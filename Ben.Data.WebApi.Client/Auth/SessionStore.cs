@@ -1,3 +1,4 @@
+using Ben.Data.WebApi.Client.External;
 using Ben.Web.Services.WebApi;
 
 namespace Ben.Data.WebApi.Client.Auth;
@@ -23,7 +24,7 @@ namespace Ben.Data.WebApi.Client.Auth;
 /// are an ordinary consequence of time passing, so the person is simply signed out. Announcing it
 /// as a failure trains people to ignore the message that matters.</para>
 /// </remarks>
-public sealed class SessionStore
+public sealed class SessionStore : IExternalSignInAdopter
 {
     private readonly TokenSession _session;
     private readonly IWebApiIdentityClient _identity;

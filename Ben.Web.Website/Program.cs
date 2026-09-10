@@ -1,5 +1,6 @@
 ﻿using Ben.Data.Common;
 using Microsoft.AspNetCore.HttpOverrides;
+using Ben.Data.WebApi.Client.External;
 using Ben.Web.Services.WebApi;
 using Ben.Web.Services;
 using Ben.Web.Website.Components;
@@ -115,6 +116,42 @@ builder.Services.AddHttpClient<IWebApiClient, WebApiClient>((sp, client) =>
 }).AddHttpMessageHandler(sp =>
     new ApiBasePathHandler(sp.GetRequiredService<IOptions<WebApiOptions>>().Value.BaseUrl));
 builder.Services.AddScoped<IWebApiAuthService, WebApiAuthService>();
+
+// The SAME instance, not a second one. WebApiAuthService holds the circuit's token store, so a
+// separate instance would adopt a session nothing on the page can see.
+builder.Services.AddScoped<IExternalSignInAdopter>(sp =>
+    (IExternalSignInAdopter)sp.GetRequiredService<IWebApiAuthService>());
+
+// ── Sign in with Apple, on the web ────────────────────────────────────────────
+//
+// A Services ID, NOT one of the app bundle ids: Apple identifies a website differently from an app,
+// and that value becomes the token's audience, so it must also be in the API's Apple:ClientIds.
+// Ships unconfigured, and the button hides itself until it is set — a door that cannot open is
+// worse than no door.
+builder.Services.AddSingleton(sp =>
+{
+    var section = sp.GetRequiredService<IConfiguration>().GetSection("Apple");
+    return new AppleWebOptions(
+        section["ServicesId"] ?? string.Empty,
+        section["RedirectUri"] ?? string.Empty);
+});
+
+// Singleton: it hands a token from a plain HTTP endpoint to a Blazor circuit, and those are two
+// different scopes. See the class for why the token travels as an opaque code.
+builder.Services.AddSingleton<Ben.Web.Website.Services.AppleSignInHandoff>();
+
+// The client itself is shared with the desktop app. It adopts through IExternalSignInAdopter,
+// which WebApiAuthService implements, so a website Apple sign-in lands exactly where a password
+// one does.
+//
+// No bearer handler on this one: both Apple doors are anonymous, and the whole point is that the
+// person has no session yet.
+builder.Services.AddHttpClient<AppleSignInClient>((sp, client) =>
+{
+    var options = sp.GetRequiredService<IOptions<WebApiOptions>>().Value;
+    client.BaseAddress = new Uri(options.BaseUrl);
+}).AddHttpMessageHandler(sp =>
+    new ApiBasePathHandler(sp.GetRequiredService<IOptions<WebApiOptions>>().Value.BaseUrl));
 builder.Services.AddScoped<IBenAdminClient, BenAdminClientAdapter>();
 builder.Services.AddScoped<IBenUserState>(sp => (IBenUserState)sp.GetRequiredService<IWebApiTokenStore>());
 // One set of unread counts per circuit, shared by every badge on the page. Scoped, so it is torn
@@ -336,6 +373,75 @@ app.MapGet("/auth/entra-signout", async (HttpContext ctx) =>
         });
 }).AllowAnonymous();
 
+// ── Sign in with Apple ───────────────────────────────────────────────────────
+//
+// Two endpoints rather than a Blazor page, because Apple answers with a form POST and a form POST
+// has no circuit. The token then crosses to a page through AppleSignInHandoff as an opaque code,
+// so it never appears in a URL, a log, or a browser history entry.
+//
+// NOTE: neither of these can be exercised on a development machine. Apple refuses a plain-http or
+// localhost redirect, so the round trip needs a real https host and a Services ID. Everything
+// either side of the redirect is deliberately pure and covered by tests.
+const string AppleStateCookie = "ben.apple.state";
+
+app.MapGet("/auth/apple-signin", (HttpContext ctx, AppleWebOptions options) =>
+{
+    if (!options.IsConfigured)
+        return Results.Redirect("/login");
+
+    var state = AppleWebAuthorizeRequest.NewSecret();
+    var nonce = AppleWebAuthorizeRequest.NewSecret();
+
+    // SameSite=None because Apple posts the answer back cross-site; without it the browser drops
+    // the cookie and every sign-in fails the state check for a reason nothing on screen explains.
+    // Secure is required alongside None, and is correct anyway: this flow is https-only.
+    ctx.Response.Cookies.Append(AppleStateCookie, $"{state}:{nonce}", new CookieOptions
+    {
+        HttpOnly = true,
+        Secure = true,
+        SameSite = SameSiteMode.None,
+        MaxAge = TimeSpan.FromMinutes(10),
+        Path = "/",
+    });
+
+    return Results.Redirect(AppleWebAuthorizeRequest.Build(options, state, nonce).ToString());
+}).AllowAnonymous();
+
+app.MapPost("/auth/apple-callback", async (
+    HttpContext ctx,
+    AppleWebOptions options,
+    Ben.Web.Website.Services.AppleSignInHandoff handoff) =>
+{
+    if (!options.IsConfigured)
+        return Results.Redirect("/login");
+
+    ctx.Request.Cookies.TryGetValue(AppleStateCookie, out var stashed);
+
+    // Spent either way. A state value that survives one answer can authenticate a second.
+    ctx.Response.Cookies.Delete(AppleStateCookie, new CookieOptions
+    {
+        HttpOnly = true, Secure = true, SameSite = SameSiteMode.None, Path = "/",
+    });
+
+    var expectedState = stashed?.Split(':', 2).FirstOrDefault();
+
+    var form = await ctx.Request.ReadFormAsync();
+    var fields = form.ToDictionary(f => f.Key, f => (string?)f.Value.ToString(), StringComparer.Ordinal);
+
+    var callback = AppleWebAuthorizeRequest.ReadCallback(fields, expectedState);
+
+    // Closing Apple's page is a decision, not a failure. Back to sign-in with nothing to apologise
+    // for.
+    if (callback.WasCancelled)
+        return Results.Redirect("/login");
+
+    if (!callback.Succeeded)
+        return Results.Redirect("/login?appleError=1");
+
+    var code = handoff.Stash(callback.IdentityToken!, callback.DisplayName);
+    return Results.Redirect($"/apple/complete?code={Uri.EscapeDataString(code)}");
+}).AllowAnonymous().DisableAntiforgery();
+
 app.MapStaticAssets();
 app.UseAntiforgery();
 
@@ -368,6 +474,24 @@ app.MapGet("/build-info.json", (IWebHostEnvironment env) =>
 //
 // The path is the modern one. iOS 9 looked in the site root; every version since checks
 // /.well-known/ first, and serving only the well-known copy is what Apple documents today.
+// ── Apple domain verification, for Sign in with Apple on the web ─────────────
+//
+// Apple will not accept a Return URL until it has fetched this file from the domain and matched it
+// against what the portal issued. The contents are a blob Apple generates; it is not a secret, and
+// it must be served EXACTLY as downloaded — a trailing newline added by an editor is enough to
+// fail verification, which is why it is a config value rather than a file somebody edits.
+//
+// No default, for the same reason the association file below has none: serving a wrong or empty
+// one is worse than a 404, because the portal reports it as a mismatch rather than as absent.
+app.MapGet("/.well-known/apple-developer-domain-association.txt", (IConfiguration config) =>
+{
+    var association = config["Apple:DomainAssociation"];
+
+    return string.IsNullOrWhiteSpace(association)
+        ? Results.NotFound()
+        : Results.Text(association, "text/plain");
+}).AllowAnonymous();
+
 app.MapGet("/.well-known/apple-app-site-association", (IConfiguration config) =>
 {
     // No default. An association file naming the wrong team would be worse than none: it claims

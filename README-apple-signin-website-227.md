@@ -64,9 +64,32 @@ the person knows they have an account, and the server cannot. Item 225 learned t
 
 `Entra/CompleteProfile.razor` is the shape to follow. It already gets this right for Microsoft.
 
-## Where the button goes
+## What was built, and what was actually verified
 
-`Ben.Web.Website/Components/Pages/Login.razor`, alongside whatever Microsoft offers today.
+- `GET /auth/apple-signin` builds Apple's authorize URL, stashes a state and nonce in a
+  `Secure; SameSite=None; HttpOnly` cookie, and redirects. `SameSite=None` is required: Apple posts
+  the answer back cross-site, and without it the browser drops the cookie and every sign-in fails
+  the state check for a reason nothing on screen explains.
+- `POST /auth/apple-callback` checks the state, reads the identity token and Apple's one-shot name,
+  and hands them to a Blazor page through `AppleSignInHandoff` as a single-use code that expires in
+  two minutes. The token itself never appears in a URL, a log, or browser history.
+- `/apple/complete` finishes it: signed in, or the create-or-link form.
+- The button on `Login.razor`, hidden until configured.
+- `/.well-known/apple-developer-domain-association.txt`, for step 3 above.
+
+**Verified by running the site**, first unconfigured and then configured:
+
+| Checked | Result |
+| --- | --- |
+| Unconfigured: button, endpoint, association file | hidden, redirects to `/login`, 404 |
+| Configured: the redirect Apple receives | correct `client_id`, `response_type=code id_token`, `response_mode=form_post`, `scope=name email`, state and nonce |
+| A simulated Apple form post with a matching state | redirects to `/apple/complete` with a one-time code |
+| A forged post with no cookie from this browser | refused, back to `/login?appleError=1` |
+| Somebody cancelling on Apple's page | back to `/login`, and NOT dressed as an error |
+
+**Not verified:** the round trip through Apple itself. That needs a Services ID and an https host,
+and Apple refuses localhost, so it cannot be done from here. Everything either side of the redirect
+is pure and covered by tests, precisely because that half can never be exercised locally.
 
 ## Duplicates that already exist: none, measured 2026-09-10
 
@@ -107,6 +130,44 @@ and nothing today needs it.
 `EntraAuthController.Link` uses a bare `CheckPasswordAsync`, which does not count failed attempts.
 It is an unauthenticated door that takes a password, so guesses against it are free. The Apple link
 added in item 225 uses `CheckPasswordSignInAsync` with lockout; this should match.
+
+## What Ben has to do in Apple's portal
+
+The code ships **disabled** and turns itself on when the two settings below are filled in. Nothing
+here is a secret; they are all public identifiers.
+
+**No webhook is needed.** Apple has an optional server-to-server notification endpoint that reports
+account deletions and consent revocations. Sign in with Apple works without it, and it is not a
+prerequisite for anything here.
+
+**No `.p8` key and no client secret is needed either**, which is the part every tutorial makes look
+frightening. A key is only required to redeem the authorization code at Apple's token endpoint. This
+asks for `response_type=code id_token`, so Apple returns the signed identity token in the form post
+itself, and that token is the only thing the API wants. The API already validates Apple tokens
+against Apple's published keys for the iPhone app.
+
+1. **Create a Services ID.** Identifiers, then Services IDs. Something like `com.ishaunted.web`. It
+   is not a bundle id and the existing app ids will not work.
+2. **Enable Sign in with Apple on it, and Configure.** Primary App ID is the existing
+   `com.ishaunted.ios`. Team `5778H75249`.
+   - Domains and Subdomains: `ishaunted.com`, plus `www.ishaunted.com` if that is used.
+   - Return URLs: `https://ishaunted.com/auth/apple-callback`, exactly.
+3. **Verify the domain.** Apple issues a verification file. Paste its contents into
+   `Apple:DomainAssociation` and the site serves it at
+   `/.well-known/apple-developer-domain-association.txt`. Serve it **verbatim** — a newline an
+   editor adds is enough to fail verification, and the portal reports that as a mismatch rather than
+   as a formatting problem.
+4. **Add the Services ID to `Apple:ClientIds`** in `Ben.Data.WebApi/appsettings.json`, beside
+   `com.ishaunted.ios` and `com.ishaunted.desktop`. It becomes the token's audience, so without it a
+   perfectly valid token is refused with a 401 that names nothing.
+5. **Fill in `Apple:ServicesId` and `Apple:RedirectUri`** in `Ben.Web.Website/appsettings.json`.
+
+### One more thing, if the site emails these people
+
+Apple's Hide My Email relay only forwards mail from sender domains registered under **Configure
+Sign in with Apple for Email Communication**. Until `ishaunted.com` is registered there, anything the
+site sends to an `@privaterelay.appleid.com` address is dropped, silently. Account confirmation is
+not affected, because an Apple-created account is already confirmed, but notifications are.
 
 ## Build note carried over from item 225
 

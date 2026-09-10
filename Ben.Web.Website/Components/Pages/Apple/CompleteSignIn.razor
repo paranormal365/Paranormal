@@ -1,0 +1,233 @@
+@page "/apple/complete"
+@using Ben.Data.WebApi.Client.Auth
+@using Ben.Data.WebApi.Client.External
+@using Ben.Web.Website.Services
+@inject AppleSignInClient AppleClient
+@inject AppleSignInHandoff Handoff
+@inject NavigationManager NavManager
+@rendermode InteractiveServer
+
+@*
+    Where a Sign in with Apple finishes. Apple posted to /auth/apple-callback, which stashed the
+    identity token and sent the browser here with a one-time code.
+
+    Three things can happen, and only one of them is an error:
+      - The server knows this Apple identity, or its verified address matches an account. Signed in.
+      - It does not. Then an account has to be created, OR joined to one that already exists.
+      - Something went wrong.
+
+    The second is NOT a failure and is not dressed as one.
+*@
+
+<PageTitle>Signing you in</PageTitle>
+
+<div class="container py-5" style="max-width: 32rem;">
+
+    @if (_stage == Stage.Working)
+    {
+        <div class="text-center">
+            <div class="spinner-border" role="status"><span class="visually-hidden">Working</span></div>
+            <p class="mt-3">Finishing your sign-in…</p>
+        </div>
+    }
+    else if (_stage == Stage.Dead)
+    {
+        <h1 class="h4">That sign-in didn't finish</h1>
+        <p>@_error</p>
+        <a class="btn btn-primary" href="/login">Back to sign in</a>
+    }
+    else
+    {
+        <h1 class="h4 mb-1">One more step</h1>
+        <p class="text-body-secondary">
+            Apple confirmed who you are. There's no account here yet, so either make one or sign in
+            to the one you already have.
+        </p>
+
+        @if (!string.IsNullOrWhiteSpace(_error))
+        {
+            <div class="alert alert-warning">@_error</div>
+        }
+
+        <div class="card mb-4">
+            <div class="card-body">
+                <h2 class="h5">Create an account</h2>
+
+                <div class="mb-3">
+                    <label class="form-label" for="ac-name">The name people see</label>
+                    <input id="ac-name" class="form-control" @bind="_displayName" @bind:event="oninput" />
+                </div>
+
+                <div class="mb-3">
+                    <label class="form-label" for="ac-handle">Your @@name</label>
+                    <input id="ac-handle" class="form-control" @bind="_handle" @bind:event="oninput" />
+                    @* Said before it is chosen, not after. *@
+                    <div class="form-text">This is permanent — it can't be changed afterwards.</div>
+                </div>
+
+                <button type="button" class="btn btn-primary"
+                        disabled="@(_busy || !CanCreate)" @onclick="CreateAsync">
+                    @(_busy ? "Working…" : "Create my account")
+                </button>
+            </div>
+        </div>
+
+        @*
+            ALWAYS offered, not only when the server notices a matching address. It can only notice
+            one when Apple's address happens to equal an existing account's, and a Hide My Email
+            relay address never will. Every one of those would otherwise quietly get a second
+            account holding none of their history.
+        *@
+        <div class="card">
+            <div class="card-body">
+                <h2 class="h5">Already have an account here?</h2>
+                <p class="text-body-secondary">
+                    Sign in to it once and we'll join the two, so you keep everything that's already
+                    yours. It doesn't matter if it's under a different email address from your Apple ID.
+                </p>
+
+                <div class="mb-3">
+                    <label class="form-label" for="ac-email">Email address</label>
+                    <input id="ac-email" type="email" class="form-control"
+                           @bind="_linkEmail" @bind:event="oninput" />
+                </div>
+
+                <div class="mb-3">
+                    <label class="form-label" for="ac-pw">Password</label>
+                    <input id="ac-pw" type="password" class="form-control"
+                           @bind="_linkPassword" @bind:event="oninput" />
+                </div>
+
+                <button type="button" class="btn btn-outline-primary"
+                        disabled="@(_busy || !CanLink)" @onclick="LinkAsync">
+                    @(_busy ? "Working…" : "Sign in and join them")
+                </button>
+            </div>
+        </div>
+    }
+</div>
+
+@code {
+    private enum Stage { Working, NeedsAccount, Dead }
+
+    [SupplyParameterFromQuery(Name = "code")]
+    private string? Code { get; set; }
+
+    private Stage _stage = Stage.Working;
+    private string? _error;
+    private bool _busy;
+
+    // Held for the whole page: the create and link calls both need it, and there is no second
+    // chance to ask Apple for another.
+    private string? _identityToken;
+    private string? _suggestedName;
+
+    private string _displayName = string.Empty;
+    private string _handle = string.Empty;
+    private string _linkEmail = string.Empty;
+    private string _linkPassword = string.Empty;
+
+    private bool CanCreate =>
+        _displayName.Trim().Length >= 2 && !string.IsNullOrWhiteSpace(_handle);
+
+    private bool CanLink =>
+        !string.IsNullOrWhiteSpace(_linkEmail) && !string.IsNullOrWhiteSpace(_linkPassword);
+
+    protected override async Task OnAfterRenderAsync(bool firstRender)
+    {
+        if (!firstRender) return;
+
+        // Redeemed on the first interactive render, not during prerender: a prerender pass would
+        // spend the single-use code and the real render would then find nothing.
+        var pending = Handoff.Redeem(Code);
+        if (pending is null)
+        {
+            _error = "That sign-in link had already been used, or it expired. Start again.";
+            _stage = Stage.Dead;
+            StateHasChanged();
+            return;
+        }
+
+        _identityToken = pending.IdentityToken;
+        _suggestedName = pending.DisplayName;
+
+        // Apple gives a real name on the FIRST authorization only. Using it now is the only chance.
+        if (!string.IsNullOrWhiteSpace(_suggestedName))
+            _displayName = _suggestedName!;
+
+        await AttemptAsync(_suggestedName, handle: null);
+        StateHasChanged();
+    }
+
+    private async Task CreateAsync()
+    {
+        _busy = true;
+        _error = null;
+        try
+        {
+            await AttemptAsync(_displayName.Trim(), _handle.Trim());
+        }
+        finally
+        {
+            _busy = false;
+        }
+    }
+
+    private async Task AttemptAsync(string? displayName, string? handle)
+    {
+        if (_identityToken is null) return;
+
+        var outcome = await AppleClient.SignInAsync(_identityToken, displayName, handle);
+
+        if (outcome.Succeeded)
+        {
+            NavManager.NavigateTo("/", forceLoad: true);
+            return;
+        }
+
+        if (outcome.RequiresProfile)
+        {
+            _stage = Stage.NeedsAccount;
+
+            if (string.IsNullOrWhiteSpace(_displayName)
+                && !string.IsNullOrWhiteSpace(outcome.NeedsProfile!.SuggestedDisplayName))
+                _displayName = outcome.NeedsProfile.SuggestedDisplayName!;
+
+            // Only speak up once there is something to fix. The first pass through here is
+            // expected to need a profile, and announcing that as a problem would be noise.
+            _error = outcome.NeedsProfile!.HandleProblem;
+            return;
+        }
+
+        _error = outcome.Reason;
+        _stage = Stage.Dead;
+    }
+
+    private async Task LinkAsync()
+    {
+        if (_identityToken is null) return;
+
+        _busy = true;
+        _error = null;
+        try
+        {
+            var outcome = await AppleClient.LinkAsync(
+                _identityToken, _linkEmail.Trim(), _linkPassword);
+
+            if (outcome.Succeeded)
+            {
+                NavManager.NavigateTo("/", forceLoad: true);
+                return;
+            }
+
+            // Stay on this page. A wrong password is a thing to retype, not a dead end, and the
+            // Apple token is still good.
+            _error = outcome.Reason;
+        }
+        finally
+        {
+            _busy = false;
+            _linkPassword = string.Empty;
+        }
+    }
+}

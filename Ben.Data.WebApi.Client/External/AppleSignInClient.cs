@@ -22,9 +22,14 @@ namespace Ben.Data.WebApi.Client.External;
 public sealed class AppleSignInClient
 {
     private readonly HttpClient _http;
-    private readonly SessionStore _store;
+    private readonly IExternalSignInAdopter _store;
 
-    public AppleSignInClient(HttpClient http, SessionStore store)
+    /// <param name="store">
+    /// Where a successful sign-in lands. Deliberately an interface: the desktop app's session
+    /// machine and the website's per-circuit token store are nothing alike, but both do the same
+    /// thing with the token response this endpoint returns.
+    /// </param>
+    public AppleSignInClient(HttpClient http, IExternalSignInAdopter store)
     {
         _http = http;
         _store = store;
