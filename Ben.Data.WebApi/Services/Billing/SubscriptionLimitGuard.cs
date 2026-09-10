@@ -154,6 +154,18 @@ public sealed class SubscriptionLimitGuard
             : null;
     }
 
+    /// <summary>
+    /// The number a limit actually holds for this organization, or null when nothing caps it.
+    /// </summary>
+    /// <remarks>
+    /// For limits that are a <b>quantity</b> rather than a ceiling to compare a count against —
+    /// how many days a photograph is kept, how long a recording may be (item 233). The refusal
+    /// wording above is meaningless for those; the number is the whole answer.
+    /// </remarks>
+    public async Task<int?> ValueOfAsync(
+        Guid organizationId, SubscriptionLimit limit, CancellationToken ct = default)
+        => (await EffectiveLimitAsync(organizationId, limit, ct)).Max;
+
     /// <summary>The cap that actually binds, with the band name for the refusal sentence.</summary>
     private async Task<(int? Max, string TierName)> EffectiveLimitAsync(
         Guid organizationId, SubscriptionLimit limit, CancellationToken ct)
@@ -211,6 +223,10 @@ public sealed class SubscriptionLimitGuard
         SubscriptionLimit.PublishedPages       => "public pages",
         SubscriptionLimit.CustomRoles          => "custom roles",
         SubscriptionLimit.CasesPerPeriod       => "new cases this period",
+        SubscriptionLimit.TourGalleryImages    => "pictures on a tour",
+        SubscriptionLimit.PhotoRetentionDays   => "how long photographs are kept",
+        SubscriptionLimit.RecordingRetentionDays => "how long recordings are kept",
+        SubscriptionLimit.RecordingMinutes     => "how long a recording may be",
         _                                      => limit.ToString(),
     };
 
@@ -225,6 +241,10 @@ public sealed class SubscriptionLimitGuard
         SubscriptionLimit.PublishedPages       => $"{max} public page(s)",
         SubscriptionLimit.CustomRoles          => $"{max} custom role(s)",
         SubscriptionLimit.CasesPerPeriod       => $"{max} new case(s) a period",
+        SubscriptionLimit.TourGalleryImages    => $"{max} picture(s) per tour",
+        SubscriptionLimit.PhotoRetentionDays   => $"photographs kept {max} day(s)",
+        SubscriptionLimit.RecordingRetentionDays => $"recordings kept {max} day(s)",
+        SubscriptionLimit.RecordingMinutes     => $"{max} minute(s) per recording",
         _                                      => max.ToString(),
     };
 }

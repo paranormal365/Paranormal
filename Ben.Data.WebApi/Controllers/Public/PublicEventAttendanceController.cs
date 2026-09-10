@@ -228,6 +228,8 @@ public sealed class PublicEventAttendanceController : BenControllerBase
 
         var invite = await db.EventAttendanceInvites
             .Include(i => i.OrgCalendarEvent).ThenInclude(e => e.Organization)
+            // The tour, so the paused/retired check below has something to read.
+            .Include(i => i.OrgCalendarEvent).ThenInclude(e => e.Tour)
             .FirstOrDefaultAsync(i => i.Token == token, ct);
 
         if (invite is null || invite.DateExpires < DateTime.UtcNow)
@@ -245,6 +247,12 @@ public sealed class PublicEventAttendanceController : BenControllerBase
         // guest asked for themselves gets no such latitude, because nobody vouched for it.
         if (invite.InvitedByAppUserId is null && DateTime.UtcNow > ev.RsvpClosingTime)
             return Conflict("Sign-ups for this event have closed.");
+
+        // Item 233: a tour that has been paused or retired since the link was sent takes nobody,
+        // whoever sent it. An organiser's latitude is about somebody standing in front of them on
+        // a night the walk is running; it is not a way to join a walk that is not.
+        if (PublicEventController.WhyTourIsNotTakingSignUps(ev) is { } tourClosed)
+            return Conflict(tourClosed);
 
         var attendees = await db.OrgCalendarEventAttendees
             .Where(a => a.OrgCalendarEventId == ev.Id)

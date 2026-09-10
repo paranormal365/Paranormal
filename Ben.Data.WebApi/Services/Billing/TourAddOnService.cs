@@ -40,9 +40,49 @@ public sealed class TourAddOnService
     public async Task<Outcome> ChargeRemainderAsync(
         BenDataContext db, Organization org, Guid byUserId, CancellationToken ct)
     {
+        try
+        {
+            return await ChargeInnerAsync(db, org, byUserId, ct);
+        }
+        catch (Exception ex)
+        {
+            // The class promises it never throws for a payment problem, and the promise has to
+            // hold for the ledger write as well as for the card: an exception after the charge
+            // left no rows, an unraised count, and the same tour charged for again tomorrow.
+            _log.LogError(ex,
+                "The tour add-on charge failed unexpectedly for organization {OrganizationId}; "
+              + "the tour stands and the renewal will count it.", org.Id);
+            return new Outcome(0m,
+                "Something went wrong taking payment for this tour. It is still yours to run, and "
+              + "your next renewal will include it.");
+        }
+    }
+
+    private async Task<Outcome> ChargeInnerAsync(
+        BenDataContext db, Organization org, Guid byUserId, CancellationToken ct)
+    {
         if (!SubscriptionTierResolver.IsBusinessKind(org.Kind))
             return new Outcome(0m, "This group is priced by its members, not by its tours.");
 
+        // One at a time per business. Two admins adding a tour in the same minute both read the
+        // old paid-for count, compute different extras, send different idempotency keys, and the
+        // card is charged for three units where two were added. The lock is held across the read,
+        // the charge and the write, so the second caller sees the first one's count.
+        var gate = OneAtATime(org.Id);
+        await gate.WaitAsync(ct);
+        try
+        {
+            return await PricedAsync(db, org, byUserId, ct);
+        }
+        finally
+        {
+            gate.Release();
+        }
+    }
+
+    private async Task<Outcome> PricedAsync(
+        BenDataContext db, Organization org, Guid byUserId, CancellationToken ct)
+    {
         var sub = await db.OrganizationSubscriptions
             .FirstOrDefaultAsync(s => s.OrganizationId == org.Id, ct);
 
@@ -71,6 +111,18 @@ public sealed class TourAddOnService
         var extra = units - sub.TourCountAtPeriodStart;
         var now = DateTime.UtcNow;
         var payable = TourBilling.Remainder(unitPrice, periodStart, periodEnd, now) * extra;
+
+        // A coupon that is still running applies here too. Without this, a business three days
+        // into "your first three months are free" was charged real money for its second tour —
+        // the renewal job honours the promise and this did not.
+        var redemption = await db.CouponRedemptions.AsNoTracking()
+            .Include(r => r.Coupon)
+            .Where(r => r.OrganizationId == org.Id)
+            .OrderByDescending(r => r.RedeemedAtUtc)
+            .FirstOrDefaultAsync(ct);
+        if (redemption is not null && CouponMath.IsStillApplying(redemption))
+            payable = CouponMath.PriceFor(payable, redemption.Coupon).Payable;
+
         payable = Math.Round(payable, 2, MidpointRounding.AwayFromZero);
 
         // The period is all but over. Nothing meaningful is owed for the hours left, and the
@@ -82,7 +134,10 @@ public sealed class TourAddOnService
             sub.UpdatedByAppUserId = byUserId;
             await db.SaveChangesAsync(ct);
             return new Outcome(0m,
-                $"Nothing more this period — your renewal on {periodEnd:MM/dd/yyyy} covers {units} tours.");
+                redemption is not null && CouponMath.IsStillApplying(redemption)
+                    ? $"Nothing to pay — your coupon covers this period. Your renewal on "
+                      + $"{periodEnd:MM/dd/yyyy} will be for {units} tours."
+                    : $"Nothing more this period — your renewal on {periodEnd:MM/dd/yyyy} covers {units} tours.");
         }
 
         if (!_stripe.IsConfigured
@@ -107,7 +162,10 @@ public sealed class TourAddOnService
             },
             // One charge per period per resulting count: a double click, or a retry after a
             // timeout, cannot bill the same tour twice.
-            IdempotencyKey: $"touradd-{org.Id:N}-{periodStart:yyyyMMdd}-{units}"), ct);
+            // Keyed on where the count LANDS and how far it moved. Two callers that agree on the
+            // destination but arrived from different places are charging different amounts, and
+            // one key for both would silently make the second one free.
+            IdempotencyKey: $"touradd-{org.Id:N}-{periodStart:yyyyMMdd}-{sub.TourCountAtPeriodStart}-{units}"), ct);
 
         if (!outcome.Succeeded)
         {
@@ -189,6 +247,19 @@ public sealed class TourAddOnService
                 sub?.TourCountAtPeriodStart ?? 0, active, next, sub?.CurrentPeriodEnd,
                 sub?.ProviderPaymentMethodRef is not null);
     }
+
+    /// <summary>
+    /// One in-process lock per business, so two tours added at once are priced in turn.
+    /// </summary>
+    /// <remarks>
+    /// In-process is honest about what it covers: one web server. A second server would need the
+    /// database to arbitrate, and the idempotency key is what stops that case double-charging a
+    /// card — this is what stops the far likelier one, two people in the same office.
+    /// </remarks>
+    private static readonly System.Collections.Concurrent.ConcurrentDictionary<Guid, SemaphoreSlim> Locks = new();
+
+    private static SemaphoreSlim OneAtATime(Guid organizationId)
+        => Locks.GetOrAdd(organizationId, _ => new SemaphoreSlim(1, 1));
 
     private static string Cadence(BillingInterval interval) => interval switch
     {

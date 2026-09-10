@@ -81,8 +81,14 @@ public sealed class EventReminderJob : IScheduledJob
             .Where(a => a.RsvpStatus == RsvpStatus.Accepted
                         && a.OrgCalendarEvent.StartDateTime > now
                         && a.OrgCalendarEvent.StartDateTime <= cutoff
+                        // Dedupe on the date's START as well as on the person (item 233): a
+                        // reminder already sent for last week's 7pm must not silence the one for
+                        // the 8pm it was moved to. A marker written before this column existed
+                        // carries null, which counts as a different start and re-arms once.
                         && !db.EventReminderSents.Any(r =>
-                               r.OrgCalendarEventId == a.OrgCalendarEventId && r.AppUserId == a.AppUserId))
+                               r.OrgCalendarEventId == a.OrgCalendarEventId
+                            && r.AppUserId == a.AppUserId
+                            && r.ForStartUtc == a.OrgCalendarEvent.StartDateTime))
             .Select(a => new Due(
                 a.OrgCalendarEventId,
                 a.AppUserId,
@@ -119,6 +125,7 @@ public sealed class EventReminderJob : IScheduledJob
                     Id = Guid.NewGuid(),
                     OrgCalendarEventId = item.EventId,
                     AppUserId = item.AppUserId,
+                    ForStartUtc = item.StartUtc,
                     SentUtc = DateTime.UtcNow,
                 });
                 await db.SaveChangesAsync(ct);

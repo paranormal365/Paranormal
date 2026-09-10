@@ -90,7 +90,13 @@ public static class TourMailRenderer
 
         // Ben's rule: the address of the tour start is in the email. A business that deleted the
         // placeholder gets it back rather than sending a guest out with nowhere to go.
-        if (!body.Contains(facts.MeetingPoint, StringComparison.OrdinalIgnoreCase))
+        //
+        // Compared against the ENCODED address, because that is what the body contains. Comparing
+        // the raw one meant an address with an apostrophe or an ampersand in it — "O'Connor
+        // Street" — never matched what had just been rendered from it, and the guest read the
+        // meeting point twice.
+        if (!body.Contains(Encode(facts.MeetingPoint), StringComparison.OrdinalIgnoreCase)
+            && !body.Contains(facts.MeetingPoint, StringComparison.OrdinalIgnoreCase))
             body += $"\n<p><strong>Where you meet:</strong> {Encode(facts.MeetingPoint)}</p>";
 
         return new Rendered(subject.Trim(), body.Trim());

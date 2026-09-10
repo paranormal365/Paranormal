@@ -193,9 +193,23 @@ public sealed class StripeFulfillmentService
         // neither gifts a free day nor bills one twice.
         var periodStart = facts.PeriodStartUtc ?? now;
         var periodEnd   = periodStart.AddMonths((int)facts.Interval);
+        // A session created before the tour key existed carries no count, and opening its period
+        // at zero would tell the add-on service that NOTHING was paid for — so the next tour
+        // added is charged for every tour the business runs. When the tier is per-tour and the
+        // metadata is silent, count what is live instead of believing the zero.
+        var tourCount = facts.TourCount;
+        if (tourCount == 0 && tier is { IsBandedByMembers: false })
+        {
+            var kind = await db.Organizations.AsNoTracking()
+                .Where(o => o.Id == facts.OrganizationId).Select(o => o.Kind).FirstOrDefaultAsync(ct);
+            if (Ben.Data.Source.Services.SubscriptionTierResolver.IsBusinessKind(kind))
+                tourCount = Ben.Data.Source.Services.TourBilling.Units(
+                    kind, await BillableUnits.ActiveToursAsync(db, facts.OrganizationId, ct));
+        }
+
         var snapshot = PeriodOpener.Open(
             sub, tier, SubscriptionStatus.Active, facts.Interval,
-            periodStart, periodEnd, facts.MemberCount, facts.InitiatedByUserId, facts.TourCount);
+            periodStart, periodEnd, facts.MemberCount, facts.InitiatedByUserId, tourCount);
 
         // The person paid the quoted (possibly discounted) amount; the period records what was
         // actually charged, not the list price the opener read off the tier.

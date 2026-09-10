@@ -14,10 +14,12 @@ namespace Ben.Data.WebApi.Controllers.Public;
 /// leading the tour - for safety". The face has to reach somebody who may have no account at all —
 /// it is in an email — so this route is anonymous.</para>
 ///
-/// <para><b>It serves exactly one thing: a photo its owner marked public and active.</b> Anything
-/// else answers 404, including a private photo, a retired one, and a person with none. There is no
-/// listing here and no way to ask for somebody's photos in bulk: the caller must already know the
-/// user id, which they only get by being handed it in a tour or an event.</para>
+/// <para><b>It serves exactly one thing: a photograph its owner published, belonging to somebody
+/// who guides a tour.</b> Anything else answers 404 — a private photo, a retired one, a person
+/// with none, and the published photograph of anybody who has never guided anything. The last of
+/// those is the point: keying the route on a file id is not a gate, because a file id can travel,
+/// and until this route existed even a public profile photograph took a signed-in caller to
+/// fetch.</para>
 /// </remarks>
 [ApiController]
 [Route("api/public")]
@@ -49,8 +51,13 @@ public sealed class PublicUserPhotoController : BenControllerBase
     {
         await using var db = await _db.CreateDbContextAsync(ct);
 
+        // A guide's photograph, and only a guide's. The file id is not a gate — it can travel —
+        // so without this the route made anybody's published profile photograph anonymously
+        // fetchable, where until it existed even a public one took a signed-in caller.
         var photo = await db.AppUserPhotos.AsNoTracking()
-            .Where(p => p.UploadFileId == uploadFileId && p.IsPublic && p.IsActive)
+            .Where(p => p.UploadFileId == uploadFileId && p.IsPublic && p.IsActive
+                     && (db.TourGuides.Any(g => g.AppUserId == p.AppUserId)
+                      || db.OrgCalendarEventGuides.Any(g => g.AppUserId == p.AppUserId)))
             .Select(p => new { p.UploadFile.StoragePath, p.UploadFile.ContentType })
             .FirstOrDefaultAsync(ct);
 

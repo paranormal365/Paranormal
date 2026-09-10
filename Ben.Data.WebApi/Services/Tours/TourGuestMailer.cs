@@ -41,14 +41,22 @@ public sealed class TourGuestMailer
         BenDataContext db, Guid eventId, string toAddress, string? guestName, CancellationToken ct)
         => SendAsync(db, eventId, toAddress, guestName, reminder: false, ct);
 
-    /// <summary>The same mail, the night before.</summary>
+    /// <summary>
+    /// The same mail, the night before.
+    /// </summary>
+    /// <remarks>
+    /// Throws when a tour's mail could not be sent, rather than answering false. False means "this
+    /// date has no tour", and the reminder job falls back to its own wording on that answer — so
+    /// swallowing a failed send here sent a tour guest a reminder with no meeting point and no
+    /// calendar file, and then wrote the marker that stops it ever trying again.
+    /// </remarks>
     public Task<bool> SendReminderAsync(
         BenDataContext db, Guid eventId, string toAddress, string? guestName, CancellationToken ct)
-        => SendAsync(db, eventId, toAddress, guestName, reminder: true, ct);
+        => SendAsync(db, eventId, toAddress, guestName, reminder: true, ct, swallowFailures: false);
 
     private async Task<bool> SendAsync(
         BenDataContext db, Guid eventId, string toAddress, string? guestName,
-        bool reminder, CancellationToken ct)
+        bool reminder, CancellationToken ct, bool swallowFailures = true)
     {
         if (!_email.IsConfigured || string.IsNullOrWhiteSpace(toAddress)) return false;
 
@@ -70,8 +78,11 @@ public sealed class TourGuestMailer
 
             return true;
         }
-        catch (Exception ex)
+        catch (Exception ex) when (swallowFailures)
         {
+            // A guest who is on the list but whose mail bounced is a guest on the list: nothing
+            // here may undo a sign-up. The reminder path passes false, because there a failure
+            // has to be told apart from "this is not a tour".
             _log.LogWarning(ex,
                 "Could not send the tour mail for event {EventId} to {Address}; the sign-up stands.",
                 eventId, toAddress);
@@ -97,6 +108,7 @@ public sealed class TourGuestMailer
             .Select(e => new
             {
                 e.Id, e.Title, e.StartDateTime, e.EndDateTime, e.AttendeeCapacity, e.UrlName,
+                e.DateCreated, e.DateUpdated,
                 Attending = e.Attendees.Count(a => a.RsvpStatus == RsvpStatus.Accepted),
                 OrgName = e.Organization.Name,
                 OrgUrlName = e.Organization.UrlName,
@@ -159,8 +171,18 @@ public sealed class TourGuestMailer
 
         // The calendar entry carries the date's id, so a reminder updates the guest's diary rather
         // than adding a second copy of the same walk.
+        // Raised every time the date is edited. A calendar client accepts an update only when the
+        // sequence is HIGHER than the one it holds; an equal one with a new start time is
+        // discarded, so a rescheduled walk sat in the guest's diary at the old hour for ever.
+        // Minutes since the date was created is monotonic, needs no column, and cannot go
+        // backwards.
+        var sequence = row.DateUpdated is { } edited
+            ? (int)Math.Min(int.MaxValue, Math.Max(0, (edited - row.DateCreated).TotalMinutes))
+            : 0;
+
         var calendar = IcsBuilder.BuildBytes(new IcsBuilder.IcsEvent(
             Uid: $"{row.Id}@ishaunted.com",
+            Sequence: sequence,
             StartUtc: row.StartDateTime,
             EndUtc: row.EndDateTime,
             Summary: row.Tour.Name,

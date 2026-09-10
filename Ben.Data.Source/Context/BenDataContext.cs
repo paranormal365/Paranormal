@@ -657,8 +657,11 @@ namespace Ben.Data.Source.Context
             // would otherwise find the same event, and the same attendee, on every pass. Enforcing
             // it in the database rather than in the query means it still holds if two instances
             // ever run at once.
+            // Widened with the start time (item 233): the key is "this person, this event, this
+            // start", so a date that moves can be reminded about again — and a second reminder
+            // for the SAME start is still refused by the database rather than by the query.
             modelBuilder.Entity<EventReminderSent>()
-                .HasIndex(e => new { e.OrgCalendarEventId, e.AppUserId }).IsUnique();
+                .HasIndex(e => new { e.OrgCalendarEventId, e.AppUserId, e.ForStartUtc }).IsUnique();
             // Cascade from the event: a deleted event's reminder markers are meaningless, and the
             // job will never look for them again.
             modelBuilder.Entity<EventReminderSent>()
@@ -669,6 +672,12 @@ namespace Ben.Data.Source.Context
             modelBuilder.Entity<EventReminderSent>()
                 .HasOne(e => e.AppUser).WithMany()
                 .HasForeignKey(e => e.AppUserId).OnDelete(DeleteBehavior.NoAction);
+
+            // ── Retention (item 233) ────────────────────────────────────────
+            // The sweep asks one question — what has expired and was not kept — and asks it of a
+            // table with every file on the site in it. Indexed on the date so that stays a seek.
+            modelBuilder.Entity<UploadFile>()
+                .HasIndex(f => f.ExpiresAtUtc);
 
             // ── Tour (item 233) ─────────────────────────────────────────────
             // The name is what tells two tours from the same corner apart, so it is unique per

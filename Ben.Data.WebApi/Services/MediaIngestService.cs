@@ -237,6 +237,12 @@ public sealed class MediaIngestService(
                      storagePath,
                      sanitizer.SanitizedPathFor(storagePath),
                      sanitizer.ThumbnailPathFor(storagePath),
+                     // The stripped audio/video copy (item 181) was missing from this list, so
+                     // every deleted recording left its derivative behind — bytes on a disk with
+                     // no row pointing at them, which nothing would ever find again. Found while
+                     // building the retention sweep (item 233), which deletes at a rate that
+                     // would have made it obvious eventually.
+                     sanitizer.StrippedPathFor(storagePath),
                  })
         {
             try { await fileStorage.DeleteAsync(path, ct); }

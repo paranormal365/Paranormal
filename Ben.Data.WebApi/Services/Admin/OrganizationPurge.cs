@@ -132,6 +132,13 @@ public sealed class OrganizationPurge
             .Where(e => eventIds.Contains(e.OrgCalendarEventId))
             .Select(e => e.UploadFileId).ToListAsync(ct));
 
+        // A tour's gallery pictures are the business's own files. Their rows go with the tour
+        // (cascade), but nothing gathered their paths — so the bytes stayed on the disk with
+        // nothing left pointing at them (item 233).
+        fileIds.AddRange(await db.TourGalleryImages.AsNoTracking()
+            .Where(g => g.Tour.OrganizationId == organizationId)
+            .Select(g => g.UploadFileId).ToListAsync(ct));
+
         fileIds.AddRange(await db.FieldSessionUploadFiles.AsNoTracking()
             .Where(f => f.FieldSessionUpload.InvestigationId != null
                      && investigationIds.Contains(f.FieldSessionUpload.InvestigationId.Value))

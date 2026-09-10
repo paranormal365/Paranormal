@@ -4,6 +4,7 @@ using Ben.Data.Common.Interfaces;
 using Ben.Data.Source.Context;
 using Ben.Data.Source.Entities;
 using Ben.Data.WebApi.Services;
+using Ben.Data.WebApi.Services.Media;
 using Ben.Data.WebApi.Services.Feed;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
@@ -39,6 +40,7 @@ public sealed class EventEvidenceController : BenControllerBase
     private readonly PlatformMessageService _messages;
 
     private readonly IMediaIngestService _mediaIngest;
+    private readonly MediaRetentionPolicy _retention;
     private readonly IAvMetadataStripper _avStripper;
 
     private readonly Ben.Service.RepositoryService.GenericInterfaces.IOrganizationSecurityService _security;
@@ -50,8 +52,9 @@ public sealed class EventEvidenceController : BenControllerBase
         IDbContextFactory<BenDataContext> db, IFileStorageService fileStorage,
         PlatformMessageService messages, IMediaIngestService mediaIngest,
         IAvMetadataStripper avStripper, Ben.Service.RepositoryService.GenericInterfaces.IOrganizationSecurityService security,
-        IFeedMediaScreener screener)
+        IFeedMediaScreener screener, MediaRetentionPolicy retention)
     {
+        _retention   = retention;
         _db          = db;
         _fileStorage = fileStorage;
         _messages    = messages;
@@ -119,14 +122,28 @@ public sealed class EventEvidenceController : BenControllerBase
             return BadRequest(ex.Message);
         }
 
+        // ── how long it may be, and how long it stays (item 233) ─────────────
+        // Read AFTER ingest, because the duration comes out of the file itself. A recording over
+        // the plan's length is refused in words and its bytes are dropped rather than left on the
+        // disk with no row pointing at them.
+        var rules = await _retention.RulesForAsync(evt.OrganizationId, ct);
+        if (MediaRetentionPolicy.WhyTooLong(
+                rules, ingested.ServedContentType, ingested.Metadata.DurationSeconds) is { } tooLong)
+        {
+            await _mediaIngest.DeleteAllAsync(storagePath, ct);
+            return BadRequest(tooLong);
+        }
+
+        var now = DateTime.UtcNow;
         var uploadFile = new UploadFile
         {
             Id = uploadFileId, UploadFileTypeId = EvidenceFileTypeId, AppUserId = userId,
             FileName = file.FileName, StoredFileName = storedName,
             ContentType = ingested.ServedContentType, FileSize = ingested.ServedFileSize,
             StoragePath = storagePath, IsPublic = false,
-            DateCreated = DateTime.UtcNow, CreatedByAppUserId = userId,
+            DateCreated = now, CreatedByAppUserId = userId,
         };
+        MediaRetentionPolicy.Stamp(uploadFile, rules, now);
         db.UploadFiles.Add(uploadFile);
         db.UploadFileMetadata.Add(ingested.Metadata);
 

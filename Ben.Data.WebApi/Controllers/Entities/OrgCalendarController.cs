@@ -360,9 +360,18 @@ public sealed class OrgCalendarEventController : BenControllerBase
 
         // A new date of a tour inherits the tour's guides when it says nothing, because that is
         // almost always right and a date with nobody on it tells a guest nothing.
+        //
+        // Narrowed to CURRENT members on the way through. Nothing removes a guide from a tour
+        // when they leave the group, so an inherited list could name somebody who is no longer a
+        // member — and the check below would then refuse every new date on that tour with
+        // "invite them first", about a person who has left. The tour's list is stale, not the
+        // date's, and refusing the date is the wrong place to complain about it.
         if (wanted is null && seedFromTour && entity.TourId is { } tourId)
             wanted = await db.TourGuides.AsNoTracking()
-                .Where(g => g.TourId == tourId).OrderBy(g => g.SortOrder)
+                .Where(g => g.TourId == tourId
+                         && db.OrganizationUserMemberships.Any(
+                                m => m.OrganizationId == orgId && m.AppUserId == g.AppUserId && m.IsActive))
+                .OrderBy(g => g.SortOrder)
                 .Select(g => g.AppUserId).ToListAsync(ct);
 
         if (wanted is null) return null;
@@ -490,6 +499,17 @@ public sealed class OrgCalendarEventController : BenControllerBase
         var entity = await db.OrgCalendarEvents
             .FirstOrDefaultAsync(e => e.Id == eventId && e.OrganizationId == orgId, ct);
         if (entity is null) return NotFound();
+
+        // A review cites the date it was written after, and that key is NoAction — so a business
+        // deleting a walk it had run would be handed a database error with nothing to act on.
+        // The review goes with the date: it is a review of a tour, and the group purge already
+        // makes exactly this move in exactly this order.
+        // Loaded and removed rather than ExecuteDelete: a date has a handful of reviews at most,
+        // and ExecuteDelete is refused outright by the in-memory provider the controller suites
+        // run on — a rule nothing could test is a rule that breaks in production instead.
+        var reviews = await db.TourReviews.Where(r => r.OrgCalendarEventId == eventId).ToListAsync(ct);
+        db.TourReviews.RemoveRange(reviews);
+
         db.OrgCalendarEvents.Remove(entity);
         await db.SaveChangesAsync(ct);
         return NoContent();

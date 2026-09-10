@@ -4,6 +4,7 @@ using Ben.Data.Source.Context;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore.Infrastructure;
 using Microsoft.EntityFrameworkCore.Metadata;
+using Microsoft.EntityFrameworkCore.Migrations;
 using Microsoft.EntityFrameworkCore.Storage.ValueConversion;
 
 #nullable disable
@@ -11,9 +12,11 @@ using Microsoft.EntityFrameworkCore.Storage.ValueConversion;
 namespace Ben.Data.Source.Migrations
 {
     [DbContext(typeof(BenDataContext))]
-    partial class BenDataContextModelSnapshot : ModelSnapshot
+    [Migration("20260910212232_MediaRetention")]
+    partial class MediaRetention
     {
-        protected override void BuildModel(ModelBuilder modelBuilder)
+        /// <inheritdoc />
+        protected override void BuildTargetModel(ModelBuilder modelBuilder)
         {
 #pragma warning disable 612, 618
             modelBuilder
@@ -2690,9 +2693,6 @@ namespace Ben.Data.Source.Migrations
                     b.Property<Guid>("AppUserId")
                         .HasColumnType("uniqueidentifier");
 
-                    b.Property<DateTime?>("ForStartUtc")
-                        .HasColumnType("datetime2");
-
                     b.Property<Guid>("OrgCalendarEventId")
                         .HasColumnType("uniqueidentifier");
 
@@ -2703,9 +2703,8 @@ namespace Ben.Data.Source.Migrations
 
                     b.HasIndex("AppUserId");
 
-                    b.HasIndex("OrgCalendarEventId", "AppUserId", "ForStartUtc")
-                        .IsUnique()
-                        .HasFilter("[ForStartUtc] IS NOT NULL");
+                    b.HasIndex("OrgCalendarEventId", "AppUserId")
+                        .IsUnique();
 
                     b.ToTable("EventReminderSents");
                 });

@@ -144,8 +144,14 @@ public sealed class TourGalleryController : OrgCmsControllerBase
             return Forbid();
 
         await using var db = await DbFactory.CreateDbContextAsync(ct);
+        // Scoped through the TOUR's organization, not the one in the route. Authorisation checked
+        // the route's orgId, which the caller chooses — so without this, somebody with settings
+        // rights on their own group could rename and reorder another group's pictures by knowing
+        // an image id. The upload and keep paths always went through FindTourAsync; these two did
+        // not, and nothing in between noticed.
         var image = await db.TourGalleryImages
-            .FirstOrDefaultAsync(g => g.Id == imageId && g.TourId == tourId, ct);
+            .FirstOrDefaultAsync(g => g.Id == imageId && g.TourId == tourId
+                                   && g.Tour.OrganizationId == orgId, ct);
         if (image is null) return NotFound();
 
         image.Caption = string.IsNullOrWhiteSpace(request.Caption) ? null : request.Caption.Trim();
@@ -174,8 +180,10 @@ public sealed class TourGalleryController : OrgCmsControllerBase
             return Forbid();
 
         await using var db = await DbFactory.CreateDbContextAsync(ct);
+        // The same scoping as the update above, and it matters more here: this deletes the bytes.
         var image = await db.TourGalleryImages.Include(g => g.UploadFile)
-            .FirstOrDefaultAsync(g => g.Id == imageId && g.TourId == tourId, ct);
+            .FirstOrDefaultAsync(g => g.Id == imageId && g.TourId == tourId
+                                   && g.Tour.OrganizationId == orgId, ct);
         if (image is null) return NotFound();
 
         var path = image.UploadFile.StoragePath;
@@ -249,6 +257,16 @@ public sealed class TourGalleryController : OrgCmsControllerBase
             HeightPixels = fittedHeight,
             ExtractedAtUtc = DateTime.UtcNow,
         });
+
+        // Counted again here, after the bytes are written and immediately before the row goes in.
+        // The check at the top of the request is a check-then-act: two uploads in the same second
+        // both see 49 and both proceed. This is not a database constraint either, but it closes
+        // the window from a whole upload to a single statement.
+        if (await FullAsync(db, tour.Id, ct) is not null)
+        {
+            await _storage.DeleteAsync(storagePath, ct);
+            return null;
+        }
 
         var nextOrder = await db.TourGalleryImages.Where(g => g.TourId == tour.Id)
             .Select(g => (int?)g.SortOrder).MaxAsync(ct) ?? -1;

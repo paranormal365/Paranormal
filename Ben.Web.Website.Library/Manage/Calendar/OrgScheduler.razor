@@ -873,9 +873,11 @@
                 AttendeeCapacity:  _form.AttendeeCapacity,
                 RsvpClosesAt:      _form.RsvpClosesAt?.ToUtcFromViewerLocal(UserState),
                 TourId:            _form.TourId,
-                // Null leaves whoever is on the date alone; a list replaces it. A new date with
-                // no list inherits the tour's guides on the server.
-                GuideAppUserIds:   _datesBelongToTours && _form.GuideIds.Count > 0
+                // An empty list is an instruction, not silence. Sending null when nobody was
+                // ticked meant the server left the old guides in place — so the last guide could
+                // never be taken off a date, and their name and face kept going out to guests.
+                // Null is reserved for a caller that is not editing guides at all.
+                GuideAppUserIds:   _datesBelongToTours && _form.TourId is not null
                                        ? [.. _form.GuideIds] : null);
 
             // Saved through the variant that keeps the server's refusal, because the public-event

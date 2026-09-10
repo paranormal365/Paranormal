@@ -123,7 +123,11 @@ public sealed class PublicEventController : BenControllerBase
             // and a pin that sharpened for some readers would be a way to work out who is coming.
             // A TOUR is the exception, and not really an exception at all: its meeting point is
             // advertised on a leaflet, so blurring it would hide nothing and help nobody.
-            var (lat, lon) = e.TourName is not null
+            // A tour's meeting point is advertised, so its pin is exact — but only when it has
+            // one. An address that has not been geocoded used to return (null, null) here and
+            // drop the walk off the map and out of the nearby search entirely, which is worse
+            // than the approximate pin it would have had before tours existed.
+            var (lat, lon) = e.TourLat is not null && e.TourLon is not null
                 ? (e.TourLat, e.TourLon)
                 : PublicCoordinates.Approximate(e.PlaceLat, e.PlaceLon);
             return new PublicEventListItem(
@@ -277,7 +281,11 @@ public sealed class PublicEventController : BenControllerBase
 
         return Ok(events.Select(e =>
         {
-            var (lat, lon) = e.TourName is not null
+            // A tour's meeting point is advertised, so its pin is exact — but only when it has
+            // one. An address that has not been geocoded used to return (null, null) here and
+            // drop the walk off the map and out of the nearby search entirely, which is worse
+            // than the approximate pin it would have had before tours existed.
+            var (lat, lon) = e.TourLat is not null && e.TourLon is not null
                 ? (e.TourLat, e.TourLon)
                 : PublicCoordinates.Approximate(e.PlaceLat, e.PlaceLon);
             return new PublicEventListItem(
@@ -309,8 +317,15 @@ public sealed class PublicEventController : BenControllerBase
 
         await using var db = await _db.CreateDbContextAsync(ct);
 
-        var ev = await VisibleEvents(db).FirstOrDefaultAsync(e => e.Id == eventId, ct);
+        var ev = await VisibleEvents(db).Include(e => e.Tour)
+            .FirstOrDefaultAsync(e => e.Id == eventId, ct);
         if (ev is null) return NotFound();
+
+        // Item 233. Pausing a tour is documented as stopping sign-ups, and the calendar refuses a
+        // new date for a paused one — but nothing here read it, so every date already on the
+        // calendar kept taking guests and sending them a meeting point for a walk that is not
+        // running. Retired is the same answer for a stronger reason.
+        if (WhyTourIsNotTakingSignUps(ev) is { } tourClosed) return Conflict(tourClosed);
 
         var attendees = await db.OrgCalendarEventAttendees
             .Where(a => a.OrgCalendarEventId == eventId)
@@ -434,12 +449,18 @@ public sealed class PublicEventController : BenControllerBase
 
     private static PublicEventLocationRecord BuildLocation(OrgCalendarEvent ev, bool mayHaveExact)
     {
-        var city  = ev.Place?.City ?? ev.OrganizationAddress?.City;
-        var state = ev.Place?.State ?? ev.OrganizationAddress?.State;
+        var city  = ev.Tour?.StartOrganizationAddress?.City ?? ev.Place?.City ?? ev.OrganizationAddress?.City;
+        var state = ev.Tour?.StartOrganizationAddress?.State ?? ev.Place?.State ?? ev.OrganizationAddress?.State;
 
-        var (lat, lon) = PublicCoordinates.Approximate(
-            ev.Place?.Latitude ?? ev.OrganizationAddress?.Latitude,
-            ev.Place?.Longitude ?? ev.OrganizationAddress?.Longitude);
+        // A tour's own page and its card both draw the exact meeting point, and the street
+        // address is printed a line above this — so blurring the detail pin hid nothing and made
+        // the two views disagree about where the same walk starts.
+        var (lat, lon) =
+            ev.Tour?.StartOrganizationAddress is { Latitude: { } tourLat, Longitude: { } tourLon }
+                ? ((decimal?)tourLat, (decimal?)tourLon)
+                : PublicCoordinates.Approximate(
+                    ev.Place?.Latitude ?? ev.OrganizationAddress?.Latitude,
+                    ev.Place?.Longitude ?? ev.OrganizationAddress?.Longitude);
 
         var exact = mayHaveExact ? ExactAddressOf(ev) : null;
 
@@ -477,6 +498,21 @@ public sealed class PublicEventController : BenControllerBase
             : address;
     }
 
+    /// <summary>
+    /// Why this date's tour is not taking sign-ups, or null.
+    /// </summary>
+    /// <remarks>
+    /// One sentence in one place, asked by the button, by the RSVP and by the confirmation link,
+    /// so a guest cannot be told two different things by two different doors.
+    /// </remarks>
+    internal static string? WhyTourIsNotTakingSignUps(OrgCalendarEvent ev)
+        => ev.Tour is null ? null
+         : ev.Tour.RetiredAtUtc is not null
+            ? "This tour is no longer running."
+         : !ev.Tour.IsBookable
+            ? "This tour isn't taking sign-ups just now."
+         : null;
+
     private static PublicEventFlags BuildFlags(
         OrgCalendarEvent ev, Guid userId, bool hasRsvpd, int acceptedCount)
     {
@@ -484,16 +520,19 @@ public sealed class PublicEventController : BenControllerBase
         // The SAME rule the sign-up endpoints enforce. When this said "closed" and the endpoint
         // still accepted, the button vanished from a tour a guest could legitimately still join.
         var hasClosed = DateTime.UtcNow > ev.RsvpClosingTime;
+        // Same rule again, from the same method the endpoints call.
+        var tourClosed = WhyTourIsNotTakingSignUps(ev);
 
         var reason =
             hasRsvpd            ? null
-            : userId == Guid.Empty ? "Sign in to say you're coming."
+            : tourClosed        ?? (
+              userId == Guid.Empty ? "Sign in to say you're coming."
             : hasClosed         ? "Sign-ups for this event have closed."
             : isFull            ? "This event is full."
-            : null;
+            : null);
 
         return new PublicEventFlags(
-            CanRsvp: userId != Guid.Empty && !hasRsvpd && !hasClosed && !isFull,
+            CanRsvp: userId != Guid.Empty && !hasRsvpd && !hasClosed && !isFull && tourClosed is null,
             HasRsvpd: hasRsvpd,
             IsFull: isFull,
             RsvpHasClosed: hasClosed,

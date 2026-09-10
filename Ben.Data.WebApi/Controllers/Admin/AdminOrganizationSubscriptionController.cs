@@ -159,7 +159,16 @@ public sealed class AdminOrganizationSubscriptionController : BenControllerBase
             if (CouponMath.WhyNotRedeemable(code.Coupon, code, ctx) is { } refusal)
                 return BadRequest(refusal);
 
-            var listPrice = tier is null ? 0m : SubscriptionPricing.PriceFor(tier, request.Interval) ?? 0m;
+            // The whole period, not one unit. A tour business is billed per tour, so pricing a
+            // coupon against the unit price wrote a 3-tour business onto $14.50 where the period
+            // was $87 — and recorded the redemption's list price as $29, which is what any
+            // later reimbursement reads back (item 233).
+            var unitPrice = tier is null ? 0m : SubscriptionPricing.PriceFor(tier, request.Interval) ?? 0m;
+            var couponTours = tier is { IsBandedByMembers: false }
+                              && SubscriptionTierResolver.IsBusinessKind(org.Kind)
+                ? TourBilling.Units(org.Kind, await BillableUnits.ActiveToursAsync(db, organizationId, ct))
+                : 1;
+            var listPrice = TourBilling.ListPrice(unitPrice, couponTours);
             discounted = CouponMath.PriceFor(listPrice, code.Coupon);
         }
         var isNew = sub is null;
