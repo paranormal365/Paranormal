@@ -1,7 +1,6 @@
 using Ben.Web.Services.WebApi;
-using Xunit;
 
-namespace Ben.Web.Tests;
+namespace Ben.Data.WebApi.Client.Tests;
 
 /// <summary>
 /// Covers the rule that keeps the API's sub-path attached to every outgoing call.
