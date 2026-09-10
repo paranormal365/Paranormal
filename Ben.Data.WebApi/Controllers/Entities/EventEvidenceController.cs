@@ -338,7 +338,19 @@ public sealed class EventEvidenceController : BenControllerBase
 
     // ── the group's review ────────────────────────────────────────────────────
 
-    /// <summary>Everything waiting on this organization's answer, oldest first.</summary>
+    /// <summary>
+    /// Everything waiting on this organization's answer, and anything on a clock.
+    /// </summary>
+    /// <remarks>
+    /// <para>Pending submissions are the queue's original job. Item 233 added the second half:
+    /// a file with an expiry the business has not stopped is <b>also</b> waiting on them, whatever
+    /// verdict it already has — deciding to keep something almost always happens after accepting
+    /// it, and a queue that only listed pending work put the keep out of reach for exactly the
+    /// files most likely to need it.</para>
+    ///
+    /// <para>Soonest to go first, so the list is ordered by how much time is left rather than by
+    /// when somebody uploaded.</para>
+    /// </remarks>
     [HttpGet("~/api/organizations/{orgId:guid}/evidence-submissions")]
     public async Task<ActionResult<IEnumerable<EvidenceSubmissionRecord>>> Queue(
         Guid orgId, CancellationToken ct)
@@ -350,8 +362,10 @@ public sealed class EventEvidenceController : BenControllerBase
 
         return Ok(await ProjectAsync(db.EventEvidenceSubmissions.AsNoTracking()
             .Where(s => s.OrgCalendarEvent.OrganizationId == orgId
-                     && s.Status == EvidenceSubmissionStatus.Pending)
-            .OrderBy(s => s.DateCreated), ct));
+                     && (s.Status == EvidenceSubmissionStatus.Pending
+                      || (s.UploadFile.ExpiresAtUtc != null && s.UploadFile.KeptAtUtc == null)))
+            .OrderBy(s => s.UploadFile.ExpiresAtUtc ?? DateTime.MaxValue)
+            .ThenBy(s => s.DateCreated), ct));
     }
 
     public sealed record ReviewEvidenceRequest(bool Accept, string? Reason);

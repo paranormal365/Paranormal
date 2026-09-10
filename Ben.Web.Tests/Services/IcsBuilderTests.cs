@@ -86,7 +86,7 @@ public sealed class IcsBuilderTests
         // The failure this prevents: "1 Printers Alley, Nashville" read as two values, and a
         // calendar entry whose location is "1 Printers Alley".
         var lines = Lines(IcsBuilder.Build(Sample()));
-        var location = Assert.Single(lines.Where(l => l.StartsWith("LOCATION:", StringComparison.Ordinal)));
+        var location = Assert.Single(lines, l => l.StartsWith("LOCATION:", StringComparison.Ordinal));
 
         Assert.Equal(@"LOCATION:1 Printers Alley\, Nashville\, TN\, 37201", location);
     }

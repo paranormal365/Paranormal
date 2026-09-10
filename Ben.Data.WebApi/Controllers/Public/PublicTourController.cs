@@ -156,7 +156,11 @@ public sealed class PublicTourController : BenControllerBase
                 e.Note, e.Status, e.RejectionReason, e.DateCreated,
                 e.PublishedToPlaceAtUtc,
                 e.OrgCalendarEvent.PlaceId != null
-                    && e.OrgCalendarEvent.Place!.Kind == PlaceKind.PublicLocation))
+                    && e.OrgCalendarEvent.Place!.Kind == PlaceKind.PublicLocation,
+                // The clock, so somebody looking at their own photographs can see how long they
+                // have — the same two fields the queue and /my-evidence carry.
+                e.UploadFile.ExpiresAtUtc,
+                e.UploadFile.KeptAtUtc != null))
             .ToListAsync(ct);
 
         return Ok(mine);
