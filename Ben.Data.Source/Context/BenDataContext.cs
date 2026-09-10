@@ -17,6 +17,7 @@ namespace Ben.Data.Source.Context
         public virtual DbSet<UserMessageType> UserMessageTypes { get; set; }
         public virtual DbSet<UserNoteType> UserNoteTypes { get; set; }
         public virtual DbSet<AppUserPhoto> AppUserPhotos { get; set; }
+        public virtual DbSet<AppleCredential> AppleCredentials { get; set; }
         public virtual DbSet<SupportTicket> SupportTickets { get; set; }
         public virtual DbSet<SupportTicketReply> SupportTicketReplies { get; set; }
         public virtual DbSet<SiteSetting> SiteSettings { get; set; }
@@ -663,6 +664,19 @@ namespace Ben.Data.Source.Context
             modelBuilder.Entity<EventReminderSent>()
                 .HasOne(e => e.AppUser).WithMany()
                 .HasForeignKey(e => e.AppUserId).OnDelete(DeleteBehavior.NoAction);
+
+            // ── AppleCredential (item 229) ───────────────────────────────────
+            // One per person per Apple client; a new sign-in through the same client replaces it.
+            // Cascade: the row is only ever about the person, and the closure deletes it anyway.
+            modelBuilder.Entity<AppleCredential>()
+                .HasOne(e => e.AppUser).WithMany()
+                .HasForeignKey(e => e.AppUserId).OnDelete(DeleteBehavior.Cascade);
+            modelBuilder.Entity<AppleCredential>()
+                .HasIndex(e => new { e.AppUserId, e.ClientId }).IsUnique();
+            modelBuilder.Entity<AppleCredential>()
+                .Property(e => e.ClientId).HasMaxLength(200);
+            modelBuilder.Entity<AppleCredential>()
+                .Property(e => e.Subject).HasMaxLength(200);
 
             // ── AppUserPhoto ─────────────────────────────────────────────────
             // The subject FK cascades: deleting a user takes their photo rows. The

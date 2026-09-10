@@ -24,6 +24,17 @@ public class AppleSignInHandoffTests
         Assert.NotNull(first);
         Assert.Equal("the.id.token", first!.IdentityToken);
         Assert.Equal("Ada Lovelace", first.DisplayName);
+        Assert.Null(first.AuthorizationCode);
+    }
+
+    /// <summary>The authorization code crosses with the token, for the API to exchange (item 229).</summary>
+    [Fact]
+    public void TheAuthorizationCodeCrossesWithTheToken()
+    {
+        var store = new AppleSignInHandoff();
+        var code = store.Stash("the.id.token", null, "c.abc");
+
+        Assert.Equal("c.abc", store.Redeem(code)!.AuthorizationCode);
     }
 
     /// <summary>

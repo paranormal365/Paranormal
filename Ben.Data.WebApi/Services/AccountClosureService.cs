@@ -39,11 +39,15 @@ public sealed class AccountClosureService
     private readonly IDbContextFactory<BenDataContext> _dbContextFactory;
     private readonly ILogger<AccountClosureService> _log;
 
+    private readonly Apple.AppleCredentialService _apple;
+
     public AccountClosureService(
         IDbContextFactory<BenDataContext> dbContextFactory,
+        Apple.AppleCredentialService apple,
         ILogger<AccountClosureService> log)
     {
         _dbContextFactory = dbContextFactory;
+        _apple = apple;
         _log = log;
     }
 
@@ -116,6 +120,11 @@ public sealed class AccountClosureService
             // Idempotent on purpose: a retry after a dropped connection must not read as an error
             // and send somebody looking for an account that is already gone.
             return new ClosureResult(true, null);
+
+        // Apple first, outside the transaction: it is a network call, and a deletion must not
+        // fail because Apple is slow or down. A token Apple refuses stays behind, stamped, for a
+        // later attempt; the person is gone either way (item 229, App Review 5.1.1(v)).
+        await _apple.RevokeAllAsync(userId, ct);
 
         await using var transaction = await db.Database.BeginTransactionAsync(ct);
 

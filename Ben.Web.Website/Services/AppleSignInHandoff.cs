@@ -36,17 +36,18 @@ public sealed class AppleSignInHandoff
         => _now = now ?? (() => DateTimeOffset.UtcNow);
 
     /// <param name="DisplayName">Apple's one-shot name, when this was a first authorization.</param>
-    public sealed record Pending(string IdentityToken, string? DisplayName);
+    /// <param name="AuthorizationCode">Apple's one-shot code, for the API to exchange (item 229).</param>
+    public sealed record Pending(string IdentityToken, string? DisplayName, string? AuthorizationCode = null);
 
     private sealed record Entry(Pending Value, DateTimeOffset ExpiresAt);
 
     /// <summary>Stashes a token and returns the code that redeems it.</summary>
-    public string Stash(string identityToken, string? displayName)
+    public string Stash(string identityToken, string? displayName, string? authorizationCode = null)
     {
         Sweep();
 
         var code = Convert.ToHexString(RandomNumberGenerator.GetBytes(32));
-        _entries[code] = new Entry(new Pending(identityToken, displayName), _now().Add(Lifetime));
+        _entries[code] = new Entry(new Pending(identityToken, displayName, authorizationCode), _now().Add(Lifetime));
         return code;
     }
 

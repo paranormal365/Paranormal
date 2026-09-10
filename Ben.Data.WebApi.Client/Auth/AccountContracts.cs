@@ -64,12 +64,20 @@ public sealed record AppleNeedsProfileResponse(
     [property: JsonPropertyName("emailProblem")] string? EmailProblem = null);
 
 /// <summary>A Sign in with Apple attempt, in the shape <c>POST api/auth/apple</c> expects.</summary>
+/// <param name="AuthorizationCode">
+/// Apple's one-shot authorization code from the same sign-in, if the client kept it. The server
+/// exchanges it for the refresh token that lets the person's Apple tokens be revoked when they
+/// delete their account (item 229). Omitted when null; a client that sends none leaves nothing to
+/// revoke, which is the state everything was in before.
+/// </param>
 public sealed record AppleSignInRequest(
     [property: JsonPropertyName("identityToken")] string IdentityToken,
     [property: JsonPropertyName("displayName"), JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
     string? DisplayName = null,
     [property: JsonPropertyName("handle"), JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
-    string? Handle = null);
+    string? Handle = null,
+    [property: JsonPropertyName("authorizationCode"), JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
+    string? AuthorizationCode = null);
 
 /// <summary>Claiming an account that already exists here for a verified Apple identity.</summary>
 /// <param name="Email">
@@ -90,4 +98,6 @@ public sealed record AppleLinkRequest(
     [property: JsonPropertyName("twoFactorCode"), JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
     string? TwoFactorCode = null,
     [property: JsonPropertyName("twoFactorRecoveryCode"), JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
-    string? TwoFactorRecoveryCode = null);
+    string? TwoFactorRecoveryCode = null,
+    [property: JsonPropertyName("authorizationCode"), JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
+    string? AuthorizationCode = null);

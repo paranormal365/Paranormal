@@ -21,6 +21,7 @@ struct AppleSignInSection: View {
     // Held from the moment Apple's sheet closes, through the profile sheet, into the second
     // attempt. Both doors need it, and there is no asking Apple for another.
     @State private var pendingToken: String?
+    @State private var pendingCode: String?
     @State private var suggestedName: String?
     @State private var handleProblem: String?
 
@@ -95,6 +96,9 @@ struct AppleSignInSection: View {
                 return
             }
             pendingToken = token
+            // Apple's one-shot authorization code, kept for the server to exchange: it is what
+            // lets this person's Apple tokens be revoked when they delete their account (item 229).
+            pendingCode = credential.authorizationCode.flatMap { String(data: $0, encoding: .utf8) }
             suggestedName = credential.fullName.flatMap {
                 let formatted = PersonNameComponentsFormatter.localizedString(from: $0, style: .default)
                 return formatted.isEmpty ? nil : formatted
@@ -109,7 +113,8 @@ struct AppleSignInSection: View {
         defer { busy = false }
 
         switch await dependencies.appleSignIn.signIn(
-            identityToken: pendingToken, displayName: displayName, handle: handle) {
+            identityToken: pendingToken, displayName: displayName, handle: handle,
+            authorizationCode: pendingCode) {
         case .signedIn:
             collecting = false
             await dependencies.session.adoptExternalSignIn()
@@ -160,7 +165,8 @@ struct AppleSignInSection: View {
             email: email,
             password: password,
             twoFactorCode: sendCode && !isRecovery ? trimmed : nil,
-            recoveryCode: sendCode && isRecovery ? trimmed : nil) {
+            recoveryCode: sendCode && isRecovery ? trimmed : nil,
+            authorizationCode: pendingCode) {
         case .signedIn:
             collecting = false
             linkNeedsTwoFactor = false
