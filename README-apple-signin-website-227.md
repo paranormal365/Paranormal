@@ -14,6 +14,9 @@ order of consequence, what is still open for Ben's decision, and the phased path
 iPhone, then consolidate both providers into one `ExternalSignInService`, then the Entra decisions,
 then UAT through the real providers.
 
+**Item 226 is built on this branch too** (the iPhone's link door), verified on both simulators; see
+the plan's Phase A. Only the Apple round trip itself remains unverifiable without a real Apple ID.
+
 ## Why this closes the iPhone gap without touching the iPhone app
 
 The Apple sign-in endpoint has three outcomes, and the first is **this Apple identity is already

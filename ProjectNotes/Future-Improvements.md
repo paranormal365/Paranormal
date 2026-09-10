@@ -11338,7 +11338,7 @@ assume it needs a signing identity.
 
 ---
 
-## 226. The iPhone app can still be given a second account by Sign in with Apple (OPEN)
+## 226. The iPhone app can still be given a second account by Sign in with Apple (BUILT 2026-09-10)
 
 Found 2026-09-10 while building the desktop client's external sign-in (item 225). Ben asked whether
 the same gap existed elsewhere; it does, on iOS.
@@ -11377,9 +11377,31 @@ creating one, and call the new endpoint. `BenKit/Sources/BenKit/Auth/AppleSignIn
 not count failed attempts. It is an unauthenticated door that takes a password, so guesses against
 it are free. The new Apple link uses the lockout-honouring form; the Entra one should match.
 
+
+### Built 2026-09-10, on `feature/apple-signin-website-227`
+
+`BenKit/Auth/AppleSignIn.swift` gained `link(identityToken:email:password:twoFactorCode:recoveryCode:)`,
+and two outcomes: `.addressTaken(reason:)` when the server says the address already has an account
+here, and `.needsTwoFactor` when the account being claimed has a second factor. `AppleProfileSheet`
+now has two doors. "Already have an account here?" is offered **always** — the server can only spot
+a collision when Apple's address happens to match an existing one, which is the case that was never
+broken — and when the server says the address is taken, the create form is put away and the link
+door becomes the prominent one. A code field appears only after the server asks for one; an empty
+code is never sent, because Identity reads that as a wrong code and spends a failed attempt.
+
+The footer promise the UI test pins — "rather than making a second one" — is now true for a
+mismatched address too, so the wording changed and the test did not.
+
+**Verified:** 16 BenKit tests (all 339 in the package pass); the iPhone app builds; the Apple UI
+regression passes on **both** iPhone 17 Pro and iPad Pro 13-inch (M5), which are different element
+trees. **Not verified:** the door itself against a real Apple identity — the simulator has no Apple
+ID to sign in with. The server half was tested in C# against the real endpoint with a forged token.
+
+Still open from this item: `EntraAuthController.Link` lockout — now DONE under 225's branch (see
+the 2026-09-10 commits closing the Microsoft hole).
 ---
 
-## 227. Sign in with Apple on the website (OPEN)
+## 227. Sign in with Apple on the website (BUILT 2026-09-10 — unverified through Apple until a Services ID exists)
 
 Ben, 2026-09-10, alongside item 226: the site should offer a "Sign in with Apple" button that can
 either create a new account or link one that already exists — the same two doors the Microsoft

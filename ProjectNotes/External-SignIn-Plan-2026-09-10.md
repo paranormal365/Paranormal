@@ -35,13 +35,12 @@ rests on: **the Services ID must be grouped under `com.ishaunted.ios` as its pri
 The server half shipped with 225: `POST api/auth/apple/link`, now with lockout, confirmed-account
 and second-factor checks.
 
-On the iPhone: `BenKit/Sources/BenKit/Auth/AppleSignIn.swift` has a `link(...)` method drafted and
-compiling, **uncommitted**. Its tests were written against a test-harness API I had not read; that
-file has been restored to what is committed. Nothing in the app's sheet offers the door yet.
-
-What remains is small: valid BenKit tests using `MockTransport(status:body:)` and `self.client(_:)`,
-a second path on `AppleProfileSheet` for email, password and a code, and the UI suite run on
-**both** the iPhone and iPad simulators, because they are different element trees.
+**Done, later the same day.** `link(...)` in BenKit with 16 tests written against the harness the
+file actually has; `AppleProfileSheet` gained the second door, offered always, with the create form
+put away when the server says the address is taken and a code field that appears only when asked
+for. The footer's pinned promise — "rather than making a second one" — is now true for a mismatched
+address too, so the sentence changed and the UI test did not. Verified on both the iPhone 17 Pro and
+iPad Pro 13-inch simulators. Not verifiable here: the door against a real Apple identity.
 
 ## What this session found, in order of consequence
 
@@ -104,7 +103,7 @@ renewal mode in `TokenSession` can go. One session type everywhere.
 
 | Phase | Work | Verified by |
 | --- | --- | --- |
-| A | Finish 226: BenKit tests with the real harness, the sheet's second door, commit | `swift test`; UI suite on iPhone **and** iPad sims |
+| A | **Done.** 226 on the iPhone: BenKit `link()`, the sheet's second door, committed | 339 BenKit tests; Apple UI regression green on iPhone 17 Pro **and** iPad Pro 13-inch |
 | B | `ExternalSignInService`; both controllers thin; one refusal shape; Entra link and register move onto it | The existing controller tests, re-pointed, plus the Entra matrix copied from Apple's |
 | C | Entra decisions with Ben: email fallback, unverified register, `api/auth/entra/token`; then drop desktop external-renewal mode | New tests per decision; desktop `TokenSession` tests shrink |
 | D | Portal work and UAT: Services ID grouped under the iOS App ID, domain file, `Apple:ClientIds`, email-communication registration; Entra redirect URI | A real Apple round trip on UAT; a real Microsoft one |
