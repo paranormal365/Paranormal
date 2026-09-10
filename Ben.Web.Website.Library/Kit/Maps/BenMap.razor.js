@@ -82,7 +82,7 @@ export async function create(containerId, dotnetRef, options) {
     const container = document.getElementById(containerId)
     if (!container) return
     const entry = {
-        map: null, container, annotations: [], circle: null, dotnetRef, options, observer: null,
+        map: null, container, annotations: [], circle: null, route: null, dotnetRef, options, observer: null,
         view: { lat: options.centerLatitude, lon: options.centerLongitude, zoom: options.zoom },
         userMoved: false,
     }
@@ -250,6 +250,63 @@ export function setCircle(containerId, circle) {
     }
     if (entry.map) apply()
     else _mapkitReady?.then(() => setTimeout(apply, 0))
+}
+
+// ── Directions ───────────────────────────────────────────────────────────────
+
+let _directions = null
+
+/**
+ * A driving route from the provider, drawn on the map with A and B pins. Resolves to what the
+ * page should say: distance, time and the steps, or an error in words. Never rejects.
+ */
+export function route(containerId, req) {
+    const entry = _maps.get(containerId)
+    if (!entry?.map) return Promise.resolve({ distanceMeters: 0, durationSeconds: 0, steps: [], error: 'The map is not ready.' })
+
+    clearRoute(containerId)
+    _directions ??= new mapkit.Directions()
+
+    const origin = req.originAddress && !req.originLatitude
+        ? req.originAddress
+        : new mapkit.Coordinate(req.originLatitude, req.originLongitude)
+    const destination = new mapkit.Coordinate(req.destinationLatitude, req.destinationLongitude)
+
+    return new Promise(resolve => {
+        _directions.route({ origin, destination, transportType: mapkit.Directions.Transport.Automobile }, (err, data) => {
+            if (err || !data?.routes?.length) {
+                resolve({ distanceMeters: 0, durationSeconds: 0, steps: [],
+                    error: err?.message ? `No route: ${err.message}` : 'No route could be found between these places.' })
+                return
+            }
+            const best = data.routes[0]
+            const map = entry.map
+            const polyline = best.polyline
+            polyline.style = new mapkit.Style({ strokeColor: '#1a73e8', strokeOpacity: .9, lineWidth: 4 })
+            const from = new mapkit.MarkerAnnotation(polyline.points[0], { glyphText: 'A', color: '#1a73e8', title: 'Start' })
+            const to = new mapkit.MarkerAnnotation(polyline.points[polyline.points.length - 1], { glyphText: 'B', color: '#d93025', title: 'Destination' })
+            map.addOverlay(polyline)
+            map.addAnnotations([from, to])
+            entry.route = { polyline, pins: [from, to] }
+            entry.framing = true
+            map.showItems([polyline, from, to], { animate: true, padding: new mapkit.Padding(40, 40, 40, 40) })
+            setTimeout(() => { entry.framing = false }, 800)
+            resolve({
+                distanceMeters: best.distance,
+                durationSeconds: best.expectedTravelTime,
+                steps: best.steps.map(s => ({ instructions: s.instructions, distanceMeters: s.distance })),
+                error: null,
+            })
+        })
+    })
+}
+
+export function clearRoute(containerId) {
+    const entry = _maps.get(containerId)
+    if (!entry?.map || !entry.route) return
+    entry.map.removeOverlay(entry.route.polyline)
+    entry.map.removeAnnotations(entry.route.pins)
+    entry.route = null
 }
 
 export function fit(containerId) {

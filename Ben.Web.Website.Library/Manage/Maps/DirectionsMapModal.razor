@@ -1,8 +1,15 @@
 @namespace Ben.Web.Website.Library.Manage.Maps
-
-@inject IBenAdminClient AdminClient
+@using Ben.Web.Website.Library.Kit.Maps
 @inject IJSRuntime JS
-@implements IAsyncDisposable
+
+@*
+    Driving directions to an address (item 228, phase 5: on Apple Maps through BenMap).
+
+    The route comes from the map provider, drawn on the map and read out beneath it. The starting
+    point is either an address in words, which the provider looks up itself, or the person's own
+    location from the browser. Neither the OSRM demo server nor a metered geocoding call is
+    involved any more.
+*@
 
 <style>
     @@media print {
@@ -42,52 +49,17 @@
 
             @* ── Map ──────────────────────────────────────────────────────── *@
             <div style="flex:0 0 @_mapHeight;">
-                <TelerikMap Center="@_mapCenter" Zoom="@_mapZoom" Height="@_mapHeight">
-                    <MapLayers>
-                        <MapLayer Type="@MapLayersType.Tile"
-                                  Attribution="&copy; <a href='https://osm.org/copyright'>OpenStreetMap contributors</a>"
-                                  Subdomains="@_subdomains"
-                                  UrlTemplate="directionsMapTileTemplate" />
-
-                        @if (_routeGeoJsonObj is not null)
-                        {
-                            <MapLayer Type="@MapLayersType.Shape"
-                                      Data="@_routeGeoJsonObj">
-                                <MapLayerShapeSettings>
-                                    <MapLayerShapeSettingsStyle>
-                                        <MapLayerShapeSettingsStyleFill Color="transparent" />
-                                        <MapLayerShapeSettingsStyleStroke Color="#1a73e8" Opacity="0.9" Width="4" />
-                                    </MapLayerShapeSettingsStyle>
-                                </MapLayerShapeSettings>
-                            </MapLayer>
-                        }
-
-                        @if (_fromLat.HasValue && _fromLon.HasValue)
-                        {
-                            <MapLayer Type="@MapLayersType.Marker"
-                                      Data="@_fromMarkers">
-                                <MapLayerMarkerSettings Template="directionsFromMarkerTemplate" />
-                            </MapLayer>
-                        }
-
-                        @if (_toLat != 0)
-                        {
-                            <MapLayer Type="@MapLayersType.Marker"
-                                      Data="@_toMarkers">
-                                <MapLayerMarkerSettings Template="directionsToMarkerTemplate" />
-                            </MapLayer>
-                        }
-                    </MapLayers>
-                </TelerikMap>
+                <BenMap @ref="_map" Pins="@_pins" Height="@_mapHeight" FitToPins="false"
+                        CenterLatitude="@_toLat" CenterLongitude="@_toLon" Zoom="13" />
             </div>
 
             @* ── Summary + action buttons ─────────────────────────────────── *@
             @if (_result is not null)
             {
                 <div class="d-flex align-items-center justify-content-between flex-wrap gap-2">
-                    <span class="fw-semibold small">
-                        @($"{_result.TotalDistanceMiles:F1} mi") &nbsp;·&nbsp;
-                        @FormatDuration(_result.TotalDurationMinutes)
+                    <span class="fw-semibold small" data-testid="directions-summary">
+                        @($"{_result.DistanceMiles:F1} mi") &nbsp;·&nbsp;
+                        @FormatDuration(_result.DurationMinutes)
                     </span>
                     <div class="d-flex gap-2">
                         <button type="button" class="btn btn-outline-secondary" @onclick="@OpenInMaps" title="Open in maps app (works on phones)"><BenIcon Name="globe" Class="me-1" />
@@ -105,7 +77,7 @@
                         @foreach (var step in _result.Steps)
                         {
                             <li class="mb-1">
-                                @step.Instruction
+                                @step.Instructions
                                 @if (step.DistanceMiles > 0.01)
                                 {
                                     <span class="text-secondary ms-1">(@($"{step.DistanceMiles:F1} mi"))</span>
@@ -128,7 +100,8 @@
     private string _height   = "700px";
     private string _mapHeight = "300px";
 
-    private static readonly string[] _subdomains = ["a", "b", "c"];
+    private BenMap? _map;
+    private IReadOnlyList<BenMapPin> _pins = [];
 
     // From state
     private string  _fromAddress = "";
@@ -137,21 +110,9 @@
     private bool    _locating;
 
     // Route state
-    private bool              _loading;
-    private string?           _errorMessage;
-    private DirectionsResult? _result;
-    private object?           _routeGeoJsonObj;
-
-    // Map state
-    private bool     _needsMapRefresh = false;
-    private double   _routeMinLat;
-    private double   _routeMaxLat;
-    private double   _routeMinLon;
-    private double   _routeMaxLon;
-    private double[] _mapCenter = [39.5, -98.35]; // initial center (US)
-    private double   _mapZoom   = 4;
-    private IEnumerable<MapMarker> _fromMarkers = [];
-    private IEnumerable<MapMarker> _toMarkers   = [];
+    private bool         _loading;
+    private string?      _errorMessage;
+    private BenMapRoute? _result;
 
     // ── Public API ────────────────────────────────────────────────────────────
 
@@ -168,13 +129,9 @@
         _fromLat         = null;
         _fromLon         = null;
         _result          = null;
-        _routeGeoJsonObj = null;
         _errorMessage    = null;
-        _toMarkers    = [new MapMarker { LatLng = [toLat, toLon], Title = toTitle }];
-        _fromMarkers  = [];
-        _mapCenter    = [toLat, toLon];
-        _mapZoom      = 13;
-        _visible      = true;
+        _pins            = [new BenMapPin(toLat, toLon, toTitle, Glyph: "B", Color: "#d93025")];
+        _visible         = true;
         StateHasChanged();
     }
 
@@ -185,14 +142,6 @@
     }
 
     // ── From address ──────────────────────────────────────────────────────────
-
-    private void OnFromAddressChanged()
-    {
-        // Just clear the cached coords so GetRouteAsync re-geocodes on next click.
-        _fromLat = null;
-        _fromLon = null;
-        _fromMarkers = [];
-    }
 
     private async Task UseMyLocationAsync()
     {
@@ -205,7 +154,6 @@
             _fromLat     = coords.Latitude;
             _fromLon     = coords.Longitude;
             _fromAddress = "My current location";
-            _fromMarkers = [new MapMarker { LatLng = [_fromLat.Value, _fromLon.Value], Title = "Start" }];
         }
         catch (JSException ex) when (ex.Message.Contains("denied") || ex.Message.Contains("not supported"))
         {
@@ -225,68 +173,29 @@
     {
         if (string.IsNullOrWhiteSpace(_fromAddress)) { _errorMessage = "Enter or locate a starting address first."; return; }
 
-        _loading         = true;
-        _errorMessage    = null;
-        _result          = null;
-        _routeGeoJsonObj = null;
+        if (_map is null) { _errorMessage = "The map is not ready yet."; return; }
+
+        _loading      = true;
+        _errorMessage = null;
+        _result       = null;
         StateHasChanged();
 
-        try
+        // "My current location" carries coordinates; anything typed is looked up by the provider.
+        var typed = _fromLat is null;
+        var route = await _map.RouteAsync(new BenMapRouteRequest(
+            typed ? _fromAddress : null, _fromLat, _fromLon, _toLat, _toLon));
+
+        if (route.Error is not null)
         {
-            // Geocode the typed from-address if we don't already have coords for it
-            if (_fromLat is null)
-            {
-                var geo = await AdminClient.SearchGeocodingAsync(_fromAddress);
-                if (geo?.Latitude is null || geo.Longitude is null)
-                {
-                    _errorMessage = "Could not locate the starting address. Try adding city and state, e.g. \"123 Main St, Nashville, TN\".";
-                    return;
-                }
-                _fromLat = (double)geo.Latitude;
-                _fromLon = (double)geo.Longitude;
-                _fromMarkers = [new MapMarker { LatLng = [_fromLat.Value, _fromLon.Value], Title = "Start" }];
-            }
-
-            _result = await AdminClient.GetDirectionsAsync(_fromLat!.Value, _fromLon!.Value, _toLat, _toLon);
-            if (_result is null) { _errorMessage = "Could not retrieve route. Please try again."; return; }
-
-            // Build the Shape layer data as an anonymous object (NOT a JSON string —
-            // Telerik Map requires a .NET object that it serializes itself)
-            _routeGeoJsonObj = new
-            {
-                type = "FeatureCollection",
-                features = new[]
-                {
-                    new
-                    {
-                        type = "Feature",
-                        geometry = new
-                        {
-                            type = "LineString",
-                            coordinates = _result.RoutePoints
-                                .Select(p => new double[] { p.Lon, p.Lat })
-                                .ToArray()
-                        },
-                        properties = new { }
-                    }
-                }
-            };
-
-            // Compute bounding box over all route points + both endpoints
-            // so the full route fits in the viewport
-            var lats = _result.RoutePoints.Select(p => p.Lat)
-                .Append(_toLat).Append(_fromLat ?? _toLat);
-            var lons = _result.RoutePoints.Select(p => p.Lon)
-                .Append(_toLon).Append(_fromLon ?? _toLon);
-            _routeMinLat = lats.Min();
-            _routeMaxLat = lats.Max();
-            _routeMinLon = lons.Min();
-            _routeMaxLon = lons.Max();
-            _needsMapRefresh = true;
+            _errorMessage = typed
+                ? $"{route.Error} Try adding the city and state, e.g. \"123 Main St, Nashville, TN\"."
+                : route.Error;
         }
-        catch (Exception ex) when (ex is not OperationCanceledException)
-        { _errorMessage = "Routing service error. Please try again."; }
-        finally { _loading = false; }
+        else
+        {
+            _result = route;
+        }
+        _loading = false;
         StateHasChanged();
     }
 
@@ -298,11 +207,13 @@
             ? $"{_fromLat.Value.ToString(System.Globalization.CultureInfo.InvariantCulture)},{_fromLon!.Value.ToString(System.Globalization.CultureInfo.InvariantCulture)}"
             : "My+Location";
         var to = $"{_toLat.ToString(System.Globalization.CultureInfo.InvariantCulture)},{_toLon.ToString(System.Globalization.CultureInfo.InvariantCulture)}";
-        var url = $"https://www.google.com/maps/dir/?api=1&origin={from}&destination={to}&travelmode=driving";
+        // Apple Maps, to match the map on the page; on a device without it the link opens the web
+        // version, and Android hands it to whatever maps app is installed.
+        var url = $"https://maps.apple.com/?saddr={from}&daddr={to}&dirflg=d";
         _ = JS.InvokeVoidAsync("open", url, "_blank");
     }
 
-    private async Task PrintAsync() => await JS.InvokeVoidAsync("printDirections");
+    private async Task PrintAsync() => await JS.InvokeVoidAsync("print");
 
     // ── Helpers ───────────────────────────────────────────────────────────────
 
@@ -314,14 +225,6 @@
         return "300px";
     }
 
-    private static double CalcZoom(double dLat, double dLon)
-    {
-        var d = Math.Max(dLat, dLon);
-        if (d <= 0) return 13;
-        var z = Math.Log2(160.0 / d);
-        return Math.Clamp(z, 4, 16);
-    }
-
     private static string FormatDuration(double minutes)
     {
         var h = (int)(minutes / 60);
@@ -330,29 +233,4 @@
     }
 
     private sealed record GeoCoords(double Latitude, double Longitude);
-    private sealed record MapMarker { public double[] LatLng { get; init; } = []; public string Title { get; init; } = ""; }
-
-    // ── JS module lifecycle ───────────────────────────────────────────────────
-
-    private IJSObjectReference? _jsModule;
-
-    protected override async Task OnAfterRenderAsync(bool firstRender)
-    {
-        if (firstRender)
-            _jsModule = await JS.InvokeAsync<IJSObjectReference>(
-                "import", "./_content/Ben.Web.Website.Library/Manage/Maps/DirectionsMapModal.razor.js");
-
-        if (_needsMapRefresh && _jsModule is not null)
-        {
-            _needsMapRefresh = false;
-            await _jsModule.InvokeVoidAsync("fitMapToRoute",
-                _routeMinLat, _routeMaxLat, _routeMinLon, _routeMaxLon);
-        }
-    }
-
-    public async ValueTask DisposeAsync()
-    {
-        if (_jsModule is not null)
-            await _jsModule.DisposeAsync();
-    }
 }

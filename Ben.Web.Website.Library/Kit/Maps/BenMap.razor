@@ -212,6 +212,43 @@
             ? OnViewportChanged.InvokeAsync(new BenMapViewport(north, south, east, west, zoom))
             : Task.CompletedTask;
 
+    /// <summary>
+    /// Asks the provider for a driving route, draws it on this map with A and B pins, and returns
+    /// what to say about it. Never throws: a route that cannot be had comes back with
+    /// <see cref="BenMapRoute.Error"/> set.
+    /// </summary>
+    /// <remarks>
+    /// The origin may be an address in words: the provider looks it up itself, which is one
+    /// metered geocoding call this site no longer has to make. Only Apple Maps can answer; the
+    /// Telerik fallback says so rather than pretending.
+    /// </remarks>
+    public async Task<BenMapRoute> RouteAsync(BenMapRouteRequest request)
+    {
+        if (Maps.Effective != MapProvider.Apple || _module is null || !_ready)
+            return new BenMapRoute(0, 0, [], "Directions need Apple Maps, which this site is not set up for yet.");
+        try
+        {
+            return await _module.InvokeAsync<BenMapRoute>("route", _containerId, request)
+                   ?? new BenMapRoute(0, 0, [], "No route came back.");
+        }
+        catch (Exception ex) when (ex is ObjectDisposedException or JSDisconnectedException)
+        {
+            return new BenMapRoute(0, 0, [], "The map went away before the route arrived.");
+        }
+        catch (JSException ex)
+        {
+            return new BenMapRoute(0, 0, [], $"Directions could not be worked out: {ex.Message}");
+        }
+    }
+
+    /// <summary>Takes a drawn route and its A and B pins off the map.</summary>
+    public async Task ClearRouteAsync()
+    {
+        if (_module is null || !_ready || Maps.Effective != MapProvider.Apple) return;
+        try { await _module.InvokeVoidAsync("clearRoute", _containerId); }
+        catch (Exception ex) when (ex is ObjectDisposedException or JSDisconnectedException) { }
+    }
+
     [JSInvokable]
     public Task OnMapTapped(double latitude, double longitude) =>
         OnMapClicked.HasDelegate ? OnMapClicked.InvokeAsync(new BenMapPoint(latitude, longitude)) : Task.CompletedTask;

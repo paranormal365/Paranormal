@@ -109,7 +109,7 @@ public class HomeMapTests : BenTestBase
     public async Task Map_KeepsItsPinsAndFramingAfterASort()
     {
         var before = await WaitForPinsAsync();
-        if (before.Count == 0) { Assert.Pass("No pins in the seed."); return; }
+        if (before.Count == 0) { Assert.Ignore("No pins in the seed."); return; }
 
         await Page.GetByText("Newest").ClickAsync();
         await Page.WaitForTimeoutAsync(2_500);
@@ -136,7 +136,7 @@ public class HomeMapTests : BenTestBase
     {
         var pins = await WaitForPinsAsync();
         var group = pins.FirstOrDefault(IsGroup);
-        if (group is null) { Assert.Pass("No grouped pins — all seeded cities have exactly one case."); return; }
+        if (group is null) { Assert.Ignore("No grouped pins — all seeded cities have exactly one case."); return; }
         Assert.That(int.Parse(group.Glyph), Is.GreaterThan(1), "A grouped pin shows its count.");
         Assert.That(group.Title, Does.Contain("cases near"));
     }
@@ -146,7 +146,7 @@ public class HomeMapTests : BenTestBase
     {
         if (!await SelectPinAsync(IsSingle))
         {
-            Assert.Pass("No single-case pin in the seed.");
+            Assert.Ignore("No single-case pin in the seed.");
             return;
         }
 
@@ -159,7 +159,7 @@ public class HomeMapTests : BenTestBase
     {
         if (!await SelectPinAsync(IsSingle) && !await SelectPinAsync(IsGroup))
         {
-            Assert.Pass("No pin in the seed.");
+            Assert.Ignore("No pin in the seed.");
             return;
         }
         await Page.WaitForTimeoutAsync(500);
@@ -216,7 +216,7 @@ public class HomeMapTests : BenTestBase
     public async Task Map_PopupTitle_IsNotEmpty()
     {
         if (!await SelectPinAsync(_ => true))
-        { Assert.Pass("No pin in the seed."); return; }
+        { Assert.Ignore("No pin in the seed."); return; }
         await Page.WaitForTimeoutAsync(500);
         var titleBar = Page.Locator(".k-window, .modal.show-title, .k-window, .modal.show-titlebar, .modal.show .modal-title").First;
         await Expect(titleBar).ToBeVisibleAsync(new() { Timeout = 5_000 });

@@ -26,8 +26,6 @@ public class MapProviderGuardTests
     /// </summary>
     private static readonly HashSet<string> StillCrossing = new(StringComparer.Ordinal)
     {
-        "Ben.Web.Website.Library/Manage/Maps/DirectionsMapModal.razor",       // phase 5
-        "Ben.Web.Website.Library/Manage/Maps/DirectionsMapModal.razor.js",
     };
 
     /// <summary>The signer that gives MapKit JS its token. About the provider by definition, and not a map.</summary>

@@ -43,3 +43,29 @@ public sealed record BenMapPoint(double Latitude, double Longitude);
 
 /// <summary>The part of the world a map is showing, as its four edges and the zoom level.</summary>
 public sealed record BenMapViewport(double North, double South, double East, double West, double Zoom);
+
+/// <summary>What a route is asked for: where from (an address to look up, or a coordinate) and where to.</summary>
+public sealed record BenMapRouteRequest(
+    string? OriginAddress,
+    double? OriginLatitude,
+    double? OriginLongitude,
+    double DestinationLatitude,
+    double DestinationLongitude);
+
+/// <summary>A driving route, as drawn on the map and read out beside it.</summary>
+/// <param name="Error">Why there is no route, in words meant for the person; null when there is one.</param>
+public sealed record BenMapRoute(
+    double DistanceMeters,
+    double DurationSeconds,
+    IReadOnlyList<BenMapRouteStep> Steps,
+    string? Error = null)
+{
+    public double DistanceMiles => DistanceMeters / 1609.344;
+    public double DurationMinutes => DurationSeconds / 60.0;
+}
+
+public sealed record BenMapRouteStep(string Instructions, double DistanceMeters)
+{
+    public double DistanceMiles => DistanceMeters / 1609.344;
+}
+
