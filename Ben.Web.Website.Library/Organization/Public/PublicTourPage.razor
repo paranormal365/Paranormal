@@ -87,53 +87,9 @@ else
             </div>
         </div>
 
-        @* The facts somebody decides on, before any prose. A rail of labelled figures rather than
-           a row of pills: a pill can hold a word, and "about 1 hour 30 minutes" beside "Up to 20
-           people" beside a date is three unlabelled phrases the reader has to sort out. The next
-           walk leads, because it is the one that decides whether they read on. *@
-        <div class="tour-facts mb-4">
-            @if (_tour.UpcomingDates.Count > 0)
-            {
-                var soonest = _tour.UpcomingDates[0].StartDateTime.ToViewerLocalTime(UserState);
-                <a class="tour-fact tour-fact--next" href="#tour-dates">
-                    <span class="tour-fact__label">Next walk</span>
-                    <span class="tour-fact__value">@soonest.ToString("ddd MM/dd")</span>
-                    <span class="tour-fact__sub">@soonest.ToString("h:mm tt")</span>
-                </a>
-            }
-            @if (_tour.DurationMinutes is { } heroMinutes)
-            {
-                <div class="tour-fact">
-                    <span class="tour-fact__label">How long</span>
-                    <span class="tour-fact__value">@Duration(heroMinutes)</span>
-                    <span class="tour-fact__sub">on your feet</span>
-                </div>
-            }
-            @if (_tour.DefaultCapacity is { } heroCapacity)
-            {
-                <div class="tour-fact">
-                    <span class="tour-fact__label">Group size</span>
-                    <span class="tour-fact__value">Up to @heroCapacity</span>
-                    <span class="tour-fact__sub">people per walk</span>
-                </div>
-            }
-            @if (_tour.Rating is { } railRating)
-            {
-                <div class="tour-fact">
-                    <span class="tour-fact__label">Rated</span>
-                    <span class="tour-fact__value">@railRating.ToString("0.0") ★</span>
-                    <span class="tour-fact__sub">@_tour.RatingCount @(_tour.RatingCount == 1 ? "guest" : "guests")</span>
-                </div>
-            }
-            @if (_gallery.Count + _guestPhotos.Count > 0)
-            {
-                <a class="tour-fact" href="#tour-slideshow">
-                    <span class="tour-fact__label">Pictures</span>
-                    <span class="tour-fact__value">@(_gallery.Count + _guestPhotos.Count)</span>
-                    <span class="tour-fact__sub">from the walk</span>
-                </a>
-            }
-        </div>
+        @* The facts somebody decides on, before any prose. The rail itself is BenFactRail, so a
+           tour date's page states them the same way a tour's does. *@
+        <BenFactRail Facts="@Facts" Class="mb-4" />
 
         @if (!_tour.IsBookable)
         {
@@ -142,16 +98,16 @@ else
             </div>
         }
 
-        @* The meeting point on a map, with directions (item 233).
+        @* The meeting point, on a map, with directions (item 233).
 
-           Ben asked whether this was overdone. It is the opposite: this page exists to get
+           Ben asked whether the map was overdone. It is the opposite: this page exists to get
            somebody to a street corner at a particular time, and a line of text is what a site in
-           2005 would have given them. The map is small and beside the address rather than a
-           full-bleed hero, and the button hands the walk to whatever they navigate with — the
-           functional answer, not a decorative one. Drawn only when the address geocoded; an
-           empty grey box would be worse than the sentence alone. *@
-        @* The address is the one line on this page a guest has to carry with them, so it is set
-           as an address and not as the second half of a definition list. How long and how many
+           2005 would have given them. The button hands the walk to whatever they navigate with —
+           the functional answer, not a decorative one. Drawn only when the address geocoded; an
+           empty grey box would be worse than the sentence alone.
+
+           The address is the one line on this page a guest has to carry with them, so it is set as
+           an address rather than as the second half of a definition list. How long and how many
            moved up to the rail; what is left here is where to stand and who to ask. *@
         <div class="tour-meet card mb-4 overflow-hidden">
             <div class="tour-meet__grid @(HasMap ? "tour-meet__grid--map" : "")">
@@ -201,31 +157,8 @@ else
 
         @if (_tour.Guides.Count > 0)
         {
-            <h2 class="tour-h">Who you'll be walking with</h2>
-            @* Named and pictured because Ben's reason was safety: somebody walking up to a
-               stranger on a dark street should already know that face. So the picture is given
-               room rather than set as an inline avatar beside a line of text. *@
-            <div class="tour-guides mb-4">
-                @foreach (var guide in _tour.Guides)
-                {
-                    <div class="tour-guide">
-                        @if (guide.PhotoUploadFileId is { } photoId)
-                        {
-                            <img src="@MediaUrls.GuidePhoto(photoId)" alt="@guide.DisplayName"
-                                 class="tour-guide__photo" loading="lazy" />
-                        }
-                        else
-                        {
-                            <span class="tour-guide__photo tour-guide__photo--none"
-                                  style="@TourPlate.HueStyle(guide.DisplayName)" aria-hidden="true">
-                                @TourPlate.Monogram(guide.DisplayName)
-                            </span>
-                        }
-                        <span class="tour-guide__name">@guide.DisplayName</span>
-                        <span class="tour-guide__role">Guide</span>
-                    </div>
-                }
-            </div>
+            <BenSectionHeading Text="Who you'll be walking with" />
+            <BenGuideStrip Guides="@_tour.Guides" Role="Guide" Class="mb-4" />
         }
 
         @* A slideshow rather than a wall of thumbnails (Ben, 2026-09-10): "a slideshow of images
@@ -235,7 +168,7 @@ else
         @* One picture is already the hero above, so the reel earns its place from two. *@
         @if (_slides.Count > 1)
         {
-            <h2 class="tour-h">Pictures</h2>
+            <BenSectionHeading Text="Pictures" />
             <div class="card mb-2 overflow-hidden" id="tour-slideshow">
                 <BenSlideshow Slides="@_slides" Height="360px" />
             </div>
@@ -307,15 +240,14 @@ else
         @if (_reviews is not null
              && (_reviews.Reviews.Count > 0 || _reviews.MayReview || _reviews.WhyNot is not null))
         {
-            <h2 class="tour-h" id="tour-reviews">
-                What people said
-                @if (_reviews.Average is { } avg)
-                {
-                    <span class="text-secondary fs-6">
-                        · @avg.ToString("0.0") ★ from @_reviews.Count @(_reviews.Count == 1 ? "guest" : "guests")
-                    </span>
-                }
-            </h2>
+            <BenSectionHeading Text="What people said" Id="tour-reviews">
+                <Note>
+                    @if (_reviews.Average is { } avg)
+                    {
+                        <text>@avg.ToString("0.0") ★ from @_reviews.Count @(_reviews.Count == 1 ? "guest" : "guests")</text>
+                    }
+                </Note>
+            </BenSectionHeading>
 
             @if (_reviews.MayReview)
             {
@@ -395,7 +327,7 @@ else
             </div>
         }
 
-        <h2 class="tour-h" id="tour-dates">When it runs</h2>
+        <BenSectionHeading Text="When it runs" Id="tour-dates" />
         @if (_tour.UpcomingDates.Count == 0)
         {
             <p class="text-secondary" id="tour-no-dates">
@@ -499,6 +431,44 @@ else
 
     private Ben.Web.Website.Library.Manage.Maps.DirectionsMapModal? _directions;
     private IReadOnlyList<Ben.Web.Website.Library.Kit.Maps.BenMapPin> _mapPins = [];
+
+    /// <summary>
+    /// The rail under the poster: the handful of figures somebody decides on before reading a word
+    /// of the description. Built here rather than in the markup so the order is one list to read.
+    /// </summary>
+    private IReadOnlyList<BenFactItem> Facts
+    {
+        get
+        {
+            if (_tour is null) return [];
+
+            var facts = new List<BenFactItem>();
+
+            if (_tour.UpcomingDates.Count > 0)
+            {
+                var soonest = _tour.UpcomingDates[0].StartDateTime.ToViewerLocalTime(UserState);
+                facts.Add(new BenFactItem("Next walk", soonest.ToString("ddd MM/dd"),
+                    soonest.ToString("h:mm tt"), Href: "#tour-dates", Emphasis: true));
+            }
+
+            if (_tour.DurationMinutes is { } minutes)
+                facts.Add(new BenFactItem("How long", Duration(minutes), "on your feet"));
+
+            if (_tour.DefaultCapacity is { } capacity)
+                facts.Add(new BenFactItem("Group size", $"Up to {capacity}", "people per walk"));
+
+            if (_tour.Rating is { } rating)
+                facts.Add(new BenFactItem("Rated", $"{rating:0.0} ★",
+                    $"{_tour.RatingCount} {(_tour.RatingCount == 1 ? "guest" : "guests")}"));
+
+            var pictures = _gallery.Count + _guestPhotos.Count;
+            if (pictures > 0)
+                facts.Add(new BenFactItem("Pictures", pictures.ToString(), "from the walk",
+                    Href: "#tour-slideshow"));
+
+            return facts;
+        }
+    }
 
     /// <summary>Whether the meeting point has coordinates to draw.</summary>
     private bool HasMap => _tour is { Latitude: not null, Longitude: not null };
