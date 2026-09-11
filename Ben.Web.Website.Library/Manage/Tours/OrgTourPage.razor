@@ -554,7 +554,11 @@
                     <div class="table-responsive mt-3">
                         <table class="table table-sm align-middle mb-0">
                             <thead>
-                                <tr><th>When</th><th>Guides</th><th class="text-end">Coming</th></tr>
+                                <tr>
+                                    <th>When</th><th>Guides</th>
+                                    <th class="text-end">Coming</th>
+                                    <th class="text-end">Sign-ups</th>
+                                </tr>
                             </thead>
                             <tbody>
                                 @foreach (var date in _dates)
@@ -568,6 +572,20 @@
                                         </td>
                                         <td class="text-end">
                                             @date.AttendeeCount@(date.AttendeeCapacity is { } cap ? $" of {cap}" : "")
+                                        </td>
+                                        @* What is waiting on the business, and the way in to decide
+                                           it (item 234). The count is the point of the column: a
+                                           business scanning its nights should see where the work is
+                                           without opening each one. *@
+                                        <td class="text-end text-nowrap">
+                                            <a class="btn btn-outline-secondary btn-sm"
+                                               href="@($"/organizations/{OrgId}/tours/{TourId}/dates/{date.Id}")">
+                                                @if (date.SeatsWaiting > 0)
+                                                {
+                                                    <span class="badge text-bg-warning me-1">@date.SeatsWaiting waiting</span>
+                                                }
+                                                Sign-ups
+                                            </a>
                                         </td>
                                     </tr>
                                 }

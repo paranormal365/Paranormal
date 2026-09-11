@@ -117,4 +117,30 @@ waiting, a guest sees an approval. Help text, screenshots, both PDFs, and the ba
 
 ## Status
 
-Planned 2026-09-11. Phase 1 in progress.
+Planned 2026-09-11. **Phases 1 and 2 built**; 3, 4 and 5 to come.
+
+### Verified, not assumed
+
+Watched happening against the running site, not inferred from a passing test:
+
+- A guest asked for three places on a walk. The walk stayed at one place taken — a request holds
+  nothing — and the page said *Your seat is with the tour — they'll confirm it* rather than
+  offering the button again.
+- The business approved it and the walk went from 1 place to 4. **One sign-up, three places.**
+- Asked to approve a party of twenty into a walk of twenty with four gone, the server answered
+  *"Only 16 places left on this date, and this is a request for 20."*
+- The guest acknowledged, and the business's list showed **Guest confirmed** beside the seat.
+- Turned down, the guest's page read *The tour couldn't take this booking* — the row is kept, not
+  deleted, so somebody who is not coming can see that they are not coming.
+
+### Found by building it
+
+`OrgTourDateSeats` loaded its data in `OnParametersSetAsync`, which runs before auth resolves on a
+hard navigation — so the page asked the API as nobody and rendered *That date could not be found*.
+It waits for `AuthReady` now, the way the tour page beside it already did. This is the same trap
+recorded in the Blazor AuthReady rule, and it presents as a missing record rather than as a
+permission error, which is what makes it worth writing down twice.
+
+The Playwright fixture's teardown had to **purge** its test business rather than delete it: a
+business with a tour, a date and sign-ups attached is refused by the ordinary delete, in words, and
+a run would otherwise leave one behind every time.

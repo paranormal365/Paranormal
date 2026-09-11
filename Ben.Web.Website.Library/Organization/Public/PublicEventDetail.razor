@@ -107,7 +107,52 @@ else
            its street until you are coming would be protecting nothing if it did. *@
         <div class="event-act card mb-4">
             <div class="card-body">
-                @if (_event.Flags.HasRsvpd)
+                @* ── A seat on a walk (item 234) ───────────────────────────
+                   On a tour date a sign-up is a REQUEST until the business approves it, so the
+                   page has to say which of the three a guest is looking at. Saying "you're
+                   coming" over a request nobody has agreed to would send somebody to a meeting
+                   point with no place held for them. *@
+                @if (_event.MySeat?.Status == TourSeatStatus.Requested)
+                {
+                    <div class="d-flex flex-wrap align-items-center gap-2">
+                        <span class="badge text-bg-warning">Asked for</span>
+                        <span class="text-secondary small flex-grow-1">
+                            @SeatSize with @_event.OrganizationName. They'll confirm it — you'll get
+                            an email with where to meet once they do.
+                        </span>
+                        <button type="button" class="btn btn-outline-secondary btn-sm"
+                                @onclick="CancelAsync" disabled="@_busy">Never mind</button>
+                    </div>
+                }
+                else if (_event.MySeat?.Status == TourSeatStatus.TurnedDown)
+                {
+                    <div class="d-flex flex-wrap align-items-center gap-2">
+                        <span class="badge bg-body-secondary text-body-emphasis">Not this time</span>
+                        <span class="text-secondary small flex-grow-1">
+                            @_event.OrganizationName couldn't take this booking. Another date may
+                            have room.
+                        </span>
+                    </div>
+                }
+                else if (_event.MySeat?.Status == TourSeatStatus.Reserved)
+                {
+                    <div class="d-flex flex-wrap align-items-center gap-2">
+                        <span class="badge text-bg-success">@SeatSize reserved</span>
+                        <span class="text-secondary small flex-grow-1">
+                            @(_event.MySeat.AcknowledgedUtc is null
+                                ? "Let them know you've seen it, if you like — it's optional."
+                                : "You've confirmed you've seen it.")
+                        </span>
+                        @if (_event.MySeat.AcknowledgedUtc is null)
+                        {
+                            <button type="button" class="btn btn-primary btn-sm"
+                                    @onclick="AcknowledgeAsync" disabled="@_busy">Got it</button>
+                        }
+                        <button type="button" class="btn btn-outline-secondary btn-sm"
+                                @onclick="CancelAsync" disabled="@_busy">I can't make it</button>
+                    </div>
+                }
+                else if (_event.Flags.HasRsvpd)
                 {
                     <div class="d-flex flex-wrap align-items-center gap-2">
                         <span class="badge text-bg-success">You're coming</span>
@@ -116,6 +161,25 @@ else
                         </span>
                         <button type="button" class="btn btn-outline-secondary btn-sm"
                                 @onclick="CancelAsync" disabled="@_busy">I can't make it</button>
+                    </div>
+                }
+                else if (_event.Flags.CanRsvp && _event.TourName is not null)
+                {
+                    @* A walk asks how many are coming; an ordinary evening does not, because one
+                       row has always been one person there and inventing a party size for it would
+                       change what every other page counts. *@
+                    <div class="d-flex flex-wrap align-items-center gap-2">
+                        <span class="event-act__ask flex-grow-1">Coming along?</span>
+                        <label class="text-secondary small" for="event-seats">How many?</label>
+                        <select id="event-seats" class="form-select form-select-sm" style="width:5.5rem;"
+                                value="@_seats" @onchange="@(e => _seats = int.TryParse(e.Value?.ToString(), out var n) ? n : 1)">
+                            @for (var n = 1; n <= MaxSeats; n++)
+                            {
+                                <option value="@n">@n</option>
+                            }
+                        </select>
+                        <button type="button" class="btn btn-primary"
+                                @onclick="RsvpAsync" disabled="@_busy">Ask for a place</button>
                     </div>
                 }
                 else if (_event.Flags.CanRsvp)
@@ -389,6 +453,23 @@ else
 
     private PublicEventRecord? _event;
     private bool _loading = true, _busy, _isAuthenticated;
+
+    /// <summary>How many places to ask for on a walk. One, unless somebody says otherwise.</summary>
+    private int _seats = 1;
+
+    /// <summary>
+    /// The ceiling on the picker, matching the server's own clamp.
+    /// </summary>
+    /// <remarks>
+    /// A guest booking for their family, not a coach party — a business seating forty from one
+    /// request is arranging that with them directly, which is the whole premise of approval.
+    /// </remarks>
+    private const int MaxSeats = 20;
+
+    /// <summary>"A place" or "3 places", so the badge reads as a sentence either way.</summary>
+    private string SeatSize => _event?.MySeat is { Seats: > 1 } seat
+        ? $"{seat.Seats} places"
+        : "A place";
     private string? _error;
 
     private DirectionsMapModal? _directions;
@@ -620,12 +701,28 @@ else
         if (_event is null) return;
         _busy = true; _error = null;
 
-        var updated = await AdminClient.RsvpToEventAsync(_event.Id);
+        // A walk carries how many places; everything else ignores the number (item 234).
+        var updated = _event.TourName is null
+            ? await AdminClient.RsvpToEventAsync(_event.Id)
+            : await AdminClient.RsvpToEventAsync(_event.Id, _seats);
         if (updated is null) _error = "That couldn't be saved — the event may be full or closed.";
         else _event = updated;
 
         _busy = false;
         if (_error is not null) await LoadAsync();
+    }
+
+    /// <summary>The guest's optional "yes, I've seen it" on a reserved seat (item 234).</summary>
+    private async Task AcknowledgeAsync()
+    {
+        if (_event is null) return;
+        _busy = true; _error = null;
+
+        var updated = await AdminClient.AcknowledgeSeatAsync(_event.Id);
+        if (updated is null) _error = "That couldn't be saved just now.";
+        else _event = updated;
+
+        _busy = false;
     }
 
     private async Task CancelAsync()

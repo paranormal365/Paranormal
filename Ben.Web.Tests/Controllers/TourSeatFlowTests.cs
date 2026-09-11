@@ -388,6 +388,24 @@ public sealed class TourSeatFlowTests
     }
 
     [Fact]
+    public async Task A_turned_down_guest_is_told_so_rather_than_left_guessing()
+    {
+        var world = await SeedAsync();
+        var guest = await GuestAsync(world, "sarah");
+        await PublicAs(world.Factory, guest).Rsvp(world.TourDateId, default);
+        var seatId = (await SeatOfAsync(world, guest, world.TourDateId))!.Id;
+        await BusinessAs(world.Factory, world.OwnerId)
+            .TurnDownSeat(world.OrgId, world.TourDateId, seatId, default);
+
+        var read = await PublicAs(world.Factory, guest).GetEvent(world.TourDateId, default);
+        var page = (PublicEventRecord)Assert.IsType<OkObjectResult>(read.Result).Value!;
+
+        Assert.Equal(TourSeatStatus.TurnedDown, page.MySeat!.Status);
+        Assert.False(page.Flags.CanRsvp);
+        Assert.Equal("The tour couldn't take this booking.", page.Flags.RsvpBlockedReason);
+    }
+
+    [Fact]
     public async Task An_approved_party_counts_as_its_places()
     {
         var world = await SeedAsync();

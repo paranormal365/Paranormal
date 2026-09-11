@@ -173,7 +173,17 @@ public record OrgCalendarEventRecord
     public string? TimeZoneId { get; init; }
 
     public string? RecurrenceRule { get; init; }
+    /// <summary>
+    /// How many PLACES are held on this date (item 234), not how many rows there are.
+    /// </summary>
+    /// <remarks>
+    /// A sign-up may hold several places. Every row written before seats existed holds exactly
+    /// one, so this equals what it counted before.
+    /// </remarks>
     public int AttendeeCount { get; init; }
+
+    /// <summary>Sign-ups waiting on the business to decide. Zero on every non-tour date.</summary>
+    public int SeatsWaiting { get; init; }
     public DateTime DateCreated { get; init; }
     public DateTime? DateUpdated { get; init; }
     public Guid CreatedByAppUserId { get; init; }
