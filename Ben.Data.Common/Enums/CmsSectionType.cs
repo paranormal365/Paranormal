@@ -48,5 +48,31 @@ public enum CmsSectionType
     /// <para>Copying the file into the section at fill-in time would have been far simpler and is
     /// exactly wrong: it would make a published page immune to somebody changing their mind.</para>
     /// </remarks>
-    CaseMedia = 9
+    CaseMedia = 9,
+
+
+    /// <summary>An event's programme — its sessions, by night, with rooms and places left.</summary>
+    /// <remarks>
+    /// Resolved on every request like <see cref="EmbeddedInvestigations"/> and
+    /// <see cref="CaseMedia"/>, and for the same reason twice over: a session cancelled this
+    /// morning must not still be advertised this afternoon, and "3 of 15 left" is a number that
+    /// is wrong the moment it is written down.
+    /// </remarks>
+    EventProgramme = 10,
+
+    /// <summary>The card a visitor asks for a place through.</summary>
+    /// <remarks>Resolved: it must know whether bookings have closed and whether this reader
+    /// already has one.</remarks>
+    EventBooking = 11,
+
+    /// <summary>An event's own pictures.</summary>
+    EventGallery = 12,
+
+    /// <summary>The venue: where it is, its history, its rooms and what they sleep.</summary>
+    /// <remarks>
+    /// Resolved because the history and photos may be BORROWED from the venue under a grant that
+    /// can be revoked (item 235 phase 8). A snapshot would keep showing a building's story after
+    /// its owner took the loan back.
+    /// </remarks>
+    EventVenue = 13
 }

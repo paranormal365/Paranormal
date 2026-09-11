@@ -286,6 +286,7 @@ public class OrganizationMembershipController : BenControllerBase
         (Ben.Data.Common.Enums.OrganizationPermissionArea.Files,               Ben.Data.Common.Enums.OrganizationSecurityTable.OrganizationFiles),
         (Ben.Data.Common.Enums.OrganizationPermissionArea.Clients,             Ben.Data.Common.Enums.OrganizationSecurityTable.ClientRequest),
         (Ben.Data.Common.Enums.OrganizationPermissionArea.Calendar,            Ben.Data.Common.Enums.OrganizationSecurityTable.OrgCalendar),
+        (Ben.Data.Common.Enums.OrganizationPermissionArea.Events,              Ben.Data.Common.Enums.OrganizationSecurityTable.HostedEvent),
     ];
 
     public sealed record OrgIncludedAreasResponse(

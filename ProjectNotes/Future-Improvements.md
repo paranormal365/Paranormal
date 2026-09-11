@@ -11708,3 +11708,48 @@ the location permission string, which now mentions finding tours, must ship WITH
 Prerequisites already true after 233: tours are public with a start address and coordinates, dates
 carry guides and capacity, and the guest mail knows how to say all of it.
 
+
+---
+
+## 235. Hosted events: the event creator band (IN PROGRESS, branched 2026-09-11)
+
+The third paying customer. Ben, 2026-09-11: *"In the price bands, there are personal, Ghost Tours
+and Event Creators. The one I don't think we have addressed is the Event Creator bands."*
+
+**What an event creator is.** A venue like The Thomas House Hotel, or any group that buys the right
+to hold one: multi-night events, rooms that each sleep so many, day passes sold to people not
+staying, a programme of optional classes with their own capacity, check-in and check-out, checklists,
+menus, files kept with the event, staff with different permissions, a flashy public page, ads, QR
+passes issued when a booking is confirmed, attendees sharing photos with each other on the phone,
+and one group hosting at another's venue by permission.
+
+**And it is not about ghosts.** Ben, the same day: *"The idea is to allow someone to schedule and
+track and organize an event that is not ghost hunting related."* A dinner-theatre run, a retreat and
+a Halloween lock-in are the same record. The copy stays neutral; the paranormal surfaces (evidence
+queue, archive publication) are per-event switches, off by default for an ordinary event.
+
+**Plan of record: `README-hosted-events-235.md`** on branch `feature/hosted-events-235` (from
+`develop` `d9c8a94d`). Thirteen phases, each independently shippable: the event package and its
+billing; bookings with rooms and menus; QR passes; sessions; staff, the door and checklists; files;
+the page, feed and ads; venue profiles and the site's first org-to-org grant; the attendee room; the
+phone's Event section; event credits (recorded, unbuilt); ticketing (design only); docs.
+
+**The model in one line:** a `HostedEvent` is the product, the way a `Tour` is, and it owns exactly
+one `OrgCalendarEvent` umbrella row — so the shipped phone, the public list, the reminder job, the
+`.ics` and the `/o/{org}/events/{slug}` URL all keep working with no change at all.
+
+**Decisions Ben took 2026-09-11:** the site takes no guest money (the venue confirms; passes issue
+on confirmation); `HauntedProperty` joins the business kinds and pays per active product, tours and
+events alike; an event is active until archived, and a job archives it 14 days after the last night;
+event **credits** are recorded but not built — one credit buys one event, unused credits expire a
+year after purchase, and each event docks one.
+
+**Open questions in the README:** whether a run of separate dates (the resident play company) lands
+its `DatesAreSeparate` flag in phase 1, and whether a credit is spent at creation or at hosting.
+
+**Phase 0 done 2026-09-11:** every append-only value fixed before anything depends on the numbers —
+`OrganizationPermissionArea.Events`, six `OrganizationSecurityTable` values, four `SubscriptionLimit`
+values, three `TierCapability` values, four `CmsSectionType` values, `OrgMessageChannel.EventRoom`,
+and five new enums. Three guards caught what the appends broke, which is what they are for: the
+permission map, the role editor's rows, and the permissions endpoint's probe list. A new
+`TierLabelCoverageTests` refuses a cap or capability a SuperAdmin would have to set by its enum name.

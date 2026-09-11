@@ -106,4 +106,32 @@ public enum OrganizationSecurityTable
 
     /// <summary>The group calendar and its events.</summary>
     OrgCalendar = 39,
+
+
+    /// <summary>A hosted event itself — creating it, its dates, its description, publishing it.</summary>
+    HostedEvent = 40,
+
+    /// <summary>Who has a place: bookings, rooms allocated, day passes, party details.</summary>
+    /// <remarks>
+    /// Split from <see cref="HostedEvent"/> because deciding who may come is a different job from
+    /// describing what the event is, and a venue commonly gives the second to somebody it would
+    /// not give the first.
+    /// </remarks>
+    EventBooking = 41,
+
+    /// <summary>The programme: sessions and classes, their times, rooms, leaders and capacity.</summary>
+    EventSession = 42,
+
+    /// <summary>Files kept with an event and who may read them.</summary>
+    EventFile = 43,
+
+    /// <summary>The door: recording who arrived and who left.</summary>
+    /// <remarks>
+    /// The narrowest grant here, and the one most often given to somebody with nothing else. A
+    /// person standing at a table with a list needs to tick names and nothing more.
+    /// </remarks>
+    EventCheckIn = 44,
+
+    /// <summary>An event's checklists and who has done what on them.</summary>
+    EventChecklist = 45,
 }

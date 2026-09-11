@@ -43,4 +43,14 @@ public enum OrganizationPermissionArea
 
     /// <summary>The group calendar and its events.</summary>
     Calendar = 9,
+
+
+    /// <summary>Hosted events: the event itself, its bookings, programme, staff, files and door.</summary>
+    /// <remarks>
+    /// Separate from <see cref="Calendar"/> on purpose (item 235). A group's calendar is its own
+    /// diary; a hosted event is a product with guests, money settled off-site, staff who are often
+    /// not members, and a door somebody stands at. Handing one person the calendar because they
+    /// run the door would hand them every date the group has.
+    /// </remarks>
+    Events = 10,
 }

@@ -700,6 +700,7 @@
         Ben.Data.Common.Enums.OrganizationPermissionArea.Files               => "Files",
         Ben.Data.Common.Enums.OrganizationPermissionArea.Clients             => "Clients",
         Ben.Data.Common.Enums.OrganizationPermissionArea.Calendar            => "Calendar",
+        Ben.Data.Common.Enums.OrganizationPermissionArea.Events               => "Hosted events",
         _ => area.ToString(),
     };
 
@@ -708,6 +709,9 @@
         Ben.Data.Common.Enums.TierCapability.CaseTransfers => "Case transfers",
         Ben.Data.Common.Enums.TierCapability.MediaMetadataStripping => "Audio/video location stripping",
         Ben.Data.Common.Enums.TierCapability.PrivateResidenceCases => "Private-residence cases",
+        Ben.Data.Common.Enums.TierCapability.HostEvents => "Host events",
+        Ben.Data.Common.Enums.TierCapability.EventCredits => "Buy event credits",
+        Ben.Data.Common.Enums.TierCapability.EventTicketing => "Sell tickets (reserved)",
         _ => capability.ToString(),
     };
 
@@ -776,6 +780,10 @@
         SubscriptionLimit.RecordingRetentionDays => "Recordings kept (days)",
         SubscriptionLimit.RecordingMinutes     => "Longest recording (minutes)",
         SubscriptionLimit.TourGalleryImages    => "Pictures per tour",
+        SubscriptionLimit.ActiveHostedEvents   => "Events at once",
+        SubscriptionLimit.EventSessions        => "Sessions per event",
+        SubscriptionLimit.EventStaff           => "Staff per event",
+        SubscriptionLimit.EventFilesMegabytes  => "Files per event (MB)",
         _                                      => limit.ToString(),
     };
 

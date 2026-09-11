@@ -37,4 +37,38 @@ public enum TierCapability
     /// plan-governs-publication they are the same right.
     /// </summary>
     PrivateResidenceCases = 3,
+
+
+    /// <summary>
+    /// Running hosted events at all — multi-night events with rooms, a programme and a door
+    /// (item 235).
+    /// </summary>
+    /// <remarks>
+    /// A business kind pays per active event the way it pays per tour, so this capability is for
+    /// the OTHER case: a group on the member ladder that wants to hold one. Withholding it is how
+    /// the free lane stays the free lane.
+    /// </remarks>
+    HostEvents = 4,
+
+    /// <summary>
+    /// Buying event credits: one credit buys one event, for a group whose plan does not otherwise
+    /// include hosting.
+    /// </summary>
+    /// <remarks>
+    /// Ben's rule, 2026-09-11: a credit is a single event a member or group may schedule and host,
+    /// it expires a year after it is bought, and three events need three credits. Declared now so
+    /// the tier page lists it and the entitlement code has something real to point at; the purchase
+    /// itself is recorded and deliberately unbuilt.
+    /// </remarks>
+    EventCredits = 5,
+
+    /// <summary>
+    /// Selling tickets through the site, rather than settling the money with the guest directly.
+    /// </summary>
+    /// <remarks>
+    /// Reserved. The site takes no guest money today and will not until Ben decides it should:
+    /// that decision brings Stripe Connect, refunds and tax with it. The value exists so the
+    /// number is fixed before anything needs it.
+    /// </remarks>
+    EventTicketing = 6,
 }

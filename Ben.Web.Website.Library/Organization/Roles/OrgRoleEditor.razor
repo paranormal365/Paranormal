@@ -270,6 +270,18 @@ else if (_role is not null)
             "Manage the organization's own equipment — adding and editing gear, its photos, and its service history. Covers the group's own property only; any active member can already view it."),
         new("Equipment Checkouts",     OrganizationSecurityTable.EquipmentCheckout,       OrganizationSecurityTable.Equipment,
             "Approve or deny checkout requests and hand equipment out and back in. Separate from Equipment so someone can run the loans desk without managing the catalog."),
+        new("Hosted Events",           OrganizationSecurityTable.HostedEvent,             null,
+            "Create and edit the group's hosted events — their dates, description, venue and whether they are published. Separate from Calendar: an event is a product with guests and staff, and handing somebody the calendar to let them run one would hand them every date the group has."),
+        new("Event Bookings",          OrganizationSecurityTable.EventBooking,            OrganizationSecurityTable.HostedEvent,
+            "See who has asked for a place and decide it — confirming a party into a room, turning one down, editing what they booked. The site never takes the money; confirming says the host and the guest have settled it."),
+        new("Event Programme",         OrganizationSecurityTable.EventSession,            OrganizationSecurityTable.HostedEvent,
+            "Build the programme: the sessions and classes inside an event, their times, rooms, leaders and how many people each can take."),
+        new("Event Files",             OrganizationSecurityTable.EventFile,               OrganizationSecurityTable.HostedEvent,
+            "Keep files with an event — running orders, slides, floor plans — and choose whether each is for the staff, the guests, or anybody."),
+        new("Event Door",              OrganizationSecurityTable.EventCheckIn,            OrganizationSecurityTable.HostedEvent,
+            "Record who arrived and who left. The narrowest grant here and the one most often given on its own: somebody standing at a table with a list needs to tick names and nothing else."),
+        new("Event Checklists",        OrganizationSecurityTable.EventChecklist,          OrganizationSecurityTable.HostedEvent,
+            "Keep the event's to-do lists and tick things off them."),
     ];
 
     private sealed record PermissionSection(
