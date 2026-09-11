@@ -189,6 +189,28 @@ Found while wiring it up, and fixed here:
   to a scoped `FeedPostCard.razor.css`; the dead file is left for a separate pass rather than
   revived untested at the end of this one.
 
+## Where the branch stands (2026-09-11)
+
+All six phases are done. Two pieces named under **Not built** above are still not built and are not
+part of this item's scope: the iPhone and iPad app knows nothing about tours (item 234 is the
+larger version of that), and an over-large recording is refused on length but not downscaled to
+1080p.
+
+The seeded member seat `james.thornton@benco.dev` had drifted from the password in
+`appsettings.Development.json`, which failed every test and capture that signs in as a member.
+`OrganizationSeeder` can now put a seeded password back, **off unless asked for**:
+
+```bash
+SeedData__SeedOrganization__ResetPasswords=true dotnet run --urls http://localhost:5252
+```
+
+It touches only accounts listed under `SeedData:SeedOrganization:Users`, only when the stored
+password no longer matches the configuration, and clears the lockout with it.
+
+Every row this branch's testing wrote to the testing copy is listed, with a back-out script, in
+`ProjectNotes/Test-Data-Written-2026-09-11.md`. Three feed posts in there are **scheduled** and
+become public on their own two days after they were written.
+
 ## Left for production
 
 - Migrations `Tours`, `TourDetailsAndGuides`, `TourReviews`, `TourGallery`, `MediaRetention`,
