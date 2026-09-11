@@ -203,6 +203,54 @@ warning email at 30 days, which costs nothing and avoids a support ticket.
 
 Re-run `HelpMediaCapture` for every `org-event-*`, `public-event-*`, `org-venue-*` shot; rebuild the documentation PDF and persona docs; turn `docs/tour-business-pitch.html` into a tour-and-event business pitch and regenerate the offer PDF; `the-mobile-apps.md` lists what the phone shows; `docs/deploy-production.md` entry (below).
 
+## Billed per event, and only while the event is live
+
+**Ben, 2026-09-11:** *"An Event Creator can host many events. What if one is at The Thomas House,
+another at Waverly Manor and another at The Octagon House. How does this get billed?"*
+
+**The venue is not the unit. The event is.** Three events is three units whether they are at three
+houses or three times at one. Nothing about a building is billable: a venue that lends its rooms
+under a grant (phase 8) is paid nothing by us and charged nothing for lending them, and the event
+belongs to whoever created it. So in Ben's example the event creator pays for three, Thomas House
+pays its own subscription for its own events and nothing for hosting somebody else's, and Waverly
+and the Octagon — if they are not customers at all — never enter the arithmetic.
+
+**But "active event" as I first recommended it is wrong, and this question is what shows it.** A
+tour is a durable asset: one route, run for years, earning every time. Paying monthly for it is
+honest. An event is an occurrence. Charging monthly from the day it is created until fourteen days
+after it ends means the meter runs on **planning time** — an operator who lays out Halloween in June
+pays five months for one weekend, and one who throws it together in September pays one. That
+punishes the better operator for being the better operator, and it makes the bill impossible to
+predict, since it moves with how far ahead somebody happens to work.
+
+**The rule instead: an event is counted while it is PUBLISHED and not yet archived.** One sentence
+to explain — *you pay for an event while it is live* — and every consequence falls out right:
+
+- Planning privately costs nothing. A draft nobody can see is earning nothing and should cost
+  nothing; there is no page, no bookings, no door, no work being done for them.
+- The meter starts the day it goes public and opens for bookings, which is the day the site starts
+  doing the job they are paying for.
+- It still stops on its own, fourteen days after the last night (Ben's decision 4 — the auto-archive
+  stays exactly as it was).
+- Three events live together in October is three units in October. The same three run one a month is
+  about one unit a month. The bill tracks what is actually on.
+- Un-publishing to dodge a period is self-defeating: it takes the page down and closes the bookings.
+
+`BillableUnits.ActiveEventsAsync` therefore counts `IsPublished && ArchivedAtUtc is null`, beside
+`ActiveToursAsync`'s `RetiredAtUtc is null`. Proration on publish rather than on create: the
+remainder is charged the day an event goes live, with idempotency key
+`eventadd-{org}-{periodStart}-{from}-{to}`.
+
+**One thing to watch, not to build yet.** An operator running many small events pays linearly and
+may reach a number that feels wrong to them before it feels wrong to us. A ceiling — *"three live
+events included, more at £X each"* — is the standard answer and fits the existing tier shape
+(`SubscriptionLimit.ActiveHostedEvents` already exists from phase 0, and the tier row is the ceiling).
+Worth having ready; not worth guessing the number before a real operator has run a real year.
+
+**DECISION NEEDED:** confirm the change from "counted while not archived" to "counted while
+published and not archived". It is a one-line difference in a service nothing has been written
+against yet, and it is much cheaper to settle now than after the first invoice.
+
 ## What this is actually for
 
 **Ben, 2026-09-11:** *"The idea is to allow someone to schedule and track and organize an event that
@@ -286,7 +334,7 @@ HostedEvents (1) → HostedEventBookings (2) → EventPasses (3) → HostedEvent
 1. **The site takes no guest money in this arc.** The venue confirms; QR passes issue on confirmation; the guest is told how to pay in the contact line. Phase 12 stays design only.
 2. **HauntedProperty becomes a business kind** billed per active product (tours + events), prorated mid-period like a tour. A venue already on a headcount plan is re-priced at its next period, with the tier-change notice.
 3. **Event credits are recorded, not built.** Phase 11 is out of this arc; the entitlement code leaves the hook, and a group without `HostEvents` sees a sentence saying credits are coming. The rule is settled even though the build is not: one credit buys one event, unused credits expire a year after purchase, and each event docks one.
-4. **An event is active for billing until archived**, and a job archives it 14 days after the last night unless a booking is still undecided. Restorable.
+4. **An event stops counting 14 days after its last night**, when a job archives it (unless a booking is still undecided). Restorable. **Amended the same day**, on Ben's three-venues question: it also does not start counting until it is *published*, so planning privately is free and the meter runs while the event is live. See "Billed per event, and only while the event is live" above — awaiting Ben's confirmation.
 
 **Routine judgement calls, taken as recommended (say so if any should differ):**
 
