@@ -20,7 +20,19 @@ namespace Ben.Data.Source.Entities
     {
         public Guid Id { get; set; }
 
-        public Guid OrgMessageId { get; set; }
+        /// <summary>
+        /// The message being reported — a feed post, or a comment on a published case.
+        /// </summary>
+        /// <remarks>
+        /// Nullable since 2026-09-11: a report can now be about a <see cref="CaseId">case</see>
+        /// instead. Exactly one of the two is set, which is checked where a report is written
+        /// rather than by a constraint — the column pair is read by one moderation screen and a
+        /// check constraint here would be a second place to keep the same rule.
+        /// </remarks>
+        public Guid? OrgMessageId { get; set; }
+
+        /// <summary>The published case being reported, when that is what this is about.</summary>
+        public Guid? CaseId { get; set; }
 
         /// <summary>Who reported it.</summary>
         public Guid ReportedByAppUserId { get; set; }
@@ -38,7 +50,8 @@ namespace Ben.Data.Source.Entities
 
         public DateTime DateCreated { get; set; }
 
-        public virtual OrgMessage OrgMessage { get; set; } = null!;
+        public virtual OrgMessage? OrgMessage { get; set; }
+        public virtual Case? Case { get; set; }
         public virtual AppUser ReportedByAppUser { get; set; } = null!;
         public virtual AppUser? ResolvedByAppUser { get; set; }
     }

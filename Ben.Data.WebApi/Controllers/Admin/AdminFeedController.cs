@@ -72,11 +72,28 @@ public sealed class AdminFeedController : BenControllerBase
             {
                 r.Id,
                 r.OrgMessageId,
-                PostBody = r.OrgMessage.Body,
-                PostAuthorId = r.OrgMessage.AuthorAppUserId,
-                PostAuthorName = r.OrgMessage.AuthorAppUser.DisplayName ?? r.OrgMessage.AuthorAppUser.Email,
-                PostDateCreated = r.OrgMessage.DateCreated,
-                PostHidden = r.OrgMessage.HiddenUtc != null,
+                r.CaseId,
+                // A report is about a post OR a case (2026-09-11). The projection asks for both
+                // shapes and the record below picks whichever is there; navigating through a null
+                // navigation in a projection is null, not a throw, so the unused half is simply
+                // empty rather than a second query.
+                PostBody = r.OrgMessage != null ? r.OrgMessage.Body : null,
+                PostAuthorId = r.OrgMessage != null ? r.OrgMessage.AuthorAppUserId : (Guid?)null,
+                PostAuthorName = r.OrgMessage != null
+                    ? (r.OrgMessage.AuthorAppUser.DisplayName ?? r.OrgMessage.AuthorAppUser.Email)
+                    : null,
+                PostDateCreated = r.OrgMessage != null ? r.OrgMessage.DateCreated : (DateTime?)null,
+                PostHidden = r.OrgMessage != null && r.OrgMessage.HiddenUtc != null,
+                PostIsComment = r.OrgMessage != null
+                             && r.OrgMessage.ChannelType == OrgMessageChannel.PublicCaseComment,
+                // The reference is built from the year and the per-org number, the way every
+                // other surface builds it — there is no stored column for it.
+                CaseYear = r.Case != null ? r.Case.CaseYear : (int?)null,
+                CaseNumber = r.Case != null ? r.Case.OrgCaseNumber : (int?)null,
+                CaseTitle = r.Case != null ? r.Case.Title : null,
+                CaseOrgUrl = r.Case != null ? r.Case.Organization.UrlName : null,
+                CaseUrlName = r.Case != null ? r.Case.UrlName : null,
+                CaseCreated = r.Case != null ? r.Case.DateCreated : (DateTime?)null,
                 r.ReportedByAppUserId,
                 ReportedByName = r.ReportedByAppUser.DisplayName ?? r.ReportedByAppUser.Email,
                 r.Reason,
@@ -89,19 +106,47 @@ public sealed class AdminFeedController : BenControllerBase
             })
             .ToListAsync(ct);
 
-        var postIds = reports.Select(r => r.OrgMessageId).Distinct().ToList();
+        // Counted once for the whole page rather than per row: "how many people reported this" is
+        // context an administrator wants on every line, and a per-row query is the N+1 that makes a
+        // queue slow exactly as it gets long enough to matter.
+        var postIds = reports.Where(r => r.OrgMessageId is not null)
+                             .Select(r => r.OrgMessageId!.Value).Distinct().ToList();
+        var caseIds = reports.Where(r => r.CaseId is not null)
+                             .Select(r => r.CaseId!.Value).Distinct().ToList();
+
         var countsPerPost = (await db.OrgMessageReports.AsNoTracking()
-            .Where(r => postIds.Contains(r.OrgMessageId))
-            .GroupBy(r => r.OrgMessageId)
-            .Select(g => new { PostId = g.Key, Count = g.Count() })
+            .Where(r => r.OrgMessageId != null && postIds.Contains(r.OrgMessageId.Value))
+            .GroupBy(r => r.OrgMessageId!.Value)
+            .Select(g => new { Id = g.Key, Count = g.Count() })
             .ToListAsync(ct))
-            .ToDictionary(x => x.PostId, x => x.Count);
+            .ToDictionary(x => x.Id, x => x.Count);
+
+        var countsPerCase = (await db.OrgMessageReports.AsNoTracking()
+            .Where(r => r.CaseId != null && caseIds.Contains(r.CaseId.Value))
+            .GroupBy(r => r.CaseId!.Value)
+            .Select(g => new { Id = g.Key, Count = g.Count() })
+            .ToListAsync(ct))
+            .ToDictionary(x => x.Id, x => x.Count);
 
         return Ok(reports.Select(r => new FeedReportRecord(
-            r.Id, r.OrgMessageId, r.PostBody, r.PostAuthorId, r.PostAuthorName ?? "Unknown",
-            r.PostDateCreated, r.PostHidden, r.ReportedByAppUserId, r.ReportedByName ?? "Unknown",
+            r.Id, r.OrgMessageId,
+            r.PostBody ?? $"{Reference(r.CaseYear, r.CaseNumber)} — {r.CaseTitle}",
+            r.PostAuthorId ?? Guid.Empty,
+            r.PostAuthorName ?? r.CaseOrgUrl ?? "Unknown",
+            r.PostDateCreated ?? r.CaseCreated ?? r.DateCreated,
+            r.PostHidden,
+            r.ReportedByAppUserId, r.ReportedByName ?? "Unknown",
             r.Reason, r.Outcome, r.DateCreated, r.ResolvedUtc, r.ResolvedByName,
-            countsPerPost.GetValueOrDefault(r.OrgMessageId))).ToList());
+            r.OrgMessageId is { } pid
+                ? countsPerPost.GetValueOrDefault(pid)
+                : r.CaseId is { } cid ? countsPerCase.GetValueOrDefault(cid) : 0,
+            r.CaseId,
+            r.CaseId is not null ? $"Case {Reference(r.CaseYear, r.CaseNumber)}"
+                : r.PostIsComment ? "Case comment"
+                : "Feed post",
+            r.CaseId is not null && r.CaseOrgUrl is not null && r.CaseUrlName is not null
+                ? $"/o/{r.CaseOrgUrl}/cases/{r.CaseUrlName}"
+                : null)).ToList());
     }
 
     /// <summary>
@@ -161,4 +206,8 @@ public sealed class AdminFeedController : BenControllerBase
         await db.SaveChangesAsync(ct);
         return NoContent();
     }
+
+    /// <summary>"#2026-001", the way every other surface writes a case's reference.</summary>
+    private static string Reference(int? year, int? number) =>
+        year is null || number is null ? "a case" : $"#{year}-{number:D3}";
 }

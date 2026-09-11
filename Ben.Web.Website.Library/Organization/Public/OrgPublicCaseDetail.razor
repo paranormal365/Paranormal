@@ -86,7 +86,7 @@ else
            once; a test pinned to the words breaks on an edit that changed nothing it cares about. *@
         <div class="mb-4" id="public-case-rating">
             <BenSectionHeading Text="What people think" />
-            <CaseVoteWidget CaseId="@_case.CaseId" />
+            <CaseVoteWidget CaseId="@_case.CaseId" CommentCount="@_commentCount" />
         </div>
 
         @* ── Timeline ─────────────────────────────────────────────────────── *@
@@ -138,6 +138,9 @@ else
         {
             <div class="alert alert-light text-muted text-center">No public timeline entries yet.</div>
         }
+        @* What people said. On the case's own page rather than anywhere else, which is why the
+           comments button in the strip above is an anchor: it scrolls, because they are here. *@
+        <CaseComments CaseId="@_case.CaseId" CountChanged="@(n => _commentCount = n)" />
     </div>
 }
 
@@ -146,6 +149,7 @@ else
     [Parameter] public string CaseRef  { get; set; } = "";
 
     private PublicCaseDetail? _case;
+    private int _commentCount;
     private string? _logoUrl;
     private IReadOnlyList<OrgPublicNavItem> _navPages = [];
     private bool _loading = true;

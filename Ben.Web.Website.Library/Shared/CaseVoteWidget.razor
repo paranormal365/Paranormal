@@ -123,6 +123,33 @@
                     </div>
                 </div>
 
+                @* Repost: a link to this case on the feed, as a post by whoever pressed it —
+                   posting on behalf of a group takes permission, and this is one person saying
+                   look at this (Ben, 2026-09-11). *@
+                <button type="button" class="vote-btn @(_reposted ? "vote-btn--done" : "")"
+                        title="@(_reposted ? "You put this on the feed" : "Repost to the feed")"
+                        aria-label="@(_reposted ? "You put this on the feed" : "Repost to the feed")"
+                        @onclick="RepostAsync" disabled="@_isBusy">
+                    <BenIcon Name="repeat" />
+                </button>
+
+                @* Comments: straight down to them, since they are on this page. *@
+                <a class="vote-btn" href="#case-comments" title="Comments"
+                   aria-label="Go to the comments">
+                    <BenIcon Name="message-circle" />
+                    @if (CommentCount > 0)
+                    {
+                        <span class="vote-btn__count">@CommentCount</span>
+                    }
+                </a>
+
+                <button type="button" class="vote-btn @(_reported ? "vote-btn--done" : "")"
+                        title="@(_reported ? "Reported" : "Report this case")"
+                        aria-label="@(_reported ? "You reported this" : "Report this case")"
+                        @onclick="ReportAsync" disabled="@(_isBusy || _reported)">
+                    <BenIcon Name="flag" />
+                </button>
+
                 @if (_shareNote is not null)
                 {
                     <span class="vote-actions__note" role="status">@_shareNote</span>
@@ -149,6 +176,15 @@
     /// <summary>When provided, skips the API fetch. Used by list views that pre-load summaries in batch.</summary>
     [Parameter] public CaseVoteSummary? PreloadedSummary { get; set; }
 
+    /// <summary>
+    /// How many comments the page below is showing, for the number on the comments button.
+    /// </summary>
+    /// <remarks>
+    /// Handed down rather than counted here. The page has already loaded them to render them, and
+    /// a second count from this component could disagree with the list a reader is looking at.
+    /// </remarks>
+    [Parameter] public int CommentCount { get; set; }
+
     private CaseVoteSummary? _summary;
     private bool _loading = true;
     private bool _isBusy;
@@ -156,6 +192,8 @@
     private string? _error;
     private string? _actionError;
     private string? _shareNote;
+    private bool _reposted;
+    private bool _reported;
 
     /// <summary>Up, level, down — the order they are offered in, and the order they read in.</summary>
     private static readonly EvidenceVoteType[] Choices =
@@ -308,6 +346,55 @@
                 ("Email",    "mail",     $"mailto:?body={url}"),
             ];
         }
+    }
+
+    /// <summary>
+    /// Puts a link to this case on the feed.
+    /// </summary>
+    /// <remarks>
+    /// The server answers with the id of the post either way — a second press finds the first one
+    /// rather than making another, so the button simply reports that it is done.
+    /// </remarks>
+    private async Task RepostAsync()
+    {
+        if (!UserState.IsAuthenticated) { NavManager.NavigateTo(SignInUrl); return; }
+
+        _isBusy = true;
+        _actionError = null;
+        try
+        {
+            var (postId, error) = await AdminClient.RepostCaseAsync(CaseId);
+            if (postId is not null) { _reposted = true; _shareNote = "On the feed"; }
+            else _actionError = error ?? "That could not be posted.";
+        }
+        catch { _actionError = "That could not be posted."; }
+        finally { _isBusy = false; }
+    }
+
+    /// <summary>
+    /// Reports the case to the site's moderators.
+    /// </summary>
+    /// <remarks>
+    /// No reason is asked for here. A box demanding an explanation before it will accept one is
+    /// how a report goes unsent; the moderator can see the case, and the reporter can say more in
+    /// the comments if they want to.
+    /// </remarks>
+    private async Task ReportAsync()
+    {
+        if (!UserState.IsAuthenticated) { NavManager.NavigateTo(SignInUrl); return; }
+
+        _isBusy = true;
+        _actionError = null;
+        try
+        {
+            // The server answers the same whether this is the first report or the fifth, so the
+            // button says the same thing either way.
+            await AdminClient.ReportCaseAsync(CaseId, null);
+            _reported = true;
+            _shareNote = "Reported";
+        }
+        catch { _actionError = "That could not be reported."; }
+        finally { _isBusy = false; }
     }
 
     private double ConfirmsPct     => _summary is { TotalVotes: > 0 } ? _summary.ConfirmsCount     * 100.0 / _summary.TotalVotes : 0;

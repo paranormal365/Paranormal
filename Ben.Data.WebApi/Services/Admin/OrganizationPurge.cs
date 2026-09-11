@@ -1,3 +1,4 @@
+using Ben.Data.Common.Enums;
 ﻿using Ben.Data.Common.Interfaces;
 using Ben.Data.Source.Context;
 using Microsoft.EntityFrameworkCore;
@@ -316,6 +317,20 @@ public sealed class OrganizationPurge
             // Proposals reference both a case and an investigation; removed before either.
             await db.InvestigationScheduleProposals
                 .Where(x => caseIds.Contains(x.CaseId)).ExecuteDeleteAsync(ct);
+
+            // Reports about this group's cases go with them: a report is a pointer at a thing,
+            // and a pointer at nothing is not a report a moderator can act on. Like the posts
+            // below, these live outside the group and the OrganizationId sweep never sees them.
+            await db.OrgMessageReports.Where(x => x.CaseId != null && caseIds.Contains(x.CaseId.Value))
+                .ExecuteDeleteAsync(ct);
+
+            // A comment on one of those cases exists only because the case did, so it goes too —
+            // and it has to go before the reports above would otherwise be orphaned, which is why
+            // the two sit together here.
+            await db.OrgMessages
+                .Where(x => x.CaseId != null && caseIds.Contains(x.CaseId.Value)
+                         && x.ChannelType == OrgMessageChannel.PublicCaseComment)
+                .ExecuteDeleteAsync(ct);
 
             // A public feed post can cite one of this group's cases while living outside the
             // group (OrganizationId is null), so the OrganizationId sweep below never sees it —

@@ -107,6 +107,35 @@ public sealed partial class BenAdminClientAdapter
     public Task<bool> RemoveCaseVoteAsync(Guid caseId, CancellationToken token = default)
         => _api.DeleteAsync($"/api/public/cases/{caseId}/votes", token);
 
+    // ── What people said, and what to do about it (item 233, Ben 2026-09-11) ──
+
+    public Task<LoadResult<PublicCaseComment>> GetCaseCommentsAsync(Guid caseId, CancellationToken token = default)
+        => _api.GetListAsync<PublicCaseComment>($"/api/public/cases/{caseId}/comments", token);
+
+    // The reason-keeping shape: a refused comment says why in words written to be read, and
+    // "Save failed" would throw that away.
+    public Task<(PublicCaseComment? Saved, string? Error)> PostCaseCommentAsync(
+        Guid caseId, string body, CancellationToken token = default)
+        => _api.SendExpectingReasonAsync<object, PublicCaseComment>(
+               HttpMethod.Post, $"/api/public/cases/{caseId}/comments", new { Body = body }, token);
+
+    public Task<bool> DeleteCaseCommentAsync(Guid caseId, Guid commentId, CancellationToken token = default)
+        => _api.DeleteAsync($"/api/public/cases/{caseId}/comments/{commentId}", token);
+
+    public async Task<(Guid? PostId, string? Error)> RepostCaseAsync(Guid caseId, CancellationToken token = default)
+    {
+        var (id, error) = await _api.SendExpectingReasonAsync<object, Guid>(
+            HttpMethod.Post, $"/api/public/cases/{caseId}/repost", new { }, token);
+        return (id == Guid.Empty ? null : id, error);
+    }
+
+    public Task<bool> ReportCaseAsync(Guid caseId, string? reason, CancellationToken token = default)
+        => _api.PostVoidAsync($"/api/public/cases/{caseId}/report", new { Reason = reason }, token);
+
+    public Task<bool> ReportCaseCommentAsync(Guid caseId, Guid commentId, string? reason, CancellationToken token = default)
+        => _api.PostVoidAsync(
+               $"/api/public/cases/{caseId}/comments/{commentId}/report", new { Reason = reason }, token);
+
     // ── Cases ─────────────────────────────────────────────────────────────────
 
     public Task<LoadResult<CaseRecord>> GetOrgCasesAsync(Guid orgId, CancellationToken token = default)

@@ -1818,7 +1818,7 @@ namespace Ben.Data.Source.Context
             // ── OrgMessageReport ──────────────────────────────────────────────
             modelBuilder.Entity<OrgMessageReport>()
                 .HasOne(e => e.OrgMessage).WithMany(e => e.Reports)
-                .HasForeignKey(e => e.OrgMessageId).OnDelete(DeleteBehavior.Cascade);
+                .HasForeignKey(e => e.OrgMessageId).IsRequired(false).OnDelete(DeleteBehavior.Cascade);
             modelBuilder.Entity<OrgMessageReport>()
                 .HasOne(e => e.ReportedByAppUser).WithMany()
                 .HasForeignKey(e => e.ReportedByAppUserId).OnDelete(DeleteBehavior.NoAction);
@@ -1829,8 +1829,21 @@ namespace Ben.Data.Source.Context
                 .Property(e => e.Reason).HasMaxLength(1000);
             // One report per person per post. Reporting a thing twice is not twice the signal, and
             // without this a single objector could make a post look like a pile-on.
+            // A filtered index, because the column is nullable now: SQL Server treats NULLs as
+            // equal in a unique index, so without the filter one person could report exactly one
+            // CASE ever — their second case report would collide with their first on (null, them).
             modelBuilder.Entity<OrgMessageReport>()
-                .HasIndex(e => new { e.OrgMessageId, e.ReportedByAppUserId }).IsUnique();
+                .HasIndex(e => new { e.OrgMessageId, e.ReportedByAppUserId }).IsUnique()
+                .HasFilter("[OrgMessageId] IS NOT NULL");
+
+            // The same rule for the other target.
+            modelBuilder.Entity<OrgMessageReport>()
+                .HasIndex(e => new { e.CaseId, e.ReportedByAppUserId }).IsUnique()
+                .HasFilter("[CaseId] IS NOT NULL");
+
+            modelBuilder.Entity<OrgMessageReport>()
+                .HasOne(e => e.Case).WithMany()
+                .HasForeignKey(e => e.CaseId).OnDelete(DeleteBehavior.NoAction);
             // The moderation queue: everything still pending, oldest first.
             modelBuilder.Entity<OrgMessageReport>()
                 .HasIndex(e => new { e.Outcome, e.DateCreated });

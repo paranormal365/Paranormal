@@ -888,9 +888,13 @@ public sealed class FeedController : BenControllerBase
 
         var reported = readerId == Guid.Empty
             ? []
+            // OrgMessageId is nullable since a report can now be about a case instead, so this
+            // asks for the rows that are about a post and unwraps them.
             : await db.OrgMessageReports.AsNoTracking()
-                .Where(r => ids.Contains(r.OrgMessageId) && r.ReportedByAppUserId == readerId)
-                .Select(r => r.OrgMessageId)
+                .Where(r => r.OrgMessageId != null
+                         && ids.Contains(r.OrgMessageId.Value)
+                         && r.ReportedByAppUserId == readerId)
+                .Select(r => r.OrgMessageId!.Value)
                 .ToListAsync(ct);
 
         // Counted per page beside the replies, for the reason OrgMessageLike documents: one

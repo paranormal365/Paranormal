@@ -149,3 +149,32 @@ public record CaseVoteSummary(
     EvidenceVoteType? CurrentUserVote,
     /// <summary>Signed total: +1 confirms, 0 inconclusive, −1 disputes. See <see cref="EvidenceVoteSummary"/>.</summary>
     int Score = 0);
+
+
+// ── Comments on a published case (item 233, Ben 2026-09-11) ──────────────────
+
+/// <summary>One comment on a published case, as anybody reading the case sees it.</summary>
+/// <param name="By">The commenter's display name. Never their address, never their real name
+/// unless that is what they chose to be called.</param>
+/// <param name="IsMine">
+/// Whether the caller wrote it — which is the only thing that decides whether they are offered
+/// the delete. The server decides; the page never works it out from a name.
+/// </param>
+public sealed record PublicCaseComment(
+    Guid Id,
+    string By,
+    string? Handle,
+    string Body,
+    DateTime WhenUtc,
+    bool IsMine,
+    bool IsHidden);
+
+/// <summary>What somebody typed into the box under a case.</summary>
+public sealed record PostCaseCommentRequest(string Body);
+
+/// <summary>Why somebody is reporting a case or a comment. The reason is optional.</summary>
+/// <remarks>
+/// A report with no words is still a signal — asking for an explanation before accepting one is
+/// how a report queue ends up empty and a problem ends up unreported.
+/// </remarks>
+public sealed record ReportContentRequest(string? Reason);

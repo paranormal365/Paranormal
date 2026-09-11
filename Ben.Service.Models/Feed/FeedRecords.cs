@@ -156,7 +156,15 @@ public sealed record ReportFeedPostRequest(string? Reason);
 /// <summary>One report in the moderation queue.</summary>
 public sealed record FeedReportRecord(
     Guid Id,
-    Guid OrgMessageId,
+    /// <summary>
+    /// The reported post, when a post is what was reported.
+    /// </summary>
+    /// <remarks>
+    /// Nullable since 2026-09-11: a report can be about a published case instead, and the queue
+    /// shows both rather than making a moderator watch two screens. Exactly one of this and
+    /// <see cref="CaseId"/> is set.
+    /// </remarks>
+    Guid? OrgMessageId,
     string PostBody,
     Guid PostAuthorAppUserId,
     string PostAuthorDisplayName,
@@ -169,8 +177,17 @@ public sealed record FeedReportRecord(
     DateTime DateCreated,
     DateTime? ResolvedUtc,
     string? ResolvedByDisplayName,
-    /// <summary>How many people have reported this same post. Context an administrator wants.</summary>
-    int ReportsAgainstThisPost);
+    /// <summary>How many people have reported this same thing. Context an administrator wants.</summary>
+    int ReportsAgainstThisPost,
+    /// <summary>The reported case, when a case is what was reported.</summary>
+    Guid? CaseId = null,
+    /// <summary>
+    /// What was reported, in two or three words — "Feed post", "Case #2026-001", "Comment".
+    /// Written by the server so the queue does not have to work it out from which id is null.
+    /// </summary>
+    string TargetLabel = "Feed post",
+    /// <summary>Where to go and look at it, when there is a public address for it.</summary>
+    string? TargetUrl = null);
 
 /// <summary>An administrator's decision on a report.</summary>
 /// <param name="Outcome">

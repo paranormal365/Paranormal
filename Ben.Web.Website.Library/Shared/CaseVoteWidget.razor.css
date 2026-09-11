@@ -149,6 +149,20 @@
     text-decoration: none !important;
 }
 
+/* A count beside an icon — comments, today. It rides inside the button so the pair moves as one
+   and the row keeps its single height. */
+.vote-btn__count {
+    margin-left: .2rem;
+    font-size: .7rem;
+    font-weight: 600;
+}
+
+/* Something already done: reposted, reported. Not a colour that shouts — the fact is worth
+   recording, not celebrating. */
+.vote-btn--done {
+    color: var(--bs-success);
+}
+
 .vote-actions__note {
     font-size: .75rem;
     color: var(--bs-secondary-color);
