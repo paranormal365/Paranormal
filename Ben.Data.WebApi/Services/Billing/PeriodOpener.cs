@@ -36,6 +36,7 @@ public static class PeriodOpener
     /// <param name="periodEnd">End of the period.</param>
     /// <param name="memberCount">Active members right now — frozen for the whole period.</param>
     /// <param name="byUserId">Who caused the period to open, recorded on the snapshot.</param>
+    /// <param name="tourCount">Tours the period is priced for (item 233); zero off the business plan.</param>
     public static SubscriptionContractTerms? Open(
         OrganizationSubscription subscription,
         SubscriptionTier? tier,
@@ -44,7 +45,8 @@ public static class PeriodOpener
         DateTime? periodStart,
         DateTime? periodEnd,
         int memberCount,
-        Guid byUserId)
+        Guid byUserId,
+        int tourCount = 0)
     {
         var now = DateTime.UtcNow;
 
@@ -54,9 +56,11 @@ public static class PeriodOpener
         subscription.CurrentPeriodStart      = periodStart;
         subscription.CurrentPeriodEnd        = periodEnd;
         subscription.MemberCountAtPeriodStart = memberCount;
+        subscription.TourCountAtPeriodStart  = tourCount;
         subscription.PriceAtPeriodStart      = tier is null
             ? 0m
-            : SubscriptionPricing.PriceFor(tier, interval) ?? 0m;
+            : Ben.Data.Source.Services.TourBilling.ListPrice(
+                SubscriptionPricing.PriceFor(tier, interval) ?? 0m, Math.Max(1, tourCount));
 
         // Set once and never cleared — the fact behind renewal-vs-acquisition coupons. A lapsed
         // group has still paid before.

@@ -54,6 +54,7 @@ public class OrgSearchTests : BenTestBase
     }
 
     [Test]
+    [Description("A search result is a card that opens the group.")]
     public async Task Search_RenderedOrgCard_HasViewGroupLink()
     {
         var input = Page.GetByPlaceholder("Enter city, address, or zip code");
@@ -62,9 +63,15 @@ public class OrgSearchTests : BenTestBase
                       .Or(Page.GetByRole(AriaRole.Button, new() { Name = "Search" }))
                       .First;
         await btn.ClickAsync();
-        await Page.WaitForSelectorAsync(".card", new() { Timeout = 15_000 });
-        var viewLink = Page.GetByRole(AriaRole.Link, new() { Name = "View Group", Exact = false }).First;
-        await Expect(viewLink).ToBeVisibleAsync(new() { Timeout = 5_000 });
+
+        // The whole card is the link. This used to look for a "View Group" button in the card's
+        // footer, which made a reader aim at a small target for the only thing the card does; the
+        // test followed the button rather than the behaviour and broke when the button went.
+        var card = Page.Locator("a.org-card").First;
+        await Expect(card).ToBeVisibleAsync(new() { Timeout = 15_000 });
+
+        var href = await card.GetAttributeAsync("href");
+        Assert.That(href, Does.StartWith("/o/"), "A group card should open that group's page.");
     }
 
     [Test]

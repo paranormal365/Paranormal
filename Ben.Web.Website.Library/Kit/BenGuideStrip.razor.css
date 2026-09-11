@@ -1,0 +1,57 @@
+.ben-guides {
+    display: flex;
+    flex-wrap: wrap;
+    gap: .75rem;
+}
+
+.ben-guide {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: .3rem;
+    width: 8.5rem;
+    padding: .85rem .5rem .7rem;
+    border: 1px solid var(--bs-border-color);
+    border-radius: .6rem;
+    background: var(--bs-body-bg);
+    text-align: center;
+}
+
+.ben-guide__photo {
+    width: 4.5rem;
+    height: 4.5rem;
+    border-radius: 50%;
+    object-fit: cover;
+}
+
+/* No published photograph: their initials on a wash in a colour taken from their own name, the
+   same rule TourPlate uses for a tour without a picture. A grey circle with a generic figure in it
+   says "unknown person", which is the opposite of what this strip is for. */
+.ben-guide__photo--none {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 1.25rem;
+    font-weight: 700;
+    letter-spacing: .12em;
+    text-indent: .12em;
+    color: #fff;
+    background:
+        radial-gradient(circle at 50% 25%, hsl(var(--plate-hue) 60% 52% / .28), transparent 55%),
+        linear-gradient(150deg,
+            hsl(var(--plate-hue) 34% 18%) 0%,
+            hsl(calc(var(--plate-hue) + 34deg) 30% 10%) 100%);
+}
+
+.ben-guide__name {
+    font-weight: 600;
+    line-height: 1.2;
+}
+
+.ben-guide__role {
+    font-size: .68rem;
+    font-weight: 700;
+    letter-spacing: .07em;
+    text-transform: uppercase;
+    color: var(--bs-secondary-color);
+}

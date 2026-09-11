@@ -4,6 +4,7 @@ using Ben.Data.Common.Interfaces;
 using Ben.Data.Source.Context;
 using Ben.Data.Source.Entities;
 using Ben.Data.WebApi.Services;
+using Ben.Data.WebApi.Services.Media;
 using Ben.Data.WebApi.Services.Feed;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
@@ -39,6 +40,7 @@ public sealed class EventEvidenceController : BenControllerBase
     private readonly PlatformMessageService _messages;
 
     private readonly IMediaIngestService _mediaIngest;
+    private readonly MediaRetentionPolicy _retention;
     private readonly IAvMetadataStripper _avStripper;
 
     private readonly Ben.Service.RepositoryService.GenericInterfaces.IOrganizationSecurityService _security;
@@ -50,8 +52,9 @@ public sealed class EventEvidenceController : BenControllerBase
         IDbContextFactory<BenDataContext> db, IFileStorageService fileStorage,
         PlatformMessageService messages, IMediaIngestService mediaIngest,
         IAvMetadataStripper avStripper, Ben.Service.RepositoryService.GenericInterfaces.IOrganizationSecurityService security,
-        IFeedMediaScreener screener)
+        IFeedMediaScreener screener, MediaRetentionPolicy retention)
     {
+        _retention   = retention;
         _db          = db;
         _fileStorage = fileStorage;
         _messages    = messages;
@@ -75,7 +78,11 @@ public sealed class EventEvidenceController : BenControllerBase
         string? Note, EvidenceSubmissionStatus Status, string? RejectionReason,
         DateTime DateCreated,
         DateTime? PublishedToPlaceAtUtc = null,
-        bool PlaceAcceptsArchive = false);
+        bool PlaceAcceptsArchive = false,
+        // When it comes off the site, or null when nothing is counting (item 233).
+        DateTime? ExpiresAtUtc = null,
+        // Whether the business has kept it for good.
+        bool IsKept = false);
 
     // ── the visitor's door ────────────────────────────────────────────────────
 
@@ -119,14 +126,28 @@ public sealed class EventEvidenceController : BenControllerBase
             return BadRequest(ex.Message);
         }
 
+        // ── how long it may be, and how long it stays (item 233) ─────────────
+        // Read AFTER ingest, because the duration comes out of the file itself. A recording over
+        // the plan's length is refused in words and its bytes are dropped rather than left on the
+        // disk with no row pointing at them.
+        var rules = await _retention.RulesForAsync(evt.OrganizationId, ct);
+        if (MediaRetentionPolicy.WhyTooLong(
+                rules, ingested.ServedContentType, ingested.Metadata.DurationSeconds) is { } tooLong)
+        {
+            await _mediaIngest.DeleteAllAsync(storagePath, ct);
+            return BadRequest(tooLong);
+        }
+
+        var now = DateTime.UtcNow;
         var uploadFile = new UploadFile
         {
             Id = uploadFileId, UploadFileTypeId = EvidenceFileTypeId, AppUserId = userId,
             FileName = file.FileName, StoredFileName = storedName,
             ContentType = ingested.ServedContentType, FileSize = ingested.ServedFileSize,
             StoragePath = storagePath, IsPublic = false,
-            DateCreated = DateTime.UtcNow, CreatedByAppUserId = userId,
+            DateCreated = now, CreatedByAppUserId = userId,
         };
+        MediaRetentionPolicy.Stamp(uploadFile, rules, now);
         db.UploadFiles.Add(uploadFile);
         db.UploadFileMetadata.Add(ingested.Metadata);
 
@@ -317,7 +338,19 @@ public sealed class EventEvidenceController : BenControllerBase
 
     // ── the group's review ────────────────────────────────────────────────────
 
-    /// <summary>Everything waiting on this organization's answer, oldest first.</summary>
+    /// <summary>
+    /// Everything waiting on this organization's answer, and anything on a clock.
+    /// </summary>
+    /// <remarks>
+    /// <para>Pending submissions are the queue's original job. Item 233 added the second half:
+    /// a file with an expiry the business has not stopped is <b>also</b> waiting on them, whatever
+    /// verdict it already has — deciding to keep something almost always happens after accepting
+    /// it, and a queue that only listed pending work put the keep out of reach for exactly the
+    /// files most likely to need it.</para>
+    ///
+    /// <para>Soonest to go first, so the list is ordered by how much time is left rather than by
+    /// when somebody uploaded.</para>
+    /// </remarks>
     [HttpGet("~/api/organizations/{orgId:guid}/evidence-submissions")]
     public async Task<ActionResult<IEnumerable<EvidenceSubmissionRecord>>> Queue(
         Guid orgId, CancellationToken ct)
@@ -329,8 +362,10 @@ public sealed class EventEvidenceController : BenControllerBase
 
         return Ok(await ProjectAsync(db.EventEvidenceSubmissions.AsNoTracking()
             .Where(s => s.OrgCalendarEvent.OrganizationId == orgId
-                     && s.Status == EvidenceSubmissionStatus.Pending)
-            .OrderBy(s => s.DateCreated), ct));
+                     && (s.Status == EvidenceSubmissionStatus.Pending
+                      || (s.UploadFile.ExpiresAtUtc != null && s.UploadFile.KeptAtUtc == null)))
+            .OrderBy(s => s.UploadFile.ExpiresAtUtc ?? DateTime.MaxValue)
+            .ThenBy(s => s.DateCreated), ct));
     }
 
     public sealed record ReviewEvidenceRequest(bool Accept, string? Reason);
@@ -520,7 +555,10 @@ public sealed class EventEvidenceController : BenControllerBase
             // because "is there an archive to contribute to" is a fact about the event, and a page
             // deciding it for itself is how a screen comes to offer what the server refuses.
             s.OrgCalendarEvent.PlaceId != null
-                && s.OrgCalendarEvent.Place!.Kind == PlaceKind.PublicLocation)).ToListAsync(ct);
+                && s.OrgCalendarEvent.Place!.Kind == PlaceKind.PublicLocation,
+            // Item 233: how long it has left, and whether somebody stopped the clock.
+            s.UploadFile.ExpiresAtUtc,
+            s.UploadFile.KeptAtUtc != null)).ToListAsync(ct);
 
     private static async Task<EvidenceSubmissionRecord> ToRecordAsync(
         BenDataContext db, Guid id, CancellationToken ct) =>

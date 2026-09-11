@@ -48,7 +48,18 @@ public class OrgCalendarEventProfile : Profile
             .ForMember(d => d.OrganizationAddressLabel, o => o.MapFrom(s =>
                 s.OrganizationAddress != null
                     ? s.OrganizationAddress.StreetAddress1 + ", " + s.OrganizationAddress.City + " " + s.OrganizationAddress.State
-                    : null));
+                    : null))
+            // Item 233. The name is flattened so a calendar row can say which tour it is without
+            // a second lookup. Guides carry no photograph here — that needs the photo table, and
+            // a mapping profile is the wrong place to reach for it — so the controller fills them
+            // in where a guest-facing answer needs the face.
+            .ForMember(d => d.TourName, o => o.MapFrom(s => s.Tour != null ? s.Tour.Name : null))
+            .ForMember(d => d.Guides, o => o.MapFrom(s =>
+                s.Guides.OrderBy(g => g.SortOrder).Select(g => new Ben.Service.Models.Entities.EventGuideRecord(
+                    g.AppUserId,
+                    g.AppUser.DisplayName ?? g.AppUser.Email ?? "A guide",
+                    g.AppUser.Handle,
+                    (Guid?)null)).ToList()));
     }
 }
 

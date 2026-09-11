@@ -40,6 +40,7 @@ anywhere in the database. Answering that would mean adding visitor tracking, whi
 about privacy and data retention rather than a chart, and it has not been made. Every number on
 this page is about accounts and what they did.
 
+
 ## Site settings
 
 ![The site settings screen](help-media:site-administration/site-settings.png)
@@ -145,6 +146,22 @@ somebody makes deliberately rather than a default they inherit.
   group's page for its administrators. Nothing appears in the public directory until a group
   actually publishes something, so switching it on shows visitors an empty directory at worst, not
   an unfinished one.
+
+## Closing the door to new ghost walking tours
+
+**Administration → Site Settings → Allow new ghost walking tours** switches off new sign-ups as a
+ghost walking tour.
+
+It closes exactly one door. Every tour business already signed up carries on unchanged — its tours,
+its dates, its sign-ups and its billing are untouched — and nobody loses anything they are paying
+for. What stops is starting a new one: the choice disappears from the Start a Group wizard with a
+sentence saying why, the registration endpoint refuses it, and an existing group cannot start
+running tours while the door is shut. A SuperAdmin can still create one at any time.
+
+**Paranormal events businesses are not affected.** They sit on the same flat plan, but they are a
+different trade, and this switch is about walks.
+
+Unset reads as **on**, so a site that never touches this setting behaves exactly as it always has.
 
 ## A person's record
 

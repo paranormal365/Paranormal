@@ -152,7 +152,11 @@ public sealed record OrgPublicFacts(
     int PublicCaseCount,
     OrgPublicNextEvent? NextPublicEvent);
 
-public sealed record OrgPublicNextEvent(Guid Id, string Title, string? UrlName, DateTime StartDateTime, bool IsAllDay, string? City, string? State, int? AttendeeCapacity, int AttendingCount);
+public sealed record OrgPublicNextEvent(
+    Guid Id, string Title, string? UrlName, DateTime StartDateTime, bool IsAllDay,
+    string? City, string? State, int? AttendeeCapacity, int AttendingCount,
+    /// <summary>The IANA zone the night happens in, when it is recorded. See EventClock.</summary>
+    string? TimeZoneId = null);
 
 
 public sealed record OrgPublicPageResponse(
@@ -1017,7 +1021,15 @@ public sealed record UpsertCalendarEventRequest(
     Guid? PlaceId = null,
     bool HideExactLocation = false,
     int? AttendeeCapacity = null,
-    DateTime? RsvpClosesAt = null);
+    DateTime? RsvpClosesAt = null,
+    // Tours (item 233): a public date of a tour business belongs to a tour, and names its guides.
+    Guid? TourId = null,
+    IReadOnlyList<Guid>? GuideAppUserIds = null,
+    /// <summary>
+    /// The IANA zone this event happens in. Null on a tour date takes the tour's; null on
+    /// anything else leaves it unsaid, and a public listing then shows UTC and says so.
+    /// </summary>
+    string? TimeZoneId = null);
 
 public sealed record AddAttendeeRequest(Guid AppUserId, string? AssignedTask);
 

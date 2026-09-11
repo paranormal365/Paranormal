@@ -55,6 +55,35 @@ namespace Ben.Data.Source.Entities
         /// <summary>Which administrator hid it.</summary>
         public Guid? HiddenByAppUserId { get; set; }
 
+        /// <summary>
+        /// When this was written to appear, or null to appear at once (item 233, Ben 2026-09-11).
+        /// </summary>
+        /// <remarks>
+        /// <para>Read by every query that shows messages rather than released by a job: a post
+        /// whose time has not come is simply not selected. A job would be a second mechanism that
+        /// can fall behind, and the moment it did the post would be late by however long the job
+        /// was down.</para>
+        ///
+        /// <para>It does not hide anything from its author. Somebody who scheduled a post needs to
+        /// see that they did, which is the difference between scheduling and losing it.</para>
+        /// </remarks>
+        public DateTime? ScheduledForUtc { get; set; }
+
+        /// <summary>
+        /// Where this was written, when the author chose to say so.
+        /// </summary>
+        /// <remarks>
+        /// Ben, 2026-09-11: "Tag the current location where the message is being created — which
+        /// would mark it on a super small map alongside the message and add a 'said at {location}'."
+        /// Always the author's own choice and never taken silently: a location attached to a
+        /// message without being asked for is somebody's whereabouts published on their behalf.
+        /// </remarks>
+        public decimal? PostedLatitude { get; set; }
+        public decimal? PostedLongitude { get; set; }
+
+        /// <summary>What that place is called, as the geocoder named it. Shown; never derived from.</summary>
+        public string? PostedPlaceName { get; set; }
+
         public DateTime DateCreated { get; set; }
         public DateTime? DateUpdated { get; set; }
         public Guid CreatedByAppUserId { get; set; }

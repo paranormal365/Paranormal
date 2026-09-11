@@ -6,6 +6,7 @@
 @inject IBenAdminClient  AdminClient
 @inject IBenUserState    UserState
 @inject IJSRuntime       JS
+@inject NavigationManager NavManager
 @using Ben.Web.Services
 @inject SiteFeaturesProvider Features
 
@@ -234,6 +235,16 @@
     // Per-marker cluster data (index = marker.Index)
     private List<List<PublicCaseDiscoveryItem>> _clusters = [];
 
+    /// <summary>
+    /// Tour pins, drawn after the case pins (item 233).
+    /// </summary>
+    /// <remarks>
+    /// Ben, 2026-09-10: "Tours are public so, they show up on the map and are searchable." They
+    /// sit on the same map as the cases rather than a map of their own, because somebody looking
+    /// at haunted places near them wants to know they can walk one on Saturday.
+    /// </remarks>
+    private IReadOnlyList<Ben.Service.Models.Entities.PublicTourMapPin> _tourPins = [];
+
     // ── Popup state ──────────────────────────────────────────────────────────
     private bool   _popupVisible  = false;
     private string _selectedCity  = "";
@@ -314,6 +325,10 @@
         _totalCount  = response.TotalCount;
         var allItems = response.Items.ToList();
 
+        // Fetched once, alongside the cases, so the map is drawn from one pass rather than
+        // repainting when a second answer arrives.
+        _tourPins = (await AdminClient.GetTourMapPinsAsync(token)).Items;
+
         BuildMarkers(allItems);
         SlicePage(allItems);
         await LoadVoteSummariesAsync();
@@ -355,6 +370,23 @@
                 Color: haunted ? "#d4a017" : null,
                 Cluster: "cases"));
         }
+
+        // Tours after the cases, so a tour pin's index is its position in _tourPins offset by the
+        // case clusters — which is what the click handler undoes. Their own cluster and colour,
+        // because a walk you can book is a different offer from a case you can read about, and a
+        // pin here is a real meeting point rather than a blurred cell.
+        _tourPinOffset = pins.Count;
+        foreach (var tour in _tourPins)
+            pins.Add(new BenMapPin(
+                (double)tour.Latitude, (double)tour.Longitude,
+                Title: tour.Name,
+                Subtitle: tour.NextDateStartUtc is { } next
+                    ? $"{tour.OrganizationName} · next {next.ToViewerLocalTime(UserState):MM/dd/yyyy}"
+                    : tour.OrganizationName,
+                Glyph: "🚶",
+                Color: "#5b8def",
+                Cluster: "tours"));
+
         _mapPins = pins;
     }
 
@@ -379,8 +411,20 @@
         }
     }
 
+    /// <summary>Where the tour pins start in the pin list the map was given.</summary>
+    private int _tourPinOffset;
+
     private void OnMarkerClicked(int index)
     {
+        // A tour pin is a link, not a popup: the tour's own page answers everything the popup
+        // would have to summarise, and it is the page somebody would want to share anyway.
+        if (index >= _tourPinOffset && index - _tourPinOffset < _tourPins.Count)
+        {
+            var tour = _tourPins[index - _tourPinOffset];
+            NavManager.NavigateTo($"/o/{tour.OrganizationUrlName}/tours/{tour.UrlName}");
+            return;
+        }
+
         if (index < 0 || index >= _clusters.Count) return;
 
         _clusterCases = _clusters[index];

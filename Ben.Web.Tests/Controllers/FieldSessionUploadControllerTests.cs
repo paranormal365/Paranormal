@@ -126,6 +126,8 @@ public sealed class FieldSessionUploadControllerTests
 
         var controller = new FieldSessionUploadController(
             factory, storage.Object, ingest.Object,
+            new Ben.Data.WebApi.Services.Media.MediaRetentionPolicy(
+                new Ben.Data.WebApi.Services.Billing.SubscriptionLimitGuard(factory)),
             NullLogger<FieldSessionUploadController>.Instance);
         controller.ControllerContext = new ControllerContext
         {

@@ -22,10 +22,16 @@ namespace Ben.Service.Models.Support;
 /// button on first render, not discover the answer after drawing it. Defaults to true — that is
 /// how the product has always worked, and the enforcement must not switch it off for a site that
 /// never set it.</param>
+/// <param name="AllowTourBusinessSignUps">
+/// Whether a new ghost walking tour may be started (item 233).
+/// Defaults to true, so an older server — or an unreachable one — leaves the choices where they
+/// have always been. Existing businesses are never affected by this: it closes one door.
+/// </param>
 public sealed record SiteFeaturesInfo(
     IReadOnlyDictionary<string, bool> Features,
     string? Announcement = null,
-    bool AllowOrganizationSelfRegistration = true)
+    bool AllowOrganizationSelfRegistration = true,
+    bool AllowTourBusinessSignUps = true)
 {
     /// <summary>Whether a feature is on. Unknown keys read as off.</summary>
     public bool IsOn(string key) => Features.TryGetValue(key, out var on) && on;

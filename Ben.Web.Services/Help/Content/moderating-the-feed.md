@@ -39,6 +39,12 @@ Both resolve **every** waiting report against that post together. Five people re
 one decision, and leaving the rest waiting would put it back in front of a colleague with no sign
 it had already been dealt with.
 
+### Reports about a published case
+
+The same queue also carries reports about **published cases** and about **comments on them**, so a
+moderator has one screen rather than three. A case report names the case and links to it; the
+decision is the same one, made by a person, and hiding still hides nothing by itself.
+
 ## Photos and videos waiting for a look
 
 **Administration → Content → Feed Media** is the other queue: photos and videos that have not been

@@ -1,0 +1,32 @@
+@namespace Ben.Web.Website.Library.Kit
+
+@*
+    A section heading with a rule that runs out past the words.
+
+    Five h5s down a long public page give it no rhythm — nothing tells the eye where one part ends
+    and the next begins, and the reader scrolls past the thing they came for. A rule does that and
+    costs no vertical space.
+
+    The note beside it is for the small print that belongs to the heading rather than the section:
+    an average rating, a count, a caveat.
+*@
+
+<h2 class="ben-section @Class" id="@Id">
+    @Text
+    @if (Note is not null)
+    {
+        <span class="ben-section__note">@Note</span>
+    }
+</h2>
+
+@code {
+    [Parameter, EditorRequired] public string Text { get; set; } = string.Empty;
+
+    /// <summary>Anchor id, when something on the page links here.</summary>
+    [Parameter] public string? Id { get; set; }
+
+    /// <summary>Small print that belongs to the heading — an average, a count, a caveat.</summary>
+    [Parameter] public RenderFragment? Note { get; set; }
+
+    [Parameter] public string? Class { get; set; }
+}

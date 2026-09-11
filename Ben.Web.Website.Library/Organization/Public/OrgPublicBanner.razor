@@ -1,0 +1,68 @@
+@namespace Ben.Web.Website.Library.Organization.Public
+@using Ben.Web.Website.Library.Kit
+
+@*
+    The band at the top of every one of a group's public pages.
+
+    What stood here was a name, a small grey badge and an email address — which is what a page
+    looks like when nobody has decided it is the first thing a stranger sees. The wash is the org's
+    own colour (TourPlate), the same rule that colours its tours, its dates and its cards elsewhere
+    on the site, so a reader arriving from one of those lands somewhere that looks related to what
+    they clicked.
+
+    Shared by the home page and by every CMS page under it: a group whose front door and whose
+    "About us" look like two different sites has no front door.
+*@
+
+<div class="org-banner @Class" style="@TourPlate.HueStyle(Name)">
+    @if (LogoUrl is { } logo)
+    {
+        <span class="org-banner__logo">
+            <BenImage Src="@logo" Alt="@(LogoAlt ?? Name)"
+                      Style="max-height:56px; max-width:100px; object-fit:contain;" />
+        </span>
+    }
+    else
+    {
+        @* Their initials rather than an empty square, which reads as a page that failed to load. *@
+        <span class="org-banner__logo org-banner__logo--none" aria-hidden="true">
+            @TourPlate.Monogram(Name)
+        </span>
+    }
+
+    <div class="org-banner__text">
+        @if (PageTitle is { } title)
+        {
+            @* On a sub-page the group's name is the eyebrow and the page is the heading: the
+               reader knows whose site they are on and needs to be told which page they reached. *@
+            <div class="org-banner__eyebrow">
+                <a href="@($"/o/{UrlName}")">@Name</a>
+            </div>
+            <h1 class="org-banner__name">@title</h1>
+        }
+        else
+        {
+            <h1 class="org-banner__name">@Name</h1>
+        }
+
+        @ChildContent
+    </div>
+</div>
+
+@code {
+    [Parameter, EditorRequired] public string Name { get; set; } = string.Empty;
+
+    /// <summary>The org's slug, for the link home from a sub-page.</summary>
+    [Parameter, EditorRequired] public string UrlName { get; set; } = string.Empty;
+
+    /// <summary>Set on a sub-page: the group's name becomes the eyebrow and this the heading.</summary>
+    [Parameter] public string? PageTitle { get; set; }
+
+    [Parameter] public string? LogoUrl { get; set; }
+    [Parameter] public string? LogoAlt { get; set; }
+
+    /// <summary>Badges and contact lines, which only the home page has.</summary>
+    [Parameter] public RenderFragment? ChildContent { get; set; }
+
+    [Parameter] public string? Class { get; set; }
+}

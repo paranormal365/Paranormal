@@ -161,6 +161,10 @@ public class PersonaDocCaptureTests : BenTestBase
         // route - and photographed the redirect to Home as "subscriptions" (found 2026-09-03).
         await VisitAsync("56-org-subscriptions", $"/organizations/{await OrgIdBySlugAsync("benco")}/billing");
         await VisitAsync("57-profile", "/profile");
+        // Item 233: the tours screen, for a group that runs them. BenCo does not, so this
+        // photographs the door rather than pretending otherwise — an owner of a walking-tour
+        // business sees the list here, and one who does not run tours sees the page say so.
+        await VisitAsync("58-tours", $"/organizations/{await OrgIdBySlugAsync("benco")}/tours");
     }
 
     // ── SuperAdmin ───────────────────────────────────────────────────────────

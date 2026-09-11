@@ -1,0 +1,646 @@
+@page "/o/{UrlName}/tours/{TourSlug}"
+@namespace Ben.Web.Website.Library.Organization.Public
+
+@using Ben.Web.Services
+@using Ben.Service.Models.Entities
+@using Ben.Web.Website.Library.Kit
+@using Ben.Web.Website.Library.Manage.Icon
+@using Ben.Web.Website.Library.Kit.Maps
+@using Ben.Web.Website.Library.Manage.Maps
+
+@inject IBenAdminClient AdminClient
+@inject IBenUserState UserState
+@inject IMediaUrlBuilder MediaUrls
+@inject NavigationManager NavManager
+
+@* One tour, for somebody deciding whether to come. The meeting point is given in full and the
+   guides are named and pictured: Ben's reason was safety, and an address withheld from the person
+   deciding whether to turn up is withheld from the wrong reader. *@
+
+<FeatureGate Flag="@SiteFeatures.Events">
+<PageTitle>@(_tour?.Name ?? "Tour") — @(_tour?.OrganizationName ?? UrlName)</PageTitle>
+
+@if (_tour is not null)
+{
+    <Ben.Web.Website.Library.Shared.SocialCard Title="@($"{_tour.Name} — {_tour.OrganizationName}")"
+                                               Description="@SocialSummary"
+                                               RelativeUrl="@($"/o/{UrlName}/tours/{TourSlug}")"
+                                               Type="article" />
+}
+
+@if (_loading)
+{
+    <div class="d-flex justify-content-center py-5">
+        <BenLoaderOverlay Visible="true" Text="Loading…" />
+    </div>
+}
+else if (_tour is null)
+{
+    <div class="container py-5 text-center">
+        <h2 class="text-muted">Tour not found</h2>
+        <p class="text-secondary">
+            This tour is no longer running, or the link is wrong.
+            <a href="/o/@UrlName">← Back to @UrlName</a>
+        </p>
+    </div>
+}
+else
+{
+    <div class="container-fluid px-3 py-3 tour-page" style="max-width:960px; margin:0 auto;">
+        <div class="mb-3">
+            <a href="@($"/o/{_tour.OrganizationUrlName}")" class="text-decoration-none small">
+                &larr; @_tour.OrganizationName
+            </a>
+        </div>
+
+        @* A poster, always. A walk is sold on what the street looks like after dark, and the name
+           belongs ON that picture rather than underneath it — with a scrim, so it stays legible
+           over a photograph nobody has seen.
+
+           A tour whose gallery is still empty used to fall back to a bare heading, which is the
+           shape of a page with nothing to show. It now gets the same poster in its own colour,
+           the colour TourPlate gives it everywhere else on the site. *@
+        <div class="tour-hero ratio ratio-16x9 rounded overflow-hidden mb-3 @(_gallery.Count == 0 ? "tour-hero--drawn" : "")"
+             style="@(_gallery.Count == 0 ? TourPlate.HueStyle(_tour.Name) : "")">
+            <div>
+                @if (_gallery.Count > 0)
+                {
+                    <img src="@MediaUrls.TourPhoto(_gallery[0].UploadFileId)"
+                         alt="@(_gallery[0].Caption ?? _tour.Name)" class="tour-hero__image" />
+                }
+                else
+                {
+                    <span class="tour-hero__monogram" aria-hidden="true">@TourPlate.Monogram(_tour.Name)</span>
+                }
+                <div class="tour-hero__scrim"></div>
+                <div class="tour-hero__text">
+                    <h1 class="tour-hero__name">@_tour.Name</h1>
+                    <div class="tour-hero__by">
+                        Run by
+                        <a class="tour-hero__link" href="@($"/o/{_tour.OrganizationUrlName}")">@_tour.OrganizationName</a>
+                        @if (_tour.Rating is { } heroRating)
+                        {
+                            <text> · @heroRating.ToString("0.0") ★ from @_tour.RatingCount @(_tour.RatingCount == 1 ? "guest" : "guests")</text>
+                        }
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        @* The facts somebody decides on, before any prose. The rail itself is BenFactRail, so a
+           tour date's page states them the same way a tour's does. *@
+        <BenFactRail Facts="@Facts" Class="mb-4" />
+
+        @if (!_tour.IsBookable)
+        {
+            <div class="alert alert-warning" id="tour-paused">
+                This tour isn't taking sign-ups just now.
+            </div>
+        }
+
+        @* The meeting point, on a map, with directions (item 233).
+
+           Ben asked whether the map was overdone. It is the opposite: this page exists to get
+           somebody to a street corner at a particular time, and a line of text is what a site in
+           2005 would have given them. The button hands the walk to whatever they navigate with —
+           the functional answer, not a decorative one. Drawn only when the address geocoded; an
+           empty grey box would be worse than the sentence alone.
+
+           The address is the one line on this page a guest has to carry with them, so it is set as
+           an address rather than as the second half of a definition list. How long and how many
+           moved up to the rail; what is left here is where to stand and who to ask. *@
+        <div class="tour-meet card mb-4 overflow-hidden">
+            <div class="tour-meet__grid @(HasMap ? "tour-meet__grid--map" : "")">
+                <div class="tour-meet__body">
+                    <span class="tour-label">Where you meet</span>
+                    <p class="tour-meet__address" id="tour-meeting-point">@_tour.MeetingPoint</p>
+
+                    @if (HasMap)
+                    {
+                        <div class="d-flex gap-2 flex-wrap mb-2">
+                            <button type="button" class="btn btn-primary btn-sm" id="tour-directions"
+                                    @onclick="ShowDirections">
+                                <BenIcon Name="map" Class="me-1" />Directions
+                            </button>
+                            <a class="btn btn-outline-secondary btn-sm" target="_blank" rel="noopener"
+                               href="@AppleMapsUrl">Open in Maps</a>
+                        </div>
+                    }
+
+                    @if (!string.IsNullOrWhiteSpace(_tour.ContactLine))
+                    {
+                        <span class="tour-label">Getting in touch</span>
+                        <p class="mb-0" id="tour-contact">@_tour.ContactLine</p>
+                    }
+                </div>
+
+                @if (HasMap)
+                {
+                    <div class="tour-meet__map">
+                        @* A pixel height, not a percentage: the map sizes itself once at start-up and a
+                               percentage against a stretched grid cell is not a number it can use. *@
+                        <BenMap Pins="@_mapPins" Height="280px" FitToPins="false"
+                                CenterLatitude="@((double)_tour!.Latitude!.Value)"
+                                CenterLongitude="@((double)_tour!.Longitude!.Value)"
+                                Zoom="15" />
+                    </div>
+                }
+            </div>
+        </div>
+
+        <DirectionsMapModal @ref="_directions" />
+
+        @if (!string.IsNullOrWhiteSpace(_tour.Description))
+        {
+            <div class="mb-4">@((MarkupString)_tour.Description!)</div>
+        }
+
+        @if (_tour.Guides.Count > 0)
+        {
+            <BenSectionHeading Text="Who you'll be walking with" />
+            <BenGuideStrip Guides="@_tour.Guides" Role="Guide" Class="mb-4" />
+        }
+
+        @* A slideshow rather than a wall of thumbnails (Ben, 2026-09-10): "a slideshow of images
+           for the tour as taken by guests and the tour guides and company". Both sources sit in
+           one reel and every slide says whose picture it is — a guest who took the best shot of
+           the night should see their name on it. *@
+        @* One picture is already the hero above, so the reel earns its place from two. *@
+        @if (_slides.Count > 1)
+        {
+            <BenSectionHeading Text="Pictures" />
+            <div class="card mb-2 overflow-hidden" id="tour-slideshow">
+                <BenSlideshow Slides="@_slides" Height="360px" />
+            </div>
+            <p class="text-secondary small mb-4">
+                @_gallery.Count from @_tour.OrganizationName@(_guestPhotos.Count > 0
+                    ? $", {_guestPhotos.Count} sent in by people who came along" : "").
+            </p>
+        }
+
+        @* Somebody who walked this tour finds their own photographs here, whatever the business
+           made of them — they handed over their own picture, and a decline is a decision not to
+           publish it rather than a decision to keep it from them. *@
+        @if (_myEvidence.Count > 0)
+        {
+            <div class="card mb-4" id="tour-my-evidence">
+                <div class="card-header"><strong>What you sent in from this tour</strong></div>
+                <div class="card-body">
+                    @foreach (var mine in _myEvidence)
+                    {
+                        <div class="py-2 border-bottom d-flex justify-content-between gap-3 flex-wrap">
+                            <div>
+                                <a href="@AdminClient.GetEventEvidenceFileUrl(mine.OrgCalendarEventId, mine.Id)"
+                                   target="_blank" rel="noopener">@mine.FileName</a>
+                                <div class="text-secondary small">
+                                    @mine.EventTitle · @mine.DateCreated.ToViewerLocalTime(UserState).ToString("MM/dd/yyyy")
+                                </div>
+                                @if (!string.IsNullOrWhiteSpace(mine.Note))
+                                {
+                                    <div class="small">@mine.Note</div>
+                                }
+                                @if (!mine.IsKept && mine.ExpiresAtUtc is { } goes)
+                                {
+                                    var days = (int)Math.Ceiling((goes - DateTime.UtcNow).TotalDays);
+                                    <div class="small @(days <= 3 ? "text-warning" : "text-secondary")">
+                                        @(days <= 0
+                                            ? "Coming off the site today."
+                                            : days == 1 ? "Comes off the site tomorrow."
+                                            : $"Comes off the site in {days} days.")
+                                    </div>
+                                }
+                            </div>
+                            <div class="text-nowrap small">
+                                @switch (mine.Status)
+                                {
+                                    case Ben.Data.Common.Enums.EvidenceSubmissionStatus.Accepted:
+                                        <span class="badge text-bg-success">On the tour's page</span>
+                                        break;
+                                    case Ben.Data.Common.Enums.EvidenceSubmissionStatus.Rejected:
+                                        <span class="badge text-bg-secondary">Not published</span>
+                                        break;
+                                    default:
+                                        <span class="badge text-bg-warning">Waiting on a look</span>
+                                        break;
+                                }
+                            </div>
+                        </div>
+                    }
+                    <p class="text-secondary small mb-0 mt-2">
+                        These are yours. Download anything you want to keep.
+                    </p>
+                </div>
+            </div>
+        }
+
+        @* ── Reviews (item 233) ──────────────────────────────────────────── *@
+        @* Shown whenever there is something to say — a review, a form, or the sentence explaining
+           why there is no form. Gating the whole block on "has reviews or may review" left a
+           signed-out guest who walked the tour told nothing at all. *@
+        @if (_reviews is not null
+             && (_reviews.Reviews.Count > 0 || _reviews.MayReview || _reviews.WhyNot is not null))
+        {
+            <BenSectionHeading Text="What people said" Id="tour-reviews">
+                <Note>
+                    @if (_reviews.Average is { } avg)
+                    {
+                        <text>@avg.ToString("0.0") ★ from @_reviews.Count @(_reviews.Count == 1 ? "guest" : "guests")</text>
+                    }
+                </Note>
+            </BenSectionHeading>
+
+            @if (_reviews.MayReview)
+            {
+                <div class="card mb-3" id="tour-review-form">
+                    <div class="card-body">
+                        <div class="fw-semibold mb-2">
+                            @(_reviews.Mine is null ? "How was it?" : "Your review")
+                        </div>
+                        <div class="d-flex gap-1 mb-2" role="group" aria-label="Stars">
+                            @for (var star = 1; star <= 5; star++)
+                            {
+                                var value = star;
+                                <button type="button"
+                                        class="btn btn-sm @(value <= _myStars ? "btn-warning" : "btn-outline-secondary")"
+                                        aria-label="@($"{value} star{(value == 1 ? "" : "s")}")"
+                                        @onclick="@(() => _myStars = value)">★</button>
+                            }
+                        </div>
+                        <textarea class="form-control mb-2" rows="3" maxlength="1000"
+                                  placeholder="What was it like? What should somebody bring?"
+                                  @bind="@_myComment" @bind:event="oninput"></textarea>
+                        <div class="d-flex gap-2">
+                            <button type="button" class="btn btn-primary btn-sm" id="tour-review-save"
+                                    disabled="@(_savingReview || _myStars == 0)" @onclick="SaveReviewAsync">
+                                @(_savingReview ? "Saving…" : _reviews.Mine is null ? "Leave it" : "Change it")
+                            </button>
+                            @if (_reviews.Mine is not null)
+                            {
+                                <button type="button" class="btn btn-outline-danger btn-sm"
+                                        disabled="@_savingReview" @onclick="DeleteReviewAsync">Take it down</button>
+                            }
+                        </div>
+                        @if (_reviewError is not null)
+                        {
+                            <div class="text-warning small mt-2">@_reviewError</div>
+                        }
+                    </div>
+                </div>
+            }
+            else if (_reviews.WhyNot is { } whyNot)
+            {
+                <p class="text-secondary small">
+                    @whyNot
+                    @if (whyNot.StartsWith("Sign in", StringComparison.OrdinalIgnoreCase))
+                    {
+                        <a class="ms-1" href="@($"/login?returnUrl={Uri.EscapeDataString(NavManager.Uri)}")">Sign in</a>
+                    }
+                </p>
+            }
+
+            <div class="tour-reviews mb-4">
+                @foreach (var review in _reviews.Reviews)
+                {
+                    <div class="tour-review">
+                        <div class="d-flex justify-content-between gap-2 flex-wrap align-items-baseline">
+                            <div>
+                                @* Razor reads `@new` as the start of an expression it cannot parse;
+                                   the stars are built in the code block instead. *@
+                                <span class="tour-review__stars">@Stars(review.Stars)</span>
+                                <span class="tour-review__stars tour-review__stars--spent">@Stars(5 - review.Stars)</span>
+                                <span class="fw-semibold ms-2">@review.By</span>
+                                @if (review.IsHidden)
+                                {
+                                    <span class="badge text-bg-secondary ms-1">Hidden by the business</span>
+                                }
+                            </div>
+                            <span class="text-secondary small">
+                                @review.WhenUtc.ToViewerLocalTime(UserState).ToString("MM/dd/yyyy")
+                            </span>
+                        </div>
+                        @if (!string.IsNullOrWhiteSpace(review.Comment))
+                        {
+                            <p class="tour-review__text">@review.Comment</p>
+                        }
+                    </div>
+                }
+            </div>
+        }
+
+        <BenSectionHeading Text="When it runs" Id="tour-dates" />
+        @if (_tour.UpcomingDates.Count == 0)
+        {
+            <p class="text-secondary" id="tour-no-dates">
+                Nothing on the calendar just now. @_tour.OrganizationName will put the next dates up here.
+            </p>
+        }
+        else
+        {
+            @* A month at a glance beside the list: somebody deciding whether to come is asking
+               "is there one on a Saturday?", and a list of eight dates answers that badly. The
+               calendar marks the days this tour runs and selecting one scrolls the list. *@
+            <div class="row g-3 mb-4">
+                <div class="col-lg-5">
+                    <div class="card">
+                        <div class="card-body p-2 tour-calendar">
+                            <TelerikCalendar Value="@_selectedDate"
+                                             ValueChanged="@((DateTime d) => _selectedDate = d)"
+                                             Min="@_calendarMin"
+                                             Max="@_calendarMax"
+                                             ShowOtherMonthDays="false">
+                                <MonthCellTemplate>
+                                    @{ var day = ((DateTime)context).Date; }
+                                    @* A dot under the number, not a colour on it: the selected day
+                                       is already painted, and a blue number on a blue cell is a
+                                       day nobody can read. *@
+                                    <span class="tour-cell @(RunsOn(day) ? "tour-cell--runs" : "")">@day.Day</span>
+                                </MonthCellTemplate>
+                            </TelerikCalendar>
+                        </div>
+                    </div>
+                    <p class="text-secondary small mt-2 mb-0">
+                        A dot marks a day this tour runs.
+                    </p>
+                </div>
+                <div class="col-lg-7">
+            @* Each date is the offer, so each date is a card with a plate a reader can find at a
+               glance — the same shape a ticket has. The bar under the time is how full it is:
+               "19 left" is a number, and a walk two thirds sold is a reason to book tonight. *@
+            <div class="tour-datelist">
+                @foreach (var date in _tour.UpcomingDates)
+                {
+                    var (when, zone) = EventClock.InPlaceTime(date.StartDateTime, _tour.TimeZoneId);
+                    var cap = date.AttendeeCapacity;
+                    var left = cap is { } c ? Math.Max(0, c - date.AttendingCount) : (int?)null;
+                    var full = left == 0;
+                    <a class="tour-date @(full ? "tour-date--full" : "")"
+                       href="@($"/o/{_tour.OrganizationUrlName}/events/{date.UrlName}")">
+                        <span class="tour-date__plate">
+                            <span class="tour-date__dow">@when.ToString("ddd")</span>
+                            <span class="tour-date__day">@when.Day</span>
+                            <span class="tour-date__mon">@when.ToString("MMM")</span>
+                        </span>
+                        <span class="tour-date__body">
+                            <span class="tour-date__time">@when.ToString("h:mm tt") <span class="tour-date__zone">@zone</span></span>
+                            <span class="tour-date__seats">
+                                @if (cap is { } capacity)
+                                {
+                                    @(full ? "No spaces left" : $"{left} of {capacity} still open")
+                                }
+                                else
+                                {
+                                    @($"{date.AttendingCount} coming along")
+                                }
+                            </span>
+                            @if (cap is { } barCapacity && barCapacity > 0)
+                            {
+                                var taken = Math.Clamp(date.AttendingCount * 100 / barCapacity, 0, 100);
+                                <span class="tour-date__bar" role="presentation">
+                                    <span class="tour-date__fill" style="width:@(taken)%"></span>
+                                </span>
+                            }
+                        </span>
+                        <span class="tour-date__go">@(full ? "See the date" : "Sign up")</span>
+                    </a>
+                }
+            </div>
+                </div>
+            </div>
+        }
+        @* Where else they are (Ben, 2026-09-10): "let the tour add their Instagram, Facebook, X,
+           URL, TikTok, BlueSky, Rumble, YouTube… displayed at the bottom of their pages."
+
+           At the bottom on purpose. A walking business lives on the accounts where it posts last
+           night's photographs, but somebody reading this page is deciding whether to come, and
+           sending them off to Instagram before they have seen the dates would be a strange thing
+           for this page to do. *@
+        @if (_tour.Links is { Count: > 0 } links)
+        {
+            <div class="tour-links">
+                <span class="tour-links__label">Find @_tour.Name</span>
+                <div class="tour-links__row">
+                    @foreach (var link in links)
+                    {
+                        @* rel="noopener" and a new tab, as everywhere else we hand a reader to
+                           somebody else's site. nofollow because these are links a business wrote
+                           about itself, on a page it publishes. *@
+                        <a class="tour-links__link" href="@link.Url"
+                           target="_blank" rel="noopener noreferrer nofollow">@link.Name</a>
+                    }
+                </div>
+            </div>
+        }
+    </div>
+}
+</FeatureGate>
+
+@code {
+    [Parameter] public string UrlName { get; set; } = "";
+    [Parameter] public string TourSlug { get; set; } = "";
+
+    private PublicTourRecord? _tour;
+    private bool _loading = true;
+
+    private IReadOnlyList<PublicTourImage> _gallery = [];
+    private TourReviewsRecord? _reviews;
+    private int _myStars;
+    private string _myComment = "";
+    private bool _savingReview;
+    private string? _reviewError;
+    private IReadOnlyList<PublicTourGuestPhoto> _guestPhotos = [];
+    private IReadOnlyList<EventEvidenceRecord> _myEvidence = [];
+
+    private List<BenSlide> _slides = [];
+
+    private Ben.Web.Website.Library.Manage.Maps.DirectionsMapModal? _directions;
+    private IReadOnlyList<Ben.Web.Website.Library.Kit.Maps.BenMapPin> _mapPins = [];
+
+    /// <summary>
+    /// The rail under the poster: the handful of figures somebody decides on before reading a word
+    /// of the description. Built here rather than in the markup so the order is one list to read.
+    /// </summary>
+    private IReadOnlyList<BenFactItem> Facts
+    {
+        get
+        {
+            if (_tour is null) return [];
+
+            var facts = new List<BenFactItem>();
+
+            if (_tour.UpcomingDates.Count > 0)
+            {
+                var (soonest, zone) = EventClock.InPlaceTime(
+                    _tour.UpcomingDates[0].StartDateTime, _tour.TimeZoneId);
+                facts.Add(new BenFactItem("Next walk", soonest.ToString("ddd MM/dd"),
+                    $"{soonest:h:mm tt} {zone}", Href: "#tour-dates", Emphasis: true));
+            }
+
+            if (_tour.DurationMinutes is { } minutes)
+                facts.Add(new BenFactItem("How long", Duration(minutes), "on your feet"));
+
+            if (_tour.DefaultCapacity is { } capacity)
+                facts.Add(new BenFactItem("Group size", $"Up to {capacity}", "people per walk"));
+
+            if (_tour.Rating is { } rating)
+                facts.Add(new BenFactItem("Rated", $"{rating:0.0} ★",
+                    $"{_tour.RatingCount} {(_tour.RatingCount == 1 ? "guest" : "guests")}"));
+
+            var pictures = _gallery.Count + _guestPhotos.Count;
+            if (pictures > 0)
+                facts.Add(new BenFactItem("Pictures", pictures.ToString(), "from the walk",
+                    Href: "#tour-slideshow"));
+
+            return facts;
+        }
+    }
+
+    /// <summary>Whether the meeting point has coordinates to draw.</summary>
+    private bool HasMap => _tour is { Latitude: not null, Longitude: not null };
+
+    /// <summary>
+    /// The meeting point handed to whatever the reader navigates with.
+    /// </summary>
+    /// <remarks>
+    /// Coordinates rather than the address text: the address has already been resolved once, and
+    /// asking a second map to guess at it again is how a guest ends up on the wrong Church Street.
+    /// </remarks>
+    private string AppleMapsUrl => _tour is { Latitude: { } lat, Longitude: { } lon }
+        ? $"https://maps.apple.com/?ll={lat.ToString(System.Globalization.CultureInfo.InvariantCulture)},"
+          + $"{lon.ToString(System.Globalization.CultureInfo.InvariantCulture)}"
+          + $"&q={Uri.EscapeDataString(_tour.Name)}"
+        : "#";
+
+    private void ShowDirections()
+    {
+        if (_tour is not { Latitude: { } lat, Longitude: { } lon }) return;
+        _directions?.Show(_tour.MeetingPoint, (double)lat, (double)lon);
+    }
+
+    /// <summary>The day the calendar is showing. Starts on the next date this tour runs.</summary>
+    private DateTime _selectedDate = DateTime.Today;
+    private DateTime _calendarMin = DateTime.Today.AddYears(-1);
+    private DateTime _calendarMax = DateTime.Today.AddYears(1);
+    private HashSet<DateTime> _dateDays = [];
+
+    /// <summary>Whether this tour runs on that day, in the reader's own zone.</summary>
+    private bool RunsOn(DateTime day) => _dateDays.Contains(day.Date);
+
+    private string SocialSummary => _tour is null
+        ? ""
+        : $"{_tour.Name}, meeting at {_tour.MeetingPoint}. Run by {_tour.OrganizationName}.";
+
+    // Loaded during prerender so a link shared into a group chat has something to show, then
+    // again once the circuit knows who is reading.
+    protected override async Task OnInitializedAsync() => await LoadAsync();
+
+    protected override async Task OnAfterRenderAsync(bool firstRender)
+    {
+        if (!firstRender) return;
+        if (!await UserState.WaitUntilAuthReadyAsync(RendererInfo.IsInteractive)) return;
+        await LoadAsync();
+        StateHasChanged();
+    }
+
+    private async Task LoadAsync()
+    {
+        _tour = await AdminClient.GetPublicTourAsync(UrlName, TourSlug);
+        _gallery = _tour?.Gallery ?? [];
+        _guestPhotos = _tour?.GuestGallery ?? [];
+
+        // The business's own pictures first, in the order it chose, then what guests sent in,
+        // newest first — so the reel opens on the shot the business picked to sell the walk.
+        _slides =
+        [
+            .. _gallery.Select(g => new BenSlide(
+                   MediaUrls.TourPhoto(g.UploadFileId), g.Caption,
+                   Credit: _tour is null ? null : $"From {_tour.OrganizationName}",
+                   AltText: g.Caption ?? _tour?.Name)),
+            .. _guestPhotos.Select(p => new BenSlide(
+                   AdminClient.GetEventEvidenceFileUrl(p.EventId, p.SubmissionId), p.Note,
+                   Credit: $"Taken by {p.By}",
+                   AltText: p.Note ?? $"A photograph taken by {p.By}")),
+        ];
+
+        _mapPins = _tour is { Latitude: { } pinLat, Longitude: { } pinLon }
+            ? [new Ben.Web.Website.Library.Kit.Maps.BenMapPin(
+                   (double)pinLat, (double)pinLon,
+                   Title: _tour.Name, Subtitle: "Where you meet", Glyph: "🚶")]
+            : [];
+
+        // The dates on the WALK's clock, so the marked days on the calendar match the times in
+        // the list beside it — and so a reader two zones away is not shown a dot on the wrong day
+        // for a walk that has only ever run on Saturdays (Ben, 2026-09-10).
+        _dateDays = [.. (_tour?.UpcomingDates ?? [])
+            .Select(d => EventClock.At(d.StartDateTime, _tour?.TimeZoneId).Date)];
+
+        if (_dateDays.Count > 0)
+        {
+            _selectedDate = _dateDays.Min();
+            _calendarMin = _dateDays.Min().AddMonths(-1);
+            _calendarMax = _dateDays.Max().AddMonths(1);
+        }
+
+        if (_tour is not null)
+        {
+            _reviews = await AdminClient.GetTourReviewsAsync(_tour.Id);
+            if (_reviews?.Mine is { } mine)
+            {
+                _myStars = mine.Stars;
+                _myComment = mine.Comment ?? "";
+            }
+        }
+
+        // Only for somebody signed in, and only their own: the endpoint refuses anyone else.
+        _myEvidence = _tour is not null && UserState.IsAuthenticated
+            ? (await AdminClient.GetMyTourEvidenceAsync(_tour.Id)).Items
+            : [];
+
+        _loading = false;
+    }
+
+    private async Task SaveReviewAsync()
+    {
+        if (_tour is null || _myStars == 0) return;
+
+        _savingReview = true; _reviewError = null;
+        var (saved, error) = await AdminClient.SaveMyTourReviewAsync(
+            _tour.Id, _myStars, string.IsNullOrWhiteSpace(_myComment) ? null : _myComment.Trim());
+        _savingReview = false;
+
+        if (saved is null) { _reviewError = error ?? "That could not be saved."; return; }
+        _reviews = saved;
+    }
+
+    private async Task DeleteReviewAsync()
+    {
+        if (_tour is null) return;
+
+        _savingReview = true; _reviewError = null;
+        var gone = await AdminClient.DeleteMyTourReviewAsync(_tour.Id);
+        _savingReview = false;
+
+        if (!gone) { _reviewError = "That could not be taken down."; return; }
+        _myStars = 0;
+        _myComment = "";
+        _reviews = await AdminClient.GetTourReviewsAsync(_tour.Id);
+    }
+
+    private static string Stars(int count) => new('★', Math.Clamp(count, 0, 5));
+
+    /// <summary>
+    /// The same length, short enough for a figure in the facts rail. "about 1 hour 30 minutes" is
+    /// a sentence; a rail wants a number.
+    /// </summary>
+    private static string Duration(int minutes)
+    {
+        var hours = minutes / 60;
+        var rest = minutes % 60;
+        return hours switch
+        {
+            0 => $"{rest} min",
+            _ when rest == 0 => $"{hours} hr",
+            _ => $"{hours} hr {rest} min",
+        };
+    }
+
+}
