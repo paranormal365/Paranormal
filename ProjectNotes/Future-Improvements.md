@@ -11577,7 +11577,7 @@ attach race. Not chased further that day; the three other billing fixtures pass.
 
 ---
 
-## 233. The tour tier: tours are the unit a business pays for (IN PROGRESS 2026-09-10)
+## 233. The tour tier: tours are the unit a business pays for (BUILT 2026-09-11, merged to develop and master; two pieces named below are deliberately out)
 
 Ben's brief, 2026-09-10, in his words and in order: photos stay a month unless the tour rep keeps
 them; video and audio a week, five minutes each at 720p or 1080p; Field Kit submissions the same,
@@ -11611,6 +11611,14 @@ tour name and guides; **2** guest mail with attachments, `.ics`, template placeh
 sites, editor with preview; **3** retention limits as tier data, expiry stamps, the sweep with
 notices, the 50-image gallery, keep for recordings, download while it lasts, five-minute and 1080p
 rules at the doors; **4** reviews; **5** help, screenshots, both PDFs, deploy notes, production data.
+
+**Closed 2026-09-11.** All six phases shipped, merged to `develop` (888a63bd) and `master`
+(097859a9), suite green at 8,133. **Two pieces are not built and are named rather than implied:**
+the phone shows a tour's NAME on an event and reads every time on the Swift half of the clock rule
+(`EventClock`, 2026-09-11), but nothing renders a date's guides yet and there is no tour browsing of
+its own — item 234 is the larger version of that; and an over-long recording is refused on length
+but never downscaled to 1080p. What the testing wrote to `IsHauntedDb_player`, with a back-out script, is in
+`ProjectNotes/Test-Data-Written-2026-09-11.md`.
 
 **Asked for mid-build and built on the same branch** (2026-09-11): the look pass across the tour,
 event, group, events and group-cases pages; the clock rule (times render in the zone of the place,

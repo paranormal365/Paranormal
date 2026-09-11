@@ -118,12 +118,25 @@ struct EventRow: View {
         VStack(alignment: .leading, spacing: 6) {
             Text(event.title)
                 .font(.headline).foregroundStyle(Theme.bone)
+
+            // The tour this night belongs to, above the business that runs it (item 233). A walk
+            // is booked by its NAME — "Printers Alley Ghost Walk" — and a business with three
+            // walks would otherwise show three rows reading "Saturday walk".
+            if let tour = event.tourName {
+                Label(tour, systemImage: "figure.walk")
+                    .font(.subheadline.weight(.medium))
+                    .foregroundStyle(Theme.bone)
+            }
+
             Text(event.organizationName)
                 .font(.subheadline).foregroundStyle(Theme.fog)
 
             HStack(spacing: 6) {
                 Image(systemName: event.isOnline ? "video" : "mappin.and.ellipse")
-                Text(event.startDateTime, format: .dateTime.month().day().hour().minute())
+                // The clock of the PLACE, not this phone's. A walk in Nashville starts at 3:08 PM
+                // CDT whether it is read in Nashville, Tokyo or London — see EventClock, and the
+                // same rule on the website.
+                Text(EventClock.dayAndTime(event.startDateTime, event.timeZoneId))
                 if let place = event.placeLabel, !event.isOnline {
                     Text("· \(place)")
                 }

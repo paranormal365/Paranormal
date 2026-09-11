@@ -147,11 +147,20 @@ struct PublicEventsTests {
         let events = try BenJSON.decoder.decode([PublicEventListItem].self, from: data)
         let first = try #require(events.first)
 
-        #expect(first.organizationName == "Tennessee Ghost Hunters")
-        #expect(first.hasCoordinates)          // approximate, by design
-        #expect(first.attendeeCapacity == nil) // no cap …
-        #expect(!first.isFull)                 // … so never full
-        #expect(first.spacesLeft == nil)
+        // Re-captured 2026-09-11 (item 233): the fixture is three live events — a tour date, an
+        // ordinary group night, and a meeting with no place and no cap. The first is the tour
+        // date, which is what carries the new fields.
+        #expect(first.organizationName == "Printers Alley Walks")
+        #expect(first.hasCoordinates)                          // approximate, by design
+        #expect(first.tourName == "Printers Alley Ghost Walk") // the night belongs to a tour
+        #expect(first.timeZoneId == "America/Chicago")         // and to a clock, not the server's
+
+        // The uncapped one is the third: a null capacity is unlimited, never full.
+        let uncapped = try #require(events.last)
+        #expect(uncapped.tourName == nil)       // an ordinary meeting belongs to no tour
+        #expect(uncapped.attendeeCapacity == nil)
+        #expect(!uncapped.isFull)
+        #expect(uncapped.spacesLeft == nil)
     }
 
     @Test func aNullCapacityIsUnlimitedNotZero() {
@@ -160,7 +169,8 @@ struct PublicEventsTests {
             PublicEventListItem(
                 id: UUID(), urlName: nil, organizationId: UUID(), organizationName: "Org",
                 organizationUrlName: "org", title: "T", startDateTime: Date(), endDateTime: Date(), isAllDay: false, city: nil, state: nil, approximateLatitude: nil, approximateLongitude: nil, attendingCount: attending,
-                attendeeCapacity: capacity, isOnline: false)
+                attendeeCapacity: capacity, isOnline: false,
+                tourName: nil, tourUrlName: nil, timeZoneId: nil)
         }
         #expect(!event(capacity: nil, attending: 500).isFull)
         #expect(event(capacity: 10, attending: 10).isFull)
