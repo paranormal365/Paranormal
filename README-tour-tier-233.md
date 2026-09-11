@@ -109,10 +109,44 @@ a recording could not be kept at all. All are fixed and pinned; the commits name
 - `README-tour-business-billing-231.md` and the pitch PDF as of 231 describe the superseded
   flat-per-business price; the pitch is rewritten in Phase 5, the README is history.
 
+## The look, and the clock (2026-09-10, after the audits)
+
+Ben asked for the site to "pop" and to read "more 2026 layout than 2000", then pointed at one
+surface at a time. The chain a guest walks — the home strip, "What's near you", the tour's page,
+a date's page, the business's page, and "What's on" — was taken in order, and the idioms that
+turned up more than once moved into the Kit rather than being copied: `TourPlate` (a colour and
+initials drawn from a name, for anything with no photograph yet), `BenTourCard`, `BenFactRail`,
+`BenSectionHeading`, `BenGuideStrip`, and `OrgPublicBanner` / `OrgPublicNav`.
+
+Three defects came out of that pass rather than out of a test:
+
+- **A page could render in three different clocks.** Most surfaces used `DateTime.ToLocalTime`,
+  which is the machine the site runs on. Ben's rule, in his words: "The dates and times may be
+  recorded in UTC, but should render at either UTC or at the time of the location where the
+  evidence was collected or photo taken." There is one `EventClock` now and every public surface
+  asks it. Only a tour records a zone, so a walk reads in the walk's time and any other event
+  reads in UTC, named either way. **Giving an ordinary `OrgCalendarEvent` a zone is the follow-on**
+  — nothing changes when it arrives.
+- **Two Playwright tests had never run.** `PublicEventDescriptionTests` searched the list response
+  for a field only the detail response carries, so it skipped itself on every run since it was
+  written; its sibling asked a URL that 404s. Both work now, and the first immediately caught a
+  real race in its own reading of the page.
+- **A published CMS page with no sections** rendered a heading over an empty screen.
+
+## Where else a tour is (2026-09-10)
+
+Ben: "let the tour add their Instagram, Facebook, X, URL, TikTok, BlueSky, Rumble, YouTube, etc.
+These could be displayed at the bottom of their pages." Nine services, one box each, a row of
+pills at the foot of the tour's public page. `SocialPlatform` is append-only and each entry names
+the hosts it accepts, matched on a dot boundary; a link is checked when it saves and again when it
+is served, because an icon that says Instagram and opens somewhere else is link laundering on a
+page a reader is trusting the business for. Migration `TourSocialLinks`.
+
 ## Left for production
 
-- Migrations `Tours` and (later) `MediaRetention` applied to `IsHauntedDb` only with an explicit
-  `--connection` naming it, on Ben's word.
+- Migrations `Tours`, `TourDetailsAndGuides`, `TourReviews`, `TourGallery`, `MediaRetention`,
+  `TourAuditFixes` and `TourSocialLinks` applied to `IsHauntedDb` only with an explicit
+  `--connection` naming it, on Ben's word. All are on the testing copy `IsHauntedDb_player`.
 - The Tour & Event Business tier's four limit rows entered on production.
 - `MediaTools:FfmpegPath` on the server for 1080p downscaling; SMTP still unconfigured.
 - One assumption to confirm: kept recordings have no count cap and count against the tier's
