@@ -27,6 +27,18 @@ public struct PublicEventFlags: Sendable, Codable, Equatable {
     public var rsvpBlockedReason: String?
 }
 
+/// Somebody leading a tour date, as a visitor may know them (item 233).
+///
+/// The photo is OPTIONAL and deliberately so — Ben, 2026-09-10: "The photo of tour guide is
+/// optional … if it is led by more than one person, it would not be the same picture for each
+/// tour." A guide with no published photo has no id here, and the row shows their name alone.
+public struct PublicGuide: Sendable, Codable, Equatable, Hashable {
+    public var displayName: String
+    public var handle: String?
+    /// The file to ask `api/public/users/photos/{id}` for. Nil when they have published none.
+    public var photoUploadFileId: UUID?
+}
+
 /// One public event (`GET api/public/events/{eventId}`).
 public struct PublicEventRecord: Sendable, Codable, Equatable, Identifiable {
     public var id: UUID
@@ -44,6 +56,18 @@ public struct PublicEventRecord: Sendable, Codable, Equatable, Identifiable {
     public var attendeeCapacity: Int?
     public var rsvpClosesAt: Date?
     public var flags: PublicEventFlags
+    // ── The tour this night belongs to (item 233) ───────────────────────────
+    // Nil on an ordinary event, which is most of them: a group's open evening
+    // belongs to nobody's walking tour.
+    public var tourName: String?
+    public var tourUrlName: String?
+    /// Who is leading THIS date, which need not be the tour's usual guides.
+    public var guides: [PublicGuide]?
+    /// The average a guest gave the tour, to one decimal, with the count behind it.
+    public var tourRating: Decimal?
+    public var tourRatingCount: Int
+    /// The IANA zone the night happens in. Nil means nobody said, and the time is UTC.
+    public var timeZoneId: String?
 }
 
 /// One public event as it appears in a list (`GET api/public/events`).
@@ -65,6 +89,13 @@ public struct PublicEventListItem: Sendable, Codable, Equatable, Identifiable {
     public var attendingCount: Int
     public var attendeeCapacity: Int?
     public var isOnline: Bool
+    // ── The tour this night belongs to (item 233) ───────────────────────────
+    // The LIST carries the tour's name but not its guides: a guide is a person, and a list of
+    // twenty nights is not the place to name sixty of them. The detail record has them.
+    public var tourName: String?
+    public var tourUrlName: String?
+    /// The IANA zone the night happens in. Nil means nobody said, and the time is UTC.
+    public var timeZoneId: String?
 }
 
 extension PublicEventListItem {
