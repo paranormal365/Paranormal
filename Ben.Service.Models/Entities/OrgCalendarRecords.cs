@@ -167,6 +167,11 @@ public record OrgCalendarEventRecord
     /// </remarks>
     public IReadOnlyList<EventGuideRecord> Guides { get; init; } = [];
 
+    /// <summary>
+    /// The IANA zone this event happens in, when somebody has said. Null reads as UTC in public.
+    /// </summary>
+    public string? TimeZoneId { get; init; }
+
     public string? RecurrenceRule { get; init; }
     public int AttendeeCount { get; init; }
     public DateTime DateCreated { get; init; }

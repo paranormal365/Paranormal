@@ -731,6 +731,10 @@ namespace Ben.Data.Source.Context
                 .HasOne(g => g.CreatedByAppUser).WithMany()
                 .HasForeignKey(g => g.CreatedByAppUserId).OnDelete(DeleteBehavior.NoAction);
 
+            // An IANA zone id, not free text: the longest the database ships is well under this.
+            modelBuilder.Entity<OrgCalendarEvent>()
+                .Property(e => e.TimeZoneId).HasMaxLength(100);
+
             // One account per platform per tour: two Instagram links for one walk is a mistake,
             // not a feature. Cascade from the tour, NoAction on the person who added it.
             modelBuilder.Entity<TourSocialLink>()

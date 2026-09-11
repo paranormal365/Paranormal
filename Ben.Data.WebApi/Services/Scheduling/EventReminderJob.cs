@@ -100,7 +100,9 @@ public sealed class EventReminderJob : IScheduledJob
                 a.OrgCalendarEvent.MeetingUrl,
                 a.OrgCalendarEvent.UrlName,
                 a.OrgCalendarEvent.Organization.Name,
-                a.OrgCalendarEvent.Organization.UrlName))
+                a.OrgCalendarEvent.Organization.UrlName,
+                a.OrgCalendarEvent.TimeZoneId
+                    ?? (a.OrgCalendarEvent.Tour != null ? a.OrgCalendarEvent.Tour.TimeZoneId : null)))
             .ToListAsync(ct);
 
         if (due.Count == 0) return;
@@ -156,7 +158,7 @@ public sealed class EventReminderJob : IScheduledJob
         var body = $"<p>{greeting},</p>"
                  + $"<p>You said you would be coming to <strong>{Safe(item.EventTitle)}</strong>, "
                  + $"hosted by {Safe(item.OrganizationName)}.</p>"
-                 + $"<p><strong>When:</strong> {item.StartUtc:dddd, MMMM d, yyyy, HH:mm} UTC</p>";
+                 + $"<p><strong>When:</strong> {When(item)}</p>";
 
         if (!string.IsNullOrWhiteSpace(item.Location))
             body += $"<p><strong>Where:</strong> {Safe(item.Location)}</p>";
@@ -193,6 +195,41 @@ public sealed class EventReminderJob : IScheduledJob
     }
 
     /// <summary>Everything one reminder needs, read in a single query.</summary>
+    /// <summary>
+    /// The start, on the clock the event actually runs on.
+    /// </summary>
+    /// <remarks>
+    /// Ben's rule, 2026-09-10: a time renders in UTC or in the time of the place, never in
+    /// somebody else's. This mail used to say "19:00 UTC" to everybody, including the people
+    /// standing in the street where it starts. An event with no zone recorded still says UTC —
+    /// but it says so, which is the half that was always true.
+    /// </remarks>
+    private static string When(Due item)
+    {
+        var zone = ZoneOf(item.TimeZoneId);
+        var at = TimeZoneInfo.ConvertTimeFromUtc(
+            DateTime.SpecifyKind(item.StartUtc, DateTimeKind.Utc), zone);
+
+        var name = zone == TimeZoneInfo.Utc
+            ? "UTC"
+            : zone.IsDaylightSavingTime(at) ? zone.DaylightName : zone.StandardName;
+        var words = name.Split(' ', StringSplitOptions.RemoveEmptyEntries);
+        var label = words.Length >= 2 ? new string([.. words.Select(w => w[0])]) : name;
+
+        return $"{at:dddd, MMMM d, yyyy, h:mm tt} {label}";
+    }
+
+    /// <summary>Never throws: a reminder that does not go out is worse than one in the wrong zone.</summary>
+    private static TimeZoneInfo ZoneOf(string? id)
+    {
+        if (string.IsNullOrWhiteSpace(id)) return TimeZoneInfo.Utc;
+        try { return TimeZoneInfo.FindSystemTimeZoneById(id); }
+        catch (Exception e) when (e is TimeZoneNotFoundException or InvalidTimeZoneException)
+        {
+            return TimeZoneInfo.Utc;
+        }
+    }
+
     private sealed record Due(
         Guid EventId,
         Guid AppUserId,
@@ -204,5 +241,7 @@ public sealed class EventReminderJob : IScheduledJob
         string? MeetingUrl,
         string? EventUrlName,
         string OrganizationName,
-        string? OrganizationUrlName);
+        string? OrganizationUrlName,
+        /// <summary>The clock the event runs on, or null when nobody has said.</summary>
+        string? TimeZoneId);
 }

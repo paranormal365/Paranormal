@@ -165,8 +165,9 @@ public sealed class SearchController : ControllerBase
                 Longitude:     approxLon,
                 DistanceMiles: Math.Round(dist, 1),
                 // The night's own clock, so a card says the time it actually starts rather than
-                // the time where the reader is sitting (Ben, 2026-09-10).
-                TimeZoneId:    ev.Tour?.TimeZoneId));
+                // the time where the reader is sitting (Ben, 2026-09-10). The event's own zone
+                // first, then its tour's for the dates scheduled before events had one.
+                TimeZoneId:    ev.TimeZoneId ?? ev.Tour?.TimeZoneId));
         }
 
         return [.. results.OrderBy(r => r.StartDateTime)];

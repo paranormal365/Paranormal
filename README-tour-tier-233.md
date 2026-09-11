@@ -124,9 +124,11 @@ Three defects came out of that pass rather than out of a test:
   which is the machine the site runs on. Ben's rule, in his words: "The dates and times may be
   recorded in UTC, but should render at either UTC or at the time of the location where the
   evidence was collected or photo taken." There is one `EventClock` now and every public surface
-  asks it. Only a tour records a zone, so a walk reads in the walk's time and any other event
-  reads in UTC, named either way. **Giving an ordinary `OrgCalendarEvent` a zone is the follow-on**
-  — nothing changes when it arrives.
+  asks it. **An event now carries its own zone** (`OrgCalendarEvent.TimeZoneId`, migration
+  `EventTimeZone`), chosen on the scheduler and defaulted to the scheduler's own; a tour date takes
+  its tour's at creation, as a copy, so a date already advertised does not move when the tour is
+  edited. An event with no zone still reads UTC and says so. The reminder mail, which told every
+  attendee "19:00 UTC" including the ones standing in the street, uses the same clock.
 - **Two Playwright tests had never run.** `PublicEventDescriptionTests` searched the list response
   for a field only the detail response carries, so it skipped itself on every run since it was
   written; its sibling asked a URL that 404s. Both work now, and the first immediately caught a
@@ -145,7 +147,7 @@ page a reader is trusting the business for. Migration `TourSocialLinks`.
 ## Left for production
 
 - Migrations `Tours`, `TourDetailsAndGuides`, `TourReviews`, `TourGallery`, `MediaRetention`,
-  `TourAuditFixes` and `TourSocialLinks` applied to `IsHauntedDb` only with an explicit
+  `TourAuditFixes`, `TourSocialLinks` and `EventTimeZone` applied to `IsHauntedDb` only with an explicit
   `--connection` naming it, on Ben's word. All are on the testing copy `IsHauntedDb_player`.
 - The Tour & Event Business tier's four limit rows entered on production.
 - `MediaTools:FfmpegPath` on the server for 1080p downscaling; SMTP still unconfigured.

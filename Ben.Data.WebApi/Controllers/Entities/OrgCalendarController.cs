@@ -213,11 +213,15 @@ public sealed class OrgCalendarEventController : BenControllerBase
             PlaceId = request.PlaceId,
             HideExactLocation = request.HideExactLocation,
             AttendeeCapacity = request.AttendeeCapacity,
+            TimeZoneId = Trimmed(request.TimeZoneId),
             RsvpClosesAt = request.RsvpClosesAt,
             RecurrenceRule = request.RecurrenceRule?.Trim(),
             TourId = request.TourId,
             DateCreated = DateTime.UtcNow, CreatedByAppUserId = userId,
         };
+
+        if (ZoneRefusal(entity.TimeZoneId) is string zoneRefusal)
+            return BadRequest(zoneRefusal);
 
         if (entity.IsPublic
             && await PublicEventRefusalAsync(db, entity.CaseId, entity.PlaceId, ct) is string refusal)
@@ -331,6 +335,27 @@ public sealed class OrgCalendarEventController : BenControllerBase
         return null;
     }
 
+    /// <summary>Why this zone cannot be saved, or null when it can.</summary>
+    /// <remarks>
+    /// Checked against what the machine actually resolves rather than against the short list the
+    /// screens offer: a business in a zone nobody thought to list must not be locked out, and a
+    /// typo must not be stored as a clock that silently reads as UTC forever.
+    /// </remarks>
+    private static string? ZoneRefusal(string? id)
+    {
+        if (string.IsNullOrWhiteSpace(id)) return null;
+
+        try { TimeZoneInfo.FindSystemTimeZoneById(id); return null; }
+        catch (Exception e) when (e is TimeZoneNotFoundException or InvalidTimeZoneException)
+        {
+            return $"\"{id}\" isn't a time zone this server knows. Pick one from the list.";
+        }
+    }
+
+    /// <summary>Null for anything blank, so an empty box is stored as "nobody said".</summary>
+    private static string? Trimmed(string? value) =>
+        string.IsNullOrWhiteSpace(value) ? null : value.Trim();
+
     /// <summary>Fills in from the tour whatever the date did not say.</summary>
     /// <remarks>
     /// The meeting point, the length and the size of a group are properties of the tour, and
@@ -346,6 +371,11 @@ public sealed class OrgCalendarEventController : BenControllerBase
 
         entity.OrganizationAddressId ??= tour.StartOrganizationAddressId;
         entity.AttendeeCapacity ??= tour.DefaultCapacity;
+
+        // The clock too. A walk meets where the tour starts, so it runs on the tour's zone unless
+        // the date says otherwise — and taking a copy rather than reading through to the tour
+        // means a date already advertised does not silently move when the tour is edited.
+        entity.TimeZoneId ??= tour.TimeZoneId;
 
         if (tour.DurationMinutes is { } minutes && entity.EndDateTime <= entity.StartDateTime)
             entity.EndDateTime = entity.StartDateTime.AddMinutes(minutes);
@@ -465,9 +495,13 @@ public sealed class OrgCalendarEventController : BenControllerBase
         entity.PlaceId = request.PlaceId;
         entity.HideExactLocation = request.HideExactLocation;
         entity.AttendeeCapacity = request.AttendeeCapacity;
+        entity.TimeZoneId = Trimmed(request.TimeZoneId);
         entity.RsvpClosesAt = request.RsvpClosesAt;
         entity.RecurrenceRule = request.RecurrenceRule?.Trim();
         entity.TourId = request.TourId;
+
+        if (ZoneRefusal(entity.TimeZoneId) is string zoneRefusal)
+            return BadRequest(zoneRefusal);
 
         if (entity.IsPublic
             && await PublicEventRefusalAsync(db, entity.CaseId, entity.PlaceId, ct) is string refusal)
@@ -475,6 +509,10 @@ public sealed class OrgCalendarEventController : BenControllerBase
 
         if (await TourDateRefusalAsync(db, orgId, entity, ct) is string tourRefusal)
             return BadRequest(tourRefusal);
+
+        // The same tour defaults as on create, or a date that was edited would lose the clock it
+        // was scheduled with the moment somebody changed its title.
+        await ApplyTourDefaultsAsync(db, entity, request, ct);
 
         entity.DateUpdated = DateTime.UtcNow;
         entity.UpdatedByAppUserId = userId == Guid.Empty ? null : userId;
@@ -834,7 +872,12 @@ public sealed record UpsertCalendarEventRequest(
     // Item 233: which tour this date runs, and who is leading it. Defaulted so every existing
     // caller is unaffected; null guides means "leave whoever is already on it alone".
     Guid? TourId = null,
-    IReadOnlyList<Guid>? GuideAppUserIds = null);
+    IReadOnlyList<Guid>? GuideAppUserIds = null,
+    /// <summary>
+    /// The IANA zone this event happens in. Null on a tour date takes the tour's; null on
+    /// anything else leaves it unsaid, and a public listing then shows UTC and says so.
+    /// </summary>
+    string? TimeZoneId = null);
 
 public sealed record AddAttendeeByEmailRequest(string? Email);
 

@@ -662,6 +662,16 @@ One account per service. Leave a box empty to take that one down; there is nothi
 Each link has to point at that service's own site — an Instagram link that opens somewhere else is
 refused, because a reader clicks the word without reading the address.
 
+### Which clock an event runs on
+
+Every event carries the zone it actually happens in, chosen on the scheduler under **Which clock**.
+It starts on your own zone, because whoever is scheduling is usually standing where it happens.
+
+That clock is what the public sees, wherever in the world they are reading — an event at eight in
+Nashville reads as eight in Tokyo, with the zone named beside it, so the listing, the event's page
+and the reminder email all agree. A date under a tour takes the tour's clock unless you say
+otherwise. An event with no clock set is shown in UTC and says so.
+
 ## Public events
 
 An event on your calendar can be opened to anybody. Tick **Public** and it appears on your group's

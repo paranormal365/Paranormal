@@ -74,7 +74,7 @@ public sealed class PublicTourController : BenControllerBase
             .Select(e => new
             {
                 e.Id, e.UrlName, e.Title, e.StartDateTime, e.EndDateTime, e.IsAllDay, e.MeetingUrl,
-                e.AttendeeCapacity,
+                e.AttendeeCapacity, e.TimeZoneId,
                 Attending = e.Attendees.Count(a => a.RsvpStatus == RsvpStatus.Accepted),
             })
             .ToListAsync(ct);
@@ -87,7 +87,9 @@ public sealed class PublicTourController : BenControllerBase
             d.Attending, d.AttendeeCapacity,
             IsOnline: !string.IsNullOrWhiteSpace(d.MeetingUrl),
             TourName: tour.Name, TourUrlName: tour.UrlName,
-            TimeZoneId: tour.TimeZoneId)).ToList();
+            // The date's own clock when it has one; the tour's for dates scheduled before dates
+            // could carry one of their own.
+            TimeZoneId: d.TimeZoneId ?? tour.TimeZoneId)).ToList();
 
         var guides = await GuidesOfAsync(db, tour, ct);
         var (rating, ratingCount) = await PublicEventController.TourRatingAsync(db, tour.Id, ct);

@@ -35,6 +35,22 @@ namespace Ben.Data.Source.Entities
         public DateTime EndDateTime { get; set; }
         public bool IsAllDay { get; set; }
 
+        /// <summary>
+        /// The zone this event actually happens in, as an IANA id ("America/Chicago").
+        /// </summary>
+        /// <remarks>
+        /// <para><b>Ben, 2026-09-10:</b> "The dates and times may be recorded in UTC, but should
+        /// render at either UTC or at the time of the location where the evidence was collected or
+        /// photo taken." The times above are UTC; this is the clock the people turning up read
+        /// them on. Without it a public listing could only say UTC, which is nobody's evening.</para>
+        ///
+        /// <para>Null for every row written before this existed, and for anything nobody has said
+        /// a zone for. A date that names a tour takes the tour's zone when it is created, so the
+        /// two cannot drift; reading falls back to the tour's for the rows that predate this, and
+        /// to UTC when there is neither.</para>
+        /// </remarks>
+        public string? TimeZoneId { get; set; }
+
         /// <summary>Visible to users outside the organization.</summary>
         /// <remarks>
         /// Written since the calendar was built and read by nothing until 2026-08-17 — an

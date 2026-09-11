@@ -113,7 +113,7 @@ public sealed class OrgPublicController : ControllerBase
             .Select(e => new OrgPublicNextEvent(
                 e.Id, e.Title, e.UrlName, e.StartDateTime, e.IsAllDay, e.Location, null,
                 e.AttendeeCapacity, e.Attendees.Count(a => a.RsvpStatus == RsvpStatus.Accepted),
-                e.Tour != null ? e.Tour.TimeZoneId : null))
+                e.TimeZoneId ?? (e.Tour != null ? e.Tour.TimeZoneId : null)))
             .FirstOrDefaultAsync(ct);
 
         return new OrgPublicFacts(areaServed, org.IsAcceptingClients, org.IsAcceptingApplications,

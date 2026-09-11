@@ -2,6 +2,7 @@
 @using Ben.Data.Common.Enums
 @using Ben.Service.Models.Entities
 @using Ben.Web.Services
+@using Ben.Web.Website.Library.Kit
 @inject IBenAdminClient AdminClient
 @inject IBenUserState UserState
 @inject NavigationManager NavManager
@@ -285,6 +286,27 @@
                     </div>
                 }
             }
+
+            @* Which clock the times above are on (Ben, 2026-09-10). A public listing shows an
+               event in the time of the place it happens; without this it could only say UTC,
+               which is nobody's evening. A tour date leaves this alone and takes its tour's. *@
+            <div class="col-md-6">
+                <label class="form-label fw-semibold" for="ev-zone">Which clock</label>
+                <select id="ev-zone" class="form-select"
+                        @onchange="@(e => _form.TimeZoneId = e.Value?.ToString() ?? "")">
+                    <option value="" selected="@(string.IsNullOrWhiteSpace(_form.TimeZoneId))">
+                        @(_form.TourId is null ? "(Not said — shown as UTC)" : "(The tour's)")
+                    </option>
+                    @foreach (var zone in TimeZoneChoices.All)
+                    {
+                        <option value="@zone.Id" selected="@(zone.Id == _form.TimeZoneId)">@zone.Label</option>
+                    }
+                </select>
+                <div class="form-text">
+                    The zone the event actually happens in. Anybody reading it publicly sees this
+                    clock, wherever they are.
+                </div>
+            </div>
 
             @* Only shown once the event is public: these four settings mean nothing otherwise, and
                a form that always showed them would make "public" look like a detail rather than the
@@ -776,6 +798,12 @@
                 // Arrived from a tour's own page ("Schedule a date"), or there is only one tour
                 // it could be. Either way the answer is already known, so do not ask.
                 TourId = _preselectedTourId ?? (_tours.Count == 1 ? _tours[0].Id : null),
+                // The person scheduling is almost always in the zone the thing happens in, so
+                // their own is the right first guess — and it is a guess they can see and change,
+                // rather than a silent UTC nobody notices until a guest turns up an hour out.
+                TimeZoneId = TimeZoneChoices.All.Any(z => z.Id == UserState.BrowserTimeZone.Id)
+                    ? UserState.BrowserTimeZone.Id
+                    : "",
             };
             ApplyTourDefaults();
         }
@@ -796,6 +824,7 @@
                 RsvpClosesAt      = _editingEvent.RsvpClosesAt,
                 EventTypeId    = _editingEvent.EventTypeId,
                 TourId         = _editingEvent.TourId,
+                TimeZoneId     = _editingEvent.TimeZoneId ?? "",
                 GuideIds       = [.. _editingEvent.Guides.Select(g => g.AppUserId)],
                 OrganizationAddressId = _editingEvent.OrganizationAddressId,
                 MeetingUrl     = _editingEvent.MeetingUrl ?? "",
@@ -878,7 +907,8 @@
                 // never be taken off a date, and their name and face kept going out to guests.
                 // Null is reserved for a caller that is not editing guides at all.
                 GuideAppUserIds:   _datesBelongToTours && _form.TourId is not null
-                                       ? [.. _form.GuideIds] : null);
+                                       ? [.. _form.GuideIds] : null,
+                TimeZoneId:        string.IsNullOrWhiteSpace(_form.TimeZoneId) ? null : _form.TimeZoneId);
 
             // Saved through the variant that keeps the server's refusal, because the public-event
             // rules refuse with a sentence written to be read — "Save failed" would throw it away
@@ -997,6 +1027,9 @@
         public DateTime? RsvpClosesAt     { get; set; }
         public Guid?    EventTypeId    { get; set; }
         public Guid?    TourId         { get; set; }
+
+        /// <summary>The clock the event runs on. Empty means "not said", or "the tour's".</summary>
+        public string   TimeZoneId     { get; set; } = "";
         public HashSet<Guid> GuideIds  { get; set; } = [];
         public Guid?    OrganizationAddressId { get; set; }
         public string   MeetingUrl     { get; set; } = "";

@@ -98,7 +98,7 @@
                     <label class="form-label fw-semibold" for="tour-zone">Time zone</label>
                     <select id="tour-zone" class="form-select"
                             @onchange="@(e => _form.TimeZoneId = e.Value?.ToString() ?? _form.TimeZoneId)">
-                        @foreach (var zone in Zones)
+                        @foreach (var zone in TimeZoneChoices.All)
                         {
                             <option value="@zone.Id" selected="@(zone.Id == _form.TimeZoneId)">@zone.Label</option>
                         }
@@ -213,16 +213,6 @@
     /// somewhere else says so and we widen this — a short honest list beats a long one nobody
     /// can find their city in.
     /// </remarks>
-    private static readonly (string Id, string Label)[] Zones =
-    [
-        ("America/New_York",    "Eastern"),
-        ("America/Chicago",     "Central"),
-        ("America/Denver",      "Mountain"),
-        ("America/Phoenix",     "Arizona (no daylight saving)"),
-        ("America/Los_Angeles", "Pacific"),
-        ("America/Anchorage",   "Alaska"),
-        ("Pacific/Honolulu",    "Hawaii"),
-    ];
 
     protected override async Task OnAfterRenderAsync(bool firstRender)
     {

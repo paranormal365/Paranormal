@@ -1024,7 +1024,12 @@ public sealed record UpsertCalendarEventRequest(
     DateTime? RsvpClosesAt = null,
     // Tours (item 233): a public date of a tour business belongs to a tour, and names its guides.
     Guid? TourId = null,
-    IReadOnlyList<Guid>? GuideAppUserIds = null);
+    IReadOnlyList<Guid>? GuideAppUserIds = null,
+    /// <summary>
+    /// The IANA zone this event happens in. Null on a tour date takes the tour's; null on
+    /// anything else leaves it unsaid, and a public listing then shows UTC and says so.
+    /// </summary>
+    string? TimeZoneId = null);
 
 public sealed record AddAttendeeRequest(Guid AppUserId, string? AssignedTask);
 
