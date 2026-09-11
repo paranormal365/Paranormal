@@ -67,16 +67,24 @@ public sealed class SmtpEmailService : IEmailService
 
     public bool IsConfigured => !string.IsNullOrWhiteSpace(_options.Host);
 
-    public async Task SendAsync(string to, string subject, string htmlBody, CancellationToken ct = default)
+    public Task SendAsync(string to, string subject, string htmlBody, CancellationToken ct = default)
+        => SendAsync(new EmailMessage(to, subject, htmlBody), ct);
+
+    /// <summary>
+    /// Builds the MIME message, attachments and all, and sends it.
+    /// </summary>
+    /// <remarks>
+    /// A <see cref="BodyBuilder"/> rather than a bare <c>TextPart</c>: with no attachments it
+    /// produces the same single HTML part this method has always sent, and with them it produces
+    /// the multipart a calendar invitation needs. One path, so a mail with an attachment is not a
+    /// second, less-travelled way of sending mail.
+    /// </remarks>
+    public async Task SendAsync(EmailMessage email, CancellationToken ct = default)
     {
         if (!IsConfigured)
             throw new InvalidOperationException("SmtpEmailService.SendAsync called while unconfigured — callers must check IsConfigured first.");
 
-        var message = new MimeMessage();
-        message.From.Add(new MailboxAddress(_options.FromName ?? _site.Name, _options.FromAddress));
-        message.To.Add(MailboxAddress.Parse(to));
-        message.Subject = subject;
-        message.Body = new TextPart("html") { Text = htmlBody };
+        var message = BuildMessage(email);
 
         using var client = new SmtpClient();
         var secureSocketOptions = _options.UseSsl
@@ -104,6 +112,33 @@ public sealed class SmtpEmailService : IEmailService
     /// Leaves only PLAIN and LOGIN in the set of mechanisms MailKit may try. The set is the one
     /// the server advertised, so removing an entry is the only lever — there is no "prefer".
     /// </summary>
+    /// <summary>The MIME message this service would send. Split out so a test can read it.</summary>
+    internal MimeMessage BuildMessage(EmailMessage email)
+    {
+        var message = new MimeMessage();
+        message.From.Add(new MailboxAddress(_options.FromName ?? _site.Name, _options.FromAddress));
+        message.To.Add(MailboxAddress.Parse(email.To));
+        message.Subject = email.Subject;
+
+        // A reply-to the sender never claims to BE: the From stays the site's own address, which
+        // is what the relay is authorised to send as, and only replies are steered elsewhere.
+        // A malformed address is dropped rather than thrown — a guest should still get the mail.
+        if (!string.IsNullOrWhiteSpace(email.ReplyTo)
+            && MailboxAddress.TryParse(email.ReplyTo, out var replyTo))
+            message.ReplyTo.Add(replyTo);
+
+        var builder = new BodyBuilder { HtmlBody = email.HtmlBody };
+        foreach (var attachment in email.Attachments ?? [])
+        {
+            builder.Attachments.Add(
+                attachment.FileName, attachment.Content,
+                ContentType.Parse(attachment.ContentType));
+        }
+        message.Body = builder.ToMessageBody();
+
+        return message;
+    }
+
     public static void KeepOnlyPlainAndLogin(ISet<string> advertised)
     {
         foreach (var mechanism in advertised.Where(m => m is not ("PLAIN" or "LOGIN")).ToList())

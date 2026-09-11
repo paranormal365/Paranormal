@@ -677,6 +677,13 @@
         SubscriptionLimit.StorageMegabytes     => "Storage (MB)",
         SubscriptionLimit.PublishedPages       => "Published pages",
         SubscriptionLimit.CustomRoles          => "Custom roles",
+        SubscriptionLimit.CasesPerPeriod       => "New cases a period",
+        // Item 233. Without these, the person entering the tour plan's rows on production reads
+        // "PhotoRetentionDays" and has to know what unit it wants.
+        SubscriptionLimit.PhotoRetentionDays   => "Photographs kept (days)",
+        SubscriptionLimit.RecordingRetentionDays => "Recordings kept (days)",
+        SubscriptionLimit.RecordingMinutes     => "Longest recording (minutes)",
+        SubscriptionLimit.TourGalleryImages    => "Pictures per tour",
         _                                      => limit.ToString(),
     };
 

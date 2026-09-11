@@ -30,6 +30,28 @@ public static class SiteSettingKeys
     /// <summary>Whether new organizations may be registered by ordinary users.</summary>
     public const string AllowOrganizationSelfRegistration = "org.allow-self-registration";
 
+    /// <summary>
+    /// Whether a NEW ghost walking tour may sign up (item 233).
+    /// </summary>
+    /// <remarks>
+    /// <para><b>Ben, 2026-09-10:</b> "As a superadmin, I want to be able to toggle the option for
+    /// sign ups as tour groups. Those already signed up and paying would continue, but no new
+    /// groups would be allowed until I turned it back on."</para>
+    ///
+    /// <para>So this closes <b>one door</b> and nothing else. A business that already exists keeps
+    /// its tours, its dates, its sign-ups and its plan; only becoming a new one is refused, which
+    /// is also why the check sits at registration and at the moment a group is reclassified,
+    /// rather than anywhere a tour is used.</para>
+    ///
+    /// <para><b>Tours only</b>, narrowed on Ben's word the same day. A paranormal events business
+    /// sits on the same flat plan but is a different trade, and a switch that closed both would be
+    /// turning away a customer nobody meant to turn away.</para>
+    ///
+    /// <para>Unset reads as ON, like every other policy switch here: introducing a check must
+    /// never close a door for a site that has not touched the setting.</para>
+    /// </remarks>
+    public const string AllowTourBusinessSignUps = "org.allow-tour-signups";
+
     /// <summary>Short notice shown site-wide — maintenance windows, outages. Empty = nothing shown.</summary>
     public const string SiteAnnouncement = "site.announcement";
 
@@ -140,6 +162,11 @@ public static class SiteSettingKeys
             "Shown instead of the generic default when the person's profile says they are a woman. Leave unset to use the generic default for everyone."),
         (AllowOrganizationSelfRegistration, "Allow groups to self-register",
             "When on, any signed-in user can register a new group. When off, only a SuperAdmin can create one."),
+        (AllowTourBusinessSignUps, "Allow new ghost walking tours",
+            "When on, anyone starting a group can choose to be a ghost walking tour. When off, no "
+            + "new ones may be started and no existing group may start running tours — but every "
+            + "tour business already signed up carries on exactly as it is: its tours, dates, "
+            + "sign-ups and billing are untouched. Paranormal events businesses are not affected."),
         (SiteAnnouncement, "Site-wide announcement",
             "A short notice shown across the site — planned maintenance, known issues. Leave empty to show nothing."),
         (PublicContactEmail, "Public contact email",
@@ -250,7 +277,9 @@ public static class SiteSettingKeys
     /// </remarks>
     public static IReadOnlySet<string> BooleanKeys { get; } =
         new HashSet<string>(
-            FeatureDefaults.Select(f => f.Key).Append(AllowOrganizationSelfRegistration),
+            FeatureDefaults.Select(f => f.Key)
+                .Append(AllowOrganizationSelfRegistration)
+                .Append(AllowTourBusinessSignUps),
             StringComparer.Ordinal);
 
 }

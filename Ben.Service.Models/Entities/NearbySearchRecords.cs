@@ -32,7 +32,12 @@ public sealed record NearbyEventResult(
     string?  State,
     decimal? Latitude,
     decimal? Longitude,
-    double   DistanceMiles);
+    double   DistanceMiles,
+    /// <summary>
+    /// The IANA zone the night happens in, when it is recorded — today, the tour's. Null means
+    /// nobody has said, and the reader is shown UTC and told so; see EventClock.
+    /// </summary>
+    string?  TimeZoneId = null);
 
 /// <summary>
 /// One organization near the caller, at whatever precision it chose when it opted into search.

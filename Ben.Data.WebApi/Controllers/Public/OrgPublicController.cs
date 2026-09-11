@@ -112,7 +112,8 @@ public sealed class OrgPublicController : ControllerBase
             .OrderBy(e => e.StartDateTime)
             .Select(e => new OrgPublicNextEvent(
                 e.Id, e.Title, e.UrlName, e.StartDateTime, e.IsAllDay, e.Location, null,
-                e.AttendeeCapacity, e.Attendees.Count(a => a.RsvpStatus == RsvpStatus.Accepted)))
+                e.AttendeeCapacity, e.Attendees.Count(a => a.RsvpStatus == RsvpStatus.Accepted),
+                e.TimeZoneId ?? (e.Tour != null ? e.Tour.TimeZoneId : null)))
             .FirstOrDefaultAsync(ct);
 
         return new OrgPublicFacts(areaServed, org.IsAcceptingClients, org.IsAcceptingApplications,
@@ -219,7 +220,12 @@ public sealed record OrgPublicFacts(
     int PublicCaseCount,
     OrgPublicNextEvent? NextPublicEvent);
 
-public sealed record OrgPublicNextEvent(Guid Id, string Title, string? UrlName, DateTime StartDateTime, bool IsAllDay, string? City, string? State, int? AttendeeCapacity, int AttendingCount);
+public sealed record OrgPublicNextEvent(
+    Guid Id, string Title, string? UrlName, DateTime StartDateTime, bool IsAllDay,
+    string? City, string? State, int? AttendeeCapacity, int AttendingCount,
+    // The IANA zone the night happens in, when it is recorded — today, the tour's. Null means
+    // nobody has said, and the reader is shown UTC and told so; see EventClock.
+    string? TimeZoneId = null);
 
 
 public sealed record OrgPublicPageResponse(

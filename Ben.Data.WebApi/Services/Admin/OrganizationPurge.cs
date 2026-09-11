@@ -1,3 +1,4 @@
+using Ben.Data.Common.Enums;
 ﻿using Ben.Data.Common.Interfaces;
 using Ben.Data.Source.Context;
 using Microsoft.EntityFrameworkCore;
@@ -131,6 +132,13 @@ public sealed class OrganizationPurge
         fileIds.AddRange(await db.EventEvidenceSubmissions.AsNoTracking()
             .Where(e => eventIds.Contains(e.OrgCalendarEventId))
             .Select(e => e.UploadFileId).ToListAsync(ct));
+
+        // A tour's gallery pictures are the business's own files. Their rows go with the tour
+        // (cascade), but nothing gathered their paths — so the bytes stayed on the disk with
+        // nothing left pointing at them (item 233).
+        fileIds.AddRange(await db.TourGalleryImages.AsNoTracking()
+            .Where(g => g.Tour.OrganizationId == organizationId)
+            .Select(g => g.UploadFileId).ToListAsync(ct));
 
         fileIds.AddRange(await db.FieldSessionUploadFiles.AsNoTracking()
             .Where(f => f.FieldSessionUpload.InvestigationId != null
@@ -310,6 +318,20 @@ public sealed class OrganizationPurge
             await db.InvestigationScheduleProposals
                 .Where(x => caseIds.Contains(x.CaseId)).ExecuteDeleteAsync(ct);
 
+            // Reports about this group's cases go with them: a report is a pointer at a thing,
+            // and a pointer at nothing is not a report a moderator can act on. Like the posts
+            // below, these live outside the group and the OrganizationId sweep never sees them.
+            await db.OrgMessageReports.Where(x => x.CaseId != null && caseIds.Contains(x.CaseId.Value))
+                .ExecuteDeleteAsync(ct);
+
+            // A comment on one of those cases exists only because the case did, so it goes too —
+            // and it has to go before the reports above would otherwise be orphaned, which is why
+            // the two sit together here.
+            await db.OrgMessages
+                .Where(x => x.CaseId != null && caseIds.Contains(x.CaseId.Value)
+                         && x.ChannelType == OrgMessageChannel.PublicCaseComment)
+                .ExecuteDeleteAsync(ct);
+
             // A public feed post can cite one of this group's cases while living outside the
             // group (OrganizationId is null), so the OrganizationId sweep below never sees it —
             // and the database refused BenCo's deletion on exactly that on 2026-09-03. The post is
@@ -323,7 +345,15 @@ public sealed class OrganizationPurge
             await db.CaseTimelineEntries.Where(x => x.InvestigationId != null && investigationIds.Contains(x.InvestigationId.Value))
                 .ExecuteUpdateAsync(u => u.SetProperty(x => x.InvestigationId, (Guid?)null), ct);
             await db.Investigations.Where(x => x.OrganizationId == organizationId).ExecuteDeleteAsync(ct);
+            // Reviews cite the date they were written after, so they go before both the dates
+            // and the tours they belong to.
+            await db.TourReviews
+                .Where(x => x.Tour.OrganizationId == organizationId).ExecuteDeleteAsync(ct);
             await db.OrgCalendarEvents.Where(x => x.OrganizationId == organizationId).ExecuteDeleteAsync(ct);
+            // Tours (item 233) point at the group AND at one of its addresses, both NoAction, so
+            // they block the group's deletion twice over. They go after the dates that name them,
+            // which the line above has just taken, and before the addresses further down.
+            await db.Tours.Where(x => x.OrganizationId == organizationId).ExecuteDeleteAsync(ct);
             await db.Cases.Where(x => x.OrganizationId == organizationId).ExecuteDeleteAsync(ct);
 
             await db.BillingLedgerEntries.Where(x => x.OrganizationId == organizationId).ExecuteDeleteAsync(ct);

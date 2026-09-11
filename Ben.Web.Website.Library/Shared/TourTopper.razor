@@ -1,0 +1,119 @@
+@namespace Ben.Web.Website.Library.Shared
+
+@using Ben.Service.Models.Entities
+@using Ben.Web.Services
+@using Ben.Web.Website.Library.Kit
+
+@inject IBenAdminClient AdminClient
+@inject IBenUserState UserState
+@inject IMediaUrlBuilder MediaUrls
+
+@*
+    A strip of tours near the top of the home page (Ben, 2026-09-10), each card led by the tour's
+    own picture.
+
+    It renders NOTHING when there are no tours to show — not a heading, not an empty rail. A band
+    across the front page announcing that there is nothing here is worse than no band, and this is
+    the first thing a visitor sees.
+
+    Soonest first, and only tours with a date on the calendar: a walk somebody can actually turn up
+    to is the offer. A tour with no dates is still findable on its business's page and in search;
+    it just has nothing to advertise this week.
+*@
+
+<FeatureGate Flag="@SiteFeatures.Events">
+@if (_tours.Count > 0)
+{
+    <div class="container-fluid px-3 mb-4" style="max-width:860px;margin:0 auto;">
+        <div class="d-flex justify-content-between align-items-baseline mb-2">
+            <h2 class="h5 mb-0">Tours you can walk</h2>
+            <a class="small text-decoration-none" href="/events">What's on</a>
+        </div>
+
+        <div class="row g-3">
+            @foreach (var tour in _tours)
+            {
+                <div class="col-6 col-lg-3">
+                    @* A poster, not a form: the picture is the card, and everything a passer-by
+                       needs sits on top of it. The scrim under the text is what keeps it readable
+                       over a photograph nobody has seen yet. *@
+                    <a class="tour-topper__card rounded overflow-hidden text-decoration-none text-reset"
+                       href="@($"/o/{tour.OrganizationUrlName}/tours/{tour.UrlName}")">
+                        <span class="tour-topper__inner">
+                            @if (tour.CoverUploadFileId is { } cover)
+                            {
+                                <img src="@MediaUrls.TourPhoto(cover)" alt="@tour.Name"
+                                     class="tour-topper__image" loading="lazy" />
+                            }
+                            else
+                            {
+                                @* No picture yet: a lantern on a wash in the tour's own colour
+                                   rather than a hole. The same colour the nearby results give this
+                                   tour, a screen further down — see TourPlate. *@
+                                <span class="tour-topper__lantern" style="@TourPlate.HueStyle(tour.Name)"><span class="tour-topper__glyph">🏮</span></span>
+                            }
+
+                            <span class="tour-topper__scrim"></span>
+
+                            @if (tour.NextDateStartUtc is { } next)
+                            {
+                                @* The walk's own clock, not the reader's (Ben, 2026-09-10). *@
+                                var (at, zone) = EventClock.InPlaceTime(next, tour.TimeZoneId);
+                                <span class="tour-topper__when">
+                                    @at.ToString("ddd MM/dd")
+                                    <span class="tour-topper__time">@at.ToString("h:mm tt") @zone</span>
+                                </span>
+                            }
+
+                            <span class="tour-topper__text">
+                                <span class="tour-topper__name">@tour.Name</span>
+                                <span class="tour-topper__where">
+                                    @if (!string.IsNullOrWhiteSpace(tour.City))
+                                    {
+                                        <text>@tour.City@(string.IsNullOrWhiteSpace(tour.State) ? "" : $", {tour.State}")</text>
+                                    }
+                                    else
+                                    {
+                                        @tour.OrganizationName
+                                    }
+                                    @if (tour.Rating is { } rating)
+                                    {
+                                        <text> · @rating.ToString("0.0") ★</text>
+                                    }
+                                </span>
+                            </span>
+                        </span>
+                    </a>
+                </div>
+            }
+        </div>
+    </div>
+}
+</FeatureGate>
+
+@code {
+    /// <summary>How many fit across without the strip becoming the page.</summary>
+    private const int MaxCards = 4;
+
+    private IReadOnlyList<PublicTourListItem> _tours = [];
+
+    // Loaded after the first render rather than during it: the front page is prerendered for
+    // people who are not signed in, and a strip that is absent for a moment is better than a
+    // page that waits on it.
+    protected override async Task OnAfterRenderAsync(bool firstRender)
+    {
+        if (!firstRender) return;
+        if (!await UserState.WaitUntilAuthReadyAsync(RendererInfo.IsInteractive)) return;
+
+        var found = await AdminClient.SearchToursAsync();
+        _tours =
+        [
+            .. found.Items
+                 .Where(t => t.NextDateStartUtc is not null)
+                 .OrderBy(t => t.NextDateStartUtc)
+                 .Take(MaxCards),
+        ];
+
+        StateHasChanged();
+    }
+}

@@ -38,4 +38,17 @@ public interface IMediaUrlBuilder
     /// that names a share row, never one that names a session.
     /// </remarks>
     string SharedFieldSessionFile(string shareToken, Guid fileId);
+
+    /// <summary>
+    /// A tour guide's published photograph (item 233).
+    /// </summary>
+    /// <remarks>
+    /// No ticket: this one is anonymous by design. Ben asked that a guest be shown who is leading
+    /// their walk, and that guest may have no account at all — the picture has to render for
+    /// somebody reading an email.
+    /// </remarks>
+    string GuidePhoto(Guid uploadFileId);
+
+    /// <summary>A picture from a tour's gallery. Anonymous, for the same reason.</summary>
+    string TourPhoto(Guid uploadFileId);
 }

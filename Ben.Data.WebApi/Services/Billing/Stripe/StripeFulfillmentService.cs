@@ -41,7 +41,10 @@ public sealed class StripeFulfillmentService
         decimal Payable, decimal TaxRatePercent, decimal TaxAmount,
         Guid InitiatedByUserId, string? CouponCode,
         decimal ListPrice, decimal Discount,
-        DateTime? PeriodStartUtc = null)
+        DateTime? PeriodStartUtc = null,
+        // Item 233: the tours a business period is priced for. Zero for everyone the ladder
+        // prices, and for sessions created before the key existed.
+        int TourCount = 0)
     {
         public static class Keys
         {
@@ -60,6 +63,7 @@ public sealed class StripeFulfillmentService
             /// <summary>Present exactly when this payment buys an overflow SEAT, not the
             /// group's subscription — the two fulfill along entirely different paths.</summary>
             public const string Seat         = "ih_seat";
+            public const string Tours        = "ih_tours";
         }
 
         public Dictionary<string, string> ToMetadata() => new()
@@ -76,6 +80,7 @@ public sealed class StripeFulfillmentService
             [Keys.List]         = ListPrice.ToString(System.Globalization.CultureInfo.InvariantCulture),
             [Keys.Discount]     = Discount.ToString(System.Globalization.CultureInfo.InvariantCulture),
             [Keys.PeriodStart]  = PeriodStartUtc?.ToString("O") ?? string.Empty,
+            [Keys.Tours]        = TourCount.ToString(),
         };
 
         /// <summary>Null when the metadata is not ours or is torn — a session created by
@@ -106,10 +111,13 @@ public sealed class StripeFulfillmentService
                 && DateTime.TryParse(psRaw, inv, System.Globalization.DateTimeStyles.RoundtripKind, out var ps))
                 periodStart = ps;
 
+            var tours = 0;
+            if (m.TryGetValue(Keys.Tours, out var tr2)) int.TryParse(tr2, out tours);
+
             return new CheckoutFacts(orgId, tierId, (BillingInterval)ivInt, members,
                 payable, taxRate, taxAmount, userId,
                 string.IsNullOrWhiteSpace(coupon) ? null : coupon,
-                list, discount, periodStart);
+                list, discount, periodStart, tours);
         }
     }
 
@@ -185,9 +193,23 @@ public sealed class StripeFulfillmentService
         // neither gifts a free day nor bills one twice.
         var periodStart = facts.PeriodStartUtc ?? now;
         var periodEnd   = periodStart.AddMonths((int)facts.Interval);
+        // A session created before the tour key existed carries no count, and opening its period
+        // at zero would tell the add-on service that NOTHING was paid for — so the next tour
+        // added is charged for every tour the business runs. When the tier is per-tour and the
+        // metadata is silent, count what is live instead of believing the zero.
+        var tourCount = facts.TourCount;
+        if (tourCount == 0 && tier is { IsBandedByMembers: false })
+        {
+            var kind = await db.Organizations.AsNoTracking()
+                .Where(o => o.Id == facts.OrganizationId).Select(o => o.Kind).FirstOrDefaultAsync(ct);
+            if (Ben.Data.Source.Services.SubscriptionTierResolver.IsBusinessKind(kind))
+                tourCount = Ben.Data.Source.Services.TourBilling.Units(
+                    kind, await BillableUnits.ActiveToursAsync(db, facts.OrganizationId, ct));
+        }
+
         var snapshot = PeriodOpener.Open(
             sub, tier, SubscriptionStatus.Active, facts.Interval,
-            periodStart, periodEnd, facts.MemberCount, facts.InitiatedByUserId);
+            periodStart, periodEnd, facts.MemberCount, facts.InitiatedByUserId, tourCount);
 
         // The person paid the quoted (possibly discounted) amount; the period records what was
         // actually charged, not the list price the opener read off the tier.

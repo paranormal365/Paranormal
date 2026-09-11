@@ -108,6 +108,15 @@ namespace Ben.Data.Source.Context
         public virtual DbSet<PublicationSubscription> PublicationSubscriptions { get; set; }
         public virtual DbSet<OrgCalendarEventType> OrgCalendarEventTypes { get; set; }
         public virtual DbSet<OrgCalendarEvent> OrgCalendarEvents { get; set; }
+        public virtual DbSet<Tour> Tours { get; set; }
+        public virtual DbSet<TourGuide> TourGuides { get; set; }
+        public virtual DbSet<TourSocialLink> TourSocialLinks { get; set; }
+        public virtual DbSet<MessagePoll> MessagePolls { get; set; }
+        public virtual DbSet<MessagePollOption> MessagePollOptions { get; set; }
+        public virtual DbSet<MessagePollVote> MessagePollVotes { get; set; }
+        public virtual DbSet<TourReview> TourReviews { get; set; }
+        public virtual DbSet<TourGalleryImage> TourGalleryImages { get; set; }
+        public virtual DbSet<OrgCalendarEventGuide> OrgCalendarEventGuides { get; set; }
         public virtual DbSet<OrgCalendarEventAttendee> OrgCalendarEventAttendees { get; set; }
         public virtual DbSet<Investigation> Investigations { get; set; }
         public virtual DbSet<InvestigationAttendee> InvestigationAttendees { get; set; }
@@ -652,8 +661,11 @@ namespace Ben.Data.Source.Context
             // would otherwise find the same event, and the same attendee, on every pass. Enforcing
             // it in the database rather than in the query means it still holds if two instances
             // ever run at once.
+            // Widened with the start time (item 233): the key is "this person, this event, this
+            // start", so a date that moves can be reminded about again — and a second reminder
+            // for the SAME start is still refused by the database rather than by the query.
             modelBuilder.Entity<EventReminderSent>()
-                .HasIndex(e => new { e.OrgCalendarEventId, e.AppUserId }).IsUnique();
+                .HasIndex(e => new { e.OrgCalendarEventId, e.AppUserId, e.ForStartUtc }).IsUnique();
             // Cascade from the event: a deleted event's reminder markers are meaningless, and the
             // job will never look for them again.
             modelBuilder.Entity<EventReminderSent>()
@@ -664,6 +676,134 @@ namespace Ben.Data.Source.Context
             modelBuilder.Entity<EventReminderSent>()
                 .HasOne(e => e.AppUser).WithMany()
                 .HasForeignKey(e => e.AppUserId).OnDelete(DeleteBehavior.NoAction);
+
+            // ── Retention (item 233) ────────────────────────────────────────
+            // The sweep asks one question — what has expired and was not kept — and asks it of a
+            // table with every file on the site in it. Indexed on the date so that stays a seek.
+            modelBuilder.Entity<UploadFile>()
+                .HasIndex(f => f.ExpiresAtUtc);
+
+            // ── Tour (item 233) ─────────────────────────────────────────────
+            // The name is what tells two tours from the same corner apart, so it is unique per
+            // business; SQL Server's default collation makes that case-insensitive, which is the
+            // intent. The start address and the business are NoAction: an address in use by a
+            // tour must be re-pointed, not silently orphaned, and deleting a business goes through
+            // its own purge. A date keeps its tour on retirement (SetNull only on a hard delete).
+            modelBuilder.Entity<Tour>()
+                .HasIndex(t => new { t.OrganizationId, t.Name }).IsUnique();
+            modelBuilder.Entity<Tour>()
+                .Property(t => t.Name).HasMaxLength(120);
+            modelBuilder.Entity<Tour>()
+                .HasOne(t => t.Organization).WithMany()
+                .HasForeignKey(t => t.OrganizationId).OnDelete(DeleteBehavior.NoAction);
+            modelBuilder.Entity<Tour>()
+                .HasOne(t => t.StartOrganizationAddress).WithMany()
+                .HasForeignKey(t => t.StartOrganizationAddressId).OnDelete(DeleteBehavior.NoAction);
+            modelBuilder.Entity<Tour>()
+                .HasOne(t => t.CreatedByAppUser).WithMany()
+                .HasForeignKey(t => t.CreatedByAppUserId).OnDelete(DeleteBehavior.NoAction);
+            modelBuilder.Entity<Tour>()
+                .HasOne(t => t.UpdatedByAppUser).WithMany()
+                .HasForeignKey(t => t.UpdatedByAppUserId).OnDelete(DeleteBehavior.NoAction);
+            modelBuilder.Entity<OrgCalendarEvent>()
+                .HasOne(e => e.Tour).WithMany(t => t.Dates)
+                .HasForeignKey(e => e.TourId).OnDelete(DeleteBehavior.SetNull);
+            modelBuilder.Entity<Tour>()
+                .HasIndex(t => new { t.OrganizationId, t.UrlName }).IsUnique();
+            modelBuilder.Entity<Tour>()
+                .Property(t => t.UrlName).HasMaxLength(120);
+            modelBuilder.Entity<Tour>()
+                .Property(t => t.TimeZoneId).HasMaxLength(64);
+            modelBuilder.Entity<Tour>()
+                .Property(t => t.ContactLine).HasMaxLength(500);
+            modelBuilder.Entity<Tour>()
+                .Property(t => t.MailSubjectTemplate).HasMaxLength(200);
+
+            // Guides: one row per person per tour, and per person per date. Cascade from the
+            // thing they guide, NoAction on the person — deleting an account must not cascade
+            // into a business's schedule, which is the rule every user FK here follows.
+            modelBuilder.Entity<TourGuide>()
+                .HasIndex(g => new { g.TourId, g.AppUserId }).IsUnique();
+            modelBuilder.Entity<TourGuide>()
+                .HasOne(g => g.Tour).WithMany(t => t.Guides)
+                .HasForeignKey(g => g.TourId).OnDelete(DeleteBehavior.Cascade);
+            modelBuilder.Entity<TourGuide>()
+                .HasOne(g => g.AppUser).WithMany()
+                .HasForeignKey(g => g.AppUserId).OnDelete(DeleteBehavior.NoAction);
+            modelBuilder.Entity<TourGuide>()
+                .HasOne(g => g.CreatedByAppUser).WithMany()
+                .HasForeignKey(g => g.CreatedByAppUserId).OnDelete(DeleteBehavior.NoAction);
+
+            // An IANA zone id, not free text: the longest the database ships is well under this.
+            modelBuilder.Entity<OrgCalendarEvent>()
+                .Property(e => e.TimeZoneId).HasMaxLength(100);
+
+            // One account per platform per tour: two Instagram links for one walk is a mistake,
+            // not a feature. Cascade from the tour, NoAction on the person who added it.
+            modelBuilder.Entity<TourSocialLink>()
+                .HasIndex(l => new { l.TourId, l.Platform }).IsUnique();
+            modelBuilder.Entity<TourSocialLink>()
+                .Property(l => l.Url).HasMaxLength(500).IsRequired();
+            modelBuilder.Entity<TourSocialLink>()
+                .HasOne(l => l.Tour).WithMany(t => t.SocialLinks)
+                .HasForeignKey(l => l.TourId).OnDelete(DeleteBehavior.Cascade);
+            modelBuilder.Entity<TourSocialLink>()
+                .HasOne(l => l.CreatedByAppUser).WithMany()
+                .HasForeignKey(l => l.CreatedByAppUserId).OnDelete(DeleteBehavior.NoAction);
+
+            modelBuilder.Entity<OrgCalendarEventGuide>()
+                .HasIndex(g => new { g.OrgCalendarEventId, g.AppUserId }).IsUnique();
+            modelBuilder.Entity<OrgCalendarEventGuide>()
+                .HasOne(g => g.OrgCalendarEvent).WithMany(e => e.Guides)
+                .HasForeignKey(g => g.OrgCalendarEventId).OnDelete(DeleteBehavior.Cascade);
+            modelBuilder.Entity<OrgCalendarEventGuide>()
+                .HasOne(g => g.AppUser).WithMany()
+                .HasForeignKey(g => g.AppUserId).OnDelete(DeleteBehavior.NoAction);
+            modelBuilder.Entity<OrgCalendarEventGuide>()
+                .HasOne(g => g.CreatedByAppUser).WithMany()
+                .HasForeignKey(g => g.CreatedByAppUserId).OnDelete(DeleteBehavior.NoAction);
+
+            // A picture belongs to one tour once. Cascade from the tour; NoAction on the file, so
+            // removing a picture from a page never reaches into the file table on its own.
+            modelBuilder.Entity<TourGalleryImage>()
+                .HasIndex(g => new { g.TourId, g.UploadFileId }).IsUnique();
+            modelBuilder.Entity<TourGalleryImage>()
+                .Property(g => g.Caption).HasMaxLength(300);
+            modelBuilder.Entity<TourGalleryImage>()
+                .HasOne(g => g.Tour).WithMany()
+                .HasForeignKey(g => g.TourId).OnDelete(DeleteBehavior.Cascade);
+            modelBuilder.Entity<TourGalleryImage>()
+                .HasOne(g => g.UploadFile).WithMany()
+                .HasForeignKey(g => g.UploadFileId).OnDelete(DeleteBehavior.NoAction);
+            modelBuilder.Entity<TourGalleryImage>()
+                .HasOne(g => g.CreatedByAppUser).WithMany()
+                .HasForeignKey(g => g.CreatedByAppUserId).OnDelete(DeleteBehavior.NoAction);
+            modelBuilder.Entity<TourGalleryImage>()
+                .HasOne(g => g.UpdatedByAppUser).WithMany()
+                .HasForeignKey(g => g.UpdatedByAppUserId).OnDelete(DeleteBehavior.NoAction);
+
+            // One review per guest per tour: the same person walking it three times has one
+            // opinion of it. Cascade from the tour; NoAction everywhere else, so deleting an
+            // account never quietly rewrites a business's rating.
+            modelBuilder.Entity<TourReview>()
+                .HasIndex(r => new { r.TourId, r.AppUserId }).IsUnique();
+            modelBuilder.Entity<TourReview>()
+                .Property(r => r.Comment).HasMaxLength(1000);
+            modelBuilder.Entity<TourReview>()
+                .HasOne(r => r.Tour).WithMany()
+                .HasForeignKey(r => r.TourId).OnDelete(DeleteBehavior.Cascade);
+            modelBuilder.Entity<TourReview>()
+                .HasOne(r => r.OrgCalendarEvent).WithMany()
+                .HasForeignKey(r => r.OrgCalendarEventId).OnDelete(DeleteBehavior.NoAction);
+            modelBuilder.Entity<TourReview>()
+                .HasOne(r => r.AppUser).WithMany()
+                .HasForeignKey(r => r.AppUserId).OnDelete(DeleteBehavior.NoAction);
+            modelBuilder.Entity<TourReview>()
+                .HasOne(r => r.CreatedByAppUser).WithMany()
+                .HasForeignKey(r => r.CreatedByAppUserId).OnDelete(DeleteBehavior.NoAction);
+            modelBuilder.Entity<TourReview>()
+                .HasOne(r => r.UpdatedByAppUser).WithMany()
+                .HasForeignKey(r => r.UpdatedByAppUserId).OnDelete(DeleteBehavior.NoAction);
 
             // ── AppleCredential (item 229) ───────────────────────────────────
             // One per person per Apple client; a new sign-in through the same client replaces it.
@@ -1678,10 +1818,59 @@ namespace Ben.Data.Source.Context
             modelBuilder.Entity<OrgMessageHashtag>()
                 .HasIndex(e => new { e.Tag, e.DateCreated });
 
+            // Where a message says it was written, and when it was set to appear (item 233).
+            modelBuilder.Entity<OrgMessage>()
+                .Property(m => m.PostedPlaceName).HasMaxLength(200);
+            modelBuilder.Entity<OrgMessage>()
+                .Property(m => m.PostedLatitude).HasPrecision(9, 6);
+            modelBuilder.Entity<OrgMessage>()
+                .Property(m => m.PostedLongitude).HasPrecision(9, 6);
+            // The feed asks "has this one's time come" on every page, so the column is indexed
+            // with the date it is ordered by.
+            modelBuilder.Entity<OrgMessage>()
+                .HasIndex(m => new { m.ScheduledForUtc, m.DateCreated });
+
+            // ── MessagePoll (item 233) ────────────────────────────────────────
+            // One poll per message, and the poll goes when the message does: a question attached
+            // to nothing is not a question anybody can answer.
+            modelBuilder.Entity<MessagePoll>()
+                .HasIndex(p => p.OrgMessageId).IsUnique();
+            modelBuilder.Entity<MessagePoll>()
+                .Property(p => p.Question).HasMaxLength(300).IsRequired();
+            modelBuilder.Entity<MessagePoll>()
+                .HasOne(p => p.OrgMessage).WithMany()
+                .HasForeignKey(p => p.OrgMessageId).OnDelete(DeleteBehavior.Cascade);
+            modelBuilder.Entity<MessagePoll>()
+                .HasOne(p => p.CreatedByAppUser).WithMany()
+                .HasForeignKey(p => p.CreatedByAppUserId).OnDelete(DeleteBehavior.NoAction);
+
+            modelBuilder.Entity<MessagePollOption>()
+                .Property(o => o.Text).HasMaxLength(120).IsRequired();
+            modelBuilder.Entity<MessagePollOption>()
+                .HasOne(o => o.MessagePoll).WithMany(p => p.Options)
+                .HasForeignKey(o => o.MessagePollId).OnDelete(DeleteBehavior.Cascade);
+
+            // One vote per person per option. A single-answer poll is held to one row by the
+            // server; this index is what stops the same answer being counted twice whatever the
+            // caller does.
+            modelBuilder.Entity<MessagePollVote>()
+                .HasIndex(v => new { v.MessagePollId, v.MessagePollOptionId, v.AppUserId }).IsUnique();
+            modelBuilder.Entity<MessagePollVote>()
+                .HasOne(v => v.MessagePoll).WithMany()
+                .HasForeignKey(v => v.MessagePollId).OnDelete(DeleteBehavior.Cascade);
+            // NoAction on the option: the poll's cascade already takes the votes, and a second
+            // cascade path into the same table is what SQL Server refuses to create.
+            modelBuilder.Entity<MessagePollVote>()
+                .HasOne(v => v.MessagePollOption).WithMany(o => o.Votes)
+                .HasForeignKey(v => v.MessagePollOptionId).OnDelete(DeleteBehavior.NoAction);
+            modelBuilder.Entity<MessagePollVote>()
+                .HasOne(v => v.AppUser).WithMany()
+                .HasForeignKey(v => v.AppUserId).OnDelete(DeleteBehavior.NoAction);
+
             // ── OrgMessageReport ──────────────────────────────────────────────
             modelBuilder.Entity<OrgMessageReport>()
                 .HasOne(e => e.OrgMessage).WithMany(e => e.Reports)
-                .HasForeignKey(e => e.OrgMessageId).OnDelete(DeleteBehavior.Cascade);
+                .HasForeignKey(e => e.OrgMessageId).IsRequired(false).OnDelete(DeleteBehavior.Cascade);
             modelBuilder.Entity<OrgMessageReport>()
                 .HasOne(e => e.ReportedByAppUser).WithMany()
                 .HasForeignKey(e => e.ReportedByAppUserId).OnDelete(DeleteBehavior.NoAction);
@@ -1692,8 +1881,21 @@ namespace Ben.Data.Source.Context
                 .Property(e => e.Reason).HasMaxLength(1000);
             // One report per person per post. Reporting a thing twice is not twice the signal, and
             // without this a single objector could make a post look like a pile-on.
+            // A filtered index, because the column is nullable now: SQL Server treats NULLs as
+            // equal in a unique index, so without the filter one person could report exactly one
+            // CASE ever — their second case report would collide with their first on (null, them).
             modelBuilder.Entity<OrgMessageReport>()
-                .HasIndex(e => new { e.OrgMessageId, e.ReportedByAppUserId }).IsUnique();
+                .HasIndex(e => new { e.OrgMessageId, e.ReportedByAppUserId }).IsUnique()
+                .HasFilter("[OrgMessageId] IS NOT NULL");
+
+            // The same rule for the other target.
+            modelBuilder.Entity<OrgMessageReport>()
+                .HasIndex(e => new { e.CaseId, e.ReportedByAppUserId }).IsUnique()
+                .HasFilter("[CaseId] IS NOT NULL");
+
+            modelBuilder.Entity<OrgMessageReport>()
+                .HasOne(e => e.Case).WithMany()
+                .HasForeignKey(e => e.CaseId).OnDelete(DeleteBehavior.NoAction);
             // The moderation queue: everything still pending, oldest first.
             modelBuilder.Entity<OrgMessageReport>()
                 .HasIndex(e => new { e.Outcome, e.DateCreated });

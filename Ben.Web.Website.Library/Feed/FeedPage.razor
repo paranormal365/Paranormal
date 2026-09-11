@@ -149,7 +149,8 @@
                               OnLikeToggled="ToggleLikeAsync"
                               OnFollowToggled="ToggleFollowAsync"
                               OnReportRequested="ReportAsync"
-                              OnRecategorized="SwapPost" />
+                              OnRecategorized="SwapPost"
+                              OnScheduledCancelled="DropPost" />
 
                 @* ── The weave (item 186 F8): one promoted slot per eight posts, real cards and
                    house cards alternating, main feed only — a tag or type page stays clean.
@@ -560,6 +561,9 @@
         var index = _posts.FindIndex(p => p.Id == post.Id);
         if (index >= 0) _posts[index] = post;
     }
+
+    /// <summary>Takes a called-back post off the page, since the server no longer has it.</summary>
+    private void DropPost(FeedPostRecord post) => _posts.RemoveAll(p => p.Id == post.Id);
 
     /// <summary>
     /// Likes or unlikes, optimistically.

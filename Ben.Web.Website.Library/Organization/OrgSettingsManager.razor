@@ -27,6 +27,11 @@ else
     <nav class="mb-3" aria-label="Settings sections">
         <div class="d-flex flex-wrap gap-2 small">
             <a class="btn btn-outline-secondary btn-sm" href="#settings-billing">Billing</a>
+            @if (_runsPublicTours || _kind == Ben.Data.Common.Enums.OrganizationKind.GhostWalkingTour
+                                  || _kind == Ben.Data.Common.Enums.OrganizationKind.PublicEventProvider)
+            {
+                <a class="btn btn-outline-secondary btn-sm" href="#settings-tours">Tours</a>
+            }
             <a class="btn btn-outline-secondary btn-sm" href="#settings-promote">Promotion</a>
             <a class="btn btn-outline-secondary btn-sm" href="#settings-attribution">Feed attribution</a>
             <a class="btn btn-outline-secondary btn-sm" href="#settings-group">Group &amp; addresses</a>
@@ -50,6 +55,28 @@ else
             <a class="btn btn-outline-primary" href="/organizations/@OrgId/billing">Open billing</a>
         </div>
     </div>
+
+    @* Item 233: the door to tours. Its own page, and a page per tour behind that — a tour
+       carries its guides, its dates, its guest email, its gallery and its reviews, and a card
+       here would be the tallest thing on this screen. Shown only to a group that runs tours,
+       because for everybody else it is a door to an empty room. *@
+    @if (_runsPublicTours || _kind == Ben.Data.Common.Enums.OrganizationKind.GhostWalkingTour
+                          || _kind == Ben.Data.Common.Enums.OrganizationKind.PublicEventProvider)
+    {
+        <div class="card mb-3" id="settings-tours">
+            <div class="card-body d-flex align-items-center gap-3">
+                <BenIcon Name="map" Class="fs-4 text-primary" />
+                <div class="flex-grow-1">
+                    <h6 class="card-title mb-0">Tours</h6>
+                    <span class="small text-secondary">
+                        The walks you sell, who guides them, and what your guests are sent.
+                    </span>
+                </div>
+                <a class="btn btn-outline-primary" id="org-tours-link"
+                   href="@($"/organizations/{OrgId}/tours")">Open tours</a>
+            </div>
+        </div>
+    }
 
     @* Item 166 W3: the door to the promotion wizard. *@
     <div class="card mb-3" id="settings-promote">

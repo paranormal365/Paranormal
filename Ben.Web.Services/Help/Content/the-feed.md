@@ -71,6 +71,73 @@ to their page, and a **Group verified** badge — the group vouching that the fo
 says. **Moderator reviewed** appears when a site moderator personally cleared the video. Both
 badges lift a post's standing in **For You**.
 
+## The tools under the box
+
+![The composer's row of tools, with the poll open](/help/media/the-feed/composer-tools.png)
+*A poll being written. Every tool in the row is an icon that names itself when you hover over it.*
+
+Under the writing box is a row of small buttons. None of them carries a word — hover over one and it
+tells you what it is.
+
+| Tool | What it does |
+|---|---|
+| **Photo or video** | Attaches one file to the post. Photos and videos only, and one per post. |
+| **GIF** | Opens a picker of GIFs from Giphy. Choosing one puts its address in your post, and it plays where the post appears. |
+| **Poll** | Opens the poll writer described below. |
+| **Emoji** | A short list of the marks people actually use. Whatever your keyboard can type works too. |
+| **Schedule** | Picks a time for the post to appear. |
+| **Location** | Tags where you are writing from. |
+
+### Writing a poll
+
+A poll is a question and **between two and six answers**. Add an answer with **Add an answer** and
+remove one with the **×** beside it; the last two cannot be removed, because a question with one
+answer is not a question.
+
+**Closes** decides how long it runs — 6 hours, a day, 3 days, a week, or never. Tick **Let people
+pick more than one** if several answers can be true at once.
+
+Answers left blank are simply dropped when you post, so four boxes with two filled in becomes a
+two-answer poll. The whole poll goes away again with the **×** at its top corner.
+
+![A poll on a post, answered](/help/media/the-feed/poll.png)
+*Answered. The bar sits behind the words rather than beside them, so a long answer is not squeezed
+into half the width to make room for a number.*
+
+Anyone signed in can answer a poll, one answer each unless it takes more, and pressing your own
+answer again takes it back. Counts are shown to everybody from the start rather than hidden until
+you vote — they are public either way, and hiding them only makes the honest reader guess. The
+number under a poll counts **people**, not answers, so a poll that takes several answers still says
+how many were there.
+
+### Scheduling a post
+
+Pick a date and time and the post waits for it. The time is **your own clock**, wherever you are
+standing — you never have to work out what that is somewhere else.
+
+Until its hour comes, **only you** can see it, marked *Goes up …* with two ways out: **Post it now**
+puts it up immediately, and **Cancel it** takes it back. Nobody else has seen it, so calling one
+back leaves nothing behind.
+
+### Saying where you are
+
+The **location** tool asks your browser where you are, turns it into the name of the place, and puts
+*said at …* under your post with a small mark that opens the spot in Maps. It is asked for every
+time and never taken quietly, and **Remove** takes it off before you post.
+
+## Links in a post
+
+A web address you type stays part of the sentence you typed it in, and gets a small card under the
+post showing where it goes.
+
+![A post carrying a link, with the card under it](/help/media/the-feed/link-preview.png)
+*The address stays in the sentence. The card under it says where it goes.*
+
+Cards are built for addresses **on this site** — a case, a tour, an event or a group — out of
+records we already hold, which is why a card stays correct after something is renamed. This site
+never goes and reads somebody else's page to make a card, so a link elsewhere gets a plainer one
+naming the site it belongs to and nothing more.
+
 ## Promoted cards
 
 Every eighth spot in the main feed carries a card instead of a post — alternating between a

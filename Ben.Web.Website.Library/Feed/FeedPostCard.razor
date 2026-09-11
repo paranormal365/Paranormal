@@ -53,6 +53,16 @@
             <FeedText Body="@Post.Body" Mentions="@Post.Mentions" />
         </div>
 
+        @* The poll, under the words it belongs to. Handed over whole rather than by id: the feed
+           already read it for this page, and asking again per card is the N+1 that makes a feed
+           slow exactly as it gets popular. *@
+        @if (Post.Poll is { } poll)
+        {
+            <div class="mt-2">
+                <BenPoll Poll="@poll" />
+            </div>
+        }
+
         @* The category chip (item 186 F6): what the author says this shows, linking to the
            type's page. Rendered for everybody — the NUDGE below is author-only, the label is not.
            Beside it, the F7 marks: the claimed group's name (ONLY when claimed — the record
@@ -173,6 +183,46 @@
             }
         }
 
+        @* Where it was written, when the author chose to say so (item 233, Ben 2026-09-11).
+           The map is a still, not a canvas: a feed of twenty posts must not be twenty live maps,
+           and the point is "roughly there", which a pin on a small square says. *@
+        @if (Post.PostedPlaceName is { } place && Post.PostedLatitude is { } lat && Post.PostedLongitude is { } lon)
+        {
+            <div class="bv-feed-post__place mt-2">
+                <a class="bv-feed-post__placemap"
+                   href="@($"https://maps.apple.com/?ll={lat.ToString(System.Globalization.CultureInfo.InvariantCulture)},{lon.ToString(System.Globalization.CultureInfo.InvariantCulture)}&q={Uri.EscapeDataString(place)}")"
+                   target="_blank" rel="noopener noreferrer"
+                   title="@($"Open {place} in Maps")" aria-label="@($"Open {place} in Maps")">
+                    <BenIcon Name="map-pin" />
+                </a>
+                <span class="small text-secondary">said at <strong>@place</strong></span>
+            </div>
+        }
+
+        @* AUTHOR-ONLY, like the media-pending note: a post waiting for its hour is on the page
+           only for the person who scheduled it, and they should be told when it goes up. *@
+        @if (Post.ScheduledForUtc is { } goesUp && Post.IsOwnPost)
+        {
+            <div class="mt-2 small text-secondary d-flex align-items-center gap-2 flex-wrap"
+                 id="feed-post-scheduled">
+                <BenIcon Name="clock" />
+                <span>
+                    Goes up @goesUp.ToViewerLocalTime(UserState).ToString("MM/dd/yyyy")
+                    at @goesUp.ToViewerLocalTime(UserState).ToString("h:mm tt") — only you can see it until then
+                </span>
+                @* Both doors, because a scheduled post nobody else can see would otherwise be one
+                   the author could neither release nor call back. *@
+                <button type="button" class="btn btn-link btn-sm p-0" disabled="@_scheduleBusy"
+                        @onclick="PublishNowAsync">Post it now</button>
+                <button type="button" class="btn btn-link btn-sm p-0 text-danger" disabled="@_scheduleBusy"
+                        @onclick="CancelScheduledAsync">Cancel it</button>
+            </div>
+            @if (_scheduleError is not null)
+            {
+                <div class="small text-danger" id="feed-post-scheduled-error">@_scheduleError</div>
+            }
+        }
+
         <div class="d-flex align-items-center gap-3 mt-2 small">
             @* The like. A visitor sees the count and a link to join rather than a dead control:
                the number is the social proof, and the invitation is the point of showing it. *@
@@ -239,8 +289,40 @@
     /// <summary>Raised with the re-read post after a recategorize, so the page swaps it in.</summary>
     [Parameter] public EventCallback<FeedPostRecord> OnRecategorized { get; set; }
 
+    /// <summary>Raised when a waiting post was called back, so the page drops it.</summary>
+    [Parameter] public EventCallback<FeedPostRecord> OnScheduledCancelled { get; set; }
+
     private bool _recategorizing;
     private string? _recategorizeError;
+    private bool _scheduleBusy;
+    private string? _scheduleError;
+
+    /// <summary>Releases a waiting post, and hands the page the version that is now up.</summary>
+    private async Task PublishNowAsync()
+    {
+        _scheduleBusy = true;
+        _scheduleError = null;
+        try
+        {
+            var released = await Feed.PublishScheduledNowAsync(Post.Id);
+            if (released is null) _scheduleError = "That couldn't be posted just now. Try again shortly.";
+            else await OnRecategorized.InvokeAsync(released);
+        }
+        finally { _scheduleBusy = false; }
+    }
+
+    /// <summary>Calls a waiting post back. Nobody has seen it, so there is nothing to explain away.</summary>
+    private async Task CancelScheduledAsync()
+    {
+        _scheduleBusy = true;
+        _scheduleError = null;
+        try
+        {
+            if (await Feed.CancelScheduledPostAsync(Post.Id)) await OnScheduledCancelled.InvokeAsync(Post);
+            else _scheduleError = "That couldn't be called back just now. Try again shortly.";
+        }
+        finally { _scheduleBusy = false; }
+    }
     private IReadOnlyList<ExperienceCategoryWithTypesResponse>? _taxonomy;
     private bool _taxonomyFailed;
 

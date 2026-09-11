@@ -351,6 +351,25 @@ public class OrganizationMembershipController : BenControllerBase
                 "New groups are not being accepted at the moment. Please contact us if you would like to start one.");
         }
 
+        // Item 233. A separate door with a separate switch: Ben asked to be able to stop new tour
+        // businesses signing up without stopping anybody else, and without touching the ones
+        // already running. SuperAdmins are exempt here too — they create groups on request, which
+        // is the whole point of being able to close the public door.
+        // Tours only, on Ben's word (2026-09-10): an events business is a different trade that
+        // happens to be on the same plan, and closing the door to walks must not close it to them.
+        // OrganizationKindDefaults.RunsPublicTours is the one definition of "this is a tour".
+        if (!User.IsInRole(RoleNames.SuperAdmin)
+            && Ben.Data.Common.Enums.OrganizationKindDefaults.RunsPublicTours(request.Kind)
+            && !await _siteSettings.GetBoolAsync(
+                    SiteSettingKeys.AllowTourBusinessSignUps, whenUnset: true, cancellationToken))
+        {
+            return StatusCode(StatusCodes.Status403Forbidden,
+                "We aren't taking on new ghost walking tours just now. You can still start an "
+                + "investigation group or a paranormal events business, and we would be glad to "
+                + "hear from you about a tour — get in touch and we will let you know when they "
+                + "reopen.");
+        }
+
         var organization = await _organizationSecurityService.RegisterOrganizationAsync(
             appUserId, request.Name, request.UrlName, request.Kind, cancellationToken);
 

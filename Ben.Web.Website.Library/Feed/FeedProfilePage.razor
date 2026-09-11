@@ -77,7 +77,9 @@
                 {
                     <FeedPostCard Post="@post" ShowFollow="false" CanAct="@IsSignedIn"
                                   OnLikeToggled="ToggleLikeAsync"
-                                  OnReportRequested="ReportAsync" />
+                                  OnReportRequested="ReportAsync"
+                                  OnRecategorized="SwapPost"
+                                  OnScheduledCancelled="DropPost" />
                 }
 
                 @if (_nextCursor is not null)
@@ -204,6 +206,16 @@
             _error = "Couldn't record that. Try again in a moment.";
         }
     }
+
+    /// <summary>Swaps in a post the card re-read — a recategorize, or a scheduled post released.</summary>
+    private void SwapPost(FeedPostRecord post)
+    {
+        var index = _posts.FindIndex(p => p.Id == post.Id);
+        if (index >= 0) _posts[index] = post;
+    }
+
+    /// <summary>Takes a called-back post off the page, since the server no longer has it.</summary>
+    private void DropPost(FeedPostRecord post) => _posts.RemoveAll(p => p.Id == post.Id);
 
     private async Task ReportAsync(FeedPostRecord post)
     {

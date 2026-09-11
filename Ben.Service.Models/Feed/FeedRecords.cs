@@ -65,7 +65,25 @@ public sealed record FeedPostRecord(
     bool GroupVerified = false,
     /// <summary>A person with the Moderator role cleared this post's media — distinct from the
     /// automatic screener's approval.</summary>
-    bool ModeratorReviewed = false);
+    bool ModeratorReviewed = false,
+    // ── The composer's other tools (item 233, Ben 2026-09-11) ────────────────
+    /// <summary>The poll on this post, counted, with this reader's own answer. Null for most posts.</summary>
+    MessagePollRecord? Poll = null,
+    /// <summary>
+    /// Where the author said they wrote it, and what that place is called. All three or none.
+    /// </summary>
+    decimal? PostedLatitude = null,
+    decimal? PostedLongitude = null,
+    string? PostedPlaceName = null,
+    /// <summary>
+    /// When it was set to appear, for a post that has not appeared yet.
+    /// </summary>
+    /// <remarks>
+    /// Only ever populated for the author, who is the only reader who sees an unreleased post at
+    /// all — and who needs to see that they scheduled it, which is the difference between
+    /// scheduling something and losing it.
+    /// </remarks>
+    DateTime? ScheduledForUtc = null);
 
 /// <summary>What kind of media a post carries.</summary>
 public enum FeedMediaKind
@@ -125,7 +143,17 @@ public sealed record FeedProfileRecord(
 /// tick it refuses the post.</param>
 public sealed record CreateFeedPostRequest(
     string Body, Guid? ParentMessageId = null, Guid? ExperienceTypeId = null,
-    Guid? SourceCaseId = null, bool ConsentToPublishPrivateEngagement = false);
+    Guid? SourceCaseId = null, bool ConsentToPublishPrivateEngagement = false,
+    // ── The composer's other tools (item 233, Ben 2026-09-11) ────────────────
+    // Appended with defaults, so every existing caller is unaffected.
+    /// <summary>A poll to attach, or null for an ordinary post.</summary>
+    NewPollRequest? Poll = null,
+    /// <summary>When to let it appear, or null for now.</summary>
+    DateTime? ScheduledForUtc = null,
+    /// <summary>Where it was written, when the author chose to say. All three or none.</summary>
+    decimal? PostedLatitude = null,
+    decimal? PostedLongitude = null,
+    string? PostedPlaceName = null);
 
 // ── Org attribution (item 186 F7) ────────────────────────────────────────────
 
@@ -156,7 +184,15 @@ public sealed record ReportFeedPostRequest(string? Reason);
 /// <summary>One report in the moderation queue.</summary>
 public sealed record FeedReportRecord(
     Guid Id,
-    Guid OrgMessageId,
+    /// <summary>
+    /// The reported post, when a post is what was reported.
+    /// </summary>
+    /// <remarks>
+    /// Nullable since 2026-09-11: a report can be about a published case instead, and the queue
+    /// shows both rather than making a moderator watch two screens. Exactly one of this and
+    /// <see cref="CaseId"/> is set.
+    /// </remarks>
+    Guid? OrgMessageId,
     string PostBody,
     Guid PostAuthorAppUserId,
     string PostAuthorDisplayName,
@@ -169,8 +205,17 @@ public sealed record FeedReportRecord(
     DateTime DateCreated,
     DateTime? ResolvedUtc,
     string? ResolvedByDisplayName,
-    /// <summary>How many people have reported this same post. Context an administrator wants.</summary>
-    int ReportsAgainstThisPost);
+    /// <summary>How many people have reported this same thing. Context an administrator wants.</summary>
+    int ReportsAgainstThisPost,
+    /// <summary>The reported case, when a case is what was reported.</summary>
+    Guid? CaseId = null,
+    /// <summary>
+    /// What was reported, in two or three words — "Feed post", "Case #2026-001", "Comment".
+    /// Written by the server so the queue does not have to work it out from which id is null.
+    /// </summary>
+    string TargetLabel = "Feed post",
+    /// <summary>Where to go and look at it, when there is a public address for it.</summary>
+    string? TargetUrl = null);
 
 /// <summary>An administrator's decision on a report.</summary>
 /// <param name="Outcome">
@@ -234,3 +279,48 @@ public sealed record FeedModerationSummary(
     /// <summary>How many feed posts exist, visible or not. Content accumulating while the
     /// feature is dark is the reminder's reason to exist.</summary>
     int FeedPostCount = 0);
+
+
+/// <summary>
+/// One GIF from Giphy, trimmed to what a picker shows and what a post carries (item 233).
+/// </summary>
+/// <param name="PreviewUrl">The small rendition, for the grid.</param>
+/// <param name="Url">The full one, which is what gets posted.</param>
+/// <param name="Alt">Giphy's own title, used as alt text — a GIF with no description is a GIF
+/// nobody using a screen reader can choose.</param>
+public sealed record GiphyItem(string Id, string PreviewUrl, string Url, string Alt);
+
+
+// ── Polls on a message (item 233, Ben 2026-09-11) ────────────────────────────
+
+/// <summary>
+/// A poll as a reader sees it, with the counts and their own answer.
+/// </summary>
+/// <param name="TotalVotes">How many people, not how many rows — a multiple-answer poll has
+/// more rows than voters, and a percentage over rows would not add up to anything.</param>
+/// <param name="MyOptionIds">What this reader chose. Empty when they have not, or are not signed in.</param>
+/// <param name="IsClosed">Whether voting has stopped, decided by the server against its own clock.</param>
+public sealed record MessagePollRecord(
+    Guid Id,
+    string Question,
+    IReadOnlyList<MessagePollOptionRecord> Options,
+    int TotalVotes,
+    IReadOnlyList<Guid> MyOptionIds,
+    bool AllowMultiple,
+    DateTime? ClosesAtUtc,
+    bool IsClosed);
+
+/// <summary>One answer, and how many chose it.</summary>
+public sealed record MessagePollOptionRecord(Guid Id, string Text, int Votes);
+
+/// <summary>A poll being written, as the composer sends it.</summary>
+/// <param name="Options">Between two and six. One answer is not a question and six is a survey.</param>
+/// <param name="ClosesInHours">Null for a poll that stays open.</param>
+public sealed record NewPollRequest(
+    string Question,
+    IReadOnlyList<string> Options,
+    bool AllowMultiple = false,
+    int? ClosesInHours = null);
+
+/// <summary>Which answers somebody is choosing. More than one only on a multiple-answer poll.</summary>
+public sealed record CastPollVoteRequest(IReadOnlyList<Guid> OptionIds);

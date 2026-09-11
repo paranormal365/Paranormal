@@ -1,0 +1,189 @@
+@namespace Ben.Web.Website.Library.Shared
+@using Ben.Service.Models.Entities
+@using Ben.Web.Services
+@using Ben.Web.Website.Library.Kit
+@inject IBenAdminClient AdminClient
+@inject IBenUserState UserState
+@inject NavigationManager NavManager
+
+@*
+  What people said about a published case (item 233, Ben 2026-09-11).
+
+  Comments live under the case rather than anywhere else, which is why the comments button in the
+  action strip is an anchor rather than a link: it scrolls, because they are already here.
+
+  A comment is stored and shown as the plain text it was typed as. Nothing renders it as markup and
+  nothing should — a comment box that accepts HTML on a page anybody can post to is the oldest way
+  there is to put a script in front of a stranger.
+*@
+
+<BenSectionHeading Text="Comments" Id="case-comments">
+    <Note>
+        @if (_comments.Count > 0)
+        {
+            <text>@_comments.Count @(_comments.Count == 1 ? "comment" : "comments")</text>
+        }
+    </Note>
+</BenSectionHeading>
+
+@if (_error is not null)
+{
+    <div class="alert alert-warning py-2">@_error</div>
+}
+
+<div class="case-comments">
+    @foreach (var comment in _comments)
+    {
+        <div class="case-comment">
+            <div class="case-comment__head">
+                <span class="case-comment__by">@comment.By</span>
+                @if (comment.Handle is { } handle)
+                {
+                    <span class="case-comment__handle">@@@handle</span>
+                }
+                <span class="case-comment__when">
+                    @comment.WhenUtc.ToViewerLocalTime(UserState).ToString("MM/dd/yyyy")
+                </span>
+
+                <span class="case-comment__actions">
+                    @* Their own comment is theirs to take back. Everybody else's is somebody
+                       else's, and the answer to one they object to is the flag. *@
+                    @if (comment.IsMine)
+                    {
+                        <button type="button" class="vote-btn" title="Delete this comment"
+                                aria-label="Delete this comment"
+                                @onclick="@(() => DeleteAsync(comment.Id))" disabled="@_busy">
+                            <BenIcon Name="trash-2" />
+                        </button>
+                    }
+                    else if (UserState.IsAuthenticated)
+                    {
+                        <button type="button" class="vote-btn @(_reported.Contains(comment.Id) ? "vote-btn--done" : "")"
+                                title="@(_reported.Contains(comment.Id) ? "Reported" : "Report this comment")"
+                                aria-label="@(_reported.Contains(comment.Id) ? "You reported this comment" : "Report this comment")"
+                                @onclick="@(() => ReportAsync(comment.Id))"
+                                disabled="@(_busy || _reported.Contains(comment.Id))">
+                            <BenIcon Name="flag" />
+                        </button>
+                    }
+                </span>
+            </div>
+            <p class="case-comment__body">@comment.Body</p>
+        </div>
+    }
+
+    @if (_comments.Count == 0)
+    {
+        <p class="text-secondary small mb-0">Nobody has said anything yet.</p>
+    }
+</div>
+
+@if (UserState.IsAuthenticated)
+{
+    <div class="case-comment-box">
+        <textarea class="form-control" rows="3" maxlength="2000" id="case-comment-body"
+                  placeholder="What do you make of it?"
+                  @bind="_draft" @bind:event="oninput" disabled="@_busy"></textarea>
+        <div class="d-flex align-items-center gap-2 mt-2">
+            <button type="button" class="btn btn-primary btn-sm" id="case-comment-post"
+                    disabled="@(_busy || string.IsNullOrWhiteSpace(_draft))" @onclick="PostAsync">
+                @(_busy ? "Posting…" : "Post")
+            </button>
+            @if (_postError is not null)
+            {
+                <span class="text-danger small">@_postError</span>
+            }
+        </div>
+    </div>
+}
+else
+{
+    <p class="case-comments__signin">
+        <a href="@SignInUrl"><strong>Sign in</strong></a> to join in.
+    </p>
+}
+
+@code {
+    [Parameter, EditorRequired] public Guid CaseId { get; set; }
+
+    /// <summary>Raised whenever the count changes, so the action strip's number stays true.</summary>
+    [Parameter] public EventCallback<int> CountChanged { get; set; }
+
+    private IReadOnlyList<PublicCaseComment> _comments = [];
+    private readonly HashSet<Guid> _reported = [];
+    private string _draft = "";
+    private bool _busy;
+    private string? _error;
+    private string? _postError;
+
+    private string SignInUrl => $"/login?returnUrl={Uri.EscapeDataString(NavManager.Uri)}";
+
+    protected override Task OnParametersSetAsync() => LoadAsync();
+
+    /// <summary>
+    /// Loads again once the circuit knows who is reading.
+    /// </summary>
+    /// <remarks>
+    /// Every comment carries whether it is the reader's own, which is what decides between the
+    /// delete and the flag — so a list fetched before auth resolved would offer a stranger's
+    /// comment to be deleted, or the reader's own to be reported.
+    /// </remarks>
+    protected override async Task OnAfterRenderAsync(bool firstRender)
+    {
+        if (!firstRender) return;
+
+        var before = UserState.IsAuthenticated;
+        if (await UserState.WaitUntilAuthReadyAsync(RendererInfo.IsInteractive)
+            && UserState.IsAuthenticated != before)
+        {
+            await LoadAsync();
+            StateHasChanged();
+        }
+    }
+
+    private async Task LoadAsync()
+    {
+        var result = await AdminClient.GetCaseCommentsAsync(CaseId);
+        // The refusal is kept, not flattened into an empty list: a list that was refused and one
+        // that is genuinely empty read the same on screen, and the empty reading tells a reader
+        // nobody has said anything when in fact nobody could be asked.
+        _error = result.Failed ? result.Reason ?? "The comments could not be loaded." : null;
+        _comments = result.Items;
+        await CountChanged.InvokeAsync(_comments.Count);
+    }
+
+    private async Task PostAsync()
+    {
+        if (string.IsNullOrWhiteSpace(_draft)) return;
+
+        _busy = true;
+        _postError = null;
+        var (saved, error) = await AdminClient.PostCaseCommentAsync(CaseId, _draft.Trim());
+        _busy = false;
+
+        // The refusal is the server's own sentence — "too long", "nothing in it" — and it is
+        // written to be read, so it is shown rather than replaced with "failed".
+        if (saved is null) { _postError = error ?? "That could not be posted."; return; }
+
+        _draft = "";
+        await LoadAsync();
+    }
+
+    private async Task DeleteAsync(Guid commentId)
+    {
+        _busy = true;
+        await AdminClient.DeleteCaseCommentAsync(CaseId, commentId);
+        _busy = false;
+        await LoadAsync();
+    }
+
+    private async Task ReportAsync(Guid commentId)
+    {
+        _busy = true;
+        // The server answers the same whether this is the first report or the fifth, so the button
+        // says the same thing either way.
+        await AdminClient.ReportCaseCommentAsync(CaseId, commentId, null);
+        _reported.Add(commentId);
+        _busy = false;
+    }
+}

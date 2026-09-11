@@ -48,13 +48,17 @@ public sealed class FieldSessionUploadController : BenControllerBase
         IDbContextFactory<BenDataContext> db,
         IFileStorageService fileStorage,
         IMediaIngestService mediaIngest,
+        Services.Media.MediaRetentionPolicy retention,
         ILogger<FieldSessionUploadController> log)
     {
         _db = db;
         _fileStorage = fileStorage;
         _mediaIngest = mediaIngest;
+        _retention = retention;
         _log = log;
     }
+
+    private readonly Services.Media.MediaRetentionPolicy _retention;
 
     // ── Reading ───────────────────────────────────────────────────────────────
 
@@ -764,14 +768,27 @@ public sealed class FieldSessionUploadController : BenControllerBase
             }
         }
 
+        // ── how long it may be, and how long it stays (item 233) ─────────────
+        // Ben: "FieldKit submissions fall under the same limits." A personal session belongs to
+        // nobody's plan and is untouched; one attached to an investigation takes that group's.
+        var rules = await _retention.RulesForAsync(session.Investigation?.OrganizationId, ct);
+        if (Services.Media.MediaRetentionPolicy.WhyTooLong(
+                rules, ingested.ServedContentType, ingested.Metadata.DurationSeconds) is { } tooLong)
+        {
+            await _mediaIngest.DeleteAllAsync(storagePath, ct);
+            return BadRequest(tooLong);
+        }
+
+        var now = DateTime.UtcNow;
         var uploadFile = new UploadFile
         {
             Id = uploadFileId, UploadFileTypeId = EvidenceFileTypeId, AppUserId = userId,
             FileName = Path.GetFileName(relativePath), StoredFileName = storedName,
             ContentType = ingested.ServedContentType, FileSize = ingested.ServedFileSize,
             StoragePath = storagePath, IsPublic = false,
-            DateCreated = DateTime.UtcNow, CreatedByAppUserId = userId,
+            DateCreated = now, CreatedByAppUserId = userId,
         };
+        Services.Media.MediaRetentionPolicy.Stamp(uploadFile, rules, now);
         db.UploadFiles.Add(uploadFile);
         db.UploadFileMetadata.Add(ingested.Metadata);
 

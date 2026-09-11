@@ -71,7 +71,8 @@ public sealed class PublicEventAttendanceTests
             factory, mail, UserManagerFor(factory),
             Options.Create(new Ben.Data.Common.SiteIdentity { BaseUrl = "https://example.test" }),
             NullLogger<PublicEventAttendanceController>.Instance,
-            new Ben.Data.WebApi.Services.UserHandleService(factory))
+            new Ben.Data.WebApi.Services.UserHandleService(factory),
+            Support.SilentTourMail.Instance)
         {
             ControllerContext = new ControllerContext
             {

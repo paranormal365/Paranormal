@@ -1,0 +1,88 @@
+/*
+    What people said about a published case.
+
+    Plain rows rather than bubbles or cards: a comment is somebody's sentence, and a box drawn
+    around every sentence turns a conversation into a filing cabinet. The only furniture is a
+    hairline between one person and the next.
+*/
+
+.case-comments {
+    display: flex;
+    flex-direction: column;
+    gap: .75rem;
+    margin-bottom: 1rem;
+}
+
+.case-comment {
+    padding-bottom: .75rem;
+    border-bottom: 1px solid var(--bs-border-color);
+}
+
+.case-comment:last-child {
+    border-bottom: 0;
+    padding-bottom: 0;
+}
+
+.case-comment__head {
+    display: flex;
+    align-items: center;
+    gap: .4rem;
+    font-size: .8rem;
+}
+
+.case-comment__by {
+    font-weight: 650;
+    font-size: .88rem;
+}
+
+.case-comment__handle,
+.case-comment__when {
+    color: var(--bs-secondary-color);
+}
+
+/* Pushed to the far end, and quiet until the row is under the pointer — the same rule the action
+   strip follows. A delete button that announces itself on every comment makes a page of
+   conversation look like a page of administration. */
+.case-comment__actions {
+    display: flex;
+    align-items: center;
+    gap: .15rem;
+    margin-left: auto;
+    opacity: 0;
+    transition: opacity .14s ease;
+}
+
+.case-comment:hover .case-comment__actions,
+.case-comment:focus-within .case-comment__actions {
+    opacity: 1;
+}
+
+.case-comment__body {
+    margin: .2rem 0 0;
+    font-size: .92rem;
+    /* The line breaks somebody typed are the line breaks they meant. */
+    white-space: pre-wrap;
+}
+
+.case-comment-box {
+    margin-bottom: 1rem;
+}
+
+.case-comments__signin {
+    font-size: .82rem;
+    color: var(--bs-secondary-color);
+}
+
+.case-comments__signin a {
+    color: inherit;
+}
+
+.case-comments__signin a:hover {
+    color: var(--bs-primary);
+}
+
+@media (prefers-reduced-motion: reduce) {
+    .case-comment__actions {
+        transition: none;
+    }
+}

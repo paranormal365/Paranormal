@@ -184,21 +184,24 @@ public sealed class StripeRenewalJob : IScheduledJob
             return;
         }
 
-        var members = await db.OrganizationUserMemberships
-            .CountAsync(m => m.OrganizationId == sub.OrganizationId && m.IsActive, ct);
         var kind = await db.Organizations.AsNoTracking()
             .Where(o => o.Id == sub.OrganizationId).Select(o => o.Kind).FirstOrDefaultAsync(ct);
-        var tier = SubscriptionTierResolver.Resolve(tiers, members, kind);
-
-        if (SubscriptionPricing.PriceFor(tier, sub.Interval) is not { } listPrice)
+        // Re-counted from the live world: members for a group, tours for a business (item 233).
+        // A tour retired since last period drops out here; one added mid-period was already
+        // paid for its remainder and is simply counted again.
+        var priced = await BillableUnits.PriceAsync(db, tiers, sub.OrganizationId, kind, sub.Interval, ct);
+        if (priced is null)
         {
             // The tier stopped selling this cadence since last period. Charging a different
             // cadence than agreed is not an option; the lapse machinery will speak for us.
             _log.LogWarning(
-                "Organization {OrganizationId} renews {Interval} but \"{Tier}\" no longer sells it — skipped.",
-                sub.OrganizationId, sub.Interval, tier.Name);
+                "Organization {OrganizationId} renews {Interval} but its plan no longer sells it — skipped.",
+                sub.OrganizationId, sub.Interval);
             return;
         }
+        var tier = priced.Tier;
+        var members = priced.Members;
+        var listPrice = priced.ListPrice;
 
         // ── the coupon's continuing promise ──────────────────────────────────
         var payable = listPrice;
@@ -230,7 +233,8 @@ public sealed class StripeRenewalJob : IScheduledJob
             // Renewal has no person at a keyboard; the row is attributed to whoever set the
             // subscription up, which is also who the pre-renewal notices were addressed to.
             sub.UpdatedByAppUserId ?? sub.CreatedByAppUserId,
-            couponCode, listPrice, discount, periodStart);
+            couponCode, listPrice, discount, periodStart,
+            TourCount: tier.IsBandedByMembers ? 0 : priced.Units);
 
         // ── a free continuing period skips the card entirely ─────────────────
         if (payable == 0m)
@@ -260,7 +264,7 @@ public sealed class StripeRenewalJob : IScheduledJob
         var outcome = await _stripe.ChargeSavedCardAsync(new StripeRenewalCharge(
             sub.ProviderCustomerRef, sub.ProviderPaymentMethodRef,
             payable + tax,
-            $"IsHaunted renewal — {tier.Name}, {members} members",
+            $"IsHaunted renewal — {tier.Name}, {BillableUnits.Describe(priced)}",
             facts.ToMetadata(),
             IdempotencyKey: $"renew-{sub.Id:N}-{periodStart:yyyyMMdd}-{now:yyyyMMdd}"), ct);
 

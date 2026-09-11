@@ -300,6 +300,15 @@ builder.Services.AddSingleton<Ben.Data.WebApi.Services.Billing.StripeIntegration
                               Ben.Data.WebApi.Services.Billing.StripeIntegration.StripeGateway>();
 builder.Services.AddScoped<Ben.Data.WebApi.Services.Billing.StripeIntegration.StripeFulfillmentService>();
 builder.Services.AddScoped<Ben.Data.WebApi.Services.Billing.SubscriptionLimitGuard>();
+// Item 233: a tour added mid-period is charged for the days that are left.
+builder.Services.AddScoped<Ben.Data.WebApi.Services.Billing.TourAddOnService>();
+// Item 233: the mail a tour guest gets, with the walk attached as a calendar file.
+builder.Services.AddScoped<Ben.Data.WebApi.Services.Tours.TourGuestMailer>();
+// Item 233: how long a file stays, for the plan it arrived under.
+builder.Services.AddScoped<Ben.Data.WebApi.Services.Media.MediaRetentionPolicy>();
+// Item 233: warns people what is about to go, then takes it.
+builder.Services.AddScoped<Ben.Data.WebApi.Services.Scheduling.IScheduledJob,
+                           Ben.Data.WebApi.Services.Scheduling.MediaRetentionJob>();
 // The most destructive operation in the product, and SuperAdmin-only at its controller.
 builder.Services.AddScoped<Ben.Data.WebApi.Services.Admin.OrganizationPurge>();
 builder.Services.AddScoped<Ben.Data.WebApi.Services.Admin.AppUserPurge>();

@@ -1,0 +1,84 @@
+/*
+    Writing a poll, inside whatever composer opened it.
+*/
+
+.poll-editor {
+    margin-top: .5rem;
+    padding: .6rem .7rem;
+    border: 1px solid var(--bs-border-color);
+    border-radius: .5rem;
+    background: var(--bs-tertiary-bg);
+}
+
+.poll-editor__head {
+    display: flex;
+    align-items: center;
+    margin-bottom: .4rem;
+}
+
+.poll-editor__label {
+    font-size: .68rem;
+    font-weight: 700;
+    letter-spacing: .07em;
+    text-transform: uppercase;
+    color: var(--bs-secondary-color);
+}
+
+/* Removing the poll, and removing one answer, are the same small mark in the same place. */
+.poll-editor__drop {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    width: 1.6rem;
+    height: 1.6rem;
+    margin-left: auto;
+    padding: 0;
+    border: 0;
+    border-radius: .35rem;
+    background: transparent;
+    color: var(--bs-secondary-color);
+    cursor: pointer;
+}
+
+.poll-editor__drop:hover,
+.poll-editor__drop:focus-visible {
+    color: var(--bs-danger);
+    background: color-mix(in srgb, var(--bs-danger) 14%, transparent);
+}
+
+/* ::deep for the same reason as everywhere else: the <svg> is BenIcon's markup and carries
+   BenIcon's scope, and the theme fills every icon unless told otherwise. */
+.poll-editor__drop ::deep svg {
+    width: .9rem;
+    height: .9rem;
+    fill: none !important;
+    stroke: currentColor;
+    stroke-width: 2;
+}
+
+.poll-editor__option {
+    display: flex;
+    align-items: center;
+    gap: .25rem;
+    margin-bottom: .3rem;
+}
+
+.poll-editor__row {
+    display: flex;
+    align-items: center;
+    flex-wrap: wrap;
+    gap: .75rem;
+    margin-top: .4rem;
+}
+
+.poll-editor__closes {
+    display: flex;
+    align-items: center;
+    gap: .35rem;
+    font-size: .8rem;
+    color: var(--bs-secondary-color);
+}
+
+.poll-editor__closes select {
+    width: auto;
+}

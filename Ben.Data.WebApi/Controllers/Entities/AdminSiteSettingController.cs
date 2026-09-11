@@ -77,5 +77,8 @@ public sealed class AdminSiteSettingController : BenControllerBase
     /// </summary>
     private static bool DefaultWhenUnset(string key)
         => key == SiteSettingKeys.AllowOrganizationSelfRegistration
+        // Item 233: the same reasoning. Tour businesses could sign up before the switch existed,
+        // so a site that never touches it must keep letting them.
+        || key == SiteSettingKeys.AllowTourBusinessSignUps
         || SiteSettingKeys.FeatureDefaults.Any(f => f.Key == key && f.DefaultWhenUnset);
 }
