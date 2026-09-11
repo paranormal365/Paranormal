@@ -157,14 +157,16 @@ struct SessionStoreTests {
         #expect(store.errorMessage == nil)
     }
 
-    @Test func deliberateSignOutRaisesNoBanner() async {
+    @Test func deliberateSignOutRaisesNoBanner() async throws {
         let (store, _) = Self.makeStore(transport: happyAuthTransport())
         await store.signIn(email: "a@b.c", password: "pw")
         #expect(store.me != nil)
         await store.signOut()
-        // Give the async event stream a beat to deliver.
-        try? await Task.sleep(for: .milliseconds(50))
-        #expect(store.state == .signedOut)
+        // Waited on, not slept through: the event stream is async, and 50ms of clock is a bet on
+        // the machine being idle.
+        try await waitUntil("the sign-out reaches the store") {
+            await MainActor.run { store.state == .signedOut }
+        }
         #expect(store.sessionEndedBanner == false)
     }
 
@@ -211,7 +213,7 @@ struct SessionStoreTests {
         #expect(late.isEmpty)
     }
 
-    @Test func refreshFailureRaisesTheInterruptBanner() async {
+    @Test func refreshFailureRaisesTheInterruptBanner() async throws {
         // Signed in, then every request 401s: the next refresh kills the session.
         let storage = InMemoryTokenStorage(tokens: StoredTokens(
             accessToken: "AT", refreshToken: "RT",
@@ -219,8 +221,9 @@ struct SessionStoreTests {
         let transport = MockTransport(status: 401)
         let (store, tokens) = Self.makeStore(transport: transport, storage: storage)
         _ = await tokens.validAccessToken() // triggers the failing refresh
-        try? await Task.sleep(for: .milliseconds(50))
-        #expect(store.sessionEndedBanner == true)
+        try await waitUntil("the banner goes up") {
+            await MainActor.run { store.sessionEndedBanner }
+        }
         #expect(store.state == .signedOut)
     }
 }
