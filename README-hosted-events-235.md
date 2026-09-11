@@ -220,10 +220,9 @@ The rules that follow:
 - **No credit, no publish.** The event stays a draft and the refusal links to where credits are
   bought. The work is not lost and nothing is destroyed — it simply does not go live.
 
-**One thing left to settle:** whether an unspent credit gets a warning email at thirty days. It
-costs nothing to send and saves the support ticket that arrives when somebody discovers a credit
-expired last week. Recommendation: yes, plus a line on the billing page showing what is held and
-when it lapses.
+**Settled 2026-09-11:** an unspent credit gets a warning email at thirty days, and the billing page
+carries a line showing what is held and when each one lapses. It costs nothing to send and saves the
+support ticket that arrives when somebody finds out a credit expired last week.
 
 ### Phase 12 — OPTIONAL PAYMENTS: Stripe Checkout per ticket (design only until decided)
 
@@ -233,7 +232,65 @@ when it lapses.
 
 Re-run `HelpMediaCapture` for every `org-event-*`, `public-event-*`, `org-venue-*` shot; rebuild the documentation PDF and persona docs; turn `docs/tour-business-pitch.html` into a tour-and-event business pitch and regenerate the offer PDF; `the-mobile-apps.md` lists what the phone shows; `docs/deploy-production.md` entry (below).
 
-## Billed per event, and only while the event is live
+## Credits are the product, not a fallback
+
+**Ben, 2026-09-11:** *"If we sell events like credits to everyone, wouldn't that be more profitable
+than selling a monthly event? I mean, the event is usually like a weekend with classes and
+presentations and that is the event I was foreseeing. Do you see it differently?"*
+
+**I don't see it differently, and the reason is larger than the one in the question.** Metering an
+event monthly does not just make the bill awkward — it anchors the price to the wrong product. The
+tour rate exists because a ghost walk is cheap, constant and earns a little every time it runs. A
+weekend with classes and presentations is none of those things: it is occasional, it is a lot of
+work, and it is worth real money to the person running it. Charging a fraction of a tour's monthly
+rate for it prices a hotel weekend as though it were a walk round a block.
+
+What the host is actually comparing us against is not a subscription. It is the per-ticket cut a
+ticketing platform takes, which on a forty-guest weekend runs into the hundreds. A flat fee per
+event is both **more** than metering would earn us and **obviously less** than the alternative
+costs them, which is the rare pricing shape where the honest argument and the profitable one are
+the same argument.
+
+| For one weekend event | Roughly |
+| --- | --- |
+| Metered monthly at the tour rate, published three months ahead | three or four months of one unit |
+| A flat credit | one fee, set against what the event is worth, not against a walk |
+| What a ticketing platform would take on 40 guests | a per-ticket cut, an order of magnitude more |
+
+**And it reaches a customer metering never will.** A group that runs one fundraiser a year will not
+take out a subscription for a weekend, so today they are worth nothing to us. They will buy a credit
+without blinking. That is not cannibalised revenue; it is revenue that does not otherwise exist.
+
+**So the shape is:**
+
+- **A credit is the headline price and the default for everybody** — groups, individuals hosting
+  from a personal org, and businesses alike. One event, one price, paid at publish.
+- **The subscription is the plan for people who run events for a living.** Thomas House is always
+  hosting; it wants the page, the bookings, the door and the staff on all year, and it would resent
+  buying twelve credits. It buys the flat business plan, and its events are governed by a cap on the
+  tier (`SubscriptionLimit.ActiveHostedEvents`, already appended in phase 0 — unset means no cap).
+- **Nothing is metered per event, anywhere.** This deletes work rather than adding it: no
+  `ActiveEventsAsync` in `BillableUnits`, no `EventCountAtPeriodStart`, no `eventadd-` proration, no
+  `ProductBilling` rename. `HauntedProperty` still joins `IsBusinessKind`, but only so it resolves to
+  the flat business tier instead of the member ladder — `TourBilling.Units` already returns one unit
+  for a business with no tours, so that path needs no change at all.
+- **Tours are untouched.** Per tour, per month, exactly as item 233 shipped it. That model is right
+  for tours precisely because a tour is the durable thing an event is not.
+- **Show the break-even.** When somebody's credits in a year pass what the plan would have cost, the
+  billing page says so and offers the switch. That converts the operators who have grown into it,
+  and never gouges the ones who have not.
+
+**What this changes about the phases.** Credits stop being phase 11's deferred nicety and become the
+way most people host an event at all, so phase 1 must ship the entitlement with a real answer rather
+than a hook: a business plan holder publishes against its cap, and everybody else is told they need
+a credit. Whether the *purchase* (Stripe Checkout, ledger, receipt) ships in this arc or a later one
+is Ben's call — the refusal is honest either way, and phase 1 is not blocked by it.
+
+**DECISION NEEDED:** the credit price. The anchor is what the event is worth to the host and what a
+ticketing platform would otherwise take, not the tour rate — the reasoning above, not a number I
+should pick.
+
+## The superseded rule: metered per live event
 
 **Ben, 2026-09-11:** *"An Event Creator can host many events. What if one is at The Thomas House,
 another at Waverly Manor and another at The Octagon House. How does this get billed?"*
@@ -277,9 +334,10 @@ events included, more at £X each"* — is the standard answer and fits the exis
 (`SubscriptionLimit.ActiveHostedEvents` already exists from phase 0, and the tier row is the ceiling).
 Worth having ready; not worth guessing the number before a real operator has run a real year.
 
-**DECISION NEEDED:** confirm the change from "counted while not archived" to "counted while
-published and not archived". It is a one-line difference in a service nothing has been written
-against yet, and it is much cheaper to settle now than after the first invoice.
+**SUPERSEDED the same day** by the section above: nothing is metered per event at all. The reasoning
+here still stands and is kept because it is what led to the better answer — publishing, not
+creating, is the moment of commitment, and that is now where a credit is spent and where a business's
+event starts counting against its cap.
 
 ## What this is actually for
 
@@ -363,8 +421,8 @@ HostedEvents (1) → HostedEventBookings (2) → EventPasses (3) → HostedEvent
 
 1. **The site takes no guest money in this arc.** The venue confirms; QR passes issue on confirmation; the guest is told how to pay in the contact line. Phase 12 stays design only.
 2. **HauntedProperty becomes a business kind** billed per active product (tours + events), prorated mid-period like a tour. A venue already on a headcount plan is re-priced at its next period, with the tier-change notice.
-3. **Event credits are recorded, not built.** Phase 11 is out of this arc; the entitlement code leaves the hook, and a group without `HostEvents` sees a sentence saying credits are coming. The rule is settled even though the build is not: one credit buys one event, unused credits expire a year after purchase, each event docks one, and **the credit is spent at publish behind an explicit confirmation** — the same moment the business meter starts, so one idea covers both.
-4. **An event stops counting 14 days after its last night**, when a job archives it (unless a booking is still undecided). Restorable. **Amended the same day**, on Ben's three-venues question: it also does not start counting until it is *published*, so planning privately is free and the meter runs while the event is live. See "Billed per event, and only while the event is live" above — awaiting Ben's confirmation.
+3. **Event credits are the product.** One credit buys one event, for anybody; unused credits expire a year after purchase with a warning at thirty days; the credit is spent at publish, behind a confirmation that says what it costs and that it does not come back. A business plan is the alternative for people who run events for a living, capped by `ActiveHostedEvents` rather than metered. **Nothing is billed per event per month.** Whether the Stripe purchase itself ships in this arc is still open; the entitlement and the refusal are not.
+4. **An event stops counting against a business's cap 14 days after its last night**, when a job archives it (unless a booking is still undecided). Restorable. It does not start counting until it is *published* — drafting is free for everyone, and publishing is the single moment that spends a credit or occupies a slot.
 
 **Routine judgement calls, taken as recommended (say so if any should differ):**
 
