@@ -5,14 +5,37 @@ import BenKit
 ///
 /// iPad shows all of them in the sidebar. **iPhone shows five**, because a sixth tab makes iOS
 /// collapse the overflow into a "More" list — and Field Kit, which is used one-handed in a dark
-/// building, is the last thing that should live two taps deep. Events is the section that gives
-/// way: browsing and RSVPing to public events is the least in-the-field thing here, and it keeps
-/// a home on the Profile tab.
+/// building, is the last thing that should live two taps deep.
+///
+/// **Item 234 adds Haunted Tours**, which Ben asked for as a tab, and there is no sixth slot to
+/// put it in. So the bar is no longer a fixed list: it is the sections that APPLY to this person,
+/// taken in the order below until five are full, with Profile always last. What that means in
+/// practice:
+///
+/// - Somebody who downloaded the app for a ghost walk gets Feed, Tours, Events and Profile. Field
+///   Kit is not offered to them at all (see `applies(to:)`), which is the slot Tours moves into.
+/// - A group member gets Feed, Tours, Field Kit, My Cases and Profile. **Investigations moves
+///   under Profile**, the way Events already had to. Ben's choice frees a slot only for people
+///   outside a group; for a member, something had to give, and Investigations is the one that is
+///   also reachable from a case.
 enum AppSection: String, CaseIterable, Identifiable, Hashable {
-    case feed, cases, investigations, fieldKit, events, profile
+    case feed, tours, cases, investigations, fieldKit, events, profile
 
-    /// What the compact shell shows as tabs — five, in the order a night actually runs.
-    static let compactTabs: [AppSection] = [.feed, .cases, .investigations, .fieldKit, .profile]
+    /// The order the compact bar fills from. Profile is pinned last and never competes.
+    private static let compactPriority: [AppSection] =
+        [.feed, .tours, .fieldKit, .cases, .investigations, .events]
+
+    /// The most tabs iOS shows before it collapses the rest into "More".
+    private static let compactSlots = 5
+
+    /// What the compact shell shows, for this person.
+    ///
+    /// Everything left over is still reachable — a section that does not make the bar keeps its
+    /// home on the Profile tab, which is how Events has worked since there were five of these.
+    static func compactTabs(for surfaces: MeSurfaces) -> [AppSection] {
+        let chosen = compactPriority.filter { $0.applies(to: surfaces) }.prefix(compactSlots - 1)
+        return chosen + [.profile]
+    }
 
     /// Whether this section leads anywhere for the person described by `surfaces`.
     ///
@@ -26,12 +49,24 @@ enum AppSection: String, CaseIterable, Identifiable, Hashable {
     /// any of them would strand somebody.
     func applies(to surfaces: MeSurfaces) -> Bool {
         switch self {
-        case .feed, .fieldKit, .profile: true
+        // Tours is unconditional for the same reason Feed is: it is a front door. Somebody who
+        // installed the app to find a ghost walk must not have to earn the screen that finds one.
+        case .feed, .tours, .profile: true
         case .cases:          surfaces.hasCases
         case .investigations: surfaces.hasInvestigations
         // Events earns its place for a ghost-walk guest, and for anybody in a group that runs
         // them. A solo investigator who has never attended one is not shown it.
         case .events:         surfaces.attendsPublicEvents || surfaces.hasGroups
+        // Item 234: Field Kit stops being unconditional — but only just. It is hidden from
+        // EXACTLY one person: somebody whose entire connection to this site is having been on a
+        // public event. A solo investigator with nothing recorded yet still gets it, because
+        // hiding the instrument from the person about to use it for the first time is the
+        // stranding this whole method exists to avoid. A visitor gets it too: `MeSurfaces.none`
+        // says they attend nothing, so the guard below does not fire.
+        case .fieldKit:
+            !(surfaces.attendsPublicEvents
+              && !surfaces.hasGroups && !surfaces.hasCases
+              && !surfaces.hasInvestigations && !surfaces.hasOwnFieldSessions)
         }
     }
 
@@ -40,6 +75,7 @@ enum AppSection: String, CaseIterable, Identifiable, Hashable {
     var title: String {
         switch self {
         case .feed: "Feed"
+        case .tours: "Tours"
         case .cases: "My Cases"
         case .investigations: "Investigations"
         case .fieldKit: "Field Kit"
@@ -51,6 +87,7 @@ enum AppSection: String, CaseIterable, Identifiable, Hashable {
     var icon: String {
         switch self {
         case .feed: "sparkles.rectangle.stack"
+        case .tours: "figure.walk"
         case .cases: "folder"
         case .investigations: "binoculars"
         case .fieldKit: "gauge.with.needle"
@@ -85,6 +122,11 @@ enum AppRoute: Hashable {
     /// Public events as a pushed screen, for the shell that has no Events tab.
     case eventsList
     case eventDetail(UUID)
+    /// One tour, by the addresses its public page uses (item 234).
+    ///
+    /// Carried as SLUGS rather than as an id because that is what the public endpoint takes, and
+    /// because it is the same pair a shared link carries — one shape for both ways in.
+    case tourDetail(organizationUrlName: String, tourSlug: String)
     case security
     /// The guest's own copy of what they offered at somebody's public event, and contributing it
     /// to the place's archive. Theirs, whatever the operator decided about their own gallery.

@@ -61,7 +61,9 @@ struct FixtureNullDriftTests {
                                     "organizationName", "wasLead"],
 
         // PublicEventListItem: OrganizationId, OrganizationUrlName, EndDateTime, IsAllDay,
-        // AttendingCount and IsOnline are all non-nullable there.
+        // AttendingCount and IsOnline are all non-nullable there. TourName, TourUrlName and
+        // TimeZoneId (item 233) are NOT in this list on purpose — they are null on every event
+        // that belongs to no tour, which is most of them.
         "public-events": ["id", "organizationName", "title", "startDateTime",
                           "organizationId", "organizationUrlName", "endDateTime",
                           "isAllDay", "attendingCount", "isOnline"],

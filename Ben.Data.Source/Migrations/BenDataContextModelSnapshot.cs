@@ -2589,6 +2589,9 @@ namespace Ben.Data.Source.Migrations
                     b.Property<Guid>("OrgCalendarEventId")
                         .HasColumnType("uniqueidentifier");
 
+                    b.Property<int?>("Seats")
+                        .HasColumnType("int");
+
                     b.Property<string>("Token")
                         .HasMaxLength(128)
                         .HasColumnType("nvarchar(128)");
@@ -4010,11 +4013,28 @@ namespace Ben.Data.Source.Migrations
                     b.Property<DateTime?>("DateRsvp")
                         .HasColumnType("datetime2");
 
+                    b.Property<DateTime?>("GuestAcknowledgedUtc")
+                        .HasColumnType("datetime2");
+
                     b.Property<Guid>("OrgCalendarEventId")
                         .HasColumnType("uniqueidentifier");
 
                     b.Property<int>("RsvpStatus")
                         .HasColumnType("int");
+
+                    b.Property<Guid?>("SeatDecidedByAppUserId")
+                        .HasColumnType("uniqueidentifier");
+
+                    b.Property<DateTime?>("SeatDecidedUtc")
+                        .HasColumnType("datetime2");
+
+                    b.Property<int?>("SeatStatus")
+                        .HasColumnType("int");
+
+                    b.Property<int>("Seats")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("int")
+                        .HasDefaultValue(1);
 
                     b.HasKey("Id");
 
@@ -4022,8 +4042,12 @@ namespace Ben.Data.Source.Migrations
 
                     b.HasIndex("CreatedByAppUserId");
 
+                    b.HasIndex("SeatDecidedByAppUserId");
+
                     b.HasIndex("OrgCalendarEventId", "AppUserId")
                         .IsUnique();
+
+                    b.HasIndex("OrgCalendarEventId", "SeatStatus");
 
                     b.ToTable("OrgCalendarEventAttendees");
                 });
@@ -11648,11 +11672,18 @@ namespace Ben.Data.Source.Migrations
                         .OnDelete(DeleteBehavior.Cascade)
                         .IsRequired();
 
+                    b.HasOne("Ben.Data.Source.Entities.AppUser", "SeatDecidedByAppUser")
+                        .WithMany()
+                        .HasForeignKey("SeatDecidedByAppUserId")
+                        .OnDelete(DeleteBehavior.NoAction);
+
                     b.Navigation("AppUser");
 
                     b.Navigation("CreatedByAppUser");
 
                     b.Navigation("OrgCalendarEvent");
+
+                    b.Navigation("SeatDecidedByAppUser");
                 });
 
             modelBuilder.Entity("Ben.Data.Source.Entities.OrgCalendarEventGuide", b =>

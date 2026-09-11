@@ -108,6 +108,19 @@ public static class NotificationRows
                 $"Sent to you through the platform · oldest {NotificationBadge.DescribeAge(s.SystemMessages.OldestUnreadUtc)}",
                 "bell", "/notifications", s.SystemMessages));
 
+        // ── Tour seats (item 234) ────────────────────────────────────────────
+        // The business's queue first: somebody is standing at the other end of it waiting to be
+        // told whether they have a place.
+        if (s.TourSeatsToDecide is { Count: > 0 } toDecide)
+            rows.Add(new("Sign-ups waiting on you",
+                $"People asking for places on your tours · oldest {NotificationBadge.DescribeAge(toDecide.OldestUnreadUtc)}",
+                "user-check", "/organizations", toDecide));
+
+        if (s.MyTourSeats is { Count: > 0 } mine)
+            rows.Add(new("A tour answered you",
+                $"Your seat has been decided · {NotificationBadge.DescribeAge(mine.OldestUnreadUtc)}",
+                "calendar", "/events", mine));
+
         // Last: being named on a public post waits on nothing. It still gets a row, because the
         // total counts it and a number that explains everything except one item reads as wrong.
         if (s.FeedMentions.Count > 0)

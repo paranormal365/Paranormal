@@ -3,6 +3,7 @@ using Ben.Data.Common.Interfaces;
 using Ben.Data.Source.Context;
 using Ben.Data.Source.Entities;
 using Ben.Data.WebApi.Services;
+using Ben.Data.WebApi.Services.Tours;
 using Ben.Service.Models.Entities;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Identity;
@@ -111,9 +112,11 @@ public sealed class PublicEventAttendanceController : BenControllerBase
         if (DateTime.UtcNow > ev.RsvpClosingTime)
             return Conflict("Sign-ups for this event have closed.");
 
-        var accepted = await db.OrgCalendarEventAttendees
-            .CountAsync(a => a.OrgCalendarEventId == eventId && a.RsvpStatus == RsvpStatus.Accepted, ct);
-        if (ev.AttendeeCapacity is int cap && accepted >= cap)
+        // Counted in PLACES (item 234), and a TOUR date is not refused for fullness at all: a
+        // request holds nothing, so the overflow is a waiting list the business works through.
+        var held = TourSeats.PlacesTaken(await db.OrgCalendarEventAttendees.AsNoTracking()
+            .Where(a => a.OrgCalendarEventId == eventId).ToListAsync(ct));
+        if (!TourSeats.IsTourDate(ev) && ev.AttendeeCapacity is int cap && held >= cap)
             return Conflict("This event is full.");
 
         // Reuse the pending row for a repeat request rather than accumulating one per attempt —
@@ -164,6 +167,8 @@ public sealed class PublicEventAttendanceController : BenControllerBase
                 OrgCalendarEventId = eventId,
                 Email              = email,
                 DisplayName        = string.IsNullOrWhiteSpace(request.DisplayName) ? null : request.DisplayName.Trim(),
+                // Only on a tour date; every other event seats one person per sign-up (item 234).
+                Seats              = TourSeats.IsTourDate(ev) ? TourSeats.Clamp(request.Seats) : null,
                 Token              = token,
                 DateExpires        = DateTime.UtcNow.Add(LinkLifetime),
                 DateCreated        = DateTime.UtcNow,
@@ -177,6 +182,8 @@ public sealed class PublicEventAttendanceController : BenControllerBase
             invite.DateExpires = DateTime.UtcNow.Add(LinkLifetime);
             invite.DateUpdated = DateTime.UtcNow;
             if (!string.IsNullOrWhiteSpace(request.DisplayName)) invite.DisplayName = request.DisplayName.Trim();
+            // Asking again with a different party size is the newer answer, not a second guest.
+            if (TourSeats.IsTourDate(ev)) invite.Seats = TourSeats.Clamp(request.Seats);
         }
 
         await db.SaveChangesAsync(ct);
@@ -288,12 +295,21 @@ public sealed class PublicEventAttendanceController : BenControllerBase
             }
         }
 
+        // ── A tour date asks; everything else simply comes (item 234) ────────
+        // Confirming the emailed link proves the address. On a TOUR date it does not also reserve
+        // a place: the guide or manager approves that, which is where the business says the money
+        // is settled. Every other kind of event keeps the rule it had.
+        var isTour = TourSeats.IsTourDate(ev);
+        var wantedSeats = TourSeats.Clamp(invite.Seats);
+
         // Capacity is likewise the organiser's own number, and likewise theirs to override in
         // person — the direct AddAttendee path has never checked it either. A guest who asked for
-        // their own link still cannot walk past a full house.
-        var alreadyFull = invite.InvitedByAppUserId is null
+        // their own link still cannot walk past a full house. Counted in PLACES, and never applied
+        // to a tour date, where confirming holds nothing.
+        var alreadyFull = !isTour
+            && invite.InvitedByAppUserId is null
             && ev.AttendeeCapacity is int cap
-            && attendees.Count(a => a.RsvpStatus == RsvpStatus.Accepted && a.AppUserId != user.Id) >= cap;
+            && TourSeats.PlacesTaken(attendees, excludingAppUserId: user.Id) >= cap;
         if (alreadyFull) return Conflict("This event filled up before you confirmed.");
 
         var attendee = attendees.FirstOrDefault(a => a.AppUserId == user.Id);
@@ -304,7 +320,9 @@ public sealed class PublicEventAttendanceController : BenControllerBase
                 Id                 = Guid.NewGuid(),
                 OrgCalendarEventId = ev.Id,
                 AppUserId          = user.Id,
-                RsvpStatus         = RsvpStatus.Accepted,
+                RsvpStatus         = isTour ? RsvpStatus.Invited : RsvpStatus.Accepted,
+                SeatStatus         = isTour ? TourSeatStatus.Requested : null,
+                Seats              = isTour ? wantedSeats : 1,
                 DateRsvp           = DateTime.UtcNow,
                 DateCreated        = DateTime.UtcNow,
                 CreatedByAppUserId = user.Id,
@@ -312,7 +330,9 @@ public sealed class PublicEventAttendanceController : BenControllerBase
         }
         else
         {
-            attendee.RsvpStatus = RsvpStatus.Accepted;
+            attendee.RsvpStatus = isTour ? RsvpStatus.Invited : RsvpStatus.Accepted;
+            attendee.SeatStatus = isTour ? TourSeatStatus.Requested : null;
+            attendee.Seats      = isTour ? wantedSeats : 1;
             attendee.DateRsvp   = DateTime.UtcNow;
         }
 
@@ -327,7 +347,12 @@ public sealed class PublicEventAttendanceController : BenControllerBase
         // a calendar file. The mail before this one was a one-line "confirm you're coming" sent
         // to an address nobody had proved yet; this is the first point at which there is somebody
         // to write to.
-        await _tourMail.SendSignUpAsync(db, ev.Id, invite.Email, invite.DisplayName ?? user.DisplayName, ct);
+        //
+        // Item 234 holds that mail back on a TOUR date until the business approves the seat. "Here
+        // is where to stand" is untrue of a request nobody has looked at, and a guest who acted on
+        // it would turn up to a walk that had never reserved them a place.
+        if (!isTour)
+            await _tourMail.SendSignUpAsync(db, ev.Id, invite.Email, invite.DisplayName ?? user.DisplayName, ct);
 
         return Ok(new EventAttendanceConfirmation(
             ev.Id, ev.Title, ev.Organization.Name, ev.Organization.UrlName, ev.UrlName, ev.StartDateTime));

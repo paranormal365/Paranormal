@@ -11577,7 +11577,7 @@ attach race. Not chased further that day; the three other billing fixtures pass.
 
 ---
 
-## 233. The tour tier: tours are the unit a business pays for (IN PROGRESS 2026-09-10)
+## 233. The tour tier: tours are the unit a business pays for (BUILT 2026-09-11, merged to develop and master; two pieces named below are deliberately out)
 
 Ben's brief, 2026-09-10, in his words and in order: photos stay a month unless the tour rep keeps
 them; video and audio a week, five minutes each at 720p or 1080p; Field Kit submissions the same,
@@ -11612,6 +11612,14 @@ sites, editor with preview; **3** retention limits as tier data, expiry stamps, 
 notices, the 50-image gallery, keep for recordings, download while it lasts, five-minute and 1080p
 rules at the doors; **4** reviews; **5** help, screenshots, both PDFs, deploy notes, production data.
 
+**Closed 2026-09-11.** All six phases shipped, merged to `develop` (888a63bd) and `master`
+(097859a9), suite green at 8,133. **Two pieces are not built and are named rather than implied:**
+the phone shows a tour's NAME on an event and reads every time on the Swift half of the clock rule
+(`EventClock`, 2026-09-11), but nothing renders a date's guides yet and there is no tour browsing of
+its own — item 234 is the larger version of that; and an over-long recording is refused on length
+but never downscaled to 1080p. What the testing wrote to `IsHauntedDb_player`, with a back-out script, is in
+`ProjectNotes/Test-Data-Written-2026-09-11.md`.
+
 **Asked for mid-build and built on the same branch** (2026-09-11): the look pass across the tour,
 event, group, events and group-cases pages; the clock rule (times render in the zone of the place,
 or UTC, never the server's); a tour's social links; a timezone on an event; the case vote widget
@@ -11625,7 +11633,7 @@ comment and a group's own message.
 
 ---
 
-## 234. The tour on the phone: a reserved seat, notifications, and a Haunted Tours tab (FUTURE, Ben 2026-09-10)
+## 234. The tour on the phone: a reserved seat, notifications, and a Haunted Tours tab (BUILT 2026-09-11; the phone half is staged behind App Store 1.0.3)
 
 Recorded while item 233 was being built, in Ben's words, to be picked up after it lands:
 
@@ -11653,6 +11661,30 @@ Four pieces, each resting on item 233:
    which is why the email's placeholders and its start address are the source for both.
 4. **A Haunted Tours tab** in the iPhone and iPad app: tours near me, or near a place I look up,
    from the same public tour endpoints item 233 builds for the website map and search.
+
+**Closed 2026-09-11, in five phases.** Plan of record: `README-tour-on-the-phone-234.md`.
+
+1. **A seat is asked for, and the business decides.** `TourSeatStatus` beside `RsvpStatus` rather
+   than inside it, so every existing count of "accepted" goes on meaning *has a place*. Capacity
+   counts PLACES, and a sign-up may hold several. A request is never refused for fullness — the
+   approval is, in words naming how many places are left — so a full walk is a waiting list rather
+   than a closed door. **This site never takes the money**; approving is the two of them agreeing.
+2. **The business's screen and the guest's three sentences**, on the web: a Sign-ups page per date
+   with a "waiting" count on the tour's Dates list, and *asked for* / *reserved* / *not this time*
+   wherever a guest looks at the night.
+3. **The phone gets an event screen** — it had none, and `AppRoute.eventDetail` fell through to a
+   placeholder — plus reminders the device schedules itself the night before and an hour before.
+   **Local, not push**, by Ben's decision: no Apple key, no device-token table, and they still
+   arrive in a cellar with no signal. Real APNs remains the separate piece, needed only for an
+   approval landing while the app is closed.
+4. **A Haunted Tours tab**, near you or near a place looked up, anonymous throughout. The five-tab
+   ceiling meant Investigations moved under Profile for group members; Field Kit is hidden from
+   exactly one person, somebody whose only connection to the site is having attended a public event.
+5. **Two notification buckets**, one per direction, plus help, screenshots and both PDFs.
+
+**Left for production on Ben's word:** migration `TourSeats` applied with an explicit `--connection`
+naming `IsHauntedDb`. The iOS half is staged and proven only — 1.0.3 (4) is still with Apple — and
+the location permission string, which now mentions finding tours, must ship WITH that release.
 
 Prerequisites already true after 233: tours are public with a start address and coordinates, dates
 carry guides and capacity, and the guest mail knows how to say all of it.

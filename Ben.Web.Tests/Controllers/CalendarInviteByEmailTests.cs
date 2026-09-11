@@ -54,7 +54,8 @@ public class CalendarInviteByEmailTests
         => new(f, Mapper(), new Ben.Service.RepositoryService.Services.OrganizationSecurityService(f), UnconfiguredEmail(),
             Microsoft.Extensions.Options.Options.Create(new Ben.Data.Common.SiteIdentity { BaseUrl = "https://example.test" }),
             Microsoft.Extensions.Logging.Abstractions.NullLogger<OrgCalendarEventController>.Instance,
-            new Ben.Data.WebApi.Services.CmsMarkupSanitizer())
+            new Ben.Data.WebApi.Services.CmsMarkupSanitizer(),
+            Support.SilentTourMail.Instance)
         {
             ControllerContext = new ControllerContext
             {
@@ -204,7 +205,8 @@ public class CalendarInviteByEmailTests
         var ctrl = new OrgCalendarEventController(factory, Mapper(), new Ben.Service.RepositoryService.Services.OrganizationSecurityService(factory), UnconfiguredEmail(),
             Microsoft.Extensions.Options.Options.Create(new Ben.Data.Common.SiteIdentity { BaseUrl = "https://example.test" }),
             Microsoft.Extensions.Logging.Abstractions.NullLogger<OrgCalendarEventController>.Instance,
-            new Ben.Data.WebApi.Services.CmsMarkupSanitizer())
+            new Ben.Data.WebApi.Services.CmsMarkupSanitizer(),
+            Support.SilentTourMail.Instance)
         {
             ControllerContext = new ControllerContext
             {
@@ -266,7 +268,8 @@ public class CalendarInviteByEmailTests
             UnconfiguredEmail(),
             Microsoft.Extensions.Options.Options.Create(new Ben.Data.Common.SiteIdentity { BaseUrl = "https://example.test" }),
             Microsoft.Extensions.Logging.Abstractions.NullLogger<OrgCalendarEventController>.Instance,
-            new Ben.Data.WebApi.Services.CmsMarkupSanitizer())
+            new Ben.Data.WebApi.Services.CmsMarkupSanitizer(),
+            Support.SilentTourMail.Instance)
         {
             ControllerContext = new ControllerContext
             {

@@ -63,10 +63,12 @@ Media a tour business holds expires on a clock unless it is in a gallery (images
 
 ## Not built
 
-- **The iPhone and iPad app knows nothing about tours.** Phase 1 promised the tour's name and its
-  guides on an event in the app; `Ben.iOS` is untouched on this branch. The public endpoints it
-  would read are all in place, and the shared records already carry the fields, so this is a
-  client-side piece of work rather than a design question. Item 234 is the larger version of it.
+- **The phone shows a tour's name, not yet its guides.** Done 2026-09-11: `PublicEventListItem`
+  and `PublicEventRecord` carry the tour, its guides and the event's zone in Swift; the events list
+  puts the tour's name under the title and reads every time on `EventClock`, the phone's half of
+  the website's clock rule. What is still absent is a screen that shows the guides — the record
+  carries them and nothing renders them yet — and any tour browsing of its own. Item 234 is the
+  larger version of that.
 - **1080p downscaling.** The five-minute refusal is enforced; resolution is not. `MediaTools`
   carries an ffmpeg path used for stripping and frame sampling, and nothing yet re-encodes an
   over-large recording. Refusing on length alone is the honest half: it is the one that costs

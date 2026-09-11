@@ -467,6 +467,144 @@ public sealed class HelpMediaCapture : BenTestBase
     /// choices are opened deliberately: the whole point of the redesign is that three buttons
     /// became one, and a closed button photographs as a single icon that explains nothing.
     /// </remarks>
+    /// <summary>
+    /// A seat on a walk, from both ends (item 234).
+    /// </summary>
+    /// <remarks>
+    /// <para>Builds its own tour business and takes it away again, because both pictures need a
+    /// date with a sign-up on it in a known state — one waiting, one reserved — and a seeded walk
+    /// is whatever the last run left it as.</para>
+    ///
+    /// <para><b>Both shots exist because the two ends disagree about what a sign-up IS.</b> The
+    /// business sees a queue to work; the guest sees an answer to read. A help page that showed
+    /// only one of them would teach half the feature.</para>
+    /// </remarks>
+    [Test]
+    [Description("organization-administration and getting-started: a tour seat, from both ends.")]
+    public async Task Capture_TourSeats()
+    {
+        var api = await Playwright.APIRequest.NewContextAsync(new() { BaseURL = ApiUrl });
+        string? orgId = null;
+
+        try
+        {
+            var login = await api.PostAsync("/login", new()
+            { DataObject = new { email = UserEmail, password = UserPassword } });
+            if (!login.Ok) Assert.Ignore("The seeded owner seat cannot sign in here.");
+            var token = (await login.JsonAsync())!.Value.GetProperty("accessToken").GetString();
+            var authed = new Dictionary<string, string> { ["Authorization"] = $"Bearer {token}" };
+
+            var slug = $"shot-seats-{Guid.NewGuid():N}"[..20];
+            var register = await api.PostAsync("/api/security/organizations/register", new()
+            {
+                Headers = authed,
+                DataObject = new { name = "Printers Alley Walks", urlName = slug, kind = 1 },
+            });
+            Assert.That(register.Ok, Is.True, await register.TextAsync());
+            orgId = (await register.JsonAsync())!.Value.GetProperty("organizationId").GetString();
+
+            var types = await api.GetAsync("/api/organization-address-types", new() { Headers = authed });
+            var typeId = (await types.JsonAsync())!.Value.EnumerateArray().First()
+                .GetProperty("id").GetString();
+
+            var address = await api.PostAsync($"/api/organizations/{orgId}/addresses", new()
+            {
+                Headers = authed,
+                DataObject = new
+                {
+                    organizationAddressTypeId = typeId, streetAddress1 = "1 Printers Alley",
+                    city = "Nashville", state = "TN", zipCode = "37201", country = "US",
+                    isPrimary = true,
+                },
+            });
+            var addressId = (await address.JsonAsync())!.Value.GetProperty("id").GetString();
+
+            var tour = await api.PostAsync($"/api/organizations/{orgId}/tours", new()
+            {
+                Headers = authed,
+                DataObject = new
+                {
+                    name = "Printers Alley Ghost Walk",
+                    description = "<p>An hour and a half through the oldest alley in Nashville.</p>",
+                    startOrganizationAddressId = addressId, durationMinutes = 90,
+                    defaultCapacity = 12, timeZoneId = "America/Chicago",
+                },
+            });
+            var tourId = (await tour.JsonAsync())!.Value.GetProperty("id").GetString();
+
+            var start = DateTime.UtcNow.AddDays(9);
+            var date = await api.PostAsync($"/api/organizations/{orgId}/calendar", new()
+            {
+                Headers = authed,
+                DataObject = new
+                {
+                    title = "Saturday walk", startDateTime = start,
+                    endDateTime = start.AddMinutes(90), isAllDay = false, isPublic = true,
+                    tourId, attendeeCapacity = 12,
+                },
+            });
+            var created = (await date.JsonAsync())!.Value;
+            var eventId = created.GetProperty("id").GetString();
+            var eventSlug = created.GetProperty("urlName").GetString();
+
+            // Two guests: one whose party is approved before the shot, one left waiting so the
+            // business's page has something on it to decide.
+            var guestToken = await TokenForCaptureAsync(MemberEmail, MemberPassword);
+            var clientToken = await TokenForCaptureAsync(ClientEmail, ClientPassword);
+            if (guestToken is null || clientToken is null)
+                Assert.Ignore("The seeded guest seats cannot sign in here.");
+
+            foreach (var (guest, seats) in new[] { (guestToken, 2), (clientToken, 3) })
+            {
+                await api.PostAsync($"/api/public/events/{eventId}/rsvp?seats={seats}", new()
+                {
+                    Headers = new Dictionary<string, string> { ["Authorization"] = $"Bearer {guest}" },
+                    DataObject = new { },
+                });
+            }
+
+            // Approve the first, leave the second waiting.
+            var attendees = await api.GetAsync(
+                $"/api/organizations/{orgId}/calendar/{eventId}/attendees", new() { Headers = authed });
+            var firstSeat = (await attendees.JsonAsync())!.Value.EnumerateArray().First()
+                .GetProperty("id").GetString();
+            await api.PostAsync(
+                $"/api/organizations/{orgId}/calendar/{eventId}/attendees/{firstSeat}/approve",
+                new() { Headers = authed, DataObject = new { } });
+
+            // ── The business's end ───────────────────────────────────────────
+            await LoginAsync(UserEmail, UserPassword);
+            await GoAsync($"/organizations/{orgId}/tours/{tourId}/dates/{eventId}");
+            await ShootAsync("organization-administration", "tour-seats.png",
+                gated: true, proves: "Waiting on you");
+
+            // ── The guest's end ──────────────────────────────────────────────
+            await LogoutAsync();
+            await LoginAsync(MemberEmail, MemberPassword);
+            await GoAsync($"/o/{slug}/events/{eventSlug}");
+            await ShootAsync("getting-started", "tour-seat.png",
+                selector: ".event-act", proves: "reserved");
+        }
+        finally
+        {
+            if (orgId is not null)
+            {
+                var admin = await api.PostAsync("/login", new()
+                { DataObject = new { email = SuperAdminEmail, password = SuperAdminPassword } });
+                if (admin.Ok)
+                {
+                    var adminToken = (await admin.JsonAsync())!.Value.GetProperty("accessToken").GetString();
+                    var headers = new Dictionary<string, string> { ["Authorization"] = $"Bearer {adminToken}" };
+                    // Purge, not delete: a business with a tour and sign-ups on it is refused by
+                    // the ordinary delete, in words.
+                    await api.DeleteAsync($"/api/admin/organizations/{orgId}/purge", new()
+                    { Headers = headers, DataObject = new { confirmName = "Printers Alley Walks" } });
+                }
+            }
+            await api.DisposeAsync();
+        }
+    }
+
     [Test]
     [Description("getting-started: the vote button and the actions beside it on a published case.")]
     public async Task Capture_CaseActions()

@@ -46,17 +46,21 @@ branch is abandoned.
 | `TourGuides` / `TourGalleryImages` / `TourReviews` / `TourSocialLinks` | 1 / 2 / 1 / 5 | same |
 | `OrgCalendarEvents` with a tour | 2 | "Saturday walk" ×2 |
 
-### Three posts are scheduled and will appear on their own
+### Three posts were scheduled — **cancelled 2026-09-11, nothing left to do**
 
-These are **not yet public** and go up two days after they were written unless they are removed:
+Three Playwright runs left posts waiting to go up two days later. Everything else in this document
+sits still; these had a clock on them, which is the reason the document exists at all.
 
 ```
-014d9d5a-d7d5-40b7-80df-826c9292ed86   s59942f43fa2 going up later
-17223cfb-b6ca-42d2-8bed-b86c34cc313c   s8af6426f073 going up later
-7ef65df7-ac44-4f9c-a0e6-57414179d36c   s644ed826d93 going up later
+014d9d5a-d7d5-40b7-80df-826c9292ed86   s59942f43fa2 going up later   removed
+17223cfb-b6ca-42d2-8bed-b86c34cc313c   s8af6426f073 going up later   removed
+7ef65df7-ac44-4f9c-a0e6-57414179d36c   s644ed826d93 going up later   removed
 ```
 
-They are the reason this document exists. Everything else sits still; these have a clock on them.
+Taken back through the feature's own door — `DELETE /api/feed/posts/{id}/schedule`, as their author
+— rather than by deleting rows, so the clean-up used the same path a person would and proved it
+works. They are already gone from the database; they stay listed here so the record is complete.
+The clean-up script below still names them, and a `DELETE` that matches nothing is harmless.
 
 ### Visible feed posts left behind
 

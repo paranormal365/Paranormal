@@ -300,6 +300,22 @@ public sealed partial class BenAdminClientAdapter
     public Task<LoadResult<OrgCalendarEventAttendeeRecord>> GetCalendarEventAttendeesAsync(Guid orgId, Guid eventId, CancellationToken token = default)
         => _api.GetListAsync<OrgCalendarEventAttendeeRecord>($"/api/organizations/{orgId}/calendar/{eventId}/attendees", token);
 
+    // ── Seats on a tour date (item 234) ─────────────────────────────────────
+
+    public Task<(OrgCalendarEventAttendeeRecord? Seat, string? Error)> ApproveSeatAsync(
+        Guid orgId, Guid eventId, Guid attendeeId, CancellationToken token = default)
+        => _api.SendExpectingReasonAsync<object, OrgCalendarEventAttendeeRecord>(
+               HttpMethod.Post,
+               $"/api/organizations/{orgId}/calendar/{eventId}/attendees/{attendeeId}/approve",
+               new { }, token);
+
+    public Task<(OrgCalendarEventAttendeeRecord? Seat, string? Error)> TurnDownSeatAsync(
+        Guid orgId, Guid eventId, Guid attendeeId, CancellationToken token = default)
+        => _api.SendExpectingReasonAsync<object, OrgCalendarEventAttendeeRecord>(
+               HttpMethod.Post,
+               $"/api/organizations/{orgId}/calendar/{eventId}/attendees/{attendeeId}/turn-down",
+               new { }, token);
+
     public Task<OrgCalendarEventAttendeeRecord?> AddCalendarAttendeeAsync(Guid orgId, Guid eventId, AddAttendeeRequest request, CancellationToken token = default)
         => _api.PostAsync<AddAttendeeRequest, OrgCalendarEventAttendeeRecord>($"/api/organizations/{orgId}/calendar/{eventId}/attendees", request, token);
 

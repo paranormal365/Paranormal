@@ -342,6 +342,20 @@ public interface IBenOrganizationClient
     Task<PublicEventRecord?> RsvpToEventAsync(Guid eventId, CancellationToken token = default);
 
     /// <summary>
+    /// Asks for a number of places on a tour date (item 234).
+    /// </summary>
+    /// <remarks>
+    /// The same endpoint. A tour date records a REQUEST that holds nothing until the business
+    /// approves it; an ordinary event ignores the number and seats one person, as it always has.
+    /// </remarks>
+    Task<PublicEventRecord?> RsvpToEventAsync(Guid eventId, int seats, CancellationToken token = default);
+
+    /// <summary>
+    /// Says back that a reserved seat has been seen. Optional, always (Ben: "if they want").
+    /// </summary>
+    Task<PublicEventRecord?> AcknowledgeSeatAsync(Guid eventId, CancellationToken token = default);
+
+    /// <summary>
     /// Asks to attend by email, for somebody who is not signed in. Always succeeds from the
     /// caller's point of view — a different answer for a known address would let anyone test which
     /// emails have accounts here.
