@@ -1,0 +1,42 @@
+/*
+    One track of pills rather than a row of outline buttons, so a group's pages read as one
+    navigation and the page you are on is obvious without reading the labels.
+*/
+.org-nav {
+    display: flex;
+    flex-wrap: wrap;
+    gap: .25rem;
+    padding: .25rem;
+    border-radius: 2rem;
+    background: var(--bs-tertiary-bg);
+    width: fit-content;
+    max-width: 100%;
+}
+
+.org-nav__item {
+    padding: .3rem .85rem;
+    border-radius: 2rem;
+    color: var(--bs-secondary-color);
+    font-size: .875rem;
+    font-weight: 600;
+    text-decoration: none;
+    transition: background-color .16s ease, color .16s ease;
+}
+
+.org-nav__item:hover {
+    color: var(--bs-body-color);
+    background: var(--bs-body-bg);
+}
+
+.org-nav__item--here {
+    color: var(--bs-body-color);
+    background: var(--bs-body-bg);
+    box-shadow: 0 1px 3px rgba(0, 0, 0, .18);
+}
+
+
+@media (prefers-reduced-motion: reduce) {
+    .org-nav__item {
+        transition: none;
+    }
+}

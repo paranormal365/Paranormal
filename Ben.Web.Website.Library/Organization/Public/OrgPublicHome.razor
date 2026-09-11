@@ -3,6 +3,7 @@
 @using Ben.Web.Services
 @using Ben.Data.Common.Enums
 @using System.Text.Json
+@using Ben.Web.Website.Library.Kit
 
 @inject IBenAdminClient AdminClient
 @inject NavigationManager NavManager
@@ -30,70 +31,48 @@ else if (_org is null)
 else
 {
     @* ── Org header ──────────────────────────────────────────────────────── *@
-    <div class="container-fluid px-3 py-3" style="max-width:900px; margin:0 auto;">
+    <div class="container-fluid px-3 py-3" style="max-width:960px; margin:0 auto;">
 
-        <div class="d-flex align-items-center gap-3 mb-3">
-            @if (_org.Logos.Any())
-            {
-                <Ben.Web.Website.Library.Kit.BenImage
-                    Src="@AdminClient.GetFileThumbnailUrl(_org.Logos.First().UploadFileId)"
-                    Alt="@(_org.Logos.First().AltText ?? _org.OrgName)"
-                    Style="max-height:64px; max-width:120px; object-fit:contain;" />
-            }
-            <div>
-                <h1 class="mb-0 fs-2 fw-bold">@_org.OrgName</h1>
-                @* What this group is, said plainly (2026-08-24). A visitor who wants a tour
-                   and a visitor who wants an investigation are looking for different things,
-                   and the name alone rarely tells them apart. *@
-                <div class="d-flex flex-wrap gap-2 mt-1">
-                    <span class="badge rounded-pill bg-body-secondary text-body-emphasis">
-                        @Ben.Data.Common.Enums.OrganizationKindDefaults.DisplayName(_org.Kind)
-                    </span>
-                    @if (_org.RunsPublicTours && _org.Kind != Ben.Data.Common.Enums.OrganizationKind.GhostWalkingTour)
-                    {
-                        @* An investigation group that also runs tours — worth saying, since
-                           it is why they turn up in a tour search. *@
-                        <span class="badge rounded-pill bg-body-secondary text-body-emphasis">
-                            Runs public tours
-                        </span>
-                    }
-                </div>
-                @if (_org.PublicPhone is not null || _org.PublicEmail is not null || _org.PublicWebsite is not null)
+        <OrgPublicBanner Name="@_org.OrgName" UrlName="@_org.OrgUrlName"
+                         LogoUrl="@(_org.Logos.Any() ? AdminClient.GetFileThumbnailUrl(_org.Logos.First().UploadFileId) : null)"
+                         LogoAlt="@(_org.Logos.FirstOrDefault()?.AltText)"
+                         Class="mb-3">
+            @* What this group is, said plainly (2026-08-24). A visitor who wants a tour and a
+               visitor who wants an investigation are looking for different things, and the name
+               alone rarely tells them apart. *@
+            <div class="org-banner__kinds">
+                <span class="org-banner__badge">
+                    @Ben.Data.Common.Enums.OrganizationKindDefaults.DisplayName(_org.Kind)
+                </span>
+                @if (_org.RunsPublicTours && _org.Kind != Ben.Data.Common.Enums.OrganizationKind.GhostWalkingTour)
                 {
-                    <div class="d-flex flex-wrap gap-3 mt-1 text-secondary small">
-                        @if (_org.PublicPhone is not null)
-                        {
-                            <span>📞 <a href="tel:@_org.PublicPhone" class="text-decoration-none text-secondary">@_org.PublicPhone</a></span>
-                        }
-                        @if (_org.PublicEmail is not null)
-                        {
-                            <span>✉️ <a href="mailto:@_org.PublicEmail" class="text-decoration-none text-secondary">@_org.PublicEmail</a></span>
-                        }
-                        @if (_org.PublicWebsite is not null)
-                        {
-                            <span>🌐 <a href="@_org.PublicWebsite" target="_blank" rel="noopener noreferrer" class="text-decoration-none text-secondary">@_org.PublicWebsite</a></span>
-                        }
-                    </div>
+                    @* An investigation group that also runs tours — worth saying, since it is why
+                       they turn up in a tour search. *@
+                    <span class="org-banner__badge">Runs public tours</span>
                 }
             </div>
-        </div>
+            @if (_org.PublicPhone is not null || _org.PublicEmail is not null || _org.PublicWebsite is not null)
+            {
+                <div class="org-banner__contact">
+                    @if (_org.PublicPhone is not null)
+                    {
+                        <span>📞 <a href="tel:@_org.PublicPhone">@_org.PublicPhone</a></span>
+                    }
+                    @if (_org.PublicEmail is not null)
+                    {
+                        <span>✉️ <a href="mailto:@_org.PublicEmail">@_org.PublicEmail</a></span>
+                    }
+                    @if (_org.PublicWebsite is not null)
+                    {
+                        <span>🌐 <a href="@_org.PublicWebsite" target="_blank" rel="noopener noreferrer">@_org.PublicWebsite</a></span>
+                    }
+                </div>
+            }
+        </OrgPublicBanner>
 
         @* ── Sub-page navigation ──────────────────────────────────────────── *@
-        <nav class="mb-4 d-flex flex-wrap gap-2">
-            <a href="/o/@_org.OrgUrlName" class="btn btn-sm btn-outline-primary">Home</a>
-            <a href="/o/@_org.OrgUrlName/cases" class="btn btn-sm btn-outline-secondary">Cases</a>
-            <a href="/o/@_org.OrgUrlName/events" class="btn btn-sm btn-outline-secondary">Events</a>
-            @if (_tours.Count > 0)
-            {
-                <a href="#org-tours" class="btn btn-sm btn-outline-secondary">Tours</a>
-            }
-            @foreach (var navPage in _org.NavPages.Where(p => p.ParentPageId is null).OrderBy(p => p.SortOrder))
-            {
-                <a href="/o/@_org.OrgUrlName/@navPage.UrlName" class="btn btn-sm btn-outline-secondary">
-                    @navPage.PageTitle
-                </a>
-            }
-        </nav>
+        <OrgPublicNav OrgUrlName="@_org.OrgUrlName" NavPages="@_org.NavPages"
+                      ShowTours="@(_tours.Count > 0)" Class="mb-4" />
 
         @* ── Home page content ────────────────────────────────────────────── *@
         @if (_org.HomePage is not null)
@@ -108,51 +87,54 @@ else
             @* A default page built from what the group already keeps (item 205). Every line here
                is a record the group can check; nothing is written on their behalf. The moment
                they publish a page of their own, this one steps aside. *@
-            <div class="card mt-4" data-testid="default-group-page">
-                <div class="card-body">
-                    <p class="lead mb-3">
-                        @Ben.Data.Common.Enums.OrganizationKindDefaults.DisplayName(_org.Kind)
-                        @if (facts.AreaServed is not null) { <text> serving <strong data-testid="default-area">@facts.AreaServed</strong></text> }
-                        @if (facts.OnSinceYear > 0) { <text>, on @SiteOptions.Value.Name since @facts.OnSinceYear</text> }.
-                    </p>
-                    <div class="row g-3">
-                        <div class="col-6 col-md-3">
-                            <div class="display-6">@facts.MemberCount</div>
-                            <div class="text-muted">member@(facts.MemberCount == 1 ? "" : "s")</div>
-                        </div>
-                        <div class="col-6 col-md-3">
-                            <div class="display-6">@facts.PublicCaseCount</div>
-                            <div class="text-muted"><a href="/o/@_org.OrgUrlName/cases" class="text-decoration-none">public case@(facts.PublicCaseCount == 1 ? "" : "s")</a></div>
-                        </div>
-                        <div class="col-12 col-md-6">
-                            @if (facts.IsAcceptingClients)
-                            {
-                                <span class="badge text-bg-success fs-6" data-testid="default-accepting">Taking new cases</span>
-                            }
-                            else
-                            {
-                                <span class="badge bg-body-secondary text-body-emphasis fs-6" data-testid="default-not-accepting">Not taking new cases right now</span>
-                            }
-                            @if (facts.IsAcceptingApplications)
-                            {
-                                <span class="badge text-bg-info fs-6 ms-1">Open to new members</span>
-                            }
-                        </div>
-                    </div>
-                    @if (facts.NextPublicEvent is { } ev)
+            <div class="mt-4" data-testid="default-group-page">
+                <p class="lead mb-3">
+                    @Ben.Data.Common.Enums.OrganizationKindDefaults.DisplayName(_org.Kind)
+                    @if (facts.AreaServed is not null) { <text> serving <strong data-testid="default-area">@facts.AreaServed</strong></text> }
+                    @if (facts.OnSinceYear > 0) { <text>, on @SiteOptions.Value.Name since @facts.OnSinceYear</text> }.
+                </p>
+
+                <BenFactRail Facts="@GroupFacts(facts)" Class="mb-2" />
+
+                <div class="d-flex flex-wrap gap-2 mb-4">
+                    @if (facts.IsAcceptingClients)
                     {
-                        <hr />
-                        <div data-testid="default-next-event">
-                            <div class="text-muted small">Next public event</div>
-                            <a class="h5 text-decoration-none" href="@(string.IsNullOrWhiteSpace(ev.UrlName) ? $"/o/{_org.OrgUrlName}/events" : $"/o/{_org.OrgUrlName}/events/{ev.UrlName}")">@ev.Title</a>
-                            <div class="text-secondary">
-                                @(ev.IsAllDay ? ev.StartDateTime.ToDisplayDate() : ev.StartDateTime.ToViewerLocalTime(UserState).ToDisplayDateTime())
-                                @if (!string.IsNullOrWhiteSpace(ev.City)) { <text> · @ev.City</text> }
-                                @if (ev.AttendeeCapacity is { } cap) { <text> · @Math.Max(0, cap - ev.AttendingCount) of @cap spaces left</text> }
-                            </div>
-                        </div>
+                        <span class="badge text-bg-success" data-testid="default-accepting">Taking new cases</span>
+                    }
+                    else
+                    {
+                        <span class="badge bg-body-secondary text-body-emphasis" data-testid="default-not-accepting">Not taking new cases right now</span>
+                    }
+                    @if (facts.IsAcceptingApplications)
+                    {
+                        <span class="badge text-bg-info">Open to new members</span>
                     }
                 </div>
+
+                @if (facts.NextPublicEvent is { } ev)
+                {
+                    @* The next night somebody could turn up to, given the shape it has everywhere
+                       else on the site: a plate the eye finds, then the time and how full it is. *@
+                    <BenSectionHeading Text="Next public event" />
+                    <a class="org-next" data-testid="default-next-event"
+                       href="@(string.IsNullOrWhiteSpace(ev.UrlName) ? $"/o/{_org.OrgUrlName}/events" : $"/o/{_org.OrgUrlName}/events/{ev.UrlName}")">
+                        @{ var when = ev.StartDateTime.ToViewerLocalTime(UserState); }
+                        <span class="org-next__plate">
+                            <span class="org-next__dow">@when.ToString("ddd")</span>
+                            <span class="org-next__day">@when.Day</span>
+                            <span class="org-next__mon">@when.ToString("MMM")</span>
+                        </span>
+                        <span class="org-next__body">
+                            <span class="org-next__title">@ev.Title</span>
+                            <span class="org-next__meta">
+                                @(ev.IsAllDay ? "All day" : when.ToDisplayTime())
+                                @if (!string.IsNullOrWhiteSpace(ev.City)) { <text> · @ev.City</text> }
+                                @if (ev.AttendeeCapacity is { } cap) { <text> · @Math.Max(0, cap - ev.AttendingCount) of @cap spaces left</text> }
+                            </span>
+                        </span>
+                        <span class="org-next__go">See the night</span>
+                    </a>
+                }
             </div>
         }
         else
@@ -167,46 +149,14 @@ else
         @if (_tours.Count > 0)
         {
             <div class="mt-4" id="org-tours">
-                <h2 class="h4 mb-3">Tours</h2>
+                <BenSectionHeading Text="Tours" />
                 <div class="row g-3">
                     @foreach (var tour in _tours)
                     {
-                        <div class="col-md-6">
-                            <div class="card h-100">
-                                @if (tour.CoverUploadFileId is { } cover)
-                                {
-                                    <div class="ratio ratio-16x9 bg-body-tertiary">
-                                        <img src="@MediaUrls.TourPhoto(cover)" alt="@tour.Name"
-                                             class="w-100 h-100 object-fit-cover card-img-top" loading="lazy" />
-                                    </div>
-                                }
-                                <div class="card-body">
-                                    <h3 class="h6 card-title mb-1">
-                                        <a class="text-decoration-none"
-                                           href="@($"/o/{_org.OrgUrlName}/tours/{tour.UrlName}")">@tour.Name</a>
-                                    </h3>
-                                    <div class="text-secondary small">
-                                        @if (!string.IsNullOrWhiteSpace(tour.City))
-                                        {
-                                            <text>@tour.City@(string.IsNullOrWhiteSpace(tour.State) ? "" : $", {tour.State}")</text>
-                                        }
-                                        @if (tour.Rating is { } rating)
-                                        {
-                                            <text> · @rating.ToString("0.0") ★</text>
-                                        }
-                                    </div>
-                                    <div class="small mt-1">
-                                        @if (tour.NextDateStartUtc is { } next)
-                                        {
-                                            <text>Next: @next.ToViewerLocalTime(UserState).ToString("MM/dd/yyyy h:mm tt")</text>
-                                        }
-                                        else
-                                        {
-                                            <span class="text-secondary">No dates on the calendar yet</span>
-                                        }
-                                    </div>
-                                </div>
-                            </div>
+                        <div class="col-md-6 col-lg-4">
+                            @* ShowOrganization off: the reader is already on this business's page,
+                               and "Run by Printers Alley Walks" under every card is noise there. *@
+                            <BenTourCard Tour="@tour" ShowOrganization="false" />
                         </div>
                     }
                 </div>
@@ -224,6 +174,28 @@ else
 
     private OrgPublicHomeResponse? _org;
     private IReadOnlyList<Ben.Service.Models.Entities.PublicTourListItem> _tours = [];
+
+    /// <summary>
+    /// The two counts a visitor takes in before reading anything, as the rail every other public
+    /// page states its figures in. They were a pair of display-6 numbers with grey words under
+    /// them, which is a lot of page for "1 member".
+    /// </summary>
+    private static IReadOnlyList<BenFactItem> GroupFacts(
+        Ben.Web.Services.OrgPublicFacts facts)
+    {
+        var items = new List<BenFactItem>
+        {
+            new("Members", facts.MemberCount.ToString(),
+                facts.MemberCount == 1 ? "person" : "people"),
+        };
+
+        // Shown even at zero. A lone tile reads as a page that could not find its other figures,
+        // and "no public cases yet" is a fact about a group worth knowing.
+        items.Add(new BenFactItem("Public cases", facts.PublicCaseCount.ToString(),
+            facts.PublicCaseCount == 0 ? "none yet" : "you can read"));
+
+        return items;
+    }
     private bool _loading = true;
 
     protected override async Task OnParametersSetAsync()
