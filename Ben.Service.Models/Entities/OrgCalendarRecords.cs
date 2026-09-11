@@ -198,4 +198,24 @@ public record OrgCalendarEventAttendeeRecord
     public DateTime? DateRsvp { get; init; }
     public DateTime DateCreated { get; init; }
     public Guid CreatedByAppUserId { get; init; }
+
+    // ── A seat on a tour date (item 234) ────────────────────────────────────
+
+    /// <summary>Where the sign-up has got to. Null on every event that is not a tour date.</summary>
+    public TourSeatStatus? SeatStatus { get; init; }
+
+    /// <summary>How many places it holds. One unless somebody asked for more.</summary>
+    public int Seats { get; init; } = 1;
+
+    /// <summary>When the business approved or turned it down.</summary>
+    public DateTime? SeatDecidedUtc { get; init; }
+
+    /// <summary>Who decided, so "the business approved it" is a person with a name.</summary>
+    public Guid? SeatDecidedByAppUserId { get; init; }
+
+    /// <summary>When the guest said back that they know. Optional, always.</summary>
+    public DateTime? GuestAcknowledgedUtc { get; init; }
+
+    /// <summary>Their address, so a business can reach somebody it has just approved.</summary>
+    public string? Email { get; init; }
 }

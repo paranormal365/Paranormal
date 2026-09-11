@@ -8,6 +8,7 @@ using Microsoft.AspNetCore.Mvc;
 using Microsoft.EntityFrameworkCore;
 
 using Ben.Data.WebApi.Services;
+using Ben.Data.WebApi.Services.Tours;
 
 namespace Ben.Data.WebApi.Controllers.Public;
 
@@ -167,7 +168,9 @@ public sealed class PublicEventController : BenControllerBase
             .Where(a => a.OrgCalendarEventId == eventId)
             .ToListAsync(ct);
 
-        var acceptedCount = attending.Count(a => a.RsvpStatus == RsvpStatus.Accepted);
+        // PLACES, not rows (item 234): a sign-up may hold more than one, and every row written
+        // before this held exactly one, so the sum equals what this used to count.
+        var acceptedCount = TourSeats.PlacesTaken(attending);
         var mine = userId != Guid.Empty
             ? attending.FirstOrDefault(a => a.AppUserId == userId)
             : null;
@@ -197,7 +200,7 @@ public sealed class PublicEventController : BenControllerBase
             ev.StartDateTime, ev.EndDateTime, ev.IsAllDay, ev.MeetingUrl,
             BuildLocation(ev, mayHaveExact),
             acceptedCount, ev.AttendeeCapacity, ev.RsvpClosesAt,
-            BuildFlags(ev, userId, hasRsvpd, acceptedCount),
+            BuildFlags(ev, userId, hasRsvpd, acceptedCount, mine?.SeatStatus),
             TourName: ev.Tour?.Name,
             TourUrlName: ev.Tour?.UrlName,
             Guides: [.. ev.Guides.OrderBy(g => g.SortOrder).Select(g => new PublicGuideRecord(
@@ -206,6 +209,10 @@ public sealed class PublicEventController : BenControllerBase
                 guidePhotos.FirstOrDefault(p => p.AppUserId == g.AppUserId)?.UploadFileId))],
             TourRating: rating.Item1,
             TourRatingCount: rating.Item2,
+            // Their own seat, so a page can say "waiting on the business" rather than offering a
+            // button that would do nothing (item 234). Null for somebody who has asked for nothing.
+            MySeat: mine is null ? null : new PublicSeatRecord(
+                mine.SeatStatus, Math.Max(1, mine.Seats), mine.SeatDecidedUtc, mine.GuestAcknowledgedUtc),
             // See the list projection: the event's own clock, then its tour's, then UTC.
             TimeZoneId: ev.TimeZoneId ?? ev.Tour?.TimeZoneId));
     }
@@ -322,7 +329,8 @@ public sealed class PublicEventController : BenControllerBase
     /// </remarks>
     [HttpPost("{eventId:guid}/rsvp")]
     [Authorize]
-    public async Task<ActionResult<PublicEventRecord>> Rsvp(Guid eventId, CancellationToken ct)
+    public async Task<ActionResult<PublicEventRecord>> Rsvp(
+        Guid eventId, CancellationToken ct, [FromQuery] int? seats = null)
     {
         var userId = GetCurrentUserId();
         if (userId == Guid.Empty) return Unauthorized();
@@ -343,23 +351,43 @@ public sealed class PublicEventController : BenControllerBase
             .Where(a => a.OrgCalendarEventId == eventId)
             .ToListAsync(ct);
 
+        // ── A tour date asks; everything else simply comes (item 234) ────────
+        // Ben: "They would not be confirmed until the tour guide or manager approves them meaning
+        // they have settled how money will be or has been exchanged." So on a tour date this
+        // endpoint records a REQUEST — Invited, with the seat waiting — and the places are held
+        // only when the business approves. Every other kind of event keeps the rule it had.
+        var isTour = TourSeats.IsTourDate(ev);
+        var wanted = TourSeats.Clamp(seats);
+
         var existing = attendees.FirstOrDefault(a => a.AppUserId == userId);
-        if (existing is { RsvpStatus: RsvpStatus.Accepted })
+
+        // Already settled: an accepted seat, or a request already waiting on the business. Pressing
+        // the button again is the same statement, not a second guest.
+        if (existing is { RsvpStatus: RsvpStatus.Accepted }
+         || existing is { SeatStatus: TourSeatStatus.Requested })
             return await GetEvent(eventId, ct);
 
         if (DateTime.UtcNow > ev.RsvpClosingTime)
             return Conflict("Sign-ups for this event have closed.");
 
-        // Counted excluding this caller's own row, so somebody re-accepting after cancelling is not
-        // refused by a seat they are not occupying.
-        var accepted = attendees.Count(a => a.RsvpStatus == RsvpStatus.Accepted && a.AppUserId != userId);
-        if (ev.AttendeeCapacity is int cap && accepted >= cap)
+        // Counted in PLACES and excluding this caller's own row, so somebody re-accepting after
+        // cancelling is not refused by a seat they are not occupying.
+        //
+        // A tour date is NOT refused here even when it is full: a request holds nothing, and the
+        // overflow is a waiting list the business works through rather than a closed door.
+        var taken = TourSeats.PlacesTaken(attendees, excludingAppUserId: userId);
+        if (!isTour && ev.AttendeeCapacity is int cap && taken >= cap)
             return Conflict("This event is full.");
 
         if (existing is not null)
         {
-            existing.RsvpStatus = RsvpStatus.Accepted;
+            existing.RsvpStatus = isTour ? RsvpStatus.Invited : RsvpStatus.Accepted;
+            existing.SeatStatus = isTour ? TourSeatStatus.Requested : null;
+            existing.Seats      = isTour ? wanted : 1;
             existing.DateRsvp   = DateTime.UtcNow;
+            existing.SeatDecidedUtc = null;
+            existing.SeatDecidedByAppUserId = null;
+            existing.GuestAcknowledgedUtc = null;
         }
         else
         {
@@ -368,7 +396,9 @@ public sealed class PublicEventController : BenControllerBase
                 Id                 = Guid.NewGuid(),
                 OrgCalendarEventId = eventId,
                 AppUserId          = userId,
-                RsvpStatus         = RsvpStatus.Accepted,
+                RsvpStatus         = isTour ? RsvpStatus.Invited : RsvpStatus.Accepted,
+                SeatStatus         = isTour ? TourSeatStatus.Requested : null,
+                Seats              = isTour ? wanted : 1,
                 DateRsvp           = DateTime.UtcNow,
                 DateCreated        = DateTime.UtcNow,
                 CreatedByAppUserId = userId,
@@ -381,13 +411,54 @@ public sealed class PublicEventController : BenControllerBase
         // calendar file. This path sent NOTHING before — a signed-in guest pressed "I'm coming"
         // and heard from us again only in the reminder the night before, if at all. Non-tour
         // events are untouched: the mailer answers to a tour or does nothing.
-        if (await db.AppUsers.AsNoTracking()
+        //
+        // Item 234 moves that mail to the moment of APPROVAL for a tour date. "You're signed up,
+        // here is where to stand" is untrue of a request nobody has looked at, and a guest who
+        // acted on it would turn up to a walk that had never reserved them a place.
+        if (!isTour
+            && await db.AppUsers.AsNoTracking()
                 .Where(u => u.Id == userId)
                 .Select(u => new { u.Email, u.DisplayName })
                 .FirstOrDefaultAsync(ct) is { Email: { Length: > 0 } address } guest)
         {
             await _tourMail.SendSignUpAsync(db, eventId, address, guest.DisplayName, ct);
         }
+
+        return await GetEvent(eventId, ct);
+    }
+
+    /// <summary>
+    /// The guest saying back that they know the seat is theirs (item 234).
+    /// </summary>
+    /// <remarks>
+    /// <para>Ben: <i>"the person who is touring can confirm it on the app - if they want."</i>
+    /// <b>Optional, always.</b> Nothing is withheld for want of it, no reminder waits on it and no
+    /// place is released without it — it is one of them telling the other they saw it, and the
+    /// business gets to see that their guest is expecting to be there.</para>
+    ///
+    /// <para>Only a seat that has actually been reserved can be acknowledged. Acknowledging a
+    /// request nobody has approved would be the guest confirming something to themselves.</para>
+    /// </remarks>
+    [HttpPost("{eventId:guid}/my-seat/acknowledge")]
+    [Authorize]
+    public async Task<ActionResult<PublicEventRecord>> AcknowledgeSeat(Guid eventId, CancellationToken ct)
+    {
+        var userId = GetCurrentUserId();
+        if (userId == Guid.Empty) return Unauthorized();
+
+        await using var db = await _db.CreateDbContextAsync(ct);
+
+        var seat = await db.OrgCalendarEventAttendees
+            .FirstOrDefaultAsync(a => a.OrgCalendarEventId == eventId && a.AppUserId == userId, ct);
+        if (seat is null) return NotFound();
+
+        if (seat.SeatStatus != TourSeatStatus.Reserved)
+            return Conflict("There's no reserved seat here to confirm yet.");
+
+        // Idempotent: pressing it twice is the same statement, and the FIRST time is the one worth
+        // keeping — that is when they saw it.
+        seat.GuestAcknowledgedUtc ??= DateTime.UtcNow;
+        await db.SaveChangesAsync(ct);
 
         return await GetEvent(eventId, ct);
     }
@@ -526,25 +597,40 @@ public sealed class PublicEventController : BenControllerBase
          : null;
 
     private static PublicEventFlags BuildFlags(
-        OrgCalendarEvent ev, Guid userId, bool hasRsvpd, int acceptedCount)
+        OrgCalendarEvent ev, Guid userId, bool hasRsvpd, int acceptedCount,
+        TourSeatStatus? mySeat = null)
     {
         var isFull    = ev.AttendeeCapacity is int cap && acceptedCount >= cap;
+        // Asked for and waiting on the business (item 234). Not "coming" — nothing is held yet —
+        // but the button must not be offered again, and the reason must say what is happening
+        // rather than leaving somebody pressing a control that answers with silence.
+        var waiting   = mySeat == TourSeatStatus.Requested;
+        var turnedDown = mySeat == TourSeatStatus.TurnedDown;
         // The SAME rule the sign-up endpoints enforce. When this said "closed" and the endpoint
         // still accepted, the button vanished from a tour a guest could legitimately still join.
         var hasClosed = DateTime.UtcNow > ev.RsvpClosingTime;
         // Same rule again, from the same method the endpoints call.
         var tourClosed = WhyTourIsNotTakingSignUps(ev);
 
+        // A tour date that is full still TAKES requests — the overflow is a waiting list the
+        // business works through, and it is the business who decides. So fullness blocks the
+        // button on an ordinary event and only warns on a tour date.
+        var fullStops = isFull && !TourSeats.IsTourDate(ev);
+
         var reason =
-            hasRsvpd            ? null
+              hasRsvpd          ? null
+            : waiting           ? "Your seat is with the tour — they'll confirm it."
+            : turnedDown        ? "The tour couldn't take this booking."
             : tourClosed        ?? (
               userId == Guid.Empty ? "Sign in to say you're coming."
             : hasClosed         ? "Sign-ups for this event have closed."
-            : isFull            ? "This event is full."
+            : fullStops         ? "This event is full."
+            : isFull            ? "This date is full — ask anyway and the tour will let you know."
             : null);
 
         return new PublicEventFlags(
-            CanRsvp: userId != Guid.Empty && !hasRsvpd && !hasClosed && !isFull && tourClosed is null,
+            CanRsvp: userId != Guid.Empty && !hasRsvpd && !waiting && !turnedDown
+                  && !hasClosed && !fullStops && tourClosed is null,
             HasRsvpd: hasRsvpd,
             IsFull: isFull,
             RsvpHasClosed: hasClosed,

@@ -2280,6 +2280,19 @@ namespace Ben.Data.Source.Context
             modelBuilder.Entity<OrgCalendarEventAttendee>()
                 .HasIndex(e => new { e.OrgCalendarEventId, e.AppUserId }).IsUnique();
 
+            // ── A seat on a tour date (item 234) ──────────────────────────────
+            modelBuilder.Entity<OrgCalendarEventAttendee>()
+                .HasOne(e => e.SeatDecidedByAppUser).WithMany()
+                .HasForeignKey(e => e.SeatDecidedByAppUserId).OnDelete(DeleteBehavior.NoAction);
+            // One, not zero: a sign-up for no places is not a sign-up, and the default has to be
+            // right for every row that already exists as well as every row written from here on.
+            modelBuilder.Entity<OrgCalendarEventAttendee>()
+                .Property(e => e.Seats).HasDefaultValue(1);
+            // The business's own question — "what is waiting on me for this date" — asked on every
+            // load of a date with sign-ups.
+            modelBuilder.Entity<OrgCalendarEventAttendee>()
+                .HasIndex(e => new { e.OrgCalendarEventId, e.SeatStatus });
+
             // ── Investigation ─────────────────────────────────────────────────
             modelBuilder.Entity<Investigation>()
                 .HasOne(e => e.Case).WithMany()

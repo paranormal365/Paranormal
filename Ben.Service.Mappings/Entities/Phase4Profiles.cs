@@ -68,6 +68,9 @@ public class OrgCalendarEventAttendeeProfile : Profile
     public OrgCalendarEventAttendeeProfile()
     {
         CreateMap<OrgCalendarEventAttendee, OrgCalendarEventAttendeeRecord>()
-            .ForMember(d => d.DisplayName, o => o.MapFrom(s => s.AppUser != null ? s.AppUser.DisplayName : null));
+            .ForMember(d => d.DisplayName, o => o.MapFrom(s => s.AppUser != null ? s.AppUser.DisplayName : null))
+            // Item 234: a business approving a seat needs to be able to reach the person. Their
+            // address is already theirs to see — they are coming on the walk.
+            .ForMember(d => d.Email, o => o.MapFrom(s => s.AppUser != null ? s.AppUser.Email : null));
     }
 }
