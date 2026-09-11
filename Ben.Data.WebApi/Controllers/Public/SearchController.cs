@@ -126,6 +126,9 @@ public sealed class SearchController : ControllerBase
             .Include(e => e.Organization)
             .Include(e => e.Place)
             .Include(e => e.OrganizationAddress)
+            // For its zone: a walk's time is the walk's, not the reader's. Without this the
+            // navigation is simply null and every card would have quietly fallen back to UTC.
+            .Include(e => e.Tour)
             .Where(e => e.StartDateTime >= now)
             .ToListAsync(ct);
 
@@ -160,7 +163,10 @@ public sealed class SearchController : ControllerBase
                 State:         ev.Place?.State ?? ev.OrganizationAddress?.State,
                 Latitude:      approxLat,
                 Longitude:     approxLon,
-                DistanceMiles: Math.Round(dist, 1)));
+                DistanceMiles: Math.Round(dist, 1),
+                // The night's own clock, so a card says the time it actually starts rather than
+                // the time where the reader is sitting (Ben, 2026-09-10).
+                TimeZoneId:    ev.Tour?.TimeZoneId));
         }
 
         return [.. results.OrderBy(r => r.StartDateTime)];

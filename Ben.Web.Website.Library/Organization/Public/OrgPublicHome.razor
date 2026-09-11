@@ -118,7 +118,8 @@ else
                     <BenSectionHeading Text="Next public event" />
                     <a class="org-next" data-testid="default-next-event"
                        href="@(string.IsNullOrWhiteSpace(ev.UrlName) ? $"/o/{_org.OrgUrlName}/events" : $"/o/{_org.OrgUrlName}/events/{ev.UrlName}")">
-                        @{ var when = ev.StartDateTime.ToViewerLocalTime(UserState); }
+                        @* The night's own clock, not the reader's — Ben's rule, 2026-09-10. *@
+                        @{ var (when, zone) = EventClock.InPlaceTime(ev.StartDateTime, ev.TimeZoneId); }
                         <span class="org-next__plate">
                             <span class="org-next__dow">@when.ToString("ddd")</span>
                             <span class="org-next__day">@when.Day</span>
@@ -127,7 +128,7 @@ else
                         <span class="org-next__body">
                             <span class="org-next__title">@ev.Title</span>
                             <span class="org-next__meta">
-                                @(ev.IsAllDay ? "All day" : when.ToDisplayTime())
+                                @(ev.IsAllDay ? "All day" : $"{when.ToDisplayTime()} {zone}")
                                 @if (!string.IsNullOrWhiteSpace(ev.City)) { <text> · @ev.City</text> }
                                 @if (ev.AttendeeCapacity is { } cap) { <text> · @Math.Max(0, cap - ev.AttendingCount) of @cap spaces left</text> }
                             </span>

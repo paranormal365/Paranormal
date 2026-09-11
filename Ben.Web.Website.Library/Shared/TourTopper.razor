@@ -57,11 +57,11 @@
 
                             @if (tour.NextDateStartUtc is { } next)
                             {
+                                @* The walk's own clock, not the reader's (Ben, 2026-09-10). *@
+                                var (at, zone) = EventClock.InPlaceTime(next, tour.TimeZoneId);
                                 <span class="tour-topper__when">
-                                    @next.ToViewerLocalTime(UserState).ToString("ddd MM/dd")
-                                    <span class="tour-topper__time">
-                                        @next.ToViewerLocalTime(UserState).ToString("h:mm tt")
-                                    </span>
+                                    @at.ToString("ddd MM/dd")
+                                    <span class="tour-topper__time">@at.ToString("h:mm tt") @zone</span>
                                 </span>
                             }
 

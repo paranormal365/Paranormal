@@ -245,6 +245,14 @@
     font-weight: 600;
 }
 
+/* Which clock this is. The walk's, never the reader's, so it has to be said. */
+.tour-date__zone {
+    font-size: .68rem;
+    font-weight: 600;
+    letter-spacing: .05em;
+    color: var(--bs-secondary-color);
+}
+
 .tour-date__seats {
     display: block;
     font-size: .8rem;

@@ -152,7 +152,11 @@ public sealed record OrgPublicFacts(
     int PublicCaseCount,
     OrgPublicNextEvent? NextPublicEvent);
 
-public sealed record OrgPublicNextEvent(Guid Id, string Title, string? UrlName, DateTime StartDateTime, bool IsAllDay, string? City, string? State, int? AttendeeCapacity, int AttendingCount);
+public sealed record OrgPublicNextEvent(
+    Guid Id, string Title, string? UrlName, DateTime StartDateTime, bool IsAllDay,
+    string? City, string? State, int? AttendeeCapacity, int AttendingCount,
+    /// <summary>The IANA zone the night happens in, when it is recorded. See EventClock.</summary>
+    string? TimeZoneId = null);
 
 
 public sealed record OrgPublicPageResponse(

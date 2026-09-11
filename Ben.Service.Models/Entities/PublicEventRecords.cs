@@ -72,7 +72,12 @@ public sealed record PublicEventRecord(
     IReadOnlyList<PublicGuideRecord>? Guides = null,
     /// <summary>Average stars out of five, when anyone has rated the tour.</summary>
     decimal? TourRating = null,
-    int TourRatingCount = 0);
+    int TourRatingCount = 0,
+    /// <summary>
+    /// The IANA zone the event happens in, when it is recorded — today, the tour's. Null means
+    /// nobody has said, and the reader is shown UTC and told so; see EventClock.
+    /// </summary>
+    string? TimeZoneId = null);
 
 /// <summary>A guide as a guest sees them: a name, and a face when they have published one.</summary>
 public sealed record PublicGuideRecord(string DisplayName, string? Handle, Guid? PhotoUploadFileId);
@@ -102,7 +107,12 @@ public sealed record PublicEventListItem(
     // Item 233, appended with defaults: a card that does not say which tour it is makes a
     // business's three walks look like three unrelated evenings.
     string? TourName = null,
-    string? TourUrlName = null);
+    string? TourUrlName = null,
+    /// <summary>
+    /// The IANA zone the event happens in, when it is recorded — today, the tour's. Null means
+    /// nobody has said, and the reader is shown UTC and told so; see EventClock.
+    /// </summary>
+    string? TimeZoneId = null);
 
 
 // ── Coming along without an account (item #87b) ──────────────────────────────
@@ -231,7 +241,12 @@ public sealed record PublicTourListItem(
     int RatingCount,
     double? DistanceMiles = null,
     /// <summary>The tour's first picture, for the card. Null when it has none.</summary>
-    Guid? CoverUploadFileId = null);
+    Guid? CoverUploadFileId = null,
+    /// <summary>
+    /// The walk's own IANA zone, so a card shows the time it actually starts rather than the time
+    /// where the reader is sitting. See EventClock.
+    /// </summary>
+    string? TimeZoneId = null);
 
 /// <summary>
 /// One tour's own page.

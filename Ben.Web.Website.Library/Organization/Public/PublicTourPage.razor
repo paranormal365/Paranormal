@@ -369,7 +369,7 @@ else
             <div class="tour-datelist">
                 @foreach (var date in _tour.UpcomingDates)
                 {
-                    var when = date.StartDateTime.ToViewerLocalTime(UserState);
+                    var (when, zone) = EventClock.InPlaceTime(date.StartDateTime, _tour.TimeZoneId);
                     var cap = date.AttendeeCapacity;
                     var left = cap is { } c ? Math.Max(0, c - date.AttendingCount) : (int?)null;
                     var full = left == 0;
@@ -381,7 +381,7 @@ else
                             <span class="tour-date__mon">@when.ToString("MMM")</span>
                         </span>
                         <span class="tour-date__body">
-                            <span class="tour-date__time">@when.ToString("h:mm tt")</span>
+                            <span class="tour-date__time">@when.ToString("h:mm tt") <span class="tour-date__zone">@zone</span></span>
                             <span class="tour-date__seats">
                                 @if (cap is { } capacity)
                                 {
@@ -446,9 +446,10 @@ else
 
             if (_tour.UpcomingDates.Count > 0)
             {
-                var soonest = _tour.UpcomingDates[0].StartDateTime.ToViewerLocalTime(UserState);
+                var (soonest, zone) = EventClock.InPlaceTime(
+                    _tour.UpcomingDates[0].StartDateTime, _tour.TimeZoneId);
                 facts.Add(new BenFactItem("Next walk", soonest.ToString("ddd MM/dd"),
-                    soonest.ToString("h:mm tt"), Href: "#tour-dates", Emphasis: true));
+                    $"{soonest:h:mm tt} {zone}", Href: "#tour-dates", Emphasis: true));
             }
 
             if (_tour.DurationMinutes is { } minutes)
@@ -543,10 +544,11 @@ else
                    Title: _tour.Name, Subtitle: "Where you meet", Glyph: "🚶")]
             : [];
 
-        // The dates in the reader's zone, so the bold days on the calendar match the times in
-        // the list beside it.
+        // The dates on the WALK's clock, so the marked days on the calendar match the times in
+        // the list beside it — and so a reader two zones away is not shown a dot on the wrong day
+        // for a walk that has only ever run on Saturdays (Ben, 2026-09-10).
         _dateDays = [.. (_tour?.UpcomingDates ?? [])
-            .Select(d => d.StartDateTime.ToViewerLocalTime(UserState).Date)];
+            .Select(d => EventClock.At(d.StartDateTime, _tour?.TimeZoneId).Date)];
 
         if (_dateDays.Count > 0)
         {

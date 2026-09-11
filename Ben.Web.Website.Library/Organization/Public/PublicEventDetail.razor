@@ -424,8 +424,20 @@ else
         _directions?.Show(address, (double)lat, (double)lon);
     }
 
-    /// <summary>This event's times in the reader's own clock, in one place.</summary>
-    private static DateTime Local(DateTime utc) => utc.ToLocalTime();
+    /// <summary>
+    /// This event's times on the clock of the place it happens, in one place.
+    /// </summary>
+    /// <remarks>
+    /// Ben's rule, 2026-09-10: a night renders in UTC or in the time of the place, never in the
+    /// reader's own — which would move one night onto a different day depending on where the
+    /// reader is sitting, and would disagree with the guest mail, the calendar file and the
+    /// ticket. Only a tour records a zone today; anything else reads in UTC and says so.
+    /// </remarks>
+    private DateTime Local(DateTime utc) => EventClock.At(utc, _event?.TimeZoneId);
+
+    /// <summary>The name of that clock, for the one place on the page that spells it out.</summary>
+    private string Zone => EventClock.InPlaceTime(
+        _event?.StartDateTime ?? DateTime.UtcNow, _event?.TimeZoneId).Zone;
 
     /// <summary>
     /// The rail under the banner: when it starts, how long it runs, and how full it is. Built here
@@ -443,7 +455,7 @@ else
             facts.Add(_event.IsAllDay
                 ? new BenFactItem("When", start.ToString("ddd MM/dd"), "all day", Emphasis: true)
                 : new BenFactItem("Starts", start.ToString("ddd MM/dd"),
-                      start.ToString("h:mm tt"), Emphasis: true));
+                      $"{start:h:mm tt} {Zone}", Emphasis: true));
 
             if (!_event.IsAllDay)
             {
@@ -460,7 +472,7 @@ else
 
             if (_event.RsvpClosesAt is { } closes)
                 facts.Add(new BenFactItem("Sign-ups close", Local(closes).ToString("ddd MM/dd"),
-                    Local(closes).ToString("h:mm tt")));
+                    $"{Local(closes):h:mm tt} {Zone}"));
 
             return facts;
         }

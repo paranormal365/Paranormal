@@ -3,7 +3,6 @@
 @using Ben.Web.Services
 
 @inject IMediaUrlBuilder MediaUrls
-@inject IBenUserState UserState
 
 @*
     One tour, as a card, wherever tours are listed: nearby results, a business's own page, and any
@@ -15,6 +14,10 @@
     business's page, which is why this is one component now. The stand-in is drawn from the tour's
     own name (TourPlate), so two tours never look alike, the same tour looks the same on every
     visit, and the page a reader lands on looks like the card they clicked.
+
+    The next date is on the WALK's clock, not the reader's (Ben, 2026-09-10): a walk starts at
+    eight where it starts, and a card that said seven to somebody a zone away would be lying about
+    which evening to turn up on.
 *@
 
 <a class="ben-tourcard @Class" href="@($"/o/{Tour.OrganizationUrlName}/tours/{Tour.UrlName}")">
@@ -32,7 +35,7 @@
         @if (Tour.NextDateStartUtc is { } soon)
         {
             <span class="ben-tourcard__when">
-                @soon.ToViewerLocalTime(UserState).ToString("ddd MM/dd")
+                @EventClock.At(soon, Tour.TimeZoneId).ToString("ddd MM/dd")
             </span>
         }
     </span>
@@ -56,7 +59,8 @@
         <span class="ben-tourcard__line">
             @if (Tour.NextDateStartUtc is { } next)
             {
-                <text>Next @next.ToViewerLocalTime(UserState).ToString("ddd MM/dd, h:mm tt")</text>
+                var (at, zone) = EventClock.InPlaceTime(next, Tour.TimeZoneId);
+                <text>Next @at.ToString("ddd MM/dd, h:mm tt") @zone</text>
             }
             else
             {

@@ -472,7 +472,10 @@ public sealed class PublicTourController : BenControllerBase
                 from is { } f && address?.Latitude is { } alat && address.Longitude is { } alon
                     ? Distance.Miles(f.Lat, f.Lon, (double)alat, (double)alon)
                     : null,
-                covers.FirstOrDefault(c => c.TourId == t.Id)?.UploadFileId);
+                covers.FirstOrDefault(c => c.TourId == t.Id)?.UploadFileId,
+                // The walk's own clock, so a card says the time it actually starts rather than
+                // the time where the reader happens to be (Ben, 2026-09-10).
+                t.TimeZoneId);
         })];
     }
 

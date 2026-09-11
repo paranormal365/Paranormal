@@ -103,6 +103,10 @@ public sealed class PublicEventController : BenControllerBase
                 e.AttendeeCapacity,
                 TourName = e.Tour != null ? e.Tour.Name : null,
                 TourUrl = e.Tour != null ? e.Tour.UrlName : null,
+                // The clock the reader is shown. A walk starts at eight where it starts, not
+                // where the reader happens to be sitting — Ben's rule, 2026-09-10. Only a tour
+                // records a zone today; an event without one is shown in UTC and told so.
+                TourZone = e.Tour != null ? e.Tour.TimeZoneId : null,
                 // A tour's meeting point is advertised, so its pin is where it actually is —
                 // the whole reason Ben wanted tours on the map.
                 TourLat = e.Tour != null ? e.Tour.StartOrganizationAddress.Latitude : null,
@@ -136,7 +140,7 @@ public sealed class PublicEventController : BenControllerBase
                 e.PlaceCity ?? e.TourCity, e.PlaceState ?? e.TourState, lat, lon,
                 e.Attending, e.AttendeeCapacity,
                 IsOnline: !string.IsNullOrWhiteSpace(e.MeetingUrl),
-                TourName: e.TourName, TourUrlName: e.TourUrl);
+                TourName: e.TourName, TourUrlName: e.TourUrl, TimeZoneId: e.TourZone);
         }).ToList());
     }
 
@@ -200,7 +204,9 @@ public sealed class PublicEventController : BenControllerBase
                 g.AppUser.Handle,
                 guidePhotos.FirstOrDefault(p => p.AppUserId == g.AppUserId)?.UploadFileId))],
             TourRating: rating.Item1,
-            TourRatingCount: rating.Item2));
+            TourRatingCount: rating.Item2,
+            // See the list projection: the walk's own clock, or UTC when nobody has recorded one.
+            TimeZoneId: ev.Tour?.TimeZoneId));
     }
 
     /// <summary>
@@ -265,6 +271,10 @@ public sealed class PublicEventController : BenControllerBase
                 e.AttendeeCapacity,
                 TourName = e.Tour != null ? e.Tour.Name : null,
                 TourUrl = e.Tour != null ? e.Tour.UrlName : null,
+                // The clock the reader is shown. A walk starts at eight where it starts, not
+                // where the reader happens to be sitting — Ben's rule, 2026-09-10. Only a tour
+                // records a zone today; an event without one is shown in UTC and told so.
+                TourZone = e.Tour != null ? e.Tour.TimeZoneId : null,
                 // A tour's meeting point is advertised, so its pin is where it actually is —
                 // the whole reason Ben wanted tours on the map.
                 TourLat = e.Tour != null ? e.Tour.StartOrganizationAddress.Latitude : null,
@@ -294,7 +304,7 @@ public sealed class PublicEventController : BenControllerBase
                 e.PlaceCity ?? e.TourCity, e.PlaceState ?? e.TourState, lat, lon,
                 e.Attending, e.AttendeeCapacity,
                 IsOnline: !string.IsNullOrWhiteSpace(e.MeetingUrl),
-                TourName: e.TourName, TourUrlName: e.TourUrl);
+                TourName: e.TourName, TourUrlName: e.TourUrl, TimeZoneId: e.TourZone);
         }).ToList());
     }
 
