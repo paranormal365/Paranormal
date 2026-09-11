@@ -1,0 +1,86 @@
+@namespace Ben.Web.Website.Library.Kit
+@using Ben.Service.Models.Entities
+@using Ben.Web.Services
+
+@inject IMediaUrlBuilder MediaUrls
+@inject IBenUserState UserState
+
+@*
+    One tour, as a card, wherever tours are listed: nearby results, a business's own page, and any
+    list that comes after them.
+
+    Every card leads with a plate, photograph or not. A tour whose gallery is still empty used to
+    render as text alone and then be stretched to the height of its neighbour, so a row of results
+    was mostly dead space — the same defect turned up separately in the nearby results and on a
+    business's page, which is why this is one component now. The stand-in is drawn from the tour's
+    own name (TourPlate), so two tours never look alike, the same tour looks the same on every
+    visit, and the page a reader lands on looks like the card they clicked.
+*@
+
+<a class="ben-tourcard @Class" href="@($"/o/{Tour.OrganizationUrlName}/tours/{Tour.UrlName}")">
+    <span class="ben-tourcard__frame @(Tour.CoverUploadFileId is null ? "ben-tourcard__frame--drawn" : "")"
+          style="@(Tour.CoverUploadFileId is null ? TourPlate.HueStyle(Tour.Name) : "")">
+        @if (Tour.CoverUploadFileId is { } cover)
+        {
+            <img src="@MediaUrls.TourPhoto(cover)" alt="@Tour.Name"
+                 class="ben-tourcard__image" loading="lazy" />
+        }
+        else
+        {
+            <span class="ben-tourcard__monogram" aria-hidden="true">@TourPlate.Monogram(Tour.Name)</span>
+        }
+        @if (Tour.NextDateStartUtc is { } soon)
+        {
+            <span class="ben-tourcard__when">
+                @soon.ToViewerLocalTime(UserState).ToString("ddd MM/dd")
+            </span>
+        }
+    </span>
+
+    <span class="ben-tourcard__body">
+        <span class="ben-tourcard__title">@Tour.Name</span>
+        <span class="ben-tourcard__meta">
+            @if (!string.IsNullOrWhiteSpace(Tour.City))
+            {
+                <text>@Tour.City@(string.IsNullOrWhiteSpace(Tour.State) ? "" : $", {Tour.State}")</text>
+            }
+            @if (ShowDistance && Tour.DistanceMiles is { } miles)
+            {
+                <text> · @miles.ToString("F0") mi</text>
+            }
+            @if (Tour.Rating is { } rating)
+            {
+                <text> · @rating.ToString("0.0") ★</text>
+            }
+        </span>
+        <span class="ben-tourcard__line">
+            @if (Tour.NextDateStartUtc is { } next)
+            {
+                <text>Next @next.ToViewerLocalTime(UserState).ToString("ddd MM/dd, h:mm tt")</text>
+            }
+            else
+            {
+                <span class="ben-tourcard__none">No dates up yet</span>
+            }
+        </span>
+        @if (ShowOrganization)
+        {
+            <span class="ben-tourcard__by">Run by @Tour.OrganizationName</span>
+        }
+    </span>
+</a>
+
+@code {
+    [Parameter, EditorRequired] public PublicTourListItem Tour { get; set; } = default!;
+
+    /// <summary>
+    /// Whether to name the business. Off on the business's own page, where saying it again on
+    /// every card is noise; on anywhere the reader may not know whose walk this is.
+    /// </summary>
+    [Parameter] public bool ShowOrganization { get; set; } = true;
+
+    /// <summary>How far away it is — only meaningful in a result list that searched from a point.</summary>
+    [Parameter] public bool ShowDistance { get; set; }
+
+    [Parameter] public string? Class { get; set; }
+}

@@ -110,61 +110,7 @@
                             @foreach (var tour in _tours)
                             {
                                 <div class="col-12 col-md-6 col-lg-4">
-                                    <a class="nearby-card h-100 d-flex flex-column text-decoration-none text-reset"
-                                       href="@($"/o/{tour.OrganizationUrlName}/tours/{tour.UrlName}")">
-                                        @* Every tour leads with a plate, photograph or not. A tour
-                                           whose gallery is still empty used to render as text alone
-                                           and then be stretched to the height of its neighbour, so a
-                                           row of results was mostly dead space. The stand-in is drawn
-                                           from the tour's own name, so two tours never look alike and
-                                           the same tour looks the same on every visit. *@
-                                        <span class="nearby-card__frame @(tour.CoverUploadFileId is null ? "nearby-card__frame--drawn" : "")"
-                                              style="@(tour.CoverUploadFileId is null ? TourPlate.HueStyle(tour.Name) : "")">
-                                            @if (tour.CoverUploadFileId is { } cover)
-                                            {
-                                                <img src="@MediaUrls.TourPhoto(cover)" alt="@tour.Name"
-                                                     class="nearby-card__image" loading="lazy" />
-                                            }
-                                            else
-                                            {
-                                                <span class="nearby-card__monogram" aria-hidden="true">@TourPlate.Monogram(tour.Name)</span>
-                                            }
-                                            @if (tour.NextDateStartUtc is { } soon)
-                                            {
-                                                <span class="nearby-card__when">
-                                                    @soon.ToViewerLocalTime(UserState).ToString("ddd MM/dd")
-                                                </span>
-                                            }
-                                        </span>
-                                        <span class="nearby-card__body">
-                                            <span class="nearby-card__title">@tour.Name</span>
-                                            <span class="nearby-card__meta">
-                                                @if (!string.IsNullOrWhiteSpace(tour.City))
-                                                {
-                                                    <text>@tour.City@(string.IsNullOrWhiteSpace(tour.State) ? "" : $", {tour.State}")</text>
-                                                }
-                                                @if (tour.DistanceMiles is { } miles)
-                                                {
-                                                    <text> · @miles.ToString("F0") mi</text>
-                                                }
-                                                @if (tour.Rating is { } rating)
-                                                {
-                                                    <text> · @rating.ToString("0.0") ★</text>
-                                                }
-                                            </span>
-                                            <span class="nearby-card__line">
-                                                @if (tour.NextDateStartUtc is { } next)
-                                                {
-                                                    <text>Next @next.ToViewerLocalTime(UserState).ToString("ddd MM/dd, h:mm tt")</text>
-                                                }
-                                                else
-                                                {
-                                                    <span class="text-secondary">No dates up yet</span>
-                                                }
-                                            </span>
-                                            <span class="nearby-card__by">Run by @tour.OrganizationName</span>
-                                        </span>
-                                    </a>
+                                    <BenTourCard Tour="@tour" ShowDistance="true" />
                                 </div>
                             }
                         </div>
