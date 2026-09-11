@@ -379,6 +379,55 @@ public interface IBenOrganizationClient
     /// <summary>Every tour this business runs, active first.</summary>
     Task<LoadResult<TourRecord>> GetToursAsync(Guid orgId, CancellationToken token = default);
 
+    // ── Hosted events (item 235) ────────────────────────────────────────────
+    //
+    // An event is the product an organization pays for, the way a tour is — and one calendar row,
+    // the umbrella, carries it into every part of the site that already understands a public
+    // event. Reading is open to members; changing takes the settings key, because publishing costs
+    // either a credit or a slot on the plan.
+
+    /// <summary>Every event this organization is putting on, live ones first.</summary>
+    Task<LoadResult<HostedEventRecord>> GetHostedEventsAsync(
+        Guid orgId, CancellationToken token = default);
+
+    /// <summary>One event, with its dates.</summary>
+    Task<HostedEventRecord?> GetHostedEventAsync(
+        Guid orgId, Guid eventId, CancellationToken token = default);
+
+    /// <summary>
+    /// What publishing will cost, read before the page offers the button.
+    /// </summary>
+    /// <remarks>
+    /// Ben's rule, 2026-09-11: "the person must understand and confirm they will be charged the
+    /// event credit before they can get too far in." This is what the page says beforehand.
+    /// </remarks>
+    Task<HostedEventPlanRecord?> GetHostedEventPlanAsync(
+        Guid orgId, CancellationToken token = default);
+
+    /// <summary>Creates or changes an event, keeping the server's refusal.</summary>
+    Task<(HostedEventRecord? Result, string? Error)> SaveHostedEventAsync(
+        Guid orgId, Guid? eventId, UpsertHostedEventRequest request,
+        CancellationToken token = default);
+
+    /// <summary>Changes one date — what it is called, when it runs, what to say about it.</summary>
+    Task<(HostedEventRecord? Result, string? Error)> SaveHostedEventNightAsync(
+        Guid orgId, Guid eventId, Guid nightId, UpsertHostedEventNightRequest request,
+        CancellationToken token = default);
+
+    /// <summary>
+    /// Publishes, un-publishes, archives, restores or un-cancels an event.
+    /// </summary>
+    /// <remarks>
+    /// Publishing is the one that can refuse and the one that can cost, which is why it is an
+    /// endpoint of its own rather than a field on the save.
+    /// </remarks>
+    Task<(HostedEventRecord? Result, string? Error)> SetHostedEventStateAsync(
+        Guid orgId, Guid eventId, string action, CancellationToken token = default);
+
+    /// <summary>Calls an event off, keeping the row so the people coming can see that it is off.</summary>
+    Task<(HostedEventRecord? Result, string? Error)> CancelHostedEventAsync(
+        Guid orgId, Guid eventId, string? reason, CancellationToken token = default);
+
     /// <summary>One tour.</summary>
     Task<TourRecord?> GetTourAsync(Guid orgId, Guid tourId, CancellationToken token = default);
 

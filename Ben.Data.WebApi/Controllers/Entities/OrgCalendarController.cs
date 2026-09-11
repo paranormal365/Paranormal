@@ -483,6 +483,31 @@ public sealed class OrgCalendarEventController : BenControllerBase
                             && e.Id != entity.Id, ct));
     }
 
+    /// <summary>
+    /// Why this calendar row cannot be edited here, or null.
+    /// </summary>
+    /// <remarks>
+    /// <para>A hosted event's umbrella row is written from the event (item 235), so its title,
+    /// dates, place, zone and public flag all come from there. Letting the calendar change them
+    /// would leave two screens each believing they own the row, and the next save from either one
+    /// would silently undo the other.</para>
+    ///
+    /// <para>The sentence names the event and says where to go, because a refusal that only says
+    /// no is a refusal somebody works around.</para>
+    /// </remarks>
+    private static async Task<string?> UmbrellaRefusalAsync(
+        BenDataContext db, OrgCalendarEvent entity, CancellationToken ct)
+    {
+        if (entity.HostedEventId is not Guid hostedId) return null;
+
+        var name = await db.HostedEvents.AsNoTracking()
+            .Where(e => e.Id == hostedId).Select(e => e.Name).FirstOrDefaultAsync(ct);
+
+        return $"This date belongs to the event \u201c{name}\u201d and is kept in step with it. "
+             + "Change it on the event's own page — its dates, venue and description all come "
+             + "from there.";
+    }
+
     [HttpPut("{eventId:guid}")]
     public async Task<ActionResult<OrgCalendarEventRecord>> Update(
         Guid orgId, Guid eventId, [FromBody] UpsertCalendarEventRequest request, CancellationToken ct)
@@ -493,6 +518,7 @@ public sealed class OrgCalendarEventController : BenControllerBase
         var entity = await db.OrgCalendarEvents
             .FirstOrDefaultAsync(e => e.Id == eventId && e.OrganizationId == orgId, ct);
         if (entity is null) return NotFound();
+        if (await UmbrellaRefusalAsync(db, entity, ct) is string managed) return BadRequest(managed);
         entity.EventTypeId = request.EventTypeId; entity.CaseId = request.CaseId;
         entity.Title = request.Title.Trim(); entity.Description = CleanDescription(request.Description);
         entity.Location = request.Location?.Trim();
@@ -545,6 +571,8 @@ public sealed class OrgCalendarEventController : BenControllerBase
         var entity = await db.OrgCalendarEvents
             .FirstOrDefaultAsync(e => e.Id == eventId && e.OrganizationId == orgId, ct);
         if (entity is null) return NotFound();
+        if (await UmbrellaRefusalAsync(db, entity, ct) is string managed)
+            return BadRequest(managed + " To take it off the calendar, archive the event there.");
 
         // A review cites the date it was written after, and that key is NoAction — so a business
         // deleting a walk it had run would be handed a database error with nothing to act on.

@@ -707,6 +707,96 @@ Nashville reads as eight in Tokyo, with the zone named beside it, so the listing
 and the reminder email all agree. A date under a tour takes the tour's clock unless you say
 otherwise. An event with no clock set is shown in UTC and says so.
 
+## Hosted events
+
+An **event** is something you put on over one or more dates: a weekend at a hotel, a run of
+performances, an evening with a talk and supper. It is not a ghost-hunting thing — a retreat, a
+dinner theatre and a lock-in are the same record with different words in the description.
+
+An event is different from a date on your calendar in the way a tour is different from a walk. The
+calendar holds dates; an event holds everything that makes the dates worth coming to, and it lives
+at **Events** in your group's menu.
+
+### Building one costs nothing
+
+Give it a name, a venue and the dates it runs. That is a **draft**: only your own people can see it,
+it has no public page, it takes no bookings and it sends nothing. Build all of it — the dates, the
+programme, the rooms, the files, the page — and change your mind as often as you like. Nothing is
+charged and nothing is announced until you press **Publish**.
+
+### A venue we haven't listed
+
+Search for the venue by name, and if we have it already, use the one we have. We share venues across
+the whole site, so a building's map pin, its history and everything anybody has ever recorded there
+hang together on one record.
+
+If it isn't there, choose **The venue isn't listed** and enter its name and address. We look up where
+it is so it shows on the map. If we can't find it, the event still works perfectly — it just has no
+pin yet. Entering a venue that turns out to already exist quietly uses the existing one rather than
+adding a second copy.
+
+A venue has to be somewhere public. A private residence is refused, because an event is published by
+definition and publishing somebody's home is not yours or ours to decide.
+
+### One stay, or a run of dates
+
+Two shapes, chosen with a switch when you add the event.
+
+**One stay** is nights running together: a weekend, where every day between the first and last date
+becomes a night of the same event and a guest books across several of them.
+
+**Separate dates** is a production put on more than once — a play every month, a supper club, a
+seasonal tour. The event is the production, each date is a performance of it, and each date is booked
+on its own. The dates need not be evenly spaced or anywhere near each other.
+
+**It costs the same either way.** A monthly show is one production on twelve dates, not twelve
+events, and you are never charged twelve times for putting the same thing on repeatedly.
+
+### Each date can say its own thing
+
+Give any date its own title, its own start and end time, and a note. Opening night starting earlier
+than the rest is exactly what this is for. Dates with nothing special said about them take the
+event's own times.
+
+Moving an event's dates keeps what you wrote about the days that survive the move. Extend a weekend
+by a day and your Saturday is still your Saturday, with its title and its notes.
+
+### What publishing does
+
+Publishing puts the event on your public page, on the site-wide **What's on** list and in the phone
+apps, and opens it for bookings. It is the moment it starts costing anything, and the page tells you
+what that is before you press it.
+
+If your plan includes running events, publishing uses one of the slots it includes. If it doesn't,
+publishing spends an **event credit**: $99, one credit for one event, and it covers that event from
+the day you publish it. You are shown how many you have and what the button will do before you press
+it.
+
+**An event is only ever charged once.** Take it down and put it back up as often as you need — the
+first time paid for it, and there is no second charge for the life of that event.
+
+### Taking it down, archiving it, calling it off
+
+**Un-publish** takes it off the public site. Nothing is destroyed and nothing is refunded.
+
+**Archive** stops it counting against your plan and takes it off your list. Everything that happened
+stays exactly as it is. Events are archived for you automatically a fortnight after their last date,
+so you never pay for last Halloween.
+
+**Cancel** is different, and it is for an event that was going to happen and now is not. The listing
+says CANCELLED in its title — the one line everybody actually reads, on your page, on a shared link
+and on somebody's phone — and the reason you give is shown to the people who had places. The event is
+kept rather than deleted, because somebody who was coming needs to be able to see that it is off.
+
+### The date on your calendar
+
+Every event puts one entry on your group's calendar, spanning the whole thing from the first date's
+start to the last date's end. That entry is what the public list, the reminder email, the calendar
+file and the phone apps all read, which is why it is kept in step with the event automatically.
+
+You can't edit it from the calendar — it tells you so, and points you at the event, where its dates,
+venue and description all come from. That way two screens can never disagree about the same evening.
+
 ## Public events
 
 An event on your calendar can be opened to anybody. Tick **Public** and it appears on your group's

@@ -1,0 +1,411 @@
+@page "/organizations/{OrgId:guid}/events"
+@namespace Ben.Web.Website.Library.Manage.Events
+
+@inject IBenAdminClient AdminClient
+@inject IBenUserState UserState
+@inject NavigationManager NavManager
+
+@using Ben.Service.Models.Entities
+@using Ben.Web.Services.WebApi
+@using Ben.Web.Website.Library.Kit
+@using Ben.Web.Website.Library.Manage.Icon
+
+@* The events this organization puts on (item 235).
+
+   Ben, 2026-09-11: "The idea is to allow someone to schedule and track and organize an event that
+   is not ghost hunting related." So the words here are a venue's words — guests, nights, dates,
+   doors — and nothing about ghosts.
+
+   The list is the front door; each event has a page behind it, because an event carries its
+   dates, its rooms, its programme, its staff, its files and its page, and none of that fits in a
+   row. *@
+
+<PageTitle>Events</PageTitle>
+
+<div class="container-fluid py-3">
+
+    <div class="d-flex justify-content-between align-items-start flex-wrap gap-2 mb-3">
+        <div>
+            <h1 class="h3 mb-1">Events<HelpLink Slug="organization-administration" Anchor="hosted-events" /></h1>
+            <p class="text-secondary mb-0">
+                An event is something you put on — a weekend, a run of performances, an evening.
+                Build it here; nothing costs anything until you publish it.
+            </p>
+        </div>
+        <a class="btn btn-outline-secondary" href="@($"/organizations/{OrgId}/calendar")">
+            <BenIcon Name="calendar" Class="me-1" />The calendar
+        </a>
+    </div>
+
+    @* What publishing will cost, said before anybody presses anything. Ben's rule: "the person
+       must understand and confirm they will be charged the event credit before they can get too
+       far in." *@
+    @if (_plan is not null)
+    {
+        <div class="alert @(_plan.MayPublish ? "alert-secondary" : "alert-warning")" id="events-plan-note">
+            @_plan.Sentence
+        </div>
+    }
+
+    @if (_error is not null)
+    {
+        <div class="alert alert-danger" id="events-error">@_error</div>
+    }
+
+    <div class="card mb-3">
+        <div class="card-header fw-semibold">Add an event</div>
+        <div class="card-body">
+            <div class="row g-3 align-items-start">
+                <div class="col-12 col-md-5">
+                    <label class="form-label" for="new-event-name">Name <span class="text-danger">*</span></label>
+                    <input id="new-event-name" class="form-control" @bind="_form.Name" @bind:event="oninput"
+                           placeholder="Thomas House Weekend" />
+                    <div class="form-text">What you call it. For a run of performances, the production's name.</div>
+                </div>
+                <div class="col-12 col-md-4">
+                    <label class="form-label" for="new-event-place">Venue <span class="text-danger">*</span></label>
+                    @* Searched rather than listed, because a venue is a shared place and the host
+                       is often not its owner — the scheduler finds one the same way. *@
+                    @if (_chosenPlace is { } chosen)
+                    {
+                        <div class="d-flex align-items-center gap-2">
+                            <span class="fw-semibold">@PlaceLabel(chosen)</span>
+                            <button type="button" class="btn btn-sm btn-link p-0"
+                                    id="clear-event-place" @onclick="ClearPlace">change</button>
+                        </div>
+                        @if (chosen.Kind == Ben.Data.Common.Enums.PlaceKind.PrivateResidence)
+                        {
+                            <div class="form-text text-danger">
+                                That is a private residence, so an event cannot be held there publicly.
+                            </div>
+                        }
+                    }
+                    else
+                    {
+                        <div class="input-group">
+                            <input id="new-event-place" class="form-control" placeholder="Search venues by name"
+                                   value="@_placeSearch"
+                                   @oninput="e => _placeSearch = e.Value?.ToString() ?? string.Empty" />
+                            <button type="button" class="btn btn-outline-secondary" id="search-event-place"
+                                    disabled="@string.IsNullOrWhiteSpace(_placeSearch)"
+                                    @onclick="SearchPlacesAsync">Search</button>
+                        </div>
+                        @if (_placeCandidates.Count > 0)
+                        {
+                            <div class="list-group mt-2" style="max-height:12rem; overflow-y:auto;">
+                                @foreach (var candidate in _placeCandidates)
+                                {
+                                    var pick = candidate;
+                                    <button type="button" class="list-group-item list-group-item-action py-1"
+                                            @onclick="() => ChoosePlace(pick)">
+                                        @PlaceLabel(pick)
+                                    </button>
+                                }
+                            </div>
+                        }
+                        else if (_placeSearched)
+                        {
+                            <div class="form-text">No venues found by that name.</div>
+                        }
+
+                        @* Ben, 2026-09-11: "They may need to enter the name and address and
+                           information about a new venue we have not listed before." Which is how
+                           most of them start. Entering one that already exists finds the existing
+                           one rather than making a second — a venue is shared, and two rows for one
+                           building splits its map, its history and its archive in half. *@
+                        <button type="button" class="btn btn-sm btn-link px-0 mt-1" id="new-venue-toggle"
+                                @onclick="() => _enteringVenue = !_enteringVenue">
+                            @(_enteringVenue ? "Search for one instead" : "The venue isn't listed — enter it")
+                        </button>
+                    }
+                </div>
+                <div class="col-6 col-md-3">
+                    <label class="form-label" for="new-event-zone">Time zone</label>
+                    <select id="new-event-zone" class="form-select" @bind="_form.TimeZoneId">
+                        @foreach (var zone in TimeZoneChoices.All)
+                        {
+                            <option value="@zone.Id">@zone.Label</option>
+                        }
+                    </select>
+                    <div class="form-text">The clock your guests will read.</div>
+                </div>
+            </div>
+
+            @if (_enteringVenue && _chosenPlace is null)
+            {
+                <div class="row g-3 align-items-start mt-0 border-top pt-3" id="new-venue-form">
+                    <div class="col-12">
+                        <div class="fw-semibold">A venue we haven't listed</div>
+                        <div class="text-secondary small mb-2">
+                            Enter what you know. If we already have it, we'll use the one we have
+                            rather than adding it twice.
+                        </div>
+                    </div>
+                    <div class="col-12 col-md-5">
+                        <label class="form-label" for="venue-name">Name</label>
+                        <input id="venue-name" class="form-control" @bind="_venue.Name" @bind:event="oninput"
+                               placeholder="The Thomas House Hotel" />
+                    </div>
+                    <div class="col-12 col-md-7">
+                        <label class="form-label" for="venue-street">Street</label>
+                        <input id="venue-street" class="form-control" @bind="_venue.StreetAddress1" />
+                    </div>
+                    <div class="col-6 col-md-4">
+                        <label class="form-label" for="venue-city">Town or city</label>
+                        <input id="venue-city" class="form-control" @bind="_venue.City" />
+                    </div>
+                    <div class="col-3 col-md-2">
+                        <label class="form-label" for="venue-state">State</label>
+                        <input id="venue-state" class="form-control" maxlength="2" @bind="_venue.State" />
+                    </div>
+                    <div class="col-3 col-md-2">
+                        <label class="form-label" for="venue-zip">ZIP</label>
+                        <input id="venue-zip" class="form-control" @bind="_venue.ZipCode" />
+                    </div>
+                    <div class="col-12 col-md-4 pt-md-4">
+                        <div class="form-text">
+                            We'll look up where it is. If we can't, the event still works — it just
+                            won't show on the map yet.
+                        </div>
+                    </div>
+                </div>
+            }
+
+            <div class="row g-3 align-items-start mt-0">
+                <div class="col-6 col-md-3">
+                    <label class="form-label" for="new-event-from">First date</label>
+                    <input id="new-event-from" type="date" class="form-control" @bind="_form.StartsOn" />
+                </div>
+                <div class="col-6 col-md-3">
+                    <label class="form-label" for="new-event-to">Last date</label>
+                    <input id="new-event-to" type="date" class="form-control" @bind="_form.EndsOn" />
+                </div>
+                <div class="col-12 col-md-6 pt-md-4">
+                    @* The flag Ben asked for. A stay is nights in a row; a run is a production put
+                       on repeatedly, and it is billed the same either way — one product. *@
+                    <div class="form-check form-switch">
+                        <input class="form-check-input" type="checkbox" role="switch"
+                               id="new-event-separate" @bind="_form.DatesAreSeparate" />
+                        <label class="form-check-label" for="new-event-separate">
+                            @(_form.DatesAreSeparate
+                                ? "Separate dates — a production put on more than once"
+                                : "One stay — nights running together")
+                        </label>
+                    </div>
+                    <div class="form-text">
+                        @(_form.DatesAreSeparate
+                            ? "Each date is booked on its own. Choose them on the event's own page once it exists."
+                            : "Every day between the two dates becomes a night of the same event.")
+                    </div>
+                </div>
+            </div>
+
+            <div class="d-flex justify-content-end mt-3">
+                <button type="button" class="btn btn-primary" id="add-event"
+                        disabled="@(_saving || !_form.IsReady)" @onclick="AddAsync">
+                    @(_saving ? "Adding…" : "Add it")
+                </button>
+            </div>
+        </div>
+    </div>
+
+    <BenListState TItem="HostedEventRecord" Result="@_events" Loading="@_loading"
+                  EmptyText="No events yet — the form above starts one"
+                  OnRetry="@LoadAsync">
+        <ChildContent>
+            <div class="table-responsive">
+                <table class="table align-middle" id="events-table">
+                    <thead>
+                        <tr>
+                            <th>Event</th>
+                            <th style="width:11rem;">When</th>
+                            <th style="width:9rem;">Dates</th>
+                            <th style="width:10rem;">Venue</th>
+                            <th style="width:8rem;">State</th>
+                            <th style="width:6rem;"></th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        @foreach (var item in _events.Items ?? [])
+                        {
+                            var row = item;
+                            <tr>
+                                <td>
+                                    <div class="fw-semibold">@row.Name</div>
+                                    @if (!string.IsNullOrWhiteSpace(row.Tagline))
+                                    {
+                                        <div class="text-secondary small">@row.Tagline</div>
+                                    }
+                                </td>
+                                <td>@Span(row)</td>
+                                <td>
+                                    @row.Nights.Count @Plural(row.Nights.Count, row.DateNoun)
+                                    @if (row.DatesAreSeparate)
+                                    {
+                                        <div class="text-secondary small">a run</div>
+                                    }
+                                </td>
+                                <td class="small">@row.PlaceLabel</td>
+                                <td>@StateBadge(row)</td>
+                                <td class="text-nowrap">
+                                    <a class="btn btn-sm btn-outline-secondary"
+                                       href="@($"/organizations/{OrgId}/events/{row.Id}")">Open</a>
+                                </td>
+                            </tr>
+                        }
+                    </tbody>
+                </table>
+            </div>
+        </ChildContent>
+    </BenListState>
+</div>
+
+@code {
+    [Parameter] public Guid OrgId { get; set; }
+
+    private LoadResult<HostedEventRecord> _events;
+    private HostedEventPlanRecord? _plan;
+    private PlaceCandidate? _chosenPlace;
+    private string _placeSearch = "";
+    private bool _placeSearched;
+    private List<PlaceCandidate> _placeCandidates = [];
+    private bool _enteringVenue;
+    private readonly NewVenueForm _venue = new();
+
+    /// <summary>A venue being typed in because the site has never listed it.</summary>
+    private sealed class NewVenueForm
+    {
+        public string Name { get; set; } = "";
+        public string StreetAddress1 { get; set; } = "";
+        public string City { get; set; } = "";
+        public string State { get; set; } = "";
+        public string ZipCode { get; set; } = "";
+
+        public bool HasAnything
+            => !string.IsNullOrWhiteSpace(Name) || !string.IsNullOrWhiteSpace(StreetAddress1);
+
+        public NewVenueRequest ToRequest()
+            => new(Name.Trim(), StreetAddress1.Trim(), null, City.Trim(), State.Trim(), ZipCode.Trim());
+    }
+    private bool _loading = true;
+    private bool _saving;
+    private string? _error;
+    private readonly NewEventForm _form = new();
+
+    /// <summary>The Add form, kept as a class so the switch and the dates bind in place.</summary>
+    private sealed class NewEventForm
+    {
+        public string Name { get; set; } = "";
+        public Guid? PlaceId { get; set; }
+        public string TimeZoneId { get; set; } = "America/Chicago";
+        public DateTime StartsOn { get; set; } = DateTime.Today.AddDays(30);
+        public DateTime EndsOn { get; set; } = DateTime.Today.AddDays(30);
+        public bool DatesAreSeparate { get; set; }
+
+        public bool IsReady => !string.IsNullOrWhiteSpace(Name);
+    }
+
+    protected override async Task OnAfterRenderAsync(bool firstRender)
+    {
+        if (!firstRender) return;
+
+        // Auth resolves after the circuit attaches; asking before it does asks as nobody, and the
+        // page then reports an empty list rather than a permission problem.
+        if (!await UserState.WaitUntilAuthReadyAsync(RendererInfo.IsInteractive)) return;
+
+        await LoadAsync();
+        StateHasChanged();
+    }
+
+    private async Task LoadAsync()
+    {
+        _loading = true;
+        _error = null;
+
+        _events = await AdminClient.GetHostedEventsAsync(OrgId);
+        _plan = await AdminClient.GetHostedEventPlanAsync(OrgId);
+
+        _loading = false;
+    }
+
+    private async Task AddAsync()
+    {
+        // Either an existing venue or a new one typed in — a name alone is not enough to run
+        // something somewhere.
+        if (!_form.IsReady || (_form.PlaceId is null && !_venue.HasAnything))
+        {
+            _error = "Choose a venue, or enter one we haven't listed.";
+            return;
+        }
+
+        _saving = true;
+        _error = null;
+
+        var request = new UpsertHostedEventRequest(
+            _form.Name.Trim(), _form.PlaceId ?? Guid.Empty, _form.StartsOn.Date, _form.EndsOn.Date,
+            TimeZoneId: _form.TimeZoneId,
+            DatesAreSeparate: _form.DatesAreSeparate,
+            // A run starts with its first date; the rest are chosen on the event's own page,
+            // because twelve dates is not something to type into a list screen.
+            Dates: _form.DatesAreSeparate ? [_form.StartsOn.Date] : null,
+            NewVenue: _form.PlaceId is null ? _venue.ToRequest() : null);
+
+        var (created, error) = await AdminClient.SaveHostedEventAsync(OrgId, null, request);
+        _saving = false;
+
+        if (created is null) { _error = error ?? "That couldn't be added just now."; return; }
+
+        // Straight to its page: everything else about an event lives there, and a person who has
+        // just named one is about to fill it in.
+        NavManager.NavigateTo($"/organizations/{OrgId}/events/{created.Id}");
+    }
+
+    private async Task SearchPlacesAsync()
+    {
+        _placeSearched = true;
+        _placeCandidates = [.. (await AdminClient.FindPlaceCandidatesAsync(
+            street: null, city: null, state: null, zip: null,
+            name: _placeSearch.Trim(), latitude: null, longitude: null)).Items];
+    }
+
+    private void ChoosePlace(PlaceCandidate place)
+    {
+        _chosenPlace = place;
+        _form.PlaceId = place.Id;
+    }
+
+    private void ClearPlace()
+    {
+        _chosenPlace = null;
+        _form.PlaceId = null;
+        _placeCandidates = [];
+        _placeSearched = false;
+    }
+
+    private static string PlaceLabel(PlaceCandidate place)
+        => string.Join(", ", new[] { place.Name, place.StreetAddress1, place.City, place.State }
+            .Where(p => !string.IsNullOrWhiteSpace(p)));
+
+    /// <summary>"30 Oct – 1 Nov 2026", or one date when that is all there is.</summary>
+    private static string Span(HostedEventRecord row)
+        => row.StartsOn.Date == row.EndsOn.Date
+            ? row.StartsOn.ToString("MM/dd/yyyy")
+            : $"{row.StartsOn:MM/dd} – {row.EndsOn:MM/dd/yyyy}";
+
+    private static string Plural(int count, string noun) => count == 1 ? noun : noun + "s";
+
+    private static RenderFragment StateBadge(HostedEventRecord row) => builder =>
+    {
+        var (text, css) = row switch
+        {
+            { CancelledAtUtc: not null } => ("Called off", "bg-danger"),
+            { ArchivedAtUtc: not null } => ("Archived", "bg-secondary"),
+            { IsPublished: true } => ("Live", "bg-success"),
+            _ => ("Draft", "bg-secondary"),
+        };
+        builder.OpenElement(0, "span");
+        builder.AddAttribute(1, "class", $"badge {css}");
+        builder.AddContent(2, text);
+        builder.CloseElement();
+    };
+}
