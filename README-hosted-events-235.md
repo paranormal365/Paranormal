@@ -61,6 +61,33 @@ Suite: .NET 8,213 pass, 0 fail. No migration, no behaviour change, nothing yet r
 
 Suite: .NET 8,227 pass, 0 fail.
 
+**Phase 1.2 done, 2026-09-11** — the endpoints, the event list, the event's own page, and the public
+layout.
+
+- `HostedEventController` (list, one, plan, create, update, one date, publish, unpublish, archive,
+  restore, cancel, uncancel) and `PublicHostedEventController` (one by id, one by org and slug,
+  what's on). Publishing is its own endpoint because it is the only act that spends money.
+- **A venue we have never listed** (Ben, 2026-09-11): searched first, and otherwise the name and
+  address are entered with the event. The place is created, geocoded best effort, and marked public
+  — the opposite of every other inline place here, where the cautious answer is "somebody's home".
+  Entering one that already exists quietly uses the existing row, because a venue is shared and two
+  rows for one building splits its map pin and its history in half.
+- The calendar refuses to edit an umbrella row, naming the event and pointing at it.
+- `OrgEvents.razor` and `OrgEventPage.razor` (anchor index, not tabs), with the publish confirmation
+  that says what it costs, what is left and that it does not come back. `PublicEventDetail.razor`
+  grows a dates section when the row is an umbrella, and is untouched for every ordinary event.
+
+**Found by opening it.** The public page showed "4 hr — on your feet" for a hotel weekend, which is
+a walk's phrase; and it offered the evidence form although the host had not asked for it. Both are
+the "not ghost hunting related" rule leaking, and both are fixed — the note now says "over 3 nights"
+where that is true, and the evidence section is the host's switch.
+
+**Three guards fired and were right.** `OrganizationPurgeCoverageTests` on a table nothing deleted;
+the help-link guards refused the branch until the "Hosted events" chapter existed; and
+`LabelAssociationTests` caught a label pointing at a rich editor, which is not a labelable control.
+
+Suite: .NET 8,239 pass, 0 fail. Walked on the running site against `IsHauntedDb_player`.
+
 Each phase records its own "Verified, not assumed" section here as it lands.
 
 ## Hard rules the plan keeps

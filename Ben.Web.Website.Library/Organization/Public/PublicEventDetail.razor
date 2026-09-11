@@ -98,6 +98,65 @@ else
         @* The facts of the night, stated the way the tour's own page states them. *@
         <BenFactRail Facts="@Facts" Class="mb-4" />
 
+        @* A hosted event is more than one evening (item 235), and the umbrella row this page is
+           built on can only say when the whole thing starts and stops. The dates come from the
+           event itself — a weekend's nights, or a production's performances — because "three
+           nights" and "on until November" are different sentences and a visitor deciding whether
+           to come needs the right one. *@
+        @if (_hosted is { } hosted)
+        {
+            @if (hosted.IsCancelled)
+            {
+                <div class="alert alert-danger" id="hosted-cancelled">
+                    <strong>This has been called off.</strong>
+                    @if (hosted.CancelledReason is { Length: > 0 } why)
+                    {
+                        <span> @why</span>
+                    }
+                </div>
+            }
+
+            <section class="mb-4" id="hosted-nights">
+                <BenSectionHeading Text="@NightsHeading(hosted)" />
+                @if (!string.IsNullOrWhiteSpace(hosted.Tagline))
+                {
+                    <p class="text-secondary">@hosted.Tagline</p>
+                }
+                <div class="list-group">
+                    @foreach (var night in hosted.Nights)
+                    {
+                        <div class="list-group-item d-flex flex-wrap gap-3 align-items-baseline">
+                            <span class="fw-semibold" style="min-width:11rem;">
+                                @night.Date.ToString("dddd, MMMM d")
+                            </span>
+                            <span class="text-secondary">@NightClock(night, hosted)</span>
+                            @if (night.Title is { Length: > 0 } title)
+                            {
+                                <span>@title</span>
+                            }
+                            @if (night.Notes is { Length: > 0 } notes)
+                            {
+                                <span class="text-secondary small">@notes</span>
+                            }
+                        </div>
+                    }
+                </div>
+                @if (hosted.DatesAreSeparate)
+                {
+                    <p class="text-secondary small mt-2">
+                        Each date is booked on its own.
+                    </p>
+                }
+                @if (hosted.ContactLine is { Length: > 0 } contact)
+                {
+                    <p class="mt-3 mb-0"><strong>Arranging it:</strong> @contact</p>
+                    <p class="text-secondary small">
+                        IsHaunted doesn't take payment — that's between you and @hosted.OrganizationName.
+                    </p>
+                }
+            </section>
+        }
+
         @* The point of the page, put where the eye lands rather than under a paragraph of
            description. Every state of it is one card: coming, may come, cannot come and why, or
            has never been here before.
@@ -374,7 +433,10 @@ else
             </div>
         }
 
-        @if (_isAuthenticated && _event is not null)
+        @* On an ordinary public event this has always been offered, and stays so. On a hosted event
+           it is the host's switch (item 235): most events are not ghost hunts, and a venue running
+           a play does not want an evidence queue on its page. *@
+        @if (_isAuthenticated && _event is not null && (_hosted is null || _collectsEvidence))
         {
             <BenSectionHeading Text="Were you there?" />
             <div class="card mb-4">
@@ -478,6 +540,10 @@ else
         ? $"{seat.Seats} places"
         : "A place";
     private string? _error;
+    private PublicHostedEventRecord? _hosted;
+
+    /// <summary>Whether this event invites evidence — always, unless a hosted event says not.</summary>
+    private bool _collectsEvidence => _hosted?.CollectsEvidence ?? true;
 
     private DirectionsMapModal? _directions;
     private IReadOnlyList<BenMapPin> _mapPins = [];
@@ -549,7 +615,13 @@ else
             {
                 var minutes = (int)(_event.EndDateTime - _event.StartDateTime).TotalMinutes;
                 if (minutes > 0)
-                    facts.Add(new BenFactItem("How long", Duration(minutes), "on your feet"));
+                    // "On your feet" is a walk's phrase and belongs to a walk. A weekend at a
+                    // hotel, a run of performances or a talk are not things anybody stands up for
+                    // (item 235), so the note only appears where it is true.
+                    facts.Add(new BenFactItem("How long", Duration(minutes),
+                        _event.TourName is not null ? "on your feet"
+                        : _hosted is { Nights.Count: > 1 } many ? $"over {many.Nights.Count} {many.DateNoun}s"
+                        : null));
             }
 
             facts.Add(_event.AttendeeCapacity is { } cap
@@ -682,6 +754,12 @@ else
     {
         _event   = await AdminClient.GetPublicEventAsync(UrlName, EventSlug);
 
+        // Only when this date is a hosted event's umbrella. An ordinary public event has no such
+        // thing and the page is unchanged for it — which is the point of the umbrella.
+        _hosted = _event?.HostedEventId is { } hostedId
+            ? await AdminClient.GetPublicHostedEventAsync(hostedId)
+            : null;
+
         if (_event is not null)
         {
             // Only a tour date earns a pin — see HasMap for why.
@@ -742,5 +820,32 @@ else
 
         _busy = false;
         await LoadAsync();
+    }
+
+    // ── A hosted event's dates (item 235) ───────────────────────────────────
+
+    /// <summary>"Three nights" or "Six dates" — the sentence that fits what this actually is.</summary>
+    private static string NightsHeading(PublicHostedEventRecord hosted)
+    {
+        var count = hosted.Nights.Count;
+        var noun = count == 1 ? hosted.DateNoun : hosted.DateNoun + "s";
+        return hosted.DatesAreSeparate ? $"{count} {noun}" : $"{count} {noun}";
+    }
+
+    /// <summary>
+    /// When one date runs, on the venue's own clock.
+    /// </summary>
+    /// <remarks>
+    /// The times are local to the event and stored as such, so they are printed rather than
+    /// converted: a reader in Tokyo is being told what time to turn up in Tennessee.
+    /// </remarks>
+    private static string NightClock(HostedEventNightRecord night, PublicHostedEventRecord hosted)
+    {
+        if (night.StartsLocal is not { } from) return "";
+
+        var start = DateTime.Today.Add(from).ToString("h:mm tt");
+        return night.EndsLocal is { } to
+            ? $"{start} – {DateTime.Today.Add(to):h:mm tt}"
+            : start;
     }
 }

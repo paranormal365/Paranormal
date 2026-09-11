@@ -304,6 +304,11 @@ public sealed partial class BenAdminClientAdapter
                HttpMethod.Post, $"/api/organizations/{orgId}/events/{eventId}/cancel",
                new CancelHostedEventRequest(reason), token);
 
+    public Task<PublicHostedEventRecord?> GetPublicHostedEventAsync(
+        Guid hostedEventId, CancellationToken token = default)
+        => _api.GetAsync<PublicHostedEventRecord>(
+               $"/api/public/hosted-events/{hostedEventId}", token);
+
     public Task<TourRecord?> GetTourAsync(Guid orgId, Guid tourId, CancellationToken token = default)
         => _api.GetAsync<TourRecord>($"/api/organizations/{orgId}/tours/{tourId}", token);
 

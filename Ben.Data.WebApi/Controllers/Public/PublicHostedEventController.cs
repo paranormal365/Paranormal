@@ -150,6 +150,7 @@ public sealed class PublicHostedEventController : ControllerBase
             r.Event.CoverUploadFileId,
             r.Event.CancelledAtUtc is not null,
             r.Event.CancelledReason,
+            r.Event.CollectsEvidence,
             [.. r.Nights.Select(n => HostedEventController.ToNight(n, r.Event))]);
     }
 }

@@ -194,4 +194,12 @@ public sealed record PublicHostedEventRecord(
     Guid? CoverUploadFileId,
     bool IsCancelled,
     string? CancelledReason,
+    /// <summary>
+    /// Whether the host invites photographs and recordings afterwards.
+    /// </summary>
+    /// <remarks>
+    /// Off for most events, because most events are not ghost hunts. A venue running a play does
+    /// not want an evidence queue on its public page, and a lock-in does.
+    /// </remarks>
+    bool CollectsEvidence,
     IReadOnlyList<HostedEventNightRecord> Nights);

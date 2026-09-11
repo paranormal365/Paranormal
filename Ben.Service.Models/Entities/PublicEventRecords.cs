@@ -79,7 +79,22 @@ public sealed record PublicEventRecord(
     /// The IANA zone the event happens in, when it is recorded — today, the tour's. Null means
     /// nobody has said, and the reader is shown UTC and told so; see EventClock.
     /// </summary>
-    string? TimeZoneId = null);
+    string? TimeZoneId = null,
+    /// <summary>
+    /// The hosted event this date is the umbrella for (item 235). Null for every ordinary date.
+    /// </summary>
+    /// <remarks>
+    /// <para>Additive, and nullable, because the app already in people's pockets decodes this
+    /// record and must keep doing so unchanged while it is with Apple. A reader that does not know
+    /// what a hosted event is sees an ordinary public event, which is exactly what the umbrella
+    /// exists to give it.</para>
+    ///
+    /// <para>A page that DOES know asks for the rest — the separate dates, the venue's own name,
+    /// whether it is a stay or a run — from the public hosted-event endpoint.</para>
+    /// </remarks>
+    Guid? HostedEventId = null,
+    /// <summary>The hosted event's name, when this is an umbrella row.</summary>
+    string? HostedEventName = null);
 
 /// <summary>A guide as a guest sees them: a name, and a face when they have published one.</summary>
 public sealed record PublicGuideRecord(string DisplayName, string? Handle, Guid? PhotoUploadFileId);

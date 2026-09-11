@@ -158,6 +158,7 @@ public sealed class PublicEventController : BenControllerBase
             .Include(e => e.Place)
             .Include(e => e.OrganizationAddress)
             .Include(e => e.Tour).ThenInclude(t => t!.StartOrganizationAddress)
+            .Include(e => e.HostedEvent)
             .Include(e => e.Guides).ThenInclude(g => g.AppUser)
             .FirstOrDefaultAsync(e => e.Id == eventId, ct);
         if (ev is null) return NotFound();
@@ -214,7 +215,12 @@ public sealed class PublicEventController : BenControllerBase
             MySeat: mine is null ? null : new PublicSeatRecord(
                 mine.SeatStatus, Math.Max(1, mine.Seats), mine.SeatDecidedUtc, mine.GuestAcknowledgedUtc),
             // See the list projection: the event's own clock, then its tour's, then UTC.
-            TimeZoneId: ev.TimeZoneId ?? ev.Tour?.TimeZoneId));
+            TimeZoneId: ev.TimeZoneId ?? ev.Tour?.TimeZoneId,
+            // Additive (item 235): a reader that knows what a hosted event is asks for the rest —
+            // the separate dates, the venue's own name — from the public hosted-event endpoint. One
+            // that does not sees an ordinary public event, which is what the umbrella is for.
+            HostedEventId: ev.HostedEventId,
+            HostedEventName: ev.HostedEvent != null ? ev.HostedEvent.Name : null));
     }
 
     /// <summary>

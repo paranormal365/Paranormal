@@ -1,0 +1,622 @@
+@page "/organizations/{OrgId:guid}/events/{EventId:guid}"
+@namespace Ben.Web.Website.Library.Manage.Events
+
+@inject IBenAdminClient AdminClient
+@inject IBenUserState UserState
+@inject NavigationManager NavManager
+
+@using Ben.Service.Models.Entities
+@using Ben.Web.Services.WebApi
+@using Ben.Web.Website.Library.Kit
+@using Ben.Web.Website.Library.Manage.Icon
+
+@* One event, and everything about it (item 235).
+
+   Sections rather than tabs, with an index down the side: an event carries its details, its dates,
+   and in later phases its rooms, programme, staff, files, menus and page. A person setting one up
+   works down it once and comes back to one part of it afterwards, which is what an anchor index is
+   for and what tabs are bad at. The tour page is laid out the same way for the same reason. *@
+
+<PageTitle>@(_event?.Name ?? "Event")</PageTitle>
+
+<div class="container-fluid py-3">
+
+    @if (_loading)
+    {
+        <BenLoaderOverlay Visible="true" Text="Loading the event…" />
+    }
+    else if (_event is null)
+    {
+        <div class="alert alert-warning" id="event-missing">
+            That event could not be found. It may have been deleted, or belong to another group.
+            <a href="@($"/organizations/{OrgId}/events")">Back to events</a>.
+        </div>
+    }
+    else
+    {
+        var ev = _event;
+
+        <div class="d-flex justify-content-between align-items-start flex-wrap gap-2 mb-2">
+            <div>
+                <div class="text-secondary small">
+                    <a href="@($"/organizations/{OrgId}/events")">Events</a>
+                </div>
+                <h1 class="h3 mb-1">
+                    @ev.Name
+                    <HelpLink Slug="organization-administration" Anchor="hosted-events" />
+                </h1>
+                <div class="d-flex align-items-center gap-2 flex-wrap">
+                    @StateBadge(ev)
+                    <span class="text-secondary small">@ev.PlaceLabel</span>
+                    <span class="text-secondary small">· @Span(ev)</span>
+                    <span class="text-secondary small">
+                        · @ev.Nights.Count @Plural(ev.Nights.Count, ev.DateNoun)
+                    </span>
+                </div>
+            </div>
+
+            <div class="d-flex gap-2 align-items-start">
+                @if (ev.IsPublished && ev.UmbrellaEventId is not null)
+                {
+                    <a class="btn btn-outline-secondary" target="_blank"
+                       href="@($"/o/{_orgUrlName}/events/{ev.UrlName}")">
+                        <BenIcon Name="eye" Class="me-1" />See it as a visitor
+                    </a>
+                }
+                @if (!ev.IsPublished && ev.ArchivedAtUtc is null && ev.CancelledAtUtc is null)
+                {
+                    <button type="button" class="btn btn-primary" id="publish-event"
+                            disabled="@_busy" @onclick="() => _confirmingPublish = true">
+                        Publish it
+                    </button>
+                }
+                else if (ev.IsPublished)
+                {
+                    <button type="button" class="btn btn-outline-secondary" id="unpublish-event"
+                            disabled="@_busy" @onclick="@(() => StateAsync("unpublish"))">
+                        Take it down
+                    </button>
+                }
+            </div>
+        </div>
+
+        @if (_note is not null)
+        {
+            <div class="alert alert-success py-2" id="event-note">@_note</div>
+        }
+        @if (_error is not null)
+        {
+            <div class="alert alert-danger" id="event-error">@_error</div>
+        }
+
+        @* Ben's rule, 2026-09-11: "the person must understand and confirm they will be charged the
+           event credit before they can get too far in." This is that confirmation, and it says what
+           it costs, what is left, and that it does not come back. *@
+        @if (_confirmingPublish)
+        {
+            <div class="card border-primary mb-3" id="publish-confirm">
+                <div class="card-body">
+                    <div class="fw-semibold mb-1">Publish @ev.Name?</div>
+                    <p class="mb-2">
+                        It goes on your public page, on the site-wide list and into the phone apps,
+                        and it starts taking bookings.
+                    </p>
+                    @if (_plan is not null)
+                    {
+                        <p class="@(_plan.MayPublish ? "text-secondary" : "text-danger") mb-2">
+                            @_plan.Sentence
+                        </p>
+                    }
+                    @if (ev.FirstPublishedUtc is not null)
+                    {
+                        <p class="text-secondary mb-2">
+                            This one has been published before, so nothing more is charged for it.
+                        </p>
+                    }
+                    <div class="d-flex gap-2">
+                        <button type="button" class="btn btn-primary" id="publish-confirm-yes"
+                                disabled="@(_busy || _plan is { MayPublish: false })"
+                                @onclick="PublishAsync">
+                            @(_busy ? "Publishing…" : "Yes, publish it")
+                        </button>
+                        <button type="button" class="btn btn-secondary"
+                                @onclick="() => _confirmingPublish = false">Not yet</button>
+                    </div>
+                </div>
+            </div>
+        }
+
+        <div class="row g-3">
+            <div class="col-12 col-lg-3">
+                <div class="list-group sticky-lg-top" style="top:1rem;" id="event-index">
+                    <a class="list-group-item list-group-item-action" href="#event-details">Details</a>
+                    <a class="list-group-item list-group-item-action" href="#event-dates">
+                        @Capitalise(Plural(2, ev.DateNoun))
+                    </a>
+                    <a class="list-group-item list-group-item-action" href="#event-guests">Your guests</a>
+                    <a class="list-group-item list-group-item-action" href="#event-state">Ending it</a>
+                    @* The sections later phases fill in. Listed but plainly not ready, rather than
+                       absent: somebody setting an event up should be able to see what is coming. *@
+                    <span class="list-group-item text-secondary small">Rooms and bookings — soon</span>
+                    <span class="list-group-item text-secondary small">Programme — soon</span>
+                    <span class="list-group-item text-secondary small">Staff and the door — soon</span>
+                    <span class="list-group-item text-secondary small">Files — soon</span>
+                </div>
+            </div>
+
+            <div class="col-12 col-lg-9">
+
+                @* ── Details ─────────────────────────────────────────────── *@
+                <div class="card mb-3" id="event-details">
+                    <div class="card-header fw-semibold">Details</div>
+                    <div class="card-body">
+                        <div class="row g-3">
+                            <div class="col-12 col-md-6">
+                                <label class="form-label" for="event-name">Name <span class="text-danger">*</span></label>
+                                <input id="event-name" class="form-control" @bind="_form.Name" @bind:event="oninput" />
+                                <div class="form-text">
+                                    @(ev.DatesAreSeparate
+                                        ? "The production's name — what it is called however often you put it on."
+                                        : "What you call it.")
+                                </div>
+                            </div>
+                            <div class="col-12 col-md-6">
+                                <label class="form-label" for="event-tagline">One line under it</label>
+                                <input id="event-tagline" class="form-control" @bind="_form.Tagline"
+                                       placeholder="Three nights at the Thomas House" />
+                            </div>
+                            <div class="col-12">
+                                @* The rich editor is not a labelable control, so the label names the
+                                   wrapper the way the tour page's does — a `for` pointing at
+                                   nothing does nothing when clicked and reads as unlabelled. *@
+                                <label class="form-label" for="event-description">About it</label>
+                                <div id="event-description">
+                                    <BenEditor Value="@_form.Description"
+                                               ValueChanged="@(v => _form.Description = v)" />
+                                </div>
+                                <div class="form-text">What a visitor reads on the page.</div>
+                            </div>
+
+                            <div class="col-6 col-md-3">
+                                <label class="form-label" for="event-from">First @ev.DateNoun</label>
+                                <input id="event-from" type="date" class="form-control" @bind="_form.StartsOn" />
+                            </div>
+                            <div class="col-6 col-md-3">
+                                <label class="form-label" for="event-to">Last @ev.DateNoun</label>
+                                <input id="event-to" type="date" class="form-control" @bind="_form.EndsOn" />
+                            </div>
+                            <div class="col-6 col-md-3">
+                                <label class="form-label" for="event-start-time">Usually starts</label>
+                                <input id="event-start-time" type="time" class="form-control"
+                                       value="@Clock(_form.DefaultStartLocal)"
+                                       @onchange="e => _form.DefaultStartLocal = ParseClock(e.Value?.ToString())" />
+                            </div>
+                            <div class="col-6 col-md-3">
+                                <label class="form-label" for="event-end-time">and ends</label>
+                                <input id="event-end-time" type="time" class="form-control"
+                                       value="@Clock(_form.DefaultEndLocal)"
+                                       @onchange="e => _form.DefaultEndLocal = ParseClock(e.Value?.ToString())" />
+                                <div class="form-text">Past midnight is fine.</div>
+                            </div>
+
+                            <div class="col-12 col-md-4">
+                                <label class="form-label" for="event-zone">Time zone</label>
+                                <select id="event-zone" class="form-select" @bind="_form.TimeZoneId">
+                                    @foreach (var zone in TimeZoneChoices.All)
+                                    {
+                                        <option value="@zone.Id">@zone.Label</option>
+                                    }
+                                </select>
+                                <div class="form-text">The clock your guests read, wherever they are.</div>
+                            </div>
+                            <div class="col-12 col-md-8 pt-md-4">
+                                <div class="form-check form-switch">
+                                    <input class="form-check-input" type="checkbox" role="switch"
+                                           id="event-hide-address" @bind="_form.HideExactLocation" />
+                                    <label class="form-check-label" for="event-hide-address">
+                                        Keep the exact address for people who are coming
+                                    </label>
+                                </div>
+                                <div class="form-check form-switch mt-1">
+                                    @* Off by default: most events are not ghost hunts, and a venue
+                                       running a play does not want an evidence queue on its page. *@
+                                    <input class="form-check-input" type="checkbox" role="switch"
+                                           id="event-evidence" @bind="_form.CollectsEvidence" />
+                                    <label class="form-check-label" for="event-evidence">
+                                        Guests may submit photographs and recordings afterwards
+                                    </label>
+                                </div>
+                            </div>
+
+                            <div class="col-12">
+                                <label class="form-label" for="event-contact">Arranging it</label>
+                                <input id="event-contact" class="form-control" @bind="_form.ContactLine"
+                                       placeholder="Call us on … or email …" />
+                                <div class="form-text">
+                                    How guests reach you and settle up. IsHaunted never takes their
+                                    money — that is between you and them.
+                                </div>
+                            </div>
+                        </div>
+
+                        <div class="d-flex justify-content-end mt-3">
+                            <button type="button" class="btn btn-primary" id="save-event"
+                                    disabled="@_busy" @onclick="SaveAsync">
+                                @(_busy ? "Saving…" : "Save")
+                            </button>
+                        </div>
+                    </div>
+                </div>
+
+                @* ── Dates ───────────────────────────────────────────────── *@
+                <div class="card mb-3" id="event-dates">
+                    <div class="card-header fw-semibold">
+                        @Capitalise(Plural(2, ev.DateNoun))
+                    </div>
+                    <div class="card-body">
+                        <p class="text-secondary small">
+                            @(ev.DatesAreSeparate
+                                ? "Each date is booked on its own. Give any of them its own title, times and notes."
+                                : "Every day between the first and last date. Give any of them its own title, times and notes — an opening night starting early is exactly what this is for.")
+                        </p>
+
+                        <div class="table-responsive">
+                            <table class="table table-sm align-middle" id="event-nights">
+                                <thead>
+                                    <tr>
+                                        <th style="width:11rem;">Date</th>
+                                        <th>Called</th>
+                                        <th style="width:7rem;">From</th>
+                                        <th style="width:7rem;">To</th>
+                                        <th>Notes</th>
+                                        <th style="width:5rem;"></th>
+                                    </tr>
+                                </thead>
+                                <tbody>
+                                    @foreach (var night in ev.Nights)
+                                    {
+                                        var row = night;
+                                        var edit = _nights[row.Id];
+                                        <tr>
+                                            <td class="text-nowrap">@row.Date.ToString("ddd MM/dd/yyyy")</td>
+                                            <td>
+                                                <input class="form-control form-control-sm"
+                                                       placeholder="@row.Date.ToString("dddd")"
+                                                       @bind="edit.Title" />
+                                            </td>
+                                            <td>
+                                                <input type="time" class="form-control form-control-sm"
+                                                       value="@Clock(edit.StartsLocal)"
+                                                       @onchange="e => edit.StartsLocal = ParseClock(e.Value?.ToString())" />
+                                            </td>
+                                            <td>
+                                                <input type="time" class="form-control form-control-sm"
+                                                       value="@Clock(edit.EndsLocal)"
+                                                       @onchange="e => edit.EndsLocal = ParseClock(e.Value?.ToString())" />
+                                            </td>
+                                            <td>
+                                                <input class="form-control form-control-sm" @bind="edit.Notes" />
+                                            </td>
+                                            <td>
+                                                <button type="button" class="btn btn-sm btn-outline-secondary text-nowrap"
+                                                        disabled="@_busy" @onclick="() => SaveNightAsync(row.Id)">
+                                                    Save
+                                                </button>
+                                            </td>
+                                        </tr>
+                                    }
+                                </tbody>
+                            </table>
+                        </div>
+                    </div>
+                </div>
+
+                @* ── Guests ──────────────────────────────────────────────── *@
+                <div class="card mb-3" id="event-guests">
+                    <div class="card-header fw-semibold">Your guests</div>
+                    <div class="card-body">
+                        <div class="row g-3">
+                            <div class="col-12 col-md-4">
+                                <label class="form-label" for="event-day-passes">
+                                    People not staying
+                                </label>
+                                <input id="event-day-passes" type="number" min="0" class="form-control"
+                                       placeholder="no limit" @bind="_form.DayPassCapacity" />
+                                <div class="form-text">
+                                    How many may come without a room. Empty for no limit, zero for none.
+                                </div>
+                            </div>
+                            <div class="col-12 col-md-8 pt-md-4">
+                                <p class="text-secondary mb-0">
+                                    Rooms, who has a place, and what they eat arrive in the next
+                                    step. Until then, people reach you through the line above.
+                                </p>
+                            </div>
+                        </div>
+                        <div class="d-flex justify-content-end mt-3">
+                            <button type="button" class="btn btn-primary" disabled="@_busy" @onclick="SaveAsync">
+                                @(_busy ? "Saving…" : "Save")
+                            </button>
+                        </div>
+                    </div>
+                </div>
+
+                @* ── Ending it ───────────────────────────────────────────── *@
+                <div class="card mb-3" id="event-state">
+                    <div class="card-header fw-semibold">Ending it</div>
+                    <div class="card-body">
+                        @if (ev.CancelledAtUtc is not null)
+                        {
+                            <div class="alert alert-danger">
+                                <strong>Called off@(ev.CancelledReason is { Length: > 0 } why ? $" — {why}" : "").</strong>
+                                Everybody who had a place can see that it is off.
+                            </div>
+                            <button type="button" class="btn btn-outline-secondary" disabled="@_busy"
+                                    @onclick="@(() => StateAsync("uncancel"))">
+                                It's back on
+                            </button>
+                        }
+                        else
+                        {
+                            <p class="text-secondary">
+                                <strong>Archiving</strong> stops it counting and takes it off your
+                                list; everything that happened stays. It happens by itself a
+                                fortnight after the last @ev.DateNoun.
+                                <strong>Calling it off</strong> is for one that was going to happen
+                                and now is not — the listing says so, and the people coming are told.
+                            </p>
+                            <div class="d-flex gap-2 flex-wrap align-items-start">
+                                @if (ev.ArchivedAtUtc is null)
+                                {
+                                    <button type="button" class="btn btn-outline-secondary" id="archive-event"
+                                            disabled="@_busy" @onclick="@(() => StateAsync("archive"))">
+                                        Archive it
+                                    </button>
+                                }
+                                else
+                                {
+                                    <button type="button" class="btn btn-outline-secondary" id="restore-event"
+                                            disabled="@_busy" @onclick="@(() => StateAsync("restore"))">
+                                        Bring it back
+                                    </button>
+                                }
+                                <div class="input-group" style="max-width:26rem;">
+                                    <input class="form-control" placeholder="Why it's off — guests read this"
+                                           @bind="_cancelReason" />
+                                    <button type="button" class="btn btn-outline-danger" id="cancel-event"
+                                            disabled="@_busy" @onclick="CancelAsync">Call it off</button>
+                                </div>
+                            </div>
+                        }
+                    </div>
+                </div>
+            </div>
+        </div>
+    }
+</div>
+
+@code {
+    [Parameter] public Guid OrgId { get; set; }
+    [Parameter] public Guid EventId { get; set; }
+
+    private HostedEventRecord? _event;
+    private HostedEventPlanRecord? _plan;
+    private string? _orgUrlName;
+    private bool _loading = true;
+    private bool _busy;
+    private bool _confirmingPublish;
+    private string? _error;
+    private string? _note;
+    private string _cancelReason = "";
+    private readonly EventForm _form = new();
+    private readonly Dictionary<Guid, NightForm> _nights = [];
+
+    private sealed class EventForm
+    {
+        public string Name { get; set; } = "";
+        public string? Tagline { get; set; }
+        public string? Description { get; set; }
+        public string TimeZoneId { get; set; } = "America/Chicago";
+        public DateTime StartsOn { get; set; } = DateTime.Today;
+        public DateTime EndsOn { get; set; } = DateTime.Today;
+        public TimeSpan? DefaultStartLocal { get; set; }
+        public TimeSpan? DefaultEndLocal { get; set; }
+        public bool HideExactLocation { get; set; }
+        public bool CollectsEvidence { get; set; }
+        public int? DayPassCapacity { get; set; }
+        public string? ContactLine { get; set; }
+    }
+
+    private sealed class NightForm
+    {
+        public string? Title { get; set; }
+        public TimeSpan? StartsLocal { get; set; }
+        public TimeSpan? EndsLocal { get; set; }
+        public string? Notes { get; set; }
+    }
+
+    protected override async Task OnAfterRenderAsync(bool firstRender)
+    {
+        if (!firstRender) return;
+
+        // Auth resolves after the circuit attaches. Asking first asks as nobody, and the page then
+        // says the event could not be found rather than that the reader is not allowed it.
+        if (!await UserState.WaitUntilAuthReadyAsync(RendererInfo.IsInteractive)) return;
+
+        await LoadAsync();
+        StateHasChanged();
+    }
+
+    private async Task LoadAsync()
+    {
+        _loading = true;
+        _event = await AdminClient.GetHostedEventAsync(OrgId, EventId);
+        _plan = await AdminClient.GetHostedEventPlanAsync(OrgId);
+
+        if (_event is { } ev)
+        {
+            _orgUrlName ??= (await AdminClient.GetOrganizationAsync(OrgId))?.UrlName;
+            Fill(ev);
+        }
+
+        _loading = false;
+    }
+
+    /// <summary>Copies the record into the forms, so an edit is never lost by a reload.</summary>
+    private void Fill(HostedEventRecord ev)
+    {
+        _form.Name = ev.Name;
+        _form.Tagline = ev.Tagline;
+        _form.Description = ev.Description;
+        _form.TimeZoneId = ev.TimeZoneId;
+        _form.StartsOn = ev.StartsOn;
+        _form.EndsOn = ev.EndsOn;
+        _form.DefaultStartLocal = ev.DefaultStartLocal;
+        _form.DefaultEndLocal = ev.DefaultEndLocal;
+        _form.HideExactLocation = ev.HideExactLocation;
+        _form.CollectsEvidence = ev.CollectsEvidence;
+        _form.DayPassCapacity = ev.DayPassCapacity;
+        _form.ContactLine = ev.ContactLine;
+
+        _nights.Clear();
+        foreach (var night in ev.Nights)
+        {
+            _nights[night.Id] = new NightForm
+            {
+                Title = night.Title,
+                StartsLocal = night.StartsLocal,
+                EndsLocal = night.EndsLocal,
+                Notes = night.Notes,
+            };
+        }
+    }
+
+    private async Task SaveAsync()
+    {
+        if (_event is not { } ev) return;
+
+        _busy = true; _error = null; _note = null;
+
+        // The venue is not changed here: it is chosen when the event is made, and moving an event
+        // to another building is a bigger decision than a field on a save form.
+        var request = new UpsertHostedEventRequest(
+            _form.Name.Trim(), ev.PlaceId, _form.StartsOn.Date, _form.EndsOn.Date,
+            TimeZoneId: _form.TimeZoneId,
+            Tagline: _form.Tagline,
+            Description: _form.Description,
+            HideExactLocation: _form.HideExactLocation,
+            DatesAreSeparate: ev.DatesAreSeparate,
+            DefaultStartLocal: _form.DefaultStartLocal,
+            DefaultEndLocal: _form.DefaultEndLocal,
+            DayPassCapacity: _form.DayPassCapacity,
+            ContactLine: _form.ContactLine,
+            CollectsEvidence: _form.CollectsEvidence,
+            // A run keeps the dates it already has; they are edited one at a time below.
+            Dates: ev.DatesAreSeparate ? [.. ev.Nights.Select(n => n.Date)] : null);
+
+        var (saved, error) = await AdminClient.SaveHostedEventAsync(OrgId, EventId, request);
+        _busy = false;
+
+        if (saved is null) { _error = error ?? "That couldn't be saved just now."; return; }
+
+        _event = saved;
+        Fill(saved);
+        _note = "Saved.";
+    }
+
+    private async Task SaveNightAsync(Guid nightId)
+    {
+        if (!_nights.TryGetValue(nightId, out var edit)) return;
+
+        _busy = true; _error = null; _note = null;
+
+        var (saved, error) = await AdminClient.SaveHostedEventNightAsync(
+            OrgId, EventId, nightId,
+            new UpsertHostedEventNightRequest(edit.Title, edit.StartsLocal, edit.EndsLocal, edit.Notes));
+
+        _busy = false;
+
+        if (saved is null) { _error = error ?? "That couldn't be saved just now."; return; }
+
+        _event = saved;
+        Fill(saved);
+        _note = "Saved.";
+    }
+
+    private async Task PublishAsync()
+    {
+        _busy = true; _error = null; _note = null;
+
+        var (saved, error) = await AdminClient.SetHostedEventStateAsync(OrgId, EventId, "publish");
+        _busy = false;
+        _confirmingPublish = false;
+
+        if (saved is null) { _error = error ?? "That couldn't be published just now."; return; }
+
+        _event = saved;
+        Fill(saved);
+        // The server's own sentence: how much was spent, or that nothing was.
+        _note = saved.PlanNote ?? "It's live.";
+        _plan = await AdminClient.GetHostedEventPlanAsync(OrgId);
+    }
+
+    private async Task StateAsync(string action)
+    {
+        _busy = true; _error = null; _note = null;
+
+        var (saved, error) = await AdminClient.SetHostedEventStateAsync(OrgId, EventId, action);
+        _busy = false;
+
+        if (saved is null) { _error = error ?? "That couldn't be done just now."; return; }
+
+        _event = saved;
+        Fill(saved);
+        _plan = await AdminClient.GetHostedEventPlanAsync(OrgId);
+    }
+
+    private async Task CancelAsync()
+    {
+        _busy = true; _error = null; _note = null;
+
+        var (saved, error) = await AdminClient.CancelHostedEventAsync(OrgId, EventId, _cancelReason);
+        _busy = false;
+
+        if (saved is null) { _error = error ?? "That couldn't be done just now."; return; }
+
+        _event = saved;
+        Fill(saved);
+        _cancelReason = "";
+    }
+
+    // ── small things the markup needs ────────────────────────────────────────
+
+    private static string Clock(TimeSpan? value) => value is { } v ? v.ToString(@"hh\:mm") : "";
+
+    private static TimeSpan? ParseClock(string? value)
+        => TimeSpan.TryParse(value, out var parsed) ? parsed : null;
+
+    private static string Span(HostedEventRecord ev)
+        => ev.StartsOn.Date == ev.EndsOn.Date
+            ? ev.StartsOn.ToString("MM/dd/yyyy")
+            : $"{ev.StartsOn:MM/dd} – {ev.EndsOn:MM/dd/yyyy}";
+
+    private static string Plural(int count, string noun) => count == 1 ? noun : noun + "s";
+
+    private static string Capitalise(string word)
+        => word.Length == 0 ? word : char.ToUpperInvariant(word[0]) + word[1..];
+
+    private static RenderFragment StateBadge(HostedEventRecord ev) => builder =>
+    {
+        var (text, css) = ev switch
+        {
+            { CancelledAtUtc: not null } => ("Called off", "bg-danger"),
+            { ArchivedAtUtc: not null } => ("Archived", "bg-secondary"),
+            { IsPublished: true } => ("Live", "bg-success"),
+            _ => ("Draft", "bg-secondary"),
+        };
+        builder.OpenElement(0, "span");
+        builder.AddAttribute(1, "class", $"badge {css}");
+        builder.AddContent(2, text);
+        builder.CloseElement();
+    };
+}

@@ -428,6 +428,16 @@ public interface IBenOrganizationClient
     Task<(HostedEventRecord? Result, string? Error)> CancelHostedEventAsync(
         Guid orgId, Guid eventId, string? reason, CancellationToken token = default);
 
+    /// <summary>
+    /// A published event as a visitor sees it — its dates, its venue, whether it is a stay or a run.
+    /// </summary>
+    /// <remarks>
+    /// Anonymous. The umbrella calendar row carries the sign-up and the reminder; this carries what
+    /// an umbrella cannot say, which is that there is more than one evening in it.
+    /// </remarks>
+    Task<PublicHostedEventRecord?> GetPublicHostedEventAsync(
+        Guid hostedEventId, CancellationToken token = default);
+
     /// <summary>One tour.</summary>
     Task<TourRecord?> GetTourAsync(Guid orgId, Guid tourId, CancellationToken token = default);
 
