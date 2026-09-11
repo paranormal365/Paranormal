@@ -1,0 +1,53 @@
+@namespace Ben.Web.Website.Library.Kit
+
+@*
+    A rail of labelled figures, for the handful of facts somebody decides on before reading any
+    prose: when it is, how long it runs, how many are coming.
+
+    It replaces a row of badge pills, which is what this kind of thing usually gets. A pill holds a
+    word; "about 1 hour 30 minutes" next to "Up to 20 people" next to a date is three unlabelled
+    phrases the reader has to sort out for themselves. Saying what each figure IS costs one small
+    line and does the sorting for them.
+
+    Renders nothing at all when there is nothing to state, so a caller can hand it a list built from
+    whatever it happens to know without guarding the call.
+*@
+
+@if (Facts.Count > 0)
+{
+    <div class="ben-facts @Class">
+        @foreach (var fact in Facts)
+        {
+            if (fact.Href is { } href)
+            {
+                <a class="ben-fact @(fact.Emphasis ? "ben-fact--lead" : "")" href="@href">
+                    <span class="ben-fact__label">@fact.Label</span>
+                    <span class="ben-fact__value">@fact.Value</span>
+                    @if (!string.IsNullOrWhiteSpace(fact.Sub))
+                    {
+                        <span class="ben-fact__sub">@fact.Sub</span>
+                    }
+                </a>
+            }
+            else
+            {
+                <div class="ben-fact @(fact.Emphasis ? "ben-fact--lead" : "")">
+                    <span class="ben-fact__label">@fact.Label</span>
+                    <span class="ben-fact__value">@fact.Value</span>
+                    @if (!string.IsNullOrWhiteSpace(fact.Sub))
+                    {
+                        <span class="ben-fact__sub">@fact.Sub</span>
+                    }
+                </div>
+            }
+        }
+    </div>
+}
+
+@code {
+    /// <summary>The figures, in the order they should be read. An empty list draws nothing.</summary>
+    [Parameter] public IReadOnlyList<BenFactItem> Facts { get; set; } = [];
+
+    /// <summary>Classes for the rail itself, for the caller's own spacing.</summary>
+    [Parameter] public string? Class { get; set; }
+}

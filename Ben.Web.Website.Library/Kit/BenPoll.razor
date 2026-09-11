@@ -1,0 +1,145 @@
+@namespace Ben.Web.Website.Library.Kit
+@using Ben.Service.Models.Feed
+@using Ben.Web.Services
+@inject IBenAdminClient Feed
+@inject IBenUserState UserState
+@inject NavigationManager NavManager
+
+@*
+    A poll on a message, and answering it (item 233, Ben 2026-09-11).
+
+    Reusable for the same reason the editor is: a poll belongs to a MESSAGE, and a message is a
+    feed post, a case comment or a group's own message depending on who is asking. This component
+    knows only the poll's id.
+
+    Results are shown to everybody rather than hidden until you vote. The counts are public
+    anyway — anybody can open the endpoint — and hiding them would only stop the honest reader from
+    seeing what a poll is for.
+*@
+
+@if (_poll is { } poll)
+{
+    <div class="poll">
+        <div class="poll__question">@poll.Question</div>
+
+        @foreach (var option in poll.Options)
+        {
+            var mine = poll.MyOptionIds.Contains(option.Id);
+            var share = poll.TotalVotes == 0 ? 0 : option.Votes * 100.0 / poll.TotalVotes;
+
+            <button type="button" class="poll__option @(mine ? "poll__option--mine" : "")"
+                    aria-pressed="@mine.ToString().ToLowerInvariant()"
+                    disabled="@(_busy || poll.IsClosed)"
+                    @onclick="@(() => ChooseAsync(option.Id))">
+                @* The bar is behind the text rather than beside it, so a long answer is not
+                   squeezed into half the width to make room for a number. *@
+                <span class="poll__fill" style="width:@share.ToString("F0")%"></span>
+                <span class="poll__text">@option.Text</span>
+                <span class="poll__count">@option.Votes</span>
+            </button>
+        }
+
+        <div class="poll__foot">
+            <span>@poll.TotalVotes @(poll.TotalVotes == 1 ? "vote" : "votes")</span>
+            @if (poll.IsClosed)
+            {
+                <span>· closed</span>
+            }
+            else if (poll.ClosesAtUtc is { } closes)
+            {
+                <span>· closes @closes.ToViewerLocalTime(UserState).ToString("MM/dd/yyyy h:mm tt")</span>
+            }
+            @if (poll.AllowMultiple)
+            {
+                <span>· pick as many as you like</span>
+            }
+            @if (!UserState.IsAuthenticated && !poll.IsClosed)
+            {
+                <span>· <a href="@SignInUrl"><strong>Sign in</strong></a> to vote</span>
+            }
+        </div>
+
+        @if (_error is not null)
+        {
+            <div class="poll__error">@_error</div>
+        }
+    </div>
+}
+
+@code {
+    /// <summary>The poll to show. Given whole where the caller already has it, or fetched by id.</summary>
+    [Parameter] public MessagePollRecord? Poll { get; set; }
+
+    /// <summary>Used when the caller has only an id — a page showing one message on its own.</summary>
+    [Parameter] public Guid? PollId { get; set; }
+
+    private MessagePollRecord? _poll;
+    private bool _busy;
+    private string? _error;
+
+    private string SignInUrl => $"/login?returnUrl={Uri.EscapeDataString(NavManager.Uri)}";
+
+    /// <summary>
+    /// Waits for auth to resolve before the foot line decides what to say.
+    /// </summary>
+    /// <remarks>
+    /// The poll renders the same counts either way, but the last line of the foot is
+    /// viewer-specific — "Sign in to vote" — and auth resolves after the circuit connects. Without
+    /// this, a signed-in reader who arrived by a hard navigation is told to sign in, under a poll
+    /// they can in fact answer.
+    /// </remarks>
+    protected override async Task OnInitializedAsync()
+    {
+        var before = UserState.IsAuthenticated;
+        if (await UserState.WaitUntilAuthReadyAsync(RendererInfo.IsInteractive)
+            && UserState.IsAuthenticated != before)
+        {
+            // Re-read: MyOptionIds is this reader's own answer, and the copy fetched as a visitor
+            // has none in it.
+            if (Poll is null && PollId is { } id) _poll = await Feed.GetPollAsync(id);
+            StateHasChanged();
+        }
+    }
+
+    protected override async Task OnParametersSetAsync()
+    {
+        // A poll handed over whole is used as given: the feed already counted it for the page, and
+        // asking again per card is the N+1 that makes a feed slow as it gets popular.
+        if (Poll is not null) { _poll = Poll; return; }
+        if (PollId is { } id && _poll is null) _poll = await Feed.GetPollAsync(id);
+    }
+
+    /// <summary>
+    /// Chooses an answer, or takes it back when it was already this reader's.
+    /// </summary>
+    /// <remarks>
+    /// Pressing your own answer again clears it, which is what every other vote on this site does.
+    /// On a multiple-answer poll the others stay; on a single-answer one the choice replaces
+    /// whatever was there, which the server does anyway.
+    /// </remarks>
+    private async Task ChooseAsync(Guid optionId)
+    {
+        if (_poll is not { } poll) return;
+
+        if (!UserState.IsAuthenticated) { NavManager.NavigateTo(SignInUrl); return; }
+
+        var next = poll.AllowMultiple
+            ? poll.MyOptionIds.Contains(optionId)
+                ? poll.MyOptionIds.Where(id => id != optionId).ToList()
+                : [.. poll.MyOptionIds, optionId]
+            : poll.MyOptionIds.Contains(optionId)
+                ? []
+                : new List<Guid> { optionId };
+
+        _busy = true;
+        _error = null;
+        try
+        {
+            var updated = await Feed.CastPollVoteAsync(poll.Id, next);
+            if (updated is not null) _poll = updated;
+            else _error = "That vote could not be counted.";
+        }
+        catch { _error = "That vote could not be counted."; }
+        finally { _busy = false; }
+    }
+}

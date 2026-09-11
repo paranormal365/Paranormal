@@ -30,6 +30,7 @@ public static class CmsReservedSlugs
         // Routed today.
         "cases",
         "events",
+        "tours",
 
         // Held back. Investigations and places are already modelled and will want public routes;
         // the rest are the words a site of this shape always ends up needing.

@@ -356,4 +356,112 @@ public interface IBenOrganizationClient
 
     /// <summary>Says they are no longer coming.</summary>
     Task<bool> CancelEventRsvpAsync(Guid eventId, CancellationToken token = default);
+
+    // ── Tours (item 233) ────────────────────────────────────────────────────
+    // A tour is the product a tour business pays for; a date on the calendar is that product
+    // happening. Reading is open to members, changing takes the settings key, because it can
+    // charge the card.
+
+    /// <summary>Every tour this business runs, active first.</summary>
+    Task<LoadResult<TourRecord>> GetToursAsync(Guid orgId, CancellationToken token = default);
+
+    /// <summary>One tour.</summary>
+    Task<TourRecord?> GetTourAsync(Guid orgId, Guid tourId, CancellationToken token = default);
+
+    /// <summary>What the plan says a tour costs right now, read before the business commits.</summary>
+    Task<TourPlanRecord?> GetTourPlanAsync(Guid orgId, CancellationToken token = default);
+
+    /// <summary>
+    /// Creates or changes a tour, keeping the server's refusal.
+    /// </summary>
+    /// <remarks>
+    /// The refusals here are sentences somebody has to act on — a name already used, an address
+    /// that is not theirs — so the variant that throws them away would leave a page able to say
+    /// only "Save failed".
+    /// </remarks>
+    Task<(TourRecord? Result, string? Error)> SaveTourAsync(
+        Guid orgId, Guid? tourId, UpsertTourRequest request, CancellationToken token = default);
+
+    /// <summary>Stops or restarts a tour. Retiring never refunds; restoring may charge.</summary>
+    Task<(TourRecord? Result, string? Error)> SetTourRetiredAsync(
+        Guid orgId, Guid tourId, bool retired, CancellationToken token = default);
+
+    /// <summary>Replaces who guides a tour. Everybody named must be an active member.</summary>
+    Task<(TourRecord? Result, string? Error)> SetTourGuidesAsync(
+        Guid orgId, Guid tourId, IReadOnlyList<Guid> appUserIds, CancellationToken token = default);
+
+    /// <summary>The tours a business advertises, as a visitor sees them.</summary>
+    Task<LoadResult<PublicTourListItem>> GetPublicToursAsync(string orgUrlName, CancellationToken token = default);
+
+    /// <summary>One tour's public page, with its next dates.</summary>
+    Task<PublicTourRecord?> GetPublicTourAsync(string orgUrlName, string tourSlug, CancellationToken token = default);
+
+    /// <summary>Every tour that can be drawn on a map.</summary>
+    Task<LoadResult<PublicTourMapPin>> GetTourMapPinsAsync(CancellationToken token = default);
+
+    /// <summary>
+    /// The guest mail as it would go out, from what is in the editor right now.
+    /// </summary>
+    /// <remarks>
+    /// The point of a preview is to see a change before saving it, so what is posted is the
+    /// editor's contents rather than what the tour last stored.
+    /// </remarks>
+    Task<TourMailPreviewRecord?> PreviewTourMailAsync(
+        Guid orgId, Guid tourId, string? subjectTemplate, string? bodyTemplate, CancellationToken token = default);
+
+    /// <summary>What people who walked this tour thought of it, and whether the reader may add.</summary>
+    Task<TourReviewsRecord?> GetTourReviewsAsync(Guid tourId, CancellationToken token = default);
+
+    /// <summary>Leaves or changes the caller's own review. Keeps the server's refusal.</summary>
+    Task<(TourReviewsRecord? Result, string? Error)> SaveMyTourReviewAsync(
+        Guid tourId, int stars, string? comment, CancellationToken token = default);
+
+    /// <summary>Takes the caller's own review down.</summary>
+    Task<bool> DeleteMyTourReviewAsync(Guid tourId, CancellationToken token = default);
+
+    /// <summary>Hides or restores a review on one of the business's own tours.</summary>
+    Task<bool> SetTourReviewHiddenAsync(Guid orgId, Guid tourId, Guid reviewId, bool hidden, CancellationToken token = default);
+
+    /// <summary>The pictures on a tour's page.</summary>
+    Task<LoadResult<TourImageRecord>> GetTourGalleryAsync(Guid orgId, Guid tourId, CancellationToken token = default);
+
+    /// <summary>Adds one of the business's own pictures. Refused at fifty, in words.</summary>
+    Task<(TourImageRecord? Result, string? Error)> AddTourImageAsync(
+        Guid orgId, Guid tourId, Stream content, string fileName, string contentType,
+        string? caption, CancellationToken token = default);
+
+    /// <summary>
+    /// Stops the clock on a file this business holds, or lets it run again (item 233).
+    /// </summary>
+    /// <remarks>
+    /// The keep for a RECORDING, and for a photograph the business wants to hold without
+    /// publishing. Putting a picture on a tour's page keeps it too, and is the better answer when
+    /// the picture is worth showing.
+    /// </remarks>
+    Task<bool> SetMediaKeptAsync(Guid orgId, Guid uploadFileId, bool kept, CancellationToken token = default);
+
+    /// <summary>Keeps a guest's photograph by copying it onto the tour's page.</summary>
+    Task<(TourImageRecord? Result, string? Error)> KeepSubmissionOnTourAsync(
+        Guid orgId, Guid tourId, Guid submissionId, string? caption, CancellationToken token = default);
+
+    /// <summary>Changes a picture's caption or where it sits.</summary>
+    Task<(IReadOnlyList<TourImageRecord>? Result, string? Error)> UpdateTourImageAsync(
+        Guid orgId, Guid tourId, Guid imageId, string? caption, int? sortOrder, CancellationToken token = default);
+
+    /// <summary>Takes a picture off the page and deletes the business's copy.</summary>
+    Task<bool> DeleteTourImageAsync(Guid orgId, Guid tourId, Guid imageId, CancellationToken token = default);
+
+    /// <summary>
+    /// What the signed-in caller sent in from one tour, whatever became of it.
+    /// </summary>
+    /// <remarks>
+    /// So somebody who walked a tour last month can find their own photographs from the tour's
+    /// page, rather than having to remember which night they went on.
+    /// </remarks>
+    Task<LoadResult<EventEvidenceRecord>> GetMyTourEvidenceAsync(Guid tourId, CancellationToken token = default);
+
+    /// <summary>Tours by name, by business, or near a point.</summary>
+    Task<LoadResult<PublicTourListItem>> SearchToursAsync(
+        string? query = null, double? latitude = null, double? longitude = null,
+        double radiusMiles = 25, CancellationToken token = default);
 }

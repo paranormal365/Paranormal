@@ -1,0 +1,71 @@
+@namespace Ben.Web.Website.Library.Kit
+@using Ben.Service.Models.Entities
+@using Ben.Web.Services
+@inject IBenAdminClient AdminClient
+
+@*
+    The card under a message that contains a link (Ben, 2026-09-11: "as currently is done in
+    iMessage on the iPhone").
+
+    Two kinds of card, and the difference is not cosmetic:
+
+      - One of OURS resolves out of our own records — a case's title, its group, where it is.
+        Correct at the moment of asking, and still correct after somebody renames it, which is more
+        than a snapshot of anybody's OpenGraph tags would manage.
+
+      - Anybody else's shows the host and the path and nothing more. Reading a stranger's page to
+        describe it would mean this server making a request to an address a stranger chose, which
+        is the shape of every server-side request forgery there has ever been. A card that says
+        less is the price, and it is a small one.
+*@
+
+@if (_preview is { } preview)
+{
+    <a class="link-card" href="@preview.Path">
+        <span class="link-card__kind">@preview.Kind</span>
+        <span class="link-card__title">@preview.Title</span>
+        @if (preview.Subtitle is { Length: > 0 } subtitle)
+        {
+            <span class="link-card__sub">@subtitle</span>
+        }
+    </a>
+}
+else if (_host is { } host)
+{
+    <a class="link-card link-card--away" href="@Url" target="_blank" rel="noopener noreferrer nofollow">
+        <span class="link-card__kind">@host</span>
+        <span class="link-card__title">@Trimmed</span>
+    </a>
+}
+
+@code {
+    /// <summary>The address, exactly as it appeared in the message.</summary>
+    [Parameter, EditorRequired] public string Url { get; set; } = string.Empty;
+
+    private LinkPreview? _preview;
+    private string? _host;
+
+    /// <summary>The address without its scheme, which is noise in a card that names the host.</summary>
+    private string Trimmed => Url.Replace("https://", "", StringComparison.OrdinalIgnoreCase)
+                                 .Replace("http://", "", StringComparison.OrdinalIgnoreCase);
+
+    protected override async Task OnParametersSetAsync()
+    {
+        _preview = null;
+        _host = null;
+
+        if (string.IsNullOrWhiteSpace(Url)) return;
+
+        // Ours first. A 404 here is the ordinary answer for somebody else's address, not a fault,
+        // and it costs one cheap lookup against records we already hold.
+        _preview = await AdminClient.GetLinkPreviewAsync(Url);
+        if (_preview is not null) return;
+
+        // Not ours. All we say is whose it is — and only when the address parses, because a card
+        // headed by a malformed string is worse than no card.
+        _host = Uri.TryCreate(Url, UriKind.Absolute, out var uri)
+             && (uri.Scheme == Uri.UriSchemeHttp || uri.Scheme == Uri.UriSchemeHttps)
+            ? uri.Host
+            : null;
+    }
+}

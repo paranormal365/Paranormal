@@ -69,12 +69,14 @@ public sealed class OrganizationCheckoutController : OrgCmsControllerBase
         if (SubscriptionTierResolver.Validate(tiers) is not null)
             return Problem("Pricing is temporarily unavailable.", statusCode: 503);
 
-        var members = await db.OrganizationUserMemberships
-            .CountAsync(m => m.OrganizationId == organizationId && m.IsActive, ct);
-        var tier = SubscriptionTierResolver.Resolve(tiers, members);
-
-        if (SubscriptionPricing.PriceFor(tier, request.Interval) is not { } listPrice)
-            return BadRequest($"\"{tier.Name}\" is not offered at that billing cadence.");
+        // Members for a group, tours for a business (item 233) — counted in the one place the
+        // quote counts them, so what was shown is what is charged.
+        if (await BillableUnits.PriceAsync(db, tiers, organizationId, org.Kind, request.Interval, ct)
+            is not { } priced)
+            return BadRequest("That plan is not offered at that billing cadence.");
+        var tier = priced.Tier;
+        var members = priced.Members;
+        var listPrice = priced.ListPrice;
 
         // ── A group is never free (Ben, 2026-09-05) ──────────────────────────
         // "An individual can be free... a group cannot." A band priced at zero was still sellable
@@ -126,7 +128,7 @@ public sealed class OrganizationCheckoutController : OrgCmsControllerBase
             organizationId, tier.Id, request.Interval, members,
             payable, taxRate, tax, userId.Value,
             string.IsNullOrWhiteSpace(request.CouponCode) ? null : request.CouponCode.Trim(),
-            listPrice, discount);
+            listPrice, discount, TourCount: tier.IsBandedByMembers ? 0 : priced.Units);
 
         var baseUrl = (_configuration["AppBaseUrl"] ?? "").TrimEnd('/');
         // Back to the billing page either way: the person left it to pay, and landing them on
@@ -153,7 +155,7 @@ public sealed class OrganizationCheckoutController : OrgCmsControllerBase
         var handle = await _stripe.CreateCheckoutSessionAsync(new StripeCheckoutSpec(
             organizationId, org.Name, sub?.ProviderCustomerRef,
             payable, tax,
-            $"IsHaunted \"{tier.Name}\" — {members} members, billed {Cadence(request.Interval)}",
+            $"IsHaunted \"{tier.Name}\" — {BillableUnits.Describe(priced)}, billed {Cadence(request.Interval)}",
             SuccessUrl: $"{billingUrl}?checkout=success",
             CancelUrl:  $"{billingUrl}?checkout=cancelled",
             facts.ToMetadata()), ct);

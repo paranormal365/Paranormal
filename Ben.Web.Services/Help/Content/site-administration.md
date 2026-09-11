@@ -40,6 +40,7 @@ anywhere in the database. Answering that would mean adding visitor tracking, whi
 about privacy and data retention rather than a chart, and it has not been made. Every number on
 this page is about accounts and what they did.
 
+
 ## Site settings
 
 ![The site settings screen](help-media:site-administration/site-settings.png)
@@ -145,6 +146,45 @@ somebody makes deliberately rather than a default they inherit.
   group's page for its administrators. Nothing appears in the public directory until a group
   actually publishes something, so switching it on shows visitors an empty directory at worst, not
   an unfinished one.
+
+## Closing the door to new ghost walking tours
+
+**Administration → Site Settings → Allow new ghost walking tours** switches off new sign-ups as a
+ghost walking tour.
+
+It closes exactly one door. Every tour business already signed up carries on unchanged — its tours,
+its dates, its sign-ups and its billing are untouched — and nobody loses anything they are paying
+for. What stops is starting a new one: the choice disappears from the Start a Group wizard with a
+sentence saying why, the registration endpoint refuses it, and an existing group cannot start
+running tours while the door is shut. A SuperAdmin can still create one at any time.
+
+**Paranormal events businesses are not affected.** They sit on the same flat plan, but they are a
+different trade, and this switch is about walks.
+
+Unset reads as **on**, so a site that never touches this setting behaves exactly as it always has.
+
+## A person's record
+
+**Administration → Users** lists every account; the view button on a row opens that person's
+record, in tabs: their profile fields, addresses, emails, phones, links, notes, memberships,
+files and site roles. Each tab edits directly, and every change is written to the audit log
+under your name.
+
+The **Addresses** tab has two buttons beside each address once it has been placed on the map:
+**Map** shows the address with its region circle, and **Directions** opens the directions
+window.
+
+![Driving directions to a person's address](help-media:site-administration/directions.png)
+*Directions from a typed starting point, drawn on the map and read out beneath it.*
+
+Type a starting address — a town is enough — or press **My Location** to use where your browser
+says you are, then **Get Route**. The route is drawn on the map with the start marked **A** and
+the address **B**, with the distance, the driving time and the turn-by-turn steps beneath.
+**Print** prints the window as it stands; **Open in Maps** hands the same route to Apple Maps,
+which on a phone opens the maps app. Nothing about the route is stored.
+
+An address that could not be placed on the map has neither button; correct it and save, and
+the lookup runs again.
 
 ## Impersonating a member
 
@@ -365,6 +405,19 @@ for, and restricting it further would mean the person on call cannot see why the
 
 ## Billing
 
+### A flat price for tour and event businesses
+
+The price bands below price an **investigation group** by the size of its team. A **ghost
+walking tour** or a **public event provider** is not priced that way: a business pays one flat
+price whatever the size of its team, because guides are not investigators and counting them
+would price the wrong thing.
+
+To offer that price, add a tier under **Administration → Subscription Tiers** and untick
+**banded by members**; the pricing page labels it for tour and event businesses. Every business
+kind of group is quoted, billed and renewed on that tier, and its member count is ignored. With
+no such tier on offer a business is priced by the bands like anyone else, so the offer in the
+tour-business mailing is true only while that tier exists and is active.
+
 ### Role areas on a price band
 
 Each band carries a **Role areas** checklist — which parts of the site a group on that band may
@@ -519,7 +572,9 @@ things happening.
 **Destroyed.** Everything that is only ever theirs and that nobody else has a claim on: field
 sessions they recorded on their own rather than for an investigation, the files under those
 sessions, their memberships, sign-in history, messages received, follows, blocks, contact details
-and any external sign-in methods.
+and any external sign-in methods. An Apple sign-in is also revoked with Apple, so IsHaunted
+disappears from the apps their Apple ID lists; if Apple cannot be reached at that moment the
+deletion still goes through and the revocation is retried later.
 
 **Kept, with their name removed.** Anything they wrote for a group — case notes, timeline
 entries, group messages, evidence, and sessions recorded for an investigation. Those belong to the

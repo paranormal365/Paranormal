@@ -83,9 +83,23 @@
                 <div class="card-body">
 
                     <div class="d-flex align-items-baseline gap-2 mb-2 flex-wrap">
-                        <a href="@($"/feed/{report.OrgMessageId}")" class="fw-semibold text-decoration-none">
-                            @report.PostAuthorDisplayName
-                        </a>
+                        @* What was reported, and where to go and look at it. A case report has no
+                           feed address, so the link is built from whichever the server gave — a
+                           row that pointed at /feed/ with nothing after it was a link to
+                           nowhere. *@
+                        <span class="badge bg-secondary-subtle text-secondary-emphasis">
+                            @report.TargetLabel
+                        </span>
+                        @if (LinkFor(report) is { } target)
+                        {
+                            <a href="@target" class="fw-semibold text-decoration-none">
+                                @report.PostAuthorDisplayName
+                            </a>
+                        }
+                        else
+                        {
+                            <span class="fw-semibold">@report.PostAuthorDisplayName</span>
+                        }
                         <span class="text-secondary small">
                             @report.PostDateCreated.ToViewerLocalTime(UserState).ToDisplayDateTime()
                         </span>
@@ -124,7 +138,7 @@
                             <button type="button" class="btn btn-outline-danger btn-sm"
                                     disabled="@(_resolving == report.Id)"
                                     @onclick="() => ResolveAsync(report, FeedReportOutcome.Hidden)">
-                                Hide the post
+                                @(report.CaseId is null ? "Hide the post" : "Take it off the public site")
                             </button>
                             <button type="button" class="btn btn-outline-secondary btn-sm"
                                     disabled="@(_resolving == report.Id)"
@@ -169,6 +183,17 @@
         (FeedReportOutcome.Hidden,    "Hidden"),
         (FeedReportOutcome.Dismissed, "Left up"),
     ];
+
+    /// <summary>
+    /// Where to go and look at what was reported, or null when there is nowhere public to go.
+    /// </summary>
+    /// <remarks>
+    /// A feed post has its own thread page. A case carries the address the server built. A comment
+    /// on a case is on the case's page, which the server gives as the case's address, so it too
+    /// lands somewhere a moderator can read it.
+    /// </remarks>
+    private static string? LinkFor(FeedReportRecord report)
+        => report.TargetUrl ?? (report.OrgMessageId is { } id ? $"/feed/{id}" : null);
 
     private List<FeedReportRecord> _reports = [];
     private LoadResult<FeedReportRecord> _reportsResult;

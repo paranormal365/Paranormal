@@ -18,7 +18,8 @@
         <div class="card-body">
             <p class="text-secondary small mb-2">
                 Accepting puts a submission into the event's <strong>public</strong> record,
-                credited to the attendee. Declining tells them why.
+                credited to the attendee. Declining tells them why. Anything on a clock stays in
+                this list, soonest to go first, until you keep it or it goes.
             </p>
             @foreach (var ev in _queue.Items)
             {
@@ -30,14 +31,64 @@
                         {
                             <div class="small">"@ev.Note"</div>
                         }
+                        @* Item 233. Retention is only honest if the person deciding can see the
+                           clock — and until this, the date existed nowhere but an email. *@
+                        @if (ev.IsKept)
+                        {
+                            <div class="small text-success">Kept — this one stays.</div>
+                        }
+                        else if (ev.ExpiresAtUtc is { } goes)
+                        {
+                            <div class="small @(goes < DateTime.UtcNow.AddDays(2) ? "text-warning" : "text-secondary")">
+                                Comes off the site on @goes.ToViewerLocalTime(UserState).ToString("MM/dd/yyyy")
+                                unless you keep it.
+                            </div>
+                        }
                     </div>
-                    <input type="text" class="form-control form-control-sm" style="max-width:16rem"
-                           placeholder="Reason if declining" @bind="_reasons[ev.Id]" @bind:event="oninput"
-                           aria-label="@($"Reason for declining {ev.FileName}")" />
-                    <button type="button" class="btn btn-success btn-sm" disabled="@_busy"
-                            @onclick="() => ReviewAsync(ev, true)">Accept</button>
-                    <button type="button" class="btn btn-outline-danger btn-sm" disabled="@_busy"
-                            @onclick="() => ReviewAsync(ev, false)">Decline</button>
+                    @* A verdict is offered once. A row that is here because its clock is running
+                       has already been judged, and showing Accept again would invite somebody to
+                       re-decide something they settled last week. *@
+                    @if (ev.Status == EvidenceSubmissionStatus.Pending)
+                    {
+                        <input type="text" class="form-control form-control-sm" style="max-width:16rem"
+                               placeholder="Reason if declining" @bind="_reasons[ev.Id]" @bind:event="oninput"
+                               aria-label="@($"Reason for declining {ev.FileName}")" />
+                        <button type="button" class="btn btn-success btn-sm" disabled="@_busy"
+                                @onclick="() => ReviewAsync(ev, true)">Accept</button>
+                        <button type="button" class="btn btn-outline-danger btn-sm" disabled="@_busy"
+                                @onclick="() => ReviewAsync(ev, false)">Decline</button>
+                    }
+                    else
+                    {
+                        <span class="badge text-bg-@(ev.Status == EvidenceSubmissionStatus.Accepted ? "success" : "secondary")">
+                            @(ev.Status == EvidenceSubmissionStatus.Accepted ? "Accepted" : "Declined")
+                        </span>
+                    }
+                    @* Keeping is a separate decision from publishing: a recording worth holding on
+                       to is often one you would not put on the page, and a photograph you publish
+                       is kept by being published. Both buttons, because both happen. *@
+                    @if (!ev.IsKept && ev.ExpiresAtUtc is not null)
+                    {
+                        <button type="button" class="btn btn-outline-secondary btn-sm text-nowrap"
+                                disabled="@_busy" @onclick="() => SetKeptAsync(ev, true)">Keep it</button>
+                    }
+                    else if (ev.IsKept)
+                    {
+                        <button type="button" class="btn btn-link btn-sm text-secondary text-nowrap p-0"
+                                disabled="@_busy" @onclick="() => SetKeptAsync(ev, false)">Let it go</button>
+                    }
+                    @if (_tours.Count > 0 && ev.ContentType.StartsWith("image/", StringComparison.OrdinalIgnoreCase))
+                    {
+                        <select class="form-select form-select-sm" style="max-width:13rem"
+                                aria-label="@($"Put {ev.FileName} on a tour's page")"
+                                @onchange="@(e => KeepOnTourAsync(ev, e.Value?.ToString()))">
+                            <option value="" selected>Put it on a tour…</option>
+                            @foreach (var tour in _tours)
+                            {
+                                <option value="@tour.Id">@tour.Name</option>
+                            }
+                        </select>
+                    }
                 </div>
             }
             @if (_error is not null)
@@ -56,6 +107,9 @@
     private bool _busy;
     private string? _error;
 
+    /// <summary>The business's tours, so a photograph can be put straight onto one's page.</summary>
+    private IReadOnlyList<Ben.Service.Models.Entities.TourRecord> _tours = [];
+
     protected override async Task OnParametersSetAsync()
     {
         // The standing AuthReady rule: this fetch needs a bearer token, and a component can run
@@ -71,6 +125,39 @@
         _queue = await AdminClient.GetEvidenceQueueAsync(OrgId);
         foreach (var ev in _queue.Items)
             _reasons.TryAdd(ev.Id, "");
+
+        // Empty for a group that runs no tours, which is most of them, and the control is hidden.
+        _tours = [.. (await AdminClient.GetToursAsync(OrgId)).Items.Where(t => t.IsActive)];
+    }
+
+    private async Task SetKeptAsync(EventEvidenceRecord ev, bool kept)
+    {
+        _busy = true; _error = null;
+        var ok = await AdminClient.SetMediaKeptAsync(OrgId, ev.UploadFileId, kept);
+        _busy = false;
+
+        if (!ok) { _error = "That could not be changed."; return; }
+        await LoadAsync();
+    }
+
+    /// <summary>
+    /// Puts a guest's photograph on a tour's page, which is also how it is kept.
+    /// </summary>
+    /// <remarks>
+    /// The business gets its own copy, fitted and stripped of the camera data; the guest's
+    /// original is untouched and keeps its own clock, because publishing somebody's photograph is
+    /// not the same as taking it.
+    /// </remarks>
+    private async Task KeepOnTourAsync(EventEvidenceRecord ev, string? tourId)
+    {
+        if (!Guid.TryParse(tourId, out var id)) return;
+
+        _busy = true; _error = null;
+        var (kept, error) = await AdminClient.KeepSubmissionOnTourAsync(OrgId, id, ev.Id, ev.Note);
+        _busy = false;
+
+        if (kept is null) { _error = error ?? "That picture could not be put on the tour."; return; }
+        await LoadAsync();
     }
 
     private async Task ReviewAsync(EventEvidenceRecord ev, bool accept)

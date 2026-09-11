@@ -641,6 +641,32 @@ app.MapGet("/media/shared/{token}/files/{fileId:guid}", async (
         accessToken: null, httpFactory, ctx, ct);
 }).AllowAnonymous();
 
+// A tour guide's photograph (item 233). Anonymous end to end: it has to render for a guest who
+// has no account and may be reading it in an email client. The API decides — it serves the file
+// only while it is a photograph its owner has published — so this forwards and asserts nothing,
+// exactly like the share-link route above.
+app.MapGet("/media/guide-photo/{fileId:guid}", async (
+    Guid fileId,
+    IHttpClientFactory httpFactory, IConfiguration config,
+    HttpContext ctx, CancellationToken ct) =>
+{
+    return await Ben.Web.Website.Services.MediaProxy.StreamAsync(
+        $"{config["WebApi:BaseUrl"]}/api/public/guide-photo/{fileId}",
+        accessToken: null, httpFactory, ctx, ct);
+}).AllowAnonymous();
+
+// A picture from a tour's gallery (item 233). Anonymous like the guide photograph above: a tour
+// page is read by people with no account.
+app.MapGet("/media/tour-photo/{fileId:guid}", async (
+    Guid fileId,
+    IHttpClientFactory httpFactory, IConfiguration config,
+    HttpContext ctx, CancellationToken ct) =>
+{
+    return await Ben.Web.Website.Services.MediaProxy.StreamAsync(
+        $"{config["WebApi:BaseUrl"]}/api/public/tour-photo/{fileId}",
+        accessToken: null, httpFactory, ctx, ct);
+}).AllowAnonymous();
+
 app.MapGet("/media/{fileId:guid}/{kind}", async (
     Guid fileId, string kind, string? t,
     Ben.Web.Website.Services.MediaTicketService tickets,

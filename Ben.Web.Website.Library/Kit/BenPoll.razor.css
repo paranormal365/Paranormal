@@ -1,0 +1,100 @@
+/*
+    A poll on a message.
+
+    The bar sits BEHIND the answer rather than beside it: a bar in its own column squeezes a long
+    answer into half the width to make room for a number nobody needed that much room for.
+*/
+
+.poll {
+    display: flex;
+    flex-direction: column;
+    gap: .3rem;
+    max-width: 30rem;
+    margin-top: .5rem;
+}
+
+.poll__question {
+    font-weight: 600;
+}
+
+.poll__option {
+    position: relative;
+    display: flex;
+    align-items: center;
+    gap: .5rem;
+    width: 100%;
+    padding: .4rem .6rem;
+    border: 1px solid var(--bs-border-color);
+    border-radius: .45rem;
+    background: var(--bs-body-bg);
+    color: inherit;
+    text-align: left;
+    overflow: hidden;
+    cursor: pointer;
+    transition: border-color .14s ease;
+}
+
+.poll__option:hover:not(:disabled),
+.poll__option:focus-visible {
+    border-color: var(--bs-primary);
+}
+
+.poll__option:disabled {
+    cursor: default;
+}
+
+/* This reader's own answer, marked the way every other vote on the site marks one. */
+.poll__option--mine {
+    border-color: var(--bs-primary);
+}
+
+.poll__fill {
+    position: absolute;
+    inset: 0 auto 0 0;
+    background: color-mix(in srgb, var(--bs-primary) 18%, transparent);
+    /* Behind the words, and never catching a click meant for the button. */
+    pointer-events: none;
+    transition: width .25s ease;
+}
+
+.poll__option--mine .poll__fill {
+    background: color-mix(in srgb, var(--bs-primary) 30%, transparent);
+}
+
+.poll__text {
+    position: relative;
+    flex: 1 1 auto;
+    min-width: 0;
+}
+
+.poll__count {
+    position: relative;
+    flex: 0 0 auto;
+    font-size: .8rem;
+    font-variant-numeric: tabular-nums;
+    color: var(--bs-secondary-color);
+}
+
+.poll__foot {
+    display: flex;
+    flex-wrap: wrap;
+    gap: .3rem;
+    font-size: .75rem;
+    color: var(--bs-secondary-color);
+}
+
+.poll__foot a {
+    color: inherit;
+}
+
+.poll__error {
+    font-size: .78rem;
+    color: var(--bs-danger);
+}
+
+@media (prefers-reduced-motion: reduce) {
+    .poll__option,
+    .poll__fill {
+        transition: none;
+    }
+}

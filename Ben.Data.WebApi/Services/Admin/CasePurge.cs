@@ -221,6 +221,20 @@ public sealed class CasePurge
                     .ExecuteDeleteAsync(ct);
             }
 
+            // Reports ABOUT this case go with it: a report is a pointer at a thing, and a pointer
+            // at nothing is not a report a moderator can act on. Reports about its COMMENTS are
+            // cascaded by the comment's own deletion below.
+            await db.OrgMessageReports.Where(x => x.CaseId == caseId).ExecuteDeleteAsync(ct);
+
+            // A comment on this case is deleted, not unlinked. It exists only because the case
+            // did — "Walked past this place last October" with no place attached is not a message
+            // anybody can read. A feed POST that referenced the case is different and keeps the
+            // unlink below: it is somebody's own post, and it survives the case going away.
+            await db.OrgMessages
+                .Where(x => x.CaseId == caseId
+                         && x.ChannelType == OrgMessageChannel.PublicCaseComment)
+                .ExecuteDeleteAsync(ct);
+
             await db.OrgMessages.Where(x => x.CaseId == caseId)
                 .ExecuteUpdateAsync(u => u.SetProperty(x => x.CaseId, (Guid?)null), ct);
             await db.OrgCalendarEvents.Where(x => x.CaseId == caseId)

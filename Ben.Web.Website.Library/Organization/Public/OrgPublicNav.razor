@@ -1,0 +1,41 @@
+@namespace Ben.Web.Website.Library.Organization.Public
+@using Ben.Web.Services
+
+@*
+    A group's own pages, as one track of pills rather than a row of outline buttons — so they read
+    as one navigation and the page you are on is obvious without reading the labels.
+*@
+
+<nav class="org-nav @Class">
+    <a href="@($"/o/{OrgUrlName}")" class="org-nav__item @(Active is null ? "org-nav__item--here" : "")">Home</a>
+    <a href="@($"/o/{OrgUrlName}/cases")" class="org-nav__item @(Here("cases"))">Cases</a>
+    <a href="@($"/o/{OrgUrlName}/events")" class="org-nav__item @(Here("events"))">Events</a>
+    @if (ShowTours)
+    {
+        <a href="#org-tours" class="org-nav__item">Tours</a>
+    }
+    @* Named `nav`, not `page`: Razor reads a line beginning "@page" as the page directive and
+       refuses to compile the file. *@
+    @foreach (var nav in NavPages.Where(p => p.ParentPageId is null).OrderBy(p => p.SortOrder))
+    {
+        <a href="@($"/o/{OrgUrlName}/{nav.UrlName}")" class="org-nav__item @(Here(nav.UrlName))">
+            @nav.PageTitle
+        </a>
+    }
+</nav>
+
+@code {
+    [Parameter, EditorRequired] public string OrgUrlName { get; set; } = string.Empty;
+    [Parameter] public IReadOnlyList<OrgPublicNavItem> NavPages { get; set; } = [];
+
+    /// <summary>The slug of the page being shown, or null on the group's home page.</summary>
+    [Parameter] public string? Active { get; set; }
+
+    /// <summary>Whether the home page has a tours block to jump to.</summary>
+    [Parameter] public bool ShowTours { get; set; }
+
+    [Parameter] public string? Class { get; set; }
+
+    private string Here(string slug) =>
+        slug.Equals(Active, StringComparison.OrdinalIgnoreCase) ? "org-nav__item--here" : "";
+}

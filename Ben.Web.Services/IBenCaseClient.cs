@@ -81,6 +81,33 @@ public interface IBenCaseClient
     Task<CaseVoteSummary?> CastCaseVoteAsync(Guid caseId, Ben.Data.Common.Enums.EvidenceVoteType voteType, CancellationToken token = default);
     Task<bool> RemoveCaseVoteAsync(Guid caseId, CancellationToken token = default);
 
+    // ── What people said, and what to do about it (item 233, Ben 2026-09-11) ──
+
+    /// <summary>The comments on a published case, oldest first. Anonymous readers may ask.</summary>
+    Task<LoadResult<PublicCaseComment>> GetCaseCommentsAsync(Guid caseId, CancellationToken token = default);
+
+    /// <summary>Leaves a comment, or the refusal in the words the server wrote it.</summary>
+    Task<(PublicCaseComment? Saved, string? Error)> PostCaseCommentAsync(
+        Guid caseId, string body, CancellationToken token = default);
+
+    /// <summary>Takes back a comment of your own.</summary>
+    Task<bool> DeleteCaseCommentAsync(Guid caseId, Guid commentId, CancellationToken token = default);
+
+    /// <summary>Puts a link to the case on the feed, as a post by the person asking.</summary>
+    Task<(Guid? PostId, string? Error)> RepostCaseAsync(Guid caseId, CancellationToken token = default);
+
+    /// <summary>Reports a case to the moderators. The answer never varies; see the controller.</summary>
+    Task<bool> ReportCaseAsync(Guid caseId, string? reason, CancellationToken token = default);
+
+    /// <summary>Reports one comment on a case.</summary>
+    Task<bool> ReportCaseCommentAsync(Guid caseId, Guid commentId, string? reason, CancellationToken token = default);
+
+    /// <summary>
+    /// What a link in a message points at, when it points at something of ours. Null otherwise —
+    /// nothing fetches anybody else's page; see the controller for why.
+    /// </summary>
+    Task<LinkPreview?> GetLinkPreviewAsync(string url, CancellationToken token = default);
+
     // ── Cases ─────────────────────────────────────────────────────────────────
 
     Task<LoadResult<CaseRecord>> GetOrgCasesAsync(Guid orgId, CancellationToken token = default);

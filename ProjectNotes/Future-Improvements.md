@@ -11551,3 +11551,109 @@ Maps key the website uses, buys an access token, and answers forward, reverse an
 lookups in the shapes the callers already had. Fixtures captured from the real API; a live test
 proves the key. Details: `README-apple-geocoding-230.md`.
 
+---
+
+## 231. One flat price for tour and event businesses (BUILT 2026-09-10)
+
+Ben asked for the tour-business mailing to be re-verified, given the logo, and for tour groups to
+be billed monthly and yearly at the flat price it promises. Every claim held except the price:
+the tier resolver priced every organization by member count, so a tour with eight guides landed
+in a $60 band. `SubscriptionTierResolver` now takes the organization's kind and sells a business
+kind the flat tier when one is on offer. No schema change; the tier is data (Administration →
+Subscription Tiers, banded by members unticked, 29 / 290). Created on the testing copy;
+**production needs the same tier entered.** Mailing rebuilt with the logo. Details:
+`README-tour-business-billing-231.md`.
+
+---
+
+## 232. The ladder-reshape Playwright fixture cannot open its dialog (OPEN, found 2026-09-10)
+
+`LadderReshapeTests` (category Billing) fails on the testing copy: the **Reshape the ladder**
+button is visible, the click lands, and the dialog never appears — with the flat tour tier present
+or retired, so item 231 is not the cause, and the website logged no error. The opening click was
+changed to a retrying one on 2026-09-10 and that did not help, so this is not the usual Blazor
+attach race. Not chased further that day; the three other billing fixtures pass. Start by opening
+`/admin/subscription-tiers` as SuperAdmin on the testing copy and pressing the button by hand.
+
+---
+
+## 233. The tour tier: tours are the unit a business pays for (IN PROGRESS 2026-09-10)
+
+Ben's brief, 2026-09-10, in his words and in order: photos stay a month unless the tour rep keeps
+them; video and audio a week, five minutes each at 720p or 1080p; Field Kit submissions the same,
+so the end user can save or download them first. "The tour can schedule tours and people can sign
+up for the tour. Money collected is to be arranged by the tour company or person… a template to
+generate for people who sign up and then as a reminder including the .ics file." "They can set the
+time and the number of people accepted." Then the rule that reshaped the item: **"The $29 per month
+is for a single tour no matter how many times scheduled. If they have a tour on one street and need
+another tour for another street, that is a different tour."** Nail it down by the start location
+(required) and, my call, the tour's name, unique within the business. The guest email carries the
+start date and time and "name and photo of person who will be leading the tour - for safety"; the
+photo is optional and per date, since a tour led by two people is not the same picture each time.
+"Tours are public so, they show up on the map and are searchable." Retention restated: "Evidence
+collected - unless marked to save - only lasts a week for everything but photos. Photos stay a
+month." The keep for images is a gallery: "up to 50 1920x1080 72ppi images… tag ones from tours to
+keep as well, but 50 images per tour max." Reviews are optional per tour and on by default. The
+owner is not necessarily a guide and adds guides to a tour; the owner manages tours from the web,
+choosing which when there is more than one.
+
+**Superseded by this item:** item 231's flat price per business. The tier row and its two prices
+stay; what changes is that the price is a *unit* price and the quantity is the business's live
+tours, re-counted at renewal and prorated when one is added mid-period (charged today on the saved
+card; without a card it is counted at the next renewal).
+
+Plan of record: `README-tour-tier-233.md`. Phases: **0** entity, `TourId` on dates,
+`TourCountAtPeriodStart`, `TourBilling` and `BillableUnits` behind checkout, quote, renewal and the
+admin screen; **1** tour API, add-on charge, tour and date guides, the calendar rule (a public date
+of a tour business belongs to a tour), the tours page with a per-tour management page, scheduler and
+billing page, public tour page, org home, `/events`, home-map pins and nearby search, iOS shows the
+tour name and guides; **2** guest mail with attachments, `.ics`, template placeholders, the four send
+sites, editor with preview; **3** retention limits as tier data, expiry stamps, the sweep with
+notices, the 50-image gallery, keep for recordings, download while it lasts, five-minute and 1080p
+rules at the doors; **4** reviews; **5** help, screenshots, both PDFs, deploy notes, production data.
+
+**Asked for mid-build and built on the same branch** (2026-09-11): the look pass across the tour,
+event, group, events and group-cases pages; the clock rule (times render in the zone of the place,
+or UTC, never the server's); a tour's social links; a timezone on an event; the case vote widget
+rebuilt as one button with a dropdown, beside share, repost, comments and report; comments on a
+published case; link previews under any message carrying a web address; and the composer's row of
+tools — photo/video, GIF (through our own API, so the Giphy key never reaches a browser), poll,
+emoji, schedule and location. Ben's item 3 from the Twitter screenshot ("that is Grok AI, I don't
+know what AI — if any — I would put there") is deliberately not built. The poll widget is reusable
+by design: a poll belongs to a message, so the same pair of components serves a feed post, a case
+comment and a group's own message.
+
+---
+
+## 234. The tour on the phone: a reserved seat, notifications, and a Haunted Tours tab (FUTURE, Ben 2026-09-10)
+
+Recorded while item 233 was being built, in Ben's words, to be picked up after it lands:
+
+> "I would like to be able to let the tours use the website with coordination to the iPhone and
+> iPad app where if the person downloads the app and creates an account free or paid, they can get
+> notified where the tour is, when to get there and other stuff that would be available in the
+> e-mail like a link to add to the calendar and a link to get directions to the start point. They
+> would not be confirmed until the tour guide or manager approves them meaning they have settled
+> how money will be or has been exchanged. Then, the person who is touring can confirm it on the
+> app - if they want. This is just confirmation between the tour company and the person taking the
+> tour the seat or seats have been reserved for the tour. I would also like to add the tours in a
+> Haunted Tours tab in the iPhone and iPad app based on current location or looking up a location
+> on the tab."
+
+Four pieces, each resting on item 233:
+
+1. **A seat is reserved, not merely requested.** A sign-up becomes `Requested → Reserved` only when
+   the guide or manager approves it, because approval is where the business says the money is
+   settled. We never take the money; the state is the two of them agreeing. The guest may then
+   acknowledge on the phone, which is optional and is the third state.
+2. **Seats, plural.** A sign-up carries how many places it holds, and capacity counts places rather
+   than people.
+3. **Notifications on the phone** for a reserved seat: where the tour is, when to be there, add to
+   the calendar, directions to the start point — everything the item 233 email already carries,
+   which is why the email's placeholders and its start address are the source for both.
+4. **A Haunted Tours tab** in the iPhone and iPad app: tours near me, or near a place I look up,
+   from the same public tour endpoints item 233 builds for the website map and search.
+
+Prerequisites already true after 233: tours are public with a start address and coordinates, dates
+carry guides and capacity, and the guest mail knows how to say all of it.
+

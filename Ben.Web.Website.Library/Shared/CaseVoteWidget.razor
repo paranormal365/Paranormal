@@ -2,20 +2,30 @@
 @using Ben.Data.Common.Enums
 @using Ben.Service.Models.Entities
 @using Ben.Web.Services
+@using Ben.Web.Website.Library.Kit
 @inject IBenAdminClient AdminClient
 @inject IBenUserState UserState
 @inject SiteFeaturesProvider Features
+@inject NavigationManager NavManager
+@inject IJSRuntime JS
 
 @*
-  Community vote widget for a public case.
-  Shows aggregate vote counts (confirms/disputes/inconclusive) and,
-  for authenticated users, buttons to cast or change their vote.
+  What people think of a published case: the counts, and the row of small round buttons under
+  them (Ben, 2026-09-11).
+
+  The vote is ONE button, not three. It carries a hollow thumb until you have voted and the filled
+  icon of your own vote afterwards, so the control says what you did without a legend; pressing it
+  again takes the vote back, which is what the separate Remove button used to be for. The three
+  choices — up, neutral, down — appear when you press it with no vote cast.
+
+  Every button in the row is the same height and the row never wraps: it is a strip of actions, and
+  a strip that reflows onto two lines stops reading as one.
 *@
 
 @* Item 154: the voting switch — off means this renders nothing at all. *@
 @if (Features.IsOn(SiteFeatures.Voting))
 {
-    <div class="case-vote-widget d-flex flex-column gap-2">
+    <div class="case-vote-widget">
         @if (_summary is null && _loading)
         {
             <span class="text-secondary small">Loading votes…</span>
@@ -26,7 +36,7 @@
         }
         else if (_summary is not null)
         {
-            @* ── Vote progress bar ──────────────────────────────────────────────── *@
+            @* ── How it stands ─────────────────────────────────────────────── *@
             @if (_summary.TotalVotes > 0)
             {
                 <div class="mb-1">
@@ -45,50 +55,120 @@
                 <VoteScoreBadge Score="@_summary.Score" Total="@_summary.TotalVotes" />
             </div>
 
-            @* ── Vote buttons (authenticated users only) ──────────────────────── *@
-            @if (UserState.IsAuthenticated)
-            {
-                @* Ben's rule (2026-08-24): the vote bar fills its line and NEVER wraps. Three
-                   equal buttons — the icon is always there, the word appears when it fits, and
-                   the tooltip + aria-label say it in full at every width. *@
-                <div class="d-flex w-100 gap-1">
-                    @foreach (var vt in Enum.GetValues<EvidenceVoteType>())
+            @* ── The actions ───────────────────────────────────────────────── *@
+            <div class="vote-actions">
+                <div class="vote-actions__vote">
+                    <button type="button" class="vote-btn @(MyVote is { } cast ? $"vote-btn--{ToneOf(cast)}" : "")"
+                            aria-label="@VoteButtonLabel"
+                            aria-pressed="@((MyVote is not null).ToString().ToLowerInvariant())"
+                            aria-expanded="@_picking.ToString().ToLowerInvariant()"
+                            title="@VoteButtonLabel"
+                            @onclick="VoteButtonPressedAsync"
+                            disabled="@_isBusy">
+                        <BenIcon Name="@(MyVote is { } icon ? IconOf(icon) : "thumbs-up")"
+                                 Class="@(MyVote is null ? "" : "vote-btn__icon--filled")" />
+                    </button>
+
+                    @* A dropdown off the button (Ben, 2026-09-11), not a row of its own: three
+                       choices hanging under the control that asked for them, rather than a second
+                       strip of buttons competing with the first.
+
+                       A plain panel rather than a dialog — a dialog would take the focus and the
+                       page away from somebody halfway down a case, for a decision that is one
+                       click. Each choice is a hollow icon; its meaning is a tooltip, which appears
+                       when the reader pauses on it. *@
+                    @if (_picking)
                     {
-                        var v = vt;
-                        var isActive = _summary.CurrentUserVote == v;
-                        @* Solid marks the vote this user has cast, outline the ones they have not —
-                           aria-pressed carries the same fact for anyone not seeing the fill. *@
-                        <button type="button"
-                                class="btn btn-sm flex-fill text-nowrap overflow-hidden @VoteButtonClass(v, isActive)"
-                                aria-pressed="@isActive.ToString().ToLowerInvariant()"
-                                aria-label="@VoteTitle(v)"
-                                title="@VoteTitle(v)"
-                                @onclick="@(() => CastVote(v))"
-                                disabled="@_isBusy">
-                            @VoteIcon(v)<span class="d-none d-md-inline ms-1">@VoteWord(v)</span>
-                        </button>
-                    }
-                    @if (_summary.CurrentUserVote.HasValue)
-                    {
-                        <button type="button" class="btn btn-sm btn-link text-decoration-none text-nowrap flex-shrink-0"
-                                title="Remove my vote" aria-label="Remove my vote"
-                                @onclick="RemoveVote" disabled="@_isBusy">
-                            &#x21ba;<span class="d-none d-lg-inline ms-1">Remove</span>
-                        </button>
+                        <div class="vote-choices" role="menu" aria-label="How do you read this case?">
+                            @foreach (var choice in Choices)
+                            {
+                                var v = choice;
+                                <button type="button" class="vote-btn vote-btn--@ToneOf(v)"
+                                        title="@VoteTitle(v)" aria-label="@VoteTitle(v)"
+                                        @onclick="@(() => CastVoteAsync(v))" disabled="@_isBusy">
+                                    <BenIcon Name="@IconOf(v)" />
+                                </button>
+                            }
+                        </div>
                     }
                 </div>
-                @if (_actionError is not null)
+
+                @* Share. No backend and none needed: the address of this page is the whole of
+                   what is being shared.
+
+                   Hovering opens the places it can go (Ben, 2026-09-11) — most people know these
+                   marks on sight, so each carries its name in a tooltip rather than a word inside
+                   the button. Opened on focus too, or the row would be unreachable by keyboard,
+                   and pressing the button itself still does the sensible thing on a phone, where
+                   there is no hover and the browser has a share sheet of its own. *@
+                <div class="vote-actions__share">
+                    <button type="button" class="vote-btn" title="Share" aria-label="Share this case"
+                            @onclick="ShareAsync">
+                        <BenIcon Name="share-2" />
+                    </button>
+
+                    <div class="share-choices">
+                        @foreach (var target in ShareTargets)
+                        {
+                            <a class="vote-btn" href="@target.Href" title="@target.Name"
+                               aria-label="@($"Share on {target.Name}")"
+                               target="_blank" rel="noopener noreferrer">
+                                <BenIcon Name="@target.Icon" />
+                            </a>
+                        }
+                        <button type="button" class="vote-btn" title="Copy link"
+                                aria-label="Copy a link to this case" @onclick="CopyLinkAsync">
+                            <BenIcon Name="link" />
+                        </button>
+                    </div>
+                </div>
+
+                @* Repost: a link to this case on the feed, as a post by whoever pressed it —
+                   posting on behalf of a group takes permission, and this is one person saying
+                   look at this (Ben, 2026-09-11). *@
+                <button type="button" class="vote-btn @(_reposted ? "vote-btn--done" : "")"
+                        title="@(_reposted ? "You put this on the feed" : "Repost to the feed")"
+                        aria-label="@(_reposted ? "You put this on the feed" : "Repost to the feed")"
+                        @onclick="RepostAsync" disabled="@_isBusy">
+                    <BenIcon Name="repeat" />
+                </button>
+
+                @* Comments: straight down to them, since they are on this page. *@
+                <a class="vote-btn" href="#case-comments" title="Comments"
+                   aria-label="Go to the comments">
+                    <BenIcon Name="message-circle" />
+                    @if (CommentCount > 0)
+                    {
+                        <span class="vote-btn__count">@CommentCount</span>
+                    }
+                </a>
+
+                <button type="button" class="vote-btn @(_reported ? "vote-btn--done" : "")"
+                        title="@(_reported ? "Reported" : "Report this case")"
+                        aria-label="@(_reported ? "You reported this" : "Report this case")"
+                        @onclick="ReportAsync" disabled="@(_isBusy || _reported)">
+                    <BenIcon Name="flag" />
+                </button>
+
+                @if (_shareNote is not null)
                 {
-                    <span class="text-danger small">@_actionError</span>
+                    <span class="vote-actions__note" role="status">@_shareNote</span>
                 }
-            }
-            else
+            </div>
+
+            @if (_actionError is not null)
             {
-                <a href="/login" class="text-secondary text-decoration-none" style="font-size:.75rem;">Sign in to vote</a>
+                <span class="text-danger small">@_actionError</span>
+            }
+
+            @if (!UserState.IsAuthenticated)
+            {
+                <div class="vote-actions__signin">
+                    <a href="@SignInUrl"><strong>Sign in</strong></a> to vote.
+                </div>
             }
         }
     </div>
-
 }
 
 @code {
@@ -96,11 +176,43 @@
     /// <summary>When provided, skips the API fetch. Used by list views that pre-load summaries in batch.</summary>
     [Parameter] public CaseVoteSummary? PreloadedSummary { get; set; }
 
+    /// <summary>
+    /// How many comments the page below is showing, for the number on the comments button.
+    /// </summary>
+    /// <remarks>
+    /// Handed down rather than counted here. The page has already loaded them to render them, and
+    /// a second count from this component could disagree with the list a reader is looking at.
+    /// </remarks>
+    [Parameter] public int CommentCount { get; set; }
+
     private CaseVoteSummary? _summary;
     private bool _loading = true;
     private bool _isBusy;
+    private bool _picking;
     private string? _error;
     private string? _actionError;
+    private string? _shareNote;
+    private bool _reposted;
+    private bool _reported;
+
+    /// <summary>Up, level, down — the order they are offered in, and the order they read in.</summary>
+    private static readonly EvidenceVoteType[] Choices =
+    [
+        EvidenceVoteType.Confirms,
+        EvidenceVoteType.Inconclusive,
+        EvidenceVoteType.Disputes,
+    ];
+
+    private EvidenceVoteType? MyVote => _summary?.CurrentUserVote;
+
+    private string SignInUrl => $"/login?returnUrl={Uri.EscapeDataString(NavManager.Uri)}";
+
+    /// <summary>
+    /// What the one button says it will do, which changes with what the reader has already done.
+    /// </summary>
+    private string VoteButtonLabel => MyVote is { } v
+        ? $"Your vote: {VoteWord(v)}. Press to take it back."
+        : "Vote";
 
     // Item #103: this widget renders differently for a signed-in viewer (vote buttons, own
     // score) and reads UserState at render — but auth resolves asynchronously after the circuit
@@ -134,7 +246,33 @@
         _loading = false;
     }
 
-    private async Task CastVote(EvidenceVoteType voteType)
+    /// <summary>
+    /// Pressing the vote button: take the vote back if there is one, otherwise offer the three.
+    /// </summary>
+    /// <remarks>
+    /// A reader who is not signed in is sent to sign in rather than shown three choices that would
+    /// be refused — the sentence under the button already says so, and the button agreeing with it
+    /// is better than the button disagreeing.
+    /// </remarks>
+    private async Task VoteButtonPressedAsync()
+    {
+        if (!UserState.IsAuthenticated)
+        {
+            NavManager.NavigateTo(SignInUrl);
+            return;
+        }
+
+        if (MyVote is not null)
+        {
+            _picking = false;
+            await RemoveVoteAsync();
+            return;
+        }
+
+        _picking = !_picking;
+    }
+
+    private async Task CastVoteAsync(EvidenceVoteType voteType)
     {
         _isBusy = true;
         _actionError = null;
@@ -145,10 +283,14 @@
             else _actionError = "Failed to cast your vote. Please try again.";
         }
         catch { _actionError = "Failed to cast your vote. Please try again."; }
-        finally { _isBusy = false; }
+        finally
+        {
+            _picking = false;
+            _isBusy = false;
+        }
     }
 
-    private async Task RemoveVote()
+    private async Task RemoveVoteAsync()
     {
         _isBusy = true;
         _actionError = null;
@@ -161,44 +303,135 @@
         finally { _isBusy = false; }
     }
 
+    /// <summary>
+    /// Hands this page's address to the browser's own share sheet, or to the clipboard.
+    /// </summary>
+    /// <remarks>
+    /// Both can be refused — a share sheet is dismissable and the clipboard needs permission — and
+    /// neither refusal is worth an error, so the note simply does not appear. What must not happen
+    /// is an exception escaping into the circuit for a button somebody pressed idly.
+    /// </remarks>
+    private Task ShareAsync() => CopyLinkAsync();
+
+    private async Task CopyLinkAsync()
+    {
+        try
+        {
+            var copied = await JS.InvokeAsync<bool>("benShareLink", NavManager.Uri);
+            _shareNote = copied ? "Link copied" : null;
+        }
+        catch (JSException) { _shareNote = null; }
+        catch (JSDisconnectedException) { _shareNote = null; }
+    }
+
+    /// <summary>
+    /// Where a link can be handed to, with the mark people recognise it by.
+    /// </summary>
+    /// <remarks>
+    /// Each one is that service's own share address with this page's URL on it — nothing is posted
+    /// on anybody's behalf, and the reader lands in their own account to decide what to say. The
+    /// marks come from the site's sprite, which is Feather: there is no glyph for X, so it keeps
+    /// the bird it has always had rather than shipping a second icon set for one letter.
+    /// </remarks>
+    private IReadOnlyList<(string Name, string Icon, string Href)> ShareTargets
+    {
+        get
+        {
+            var url = Uri.EscapeDataString(NavManager.Uri);
+            return
+            [
+                ("Facebook", "facebook", $"https://www.facebook.com/sharer/sharer.php?u={url}"),
+                ("X",        "twitter",  $"https://twitter.com/intent/tweet?url={url}"),
+                ("LinkedIn", "linkedin", $"https://www.linkedin.com/sharing/share-offsite/?url={url}"),
+                ("Email",    "mail",     $"mailto:?body={url}"),
+            ];
+        }
+    }
+
+    /// <summary>
+    /// Puts a link to this case on the feed.
+    /// </summary>
+    /// <remarks>
+    /// The server answers with the id of the post either way — a second press finds the first one
+    /// rather than making another, so the button simply reports that it is done.
+    /// </remarks>
+    private async Task RepostAsync()
+    {
+        if (!UserState.IsAuthenticated) { NavManager.NavigateTo(SignInUrl); return; }
+
+        _isBusy = true;
+        _actionError = null;
+        try
+        {
+            var (postId, error) = await AdminClient.RepostCaseAsync(CaseId);
+            if (postId is not null) { _reposted = true; _shareNote = "On the feed"; }
+            else _actionError = error ?? "That could not be posted.";
+        }
+        catch { _actionError = "That could not be posted."; }
+        finally { _isBusy = false; }
+    }
+
+    /// <summary>
+    /// Reports the case to the site's moderators.
+    /// </summary>
+    /// <remarks>
+    /// No reason is asked for here. A box demanding an explanation before it will accept one is
+    /// how a report goes unsent; the moderator can see the case, and the reporter can say more in
+    /// the comments if they want to.
+    /// </remarks>
+    private async Task ReportAsync()
+    {
+        if (!UserState.IsAuthenticated) { NavManager.NavigateTo(SignInUrl); return; }
+
+        _isBusy = true;
+        _actionError = null;
+        try
+        {
+            // The server answers the same whether this is the first report or the fifth, so the
+            // button says the same thing either way.
+            await AdminClient.ReportCaseAsync(CaseId, null);
+            _reported = true;
+            _shareNote = "Reported";
+        }
+        catch { _actionError = "That could not be reported."; }
+        finally { _isBusy = false; }
+    }
+
     private double ConfirmsPct     => _summary is { TotalVotes: > 0 } ? _summary.ConfirmsCount     * 100.0 / _summary.TotalVotes : 0;
     private double DisputesPct     => _summary is { TotalVotes: > 0 } ? _summary.DisputesCount     * 100.0 / _summary.TotalVotes : 0;
     private double InconclusivePct => _summary is { TotalVotes: > 0 } ? _summary.InconclusiveCount * 100.0 / _summary.TotalVotes : 0;
 
-    private static string VoteIcon(EvidenceVoteType v) => v switch
+    /// <summary>Thumb up, level, thumb down — Ben's +1 / 0 / −1, in the sprite's names.</summary>
+    private static string IconOf(EvidenceVoteType v) => v switch
     {
-        EvidenceVoteType.Confirms     => "✓",
-        EvidenceVoteType.Disputes     => "✗",
-        EvidenceVoteType.Inconclusive => "?",
-        _                             => "•",
+        EvidenceVoteType.Confirms     => "thumbs-up",
+        EvidenceVoteType.Disputes     => "thumbs-down",
+        EvidenceVoteType.Inconclusive => "minus",
+        _                             => "circle",
+    };
+
+    private static string ToneOf(EvidenceVoteType v) => v switch
+    {
+        EvidenceVoteType.Confirms     => "up",
+        EvidenceVoteType.Disputes     => "down",
+        EvidenceVoteType.Inconclusive => "level",
+        _                             => "level",
     };
 
     private static string VoteWord(EvidenceVoteType v) => v switch
     {
-        EvidenceVoteType.Confirms     => "Confirms",
-        EvidenceVoteType.Disputes     => "Disputes",
-        EvidenceVoteType.Inconclusive => "Inconclusive",
+        EvidenceVoteType.Confirms     => "confirms",
+        EvidenceVoteType.Disputes     => "disputes",
+        EvidenceVoteType.Inconclusive => "can't say",
         _                             => v.ToString(),
     };
 
-    /// <summary>The full sentence, for the tooltip and screen readers at every width.</summary>
+    /// <summary>The full sentence, for the tooltip and screen readers.</summary>
     private static string VoteTitle(EvidenceVoteType v) => v switch
     {
         EvidenceVoteType.Confirms     => "Confirms the findings",
         EvidenceVoteType.Disputes     => "Disputes the findings",
         EvidenceVoteType.Inconclusive => "Inconclusive — can't say either way",
         _                             => v.ToString(),
-    };
-
-    /// <summary>Bootstrap button class for a vote: solid once cast, outline until then.</summary>
-    private static string VoteButtonClass(EvidenceVoteType v, bool isActive)
-        => (isActive ? "btn-" : "btn-outline-") + VoteThemeColor(v);
-
-    private static string VoteThemeColor(EvidenceVoteType v) => v switch
-    {
-        EvidenceVoteType.Confirms     => "success",
-        EvidenceVoteType.Disputes     => "danger",
-        EvidenceVoteType.Inconclusive => "secondary",
-        _                             => "secondary",
     };
 }

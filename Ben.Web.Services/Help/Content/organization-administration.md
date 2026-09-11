@@ -516,6 +516,166 @@ timeline entry private, or the case is unpublished, the photos come off every pa
 themselves. You do not have to remember which pages they were on. The same is true of the direct
 image links — a link copied out of the page stops working at the same moment.
 
+## Tours
+
+If you run ghost walks, a **tour** is the thing you sell and the thing your plan is priced on. The
+walk down Printers Alley is one tour whether you run it twice a year or four nights a week; a
+second walk down a different street is a second tour. **Administration → Tours** is where they
+live, and each one has its own page.
+
+Two things tell your tours apart. The **meeting point** is required and must be one of your own
+addresses, so it can be corrected in one place and every date follows. The **name** is what
+separates two tours that leave from the same corner, so it has to be different from your other
+tours — and it is what a guest will look for, so use what is on your leaflet.
+
+A tour also carries how long it runs, how many people a date takes, its time zone, a line about
+how to reach you and how to pay, and a description. Nothing about money passes through this site:
+that line is where you tell your guests what to bring and what it costs.
+
+![Your tours](help-media:organization-administration/tours.png)
+
+Opening one gives you everything about it on a page of its own — and a picker at the top for
+switching between them when you run more than one.
+
+![One tour](help-media:organization-administration/tour-details.png)
+
+### Adding a tour, and what it costs
+
+Your plan covers one tour. Adding another is charged for the part of your current period that is
+left, on the card you already have on file, and after that every renewal counts the tours you are
+running. If there is no card on file the tour is still yours to run and simply gets counted at
+your next renewal. The Tours page tells you which of those is about to happen before you press
+the button.
+
+**Retiring** a tour stops it taking new dates and drops it from your next renewal. It refunds
+nothing for the period you have already paid for, and it leaves everything the tour has already
+run exactly where it is. **Pausing** — turning off *Taking sign-ups* — is the lighter version for
+a closed season.
+
+### Guides
+
+You do not have to be a guide yourself. Add the people who actually walk it from your members, and
+each date starts with those guides on it — then change them per date, because a tour led by two
+people is not the same person every night.
+
+Every guest who signs up is told who is leading their walk, by name, with their photograph when
+they have made one public on their profile. That is a safety thing: somebody meeting a stranger
+after dark should know who they are looking for. The photograph is optional and always theirs to
+publish or not; a guide who has not published one is simply named.
+
+### Dates
+
+A date is the tour happening, and it goes on the **calendar** like anything else — pick the tour,
+set the time, and the meeting point, length and group size come from the tour unless you say
+otherwise. Scheduling a tour again costs nothing; the plan counts tours, not nights.
+
+A public date of a tour business has to name a tour. Without one there is nothing to tell a guest
+where to stand or who they are meeting, so the calendar refuses it and says so. A private date —
+a guides' meeting, a rehearsal — needs no tour.
+
+### The email your guests get
+
+When somebody signs up for a date, and again the night before, they are sent an email about the
+walk with a **calendar file** attached, so it lands in their diary with the meeting point and their
+phone reminds them.
+
+You can write that email yourself under **Tours → the tour → Guest email**, or leave it empty and
+we send a complete one. Drop in the things that change per date by clicking a placeholder and
+pasting it: the tour's name and meeting point, the date and time in your tour's own time zone, who
+is guiding that night and their photograph, how many places are left, and your own contact line.
+Anything we do not recognise is simply left out, and **the meeting point is always included**
+whether or not you ask for it — a guest who cannot tell where to stand has not been told about the
+tour.
+
+**See what it looks like** renders it against your next scheduled date, with your times, your
+guides and your wording, and shows the calendar file that travels with it. Nothing is sent.
+
+![The guest email](help-media:organization-administration/tour-guest-email.png)
+
+Replies go to your group's public email address when you have set one, so a guest who hits reply
+reaches you rather than us.
+
+### Pictures and the slideshow
+
+Each tour keeps up to 50 pictures. Add your own from **Tours → the tour → Pictures**; the first one
+is the picture on the tour's card and at the top of its page. Anything you add is fitted inside
+1920 by 1080 and re-encoded, which strips the camera data — including where the photograph was
+taken — before it is ever published.
+
+The tour's page shows a slideshow of those pictures **and** of the photographs guests sent in that
+you accepted, each credited to whoever took it. Accepting a guest's photograph is also how you keep
+it: it is the answer to the retention clock, so a shot worth keeping goes on the page.
+
+Somebody who came on the tour sees their own uploads on the tour's page, whatever you decided about
+them — accepted, waiting, or not published. They took the photograph; your decision is about what
+the tour publishes, not about who it belongs to.
+
+### What people say about it
+
+Guests who came on a date that has finished can leave a rating out of five and a few words. It is
+on by default and switchable per tour under **Details**; turning it off stops new ones and leaves
+anything already there.
+
+You can **hide** a review you think is unfair. You cannot change what somebody wrote — their name
+is on it — and hiding is undoable, so nothing is lost either way. Whoever wrote it still sees it on
+the page, marked as hidden, rather than being left to wonder where it went. If they rewrite it, it
+comes back: new words have not been judged.
+
+### How long things stay
+
+On the tour plan, a photograph a guest sends in stays for **a month** and a recording for **a
+week**, unless somebody keeps it. Recordings are limited to **five minutes** each; a longer one is
+refused when it is sent, with the length said plainly, because the phone can trim before uploading
+and only the person who was there knows which five minutes matter.
+
+**Keep it** on the submission itself stops the clock on anything — a recording you want to hold on
+to, a photograph you are not going to publish. **Put it on a tour** does the same for a picture and
+publishes it: the business gets its own copy, fitted inside 1920 by 1080 with the camera data
+stripped, while the guest's original keeps its own clock and its own owner. Both are on the
+evidence queue, beside Accept and Decline, along with the date each file comes off.
+
+Letting something go again puts it back on the clock from that day, not from when it was uploaded,
+and whoever sent it in is warned afresh.
+
+Everyone who sends something in is emailed before it goes, a week ahead and again the day before,
+so they can download it. Nothing is ever deleted that has not been warned about first.
+
+Groups that are not on a tour plan have no clock at all: their files stay, as they always have.
+
+### Where your tours show up
+
+Tours are public. They appear on your own public page, on the map on the front page, and in the
+nearby search, with the meeting point given in full — shown on its own map on the tour's page, with
+directions and a link that opens it in Maps — an address held back from somebody deciding
+whether to come is held back from the wrong person. Each tour also has a page of its own at
+`/o/your-group/tours/the-tour-name`, which is the link worth sharing.
+
+### Where else you are
+
+Under **Where else you are** on a tour's page you can add the accounts that walk goes with:
+your own website, Instagram, Facebook, X, TikTok, YouTube, Bluesky, Rumble and Threads. They show
+as a quiet row at the **foot** of the tour's public page, under the dates — somebody reading it is
+deciding whether to come, and sending them to Instagram before they have seen when it runs would
+be an odd thing for the page to do.
+
+![The nine link boxes on a tour's settings page](help-media:organization-administration/tour-links.png)
+
+One account per service. Leave a box empty to take that one down; there is nothing to confirm.
+Each link has to point at that service's own site — an Instagram link that opens somewhere else is
+refused, because a reader clicks the word without reading the address.
+
+### Which clock an event runs on
+
+Every event carries the zone it actually happens in, chosen on the scheduler under **Which clock**.
+It starts on your own zone, because whoever is scheduling is usually standing where it happens.
+
+![The Which clock picker on the scheduler](help-media:organization-administration/event-clock.png)
+
+That clock is what the public sees, wherever in the world they are reading — an event at eight in
+Nashville reads as eight in Tokyo, with the zone named beside it, so the listing, the event's page
+and the reminder email all agree. A date under a tour takes the tour's clock unless you say
+otherwise. An event with no clock set is shown in UTC and says so.
+
 ## Public events
 
 An event on your calendar can be opened to anybody. Tick **Public** and it appears on your group's

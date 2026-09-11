@@ -1,8 +1,11 @@
+@using Ben.Web.Website.Library.Kit
 @namespace Ben.Web.Website.Library.Shared
 @using Ben.Web.Website.Library.Organization
 @implements IAsyncDisposable
 
 @inject IBenAdminClient  AdminClient
+@inject IMediaUrlBuilder MediaUrls
+@inject IBenUserState    UserState
 @inject IJSRuntime       JS
 @using Ben.Web.Services
 @inject SiteFeaturesProvider Features
@@ -22,7 +25,9 @@
 @* Item 154: the discovery switch — off means this renders nothing at all. *@
 @if (Features.IsOn(SiteFeatures.Discovery))
 {
-    <div class="container-fluid px-3 mt-5" style="max-width:1000px;">
+    @* The id is for the help capture and for anything else that wants the panel rather than the
+       page it sits on. *@
+    <div class="container-fluid px-3 mt-5" id="nearby" style="max-width:1000px;">
         <div class="d-flex align-items-baseline justify-content-between mb-2 flex-wrap gap-2">
             <h4 class="mb-0">What's Near You</h4>
             <div class="d-flex align-items-center gap-2">
@@ -81,7 +86,7 @@
                 <BenLoaderOverlay Visible="true" Text="Looking nearby…" />
             </div>
         }
-        else if (_hasSearched && _events.Count == 0 && _groups.Count == 0)
+        else if (_hasSearched && _events.Count == 0 && _groups.Count == 0 && _tours.Count == 0)
         {
             <div class="alert alert-light text-muted text-center py-4">
                 Nothing found within @_radiusMiles miles.
@@ -90,64 +95,100 @@
         }
         else if (_hasSearched)
         {
-            @* ── Public events ────────────────────────────────────────────────── *@
-            @if (_events.Count > 0)
-            {
-                <h5 class="mb-2">Upcoming Events</h5>
-                <p class="text-secondary small mb-3">
-                    Locations shown here are approximate — an area several miles across, not an address.
-                </p>
-                <div class="row g-3 mb-4">
-                    @foreach (var ev in _events)
-                    {
-                        <div class="col-12 col-md-6 col-lg-4">
-                            <div class="card h-100">
-                                <div class="card-body">
-                                    <h6 class="card-title mb-1">@ev.Title</h6>
-                                    <p class="card-text text-secondary mb-1" style="font-size:.85rem;">
-                                        @ev.StartDateTime.ToDisplayDateTime()
-                                    </p>
-                                    @if (!string.IsNullOrWhiteSpace(ev.City))
-                                    {
-                                        <p class="card-text text-muted mb-1" style="font-size:.8rem;">
-                                            Near @ev.City@(string.IsNullOrWhiteSpace(ev.State) ? "" : $", {ev.State}")
-                                            · @ev.DistanceMiles.ToString("F0") mi
-                                        </p>
-                                    }
-                                    <p class="card-text text-muted mb-0" style="font-size:.78rem;">Hosted by @ev.OrgName</p>
-                                </div>
-                                <div class="card-footer bg-transparent d-flex gap-2 pt-2">
-                                    @if (!string.IsNullOrWhiteSpace(ev.UrlName) && !string.IsNullOrWhiteSpace(ev.OrgUrlName))
-                                    {
-                                        <a href="@($"/o/{ev.OrgUrlName}/events/{ev.UrlName}")"
-                                           class="btn btn-sm btn-outline-primary">View Event</a>
-                                    }
-                                    @if (!string.IsNullOrWhiteSpace(ev.OrgUrlName))
-                                    {
-                                        <a href="/o/@ev.OrgUrlName" class="btn btn-sm btn-outline-secondary">Group</a>
-                                    }
-                                </div>
-                            </div>
-                        </div>
-                    }
-                </div>
-            }
+            @* Three lists stacked down the page read as one long scroll, and nobody is still
+               reading by the third heading (Ben, 2026-09-10: "it looks too busy"). One strip of
+               tabs instead, each carrying its own count, so the shape of what was found is
+               readable before anything is clicked — and an empty one is not offered at all, so
+               the strip can never send somebody to a blank panel.
 
-            @* ── Groups ────────────────────────────────────────────────────────── *@
-            @if (_groups.Count > 0)
-            {
-                <h5 class="mb-2">Groups Nearby</h5>
-                <div class="row g-3 mb-4">
-                    @foreach (var org in _groups)
-                    {
-                        <div class="col-12 col-md-6 col-lg-4">
-                            <OrgCard Name="@org.OrgName" UrlName="@org.OrgUrlName">
-                                <MetaLine>@org.DistanceMiles.ToString("F1") mi away</MetaLine>
-                            </OrgCard>
+               Tours first where there are any: a walk with a date on it is the most actionable
+               thing this page can hand somebody. *@
+            <BenTabs @bind-ActiveId="_resultTab">
+
+                @if (_tours.Count > 0)
+                {
+                    <BenTab Title="Tours" Id="tours" Badge="@_tours.Count">
+                        <div class="row g-3">
+                            @foreach (var tour in _tours)
+                            {
+                                <div class="col-12 col-md-6 col-lg-4">
+                                    <BenTourCard Tour="@tour" ShowDistance="true" />
+                                </div>
+                            }
                         </div>
-                    }
-                </div>
-            }
+                    </BenTab>
+                }
+
+                @if (_events.Count > 0)
+                {
+                    <BenTab Title="Events" Id="events" Badge="@_events.Count">
+                        <p class="text-secondary small mb-3">
+                            Locations here are approximate — an area several miles across, not an
+                            address.
+                        </p>
+                        <div class="row g-3">
+                            @foreach (var ev in _events)
+                            {
+                                @* The night's own clock, not the reader's — Ben's rule,
+                                   2026-09-10. Declared here, in the loop body, because a `var`
+                                   written among the markup below is rendered as text. *@
+                                var (evAt, evZone) = EventClock.InPlaceTime(ev.StartDateTime, ev.TimeZoneId);
+
+                                <div class="col-12 col-md-6 col-lg-4">
+                                    <div class="nearby-card h-100 d-flex flex-column">
+                                        <span class="nearby-card__body">
+                                            <span class="nearby-card__date">
+                                                @evAt.ToString("ddd MM/dd")
+                                                <span class="nearby-card__time">
+                                                    @evAt.ToString("h:mm tt") @evZone
+                                                </span>
+                                            </span>
+                                            <span class="nearby-card__title">@ev.Title</span>
+                                            <span class="nearby-card__meta">
+                                                @if (!string.IsNullOrWhiteSpace(ev.City))
+                                                {
+                                                    <text>Near @ev.City@(string.IsNullOrWhiteSpace(ev.State) ? "" : $", {ev.State}")</text>
+                                                    <text> · </text>
+                                                }
+                                                @ev.DistanceMiles.ToString("F0") mi
+                                            </span>
+                                            <span class="nearby-card__by">Hosted by @ev.OrgName</span>
+                                        </span>
+                                        <span class="nearby-card__actions">
+                                            @if (!string.IsNullOrWhiteSpace(ev.UrlName) && !string.IsNullOrWhiteSpace(ev.OrgUrlName))
+                                            {
+                                                <a href="@($"/o/{ev.OrgUrlName}/events/{ev.UrlName}")"
+                                                   class="btn btn-sm btn-outline-primary">See this event</a>
+                                            }
+                                            @if (!string.IsNullOrWhiteSpace(ev.OrgUrlName))
+                                            {
+                                                <a href="/o/@ev.OrgUrlName" class="btn btn-sm btn-outline-secondary">Group</a>
+                                            }
+                                        </span>
+                                    </div>
+                                </div>
+                            }
+                        </div>
+                    </BenTab>
+                }
+
+                @if (_groups.Count > 0)
+                {
+                    <BenTab Title="Groups" Id="groups" Badge="@_groups.Count">
+                        <div class="row g-3">
+                            @foreach (var org in _groups)
+                            {
+                                <div class="col-12 col-md-6 col-lg-4">
+                                    <OrgCard Name="@org.OrgName" UrlName="@org.OrgUrlName">
+                                        <MetaLine>@org.DistanceMiles.ToString("F1") mi away</MetaLine>
+                                    </OrgCard>
+                                </div>
+                            }
+                        </div>
+                    </BenTab>
+                }
+
+            </BenTabs>
         }
     </div>
 
@@ -166,7 +207,11 @@
     private string? _manualError;
 
     private IReadOnlyList<Ben.Service.Models.Entities.NearbyEventResult> _events = [];
+    private IReadOnlyList<Ben.Service.Models.Entities.PublicTourListItem> _tours = [];
     private IReadOnlyList<Ben.Service.Models.Entities.NearbyOrgResult>   _groups = [];
+
+    /// <summary>Which tab opens. Set from what was actually found, never to an empty one.</summary>
+    private string? _resultTab;
 
     private double? _lat, _lon;
 
@@ -246,6 +291,16 @@
 
         _events = results?.Events ?? [];
         _groups = results?.Organizations ?? [];
+        _resultTab = null;   // chosen below, once the counts are known
+        _tours  = (await AdminClient.SearchToursAsync(
+            latitude: _lat.Value, longitude: _lon.Value, radiusMiles: _radiusMiles)).Items;
+        // Tours, then events, then groups: most actionable first, and never a tab with nothing
+        // behind it.
+        _resultTab = _tours.Count > 0 ? "tours"
+                   : _events.Count > 0 ? "events"
+                   : _groups.Count > 0 ? "groups"
+                   : null;
+
         _hasSearched = true;
         _searching   = false;
         StateHasChanged();

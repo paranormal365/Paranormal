@@ -2,6 +2,7 @@
 @page "/o/{UrlName}/events"
 @namespace Ben.Web.Website.Library.Organization.Public
 @using Ben.Web.Services
+@using Ben.Web.Website.Library.Kit
 @inject IBenAdminClient AdminClient
 
 @* Item 154: the address must die with the feature switch, not just the links to it. *@
@@ -11,7 +12,7 @@
 @* Two routes, one page. Under an organization it is their events; at the top level it is
    everybody's, which is the surface that brings in somebody who has never heard of any of them. *@
 
-<div class="container-fluid px-3 py-3" style="max-width:900px; margin:0 auto;">
+<div class="container-fluid px-3 py-3" style="max-width:960px; margin:0 auto;">
 
     @if (UrlName is not null)
     {
@@ -21,11 +22,15 @@
     }
 
     <h1 class="mb-1">@(UrlName is null ? "What's on" : "Events")</h1>
-    <p class="text-secondary mb-4">
+    <p class="text-secondary mb-3">
         @(UrlName is null
             ? "Public investigations, meetings and walks that groups have opened to anyone."
             : "Events this group has opened to anyone.")
     </p>
+
+    @* The shape of the list before anybody scrolls it: how many nights, over what stretch, from
+       how many groups. Drawn from what was loaded, so it cannot disagree with the list under it. *@
+    <BenFactRail Facts="@Summary" Class="mb-4" />
 
     @* This page is served to signed-out visitors, which is why the failure state matters more here
        than anywhere else: somebody who is refused sees "Nothing coming up", has no account, no
@@ -46,59 +51,119 @@
             </div>
         </Empty>
         <ChildContent>
-        <div class="row g-3">
-            @foreach (var item in _events.Items)
-            {
-                <div class="col-md-6">
-                    <div class="card h-100">
-                        <div class="card-body">
-                            <div class="text-secondary small">
-                                @item.StartDateTime.ToLocalTime().ToDisplayDate()
-                                @if (!item.IsAllDay)
-                                {
-                                    <span> · @item.StartDateTime.ToLocalTime().ToDisplayTime()</span>
-                                }
-                            </div>
+        @* Grouped by the day it happens, not poured out as one run of identical cards. Eight
+           nights in a row all saying "Saturday walk · Printers Alley Walks" is a list nobody
+           finishes reading; the day carries the date once, and each night under it only has to
+           say what is different about it.
 
-                            <h6 class="card-title mt-1 mb-1">
+           Times are the PLACE's, not the server's and not the reader's (Ben, 2026-09-10). A walk
+           starts at eight where it starts, whoever is reading about it; the reader's own clock
+           would move one night onto a different day depending on where they happen to be sitting,
+           and would disagree with the guest mail and the calendar file, which both use the walk's
+           time. The zone is named beside it. An event with no zone recorded reads in UTC and says
+           so — see EventClock. *@
+        @foreach (var day in _events.Items
+                     .OrderBy(e => e.StartDateTime)
+                     .GroupBy(e => EventClock.At(e.StartDateTime, e.TimeZoneId).Date))
+        {
+            <div class="ev-day">
+                <span class="ev-day__plate">
+                    <span class="ev-day__dow">@day.Key.ToString("ddd")</span>
+                    <span class="ev-day__num">@day.Key.Day</span>
+                    <span class="ev-day__mon">@day.Key.ToString("MMM")</span>
+                </span>
+                <span class="ev-day__label">@day.Key.ToString("dddd, MM/dd/yyyy")</span>
+                <span class="ev-day__count">
+                    @day.Count() @(day.Count() == 1 ? "night" : "nights")
+                </span>
+            </div>
+
+            <div class="ev-list">
+                @foreach (var item in day)
+                {
+                    var (when, zone) = EventClock.InPlaceTime(item.StartDateTime, item.TimeZoneId);
+                    var full = item.AttendeeCapacity is { } c && item.AttendingCount >= c;
+
+                    <div class="ev-row @(full ? "ev-row--full" : "")">
+                        <span class="ev-row__time">
+                            @if (item.IsAllDay)
+                            {
+                                <text>All day</text>
+                            }
+                            else
+                            {
+                                @when.ToDisplayTime()
+                                <span class="ev-row__zone">@zone</span>
+                            }
+                        </span>
+
+                        <span class="ev-row__main">
+                            <span class="ev-row__title">
                                 @if (item.UrlName is string slug)
                                 {
-                                    <a href="@($"/o/{item.OrganizationUrlName}/events/{slug}")"
-                                       class="text-decoration-none">@item.Title</a>
+                                    <a href="@($"/o/{item.OrganizationUrlName}/events/{slug}")">@item.Title</a>
                                 }
                                 else
                                 {
                                     @item.Title
                                 }
-                            </h6>
+                            </span>
 
-                            @* The group is named on every card. Somebody scanning this list is
+                            @* The group is named on every row. Somebody scanning this list is
                                meeting these organizations for the first time. *@
-                            <div class="small mb-2">
-                                <a href="@($"/o/{item.OrganizationUrlName}")" class="text-decoration-none">
-                                    @item.OrganizationName
-                                </a>
-                            </div>
+                            <span class="ev-row__by">
+                                <a href="@($"/o/{item.OrganizationUrlName}")">@item.OrganizationName</a>
+                                @* And which tour it is, when it is one (item 233): a business's
+                                   three walks look like three unrelated evenings otherwise. *@
+                                @if (item.TourName is { } tourName)
+                                {
+                                    <text> · </text>
+                                    @if (item.TourUrlName is { } tourSlug)
+                                    {
+                                        <a href="@($"/o/{item.OrganizationUrlName}/tours/{tourSlug}")">@tourName</a>
+                                    }
+                                    else
+                                    {
+                                        @tourName
+                                    }
+                                }
+                            </span>
 
-                            <div class="text-secondary small">
+                            <span class="ev-row__where">
                                 @if (item.IsOnline)
                                 {
-                                    <span class="badge bg-info text-dark">Online</span>
+                                    <span class="ev-row__online">Online</span>
                                 }
                                 @if (item.City is not null)
                                 {
-                                    <span>@item.City@(item.State is null ? "" : $", {item.State}")</span>
+                                    <text>@item.City@(item.State is null ? "" : $", {item.State}")</text>
                                 }
-                            </div>
+                            </span>
+                        </span>
 
-                            <div class="text-secondary small mt-1">
-                                @item.AttendingCount coming@(item.AttendeeCapacity is int cap ? $" of {cap} places" : "")
-                            </div>
-                        </div>
+                        <span class="ev-row__seats">
+                            <span class="ev-row__count">
+                                @if (item.AttendeeCapacity is { } cap)
+                                {
+                                    @(full ? "Full" : $"{Math.Max(0, cap - item.AttendingCount)} left")
+                                }
+                                else
+                                {
+                                    @($"{item.AttendingCount} coming")
+                                }
+                            </span>
+                            @if (item.AttendeeCapacity is { } barCap && barCap > 0)
+                            {
+                                var taken = Math.Clamp(item.AttendingCount * 100 / barCap, 0, 100);
+                                <span class="ev-row__bar" role="presentation">
+                                    <span class="ev-row__fill" style="width:@(taken)%"></span>
+                                </span>
+                            }
+                        </span>
                     </div>
-                </div>
-            }
-        </div>
+                }
+            </div>
+        }
         </ChildContent>
     </BenListState>
 </div>
@@ -108,6 +173,43 @@
 @code {
     /// <summary>Null on the site-wide route, set when showing one group's events.</summary>
     [Parameter] public string? UrlName { get; set; }
+
+    /// <summary>
+    /// The figures over the list. Empty until something has loaded, so the rail draws nothing
+    /// while the page is still fetching and nothing at all when there is nothing coming up.
+    /// </summary>
+    private IReadOnlyList<BenFactItem> Summary
+    {
+        get
+        {
+            var items = _events.Items;
+            if (items is not { Count: > 0 }) return [];
+
+            var soonest = items.MinBy(e => e.StartDateTime)!;
+            var latest = items.MaxBy(e => e.StartDateTime)!;
+            var first = EventClock.At(soonest.StartDateTime, soonest.TimeZoneId);
+            var last = EventClock.At(latest.StartDateTime, latest.TimeZoneId);
+            var groups = items.Select(e => e.OrganizationUrlName).Distinct().Count();
+
+            var facts = new List<BenFactItem>
+            {
+                new("Coming up", items.Count.ToString(), items.Count == 1 ? "night" : "nights",
+                    Emphasis: true),
+                new("First", first.ToString("ddd MM/dd"), first.ToString("h:mm tt")),
+            };
+
+            // Only when it says something the first one did not.
+            if (last.Date != first.Date)
+                facts.Add(new BenFactItem("Last", last.ToString("ddd MM/dd"), last.ToString("h:mm tt")));
+
+            // On a group's own page every night is theirs, so counting groups says nothing.
+            if (UrlName is null)
+                facts.Add(new BenFactItem("Groups", groups.ToString(),
+                    groups == 1 ? "is hosting" : "are hosting"));
+
+            return facts;
+        }
+    }
 
     private LoadResult<PublicEventListItem> _events;
     private bool _loading = true;

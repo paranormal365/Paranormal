@@ -76,7 +76,7 @@ public sealed class AdminOrganizationSubscriptionController : BenControllerBase
         return Ok(rows.Select(r => ToRecord(
             r.Organization, r.Subscription, r.MemberCount,
             r.Subscription is null ? null : tiers.FirstOrDefault(t => t.Id == r.Subscription.SubscriptionTierId),
-            listIsUsable ? SubscriptionTierResolver.Resolve(tiers, r.MemberCount).Name : null)));
+            listIsUsable ? SubscriptionTierResolver.Resolve(tiers, r.MemberCount, r.Organization.Kind).Name : null)));
     }
 
     [HttpGet("{organizationId:guid}")]
@@ -97,7 +97,7 @@ public sealed class AdminOrganizationSubscriptionController : BenControllerBase
         return Ok(ToRecord(org, sub, members,
             tiers.FirstOrDefault(t => t.Id == sub?.SubscriptionTierId),
             SubscriptionTierResolver.Validate(tiers) is null
-                ? SubscriptionTierResolver.Resolve(tiers, members).Name
+                ? SubscriptionTierResolver.Resolve(tiers, members, org.Kind).Name
                 : null));
     }
 
@@ -159,7 +159,16 @@ public sealed class AdminOrganizationSubscriptionController : BenControllerBase
             if (CouponMath.WhyNotRedeemable(code.Coupon, code, ctx) is { } refusal)
                 return BadRequest(refusal);
 
-            var listPrice = tier is null ? 0m : SubscriptionPricing.PriceFor(tier, request.Interval) ?? 0m;
+            // The whole period, not one unit. A tour business is billed per tour, so pricing a
+            // coupon against the unit price wrote a 3-tour business onto $14.50 where the period
+            // was $87 — and recorded the redemption's list price as $29, which is what any
+            // later reimbursement reads back (item 233).
+            var unitPrice = tier is null ? 0m : SubscriptionPricing.PriceFor(tier, request.Interval) ?? 0m;
+            var couponTours = tier is { IsBandedByMembers: false }
+                              && SubscriptionTierResolver.IsBusinessKind(org.Kind)
+                ? TourBilling.Units(org.Kind, await BillableUnits.ActiveToursAsync(db, organizationId, ct))
+                : 1;
+            var listPrice = TourBilling.ListPrice(unitPrice, couponTours);
             discounted = CouponMath.PriceFor(listPrice, code.Coupon);
         }
         var isNew = sub is null;
@@ -189,9 +198,13 @@ public sealed class AdminOrganizationSubscriptionController : BenControllerBase
         // first-paid exactly once. The provider webhook will call the same method; two copies of
         // this list would disagree within a month.
         sub.CancelAtPeriodEnd = request.CancelAtPeriodEnd;
+        // A business period is priced per tour (item 233); a hand-set one counts them the same way.
+        var tours = tier is { IsBandedByMembers: false } && SubscriptionTierResolver.IsBusinessKind(org.Kind)
+            ? TourBilling.Units(org.Kind, await BillableUnits.ActiveToursAsync(db, organizationId, ct))
+            : 0;
         var snapshot = PeriodOpener.Open(
             sub, tier, request.Status, request.Interval,
-            request.CurrentPeriodStart, request.CurrentPeriodEnd, members, userId);
+            request.CurrentPeriodStart, request.CurrentPeriodEnd, members, userId, tours);
         sub.ProviderName = "Manual";
 
         if (snapshot is not null)
@@ -250,7 +263,7 @@ public sealed class AdminOrganizationSubscriptionController : BenControllerBase
 
         return Ok(ToRecord(org, sub, members, tier,
             SubscriptionTierResolver.Validate(tiers) is null
-                ? SubscriptionTierResolver.Resolve(tiers, members).Name
+                ? SubscriptionTierResolver.Resolve(tiers, members, org.Kind).Name
                 : null));
     }
 

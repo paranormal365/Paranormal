@@ -26,8 +26,31 @@ else if (Html)
 else
 {
     @* Plain text, with line breaks honoured. A case message typed across three lines should read
-       as three lines rather than one run-on paragraph. *@
-    <div style="white-space:pre-wrap;">@Body</div>
+       as three lines rather than one run-on paragraph.
+
+       Links are picked out of it by the same segmenter the feed uses, so an address is a link
+       wherever a body is shown, and the card goes under the message the way iMessage does it
+       (Ben, 2026-09-11). Still never rendered as markup: each run is emitted as Razor content, so
+       the framework encodes it — assembling a string and casting it to MarkupString would not, and
+       would hand every sender an injection point. *@
+    <div style="white-space:pre-wrap;">
+        @foreach (var segment in Ben.Data.Common.Helpers.FeedTextSegmenter.Segment(Body))
+        {
+            if (segment.Kind == Ben.Data.Common.Helpers.FeedSegmentKind.Url)
+            {
+                <a href="@segment.Value" target="_blank" rel="noopener noreferrer nofollow">@segment.Text</a>
+            }
+            else
+            {
+                @segment.Text
+            }
+        }
+    </div>
+
+    @if (ShowPreview && FirstUrl is { } url)
+    {
+        <Ben.Web.Website.Library.Kit.BenLinkPreview Url="@url" />
+    }
 }
 
 @code {
@@ -42,6 +65,24 @@ else
 
     /// <summary>How many characters a snippet keeps before it is cut.</summary>
     [Parameter] public int SnippetLength { get; set; } = 200;
+
+    /// <summary>
+    /// Whether a link in the body gets a card under it.
+    /// </summary>
+    /// <remarks>
+    /// On for a message being read, off wherever a body is a line in a list — a card in a list of
+    /// one-line previews makes every row three lines tall and the list stops being a list.
+    /// </remarks>
+    [Parameter] public bool ShowPreview { get; set; } = true;
+
+    /// <summary>
+    /// The first address in the body, or null. Only the first: a message with four links gets one
+    /// card, because five cards under one sentence is not a preview, it is a directory.
+    /// </summary>
+    private string? FirstUrl => Html ? null
+        : Ben.Data.Common.Helpers.FeedTextSegmenter.Segment(Body)
+            .FirstOrDefault(s => s.Kind == Ben.Data.Common.Helpers.FeedSegmentKind.Url).Value
+              is { Length: > 0 } url ? url : null;
 
     /// <summary>
     /// The body as readable text, for previews.

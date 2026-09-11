@@ -160,7 +160,16 @@
                 {
                     <div class="mt-3 p-3 bg-body-tertiary rounded" style="max-width:640px;">
                         <div class="d-flex justify-content-between">
-                            <span>@_quote.TierName — @Cadence(_quote.Interval)</span>
+                            @* Item 233: a tour business is billed per tour, so the line says how
+                               many and at what each — a bare $87 against a $29 plan reads as an
+                               error rather than three walks. *@
+                            <span>
+                                @_quote.TierName — @Cadence(_quote.Interval)
+                                @if (_quote.IsPerUnit && _quote.UnitPrice is { } unit)
+                                {
+                                    <text> · @_quote.Units @(_quote.Units == 1 ? "tour" : "tours") × $@unit.ToString("0.00")</text>
+                                }
+                            </span>
                             <span>$@_quote.ListPrice.ToString("0.00")</span>
                         </div>
                         @if (_quote.Discount > 0m)

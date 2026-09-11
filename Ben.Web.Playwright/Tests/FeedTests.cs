@@ -524,4 +524,148 @@ public class FeedTests : BenTestBase
         Assert.That(await Page.Locator("button.bv-feed-like").CountAsync(), Is.Zero,
             "a visitor was offered a like button the API would refuse");
     }
+
+    // ── The composer's other tools (item 233) ────────────────────────────────
+
+    /// <summary>
+    /// A poll written in the composer reaches the feed and can be answered.
+    /// </summary>
+    /// <remarks>
+    /// Through the page rather than the API on purpose: the poll travels as form fields the model
+    /// binder has to reassemble, and a request built in a test would prove the controller works
+    /// while the composer quietly sent nothing.
+    /// </remarks>
+    [Test]
+    [Description("A poll posted from the composer is answerable, and the count follows.")]
+    public async Task APollIsPostedAndAnswered()
+    {
+        var marker = $"p{Guid.NewGuid():N}"[..12];
+
+        await LoginAsync(UserEmail, UserPassword);
+        await GoToFeedAsync();
+
+        await Page.Locator("#feed-composer").FillAsync($"{marker} which way?");
+        await Page.GetByRole(AriaRole.Button, new() { Name = "Add a poll" }).ClickAsync();
+        await Expect(Page.Locator(".poll-editor")).ToBeVisibleAsync(new() { Timeout = 20_000 });
+
+        await Page.Locator(".poll-editor input[placeholder='Ask something']").FillAsync("Which way?");
+        var answers = Page.Locator(".poll-editor__option input");
+        await answers.Nth(0).FillAsync("Left");
+        await answers.Nth(1).FillAsync("Right");
+
+        var post = Page.GetByRole(AriaRole.Button, new() { Name = "Post", Exact = true });
+        await Expect(post).ToBeEnabledAsync(new() { Timeout = 20_000 });
+        await post.ClickAsync();
+
+        var card = Page.Locator(".bv-feed-post", new() { HasTextString = marker }).First;
+        await Expect(card).ToBeVisibleAsync(new() { Timeout = 20_000 });
+        await Expect(card.Locator(".poll__question")).ToHaveTextAsync("Which way?");
+
+        await card.Locator(".poll__option").First.ClickAsync();
+        await Expect(card.Locator(".poll__option--mine")).ToBeVisibleAsync(new() { Timeout = 20_000 });
+        await Expect(card.Locator(".poll__foot")).ToContainTextAsync("1 vote");
+    }
+
+    /// <summary>
+    /// A scheduled post is on its author's page, marked, and on nobody else's.
+    /// </summary>
+    /// <remarks>
+    /// Checked as a visitor rather than as a second account: what matters is that the post is not
+    /// public yet, and a signed-out reader is the plainest statement of "not public".
+    /// </remarks>
+    [Test]
+    [Description("A scheduled post waits, and only its author can see it waiting.")]
+    public async Task AScheduledPostWaitsWhereOnlyItsAuthorCanSeeIt()
+    {
+        var marker = $"s{Guid.NewGuid():N}"[..12];
+
+        await LoginAsync(UserEmail, UserPassword);
+        await GoToFeedAsync();
+
+        await Page.Locator("#feed-composer").FillAsync($"{marker} going up later");
+        await Page.GetByRole(AriaRole.Button, new() { Name = "Schedule this post" }).ClickAsync();
+
+        // Two days out in the reader's own clock, which is what the box speaks.
+        var when = DateTime.Now.AddDays(2);
+        await Page.Locator("#composer-when").FillAsync(when.ToString("yyyy-MM-ddTHH:mm"));
+        await Expect(Page.Locator("#feed-composer-scheduled")).ToBeVisibleAsync(new() { Timeout = 20_000 });
+
+        var post = Page.GetByRole(AriaRole.Button, new() { Name = "Post", Exact = true });
+        await Expect(post).ToBeEnabledAsync(new() { Timeout = 20_000 });
+        await post.ClickAsync();
+
+        var card = Page.Locator(".bv-feed-post", new() { HasTextString = marker }).First;
+        await Expect(card).ToBeVisibleAsync(new() { Timeout = 20_000 });
+        await Expect(card.Locator("#feed-post-scheduled")).ToContainTextAsync("Goes up");
+
+        await LogoutAsync();
+        await GoToFeedAsVisitorAsync();
+        await Expect(Page.Locator(".bv-feed-post").First).ToBeVisibleAsync(new() { Timeout = 20_000 });
+        Assert.That(await Page.Locator(".bv-feed-post", new() { HasTextString = marker }).CountAsync(),
+            Is.Zero, "a post scheduled for two days' time was already public");
+    }
+
+    /// <summary>Calling a waiting post back takes it off the page it was waiting on.</summary>
+    [Test]
+    [Description("A scheduled post can be called back before it goes up.")]
+    public async Task AScheduledPostCanBeCalledBack()
+    {
+        var marker = $"c{Guid.NewGuid():N}"[..12];
+
+        await LoginAsync(UserEmail, UserPassword);
+        await GoToFeedAsync();
+
+        await Page.Locator("#feed-composer").FillAsync($"{marker} second thoughts");
+        await Page.GetByRole(AriaRole.Button, new() { Name = "Schedule this post" }).ClickAsync();
+        await Page.Locator("#composer-when").FillAsync(DateTime.Now.AddDays(2).ToString("yyyy-MM-ddTHH:mm"));
+        await Expect(Page.Locator("#feed-composer-scheduled")).ToBeVisibleAsync(new() { Timeout = 20_000 });
+
+        var post = Page.GetByRole(AriaRole.Button, new() { Name = "Post", Exact = true });
+        await Expect(post).ToBeEnabledAsync(new() { Timeout = 20_000 });
+        await post.ClickAsync();
+
+        var card = Page.Locator(".bv-feed-post", new() { HasTextString = marker }).First;
+        await Expect(card).ToBeVisibleAsync(new() { Timeout = 20_000 });
+
+        await card.GetByRole(AriaRole.Button, new() { Name = "Cancel it" }).ClickAsync();
+        await Expect(card).ToHaveCountAsync(0, new() { Timeout = 20_000 });
+    }
+
+    /// <summary>
+    /// The location tool tags a place, and the post says where it was written.
+    /// </summary>
+    /// <remarks>
+    /// The browser is given a location and the permission to share it, because the alternative is
+    /// a test of the refusal path only. The refusal path has its own answer on the page — "Your
+    /// browser did not share a location" — and is what every run without this grant exercises.
+    /// </remarks>
+    [Test]
+    [Description("Tagging a location puts \"said at\" on the post.")]
+    public async Task TaggingALocationSaysWhereThePostWasWritten()
+    {
+        var marker = $"l{Guid.NewGuid():N}"[..12];
+
+        // Nashville, which is where the seeded groups work.
+        await Context.GrantPermissionsAsync(["geolocation"], new() { Origin = BaseUrl });
+        await Context.SetGeolocationAsync(new() { Latitude = 36.1627f, Longitude = -86.7816f });
+
+        await LoginAsync(UserEmail, UserPassword);
+        await GoToFeedAsync();
+
+        await Page.Locator("#feed-composer").FillAsync($"{marker} cold down here");
+        await Page.GetByRole(AriaRole.Button, new() { Name = "Tag where you are" }).ClickAsync();
+        await Expect(Page.Locator("#feed-composer-place")).ToBeVisibleAsync(new() { Timeout = 30_000 });
+
+        var post = Page.GetByRole(AriaRole.Button, new() { Name = "Post", Exact = true });
+        await Expect(post).ToBeEnabledAsync(new() { Timeout = 20_000 });
+        await post.ClickAsync();
+
+        var card = Page.Locator(".bv-feed-post", new() { HasTextString = marker }).First;
+        await Expect(card).ToBeVisibleAsync(new() { Timeout = 20_000 });
+        await Expect(card.Locator(".bv-feed-post__place")).ToContainTextAsync("said at");
+
+        // The mark beside it opens the spot in Maps rather than being decoration.
+        await Expect(card.Locator(".bv-feed-post__placemap"))
+            .ToHaveAttributeAsync("href", new System.Text.RegularExpressions.Regex("^https://maps\\.apple\\.com/"));
+    }
 }

@@ -1,0 +1,70 @@
+/*
+    The event card in "What's near you".
+
+    Tours in the same results are BenTourCard; an event has no photograph to lead with, so it is
+    drawn here instead — but off the same frame, because the two shapes have to read as one set of
+    results rather than two designs. It is not a link (it carries its own buttons), so it does not
+    lift the way a tour card does.
+*/
+
+/* An event card has no photograph to lead with, so it borrows the frame and the lift from
+   BenTourCard beside it — the two shapes have to read as one set of results. */
+.nearby-card {
+    position: relative;
+    display: flex;
+    flex-direction: column;
+    overflow: hidden;
+    border: 1px solid var(--bs-border-color);
+    border-radius: .5rem;
+    background: var(--bs-body-bg);
+    transition: transform .16s ease, box-shadow .16s ease, border-color .16s ease;
+}
+
+/* The date leads an event card the way the picture leads a tour's. */
+.nearby-card__date {
+    display: block;
+    font-size: .72rem;
+    font-weight: 700;
+    letter-spacing: .04em;
+    text-transform: uppercase;
+    color: var(--bs-primary);
+}
+
+.nearby-card__time {
+    font-weight: 400;
+    text-transform: none;
+    letter-spacing: 0;
+    opacity: .8;
+}
+
+.nearby-card__title {
+    display: block;
+    margin-top: .1rem;
+    font-weight: 600;
+    line-height: 1.25;
+}
+
+.nearby-card__meta,
+.nearby-card__by {
+    display: block;
+    font-size: .78rem;
+    color: var(--bs-secondary-color);
+}
+
+.nearby-card__line {
+    display: block;
+    font-size: .85rem;
+    margin-top: .15rem;
+}
+
+.nearby-card__actions {
+    display: flex;
+    gap: .5rem;
+    padding: 0 .75rem .65rem;
+}
+
+@media (prefers-reduced-motion: reduce) {
+    .nearby-card {
+        transition: none;
+    }
+}

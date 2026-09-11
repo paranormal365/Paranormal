@@ -152,7 +152,11 @@ public sealed class CasePurgeCoverageTests
     [InlineData("ClientRequests", "the request is the client's own record and outlives the case that was opened from it")]
     [InlineData("AppUsers", "a person is not a case's property")]
     [InlineData("Organizations", "the group outlives its cases")]
-    [InlineData("OrgMessages", "a feed post is its author's; the purge clears its case reference instead")]
+    // OrgMessages is deliberately absent from this list since 2026-09-11. It holds two different
+    // things now: a feed POST, which is its author's and survives the case, and a case COMMENT,
+    // which exists only because the case did. The purge deletes the comments and unlinks the
+    // posts, which the pair of tests below check one at a time — a blanket "never delete from
+    // OrgMessages" would have forced the purge to leave comments pointing at nothing.
     [InlineData("VideoProjects", "an edit is the editor's work; it loses the case link, not its existence")]
     [InlineData("OrgCalendarEvents", "an event on the calendar happened; it loses the case link only")]
     [InlineData("OrganizationPages", "a public page is the group's; it loses the case link only")]
@@ -161,6 +165,30 @@ public sealed class CasePurgeCoverageTests
     public void The_purge_never_deletes_what_the_case_does_not_own(string forbidden, string why)
     {
         Assert.False(PurgedSets().Contains(forbidden), $"The case purge deletes from {forbidden}, but {why}.");
+    }
+
+    /// <summary>
+    /// A comment on the case goes with the case: it exists only because the case did.
+    /// </summary>
+    [Fact]
+    public void A_comment_on_the_case_is_deleted_with_it()
+    {
+        var source = PurgeSource();
+        Assert.Contains("PublicCaseComment", source);
+        Assert.Matches(
+            @"db\.OrgMessages[\s\S]{0,200}?PublicCaseComment[\s\S]{0,120}?ExecuteDeleteAsync",
+            source);
+    }
+
+    /// <summary>
+    /// And a feed post that merely mentioned the case does NOT: it is somebody's own post, and it
+    /// loses the reference rather than its existence. This is the half the blanket rule used to
+    /// carry, kept as its own check now that the table holds two kinds of thing.
+    /// </summary>
+    [Fact]
+    public void A_feed_post_that_referenced_the_case_only_loses_the_reference()
+    {
+        Assert.Contains("OrgMessages", ClearedSets());
     }
 
     /// <summary>

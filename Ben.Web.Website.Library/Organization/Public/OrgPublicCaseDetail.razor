@@ -3,6 +3,7 @@
 @using Ben.Data.Common.Enums
 @using Ben.Web.Website.Library.Shared
 @using Ben.Web.Website.Library.Organization.Cases
+@using Ben.Web.Website.Library.Kit
 
 @inject IBenAdminClient AdminClient
 @inject NavigationManager NavManager
@@ -27,45 +28,25 @@ else if (_case is null)
 }
 else
 {
-    <div class="container-fluid px-3 py-4" style="max-width:860px; margin:0 auto;">
+    <div class="container-fluid px-3 py-4" style="max-width:960px; margin:0 auto;">
 
-        @* ── Breadcrumb nav ───────────────────────────────────────────────── *@
-        <nav class="mb-4 d-flex flex-wrap gap-2">
-            <a href="/o/@UrlName" class="btn btn-sm btn-outline-secondary">@_case.OrgName</a>
-            <a href="/o/@UrlName/cases" class="btn btn-sm btn-outline-secondary">Cases</a>
-            <span class="btn btn-sm btn-outline-primary disabled" aria-current="page">@_case.CaseReference</span>
-        </nav>
+        @* The group's own band and pills, as everywhere else under /o/. The case's reference is
+           the eyebrow above its title, so a reader knows which case they are on without a third
+           breadcrumb button that goes nowhere. *@
+        <OrgPublicBanner Name="@_case.OrgName" UrlName="@UrlName"
+                         PageTitle="@_case.Title"
+                         LogoUrl="@_logoUrl" Class="mb-3" />
 
-        @* ── Case header ──────────────────────────────────────────────────── *@
-        <div class="mb-4">
-            <div class="d-flex align-items-center gap-2 mb-1">
-                <span class="font-monospace text-muted">@_case.CaseReference</span>
-                <span class="badge @_case.Status.BadgeClass()">@_case.Status.Label()</span>
-                @if (_case.IsHaunted && _case.Status != CaseStatus.Haunted)
-                {
-                    <span class="badge bg-warning text-dark">👻 Haunted</span>
-                }
-            </div>
-            <h1 class="mb-1">@_case.Title</h1>
-            <p class="text-secondary mb-1">@_case.City, @_case.State, @_case.Country</p>
-            <p class="text-muted" style="font-size:.85rem;">
-                Opened @_case.DateCaseOpened.ToDisplayDate()
-                @if (_case.DateCaseClosed.HasValue)
-                {
-                    <span> · Closed @_case.DateCaseClosed.Value.ToDisplayDate()</span>
-                }
-                @if (_case.ClientName is not null)
-                {
-                    <span> · Client: @_case.ClientName</span>
-                }
-            </p>
-        </div>
+        <OrgPublicNav OrgUrlName="@UrlName" NavPages="@_navPages" Active="cases" Class="mb-4" />
+
+        @* The facts of the case, in the rail every other public page states a figure in. *@
+        <BenFactRail Facts="@Summary" Class="mb-4" />
 
         @* ── Description ──────────────────────────────────────────────────── *@
         @if (!string.IsNullOrWhiteSpace(_case.Description))
         {
             <div class="mb-4">
-                <h5 class="border-bottom pb-1 mb-2">Summary</h5>
+                <BenSectionHeading Text="Summary" />
                 <div>@((MarkupString)_case.Description)</div>
             </div>
         }
@@ -77,19 +58,15 @@ else
         @if (_case.Report is { } report)
         {
             <div class="mb-4" id="public-case-report">
-                <h5 class="border-bottom pb-1 mb-2">
-                    What we found
-                    @if (report.PublishedAt is { } published)
-                    {
-                        <span class="text-muted fw-normal ms-2" style="font-size:.8rem;">
-                            @report.Title · @published.ToDisplayDate()
-                        </span>
-                    }
-                    else
-                    {
-                        <span class="text-muted fw-normal ms-2" style="font-size:.8rem;">@report.Title</span>
-                    }
-                </h5>
+                <BenSectionHeading Text="What we found">
+                    <Note>
+                        @report.Title
+                        @if (report.PublishedAt is { } published)
+                        {
+                            <text> · @published.ToDisplayDate()</text>
+                        }
+                    </Note>
+                </BenSectionHeading>
                 @if (!string.IsNullOrWhiteSpace(report.Summary))
                 {
                     <div class="mb-2">@((MarkupString)report.Summary)</div>
@@ -105,16 +82,18 @@ else
         }
 
         @* ── Community vote ───────────────────────────────────────────────── *@
-        <div class="mb-4">
-            <h5 class="border-bottom pb-1 mb-2">Community Rating</h5>
-            <CaseVoteWidget CaseId="@_case.CaseId" />
+        @* The id is what tests hold on to. The heading is prose and has already been reworded
+           once; a test pinned to the words breaks on an edit that changed nothing it cares about. *@
+        <div class="mb-4" id="public-case-rating">
+            <BenSectionHeading Text="What people think" />
+            <CaseVoteWidget CaseId="@_case.CaseId" CommentCount="@_commentCount" />
         </div>
 
         @* ── Timeline ─────────────────────────────────────────────────────── *@
         @if (_case.Timeline.Count > 0)
         {
-            <div class="mb-4">
-                <h5 class="border-bottom pb-1 mb-3">Timeline</h5>
+            <div class="mb-4" id="public-case-timeline">
+                <BenSectionHeading Text="What happened, and when" />
                 <div class="timeline-list">
                     @foreach (var entry in _case.Timeline)
                     {
@@ -159,6 +138,9 @@ else
         {
             <div class="alert alert-light text-muted text-center">No public timeline entries yet.</div>
         }
+        @* What people said. On the case's own page rather than anywhere else, which is why the
+           comments button in the strip above is an anchor: it scrolls, because they are here. *@
+        <CaseComments CaseId="@_case.CaseId" CountChanged="@(n => _commentCount = n)" />
     </div>
 }
 
@@ -167,13 +149,65 @@ else
     [Parameter] public string CaseRef  { get; set; } = "";
 
     private PublicCaseDetail? _case;
+    private int _commentCount;
+    private string? _logoUrl;
+    private IReadOnlyList<OrgPublicNavItem> _navPages = [];
     private bool _loading = true;
+
+    /// <summary>
+    /// The facts a reader takes in before any prose: which case, where, when, and whether the
+    /// group concluded anything. Everything here was already on the page as grey text under the
+    /// title; the rail is where every other public page puts a figure.
+    /// </summary>
+    private IReadOnlyList<BenFactItem> Summary
+    {
+        get
+        {
+            if (_case is null) return [];
+
+            var facts = new List<BenFactItem>
+            {
+                // A case can be marked haunted without its status saying so, and the old header
+                // carried a separate badge for exactly that. Kept here rather than dropped: it is
+                // the group's conclusion, and the rarest thing on the page.
+                new("Case", _case.CaseReference,
+                    _case.IsHaunted && _case.Status != CaseStatus.Haunted
+                        ? $"{_case.Status.Label()} · called haunted"
+                        : _case.Status.Label(),
+                    Emphasis: _case.IsHaunted),
+                new("Where", _case.City, $"{_case.State}, {_case.Country}"),
+                // A published or haunted case usually carries no closing date and is nonetheless
+                // finished — "still being worked" under a conclusion would contradict the page it
+                // sits on. Status decides which sentence, the same rule the list's tiles use.
+                new("Opened", _case.DateCaseOpened.ToString("MM/dd/yyyy"),
+                    _case.DateCaseClosed is { } closed ? $"closed {closed:MM/dd/yyyy}"
+                    : _case.Status <= CaseStatus.Summarized ? "still being worked"
+                    : "no closing date"),
+            };
+
+            // Only when the group gave one: a pseudonym is the client's own choice, and an absent
+            // tile says nothing about them either way.
+            if (_case.ClientName is { } client)
+                facts.Add(new BenFactItem("Client", client, "as they asked to be known"));
+
+            return facts;
+        }
+    }
 
     protected override async Task OnParametersSetAsync()
     {
         _loading = true;
         StateHasChanged();
         _case    = await AdminClient.GetPublicCaseAsync(UrlName, CaseRef);
+
+        // The group's band and pills need its logo and its own pages, which the case payload does
+        // not carry. One extra call on a page a visitor reaches by choice.
+        var org = await AdminClient.GetPublicOrgAsync(UrlName);
+        _logoUrl = org?.Logos.FirstOrDefault() is { } logo
+            ? AdminClient.GetFileThumbnailUrl(logo.UploadFileId)
+            : null;
+        _navPages = org?.NavPages ?? [];
+
         _loading = false;
     }
 

@@ -172,6 +172,7 @@ public sealed class OrgCalendarEventController : BenControllerBase
             .Include(e => e.EventType)
             .Include(e => e.Case)
             .Include(e => e.Attendees).Include(e => e.OrganizationAddress)
+            .Include(e => e.Tour).Include(e => e.Guides).ThenInclude(g => g.AppUser)
             .Where(e => e.OrganizationId == orgId);
 
         if (from.HasValue) query = query.Where(e => e.EndDateTime >= from.Value);
@@ -187,10 +188,9 @@ public sealed class OrgCalendarEventController : BenControllerBase
     {
         if (!await IsOrgMemberAsync(orgId, ct)) return Forbid();
         await using var db = await _db.CreateDbContextAsync(ct);
-        var ev = await db.OrgCalendarEvents.AsNoTracking()
-            .Include(e => e.EventType).Include(e => e.Case).Include(e => e.Attendees).Include(e => e.OrganizationAddress)
-            .FirstOrDefaultAsync(e => e.Id == eventId && e.OrganizationId == orgId, ct);
-        return ev is null ? NotFound() : Ok(_mapper.Map<OrgCalendarEventRecord>(ev));
+        var exists = await db.OrgCalendarEvents.AsNoTracking()
+            .AnyAsync(e => e.Id == eventId && e.OrganizationId == orgId, ct);
+        return exists ? Ok(await ProjectAsync(db, eventId, ct)) : NotFound();
     }
 
     [HttpPost]
@@ -213,25 +213,41 @@ public sealed class OrgCalendarEventController : BenControllerBase
             PlaceId = request.PlaceId,
             HideExactLocation = request.HideExactLocation,
             AttendeeCapacity = request.AttendeeCapacity,
+            TimeZoneId = Trimmed(request.TimeZoneId),
             RsvpClosesAt = request.RsvpClosesAt,
             RecurrenceRule = request.RecurrenceRule?.Trim(),
+            TourId = request.TourId,
             DateCreated = DateTime.UtcNow, CreatedByAppUserId = userId,
         };
+
+        if (ZoneRefusal(entity.TimeZoneId) is string zoneRefusal)
+            return BadRequest(zoneRefusal);
 
         if (entity.IsPublic
             && await PublicEventRefusalAsync(db, entity.CaseId, entity.PlaceId, ct) is string refusal)
             return BadRequest(refusal);
+
+        if (await TourDateRefusalAsync(db, orgId, entity, ct) is string tourRefusal)
+            return BadRequest(tourRefusal);
+
+        await ApplyTourDefaultsAsync(db, entity, request, ct);
 
         await EnsurePublicSlugAsync(db, entity, ct);
 
         db.OrgCalendarEvents.Add(entity);
         await db.SaveChangesAsync(ct);
 
-        var loaded = await db.OrgCalendarEvents.AsNoTracking()
-            .Include(e => e.EventType).Include(e => e.Case).Include(e => e.Attendees).Include(e => e.OrganizationAddress)
-            .FirstAsync(e => e.Id == entity.Id, ct);
+        if (await SetGuidesAsync(db, orgId, entity, request, userId, seedFromTour: true, ct) is string guideRefusal)
+        {
+            // Nothing has been promised to anybody yet, so the cleanest answer to a bad guide is
+            // to undo the date rather than leave one nobody is leading.
+            db.OrgCalendarEvents.Remove(entity);
+            await db.SaveChangesAsync(ct);
+            return BadRequest(guideRefusal);
+        }
+
         return CreatedAtAction(nameof(GetById), new { orgId, eventId = entity.Id },
-            _mapper.Map<OrgCalendarEventRecord>(loaded));
+            await ProjectAsync(db, entity.Id, ct));
     }
 
 
@@ -278,6 +294,165 @@ public sealed class OrgCalendarEventController : BenControllerBase
 
 
     /// <summary>
+    /// Why this date cannot run as asked, or null.
+    /// </summary>
+    /// <remarks>
+    /// <para><b>A public date of a tour business belongs to a tour</b> (item 233). The tour is
+    /// what the business pays for, so a public date without one would be a tour run without being
+    /// counted — and, more to the point, a guest would be signing up to something with no meeting
+    /// point, no length and nobody named as its guide.</para>
+    /// <para>Groups that do not run tours are untouched: their calendar is what it always was.</para>
+    /// </remarks>
+    private static async Task<string?> TourDateRefusalAsync(
+        BenDataContext db, Guid orgId, OrgCalendarEvent entity, CancellationToken ct)
+    {
+        var org = await db.Organizations.AsNoTracking()
+            .Where(o => o.Id == orgId)
+            .Select(o => new { o.Kind, o.RunsPublicTours })
+            .FirstOrDefaultAsync(ct);
+        if (org is null) return null;
+
+        var runsTours = org.RunsPublicTours || org.Kind == OrganizationKind.GhostWalkingTour;
+
+        if (entity.TourId is null)
+            return runsTours && entity.IsPublic
+                ? "A public date belongs to one of your tours. Set the tour up first — its meeting "
+                + "point, how long it runs and who guides it are what a guest is told — then "
+                + "schedule this date under it."
+                : null;
+
+        var tour = await db.Tours.AsNoTracking()
+            .FirstOrDefaultAsync(t => t.Id == entity.TourId && t.OrganizationId == orgId, ct);
+        if (tour is null)
+            return "That tour isn't one of yours.";
+        if (tour.RetiredAtUtc is not null)
+            return $"\"{tour.Name}\" is retired, so it takes no new dates. Bring it back first if "
+                 + "you are running it again.";
+        if (!tour.IsBookable && entity.IsPublic)
+            return $"\"{tour.Name}\" is paused, so it isn't taking sign-ups. Un-pause it to put a "
+                 + "public date on the calendar.";
+
+        return null;
+    }
+
+    /// <summary>Why this zone cannot be saved, or null when it can.</summary>
+    /// <remarks>
+    /// Checked against what the machine actually resolves rather than against the short list the
+    /// screens offer: a business in a zone nobody thought to list must not be locked out, and a
+    /// typo must not be stored as a clock that silently reads as UTC forever.
+    /// </remarks>
+    private static string? ZoneRefusal(string? id)
+    {
+        if (string.IsNullOrWhiteSpace(id)) return null;
+
+        try { TimeZoneInfo.FindSystemTimeZoneById(id); return null; }
+        catch (Exception e) when (e is TimeZoneNotFoundException or InvalidTimeZoneException)
+        {
+            return $"\"{id}\" isn't a time zone this server knows. Pick one from the list.";
+        }
+    }
+
+    /// <summary>Null for anything blank, so an empty box is stored as "nobody said".</summary>
+    private static string? Trimmed(string? value) =>
+        string.IsNullOrWhiteSpace(value) ? null : value.Trim();
+
+    /// <summary>Fills in from the tour whatever the date did not say.</summary>
+    /// <remarks>
+    /// The meeting point, the length and the size of a group are properties of the tour, and
+    /// re-typing them per date is how three dates of one tour end up meeting in three places.
+    /// An explicit value on the request always wins.
+    /// </remarks>
+    private static async Task ApplyTourDefaultsAsync(
+        BenDataContext db, OrgCalendarEvent entity, UpsertCalendarEventRequest request, CancellationToken ct)
+    {
+        if (entity.TourId is null) return;
+        var tour = await db.Tours.AsNoTracking().FirstOrDefaultAsync(t => t.Id == entity.TourId, ct);
+        if (tour is null) return;
+
+        entity.OrganizationAddressId ??= tour.StartOrganizationAddressId;
+        entity.AttendeeCapacity ??= tour.DefaultCapacity;
+
+        // The clock too. A walk meets where the tour starts, so it runs on the tour's zone unless
+        // the date says otherwise — and taking a copy rather than reading through to the tour
+        // means a date already advertised does not silently move when the tour is edited.
+        entity.TimeZoneId ??= tour.TimeZoneId;
+
+        if (tour.DurationMinutes is { } minutes && entity.EndDateTime <= entity.StartDateTime)
+            entity.EndDateTime = entity.StartDateTime.AddMinutes(minutes);
+    }
+
+    /// <summary>Sets who leads a date, or the refusal naming who cannot.</summary>
+    private static async Task<string?> SetGuidesAsync(
+        BenDataContext db, Guid orgId, OrgCalendarEvent entity,
+        UpsertCalendarEventRequest request, Guid userId, bool seedFromTour, CancellationToken ct)
+    {
+        var wanted = request.GuideAppUserIds?.Distinct().ToList();
+
+        // A new date of a tour inherits the tour's guides when it says nothing, because that is
+        // almost always right and a date with nobody on it tells a guest nothing.
+        //
+        // Narrowed to CURRENT members on the way through. Nothing removes a guide from a tour
+        // when they leave the group, so an inherited list could name somebody who is no longer a
+        // member — and the check below would then refuse every new date on that tour with
+        // "invite them first", about a person who has left. The tour's list is stale, not the
+        // date's, and refusing the date is the wrong place to complain about it.
+        if (wanted is null && seedFromTour && entity.TourId is { } tourId)
+            wanted = await db.TourGuides.AsNoTracking()
+                .Where(g => g.TourId == tourId
+                         && db.OrganizationUserMemberships.Any(
+                                m => m.OrganizationId == orgId && m.AppUserId == g.AppUserId && m.IsActive))
+                .OrderBy(g => g.SortOrder)
+                .Select(g => g.AppUserId).ToListAsync(ct);
+
+        if (wanted is null) return null;
+
+        if (await TourController.WhoIsNotAMemberAsync(db, orgId, wanted, ct) is string refusal)
+            return refusal;
+
+        var existing = await db.OrgCalendarEventGuides
+            .Where(g => g.OrgCalendarEventId == entity.Id).ToListAsync(ct);
+        db.OrgCalendarEventGuides.RemoveRange(existing);
+
+        var now = DateTime.UtcNow;
+        for (var i = 0; i < wanted.Count; i++)
+            db.OrgCalendarEventGuides.Add(new OrgCalendarEventGuide
+            {
+                Id = Guid.NewGuid(), OrgCalendarEventId = entity.Id, AppUserId = wanted[i],
+                SortOrder = i, DateCreated = now, CreatedByAppUserId = userId,
+            });
+
+        await db.SaveChangesAsync(ct);
+        return null;
+    }
+
+    /// <summary>One event as the client reads it, tour name and guides filled in.</summary>
+    private async Task<OrgCalendarEventRecord> ProjectAsync(
+        BenDataContext db, Guid eventId, CancellationToken ct)
+    {
+        var loaded = await db.OrgCalendarEvents.AsNoTracking()
+            .Include(e => e.EventType).Include(e => e.Case).Include(e => e.Attendees)
+            .Include(e => e.OrganizationAddress).Include(e => e.Tour)
+            .Include(e => e.Guides).ThenInclude(g => g.AppUser)
+            .FirstAsync(e => e.Id == eventId, ct);
+
+        var guideIds = loaded.Guides.Select(g => g.AppUserId).ToList();
+        var photos = await db.AppUserPhotos.AsNoTracking()
+            .Where(p => guideIds.Contains(p.AppUserId) && p.IsPublic && p.IsActive)
+            .Select(p => new { p.AppUserId, p.UploadFileId })
+            .ToListAsync(ct);
+
+        return _mapper.Map<OrgCalendarEventRecord>(loaded) with
+        {
+            TourName = loaded.Tour?.Name,
+            Guides = [.. loaded.Guides.OrderBy(g => g.SortOrder).Select(g => new EventGuideRecord(
+                g.AppUserId,
+                g.AppUser.DisplayName ?? g.AppUser.Email ?? "A guide",
+                g.AppUser.Handle,
+                photos.FirstOrDefault(p => p.AppUserId == g.AppUserId)?.UploadFileId))],
+        };
+    }
+
+    /// <summary>
     /// Gives a newly-public event its readable URL, and leaves an existing one alone.
     /// </summary>
     /// <remarks>
@@ -320,22 +495,38 @@ public sealed class OrgCalendarEventController : BenControllerBase
         entity.PlaceId = request.PlaceId;
         entity.HideExactLocation = request.HideExactLocation;
         entity.AttendeeCapacity = request.AttendeeCapacity;
+        entity.TimeZoneId = Trimmed(request.TimeZoneId);
         entity.RsvpClosesAt = request.RsvpClosesAt;
         entity.RecurrenceRule = request.RecurrenceRule?.Trim();
+        entity.TourId = request.TourId;
+
+        if (ZoneRefusal(entity.TimeZoneId) is string zoneRefusal)
+            return BadRequest(zoneRefusal);
 
         if (entity.IsPublic
             && await PublicEventRefusalAsync(db, entity.CaseId, entity.PlaceId, ct) is string refusal)
             return BadRequest(refusal);
+
+        if (await TourDateRefusalAsync(db, orgId, entity, ct) is string tourRefusal)
+            return BadRequest(tourRefusal);
+
+        // The same tour defaults as on create, or a date that was edited would lose the clock it
+        // was scheduled with the moment somebody changed its title.
+        await ApplyTourDefaultsAsync(db, entity, request, ct);
 
         entity.DateUpdated = DateTime.UtcNow;
         entity.UpdatedByAppUserId = userId == Guid.Empty ? null : userId;
 
         await EnsurePublicSlugAsync(db, entity, ct);
         await db.SaveChangesAsync(ct);
-        var loaded = await db.OrgCalendarEvents.AsNoTracking()
-            .Include(e => e.EventType).Include(e => e.Case).Include(e => e.Attendees).Include(e => e.OrganizationAddress)
-            .FirstAsync(e => e.Id == entity.Id, ct);
-        return Ok(_mapper.Map<OrgCalendarEventRecord>(loaded));
+
+        // An edit that says nothing about guides leaves them alone; one that names them replaces
+        // the list, which is how a guide swapped the afternoon of a walk gets swapped.
+        if (request.GuideAppUserIds is not null
+            && await SetGuidesAsync(db, orgId, entity, request, userId, seedFromTour: false, ct) is string guideRefusal)
+            return BadRequest(guideRefusal);
+
+        return Ok(await ProjectAsync(db, entity.Id, ct));
     }
 
     [HttpDelete("{eventId:guid}")]
@@ -346,6 +537,17 @@ public sealed class OrgCalendarEventController : BenControllerBase
         var entity = await db.OrgCalendarEvents
             .FirstOrDefaultAsync(e => e.Id == eventId && e.OrganizationId == orgId, ct);
         if (entity is null) return NotFound();
+
+        // A review cites the date it was written after, and that key is NoAction — so a business
+        // deleting a walk it had run would be handed a database error with nothing to act on.
+        // The review goes with the date: it is a review of a tour, and the group purge already
+        // makes exactly this move in exactly this order.
+        // Loaded and removed rather than ExecuteDelete: a date has a handful of reviews at most,
+        // and ExecuteDelete is refused outright by the in-memory provider the controller suites
+        // run on — a rule nothing could test is a rule that breaks in production instead.
+        var reviews = await db.TourReviews.Where(r => r.OrgCalendarEventId == eventId).ToListAsync(ct);
+        db.TourReviews.RemoveRange(reviews);
+
         db.OrgCalendarEvents.Remove(entity);
         await db.SaveChangesAsync(ct);
         return NoContent();
@@ -566,6 +768,10 @@ public sealed class OrgCalendarEventController : BenControllerBase
 
         await db.SaveChangesAsync(ct);
 
+        // Item 233 deliberately does NOT send the tour's own welcome here, attachment and all.
+        // A guide typed this address on a pavement in the dark and nobody has proved it yet; the
+        // full details — meeting point, guide's face, how to pay — go out when the link is
+        // confirmed, which is the first moment there is somebody on the other end of it.
         if (_email.IsConfigured)
         {
             var link = _site.AbsoluteUrl($"/attending/{token}");
@@ -662,7 +868,14 @@ public sealed record UpsertCalendarEventRequest(
     Guid? PlaceId = null,
     bool HideExactLocation = false,
     int? AttendeeCapacity = null,
-    DateTime? RsvpClosesAt = null);
+    DateTime? RsvpClosesAt = null,
+    // Item 233: which tour this date runs, and who is leading it. Defaulted so every existing
+    // caller is unaffected; null guides means "leave whoever is already on it alone".
+    Guid? TourId = null,
+    IReadOnlyList<Guid>? GuideAppUserIds = null,
+    // The IANA zone this event happens in. Null on a tour date takes the tour's; null on
+    // anything else leaves it unsaid, and a public listing then shows UTC and says so.
+    string? TimeZoneId = null);
 
 public sealed record AddAttendeeByEmailRequest(string? Email);
 

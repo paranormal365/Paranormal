@@ -126,13 +126,15 @@ public sealed class OrganizationSubscriptionController : OrgCmsControllerBase
             return Problem("Pricing is temporarily unavailable.", statusCode: 503);
         }
 
-        var members = await db.OrganizationUserMemberships
-            .CountAsync(m => m.OrganizationId == organizationId && m.IsActive, ct);
-
-        var tier = SubscriptionTierResolver.Resolve(tiers, members);
-
-        if (SubscriptionPricing.PriceFor(tier, request.Interval) is not { } listPrice)
-            return BadRequest($"\"{tier.Name}\" is not offered at that billing cadence.");
+        // A tour or event business is priced per tour, not by the size of its team (items 231
+        // and 233); a group by its member band. One counter serves the quote and the checkout.
+        var kind = await db.Organizations.AsNoTracking()
+            .Where(o => o.Id == organizationId).Select(o => o.Kind).FirstAsync(ct);
+        if (await BillableUnits.PriceAsync(db, tiers, organizationId, kind, request.Interval, ct)
+            is not { } priced)
+            return BadRequest("That plan is not offered at that billing cadence.");
+        var tier = priced.Tier;
+        var listPrice = priced.ListPrice;
 
         var subscription = await db.OrganizationSubscriptions.AsNoTracking()
             .FirstOrDefaultAsync(s => s.OrganizationId == organizationId, ct);
@@ -144,7 +146,9 @@ public sealed class OrganizationSubscriptionController : OrgCmsControllerBase
 
         SubscriptionQuoteResponse Priced(decimal discount, decimal payable, string? refusal, int? periods)
             => new(tier.Name, request.Interval, listPrice, discount, payable, refusal, periods,
-                   taxRate, TaxResolver.TaxOn(payable, taxRate));
+                   taxRate, TaxResolver.TaxOn(payable, taxRate),
+                   Units: priced.Units, UnitPrice: priced.UnitPrice,
+                   UnitsAre: tier.IsBandedByMembers ? "members" : "tours");
 
         // ── the coupon line ──────────────────────────────────────────────────
         var typed = CouponCodeGenerator.Normalise(request.CouponCode);

@@ -54,7 +54,33 @@ public sealed record PublicEventRecord(
     int AttendingCount,
     int? AttendeeCapacity,
     DateTime? RsvpClosesAt,
-    PublicEventFlags Flags);
+    PublicEventFlags Flags,
+    // ── Tours (item 233) ────────────────────────────────────────────────────
+    // Appended with defaults so an older client reads this exactly as it did before.
+    /// <summary>The tour this date runs, when it is one.</summary>
+    string? TourName = null,
+    /// <summary>Its slug, for the link to the tour's own page.</summary>
+    string? TourUrlName = null,
+    /// <summary>
+    /// Who is leading it.
+    /// </summary>
+    /// <remarks>
+    /// Ben asked for the guide's name and picture in what a guest is sent, "for safety" — the
+    /// person walking into the dark should know who they are meeting. The same facts are on the
+    /// page, so a guest who never opens the mail still knows.
+    /// </remarks>
+    IReadOnlyList<PublicGuideRecord>? Guides = null,
+    /// <summary>Average stars out of five, when anyone has rated the tour.</summary>
+    decimal? TourRating = null,
+    int TourRatingCount = 0,
+    /// <summary>
+    /// The IANA zone the event happens in, when it is recorded — today, the tour's. Null means
+    /// nobody has said, and the reader is shown UTC and told so; see EventClock.
+    /// </summary>
+    string? TimeZoneId = null);
+
+/// <summary>A guide as a guest sees them: a name, and a face when they have published one.</summary>
+public sealed record PublicGuideRecord(string DisplayName, string? Handle, Guid? PhotoUploadFileId);
 
 /// <summary>One public event as it appears in a list.</summary>
 public sealed record PublicEventListItem(
@@ -77,7 +103,16 @@ public sealed record PublicEventListItem(
     decimal? ApproximateLongitude,
     int AttendingCount,
     int? AttendeeCapacity,
-    bool IsOnline);
+    bool IsOnline,
+    // Item 233, appended with defaults: a card that does not say which tour it is makes a
+    // business's three walks look like three unrelated evenings.
+    string? TourName = null,
+    string? TourUrlName = null,
+    /// <summary>
+    /// The IANA zone the event happens in, when it is recorded — today, the tour's. Null means
+    /// nobody has said, and the reader is shown UTC and told so; see EventClock.
+    /// </summary>
+    string? TimeZoneId = null);
 
 
 // ── Coming along without an account (item #87b) ──────────────────────────────
@@ -170,5 +205,125 @@ public sealed record EventEvidenceRecord(
     /// this is the photographer's decision about the place's public record.
     /// </summary>
     DateTime? PublishedToPlaceAtUtc = null,
+    /// <summary>
+    /// When this file comes off the site, or null when nothing is counting (item 233).
+    /// </summary>
+    /// <remarks>
+    /// Carried so a screen can say the date. A guest is emailed before anything goes, but the
+    /// person who missed the mail had no other way to find out how long they had.
+    /// </remarks>
+    DateTime? ExpiresAtUtc = null,
+    /// <summary>Whether the business has kept it for good.</summary>
+    bool IsKept = false,
     /// <summary>Whether the event is at a public place, so there is an archive to contribute to.</summary>
     bool PlaceAcceptsArchive = false);
+
+// ── Tours (item 233) ─────────────────────────────────────────────────────────
+// Ben, 2026-09-10: "Tours are public so, they show up on the map and are searchable." A tour is
+// the product a business sells; these are the shapes a visitor reads it in.
+
+/// <summary>A tour on a list or a search result.</summary>
+public sealed record PublicTourListItem(
+    Guid Id,
+    string Name,
+    string UrlName,
+    Guid OrganizationId,
+    string OrganizationName,
+    string OrganizationUrlName,
+    string? City,
+    string? State,
+    decimal? Latitude,
+    decimal? Longitude,
+    int? DurationMinutes,
+    DateTime? NextDateStartUtc,
+    int UpcomingDateCount,
+    decimal? Rating,
+    int RatingCount,
+    double? DistanceMiles = null,
+    /// <summary>The tour's first picture, for the card. Null when it has none.</summary>
+    Guid? CoverUploadFileId = null,
+    /// <summary>
+    /// The walk's own IANA zone, so a card shows the time it actually starts rather than the time
+    /// where the reader is sitting. See EventClock.
+    /// </summary>
+    string? TimeZoneId = null);
+
+/// <summary>
+/// One tour's own page.
+/// </summary>
+/// <remarks>
+/// The meeting point is given in full, unlike a case or a private investigation: a tour exists to
+/// be turned up to, and an address withheld from the person deciding whether to come is an
+/// address withheld from the wrong reader.
+/// </remarks>
+public sealed record PublicTourRecord(
+    Guid Id,
+    string Name,
+    string UrlName,
+    string? Description,
+    Guid OrganizationId,
+    string OrganizationName,
+    string OrganizationUrlName,
+    string MeetingPoint,
+    string? City,
+    string? State,
+    decimal? Latitude,
+    decimal? Longitude,
+    int? DurationMinutes,
+    int? DefaultCapacity,
+    string TimeZoneId,
+    string? ContactLine,
+    bool IsBookable,
+    bool AllowReviews,
+    IReadOnlyList<PublicGuideRecord> Guides,
+    IReadOnlyList<PublicEventListItem> UpcomingDates,
+    decimal? Rating,
+    int RatingCount,
+    /// <summary>The tour's own pictures, in the order the business put them.</summary>
+    IReadOnlyList<PublicTourImage>? Gallery = null,
+    /// <summary>
+    /// Pictures guests took on the nights out, as accepted by the business (item 233).
+    /// </summary>
+    /// <remarks>
+    /// Ben asked for a slideshow "as taken by guests and the tour guides and company", so the two
+    /// sources sit side by side and each slide says whose it is. Only accepted submissions from
+    /// public dates appear, which is the rule the event page already publishes under — a guest is
+    /// told at the moment they upload that acceptance makes it public and credited.
+    /// </remarks>
+    IReadOnlyList<PublicTourGuestPhoto>? GuestGallery = null,
+    /// <summary>
+    /// Where else this tour can be found — its own accounts, in its own order (Ben, 2026-09-10).
+    /// </summary>
+    IReadOnlyList<PublicTourLink>? Links = null);
+
+/// <summary>One of a tour's own accounts elsewhere, as a visitor sees it.</summary>
+public sealed record PublicTourLink(
+    Ben.Data.Common.Enums.SocialPlatform Platform,
+    string Name,
+    string Url);
+
+/// <summary>One picture a guest took on a tour, credited to them.</summary>
+/// <param name="EventId">The date it was taken on — also where its bytes are served from.</param>
+public sealed record PublicTourGuestPhoto(
+    Guid SubmissionId,
+    Guid EventId,
+    string FileName,
+    string ContentType,
+    string? Note,
+    string By,
+    DateTime WhenUtc);
+
+/// <summary>A picture on a tour's public page.</summary>
+/// <param name="Caption">Also the alt text, so a picture here is never mute.</param>
+public sealed record PublicTourImage(Guid UploadFileId, string? Caption);
+
+/// <summary>A tour as a pin: the least a map needs, and nothing a map does not.</summary>
+public sealed record PublicTourMapPin(
+    Guid Id,
+    string Name,
+    string UrlName,
+    string OrganizationName,
+    string OrganizationUrlName,
+    decimal Latitude,
+    decimal Longitude,
+    DateTime? NextDateStartUtc);

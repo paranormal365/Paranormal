@@ -31,11 +31,35 @@ replaced by whatever name they chose.
 | A group member | Work cases, record findings, attend investigations. |
 | A group owner or administrator | Configure the group, manage members, accept or decline requests. |
 
+## The map of published cases
+
+Below the search on the home page, every case a group has published is on a map, with the same
+cases listed beneath it. Pins that sit close together at the zoom you are looking at gather into a
+single pin showing how many are there; zoom in and they separate. Click a pin to see the case, or
+the cases, at that spot. Pan or zoom and the list beneath follows the part of the map you are
+looking at.
+
+![The map of published cases](/help/media/getting-started/public-map.png)
+*Three cases near Nashville, gathered into one pin at this zoom.*
+
+If your browser is allowed to say where you are, the map starts there; if not, it starts on the
+whole country and works just the same. A pin marks the area a case is in, not a front door — the
+site deliberately places it a little way off.
+
 ## Voting on a published case
 
 Anyone with an account can vote on a published case, and on individual pieces of evidence within
 it. There are three answers: **confirms**, **inconclusive**, and **disputes**. You get one vote,
 and changing your mind replaces it rather than adding a second.
+
+![The vote button with its three choices open, and the row of actions beside it](/help/media/getting-started/case-actions.png)
+*One button to vote with, and the choices it offers. Everything in the row explains itself when you
+hover over it.*
+
+Voting is **one button**, under the counts. It carries a hollow thumb until you have voted, and the
+filled mark of your own answer afterwards, so you can always see what you said without reading a
+legend. Press it and the three choices appear underneath; pause on one and it tells you what it
+means. Pressing your own answer again takes the vote back.
 
 Alongside the three counts you will see a single **score**. It is the votes added up, with confirms
 counting **+1**, disputes **−1**, and inconclusive **0** — so a green **+4** means the people who
@@ -48,15 +72,49 @@ The score is always shown with the number of votes behind it, because **+4** fro
 **+4** from ninety are not the same claim. A score of **0** can mean the case is evenly split or
 that everyone was undecided — the counts beside it tell you which.
 
+### The other buttons beside it
+
+Four more buttons sit in the same row, all the same height, and none of them carries a word — hover
+over one and it says what it is.
+
+- **Share** opens the places a case can go when you hover over it: Facebook, X, Bluesky, Reddit,
+  WhatsApp, email, and **Copy link**. On a phone, where there is nothing to hover over, pressing the
+  button opens your own share sheet instead.
+- **Repost** puts the case on the feed as a post by you. It is a link to the case — posting on
+  behalf of a group takes permission, and this is one person saying *look at this*.
+- **Comments** takes you straight down to the comments on this page, with the number on it.
+- **Report** flags the case for a site moderator. Reporting never hides anything by itself.
+
+If you are not signed in the counts are still there, with **Sign in** under them.
+
+## Commenting on a published case
+
+Under a published case is a box to say something about it. Comments are plain text — no formatting,
+no attachments — and yours can be deleted by you at any time. Somebody else's can be reported, which
+sends it to the same moderation queue as anything else.
+
+A web address typed into a comment, a message or a feed post gets a small card under it showing what
+it points at. Cards are only ever built for addresses **on this site** — a case, a tour, an event or
+a group — out of records we already hold, so they stay correct when something is renamed. A link
+somewhere else stays a link, with the site it belongs to named under it.
+
 ## Finding what's near you
 
 ![The Find Groups page listing nearby groups](/help/media/getting-started/find-groups.png)
 *Browse Groups lists every group, closest first once you have given it a place to measure from.*
 
-The home page shows what's happening close to you — groups that serve your area, and public events
-you could attend. If your browser allows it, this uses your current location automatically; if not,
-type a city, address, or zip code instead. Either way, choose how far to look with the distance
-dropdown.
+The home page shows what's happening close to you — walks you could book, public events you could
+attend, and groups that serve your area. If your browser allows it, this uses your current location
+automatically; if not, type a city, address, or zip code instead. Either way, choose how far to look
+with the distance dropdown.
+
+![What's near you, with tours, events and groups on separate tabs](/help/media/getting-started/whats-near-you.png)
+*Each tab carries its count, so you can see the shape of what was found before opening anything.
+A tab only appears when there is something behind it.*
+
+Tours open first, because a walk with a date on it is the most useful thing the page can hand you.
+Every tour card leads with a picture; a walk that has not put one up yet gets a plate drawn from its
+own name, so it is the same colour here, on the group's page, and on the tour's own page.
 
 Once you belong to a group, your Home becomes your desk: the next investigation you are on, the
 open cases in your groups (yours first), how many messages and requests are waiting, and any gear
@@ -163,6 +221,23 @@ carrying a link is exactly what filters are suspicious of.
 There is a minute's wait between requests, so pressing it repeatedly will not send more mail.
 
 If the link itself has expired, use the same button for a fresh one.
+
+## Signing in with Apple or Microsoft
+
+The sign-in page also offers **Sign in with Apple** and **Sign in with Microsoft**. Either one
+signs you in with an account you already hold there, and no password of ours is involved.
+
+The first time, we need to know who you are here. You can **make a new account** — a display
+name and a permanent @name are all it asks — or, if you already have an account here under some
+other address, **link it instead**: give that account's email and password (and its code, if it
+has two-step sign-in). Linking is always offered, because the address Apple or Microsoft gives us
+is often not the one you signed up with, and we would rather join your accounts than make you a
+second one that has none of your history.
+
+Apple lets you **hide your email**. If you do, we receive a forwarding address that reaches you
+only while Apple allows it, and your profile says so rather than showing an address you would not
+recognise. If you give us no address at all, your profile warns you: Apple is then the only way
+into your account, and there is no reset link to fall back on until you add one.
 
 ## Your first minute
 
@@ -336,13 +411,71 @@ an "Investigator Role" for exactly this). Titles like *Probationary* or *Senior 
 are seniority labels and open nothing by themselves; if a tab you expect is missing, it's a
 role you're missing, not a bug — ask whoever runs your group.
 
+## A group's own pages
+
+Every group has a page of its own at `/o/their-name`, and everything they publish hangs off it: a
+strip of pills across the top takes you to their **Cases**, their **Events**, any pages they have
+written, and back to their home.
+
+![A group's public page](/help/media/getting-started/group-page.png)
+*What the group is, where it works, how many people, and the next night you could turn up to.*
+
+**Cases** is what they have published of their investigations.
+
+![A group's published investigations](/help/media/getting-started/group-cases.png)
+*A case the group concluded is haunted is marked down its left edge. The whole card opens it.*
+
+Each case has a page with the group's summary, what they found if they chose to publish it, a
+timeline of what happened and when, and a community rating you can vote in once you are signed in.
+
+## What's on
+
+**What's On** in the menu lists every public night any group has opened to anyone — walks,
+investigations and open meetings together, soonest first.
+
+![What's on, grouped by the night each event happens](/help/media/getting-started/whats-on.png)
+*Grouped by the day, so the date is said once and each night under it only has to tell you what is
+different about it. The bar on the right is how full it is.*
+
+**Every time is the event's own.** A walk that starts at eight in Nashville reads as eight wherever
+in the world you are reading it, with the zone named beside it — so this page, the event's page, the
+email you are sent and the calendar file all agree. An event whose group has not said which zone it
+runs on is shown in UTC and says so.
+
 ## Going to a group's public event
 
 Public events are open to anyone — you'll find them on a group's page and under **Join a Group**.
 Say you're coming with your email address, click the link we send, and you're on the list (that
 also creates you an account, with no password to invent).
 
+![One public event, with the date, the sign-up and where to meet](/help/media/getting-started/event-page.png)
+*Coming along is the first thing on the page. Where you meet is drawn on a map when the event is a
+tour date, because a walk's meeting point is exact; an ordinary event only gives a town.*
+
 Afterwards, if you captured something, the event's page lets you **offer it to the group**. A
 member reviews every submission. If yours is accepted it becomes part of that event's public
 record, credited to you; if it's declined you're told why, and your file stays private. You can
 see where each of your submissions stands on the same page.
+
+## Ghost walks and tours
+
+A tour is a walk somebody sells: it has a meeting point, a length, and dates you can sign up for.
+They show up on the map on the front page, in **What's near you**, and on the business's own page,
+and each has a page of its own with its pictures, its guides, and when it runs.
+
+![A tour's page](/help/media/getting-started/tour-page.png)
+
+Signing up gets you an email with the meeting point, the time in the tour's own zone, who is
+leading it and what they look like, and a calendar file so your phone reminds you. You get the same
+again the night before. **Money is arranged with the business** — nothing is taken through this
+site, and the email says how they want to be paid.
+
+Afterwards you can rate the walk out of five and say a few words, and anything you sent in from the
+night is on the tour's page for you to download.
+
+**Times are the event's own.** A walk that starts at eight in Nashville reads as eight wherever
+you are reading it, with the zone named beside it, so the page, the email and the calendar file
+all agree. An event whose group has not said which zone it runs on is shown in UTC and says so.
+
+At the foot of a tour's page you may find the accounts that walk goes with — their site, Instagram,
+YouTube and so on — if the business has added them.

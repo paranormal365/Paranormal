@@ -46,6 +46,19 @@ public class NearbyDiscoveryTests : BenTestBase
             .ToBeVisibleAsync(new() { Timeout = 30_000 });
     }
 
+    /// <summary>
+    /// Brings one kind of result on screen. Results are a tab strip now, and only the open tab's
+    /// panel is in the DOM at all — so a test that asserts on an event has to open Events first,
+    /// exactly as a reader would. Waiting for the tab button doubles as the wait for the search
+    /// to have come back: a kind that found nothing is never given a tab.
+    /// </summary>
+    private async Task ShowTabAsync(string id)
+    {
+        var tab = Page.Locator($"#tab-{id}");
+        await Expect(tab).ToBeVisibleAsync(new() { Timeout = 20_000 });
+        await tab.ClickAsync();
+    }
+
     [Test]
     [Description("The panel renders its heading and distance control.")]
     public async Task Panel_RendersHeadingAndDistanceControl()
@@ -61,10 +74,9 @@ public class NearbyDiscoveryTests : BenTestBase
     [Description("With location granted, the seeded findable group appears.")]
     public async Task Granted_ShowsSeededGroup()
     {
-        // The panel queries after geolocation resolves, so wait for the section rather than the
+        // The panel queries after geolocation resolves, so wait for the tab rather than the
         // page load — NetworkIdle fires before the Blazor circuit has made its call.
-        var groups = Page.GetByText("Groups Nearby", new() { Exact = false });
-        await Expect(groups).ToBeVisibleAsync(new() { Timeout = 20_000 });
+        await ShowTabAsync("groups");
 
         var tgh = Page.GetByText("Paranormal365", new() { Exact = false }).First;
         await Expect(tgh).ToBeVisibleAsync(new() { Timeout = 5_000 });
@@ -74,8 +86,7 @@ public class NearbyDiscoveryTests : BenTestBase
     [Description("The nearer seeded event shows at the default 25-mile radius.")]
     public async Task Granted_ShowsNearEventAtDefaultRadius()
     {
-        var events = Page.GetByText("Upcoming Events", new() { Exact = false });
-        await Expect(events).ToBeVisibleAsync(new() { Timeout = 20_000 });
+        await ShowTabAsync("events");
 
         // Seeded at the NPS Nashville address, so within 25 miles of the caller.
         var meeting = Page.GetByText("Open Meeting", new() { Exact = false }).First;
@@ -86,8 +97,7 @@ public class NearbyDiscoveryTests : BenTestBase
     [Description("Event locations are labelled approximate, never as an address.")]
     public async Task Events_AreLabelledApproximate()
     {
-        await Expect(Page.GetByText("Upcoming Events", new() { Exact = false }))
-            .ToBeVisibleAsync(new() { Timeout = 20_000 });
+        await ShowTabAsync("events");
 
         var caveat = Page.GetByText("approximate", new() { Exact = false }).First;
         await Expect(caveat).ToBeVisibleAsync(new() { Timeout = 5_000 });
@@ -97,8 +107,7 @@ public class NearbyDiscoveryTests : BenTestBase
     [Description("Widening the radius to 50 miles brings in the far seeded event.")]
     public async Task WideningRadius_BringsInTheFarEvent()
     {
-        await Expect(Page.GetByText("Upcoming Events", new() { Exact = false }))
-            .ToBeVisibleAsync(new() { Timeout = 20_000 });
+        await ShowTabAsync("events");
 
         // Bell Witch Cave is 33.4 mi away — deliberately outside the default 25.
         var walk = Page.GetByText("Public Night Walk", new() { Exact = false });
@@ -109,6 +118,10 @@ public class NearbyDiscoveryTests : BenTestBase
         // old click waited out its full timeout on an element Playwright could see but not press.
         await Page.SelectOptionAsync("#nearby-radius", "50");
         await Page.WaitForTimeoutAsync(3_000); // re-query round trip
+
+        // A fresh search re-opens the first tab that found anything, so Events has to be chosen
+        // again before the far walk can be seen.
+        await ShowTabAsync("events");
 
         await Expect(walk.First).ToBeVisibleAsync(new() { Timeout = 10_000 });
 
@@ -161,8 +174,12 @@ public class NearbyDiscoveryFallbackTests : BenTestBase
         await Page.ClickAsync("button:has-text(\"Show what's near there\")");
 
         // Geocoding is an outbound call, so allow for it before asserting on results.
-        var results = Page.GetByText("Groups Nearby", new() { Exact = false })
-            .Or(Page.GetByText("Upcoming Events", new() { Exact = false }))
+        // Results arrive as a tab strip, one tab per kind that actually found something (Ben,
+        // 2026-09-10: three stacked lists "looked too busy"). An empty kind is never offered a
+        // tab, so this asserts on any of the three rather than a particular one.
+        var results = Page.Locator("#tab-tours")
+            .Or(Page.Locator("#tab-events"))
+            .Or(Page.Locator("#tab-groups"))
             .Or(Page.GetByText("Nothing found", new() { Exact = false }));
 
         await Expect(results.First).ToBeVisibleAsync(new() { Timeout = 25_000 });

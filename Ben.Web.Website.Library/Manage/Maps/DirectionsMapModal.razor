@@ -194,6 +194,9 @@
         else
         {
             _result = route;
+            // The route draws its own A and B pins; the address pin under B would only put a second
+            // title on top of the first (seen in the help screenshot: two labels tangled at B).
+            _pins = [];
         }
         _loading = false;
         StateHasChanged();

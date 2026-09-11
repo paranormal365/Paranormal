@@ -1,0 +1,109 @@
+/*
+    The band at the top of every one of a group's public pages. See OrgPublicBanner.razor for why
+    it takes the org's own colour.
+*/
+
+.org-banner {
+    display: flex;
+    align-items: center;
+    gap: 1rem;
+    padding: 1.1rem 1.25rem;
+    border-radius: .65rem;
+    background:
+        radial-gradient(ellipse 60% 140% at 8% 50%, hsl(var(--plate-hue) 55% 42% / .26), transparent 62%),
+        linear-gradient(105deg,
+            hsl(var(--plate-hue) 34% 13%) 0%,
+            hsl(calc(var(--plate-hue) + 34deg) 30% 8%) 100%);
+    color: #fff;
+}
+
+.org-banner__logo {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    flex: 0 0 auto;
+    width: 5rem;
+    height: 5rem;
+    padding: .4rem;
+    border-radius: .55rem;
+    /* A light plate under the logo: most are drawn for a white page and vanish on this ground. */
+    background: rgba(255, 255, 255, .92);
+    overflow: hidden;
+}
+
+/* No logo: their initials. */
+.org-banner__logo--none {
+    background: rgba(255, 255, 255, .1);
+    font-size: 1.5rem;
+    font-weight: 700;
+    letter-spacing: .12em;
+    text-indent: .12em;
+    color: #fff;
+}
+
+.org-banner__text {
+    min-width: 0;
+}
+
+.org-banner__name {
+    margin: 0;
+    font-size: clamp(1.4rem, 3vw, 2rem);
+    font-weight: 700;
+    line-height: 1.15;
+}
+
+.org-banner ::deep .org-banner__kinds {
+    display: flex;
+    flex-wrap: wrap;
+    gap: .4rem;
+    margin-top: .35rem;
+}
+
+.org-banner ::deep .org-banner__badge {
+    padding: .1rem .5rem;
+    border-radius: 1rem;
+    background: rgba(255, 255, 255, .14);
+    font-size: .72rem;
+    font-weight: 600;
+    letter-spacing: .02em;
+}
+
+.org-banner ::deep .org-banner__contact {
+    display: flex;
+    flex-wrap: wrap;
+    gap: .85rem;
+    margin-top: .5rem;
+    font-size: .82rem;
+    opacity: .9;
+}
+
+/* ::deep, because the badges and contact lines are the CALLER's markup rendered as child content:
+   they carry the caller's scope attribute, not this component's, so an unprefixed rule here never
+   reaches them. The first version of this shipped a badge with no pill and a link in the theme's
+   blue on a ground that is dark in both themes.
+
+   The banner paints its own ground, so links in it take a fixed light colour rather than the
+   theme's: the ground is the same in both themes and the theme's link colour is not. */
+.org-banner ::deep .org-banner__contact a {
+    color: #fff;
+    text-decoration: none;
+}
+
+.org-banner ::deep .org-banner__contact a:hover {
+    text-decoration: underline;
+}
+
+
+/* On a sub-page the group's name sits above the page's own title. */
+.org-banner__eyebrow {
+    font-size: .8rem;
+    font-weight: 600;
+    letter-spacing: .02em;
+    opacity: .85;
+}
+
+.org-banner__eyebrow a {
+    color: #fff;
+    text-decoration: underline;
+    text-underline-offset: .15em;
+}
