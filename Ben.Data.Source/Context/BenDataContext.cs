@@ -110,6 +110,7 @@ namespace Ben.Data.Source.Context
         public virtual DbSet<OrgCalendarEvent> OrgCalendarEvents { get; set; }
         public virtual DbSet<Tour> Tours { get; set; }
         public virtual DbSet<TourGuide> TourGuides { get; set; }
+        public virtual DbSet<TourSocialLink> TourSocialLinks { get; set; }
         public virtual DbSet<TourReview> TourReviews { get; set; }
         public virtual DbSet<TourGalleryImage> TourGalleryImages { get; set; }
         public virtual DbSet<OrgCalendarEventGuide> OrgCalendarEventGuides { get; set; }
@@ -729,6 +730,19 @@ namespace Ben.Data.Source.Context
             modelBuilder.Entity<TourGuide>()
                 .HasOne(g => g.CreatedByAppUser).WithMany()
                 .HasForeignKey(g => g.CreatedByAppUserId).OnDelete(DeleteBehavior.NoAction);
+
+            // One account per platform per tour: two Instagram links for one walk is a mistake,
+            // not a feature. Cascade from the tour, NoAction on the person who added it.
+            modelBuilder.Entity<TourSocialLink>()
+                .HasIndex(l => new { l.TourId, l.Platform }).IsUnique();
+            modelBuilder.Entity<TourSocialLink>()
+                .Property(l => l.Url).HasMaxLength(500).IsRequired();
+            modelBuilder.Entity<TourSocialLink>()
+                .HasOne(l => l.Tour).WithMany(t => t.SocialLinks)
+                .HasForeignKey(l => l.TourId).OnDelete(DeleteBehavior.Cascade);
+            modelBuilder.Entity<TourSocialLink>()
+                .HasOne(l => l.CreatedByAppUser).WithMany()
+                .HasForeignKey(l => l.CreatedByAppUserId).OnDelete(DeleteBehavior.NoAction);
 
             modelBuilder.Entity<OrgCalendarEventGuide>()
                 .HasIndex(g => new { g.OrgCalendarEventId, g.AppUserId }).IsUnique();

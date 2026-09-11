@@ -135,6 +135,7 @@ public sealed class TourController : OrgCmsControllerBase
             CreatedByAppUserId = userId.Value,
         };
         db.Tours.Add(tour);
+        ApplyLinks(db, tour, request.SocialLinks, userId.Value, now);
         await db.SaveChangesAsync(ct);
 
         // The money, after the tour exists: a payment problem must never be why a business cannot
@@ -177,6 +178,16 @@ public sealed class TourController : OrgCmsControllerBase
         tour.MailBodyTemplate = Clean(request.MailBodyTemplate);
         tour.DateUpdated = DateTime.UtcNow;
         tour.UpdatedByAppUserId = userId.Value;
+
+        // Null leaves them alone; a list replaces the lot. Loaded rather than ExecuteDelete'd
+        // because the tests run on a provider that has no such statement.
+        if (request.SocialLinks is not null)
+        {
+            var existing = await db.TourSocialLinks.Where(l => l.TourId == tourId).ToListAsync(ct);
+            db.TourSocialLinks.RemoveRange(existing);
+            ApplyLinks(db, tour, request.SocialLinks, userId.Value, DateTime.UtcNow);
+        }
+
         await db.SaveChangesAsync(ct);
 
         return Ok((await LoadAsync(db, orgId, tourId, ct)).First());
@@ -247,6 +258,7 @@ public sealed class TourController : OrgCmsControllerBase
         var tour = await db.Tours.AsNoTracking()
             .Include(t => t.StartOrganizationAddress)
             .Include(t => t.Guides).ThenInclude(g => g.AppUser)
+            .Include(t => t.SocialLinks)
             .Include(t => t.Organization)
             .FirstOrDefaultAsync(t => t.Id == tourId && t.OrganizationId == orgId, ct);
         if (tour is null) return NotFound();
@@ -474,6 +486,34 @@ public sealed class TourController : OrgCmsControllerBase
             }
         }
 
+        // A link is checked against the platform's own hosts. An icon that says Instagram and
+        // opens somewhere else is a link-laundering trick on a page a reader is trusting the
+        // business for, and the refusal names the one that is wrong so it can be fixed.
+        foreach (var link in request.SocialLinks ?? [])
+        {
+            if (link.Url?.Trim() is not { Length: > 0 })
+                return $"The {SocialPlatforms.DisplayName(link.Platform)} link is empty. "
+                     + "Fill it in or take the row out.";
+
+            if (!SocialPlatforms.IsAllowed(link.Platform, link.Url))
+            {
+                var hosts = SocialPlatforms.HostsFor(link.Platform);
+                // No article in front of the name: "a Instagram address" is what you get when a
+                // sentence is built around a word nobody knew in advance.
+                return hosts.Count == 0
+                    ? "A website link has to start with http:// or https://."
+                    : $"That doesn't look like an address on {SocialPlatforms.DisplayName(link.Platform)}. "
+                    + $"It should be a link to {string.Join(" or ", hosts)}.";
+            }
+        }
+
+        if (request.SocialLinks is { } all
+            && all.GroupBy(l => l.Platform).FirstOrDefault(g => g.Count() > 1) is { } twice)
+        {
+            return $"You've listed {SocialPlatforms.DisplayName(twice.Key)} twice. "
+                 + "One account per service.";
+        }
+
         return null;
     }
 
@@ -486,6 +526,7 @@ public sealed class TourController : OrgCmsControllerBase
         var tours = await db.Tours.AsNoTracking()
             .Include(t => t.StartOrganizationAddress)
             .Include(t => t.Guides).ThenInclude(g => g.AppUser)
+            .Include(t => t.SocialLinks)
             .Where(t => t.OrganizationId == orgId && (tourId == null || t.Id == tourId))
             .OrderBy(t => t.RetiredAtUtc == null ? 0 : 1).ThenBy(t => t.Name)
             .ToListAsync(ct);
@@ -521,8 +562,44 @@ public sealed class TourController : OrgCmsControllerBase
                     g.AppUser.Handle,
                     photos.FirstOrDefault(p => p.AppUserId == g.AppUserId)?.UploadFileId))],
                 upcoming.Count, mine.Count,
-                upcoming.Count == 0 ? null : upcoming.Min(d => d.StartDateTime));
+                upcoming.Count == 0 ? null : upcoming.Min(d => d.StartDateTime),
+                PlanNote: null,
+                SocialLinks: [.. t.SocialLinks.OrderBy(l => l.SortOrder)
+                    .Select(l => new TourSocialLinkRecord(l.Platform, l.Url, l.SortOrder))]);
         })];
+    }
+
+    /// <summary>
+    /// Writes the tour's links, in the order given, skipping anything that did not pass validation.
+    /// </summary>
+    /// <remarks>
+    /// Validation already refused the request if a link was wrong, so nothing should be dropped
+    /// here — but a platform listed twice would break the unique index at save time and take the
+    /// whole tour down with it, so the last one wins and the save succeeds.
+    /// </remarks>
+    private static void ApplyLinks(
+        BenDataContext db, Tour tour, IReadOnlyList<TourSocialLinkRecord>? links,
+        Guid userId, DateTime now)
+    {
+        if (links is not { Count: > 0 }) return;
+
+        var order = 0;
+        foreach (var link in links
+                     .Where(l => SocialPlatforms.IsAllowed(l.Platform, l.Url))
+                     .GroupBy(l => l.Platform)
+                     .Select(g => g.Last()))
+        {
+            db.TourSocialLinks.Add(new TourSocialLink
+            {
+                Id = Guid.NewGuid(),
+                TourId = tour.Id,
+                Platform = link.Platform,
+                Url = link.Url.Trim(),
+                SortOrder = order++,
+                DateCreated = now,
+                CreatedByAppUserId = userId,
+            });
+        }
     }
 
     /// <summary>The meeting point on one line, as a guest would read it.</summary>

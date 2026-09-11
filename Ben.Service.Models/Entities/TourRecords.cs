@@ -34,10 +34,18 @@ public sealed record TourRecord(
     int UpcomingDateCount,
     int TotalDateCount,
     DateTime? NextDateStartUtc,
-    string? PlanNote = null)
+    string? PlanNote = null,
+    /// <summary>Where else this tour can be found, in the order the business listed them.</summary>
+    IReadOnlyList<TourSocialLinkRecord>? SocialLinks = null)
 {
     public bool IsActive => RetiredAtUtc is null;
 }
+
+/// <summary>One of a tour's own accounts elsewhere (item 233, Ben 2026-09-10).</summary>
+public sealed record TourSocialLinkRecord(
+    Ben.Data.Common.Enums.SocialPlatform Platform,
+    string Url,
+    int SortOrder);
 
 /// <summary>One of a tour's guides — the person a guest will meet.</summary>
 /// <param name="PhotoUploadFileId">
@@ -62,7 +70,12 @@ public sealed record UpsertTourRequest(
     bool IsBookable = true,
     string? ContactLine = null,
     string? MailSubjectTemplate = null,
-    string? MailBodyTemplate = null);
+    string? MailBodyTemplate = null,
+    /// <summary>
+    /// The whole list, replacing whatever was there. Null leaves the existing links alone, so an
+    /// older client that has never heard of them cannot wipe them by saving a tour.
+    /// </summary>
+    IReadOnlyList<TourSocialLinkRecord>? SocialLinks = null);
 
 /// <summary>Who guides a tour, replacing the whole list.</summary>
 public sealed record SetTourGuidesRequest(IReadOnlyList<Guid> AppUserIds);

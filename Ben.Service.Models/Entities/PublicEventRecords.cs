@@ -290,7 +290,17 @@ public sealed record PublicTourRecord(
     /// public dates appear, which is the rule the event page already publishes under — a guest is
     /// told at the moment they upload that acceptance makes it public and credited.
     /// </remarks>
-    IReadOnlyList<PublicTourGuestPhoto>? GuestGallery = null);
+    IReadOnlyList<PublicTourGuestPhoto>? GuestGallery = null,
+    /// <summary>
+    /// Where else this tour can be found — its own accounts, in its own order (Ben, 2026-09-10).
+    /// </summary>
+    IReadOnlyList<PublicTourLink>? Links = null);
+
+/// <summary>One of a tour's own accounts elsewhere, as a visitor sees it.</summary>
+public sealed record PublicTourLink(
+    Ben.Data.Common.Enums.SocialPlatform Platform,
+    string Name,
+    string Url);
 
 /// <summary>One picture a guest took on a tour, credited to them.</summary>
 /// <param name="EventId">The date it was taken on — also where its bytes are served from.</param>

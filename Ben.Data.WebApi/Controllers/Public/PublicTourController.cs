@@ -62,6 +62,7 @@ public sealed class PublicTourController : BenControllerBase
         var tour = await VisibleTours(db)
             .Include(t => t.StartOrganizationAddress)
             .Include(t => t.Guides).ThenInclude(g => g.AppUser)
+            .Include(t => t.SocialLinks)
             .FirstOrDefaultAsync(t => t.OrganizationId == org.Id && t.UrlName == tourSlug, ct);
         if (tour is null) return NotFound();
 
@@ -85,7 +86,8 @@ public sealed class PublicTourController : BenControllerBase
             address?.City, address?.State, address?.Latitude, address?.Longitude,
             d.Attending, d.AttendeeCapacity,
             IsOnline: !string.IsNullOrWhiteSpace(d.MeetingUrl),
-            TourName: tour.Name, TourUrlName: tour.UrlName)).ToList();
+            TourName: tour.Name, TourUrlName: tour.UrlName,
+            TimeZoneId: tour.TimeZoneId)).ToList();
 
         var guides = await GuidesOfAsync(db, tour, ct);
         var (rating, ratingCount) = await PublicEventController.TourRatingAsync(db, tour.Id, ct);
@@ -120,7 +122,15 @@ public sealed class PublicTourController : BenControllerBase
             address?.City, address?.State, address?.Latitude, address?.Longitude,
             tour.DurationMinutes, tour.DefaultCapacity, tour.TimeZoneId,
             tour.ContactLine, tour.IsBookable, tour.AllowReviews,
-            guides, dates, rating, ratingCount, gallery, guestGallery));
+            guides, dates, rating, ratingCount, gallery, guestGallery,
+            // Where else they are. Checked against the platform's own hosts when it was saved,
+            // and checked again here — a row written before that rule existed, or by any future
+            // path that forgets, never reaches a reader's browser as a link.
+            Links: [.. tour.SocialLinks
+                .OrderBy(l => l.SortOrder)
+                .Where(l => SocialPlatforms.IsAllowed(l.Platform, l.Url))
+                .Select(l => new PublicTourLink(
+                    l.Platform, SocialPlatforms.DisplayName(l.Platform), l.Url))]));
     }
 
     /// <summary>

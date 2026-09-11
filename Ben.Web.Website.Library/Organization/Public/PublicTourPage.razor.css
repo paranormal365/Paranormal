@@ -338,3 +338,57 @@
         transform: none;
     }
 }
+
+/* ── Where else they are ────────────────────────────────────────────────────
+   A quiet row at the foot of the page. The business's own accounts, named in words rather than
+   drawn as brand marks: a wall of logos is somebody else's advertising on a page this business
+   pays for, and a word is legible at any size and in any theme. */
+.tour-links {
+    margin-top: 2rem;
+    padding-top: 1rem;
+    border-top: 1px solid var(--bs-border-color);
+}
+
+.tour-links__label {
+    display: block;
+    margin-bottom: .5rem;
+    font-size: .68rem;
+    font-weight: 700;
+    letter-spacing: .07em;
+    text-transform: uppercase;
+    color: var(--bs-secondary-color);
+}
+
+.tour-links__row {
+    display: flex;
+    flex-wrap: wrap;
+    gap: .4rem;
+}
+
+/* Two classes deep on purpose. The vendor theme carries
+   `a[target]:not(.btn){text-decoration:underline!important}` — every link that opens a new tab is
+   underlined site-wide, with .btn as its only escape hatch — and that selector scores higher than
+   a single class, so !important alone loses to it. Inside a pill the underline reads as a mistake
+   rather than a convention. */
+.tour-links .tour-links__link {
+    padding: .3rem .75rem;
+    border: 1px solid var(--bs-border-color);
+    border-radius: 2rem;
+    color: var(--bs-body-color);
+    font-size: .85rem;
+    font-weight: 600;
+    text-decoration: none !important;
+    transition: border-color .16s ease, color .16s ease;
+}
+
+.tour-links .tour-links__link:hover,
+.tour-links .tour-links__link:focus-visible {
+    border-color: var(--bs-primary);
+    color: var(--bs-primary);
+}
+
+@media (prefers-reduced-motion: reduce) {
+    .tour-links .tour-links__link {
+        transition: none;
+    }
+}

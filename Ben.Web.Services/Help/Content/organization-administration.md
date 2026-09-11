@@ -650,6 +650,18 @@ directions and a link that opens it in Maps — an address held back from somebo
 whether to come is held back from the wrong person. Each tour also has a page of its own at
 `/o/your-group/tours/the-tour-name`, which is the link worth sharing.
 
+### Where else you are
+
+Under **Where else you are** on a tour's page you can add the accounts that walk goes with:
+your own website, Instagram, Facebook, X, TikTok, YouTube, Bluesky, Rumble and Threads. They show
+as a quiet row at the **foot** of the tour's public page, under the dates — somebody reading it is
+deciding whether to come, and sending them to Instagram before they have seen when it runs would
+be an odd thing for the page to do.
+
+One account per service. Leave a box empty to take that one down; there is nothing to confirm.
+Each link has to point at that service's own site — an Instagram link that opens somewhere else is
+refused, because a reader clicks the word without reading the address.
+
 ## Public events
 
 An event on your calendar can be opened to anybody. Tick **Public** and it appears on your group's

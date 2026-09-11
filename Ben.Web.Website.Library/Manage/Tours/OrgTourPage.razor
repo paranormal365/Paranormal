@@ -7,6 +7,7 @@
 @inject IMediaUrlBuilder MediaUrls
 @inject IJSRuntime JS
 
+@using Ben.Data.Common.Enums
 @using Ben.Service.Models.Entities
 @using Ben.Web.Services.WebApi
 @using Ben.Web.Website.Library.Kit
@@ -179,6 +180,38 @@
                         </div>
                         <div class="form-text">Only people who came to a date that has finished.</div>
                     </div>
+                    @* Ben, 2026-09-10: "let the tour add their Instagram, Facebook, X, URL,
+                       TikTok, BlueSky, Rumble, YouTube… displayed at the bottom of their pages."
+
+                       One box per service rather than an add-a-row list: the set is fixed, a
+                       business has at most one account on each, and clearing a box is how a link
+                       comes down — no delete button to find, nothing to confirm. *@
+                    <div class="col-12">
+                        <label class="form-label fw-semibold">Where else you are</label>
+                        <div class="row g-2" id="tour-links">
+                            @foreach (var platform in SocialPlatforms.All)
+                            {
+                                var hosts = SocialPlatforms.HostsFor(platform);
+                                <div class="col-md-6">
+                                    <div class="input-group input-group-sm">
+                                        <span class="input-group-text" style="min-width:6.5rem;">
+                                            @SocialPlatforms.DisplayName(platform)
+                                        </span>
+                                        <input class="form-control" maxlength="500" type="url"
+                                               id="@($"tour-link-{platform}")"
+                                               placeholder="@(hosts.Count == 0 ? "https://yourwalks.com" : $"https://{hosts[0]}/yourwalks")"
+                                               value="@_form.Links.GetValueOrDefault(platform)"
+                                               @oninput="@(e => _form.Links[platform] = e.Value?.ToString() ?? "")" />
+                                    </div>
+                                </div>
+                            }
+                        </div>
+                        <div class="form-text">
+                            These show at the foot of your tour's page. Leave a box empty to take
+                            that one down. Each link has to point at that service's own site.
+                        </div>
+                    </div>
+
                     <div class="col-12 d-flex gap-2">
                         <button type="button" class="btn btn-primary" id="tour-save"
                                 disabled="@_saving" @onclick="SaveAsync">
@@ -623,6 +656,10 @@
             _form.MailSubject = _tour.MailSubjectTemplate ?? "";
             _form.MailBody = _tour.MailBodyTemplate ?? "";
             _guideIds = [.. _tour.Guides.Select(g => g.AppUserId)];
+
+            _form.Links.Clear();
+            foreach (var link in _tour.SocialLinks ?? [])
+                _form.Links[link.Platform] = link.Url;
         }
 
         // Each refusal is kept, not flattened into an empty list: an address list that was
@@ -671,7 +708,12 @@
             _form.AllowReviews, _form.IsBookable,
             string.IsNullOrWhiteSpace(_form.ContactLine) ? null : _form.ContactLine.Trim(),
             string.IsNullOrWhiteSpace(_form.MailSubject) ? null : _form.MailSubject.Trim(),
-            string.IsNullOrWhiteSpace(_form.MailBody) ? null : _form.MailBody.Trim()));
+            string.IsNullOrWhiteSpace(_form.MailBody) ? null : _form.MailBody.Trim(),
+            // Always a list, never null: null means "leave them alone", and this screen is the one
+            // place that knows the business has just emptied a box on purpose.
+            [.. SocialPlatforms.All
+                .Where(p => !string.IsNullOrWhiteSpace(_form.Links.GetValueOrDefault(p)))
+                .Select((p, i) => new TourSocialLinkRecord(p, _form.Links[p].Trim(), i))]));
         _saving = false;
 
         if (saved is null) { _error = error ?? "That could not be saved."; return; }
@@ -823,5 +865,11 @@
         public bool AllowReviews { get; set; } = true;
         public string MailSubject { get; set; } = "";
         public string MailBody { get; set; } = "";
+
+        /// <summary>
+        /// One box per service, keyed by platform. Empty boxes are simply not saved, so taking a
+        /// link down is clearing the box rather than hunting for a delete button.
+        /// </summary>
+        public Dictionary<SocialPlatform, string> Links { get; } = [];
     }
 }

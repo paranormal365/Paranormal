@@ -407,6 +407,29 @@ else
                 </div>
             </div>
         }
+        @* Where else they are (Ben, 2026-09-10): "let the tour add their Instagram, Facebook, X,
+           URL, TikTok, BlueSky, Rumble, YouTube… displayed at the bottom of their pages."
+
+           At the bottom on purpose. A walking business lives on the accounts where it posts last
+           night's photographs, but somebody reading this page is deciding whether to come, and
+           sending them off to Instagram before they have seen the dates would be a strange thing
+           for this page to do. *@
+        @if (_tour.Links is { Count: > 0 } links)
+        {
+            <div class="tour-links">
+                <span class="tour-links__label">Find @_tour.Name</span>
+                <div class="tour-links__row">
+                    @foreach (var link in links)
+                    {
+                        @* rel="noopener" and a new tab, as everywhere else we hand a reader to
+                           somebody else's site. nofollow because these are links a business wrote
+                           about itself, on a page it publishes. *@
+                        <a class="tour-links__link" href="@link.Url"
+                           target="_blank" rel="noopener noreferrer nofollow">@link.Name</a>
+                    }
+                </div>
+            </div>
+        }
     </div>
 }
 </FeatureGate>

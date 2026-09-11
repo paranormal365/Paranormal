@@ -121,5 +121,8 @@ namespace Ben.Data.Source.Entities
 
         /// <summary>Who leads this tour, by default, when a date is scheduled.</summary>
         public virtual ICollection<TourGuide> Guides { get; set; } = new List<TourGuide>();
+
+        /// <summary>Where else this tour can be found — its own accounts, in its own order.</summary>
+        public virtual ICollection<TourSocialLink> SocialLinks { get; set; } = new List<TourSocialLink>();
     }
 }

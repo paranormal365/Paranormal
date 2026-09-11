@@ -394,3 +394,10 @@ site, and the email says how they want to be paid.
 
 Afterwards you can rate the walk out of five and say a few words, and anything you sent in from the
 night is on the tour's page for you to download.
+
+**Times are the walk's own.** A walk that starts at eight in Nashville reads as eight wherever you
+are reading it, with the zone named beside it, so the page, the email and the calendar file all
+agree. An event that has no zone recorded is shown in UTC and says so.
+
+At the foot of a tour's page you may find the accounts that walk goes with — their site, Instagram,
+YouTube and so on — if the business has added them.
