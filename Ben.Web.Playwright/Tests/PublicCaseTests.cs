@@ -67,11 +67,17 @@ public class PublicCaseTests : BenTestBase
         await Page.GotoAsync($"{BaseUrl}/o/{OrgUrlName}/cases/{CaseRef}");
         await Page.WaitForLoadStateAsync(LoadState.NetworkIdle);
 
-        var confirmBtn = Page.GetByRole(AriaRole.Button, new() { Name = "Confirms the findings" });
-        await Expect(confirmBtn).ToBeVisibleAsync(new() { Timeout = 10_000 });
+        // One button now, not three. It carries a hollow thumb until you vote and the filled icon
+        // of your own vote afterwards; the three choices are a dropdown off it. This asserted on
+        // two of those choices, which are no longer on the page until somebody asks for them.
+        var vote = Page.Locator(".vote-actions__vote > .vote-btn").First;
+        await Expect(vote).ToBeVisibleAsync(new() { Timeout = 10_000 });
+        await vote.ClickAsync();
 
-        var disputeBtn = Page.GetByRole(AriaRole.Button, new() { Name = "Disputes the findings" });
-        await Expect(disputeBtn).ToBeVisibleAsync();
+        await Expect(Page.GetByRole(AriaRole.Button, new() { Name = "Confirms the findings" }))
+            .ToBeVisibleAsync(new() { Timeout = 8_000 });
+        await Expect(Page.GetByRole(AriaRole.Button, new() { Name = "Disputes the findings" }))
+            .ToBeVisibleAsync();
     }
 
     [Test]
@@ -86,20 +92,23 @@ public class PublicCaseTests : BenTestBase
         await Page.GotoAsync($"{BaseUrl}/o/{OrgUrlName}/cases/{CaseRef}");
         await Page.WaitForLoadStateAsync(LoadState.NetworkIdle);
 
-        // Read the initial total votes number
-        var voteCount = Page.Locator("text=vote", new() { HasText = "vote" }).First;
+        var vote = Page.Locator(".vote-actions__vote > .vote-btn").First;
+        await Expect(vote).ToBeVisibleAsync(new() { Timeout = 10_000 });
 
-        // Cast a Confirms vote
-        var confirmBtn = Page.GetByRole(AriaRole.Button, new() { Name = "Confirms the findings" });
-        await confirmBtn.ClickAsync();
+        // Open the dropdown and confirm.
+        await vote.ClickAsync();
+        await Page.GetByRole(AriaRole.Button, new() { Name = "Confirms the findings" }).ClickAsync();
 
-        // A Remove button should now appear (user has an active vote)
-        var removeBtn = Page.GetByRole(AriaRole.Button, new() { Name = "Remove" });
-        await Expect(removeBtn).ToBeVisibleAsync(new() { Timeout = 8_000 });
+        // The one button now reports the vote back: it fills in, and says what pressing it again
+        // would do. There is no separate Remove button any more — pressing this one is the way
+        // back, which is what the old Remove did.
+        var filled = Page.Locator(".vote-btn__icon--filled");
+        await Expect(filled).ToBeVisibleAsync(new() { Timeout = 8_000 });
+        await Expect(vote).ToHaveAttributeAsync("aria-pressed", "true");
 
-        // Clean up — remove the vote so repeated test runs stay idempotent
-        await removeBtn.ClickAsync();
-        await Expect(removeBtn).ToBeHiddenAsync(new() { Timeout = 5_000 });
+        // Clean up — take the vote back, so repeated runs stay idempotent.
+        await vote.ClickAsync();
+        await Expect(filled).ToBeHiddenAsync(new() { Timeout = 8_000 });
     }
 
     [Test]

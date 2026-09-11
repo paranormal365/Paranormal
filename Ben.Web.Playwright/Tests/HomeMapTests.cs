@@ -208,9 +208,17 @@ public class HomeMapTests : BenTestBase
         await Page.GotoAsync(BaseUrl);
         await Page.WaitForLoadStateAsync(LoadState.NetworkIdle);
         await Page.WaitForSelectorAsync(".card", new() { Timeout = 15_000 });
-        // CaseVoteWidget shows vote buttons when authenticated
-        var confirmBtn = Page.GetByRole(AriaRole.Button, new() { Name = "Confirms the findings" }).First;
-        await Expect(confirmBtn).ToBeVisibleAsync(new() { Timeout = 12_000 });
+
+        // One button now, not three: it carries a hollow thumb until you vote and the filled icon
+        // of your own vote afterwards, and pressing it offers the three choices. This asserted on
+        // "Confirms the findings", which is one of those choices and is no longer on the page
+        // until somebody asks for it — so it presses the button and then looks.
+        var vote = Page.Locator(".vote-actions__vote > .vote-btn").First;
+        await Expect(vote).ToBeVisibleAsync(new() { Timeout = 12_000 });
+        await vote.ClickAsync();
+
+        var confirms = Page.GetByRole(AriaRole.Button, new() { Name = "Confirms the findings" }).First;
+        await Expect(confirms).ToBeVisibleAsync(new() { Timeout = 8_000 });
     }
 
     [Test]
