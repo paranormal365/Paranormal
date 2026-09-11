@@ -36,12 +36,26 @@
                   EmptyText="No site settings are defined yet"
                   OnRetry="@LoadAsync">
         <ChildContent>
-        @foreach (var setting in _settings ?? [])
+        @* Grouped, not one long run of twenty-seven identical cards. The sections come from the
+           server beside the settings themselves, so adding a setting files it without touching
+           this page — and a setting filed nowhere is refused there rather than quietly dropped
+           here. *@
+        @foreach (var section in Sections)
+        {
+            <div class="mb-2">
+                <h5 class="mb-1 pt-2">@section.Key</h5>
+                <p class="text-secondary small mb-3">
+                    @(string.IsNullOrWhiteSpace(section.First().GroupBlurb)
+                        ? "Settings the site has not filed under a heading."
+                        : section.First().GroupBlurb)
+                </p>
+            </div>
+        @foreach (var setting in section)
         {
             var s = setting;
             <div class="card mb-3">
                 <div class="card-body">
-                    <div class="d-flex justify-content-between align-items-start gap-2 flex-wrap">
+                    <div class="d-flex justify-content-between align-items-start gap-3">
                         <div class="flex-grow-1">
                             @* The key is the API's name for it, not a label a person should have
                                to read first — description leads, key is shown small for support. *@
@@ -49,7 +63,7 @@
                             <div class="text-secondary small">@s.Description</div>
                             <div class="text-muted font-monospace" style="font-size:.7rem;">@s.Key</div>
                         </div>
-                        <span class="badge @(string.IsNullOrWhiteSpace(_drafts[s.Key]) ? "bg-secondary" : "bg-success")">
+                        <span class="badge flex-shrink-0 @(string.IsNullOrWhiteSpace(_drafts[s.Key]) ? "bg-secondary" : "bg-success")">
                             @(string.IsNullOrWhiteSpace(_drafts[s.Key]) ? "Not set" : "Set")
                         </span>
                     </div>
@@ -141,11 +155,30 @@
                 </div>
             </div>
         }
+        }
         </ChildContent>
     </BenListState>
 </div>
 
 @code {
+    /// <summary>
+    /// The settings as the page lays them out: the server's sections, in the server's order.
+    /// </summary>
+    /// <remarks>
+    /// Anything the server did not file lands in a section of its own at the end rather than
+    /// vanishing. A setting nobody can find is the same as a setting that does not exist, and a
+    /// page that silently drops one is worse than an ugly page.
+    /// </remarks>
+    private IEnumerable<IGrouping<string, SiteSettingRecord>> Sections
+        => (_settings ?? [])
+            .GroupBy(s => string.IsNullOrWhiteSpace(s.Group) ? "Other" : s.Group)
+            .OrderBy(g => g.Key == "Other" ? int.MaxValue : SectionOrder.IndexOf(g.Key));
+
+    /// <summary>The order the server sent them in, which is the order they were declared in.</summary>
+    private List<string> SectionOrder
+        => (_settings ?? []).Select(s => s.Group).Where(g => !string.IsNullOrWhiteSpace(g))
+            .Distinct().ToList();
+
     private const string DefaultAvatarKey = "avatar.default.upload-file-id";
 
     /// <summary>The three default-avatar settings (item 163): generic, man, woman. All render

@@ -11566,14 +11566,33 @@ Subscription Tiers, banded by members unticked, 29 / 290). Created on the testin
 
 ---
 
-## 232. The ladder-reshape Playwright fixture cannot open its dialog (OPEN, found 2026-09-10)
+## 232. The Price Bands screen died whenever the ladder had something to say (FIXED 2026-09-11)
 
-`LadderReshapeTests` (category Billing) fails on the testing copy: the **Reshape the ladder**
-button is visible, the click lands, and the dialog never appears — with the flat tour tier present
-or retired, so item 231 is not the cause, and the website logged no error. The opening click was
-changed to a retrying one on 2026-09-10 and that did not help, so this is not the usual Blazor
-attach race. Not chased further that day; the three other billing fixtures pass. Start by opening
-`/admin/subscription-tiers` as SuperAdmin on the testing copy and pressing the button by hand.
+Reported as "the reshape dialog will not open". It was the whole page, and the dialog was simply
+the only part anybody was looking at.
+
+**What it actually was.** `GET api/admin/subscription-tiers/validation` returned `Ok(aString)`.
+MVC serves a string result through its string formatter as `text/plain`, and every client here
+reads an answer as JSON — so `ReadFromJsonAsync` threw on the sentence, inside the page's
+`OnInitializedAsync`, which killed the circuit. The button rendered because it is drawn before the
+load; nothing it was wired to was alive.
+
+**Why nobody caught it.** A healthy ladder answers "nothing to report", and null comes back as an
+empty 204 that `ApiResponseMapper` already handles — a fix made after this same screen died on
+production for the mirror-image reason. So the page worked on a fresh database and died on a real
+one. The fixture failed only on the testing copy, whose "Free" band is priced at nothing.
+
+**The fix.** `TierValidationRecord`, so the answer is JSON. The record also carries `IsBlocking`,
+because the endpoint had been collapsing two different things into one string: the screen greeted
+a free-band advisory with "The price list is unusable" and "checkout is refused", neither true. A
+blocker is red and says that; an advisory is amber and says "Worth knowing".
+
+`GiphyController.SdkKey` had the same shape and nothing consuming it yet, so it was wrapped too.
+`TierValidationShapeTests` pins the shape and scans `Ben.Data.WebApi` for any endpoint answering
+with a bare string.
+
+**Verified** by running `LadderReshapeTests` against the testing copy — failing before, passing
+after — and by opening the repaired screen and reading its banner.
 
 ---
 

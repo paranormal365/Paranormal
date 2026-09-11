@@ -35,7 +35,12 @@ public sealed class AdminSiteSettingController : BenControllerBase
     public async Task<ActionResult<IEnumerable<SiteSettingRecord>>> GetAll(CancellationToken ct)
     {
         var rows = await _settings.GetAllAsync(ct);
-        return Ok(rows.Select(ToRecord));
+        // In the order the page shows them — by section, then within it — so the page has no
+        // ordering of its own to get wrong.
+        return Ok(rows
+            .OrderBy(r => SiteSettingKeys.DisplayOrder(r.Key).Section)
+            .ThenBy(r => SiteSettingKeys.DisplayOrder(r.Key).Within)
+            .Select(ToRecord));
     }
 
     /// <summary>Sets one setting. An empty value clears it.</summary>
@@ -65,11 +70,15 @@ public sealed class AdminSiteSettingController : BenControllerBase
     }
 
     private static SiteSettingRecord ToRecord(SiteSetting s)
-        => new(s.Key, SiteSettingsService.LabelFor(s.Key), s.Value, s.Description,
-               s.DateUpdated ?? s.DateCreated,
-               SiteSettingKeys.MultiLineKeys.Contains(s.Key),
-               SiteSettingKeys.BooleanKeys.Contains(s.Key),
-               DefaultWhenUnset(s.Key));
+    {
+        var (group, blurb) = SiteSettingKeys.GroupFor(s.Key);
+        return new(s.Key, SiteSettingsService.LabelFor(s.Key), s.Value, s.Description,
+                   s.DateUpdated ?? s.DateCreated,
+                   SiteSettingKeys.MultiLineKeys.Contains(s.Key),
+                   SiteSettingKeys.BooleanKeys.Contains(s.Key),
+                   DefaultWhenUnset(s.Key),
+                   group, blurb);
+    }
 
     /// <summary>
     /// What an unset on/off setting actually does. Feature flags carry their own declared

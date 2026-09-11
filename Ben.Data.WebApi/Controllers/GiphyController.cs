@@ -100,16 +100,21 @@ public sealed class GiphyController : BenControllerBase
 
     /// <summary>The key the iOS app's own Giphy SDK needs, for a signed-in app.</summary>
     /// <remarks>
-    /// Served rather than compiled into the app so it can be rotated without shipping a build.
-    /// A different key from the one above on purpose: Giphy issues SDK keys separately, and an
-    /// app that shipped the server key would put it on every phone.
+    /// <para>Served rather than compiled into the app so it can be rotated without shipping a
+    /// build. A different key from the one above on purpose: Giphy issues SDK keys separately, and
+    /// an app that shipped the server key would put it on every phone.</para>
+    ///
+    /// <para>Wrapped in an object rather than returned as a bare string. MVC serves a string
+    /// result as <c>text/plain</c>, and a key is not valid JSON, so any client reading this the
+    /// way every other endpoint is read would throw on it. Nothing consumes it yet, which is
+    /// exactly when it is free to fix (2026-09-11, item 232).</para>
     /// </remarks>
     [HttpGet("sdk-key")]
     [Authorize]
-    public ActionResult<string> SdkKey()
+    public ActionResult<GiphySdkKeyRecord> SdkKey()
     {
         var key = _configuration["GiphySdk"];
-        return string.IsNullOrWhiteSpace(key) ? NotFound() : Ok(key);
+        return string.IsNullOrWhiteSpace(key) ? NotFound() : Ok(new GiphySdkKeyRecord(key));
     }
 
     /// <summary>
