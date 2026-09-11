@@ -592,9 +592,35 @@ if ($Apps -contains 'website') {
     # The two key files must exist where the settings say, or the apps refuse to start - by
     # design, because a wrong path is a deployment mistake. Checked here, where somebody is
     # watching, rather than discovered as a failed service start.
+    #
+    # Existing is not the same as READABLE, and this check could only ever see the first. The keys
+    # are the one secret handed on as a PATH rather than a value, so the pool identity opens the
+    # file itself at startup - and they live in the deploy folder, which is locked to
+    # Administrators and SYSTEM precisely so no pool identity can read it.
+    #
+    # 2026-09-11: the API refused to start with "Maps:PrivateKeyPath names a file that does not
+    # exist", naming a key that was sitting right there. File.Exists answers false for a file you
+    # may not read, so the message accused the wrong thing and the deploy's own check passed -
+    # it runs as you, and you can read it.
+    #
+    # Granted on the FILES, never on the folder: secrets.json lives beside them and must stay
+    # unreadable. Re-applied every deploy so a replaced key file cannot quietly lose its grant.
     foreach ($keyPath in @((Get-JsonValue $secrets 'AppleSignInKeyPath'), (Get-JsonValue $secrets 'AppleMapsKeyPath'))) {
-        if ($keyPath -and -not (Test-Path $keyPath)) {
+        if (-not $keyPath) { continue }
+        if (-not (Test-Path $keyPath)) {
             throw "The secrets file names an Apple key file that is not on this machine: $keyPath"
+        }
+
+        if (-not $StageOnly) {
+            # The Maps key signs the website's MapKit tokens AND the API's geocoding, so both pools
+            # read it. The sign-in key needs only the API, but keeping the two grants identical is
+            # one less thing to get subtly wrong at three in the morning.
+            & icacls.exe $keyPath '/grant' "IIS AppPool\${WebApiPool}:(R)" `
+                                  '/grant' "IIS AppPool\${RootPool}:(R)" | Out-Null
+            if ($LASTEXITCODE -ne 0) {
+                throw "Could not grant the application pools read on $keyPath - the apps will not start without it."
+            }
+            Write-Detail "pools granted read : $(Split-Path $keyPath -Leaf)"
         }
     }
 

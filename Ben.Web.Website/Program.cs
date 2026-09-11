@@ -151,9 +151,7 @@ builder.Services.AddSingleton(sp =>
 {
     var section = sp.GetRequiredService<IConfiguration>().GetSection("Maps");
     var path = section["PrivateKeyPath"];
-    var pem = string.IsNullOrWhiteSpace(path) ? string.Empty
-            : File.Exists(path) ? File.ReadAllText(path)
-            : throw new InvalidOperationException($"Maps:PrivateKeyPath names a file that does not exist: {path}");
+    var pem = PrivateKeyFile.ReadOrEmpty(path, "Maps:PrivateKeyPath");
     return new Ben.Web.Website.Services.MapKitSigningOptions(
         section["TeamId"] ?? string.Empty, section["KeyId"] ?? string.Empty, pem);
 });

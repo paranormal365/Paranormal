@@ -238,9 +238,7 @@ builder.Services.AddSingleton(sp =>
 {
     var section = sp.GetRequiredService<IConfiguration>().GetSection("Apple");
     var path = section["PrivateKeyPath"];
-    var pem = string.IsNullOrWhiteSpace(path) ? string.Empty
-            : File.Exists(path) ? File.ReadAllText(path)
-            : throw new InvalidOperationException($"Apple:PrivateKeyPath names a file that does not exist: {path}");
+    var pem = PrivateKeyFile.ReadOrEmpty(path, "Apple:PrivateKeyPath");
     return new Ben.Data.WebApi.Services.Apple.AppleSigningOptions(
         section["TeamId"] ?? string.Empty, section["KeyId"] ?? string.Empty, pem);
 });
@@ -563,10 +561,9 @@ else
     var teamId = maps["TeamId"]; var keyId = maps["KeyId"];
     if (!string.IsNullOrWhiteSpace(keyPath) && !string.IsNullOrWhiteSpace(teamId) && !string.IsNullOrWhiteSpace(keyId))
     {
-        if (!File.Exists(keyPath))
-            throw new InvalidOperationException($"Maps:PrivateKeyPath names a file that does not exist: {keyPath}");
         Ben.Service.RepositoryService.Services.AddressGeocodingService.Configure(
-            new Ben.Service.RepositoryService.Services.AppleMapsGeocoder(teamId, keyId, File.ReadAllText(keyPath), maps["BaseUrl"]));
+            new Ben.Service.RepositoryService.Services.AppleMapsGeocoder(
+                teamId, keyId, PrivateKeyFile.ReadOrEmpty(keyPath, "Maps:PrivateKeyPath"), maps["BaseUrl"]));
         Log.Information("Geocoding: Apple Maps Server API, key {KeyId}", keyId);
     }
     else
