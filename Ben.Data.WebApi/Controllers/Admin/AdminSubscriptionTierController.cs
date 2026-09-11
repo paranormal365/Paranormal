@@ -69,7 +69,7 @@ public sealed class AdminSubscriptionTierController : BenControllerBase
     /// is visible before somebody tries to save a fix for a different one.
     /// </summary>
     [HttpGet("validation")]
-    public async Task<ActionResult<string?>> GetValidation(CancellationToken ct)
+    public async Task<ActionResult<TierValidationRecord>> GetValidation(CancellationToken ct)
     {
         await using var db = await _dbFactory.CreateDbContextAsync(ct);
         // Prices ride along: a bounded top band is legal exactly when a price row allows overflow
@@ -79,8 +79,15 @@ public sealed class AdminSubscriptionTierController : BenControllerBase
         // The blocking problem first, because it is the one that stops the list working at all.
         // The free-band advisory only when there is no blocker: a group priced at nothing is a
         // real fault, but the list still functions, so it must not hide a list that does not.
-        return Ok(SubscriptionTierResolver.Validate(tiers)
-               ?? SubscriptionTierResolver.WhyGroupsCanStillBeFree(tiers));
+        // Wrapped, never a bare string: MVC serves a string result as text/plain, and this client
+        // reads JSON. See TierValidationRecord.
+        //
+        // Which of the two it is travels with it. They used to arrive as one string, so a screen
+        // that received the free-band advisory announced the list was unusable and that checkout
+        // was refused — neither true.
+        return Ok(SubscriptionTierResolver.Validate(tiers) is { } blocker
+            ? new TierValidationRecord(blocker, IsBlocking: true)
+            : new TierValidationRecord(SubscriptionTierResolver.WhyGroupsCanStillBeFree(tiers)));
     }
 
     [HttpPost]

@@ -290,6 +290,14 @@ public sealed record FeedModerationSummary(
 /// nobody using a screen reader can choose.</param>
 public sealed record GiphyItem(string Id, string PreviewUrl, string Url, string Alt);
 
+/// <summary>The Giphy SDK key the phone's own picker needs.</summary>
+/// <remarks>
+/// An object and not a bare string: MVC serves a string result as <c>text/plain</c>, and a key is
+/// not valid JSON, so a client reading it the way it reads everything else would throw. The same
+/// shape cost the Price Bands screen its whole page (item 232).
+/// </remarks>
+public sealed record GiphySdkKeyRecord(string Key);
+
 
 // ── Polls on a message (item 233, Ben 2026-09-11) ────────────────────────────
 

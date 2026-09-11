@@ -24,8 +24,8 @@ public sealed partial class BenAdminClientAdapter
             HttpMethod.Put, $"/api/admin/subscription-tiers/{tierId}/capabilities",
             new SetTierCapabilitiesRequest(capabilities), token);
 
-    public Task<string?> GetTierValidationAsync(CancellationToken token = default)
-        => _api.GetAsync<string?>("/api/admin/subscription-tiers/validation", token);
+    public Task<TierValidationRecord?> GetTierValidationAsync(CancellationToken token = default)
+        => _api.GetAsync<TierValidationRecord>("/api/admin/subscription-tiers/validation", token);
 
     public Task<(SubscriptionTierAdminRecord? Result, string? Error)> CreateSubscriptionTierAsync(
         SaveSubscriptionTierRequest request, CancellationToken token = default)

@@ -43,13 +43,20 @@
         </div>
     </div>
 
-    @if (_validationProblem is not null)
+    @* Two different things, and saying them the same way was its own small lie: a band priced at
+       nothing is worth knowing about, but the list still prices people and checkout still runs. *@
+    @if (_validation?.Problem is { } problem)
     {
-        <div class="alert alert-danger">
-            <strong>The price list is unusable:</strong> @_validationProblem
-            <div class="small mt-1">
-                Until this is fixed, no organization can be priced and checkout is refused.
-            </div>
+        <div class="alert @(_validation.IsBlocking ? "alert-danger" : "alert-warning")">
+            <strong>
+                @(_validation.IsBlocking ? "The price list is unusable:" : "Worth knowing:")
+            </strong> @problem
+            @if (_validation.IsBlocking)
+            {
+                <div class="small mt-1">
+                    Until this is fixed, no organization can be priced and checkout is refused.
+                </div>
+            }
         </div>
     }
 
@@ -388,7 +395,7 @@
 @code {
     private bool _loading = true;
     private LoadResult<SubscriptionTierAdminRecord> _tiersResult;
-    private string? _validationProblem;
+    private TierValidationRecord? _validation;
 
     private bool _showDialog;
     private bool _saving;
@@ -435,7 +442,7 @@
     {
         _loading = true;
         _tiersResult = await AdminClient.GetSubscriptionTiersAsync();
-        _validationProblem = await AdminClient.GetTierValidationAsync();
+        _validation = await AdminClient.GetTierValidationAsync();
         _loading = false;
     }
 
