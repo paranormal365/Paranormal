@@ -124,7 +124,7 @@ h1, h2, h3 { break-after: avoid-page; }
     <div class="cover-meta">
       <div>Product Documentation</div>
       <div>17 documents &middot; 6 sections</div>
-      <div>10 September 2026</div>
+      <div>11 September 2026</div>
     </div>
   </div>
   <div class="status">
@@ -212,10 +212,16 @@ that everyone was undecided — the counts beside it tell you which.</p>
 <h2>Finding what's near you</h2>
 <p><img alt="The Find Groups page listing nearby groups" src="../Ben.Web.Website/wwwroot/help/media/getting-started/find-groups.png" />
 <em>Browse Groups lists every group, closest first once you have given it a place to measure from.</em></p>
-<p>The home page shows what's happening close to you — groups that serve your area, and public events
-you could attend. If your browser allows it, this uses your current location automatically; if not,
-type a city, address, or zip code instead. Either way, choose how far to look with the distance
-dropdown.</p>
+<p>The home page shows what's happening close to you — walks you could book, public events you could
+attend, and groups that serve your area. If your browser allows it, this uses your current location
+automatically; if not, type a city, address, or zip code instead. Either way, choose how far to look
+with the distance dropdown.</p>
+<p><img alt="What's near you, with tours, events and groups on separate tabs" src="../Ben.Web.Website/wwwroot/help/media/getting-started/whats-near-you.png" />
+<em>Each tab carries its count, so you can see the shape of what was found before opening anything.
+A tab only appears when there is something behind it.</em></p>
+<p>Tours open first, because a walk with a date on it is the most useful thing the page can hand you.
+Every tour card leads with a picture; a walk that has not put one up yet gets a plate drawn from its
+own name, so it is the same colour here, on the group's page, and on the tour's own page.</p>
 <p>Once you belong to a group, your Home becomes your desk: the next investigation you are on, the
 open cases in your groups (yours first), how many messages and requests are waiting, and any gear
 checked out to you with its due date. Each tile opens exactly what it counts. A group that has not
@@ -525,10 +531,34 @@ baseline</strong> — those tabs appear when the group hands you a role that ope
 an "Investigator Role" for exactly this). Titles like <em>Probationary</em> or <em>Senior Investigator</em>
 are seniority labels and open nothing by themselves; if a tab you expect is missing, it's a
 role you're missing, not a bug — ask whoever runs your group.</p>
+<h2>A group's own pages</h2>
+<p>Every group has a page of its own at <code>/o/their-name</code>, and everything they publish hangs off it: a
+strip of pills across the top takes you to their <strong>Cases</strong>, their <strong>Events</strong>, any pages they have
+written, and back to their home.</p>
+<p><img alt="A group's public page" src="../Ben.Web.Website/wwwroot/help/media/getting-started/group-page.png" />
+<em>What the group is, where it works, how many people, and the next night you could turn up to.</em></p>
+<p><strong>Cases</strong> is what they have published of their investigations.</p>
+<p><img alt="A group's published investigations" src="../Ben.Web.Website/wwwroot/help/media/getting-started/group-cases.png" />
+<em>A case the group concluded is haunted is marked down its left edge. The whole card opens it.</em></p>
+<p>Each case has a page with the group's summary, what they found if they chose to publish it, a
+timeline of what happened and when, and a community rating you can vote in once you are signed in.</p>
+<h2>What's on</h2>
+<p><strong>What's On</strong> in the menu lists every public night any group has opened to anyone — walks,
+investigations and open meetings together, soonest first.</p>
+<p><img alt="What's on, grouped by the night each event happens" src="../Ben.Web.Website/wwwroot/help/media/getting-started/whats-on.png" />
+<em>Grouped by the day, so the date is said once and each night under it only has to tell you what is
+different about it. The bar on the right is how full it is.</em></p>
+<p><strong>Every time is the event's own.</strong> A walk that starts at eight in Nashville reads as eight wherever
+in the world you are reading it, with the zone named beside it — so this page, the event's page, the
+email you are sent and the calendar file all agree. An event whose group has not said which zone it
+runs on is shown in UTC and says so.</p>
 <h2>Going to a group's public event</h2>
 <p>Public events are open to anyone — you'll find them on a group's page and under <strong>Join a Group</strong>.
 Say you're coming with your email address, click the link we send, and you're on the list (that
 also creates you an account, with no password to invent).</p>
+<p><img alt="One public event, with the date, the sign-up and where to meet" src="../Ben.Web.Website/wwwroot/help/media/getting-started/event-page.png" />
+<em>Coming along is the first thing on the page. Where you meet is drawn on a map when the event is a
+tour date, because a walk's meeting point is exact; an ordinary event only gives a town.</em></p>
 <p>Afterwards, if you captured something, the event's page lets you <strong>offer it to the group</strong>. A
 member reviews every submission. If yours is accepted it becomes part of that event's public
 record, credited to you; if it's declined you're told why, and your file stays private. You can
@@ -3477,12 +3507,14 @@ your own website, Instagram, Facebook, X, TikTok, YouTube, Bluesky, Rumble and T
 as a quiet row at the <strong>foot</strong> of the tour's public page, under the dates — somebody reading it is
 deciding whether to come, and sending them to Instagram before they have seen when it runs would
 be an odd thing for the page to do.</p>
+<p><img alt="The nine link boxes on a tour's settings page" src="../Ben.Web.Services/Help/Media/organization-administration/tour-links.png" /></p>
 <p>One account per service. Leave a box empty to take that one down; there is nothing to confirm.
 Each link has to point at that service's own site — an Instagram link that opens somewhere else is
 refused, because a reader clicks the word without reading the address.</p>
 <h3>Which clock an event runs on</h3>
 <p>Every event carries the zone it actually happens in, chosen on the scheduler under <strong>Which clock</strong>.
 It starts on your own zone, because whoever is scheduling is usually standing where it happens.</p>
+<p><img alt="The Which clock picker on the scheduler" src="../Ben.Web.Services/Help/Media/organization-administration/event-clock.png" /></p>
 <p>That clock is what the public sees, wherever in the world they are reading — an event at eight in
 Nashville reads as eight in Tokyo, with the zone named beside it, so the listing, the event's page
 and the reminder email all agree. A date under a tour takes the tour's clock unless you say

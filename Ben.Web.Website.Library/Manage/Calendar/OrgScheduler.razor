@@ -290,7 +290,9 @@
             @* Which clock the times above are on (Ben, 2026-09-10). A public listing shows an
                event in the time of the place it happens; without this it could only say UTC,
                which is nobody's evening. A tour date leaves this alone and takes its tour's. *@
-            <div class="col-md-6">
+            @* The id is for the help capture, which wants the label, the box and the sentence
+               under it rather than the bare select. *@
+            <div class="col-md-6" id="ev-zone-field">
                 <label class="form-label fw-semibold" for="ev-zone">Which clock</label>
                 <select id="ev-zone" class="form-select"
                         @onchange="@(e => _form.TimeZoneId = e.Value?.ToString() ?? "")">

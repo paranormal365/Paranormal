@@ -68,10 +68,18 @@ that everyone was undecided — the counts beside it tell you which.
 ![The Find Groups page listing nearby groups](/help/media/getting-started/find-groups.png)
 *Browse Groups lists every group, closest first once you have given it a place to measure from.*
 
-The home page shows what's happening close to you — groups that serve your area, and public events
-you could attend. If your browser allows it, this uses your current location automatically; if not,
-type a city, address, or zip code instead. Either way, choose how far to look with the distance
-dropdown.
+The home page shows what's happening close to you — walks you could book, public events you could
+attend, and groups that serve your area. If your browser allows it, this uses your current location
+automatically; if not, type a city, address, or zip code instead. Either way, choose how far to look
+with the distance dropdown.
+
+![What's near you, with tours, events and groups on separate tabs](/help/media/getting-started/whats-near-you.png)
+*Each tab carries its count, so you can see the shape of what was found before opening anything.
+A tab only appears when there is something behind it.*
+
+Tours open first, because a walk with a date on it is the most useful thing the page can hand you.
+Every tour card leads with a picture; a walk that has not put one up yet gets a plate drawn from its
+own name, so it is the same colour here, on the group's page, and on the tour's own page.
 
 Once you belong to a group, your Home becomes your desk: the next investigation you are on, the
 open cases in your groups (yours first), how many messages and requests are waiting, and any gear
@@ -368,11 +376,46 @@ an "Investigator Role" for exactly this). Titles like *Probationary* or *Senior 
 are seniority labels and open nothing by themselves; if a tab you expect is missing, it's a
 role you're missing, not a bug — ask whoever runs your group.
 
+## A group's own pages
+
+Every group has a page of its own at `/o/their-name`, and everything they publish hangs off it: a
+strip of pills across the top takes you to their **Cases**, their **Events**, any pages they have
+written, and back to their home.
+
+![A group's public page](/help/media/getting-started/group-page.png)
+*What the group is, where it works, how many people, and the next night you could turn up to.*
+
+**Cases** is what they have published of their investigations.
+
+![A group's published investigations](/help/media/getting-started/group-cases.png)
+*A case the group concluded is haunted is marked down its left edge. The whole card opens it.*
+
+Each case has a page with the group's summary, what they found if they chose to publish it, a
+timeline of what happened and when, and a community rating you can vote in once you are signed in.
+
+## What's on
+
+**What's On** in the menu lists every public night any group has opened to anyone — walks,
+investigations and open meetings together, soonest first.
+
+![What's on, grouped by the night each event happens](/help/media/getting-started/whats-on.png)
+*Grouped by the day, so the date is said once and each night under it only has to tell you what is
+different about it. The bar on the right is how full it is.*
+
+**Every time is the event's own.** A walk that starts at eight in Nashville reads as eight wherever
+in the world you are reading it, with the zone named beside it — so this page, the event's page, the
+email you are sent and the calendar file all agree. An event whose group has not said which zone it
+runs on is shown in UTC and says so.
+
 ## Going to a group's public event
 
 Public events are open to anyone — you'll find them on a group's page and under **Join a Group**.
 Say you're coming with your email address, click the link we send, and you're on the list (that
 also creates you an account, with no password to invent).
+
+![One public event, with the date, the sign-up and where to meet](/help/media/getting-started/event-page.png)
+*Coming along is the first thing on the page. Where you meet is drawn on a map when the event is a
+tour date, because a walk's meeting point is exact; an ordinary event only gives a town.*
 
 Afterwards, if you captured something, the event's page lets you **offer it to the group**. A
 member reviews every submission. If yours is accepted it becomes part of that event's public

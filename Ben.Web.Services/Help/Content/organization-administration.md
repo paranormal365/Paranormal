@@ -658,6 +658,8 @@ as a quiet row at the **foot** of the tour's public page, under the dates — so
 deciding whether to come, and sending them to Instagram before they have seen when it runs would
 be an odd thing for the page to do.
 
+![The nine link boxes on a tour's settings page](help-media:organization-administration/tour-links.png)
+
 One account per service. Leave a box empty to take that one down; there is nothing to confirm.
 Each link has to point at that service's own site — an Instagram link that opens somewhere else is
 refused, because a reader clicks the word without reading the address.
@@ -666,6 +668,8 @@ refused, because a reader clicks the word without reading the address.
 
 Every event carries the zone it actually happens in, chosen on the scheduler under **Which clock**.
 It starts on your own zone, because whoever is scheduling is usually standing where it happens.
+
+![The Which clock picker on the scheduler](help-media:organization-administration/event-clock.png)
 
 That clock is what the public sees, wherever in the world they are reading — an event at eight in
 Nashville reads as eight in Tokyo, with the zone named beside it, so the listing, the event's page

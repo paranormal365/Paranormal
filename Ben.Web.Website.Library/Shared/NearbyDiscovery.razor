@@ -25,7 +25,9 @@
 @* Item 154: the discovery switch — off means this renders nothing at all. *@
 @if (Features.IsOn(SiteFeatures.Discovery))
 {
-    <div class="container-fluid px-3 mt-5" style="max-width:1000px;">
+    @* The id is for the help capture and for anything else that wants the panel rather than the
+       page it sits on. *@
+    <div class="container-fluid px-3 mt-5" id="nearby" style="max-width:1000px;">
         <div class="d-flex align-items-baseline justify-content-between mb-2 flex-wrap gap-2">
             <h4 class="mb-0">What's Near You</h4>
             <div class="d-flex align-items-center gap-2">

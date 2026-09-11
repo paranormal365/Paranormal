@@ -1116,6 +1116,97 @@ public sealed class HelpMediaCapture : BenTestBase
         await ShootAsync("working-a-case", "case-detail.png");
     }
 
+    /// <summary>
+    /// The visitor-facing surfaces the 2026-09-10 look pass rewrote: what's near you, what's on,
+    /// a group's own page, its cases, and one event.
+    /// </summary>
+    /// <remarks>
+    /// <para>All signed out, because that is the seat every one of these pages is designed for and
+    /// the seat the pass was judged in. A signed-in shot would carry somebody's sidebar and their
+    /// notification banners into a document about the public site.</para>
+    ///
+    /// <para>Each shot names the text it is supposed to contain. These pages all have plausible
+    /// empty states — "Nothing coming up", "No public cases" — and a screenshot of one teaches
+    /// nobody anything while looking perfectly fine in review.</para>
+    /// </remarks>
+    [Test]
+    [Description("getting-started: the public pages, as the look pass left them.")]
+    public async Task Capture_PublicSurfaces()
+    {
+        await LogoutAsync();
+
+        // What's near you. Geolocation is never granted to this context, so the panel offers its
+        // place-name box — which is the state most readers meet it in anyway.
+        await GoAsync("/");
+        var place = Page.Locator("#nearby-location");
+        await Expect(place).ToBeVisibleAsync(new() { Timeout = 30_000 });
+        await place.FillAsync("Nashville, TN");
+        await Page.ClickAsync("button:has-text(\"Show what's near there\")");
+
+        // The tab strip is the thing being photographed; without waiting for it the shot is of a
+        // spinner. Any of the three will do — which ones appear depends on what is seeded.
+        var tabs = Page.Locator("#tab-tours").Or(Page.Locator("#tab-events")).Or(Page.Locator("#tab-groups"));
+        await Expect(tabs.First).ToBeVisibleAsync(new() { Timeout = 30_000 });
+        await Page.WaitForTimeoutAsync(1_200);
+
+        // The panel is taller than the window once a search has found things, and an element shot
+        // of something that runs past the fold comes back with the overflow as black. Give the
+        // window the height for one capture and put it back.
+        var window = Page.ViewportSize!;
+        await Page.SetViewportSizeAsync(window.Width, 2_000);
+        await Page.WaitForTimeoutAsync(600);
+        await ShootAsync("getting-started", "whats-near-you.png", selector: "#nearby");
+        await Page.SetViewportSizeAsync(window.Width, window.Height);
+
+        // What's on, grouped by the night it happens.
+        await GoAsync("/events");
+        await ShootAsync("getting-started", "whats-on.png", proves: "What's on");
+
+        // A group's front door, and its cases.
+        await GoAsync($"/o/{PublicGroupSlug}");
+        await ShootAsync("getting-started", "group-page.png", proves: "Investigation group");
+
+        await GoAsync($"/o/{PublicGroupSlug}/cases");
+        await ShootAsync("getting-started", "group-cases.png", proves: "Investigations");
+
+        // One public event, which is where a tour date and an open evening both land.
+        var slug = await FirstPublicEventSlugAsync();
+        if (slug is null) Assert.Ignore("No public event is scheduled, so there is nothing to photograph.");
+
+        await GoAsync(slug);
+        await ShootAsync("getting-started", "event-page.png", proves: "Where");
+    }
+
+    /// <summary>The seeded investigation group whose public pages the documents show.</summary>
+    private const string PublicGroupSlug = "paranormal365";
+
+    /// <summary>
+    /// The path of some public event, or null when none is scheduled.
+    /// </summary>
+    /// <remarks>
+    /// Read from the API rather than by clicking through the listing: the listing is one of the
+    /// things being photographed, and a capture that depends on the page it is capturing fails in
+    /// a way that reads as a missing event.
+    /// </remarks>
+    private async Task<string?> FirstPublicEventSlugAsync()
+    {
+        var api = await Playwright.APIRequest.NewContextAsync(new() { BaseURL = ApiUrl });
+        try
+        {
+            var response = await api.GetAsync("/api/public/events");
+            if (!response.Ok) return null;
+
+            foreach (var e in (await response.JsonAsync())!.Value.EnumerateArray())
+            {
+                var org = e.TryGetProperty("organizationUrlName", out var o) ? o.GetString() : null;
+                var ev = e.TryGetProperty("urlName", out var u) ? u.GetString() : null;
+                if (org is not null && ev is not null) return $"/o/{org}/events/{ev}";
+            }
+            return null;
+        }
+        finally { await api.DisposeAsync(); }
+    }
+
     // ── Group administrators (gated) ──────────────────────────────────────────
 
     [Test]
@@ -1231,6 +1322,29 @@ public sealed class HelpMediaCapture : BenTestBase
             await Page.Locator("#tour-mail").ScrollIntoViewIfNeededAsync();
             await ShootAsync("organization-administration", "tour-guest-email.png",
                 gated: true, selector: "#tour-mail", proves: "The email your guests get");
+
+            // Where else the walk can be found (Ben, 2026-09-10). Filled in first: a grid of nine
+            // empty boxes photographs as a form nobody has used, which is not what the paragraph
+            // beside it is describing.
+            await Page.Locator("#tour-link-Website").FillAsync("https://printersalleywalks.com");
+            await Page.Locator("#tour-link-Instagram").FillAsync("https://instagram.com/printersalleywalks");
+            await Page.Locator("#tour-link-YouTube").FillAsync("https://youtube.com/@printersalley");
+            await Page.Locator("#tour-links").ScrollIntoViewIfNeededAsync();
+            await ShootAsync("organization-administration", "tour-links.png",
+                gated: true, selector: "#tour-links");
+
+            // And the clock a date runs on, on the scheduler.
+            await GoAsync($"/organizations/{orgId}/calendar");
+            var newEvent = Page.Locator("#calendar-new-event");
+            if (await newEvent.CountAsync() > 0)
+            {
+                await newEvent.ClickAsync();
+                var zone = Page.Locator("#ev-zone");
+                await Expect(zone).ToBeVisibleAsync(new() { Timeout = 15_000 });
+                await zone.ScrollIntoViewIfNeededAsync();
+                await ShootAsync("organization-administration", "event-clock.png",
+                    gated: true, selector: "#ev-zone-field");
+            }
 
             // The public page as a VISITOR sees it, which is the rule for a public-facing
             // feature. Clearing the cookies is not enough on its own: the Blazor circuit is
