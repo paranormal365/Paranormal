@@ -43,7 +43,8 @@ show them to you again.
 | **Notifications** | Everything waiting on you, in the same buckets the website's bell uses. Colour follows the AGE of the oldest item rather than the count — fifty messages from this morning are a busy day, one from last week is the thing worth chasing. Rows open exactly what they count. |
 | **Your cases** | Your cases and their timelines — what happened, what the group has written back, and photos attached to either. **Log something that happened** right from the case, with photos from your library or one you take there and then; say when it happened, or say that you don't know rather than guessing. **Reports** your group has published are there to read in full, and to share or save, and you can **message your group** about the case — what you send and what they send back, in one conversation. Who to contact is a tap away: their email opens Mail, their number dials. |
 | **Investigations** | The ones you're on, split into what's coming and what's been, with your assigned role and any evidence deadline. **Where you've been** draws the places you've investigated on a map. |
-| **Events** | Public events, readable without an account, and you can reserve a place. A night that belongs to a **walking tour** carries the tour's name under its title, because a walk is booked by its name and a business with three of them would otherwise show three rows reading "Saturday walk". Times are the **clock of the place the night happens in**, named beside them — a Nashville walk says 3:08 PM CDT whether you read it in Nashville, Tokyo or London — and an event whose organiser never said which zone it is in reads in UTC and says so. **Add to calendar** puts one straight into your own calendar. |
+| **Haunted Tours** | Ghost walks near you, or near a place you look up, with how far away they are and when they next run. No account needed. Tapping one opens the walk — where you meet, how long it runs, who leads it and the nights coming up — and a night opens that night. Asking for a place is done there. **Location is asked for, never taken**: the tab opens on a list, and if you would rather not share where you are, type a city instead. |
+| **Events** | Public events, readable without an account, and you can reserve a place. A night that belongs to a **walking tour** carries the tour's name under its title, because a walk is booked by its name and a business with three of them would otherwise show three rows reading "Saturday walk". Times are the **clock of the place the night happens in**, named beside them — a Nashville walk says 3:08 PM CDT whether you read it in Nashville, Tokyo or London — and an event whose organiser never said which zone it is in reads in UTC and says so. **Add to calendar** puts one straight into your own calendar. Tapping a night opens it, with your seat on it, directions to the meeting point and who is guiding. |
 | **Field Kit** | The phone as an instrument during an investigation — see below. |
 | **My evidence** | What you have offered at other people's public events — yours to open whatever they decided, and yours to add to the archive of the place it was taken at. |
 | **Your account** | Sign in and out, create an account, confirm your email, change your password, and turn two-step sign-in on or off. |
@@ -371,6 +372,23 @@ Three sessions cannot be deleted there, and the page says which:
 
 The place itself is never touched. Where a session happened is a fact about the recording, not a
 consequence of having shared it.
+
+## Your seat on a walk
+
+Asking for a place on a ghost walk is a **request** — the tour confirms it. Say how many of you are
+coming, and the night's page will say your seat is with the tour until somebody there decides. When
+it is approved the page says how many places are reserved, and **Got it** tells them you have seen
+it. That is optional; your place is held either way.
+
+**The phone reminds you itself.** Once a seat is reserved it sets two reminders — the night before,
+and an hour before — each carrying the meeting point, and both on the walk's own clock. They are
+set on the phone rather than sent from here, so they still arrive in a cellar with no signal. You
+are asked for permission at the moment you have a seat to be reminded about, and if you say no
+everything else goes on working.
+
+A seat that is turned down, or a walk you cancel, takes its reminders with it.
+
+**Money is arranged with the business.** Nothing is taken through the app.
 
 ## What you photographed on somebody else's event
 

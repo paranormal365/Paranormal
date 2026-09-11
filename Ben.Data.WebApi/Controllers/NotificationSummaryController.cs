@@ -245,12 +245,46 @@ public sealed class NotificationSummaryController : BenControllerBase
 
         var feedMentions = feedActivity;
 
+        // ── Tour seats (item 234) ────────────────────────────────────────────
+        // Two directions, because they are two different jobs. A business has people waiting on a
+        // decision; a guest has a decision waiting to be read.
+        //
+        // The business side is scoped to orgs this person can actually DECIDE for — owners and
+        // administrators — rather than to every org they belong to. A guide with no calendar
+        // permission nagged about a queue they cannot work is a bell that teaches people to
+        // ignore it. Anyone else with the calendar grant still sees the badge on the date itself.
+        var seatsToDecide = myAdminOrgIds.Count == 0
+            ? NotificationBucket.Empty
+            : await BucketAsync(
+                db.OrgCalendarEventAttendees.AsNoTracking()
+                    .Where(a => a.SeatStatus == TourSeatStatus.Requested
+                             && myAdminOrgIds.Contains(a.OrgCalendarEvent.OrganizationId)
+                             // A night already past is not a decision anybody still needs to make.
+                             && a.OrgCalendarEvent.StartDateTime > DateTime.UtcNow)
+                    .Select(a => (DateTime?)a.DateCreated),
+                ct);
+
+        // The guest's side: decided and not yet acknowledged. Cleared by their own optional
+        // "Got it", which is what makes that button worth having.
+        var mySeats = await BucketAsync(
+            db.OrgCalendarEventAttendees.AsNoTracking()
+                .Where(a => a.AppUserId == userId
+                         && a.SeatStatus != null
+                         && a.SeatStatus != TourSeatStatus.Requested
+                         && a.GuestAcknowledgedUtc == null
+                         && a.OrgCalendarEvent.StartDateTime > DateTime.UtcNow)
+                // Dated by the DECISION, so "waiting since" means since somebody answered them.
+                .Select(a => a.SeatDecidedUtc),
+            ct);
+
         return Ok(new NotificationSummaryResponse(
             orgMessages, caseMessagesAsOrg, caseMessagesAsClient, systemMessages, pendingRequests,
             investigationInvites, equipmentCheckouts, feedMentions,
             OrgMessagesByOrg: [.. orgMessagesByOrg.OrderBy(b => b.OrganizationName)],
             CaseMessagesAsOrgMemberByCase:
-                [.. caseMessagesAsOrgByCase.OrderBy(b => b.OrganizationName).ThenBy(b => b.CaseTitle)]));
+                [.. caseMessagesAsOrgByCase.OrderBy(b => b.OrganizationName).ThenBy(b => b.CaseTitle)],
+            TourSeatsToDecide: seatsToDecide,
+            MyTourSeats: mySeats));
     }
 
     /// <summary>The aggregate a breakdown folds to — the bell's total stays the sum of its rows.</summary>
