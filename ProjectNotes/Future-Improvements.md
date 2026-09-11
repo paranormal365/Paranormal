@@ -11732,20 +11732,27 @@ queue, archive publication) are per-event switches, off by default for an ordina
 `develop` `d9c8a94d`). Thirteen phases, each independently shippable: the event package and its
 billing; bookings with rooms and menus; QR passes; sessions; staff, the door and checklists; files;
 the page, feed and ads; venue profiles and the site's first org-to-org grant; the attendee room; the
-phone's Event section; event credits (recorded, unbuilt); ticketing (design only); docs.
+phone's Event section; ticketing (design only); docs. **Event credits ship in this arc**, as phase
+1B directly after the event package — without them nobody outside a business plan could publish
+anything at all.
 
 **The model in one line:** a `HostedEvent` is the product, the way a `Tour` is, and it owns exactly
 one `OrgCalendarEvent` umbrella row — so the shipped phone, the public list, the reminder job, the
 `.ics` and the `/o/{org}/events/{slug}` URL all keep working with no change at all.
 
-**Decisions Ben took 2026-09-11:** the site takes no guest money (the venue confirms; passes issue
-on confirmation); `HauntedProperty` joins the business kinds and pays per active product, tours and
-events alike; an event is active until archived, and a job archives it 14 days after the last night;
-event **credits** are recorded but not built — one credit buys one event, unused credits expire a
-year after purchase, and each event docks one.
+**Decisions Ben took 2026-09-11:** the site takes no guest money from guests (the host confirms a
+booking; passes issue on confirmation). **An event is sold as a credit, not metered** — `$99` buys
+one event for anybody, credits expire a year after purchase with a thirty-day warning, and one is
+spent at publish behind a confirmation that says what it costs and that it does not come back.
+Metering an occasional weekend at a tour's monthly rate would have priced a hotel weekend as a walk
+round a block, earned less, and reached none of the groups that run one fundraiser a year. The flat
+business plan stays for people who run events for a living, capped by `ActiveHostedEvents` rather
+than metered; `HauntedProperty` joins the business kinds only so it resolves to that plan.
+Publishing is the single moment that spends a credit or occupies a slot, and an event stops counting
+14 days after its last night.
 
-**Open questions in the README:** whether a run of separate dates (the resident play company) lands
-its `DatesAreSeparate` flag in phase 1, and whether a credit is spent at creation or at hosting.
+**Open question in the README:** whether a run of separate dates (the resident play company) lands
+its `DatesAreSeparate` flag in phase 1.
 
 **Phase 0 done 2026-09-11:** every append-only value fixed before anything depends on the numbers —
 `OrganizationPermissionArea.Events`, six `OrganizationSecurityTable` values, four `SubscriptionLimit`

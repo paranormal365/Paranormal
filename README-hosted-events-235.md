@@ -73,6 +73,100 @@ Each phase ships independently and is verified on the running site before the ne
 1.7 Docs: `organization-administration.md` "## Hosted events", `site-administration.md`, `HelpMediaCapture.cs` shots `org-events-list`, `org-event-details`, `public-hosted-event`, PDF, pitch panel.
 Verified by: as the Thomas House test org, create a 3-night event; it appears once on `/o/thomas-house/events`; the calendar shows the managed-by link; `/api/public/events` includes it (what the shipped phone sees); the billing quote counts it.
 
+### Phase 1B — Event credits, end to end (server + web)
+
+**In this arc, and early, because without it nobody outside a business plan can publish anything.**
+Ben set the price at **$99** and said to ship the purchase, 2026-09-11. It sits directly after phase
+1 so the refusal phase 1 writes has somewhere real to send people.
+
+**Ben's rule, in his words (2026-09-11):** *"If someone hosts an event and is hosting from their
+group or organization, they can buy an event credit. This is a single event they can schedule or
+host. They have a year to have hosted the event otherwise they lose the credit. For multiple events
+they would need multiple credits, one for each event. Each event would dock the member or group the
+credit for the event."*
+
+So: **one credit, one event.** Not a subscription, not a period allowance — a thing you buy, spend
+once, and lose if you do not use it within a year of buying it. A group that wants three events
+buys three credits. Creating an event docks a credit; the credit is gone whether or not the event
+is later cancelled (a refund is a decision for a person, not a rule).
+
+Called a **credit**, not a package, everywhere in code and copy — that is the word Ben used and it
+is the word that says what it is.
+
+**1B.1 Model + migration `EventCredits`.** `EventCredit` (OwnerOrganizationId **or** OwnerAppUserId — "the member or group", so an individual
+hosting from a personal org can hold one; PriceAtPurchase, Currency, PurchasedUtc, ExpiresUtc =
+purchased + 12 months, ProviderCheckoutRef, ProviderPaymentRef, ReceiptNumber, SpentUtc?,
+SpentOnHostedEventId?, RefundedUtc?). Site settings `EventCreditsEnabled` (on) and `EventCreditPriceUsd` (**99**) — a setting, not a
+constant, so the price moves without a deploy and `PriceAtPurchase` on the row means a change never
+reaches a credit somebody already holds.
+
+**1B.2 Buying one.** `POST api/organizations/{org}/event-credits/checkout` (and the personal-org
+equivalent) opens a Stripe Checkout session against a one-time price, metadata `ih_event_credit`,
+quantity chosen by the buyer. The webhook in `StripeFulfillmentService` writes the credit rows plus
+the ledger Charge/Payment pair and a receipt number, exactly as a seat purchase does, and is
+idempotent on replay by `PaymentReference`. Tax through `TaxResolver.ForOrganizationAsync` + `TaxOn`,
+the same path a subscription takes — a credit is a digital service sale and is taxed like one.
+
+**1B.3 Spending one.** `HostedEventEntitlement` takes the **oldest unexpired unspent** credit at
+publish when the tier's capability or cap would otherwise refuse, inside the same transaction as the
+publish so two tabs cannot spend one credit twice. The refusal, when there is none to take, names
+what is missing and links to the purchase.
+
+**1B.4 Expiry and the warning.** A daily job mails the holder thirty days before a credit lapses and
+writes a platform message for anybody who cannot be emailed; `ExpiresUtc` past with `SpentUtc` null
+is simply gone — no reclaim, no silent extension. A refund is a **SuperAdmin action**, not a
+self-service button: `RefundedUtc` exists on the row and a refunded credit cannot then be spent.
+
+**1B.5 Pages.** Billing page card: credits held with their expiry dates, credits spent with the
+event each went on, and a Buy control. The publish confirmation from the decisions above. The
+refusal on `OrgEvents` links straight to the card.
+
+**1B.6 Tests.** `EventCreditTests`: the oldest unexpired credit is the one spent (not the newest —
+fails before if the order is wrong); an expired credit is never spent; publishing twice spends one;
+a refunded credit is refused; the webhook is idempotent on replay; the thirty-day mail goes once per
+credit. Playwright `EventCreditTests.cs` through the existing test-mode Checkout stub: buy two,
+publish an event, see one left and a receipt on the receipts page.
+
+**Volume pricing is deliberately not built.** Three-for-the-price-of-two is an easy thing to add
+later and an easy thing to regret early; the shape is a quantity discount on the Checkout line, not
+a second product.
+
+**When a credit is spent — settled by Ben, 2026-09-11:** *"I think the credit should be spent after
+a certain point. If we are getting responses and confirmations, obviously the event has been planned.
+So the person must understand and confirm they will be charged the event credit before they can get
+too far in."*
+
+**The credit is spent at PUBLISH**, and that is the same moment the business meter starts. One
+concept governs money for both kinds of customer: going live is the commitment. Nothing before it
+costs anything, because nothing before it involves anybody else — a draft has no page, takes no
+bookings and sends no confirmations. Publishing is precisely the act that lets responses start
+arriving, which is Ben's line for "too far in", and it is the last moment at which stopping is still
+free.
+
+The rules that follow:
+
+- **Drafting is free and reversible.** Build the whole thing — nights, rooms, programme, menus,
+  staff, files, the page — without spending anything. A person who changes their mind loses nothing,
+  which is the fault with spending at creation: a mistyped event would cost real money.
+- **Consent is explicit, and it is the publish button.** Publishing an event funded by a credit
+  opens a confirmation that says plainly what it costs, what is left, and that it does not come back:
+  *"Publishing spends one event credit. You have 2 left, the next expiring 14 March 2027. The credit
+  is not returned if you take the event down."* Nobody is charged by a click that did not say so.
+- **No refund on un-publishing**, and **re-publishing never spends a second.** One event, one credit,
+  for the life of that event. The credit is recorded against the event (`SpentOnHostedEventId`), so
+  the question "have we paid for this one?" has one answer for ever.
+- **The year is checked at publish, against both ends.** The credit must be unexpired *and* the
+  event's first night must fall inside its year — which is Ben's "a year to have hosted the event"
+  read literally, and stops a credit being parked by publishing a placeholder dated 2031. The
+  refusal names both dates: *"This credit runs out on 14 March 2027 and this event's first night is
+  2 April 2027. A credit bought today would cover it."*
+- **No credit, no publish.** The event stays a draft and the refusal links to where credits are
+  bought. The work is not lost and nothing is destroyed — it simply does not go live.
+
+**Settled 2026-09-11:** an unspent credit gets a warning email at thirty days, and the billing page
+carries a line showing what is held and when each one lapses. It costs nothing to send and saves the
+support ticket that arrives when somebody finds out a credit expired last week.
+
 ### Phase 2 — Bookings: rooms with capacity, day passes, party guests, dietary, menus, mail, bell (server + web)
 
 2.1 Migration `HostedEventBookings`: `PlaceRoom` += Capacity?, IsBookable, BedNote; `HostedEventRoom` (offered rooms, CapacityOverride?); `HostedEventBooking` (lead AppUserId, PartySize, Kind, Status, DecidedUtc/By, GuestAcknowledgedUtc, Note, UmbrellaAttendeeId?, ProgrammeSeenUtc later); `HostedEventBookingNight` (BookingId, NightId, PlaceRoomId); `HostedEventBookingGuest` (DisplayName, AppUserId?, DietaryNotes); `HostedEventMenu` (NightId, Title, ServedAtLocal, Notes) + `HostedEventMenuItem` (Course, Name, Description, DietaryTags, SortOrder); `HostedEvent.BookingsCloseAt?`. Pure `EventCapacity` (mirror `TourSeats`): confirmed parties only count (DECISION 5), per room per night, day-pass cap.
@@ -161,74 +255,11 @@ The rule proposed for the tab bar: `MeSurfaces` gains `attendingEventNow` / `sta
 10.9 Chunked, resumable video: `ChunkedUploadClient` against the server's `api/chunked-uploads` (Cloudflare refuses bodies over 100 MB, so a séance video cannot ride the single-shot path); the room post accepts `{uploadFileId}` from a completed session; the outbox resumes rather than restarts.
 Verified by (simulator, `-autoSignIn` DEBUG hook with `BEN_ATTENDEE_*` / `BEN_STAFF_*` secrets): Events is the first tab during the seeded event; the hub shows Now/Next; kill the API and the hub still renders with the stale banner; sign up, see the pending reminder; post a photo with the API down, it sends when the API returns; the pass QR scans at the door on a second simulator.
 
-### Phase 11 — Event credits (RECORDED ONLY — Ben, 2026-09-11: build later)
+### Phase 11 — OPTIONAL PAYMENTS: Stripe Checkout per ticket (design only until decided)
 
-**Ben's rule, in his words (2026-09-11):** *"If someone hosts an event and is hosting from their
-group or organization, they can buy an event credit. This is a single event they can schedule or
-host. They have a year to have hosted the event otherwise they lose the credit. For multiple events
-they would need multiple credits, one for each event. Each event would dock the member or group the
-credit for the event."*
+`TierCapability.EventTicketing`; `HostedEventTicketType` (name, price, kind, quantity); paid Checkout replaces the "money is settled" click; refunds cancel; Stripe Connect needed for the venue to be paid. No work until Ben decides the site should take guest money at all; decision 1 says it does not.
 
-So: **one credit, one event.** Not a subscription, not a period allowance — a thing you buy, spend
-once, and lose if you do not use it within a year of buying it. A group that wants three events
-buys three credits. Creating an event docks a credit; the credit is gone whether or not the event
-is later cancelled (a refund is a decision for a person, not a rule).
-
-Called a **credit**, not a package, everywhere in code and copy — that is the word Ben used and it
-is the word that says what it is.
-
-`EventCredit` (OwnerOrganizationId **or** OwnerAppUserId — "the member or group", so an individual
-hosting from a personal org can hold one; PriceAtPurchase, Currency, PurchasedUtc, ExpiresUtc =
-purchased + 12 months, ProviderCheckoutRef, ProviderPaymentRef, ReceiptNumber, SpentUtc?,
-SpentOnHostedEventId?, RefundedUtc?). Site settings `EventCreditsEnabled`, `EventCreditPriceUsd`.
-Stripe Checkout one-time price with metadata `ih_event_credit`; the webhook writes the row plus the
-ledger Charge/Payment pair and a receipt number, exactly as a seat purchase does.
-`HostedEventEntitlement` spends the **oldest unexpired unspent** credit when the tier's capability
-or cap would otherwise refuse, and the refusal sentence names how many credits are left and when
-the next one expires. Billing page card listing credits held, spent and expiring; the refusal on
-`OrgEvents` links to it. Tests through the existing test-mode Checkout stub.
-
-**When a credit is spent — settled by Ben, 2026-09-11:** *"I think the credit should be spent after
-a certain point. If we are getting responses and confirmations, obviously the event has been planned.
-So the person must understand and confirm they will be charged the event credit before they can get
-too far in."*
-
-**The credit is spent at PUBLISH**, and that is the same moment the business meter starts. One
-concept governs money for both kinds of customer: going live is the commitment. Nothing before it
-costs anything, because nothing before it involves anybody else — a draft has no page, takes no
-bookings and sends no confirmations. Publishing is precisely the act that lets responses start
-arriving, which is Ben's line for "too far in", and it is the last moment at which stopping is still
-free.
-
-The rules that follow:
-
-- **Drafting is free and reversible.** Build the whole thing — nights, rooms, programme, menus,
-  staff, files, the page — without spending anything. A person who changes their mind loses nothing,
-  which is the fault with spending at creation: a mistyped event would cost real money.
-- **Consent is explicit, and it is the publish button.** Publishing an event funded by a credit
-  opens a confirmation that says plainly what it costs, what is left, and that it does not come back:
-  *"Publishing spends one event credit. You have 2 left, the next expiring 14 March 2027. The credit
-  is not returned if you take the event down."* Nobody is charged by a click that did not say so.
-- **No refund on un-publishing**, and **re-publishing never spends a second.** One event, one credit,
-  for the life of that event. The credit is recorded against the event (`SpentOnHostedEventId`), so
-  the question "have we paid for this one?" has one answer for ever.
-- **The year is checked at publish, against both ends.** The credit must be unexpired *and* the
-  event's first night must fall inside its year — which is Ben's "a year to have hosted the event"
-  read literally, and stops a credit being parked by publishing a placeholder dated 2031. The
-  refusal names both dates: *"This credit runs out on 14 March 2027 and this event's first night is
-  2 April 2027. A credit bought today would cover it."*
-- **No credit, no publish.** The event stays a draft and the refusal links to where credits are
-  bought. The work is not lost and nothing is destroyed — it simply does not go live.
-
-**Settled 2026-09-11:** an unspent credit gets a warning email at thirty days, and the billing page
-carries a line showing what is held and when each one lapses. It costs nothing to send and saves the
-support ticket that arrives when somebody finds out a credit expired last week.
-
-### Phase 12 — OPTIONAL PAYMENTS: Stripe Checkout per ticket (design only until decided)
-
-`TierCapability.EventTicketing`; `HostedEventTicketType` (name, price, kind, quantity); paid Checkout replaces the "money is settled" click; refunds cancel; Stripe Connect needed for the venue to be paid. No work until DECISION 10.
-
-### Phase 13 — Documentation consolidation, product PDF, pitch, production runbook
+### Phase 12 — Documentation consolidation, product PDF, pitch, production runbook
 
 Re-run `HelpMediaCapture` for every `org-event-*`, `public-event-*`, `org-venue-*` shot; rebuild the documentation PDF and persona docs; turn `docs/tour-business-pitch.html` into a tour-and-event business pitch and regenerate the offer PDF; `the-mobile-apps.md` lists what the phone shows; `docs/deploy-production.md` entry (below).
 
@@ -286,9 +317,10 @@ than a hook: a business plan holder publishes against its cap, and everybody els
 a credit. Whether the *purchase* (Stripe Checkout, ledger, receipt) ships in this arc or a later one
 is Ben's call — the refusal is honest either way, and phase 1 is not blocked by it.
 
-**DECISION NEEDED:** the credit price. The anchor is what the event is worth to the host and what a
-ticketing platform would otherwise take, not the tour rate — the reasoning above, not a number I
-should pick.
+**Settled 2026-09-11: $99 a credit, and the purchase ships in this arc** as phase 1B. Against a
+forty-guest weekend that is a fraction of what a ticketing platform's per-ticket cut would take, and
+a low single-digit percentage of what the host collects — cheap enough to say out loud, and several
+times what metering at the tour rate would have earned.
 
 ## The superseded rule: metered per live event
 
@@ -406,7 +438,7 @@ work waits for Phase 2 and is small there.
 
 ## Migrations, in order
 
-HostedEvents (1) → HostedEventBookings (2) → EventPasses (3) → HostedEventSessions (4) → HostedEventStaffAndCheckIn (5) → HostedEventFiles (6) → HostedEventPages (7) → VenueProfilesAndGrants (8) → EventRoomMessages (9) → EventPackages (11). Each: `dotnet ef migrations add <Name> --project Ben.Data.Source --startup-project Ben.Data.WebApi`, review `Up` for unintended drops (the snapshot was touched by `TourSeats` today), then `database update … --connection "<IsHauntedDb_player>"`. Never `IsHauntedDb` from a dev box.
+HostedEvents (1) → EventCredits (1B) → HostedEventBookings (2) → EventPasses (3) → HostedEventSessions (4) → HostedEventStaffAndCheckIn (5) → HostedEventFiles (6) → HostedEventPages (7) → VenueProfilesAndGrants (8) → EventRoomMessages (9) → EventPackages (11). Each: `dotnet ef migrations add <Name> --project Ben.Data.Source --startup-project Ben.Data.WebApi`, review `Up` for unintended drops (the snapshot was touched by `TourSeats` today), then `database update … --connection "<IsHauntedDb_player>"`. Never `IsHauntedDb` from a dev box.
 
 ## Production notes (for the runbook)
 
@@ -421,7 +453,7 @@ HostedEvents (1) → HostedEventBookings (2) → EventPasses (3) → HostedEvent
 
 1. **The site takes no guest money in this arc.** The venue confirms; QR passes issue on confirmation; the guest is told how to pay in the contact line. Phase 12 stays design only.
 2. **HauntedProperty becomes a business kind** billed per active product (tours + events), prorated mid-period like a tour. A venue already on a headcount plan is re-priced at its next period, with the tier-change notice.
-3. **Event credits are the product.** One credit buys one event, for anybody; unused credits expire a year after purchase with a warning at thirty days; the credit is spent at publish, behind a confirmation that says what it costs and that it does not come back. A business plan is the alternative for people who run events for a living, capped by `ActiveHostedEvents` rather than metered. **Nothing is billed per event per month.** Whether the Stripe purchase itself ships in this arc is still open; the entitlement and the refusal are not.
+3. **Event credits are the product, at $99, and the purchase ships in this arc** (phase 1B). One credit buys one event, for anybody; unused credits expire a year after purchase with a warning at thirty days; the credit is spent at publish, behind a confirmation that says what it costs and that it does not come back. A business plan is the alternative for people who run events for a living, capped by `ActiveHostedEvents` rather than metered. **Nothing is billed per event per month.**
 4. **An event stops counting against a business's cap 14 days after its last night**, when a job archives it (unless a booking is still undecided). Restorable. It does not start counting until it is *published* — drafting is free for everyone, and publishing is the single moment that spends a credit or occupies a slot.
 
 **Routine judgement calls, taken as recommended (say so if any should differ):**
