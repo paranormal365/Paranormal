@@ -216,11 +216,19 @@ against Apple's published keys for the iPhone app.
    primary App ID — do NOT let it become a primary App ID of its own.** Team `5778H75249`.
    - Domains and Subdomains: `ishaunted.com`, plus `www.ishaunted.com` if that is used.
    - Return URLs: `https://ishaunted.com/auth/apple-callback`, exactly.
-3. **Verify the domain.** Apple issues a verification file. Paste its contents into
-   `Apple:DomainAssociation` and the site serves it at
-   `/.well-known/apple-developer-domain-association.txt`. Serve it **verbatim** — a newline an
-   editor adds is enough to fail verification, and the portal reports that as a mismatch rather than
-   as a formatting problem.
+3. ~~**Verify the domain.**~~ **APPLE RETIRED THIS STEP — there is no file and no Verify button.**
+   Corrected 2026-09-11 against the live portal and Apple's own help page, *Configure Sign in with
+   Apple for the web*, which documents the entire flow as: pick the primary App ID, give the
+   Website URLs, **Done**, **Continue**, **Save**. In the portal the Website URLs list offers only
+   selection checkboxes and **Remove** — the small blue squares beside each domain are NOT download
+   icons — and the register form loops straight back to that list. Much of the guidance still on
+   the web describes the old download-and-verify dance; it is out of date, and following it costs
+   an afternoon.
+
+   `/.well-known/apple-developer-domain-association.txt` is kept anyway: it costs nothing, and
+   Apple has reversed such decisions before. While `Apple:DomainAssociation` is empty it answers
+   **404**, which is deliberately better than serving an empty or wrong blob — the portal reports
+   that as a *mismatch*, which is far harder to diagnose than an absence.
 4. **Add the Services ID to `Apple:ClientIds`** in `Ben.Data.WebApi/appsettings.json`, beside
    `com.ishaunted.ios` and `com.ishaunted.desktop`. It becomes the token's audience, so without it a
    perfectly valid token is refused with a 401 that names nothing.
