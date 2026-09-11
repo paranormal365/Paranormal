@@ -27,14 +27,16 @@ public class PublicCaseTests : BenTestBase
     }
 
     [Test]
-    [Description("Community Rating section is visible on a public case page.")]
+    [Description("The community rating section is visible on a public case page.")]
     public async Task CaseDetail_ShowsCommunityRating()
     {
         await Page.GotoAsync($"{BaseUrl}/o/{OrgUrlName}/cases/{CaseRef}");
         await Page.WaitForLoadStateAsync(LoadState.NetworkIdle);
 
-        await Expect(Page.GetByText("Community Rating", new() { Exact = false }))
-            .ToBeVisibleAsync(new() { Timeout = 10_000 });
+        // Held by id, not by its heading. This asserted on the words "Community Rating" and broke
+        // when the heading was reworded to "What people think" — an edit that changed nothing
+        // this test is about.
+        await Expect(Page.Locator("#public-case-rating")).ToBeVisibleAsync(new() { Timeout = 10_000 });
     }
 
     [Test]
@@ -107,7 +109,13 @@ public class PublicCaseTests : BenTestBase
         await Page.GotoAsync($"{BaseUrl}/o/{OrgUrlName}/cases/{CaseRef}");
         await Page.WaitForLoadStateAsync(LoadState.NetworkIdle);
 
-        await Expect(Main.GetByText("Timeline", new() { Exact = false })).ToBeVisibleAsync(new() { Timeout = 10_000 });
+        // By id rather than by the heading's words, for the same reason as the rating above —
+        // and an entry inside it, because a heading over an empty section is not what this
+        // test's name promises.
+        var timeline = Page.Locator("#public-case-timeline");
+        await Expect(timeline).ToBeVisibleAsync(new() { Timeout = 10_000 });
+        await Expect(timeline.GetByText("Initial Client Report", new() { Exact = false }).First)
+            .ToBeVisibleAsync(new() { Timeout = 10_000 });
     }
 
     [Test]
