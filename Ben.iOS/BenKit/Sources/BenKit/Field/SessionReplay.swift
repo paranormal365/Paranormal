@@ -146,7 +146,15 @@ public final class SessionReplay {
     public func setRate(_ value: Double) {
         // Anchored BEFORE the change, so the time already played keeps the speed it was played
         // at. Anchoring after would re-scale it.
-        if isPlaying { reanchor() }
+        //
+        // From the MEASURED position, not the stored one. The stored playhead is as old as the
+        // last tick, and re-anchoring from it rewinds by that much — at 64x, a tenth of a second
+        // of ticking is over six seconds of the night, dropped silently on every speed change.
+        if isPlaying {
+            let here = measuredPlayhead
+            moveTo(here)
+            reanchor(at: here)
+        }
         rate = min(max(value, Self.rateRange.lowerBound), Self.rateRange.upperBound)
     }
 
@@ -176,18 +184,29 @@ public final class SessionReplay {
     static func playhead(
         from anchor: Date, elapsed: Duration, rate: Double, endingAt end: Date
     ) -> Date {
-        let seconds = Double(elapsed.components.seconds)
-                    + Double(elapsed.components.attoseconds) / 1e18
-        return min(anchor.addingTimeInterval(seconds * rate), end)
+        min(anchor.addingTimeInterval(elapsed.inSeconds * rate), end)
     }
 
-    /// Starts measuring again from where the playhead is now.
+    /// Where the playhead is *right now* — further along than the last tick left it, by however
+    /// much real time has passed since. Between ticks the stored `playhead` is stale by design;
+    /// this is what anything re-anchoring must measure from.
+    private var measuredPlayhead: Date {
+        guard isPlaying, let anchoredAt = anchorAt else { return playhead }
+        return Self.playhead(from: anchorPlayhead, elapsed: ContinuousClock.now - anchoredAt,
+                             rate: rate, endingAt: timeline.endedAt)
+    }
+
+    /// Starts measuring again from a given moment.
     ///
     /// Called whenever something makes the elapsed time since the last anchor meaningless: play,
     /// a person seeking, or a change of speed. Without the last of those, changing to 8x would
     /// retroactively re-scale every second already played.
-    private func reanchor() {
-        anchorPlayhead = playhead
+    ///
+    /// The moment is passed in rather than read from `playhead`, because the two callers want
+    /// different ones: a seek anchors where the person just dragged to, and a speed change
+    /// anchors where the measurement says we actually are.
+    private func reanchor(at moment: Date) {
+        anchorPlayhead = moment
         anchorAt = ContinuousClock.now
     }
 
@@ -231,7 +250,7 @@ public final class SessionReplay {
         if playhead >= timeline.endedAt { seek(to: timeline.startedAt) }
         isPlaying = true
 
-        reanchor()
+        reanchor(at: playhead)
 
         ticker = Task { [weak self] in
             let step = 1 / (self?.tickHz ?? 10)
@@ -270,7 +289,7 @@ public final class SessionReplay {
         moveTo(moment)
         // A person dragging the scrubber mid-playback restarts the measurement; without this the
         // next tick would drag the playhead straight back to where the anchor says it should be.
-        if isPlaying { reanchor() }
+        if isPlaying { reanchor(at: playhead) }
     }
 
     /// Moves the playhead without disturbing the anchor — what the ticker uses.

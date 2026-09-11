@@ -724,12 +724,18 @@
         // though the pictures were changing (2026-09-05 audit, preview-9).
         _duration = totalDur;
 
+        // Measured, not counted: the pass below takes longer than `dt` — it renders — so adding a
+        // frame's worth per pass played the slideshow in slow motion and read the clock low the
+        // whole way. See SlideshowClock.
+        var began = System.Diagnostics.Stopwatch.GetTimestamp();
+        var from  = Playback.State.CurrentTime;
+
         try
         {
             while (!ct.IsCancellationRequested)
             {
-                var next = Playback.State.CurrentTime + dt;
-                if (next >= totalDur) next = totalDur;
+                var next = SlideshowClock.At(
+                    from, System.Diagnostics.Stopwatch.GetElapsedTime(began), totalDur);
 
                 Playback.NotifyTimeUpdate(next);
                 _currentTime = next;

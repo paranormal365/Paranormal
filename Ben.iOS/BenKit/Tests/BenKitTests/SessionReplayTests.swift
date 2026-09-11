@@ -238,6 +238,38 @@ struct SessionReplayTests {
         #expect(after == end)
     }
 
+    /// Changing speed must not throw away the time since the last tick.
+    ///
+    /// Re-anchoring is right — without it a change to 8x would re-scale every second already
+    /// played — but it has to anchor where the playhead *is*, not where the last tick left it.
+    /// Anchoring on the stored value drops everything since that tick, which at 64x is over six
+    /// seconds of the night per change, gone silently.
+    @Test func changingSpeedDoesNotLoseTheTimeSinceTheLastTick() async throws {
+        let replay = try await loaded([reading(0, emf: 48)],
+                                      endedAt: start.addingTimeInterval(7200))
+        replay.setRate(32)
+        let began = ContinuousClock.now
+        replay.play()
+
+        // Twenty changes to the SAME speed. Nothing about playback should change; each one is
+        // simply an opportunity to lose the fraction of a tick that had accrued.
+        for _ in 0..<20 {
+            try await Task.sleep(for: .milliseconds(50))
+            replay.setRate(32)
+        }
+
+        let moved = replay.playhead.timeIntervalSince(start)
+        let real = ContinuousClock.now - began
+        replay.pause()
+
+        let realSeconds = Double(real.components.seconds)
+                        + Double(real.components.attoseconds) / 1e18
+        // Two ticks of slack: the playhead is read between ticks, so it always trails a little.
+        // The defect loses about twenty times that, and a starved machine only makes `real`
+        // larger, which the measured playhead follows.
+        #expect(moved > realSeconds * 32 - 2 * 0.1 * 32)
+    }
+
     /// Playing moves the playhead, and reaching the end stops it.
     ///
     /// Waits on the VALUE rather than on the clock. The first version slept 400ms and then

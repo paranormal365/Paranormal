@@ -114,4 +114,97 @@ public class FieldSessionMediaClockTests : BenTestBase
         await Page.EvaluateAsync("() => document.querySelector('audio').pause()");
         await Expect(Page.GetByRole(AriaRole.Button, new() { Name = "Play" })).ToBeVisibleAsync(new() { Timeout = 5_000 });
     }
+
+    /// <summary>
+    /// Half an hour of session with nothing recorded on it, so the page itself is the clock.
+    /// </summary>
+    private static string SilentDocument(DateTime start)
+    {
+        var readings = new StringBuilder();
+        for (var t = 0; t <= 1800; t += 60)
+        {
+            if (readings.Length > 0) readings.Append(',');
+            var at = start.AddSeconds(t).ToString("yyyy-MM-dd'T'HH:mm:ss.fff'Z'");
+            readings.Append("{\"at\":\"" + at + "\",\"triggered_by\":\"interval\","
+                          + "\"measurements\":{\"emf\":{\"value\":48.0,\"unit\":\"uT\",\"baseline\":48.0}}}");
+        }
+
+        var startedAt = start.ToString("yyyy-MM-dd'T'HH:mm:ss.fff'Z'");
+        var endedAt = start.AddSeconds(1800).ToString("yyyy-MM-dd'T'HH:mm:ss.fff'Z'");
+        return $$$"""
+            {"format_version":"1.0.0","device":{"manufacturer":"Apple","model":"iPhone17,1"},
+             "session":{"started_at":"{{{startedAt}}}","ended_at":"{{{endedAt}}}",
+                        "location_label":"Page clock check","trigger":{"mode":"interval","interval_seconds":60}},
+             "readings":[{{{readings}}}]}
+            """;
+    }
+
+    /// <summary>
+    /// With no recording to follow, the page keeps time — and it must keep it at the speed on the
+    /// button.
+    /// </summary>
+    /// <remarks>
+    /// The ticker used to add a fixed slice of session per tick. A tick is a delay plus a map
+    /// update plus a render pushed down the circuit, so it always runs long, and 16× quietly
+    /// played slower than 16× with the readout, the scrubber and the trace all agreeing with each
+    /// other and all wrong. The same fault was found and fixed on the phone the same day.
+    ///
+    /// This measures the page against the wall clock, which is the only thing that can tell the
+    /// difference. The tolerance is wide on purpose: a shared machine can starve the ticker, and
+    /// the point is the SPEED, not the smoothness.
+    /// </remarks>
+    [Test]
+    public async Task The_page_keeps_time_at_the_speed_on_the_button()
+    {
+        var api = await Playwright.APIRequest.NewContextAsync(new() { BaseURL = ApiUrl });
+        var login = await api.PostAsync("/login", new() { DataObject = new { email = MemberEmail, password = MemberPassword } });
+        Assert.That(login.Ok, Is.True);
+        var token = (await login.JsonAsync())!.Value.GetProperty("accessToken").GetString();
+        var auth = new Dictionary<string, string> { ["Authorization"] = $"Bearer {token}" };
+
+        var form = Context.APIRequest.CreateFormData();
+        form.Append("file", new FilePayload
+        {
+            Name = "data.json",
+            MimeType = "application/json",
+            Buffer = Encoding.UTF8.GetBytes(SilentDocument(new DateTime(2026, 8, 25, 3, 0, 0, DateTimeKind.Utc))),
+        });
+        form.Append("deviceSessionId", Guid.NewGuid().ToString());
+        var upload = await api.PostAsync("/api/field-sessions/document", new() { Headers = auth, Multipart = form });
+        Assert.That(upload.Ok, Is.True, await upload.TextAsync());
+        var sessionId = (await upload.JsonAsync())!.Value.GetProperty("id").GetString();
+
+        await LoginAsync(MemberEmail, MemberPassword);
+        await Page.GotoAsync($"{BaseUrl}/field-sessions/{sessionId}");
+        await Expect(Page.GetByText("Page clock check").First).ToBeVisibleAsync(new() { Timeout = 20_000 });
+
+        await Page.GetByRole(AriaRole.Button, new() { Name = "16×" }).ClickAsync();
+        await Page.GetByRole(AriaRole.Button, new() { Name = "Play" }).ClickAsync();
+
+        // Nothing was recorded, so no recording can be driving.
+        await Expect(Page.Locator("[data-testid='media-clock']")).Not.ToBeVisibleAsync();
+
+        var before = await ShownSecondsAsync();
+        var watch = System.Diagnostics.Stopwatch.StartNew();
+        await Page.WaitForTimeoutAsync(5_000);
+        var after = await ShownSecondsAsync();
+        var real = watch.Elapsed.TotalSeconds;
+
+        var speed = (after - before) / real;
+        TestContext.Out.WriteLine($"{after - before:0.0}s of session in {real:0.00}s of clock = {speed:0.0}×");
+
+        Assert.That(after, Is.GreaterThan(before), "the playhead should have moved at all");
+        // A second of quantisation in the readout over five seconds is 3%; the rest is slack for a
+        // busy machine. Counting ticks instead of measuring loses far more than this under load.
+        Assert.That(speed, Is.GreaterThan(16 * 0.8).And.LessThan(16 * 1.2),
+            "the page played at a speed other than the one on the button");
+    }
+
+    /// <summary>The elapsed readout as seconds — "hh:mm:ss", read as parts rather than guessed.</summary>
+    private async Task<double> ShownSecondsAsync()
+    {
+        var text = (await Page.Locator("[data-testid='elapsed']").InnerTextAsync()).Trim();
+        return text.Split(':').Select(int.Parse).Reverse()
+                   .Select((v, i) => v * Math.Pow(60, i)).Sum();
+    }
 }
