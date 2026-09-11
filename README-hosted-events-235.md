@@ -188,12 +188,42 @@ or cap would otherwise refuse, and the refusal sentence names how many credits a
 the next one expires. Billing page card listing credits held, spent and expiring; the refusal on
 `OrgEvents` links to it. Tests through the existing test-mode Checkout stub.
 
-**Two things to settle before building it:** whether a credit is spent when the event is *created*
-or when it has been *hosted* (Ben's sentence says "a year to have hosted the event", which argues
-the clock is on the event happening, not on the booking of it — the recommendation is to spend the
-credit at creation and require the event's first night to fall before the credit's expiry, so both
-readings are satisfied and nothing can be parked); and whether an expiring-unspent credit gets a
-warning email at 30 days, which costs nothing and avoids a support ticket.
+**When a credit is spent — settled by Ben, 2026-09-11:** *"I think the credit should be spent after
+a certain point. If we are getting responses and confirmations, obviously the event has been planned.
+So the person must understand and confirm they will be charged the event credit before they can get
+too far in."*
+
+**The credit is spent at PUBLISH**, and that is the same moment the business meter starts. One
+concept governs money for both kinds of customer: going live is the commitment. Nothing before it
+costs anything, because nothing before it involves anybody else — a draft has no page, takes no
+bookings and sends no confirmations. Publishing is precisely the act that lets responses start
+arriving, which is Ben's line for "too far in", and it is the last moment at which stopping is still
+free.
+
+The rules that follow:
+
+- **Drafting is free and reversible.** Build the whole thing — nights, rooms, programme, menus,
+  staff, files, the page — without spending anything. A person who changes their mind loses nothing,
+  which is the fault with spending at creation: a mistyped event would cost real money.
+- **Consent is explicit, and it is the publish button.** Publishing an event funded by a credit
+  opens a confirmation that says plainly what it costs, what is left, and that it does not come back:
+  *"Publishing spends one event credit. You have 2 left, the next expiring 14 March 2027. The credit
+  is not returned if you take the event down."* Nobody is charged by a click that did not say so.
+- **No refund on un-publishing**, and **re-publishing never spends a second.** One event, one credit,
+  for the life of that event. The credit is recorded against the event (`SpentOnHostedEventId`), so
+  the question "have we paid for this one?" has one answer for ever.
+- **The year is checked at publish, against both ends.** The credit must be unexpired *and* the
+  event's first night must fall inside its year — which is Ben's "a year to have hosted the event"
+  read literally, and stops a credit being parked by publishing a placeholder dated 2031. The
+  refusal names both dates: *"This credit runs out on 14 March 2027 and this event's first night is
+  2 April 2027. A credit bought today would cover it."*
+- **No credit, no publish.** The event stays a draft and the refusal links to where credits are
+  bought. The work is not lost and nothing is destroyed — it simply does not go live.
+
+**One thing left to settle:** whether an unspent credit gets a warning email at thirty days. It
+costs nothing to send and saves the support ticket that arrives when somebody discovers a credit
+expired last week. Recommendation: yes, plus a line on the billing page showing what is held and
+when it lapses.
 
 ### Phase 12 — OPTIONAL PAYMENTS: Stripe Checkout per ticket (design only until decided)
 
@@ -333,7 +363,7 @@ HostedEvents (1) → HostedEventBookings (2) → EventPasses (3) → HostedEvent
 
 1. **The site takes no guest money in this arc.** The venue confirms; QR passes issue on confirmation; the guest is told how to pay in the contact line. Phase 12 stays design only.
 2. **HauntedProperty becomes a business kind** billed per active product (tours + events), prorated mid-period like a tour. A venue already on a headcount plan is re-priced at its next period, with the tier-change notice.
-3. **Event credits are recorded, not built.** Phase 11 is out of this arc; the entitlement code leaves the hook, and a group without `HostEvents` sees a sentence saying credits are coming. The rule is settled even though the build is not: one credit buys one event, unused credits expire a year after purchase, and each event docks one.
+3. **Event credits are recorded, not built.** Phase 11 is out of this arc; the entitlement code leaves the hook, and a group without `HostEvents` sees a sentence saying credits are coming. The rule is settled even though the build is not: one credit buys one event, unused credits expire a year after purchase, each event docks one, and **the credit is spent at publish behind an explicit confirmation** — the same moment the business meter starts, so one idea covers both.
 4. **An event stops counting 14 days after its last night**, when a job archives it (unless a booking is still undecided). Restorable. **Amended the same day**, on Ben's three-venues question: it also does not start counting until it is *published*, so planning privately is free and the meter runs while the event is live. See "Billed per event, and only while the event is live" above — awaiting Ben's confirmation.
 
 **Routine judgement calls, taken as recommended (say so if any should differ):**
