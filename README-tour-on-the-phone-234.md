@@ -124,7 +124,7 @@ that release is through.
 
 ## Status
 
-Planned 2026-09-11. **Phases 1, 2 and 3 built**; 4 and 5 to come.
+Planned 2026-09-11. **Phases 1 to 4 built**; 5 to come.
 
 ### Verified, not assumed
 
@@ -152,6 +152,29 @@ Watched happening against the running site, not inferred from a passing test:
   stood in front of the phone with a reserved seat on it. Signing in there means typing a password,
   which is not something this session does.
 
+### Phase 4, verified
+
+Watched on the simulator against the dev API: the **Tours** tab lists walks with their length,
+rating and next night on the walk's own clock; a tour opens with its meeting point, guide, dates
+and contact line; and a night from there opens the event screen built in phase 3. The whole chain
+is anonymous — no sign-in anywhere in it.
+
+**What the five-tab ceiling cost.** Ben chose *Tours in, Field Kit conditional*, and that frees a
+slot only for somebody outside a group. So the compact bar is no longer a fixed list of five: it is
+the sections that apply, taken in priority order, until five are full, with Profile pinned last.
+For a ghost-walk guest that is Feed, Tours, Events, Profile — Field Kit is not offered at all. For a
+group member it is Feed, Tours, Field Kit, My Cases, Profile, and **Investigations moves under
+Profile**, the way Events already had to.
+
+**Field Kit is hidden from exactly one person**: somebody whose entire connection to the site is
+having been on a public event. A solo investigator with nothing recorded yet still gets it — hiding
+the instrument from the person about to use it for the first time is the stranding that rule exists
+to avoid — and so does a signed-out visitor.
+
+The location permission string in `Info.plist` now covers finding tours as well as stamping a field
+session. **It must ship with the tours release, not before it**, or the string describes a use the
+build does not have.
+
 ### Found by building it
 
 `OrgTourDateSeats` loaded its data in `OnParametersSetAsync`, which runs before auth resolves on a
@@ -159,6 +182,10 @@ hard navigation — so the page asked the API as nobody and rendered *That date 
 It waits for `AuthReady` now, the way the tour page beside it already did. This is the same trap
 recorded in the Blazor AuthReady rule, and it presents as a missing record rather than as a
 permission error, which is what makes it worth writing down twice.
+
+`Endpoint` carries its query as `[URLQueryItem]`. Gluing `?radiusMiles=25` onto the path escapes
+the whole string as one segment, and the Tours tab's first build answered 404 against an endpoint
+that answers 200 to curl.
 
 `Theme.haunt` is an ACCENT, not a panel colour. The seat panel used it as a background and came
 out a bright purple with grey text on it. `Theme.mist` is what every other card in the app uses.

@@ -111,8 +111,13 @@ struct RootShell: View {
     /// investigator carries no My Cases tab and no Investigations tab, because neither can ever
     /// hold anything for them.
     private var shownSections: [AppSection] {
-        let all = sizeClass == .regular ? AppSection.allCases : AppSection.compactTabs
-        return all.filter { $0.applies(to: dependencies.surfaces.surfaces) }
+        let surfaces = dependencies.surfaces.surfaces
+        // The compact bar is built to five FROM what applies (item 234), rather than filtered
+        // down from a fixed five — adding Haunted Tours left no sixth slot, so the bar has to
+        // choose. AppSection.compactTabs(for:) is where that choice lives.
+        return sizeClass == .regular
+            ? AppSection.allCases.filter { $0.applies(to: surfaces) }
+            : AppSection.compactTabs(for: surfaces)
     }
 
     private var tabView: some View {
@@ -169,6 +174,7 @@ struct RootShell: View {
         case .investigations: InvestigationsView()
         case .fieldKit: FieldKitHomeView()
         case .events: EventsView()
+        case .tours: ToursView()
         case .profile: SettingsHomeView()
         }
     }
@@ -185,6 +191,8 @@ struct RootShell: View {
         // nowhere to happen.
         case .eventDetail(let id):
             EventDetailView(eventId: id)
+        case .tourDetail(let org, let slug):
+            TourDetailView(organizationUrlName: org, tourSlug: slug)
         case .myEvidence:
             MyEvidenceView()
         case .developerSettings:
