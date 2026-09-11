@@ -115,13 +115,18 @@ public class RoleTierJourneyTests : BenTestBase
         await WaitUntilLoadedAsync();
     }
 
-    /// <summary>The Cases-area checkbox (area 3) on the named tier's admin row.</summary>
+    /// <summary>The Cases-area checkbox (area 3) for the named tier, opened from its row.</summary>
+    /// <remarks>
+    /// The checklists open on the band since 2026-09-11 rather than sitting inline in the grid,
+    /// so this clicks the row's Includes button the way a person does.
+    /// </remarks>
     private async Task<ILocator> OpenTierRowCheckboxAsync(string tierName)
     {
         await Page.GotoAsync($"{BaseUrl}/admin/subscription-tiers");
         await WaitUntilLoadedAsync();
         var row = Main.Locator("tr", new() { HasTextString = tierName }).First;
-        var box = row.Locator("input[type=checkbox][id^='area-'][id$='-3']");   // Cases = 3
+        await row.Locator("button[id^='includes-']").First.ClickAsync();
+        var box = Page.Locator("input[type=checkbox][id^='area-'][id$='-3']");   // Cases = 3
         await Expect(box).ToBeVisibleAsync(new() { Timeout = 45_000 });
         return box;
     }

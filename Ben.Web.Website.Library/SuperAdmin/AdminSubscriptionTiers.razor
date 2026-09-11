@@ -64,8 +64,24 @@
                   EmptyText="No price bands exist yet — every organization is unpriced" OnRetry="@LoadAsync">
         <TelerikGrid Data="@_tiersResult.Items" TItem="SubscriptionTierAdminRecord" Sortable="false">
             <GridColumns>
-                <GridColumn Field="@nameof(SubscriptionTierAdminRecord.Name)" Title="Band" />
-                <GridColumn Title="Members" Width="130px">
+                        @* Widths are set on the NARROW columns only. When the fixed widths add up to the grid's own
+           width, Telerik gives a width-less column nothing at all — which is how both Band and
+           Prices were invisible on this screen before 2026-09-11, with the grid scrolling
+           sideways to show checkboxes instead. *@
+                <GridColumn Field="@nameof(SubscriptionTierAdminRecord.Name)" Title="Band">
+                    <Template>
+                        @{ var t = (SubscriptionTierAdminRecord)context; }
+                        <div class="fw-semibold">@t.Name</div>
+                        @* Retired says itself here rather than in a column of its own: it is a
+                           fact about the band, and a whole column spent on a tick for "yes, this
+                           one is in use like all the others" earns nothing. *@
+                        @if (!t.IsActive)
+                        {
+                            <span class="badge bg-secondary">Retired</span>
+                        }
+                    </Template>
+                </GridColumn>
+                <GridColumn Title="Members" Width="110px">
                     <Template>
                         @{ var t = (SubscriptionTierAdminRecord)context; }
                         @t.MinMembers–@(t.MaxMembers?.ToString() ?? "∞")
@@ -90,7 +106,7 @@
                         }
                     </Template>
                 </GridColumn>
-                <GridColumn Title="Caps" Width="220px">
+                <GridColumn Title="Caps">
                     <Template>
                         @{ var t = (SubscriptionTierAdminRecord)context; }
                         @if (t.Limits.Count == 0)
@@ -105,66 +121,26 @@
                         }
                     </Template>
                 </GridColumn>
-                @* Item 156 Phase A: which permission AREAS this tier's groups may use in
-                   custom roles. Checkbox-per-area, saved on toggle like the settings switches —
-                   a checklist with a separate Save button reads as already applied. All-checked
-                   is the seeded default and gates nothing; unchecking is how Ben differentiates
-                   tiers. Enforcement arrives in later phases; today this renders truthfully and
-                   stores the choice. *@
-                <GridColumn Title="Role areas" Width="260px">
+                @* Thirteen checkboxes a row used to live here, in two columns, and the grid was
+                   wider than any screen because of it. What a band includes is a fact about that
+                   band, not a comparison across bands — so the row says how much is included and
+                   the checklists open on the band itself. Same save-on-toggle contract as before
+                   (items 156 Phase A and 167). *@
+                <GridColumn Title="Includes" Width="210px">
                     <Template>
-                        @{ var ta = (SubscriptionTierAdminRecord)context; }
-                        <div class="d-flex flex-wrap gap-1">
-                            @foreach (var area in Enum.GetValues<Ben.Data.Common.Enums.OrganizationPermissionArea>())
+                        @{ var ti = (SubscriptionTierAdminRecord)context; }
+                        <button type="button" class="btn btn-sm btn-outline-secondary text-nowrap"
+                                id="@($"includes-{ti.Id}")" @onclick="() => OpenIncludes(ti)">
+                            @AreaCount(ti) of @TotalAreas areas
+                            @if (TotalCapabilities > 0)
                             {
-                                var included = (ta.IncludedAreas ?? []).Contains(area);
-                                <div class="form-check form-check-inline m-0" title="@AreaLabel(area)">
-                                    <input type="checkbox" class="form-check-input"
-                                           id="@($"area-{ta.Id}-{(int)area}")"
-                                           checked="@included"
-                                           disabled="@(_savingAreasTierId == ta.Id)"
-                                           @onchange="@(e => ToggleAreaAsync(ta, area, e.Value is true))" />
-                                    <label class="form-check-label small" for="@($"area-{ta.Id}-{(int)area}")">@AreaLabel(area)</label>
-                                </div>
+                                <span>· @CapabilityCount(ti) of @TotalCapabilities extras</span>
                             }
-                        </div>
-                    </Template>
-                </GridColumn>
-                @* Item 167: per-tier capabilities — may-or-may-not switches, not role areas.
-                   Same save-on-toggle contract as the areas checklist. *@
-                <GridColumn Title="Capabilities" Width="150px">
-                    <Template>
-                        @{ var tc = (SubscriptionTierAdminRecord)context; }
-                        <div class="d-flex flex-wrap gap-1">
-                            @foreach (var capability in Enum.GetValues<Ben.Data.Common.Enums.TierCapability>())
-                            {
-                                var has = (tc.IncludedCapabilities ?? []).Contains(capability);
-                                <div class="form-check form-check-inline m-0" title="@CapabilityLabel(capability)">
-                                    <input type="checkbox" class="form-check-input"
-                                           id="@($"cap-{tc.Id}-{(int)capability}")"
-                                           checked="@has"
-                                           disabled="@(_savingAreasTierId == tc.Id)"
-                                           @onchange="@(e => ToggleCapabilityAsync(tc, capability, e.Value is true))" />
-                                    <label class="form-check-label small" for="@($"cap-{tc.Id}-{(int)capability}")">@CapabilityLabel(capability)</label>
-                                </div>
-                            }
-                        </div>
+                        </button>
                     </Template>
                 </GridColumn>
                 <GridColumn Field="@nameof(SubscriptionTierAdminRecord.OrganizationCount)" Title="Groups" Width="90px" />
-                <GridColumn Field="@nameof(SubscriptionTierAdminRecord.IsActive)" Title="Active" Width="80px">
-                    <Template>
-                        @if (((SubscriptionTierAdminRecord)context).IsActive)
-                        {
-                            <BenIcon Name="check" />
-                        }
-                        else
-                        {
-                            <span class="badge bg-secondary">Retired</span>
-                        }
-                    </Template>
-                </GridColumn>
-                <GridCommandColumn Width="110px">
+                <GridCommandColumn Width="100px">
                     <GridCommandButton Command="Edit" Icon="@SvgIcon.Pencil"
                                        OnClick="@((GridCommandEventArgs e) => OpenEdit((SubscriptionTierAdminRecord)e.Items.First()))">
                         Edit
@@ -175,36 +151,119 @@
     </BenListState>
 </div>
 
+@*  What one band includes.
+
+    Two checklists that used to be thirteen checkboxes in every grid row. They save the moment
+    they are toggled, as they always have: a checklist with its own Save button reads as already
+    applied, and half the point of these is that a SuperAdmin can see the effect immediately.  *@
+<BenModal @bind-Visible="@_showIncludes" Title="@($"What {IncludesTier?.Name} includes")">
+    <ChildContent>
+        @if (IncludesTier is { } inc)
+        {
+            <p class="text-secondary small">
+                Saved as you tick. Everything ticked is offered to groups on this band; everything
+                unticked is not, wherever the site checks.
+            </p>
+
+            <div class="fw-semibold mb-1">Role areas</div>
+            <p class="text-secondary small mb-2">
+                The areas a group on this band may build custom roles around.
+            </p>
+            <div class="row g-1 mb-3">
+                @foreach (var area in Enum.GetValues<Ben.Data.Common.Enums.OrganizationPermissionArea>())
+                {
+                    var included = (inc.IncludedAreas ?? []).Contains(area);
+                    <div class="col-6">
+                        <div class="form-check m-0">
+                            <input type="checkbox" class="form-check-input"
+                                   id="@($"area-{inc.Id}-{(int)area}")"
+                                   checked="@included"
+                                   disabled="@(_savingAreasTierId == inc.Id)"
+                                   @onchange="@(e => ToggleAreaAsync(inc, area, e.Value is true))" />
+                            <label class="form-check-label small" for="@($"area-{inc.Id}-{(int)area}")">@AreaLabel(area)</label>
+                        </div>
+                    </div>
+                }
+            </div>
+
+            <div class="fw-semibold mb-1">Extras</div>
+            <p class="text-secondary small mb-2">
+                Things a band may or may not be sold, rather than areas a role can cover.
+            </p>
+            <div class="row g-1">
+                @foreach (var capability in Enum.GetValues<Ben.Data.Common.Enums.TierCapability>())
+                {
+                    var has = (inc.IncludedCapabilities ?? []).Contains(capability);
+                    <div class="col-6">
+                        <div class="form-check m-0">
+                            <input type="checkbox" class="form-check-input"
+                                   id="@($"cap-{inc.Id}-{(int)capability}")"
+                                   checked="@has"
+                                   disabled="@(_savingAreasTierId == inc.Id)"
+                                   @onchange="@(e => ToggleCapabilityAsync(inc, capability, e.Value is true))" />
+                            <label class="form-check-label small" for="@($"cap-{inc.Id}-{(int)capability}")">@CapabilityLabel(capability)</label>
+                        </div>
+                    </div>
+                }
+            </div>
+
+            @if (_saveError is not null)
+            {
+                <div class="alert alert-danger py-2 mt-3">@_saveError</div>
+            }
+        }
+        <div class="d-flex justify-content-end mt-3">
+            <button type="button" class="btn btn-secondary" @onclick="() => _showIncludes = false">Close</button>
+        </div>
+    </ChildContent>
+</BenModal>
+
 <BenModal @bind-Visible="@_showDialog" Title="@(_editing is null ? "New Band" : $"Edit {_editing.Name}")" Size="lg">
     <ChildContent>
-        <div class="row mb-3">
-            <div class="col-5">
-                <label class="form-label" for="tier-name">Name <span class="text-danger">*</span></label>
-                <input id="tier-name" type="text" class="form-control" @bind="_form.Name" @bind:event="oninput" />
+        @* Three questions, asked in order: who the band is for, what it costs, what it allows.
+           They used to run together as one row of five boxes and two bare headings, which made a
+           band look like a form to fill in rather than three decisions to take. *@
+        <div class="mb-4">
+            <div class="fw-semibold mb-2">Who this band is for</div>
+            <div class="row g-3 align-items-start">
+                <div class="col-12 col-md-6">
+                    <label class="form-label" for="tier-name">Name <span class="text-danger">*</span></label>
+                    <input id="tier-name" type="text" class="form-control" @bind="_form.Name" @bind:event="oninput" />
+                    <div class="form-text">What a group sees on the pricing page.</div>
+                </div>
+                <div class="col-6 col-md-3">
+                    <label class="form-label" for="tier-min">From (members)</label>
+                    <input id="tier-min" type="number" class="form-control" min="1" @bind="_form.MinMembers" />
+                    <div class="form-text">The bottom band starts at 1.</div>
+                </div>
+                <div class="col-6 col-md-3">
+                    <label class="form-label" for="tier-max">To</label>
+                    <input id="tier-max" type="number" class="form-control" min="1"
+                           placeholder="unbounded" @bind="_form.MaxMembers" />
+                    <div class="form-text">Blank means no upper limit.</div>
+                </div>
             </div>
-            <div class="col-auto">
-                <label class="form-label" for="tier-min">From (members)</label>
-                <input id="tier-min" type="number" class="form-control" min="1" style="max-width:110px" @bind="_form.MinMembers" />
-            </div>
-            <div class="col-auto">
-                <label class="form-label" for="tier-max">To</label>
-                <input id="tier-max" type="number" class="form-control" min="1" style="max-width:110px"
-                       placeholder="unbounded" @bind="_form.MaxMembers" />
-                <div class="form-text">Blank = unbounded top band</div>
-            </div>
-            <div class="col-auto">
-                <label class="form-label" for="tier-sort">Sort</label>
-                <input id="tier-sort" type="number" class="form-control" style="max-width:90px" @bind="_form.SortOrder" />
-            </div>
-            <div class="col-auto d-flex align-items-end pb-2">
-                <label>
-                    <input type="checkbox" class="form-check-input" @bind="_form.IsActive" />
-                    <span class="ms-1">Active</span>
-                </label>
+            <div class="row g-3 align-items-start mt-0">
+                <div class="col-6 col-md-3">
+                    <label class="form-label" for="tier-sort">Sort</label>
+                    <input id="tier-sort" type="number" class="form-control" @bind="_form.SortOrder" />
+                    <div class="form-text">Where it sits in the list.</div>
+                </div>
+                <div class="col-6 col-md-9 d-flex align-items-center pt-4">
+                    @* A switch, not a tick box: this one is a state the band is IN, and the two
+                       are read differently at a glance. *@
+                    <div class="form-check form-switch mb-0">
+                        <input class="form-check-input" type="checkbox" role="switch"
+                               id="tier-active" @bind="_form.IsActive" />
+                        <label class="form-check-label" for="tier-active">
+                            @(_form.IsActive ? "Offered to new groups" : "Retired — nobody new may join it")
+                        </label>
+                    </div>
+                </div>
             </div>
         </div>
 
-        <h6>Prices</h6>
+        <div class="fw-semibold mb-1">What it costs</div>
         <p class="text-secondary small mb-2">
             A cadence with no active price is not offered. The yearly saving is computed from the
             two prices — set the yearly price directly, or use the % button to fill it in from
@@ -247,7 +306,7 @@
             </div>
         }
 
-        <h6 class="mt-3">Caps</h6>
+        <div class="fw-semibold mb-1 mt-4">What it allows</div>
         <p class="text-secondary small mb-2">
             A cap that is not listed does not apply — that is the safe default. Zero turns the
             feature off for this band; ticking a cap with a blank number writes it down as
@@ -403,6 +462,32 @@
     private SubscriptionTierAdminRecord? _editing;
     private TierImpactRecord? _impact;
     private TierForm _form = new();
+
+    @* Held by ID, not by record: every toggle reloads the list, and a dialog holding the old
+       snapshot would show the state the band was in before the tick. *@
+    private bool _showIncludes;
+    private Guid? _includesTierId;
+
+    private SubscriptionTierAdminRecord? IncludesTier
+        => (_tiersResult.Items ?? []).FirstOrDefault(t => t.Id == _includesTierId);
+
+    private static int TotalAreas
+        => Enum.GetValues<Ben.Data.Common.Enums.OrganizationPermissionArea>().Length;
+
+    private static int TotalCapabilities
+        => Enum.GetValues<Ben.Data.Common.Enums.TierCapability>().Length;
+
+    private static int AreaCount(SubscriptionTierAdminRecord t) => (t.IncludedAreas ?? []).Count;
+
+    private static int CapabilityCount(SubscriptionTierAdminRecord t)
+        => (t.IncludedCapabilities ?? []).Count;
+
+    private void OpenIncludes(SubscriptionTierAdminRecord tier)
+    {
+        _saveError = null;
+        _includesTierId = tier.Id;
+        _showIncludes = true;
+    }
 
     private bool _showLadder;
     private bool _savingLadder;

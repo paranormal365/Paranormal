@@ -219,6 +219,76 @@ public static class SiteSettingKeys
     ];
 
     /// <summary>
+    /// The sections the admin page lays these out in, in order, each with the sentence that says
+    /// what the section is for.
+    /// </summary>
+    /// <remarks>
+    /// <para>Kept beside the seed rather than as a fourth field on it, so adding a grouping did
+    /// not have to touch every reader of the seed. <c>SiteSettingGroupCoverageTests</c> is what
+    /// makes the pairing safe: a setting that belongs to no section here would simply not be drawn,
+    /// and a setting nobody can find is the same as one that does not exist.</para>
+    ///
+    /// <para>Order is deliberate — what visitors see, then who may come in, then how people look,
+    /// then the ceilings, then the switches that turn whole sections off. The last of those is the
+    /// most dangerous and sits at the bottom for that reason.</para>
+    /// </remarks>
+    public static readonly IReadOnlyList<(string Name, string Blurb, string[] Keys)> Groups =
+    [
+        ("Contact and announcements",
+         "What a visitor is told, and how they reach you.",
+         [SiteAnnouncement, PublicContactEmail, ContactPostalAddress, ContactPhone, ContactHours]),
+
+        ("Who may sign up",
+         "Which doors into the site are open. Closing one never affects anybody already through it.",
+         [AllowOrganizationSelfRegistration, AllowTourBusinessSignUps]),
+
+        ("Default profile pictures",
+         "Shown when somebody has no photo the viewer is allowed to see.",
+         [DefaultAvatarUploadFileId, DefaultAvatarManUploadFileId, DefaultAvatarWomanUploadFileId]),
+
+        ("Limits",
+         "Ceilings on what one caller or one account may use. Every one of these has a built-in "
+         + "default, so leaving a box empty is safe.",
+         [FreeAccountStorageMegabytes, UploadMaxFileBytes, UploadChunkMaxBytes,
+          RateLimitGlobalPerMinute, RateLimitAuthPerMinute, RateLimitGeocodingPerMinute,
+          RateLimitEventAttendancePerMinute, RateLimitAudioProcessingPerMinute]),
+
+        ("Features",
+         "Whole sections of the site, on or off. Turning one off stops its addresses working, not "
+         + "just its links — and nothing stored is deleted.",
+         [FeatureVideoEditor, FeatureEquipment, FeatureEvents, FeatureDiscovery, FeatureCmsPages,
+          FeatureMediaLibrary, FeatureOrgMessaging, FeatureVoting, FeaturePublicFeed,
+          FeaturePublications]),
+    ];
+
+    /// <summary>
+    /// Where a setting sits on the page: its section's position, then its position within the
+    /// section. The seed's own order is the order settings were ADDED, which is no order at all
+    /// to a reader.
+    /// </summary>
+    public static (int Section, int Within) DisplayOrder(string key)
+    {
+        for (var g = 0; g < Groups.Count; g++)
+        {
+            var within = Array.IndexOf(Groups[g].Keys, key);
+            if (within >= 0) return (g, within);
+        }
+        return (int.MaxValue, 0);
+    }
+
+    /// <summary>Which section a setting belongs to, and what that section is for.</summary>
+    /// <remarks>
+    /// Both together, because they are one fact. Sending the name and letting the page supply its
+    /// own wording means the two can disagree, and the way that shows up is a heading quietly
+    /// losing its sentence.
+    /// </remarks>
+    public static (string Name, string Blurb) GroupFor(string key)
+    {
+        var group = Groups.FirstOrDefault(g => g.Keys.Contains(key));
+        return (group.Name ?? string.Empty, group.Blurb ?? string.Empty);
+    }
+
+    /// <summary>
     /// Settings whose value is expected to run to several lines, so the admin page gives them a
     /// textarea instead of a single-line input.
     /// </summary>
