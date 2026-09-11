@@ -89,9 +89,16 @@ struct SignInView: View {
         }
         countdown = Int(retryAfter.rounded(.up))
         countdownTask = Task {
-            while countdown > 0, !Task.isCancelled {
-                try? await Task.sleep(for: .seconds(1))
-                countdown -= 1
+            // Measured against a deadline rather than counted down a tick at a time. A sleep
+            // promises "at least", so a phone that is busy — which after several failed sign-ins
+            // it may well be — makes a counted countdown run slow, and somebody sits watching a
+            // lock that lifted a while ago.
+            let began = ContinuousClock.now
+            while !Task.isCancelled {
+                try? await Task.sleep(for: .milliseconds(250))
+                countdown = max(0, Int((retryAfter - (ContinuousClock.now - began).inSeconds)
+                                           .rounded(.up)))
+                if countdown == 0 { return }
             }
         }
     }

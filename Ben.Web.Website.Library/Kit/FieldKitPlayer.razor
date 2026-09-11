@@ -1,6 +1,7 @@
 @namespace Ben.Web.Website.Library.Kit
 @using Microsoft.JSInterop
 @using System.Text.Json
+@using System.Diagnostics
 @using Ben.Web.Website.Library.Manage.Maps
 @using Ben.Web.Services
 @inject IBenAdminClient AdminClient
@@ -987,6 +988,7 @@
 
         _clockKey = null;
         _playing = true;
+        Reanchor(_playhead);
         _ticker = new CancellationTokenSource();
         _ = Tick(_ticker.Token);
     }
@@ -996,6 +998,7 @@
         _playing = false;
         _ticker?.Cancel();
         _ticker = null;
+        _anchorAt = null;
     }
 
     private async Task PauseAsync()
@@ -1095,6 +1098,15 @@
 
     private async Task SetRateAsync(int rate)
     {
+        // Anchored BEFORE the change, so the time already played keeps the speed it was played
+        // at; anchoring after would re-scale it. When a recording is the clock the browser owns
+        // the rate and there is no anchor to keep.
+        if (_playing && _clockKey is null)
+        {
+            _playhead = Measured;
+            Reanchor(_playhead);
+        }
+
         _rate = rate;
         if (_clockKey is { } key && _media is not null && _mediaRefs.TryGetValue(key, out var el))
         {
@@ -1151,14 +1163,47 @@
         }
     }
 
+    // ── Where the playhead is measured FROM ──────────────────────────────────
+    //
+    // Not counted. See ReplayClock: a tick is a delay plus a map update plus a render pushed down
+    // the circuit, so it always takes longer than it asked for, and adding a fixed slice per tick
+    // made a 16x replay run slower than 16x with nothing on the page saying so.
+    private DateTime _anchorPlayhead;
+    private long? _anchorAt;          // A Stopwatch timestamp: monotonic, unlike UtcNow.
+
+    private const int TickEveryMs = 250;
+
+    /// <summary>Where the playhead is right NOW, which between ticks is past where it shows.</summary>
+    private DateTime Measured => _anchorAt is { } at
+        ? ReplayClock.Playhead(_anchorPlayhead, Stopwatch.GetElapsedTime(at), _rate, _end)
+        : _playhead;
+
+    /// <summary>Starts measuring again from a given moment.</summary>
+    /// <remarks>
+    /// Wanted whenever the elapsed time since the last anchor stops meaning anything: pressing
+    /// play, or changing speed. Changing speed anchors where the measurement says we are, not
+    /// where the last tick left the display — anchoring on the stale value would throw away up to
+    /// a quarter-second, which at 16x is four seconds of the night per change. Seeking and
+    /// jumping to a mark both pause first, so they need no anchor of their own.
+    /// </remarks>
+    private void Reanchor(DateTime moment)
+    {
+        _anchorPlayhead = moment;
+        _anchorAt = Stopwatch.GetTimestamp();
+    }
+
     private async Task Tick(CancellationToken token)
     {
         while (!token.IsCancellationRequested && _playing)
         {
-            await Task.Delay(250, CancellationToken.None);
+            await Task.Delay(TickEveryMs, CancellationToken.None);
             if (token.IsCancellationRequested) break;
+            if (_anchorAt is not { } anchoredAt) break;
 
-            _playhead = _playhead.AddSeconds(0.25 * _rate);
+            // Measured, not counted: a tick that arrives late moves the playhead further.
+            _playhead = ReplayClock.Playhead(
+                _anchorPlayhead, Stopwatch.GetElapsedTime(anchoredAt), _rate, _end);
+
             if (_playhead >= _end)
             {
                 _playhead = _end;

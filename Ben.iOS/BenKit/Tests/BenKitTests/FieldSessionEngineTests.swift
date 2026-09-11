@@ -350,7 +350,12 @@ struct FieldSessionEngineTests {
         defer { try? FileManager.default.removeItem(at: directory) }
 
         await engine.start()
-        try await Task.sleep(for: .milliseconds(120))
+        // Waited on rather than slept through: a starved sampler records nothing in 120ms of
+        // clock, and an empty log would read as "the channel was off" — which is the very thing
+        // this test is about.
+        try await waitUntil("the magnetometer records something") {
+            await !((try? await log.readings()) ?? []).isEmpty
+        }
         await engine.stop()
 
         let readings = try await log.readings()
