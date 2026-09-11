@@ -26,8 +26,10 @@ namespace Ben.Data.WebApi.Controllers.Public;
 public sealed class PublicCaseCommentController : BenControllerBase
 {
     private readonly IDbContextFactory<BenDataContext> _db;
+    private readonly IConfiguration _configuration;
 
-    public PublicCaseCommentController(IDbContextFactory<BenDataContext> db) { _db = db; }
+    public PublicCaseCommentController(IDbContextFactory<BenDataContext> db, IConfiguration configuration)
+    { _db = db; _configuration = configuration; }
 
     /// <summary>How long a comment may be. Longer than a feed post: this is a considered reply.</summary>
     public const int MaxBodyLength = 2_000;
@@ -210,7 +212,14 @@ public sealed class PublicCaseCommentController : BenControllerBase
         var theCase = await db.Cases.AsNoTracking()
             .Where(c => c.Id == caseId && c.IsPublic
                      && (c.Status == CaseStatus.Public || c.Status == CaseStatus.Haunted))
-            .Select(c => new { c.Title, c.UrlName, OrgUrl = c.Organization.UrlName })
+            .Select(c => new
+            {
+                c.Title,
+                c.UrlName,
+                c.CaseYear,
+                c.OrgCaseNumber,
+                OrgUrl = c.Organization.UrlName,
+            })
             .FirstOrDefaultAsync(ct);
         if (theCase is null) return NotFound();
 
@@ -233,9 +242,17 @@ public sealed class PublicCaseCommentController : BenControllerBase
             AuthorAppUserId = userId,
             ChannelType = OrgMessageChannel.PublicFeed,
             CaseId = caseId,
-            // The link is the post. Nothing is written on the reader's behalf beyond the title
-            // they are pointing at — a body invented for them is words they did not say.
-            Body = $"{theCase.Title} — /o/{theCase.OrgUrl}/cases/{theCase.UrlName}",
+            // "The repost is a link to the case" (Ben, 2026-09-11) — so the body is the link and
+            // nothing else. The card under it already says the title, the group and the place,
+            // read live from our own records; repeating the title in the body put it on the
+            // screen twice. And no sentence is invented on the poster's behalf: words they did
+            // not say should not appear over their name.
+            //
+            // ABSOLUTE, for two reasons the first version got wrong: a root-relative path is not
+            // a link anywhere a body is rendered (the segmenter wants a scheme, on purpose, so
+            // that ordinary full stops do not become links), and it is not a link at all once
+            // somebody copies the post somewhere else.
+            Body = PublicCaseUrl(theCase.OrgUrl, theCase.UrlName, theCase.CaseYear, theCase.OrgCaseNumber),
             IsPublic = true,
             AttributionState = OrgAttributionState.Unclaimed,
             DateCreated = now,
@@ -285,6 +302,22 @@ public sealed class PublicCaseCommentController : BenControllerBase
 
     private static string? Trimmed(string? value) =>
         string.IsNullOrWhiteSpace(value) ? null : value.Trim();
+
+    /// <summary>
+    /// The public address of a case, absolute.
+    /// </summary>
+    /// <remarks>
+    /// <paramref name="urlName"/> is null on every case published before slugs existed, and the
+    /// case route accepts the old "2026-042" reference for exactly that reason — so the fallback
+    /// here is not a nicety. The first version of this built ".../cases/" with nothing on the end
+    /// and put it on the feed.
+    /// </remarks>
+    private string PublicCaseUrl(string orgUrl, string? urlName, int year, int number)
+    {
+        var slug = string.IsNullOrWhiteSpace(urlName) ? $"{year}-{number:D3}" : urlName;
+        var root = (_configuration["AppBaseUrl"] ?? "").TrimEnd('/');
+        return $"{root}/o/{orgUrl}/cases/{slug}";
+    }
 
     /// <summary>A case anybody may read: published, and its group meant it to be.</summary>
     private static Task<bool> IsPublicAsync(BenDataContext db, Guid caseId, CancellationToken ct)

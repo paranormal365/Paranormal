@@ -11,6 +11,16 @@ public enum FeedSegmentKind
 
     /// <summary>A <c>#tag</c>. Carries the tag, lower-cased, without the <c>#</c>.</summary>
     Hashtag = 2,
+
+    /// <summary>
+    /// A web address. Carries the whole URL, with any trailing sentence punctuation left out.
+    /// </summary>
+    /// <remarks>
+    /// Only <c>http://</c> and <c>https://</c>, spelled out. Guessing that "example.com" is a link
+    /// turns every sentence with a full stop in it into a minefield, and a scheme is what the
+    /// author typed when they meant a link.
+    /// </remarks>
+    Url = 3,
 }
 
 /// <summary>
@@ -80,6 +90,11 @@ public static class FeedTextSegmenter
         for (var i = from; i < body.Length; i++)
         {
             var marker = body[i];
+
+            // A URL, at a word boundary so "see:https://x" and "ahttps://x" are not links.
+            if ((marker is 'h' or 'H') && AtBoundary(body, i) && UrlLengthAt(body, i) is { } urlLength)
+                return (i, urlLength, FeedSegmentKind.Url, body.Substring(i, urlLength));
+
             if (marker is not ('@' or '#')) continue;
 
             // The parser decides what counts, so the rules live in exactly one place. It is given
@@ -107,5 +122,64 @@ public static class FeedTextSegmenter
         }
 
         return null;
+    }
+
+    /// <summary>
+    /// Whether position <paramref name="i"/> starts a word.
+    /// </summary>
+    /// <remarks>
+    /// Quotes count as openers as well as brackets: a body that says <c>"https://example.com"</c>
+    /// is quoting a link, not writing a word that happens to begin with h.
+    /// </remarks>
+    private static bool AtBoundary(string body, int i)
+        => i == 0
+        || char.IsWhiteSpace(body[i - 1])
+        || body[i - 1] is '(' or '[' or '<' or '"' or '\'';
+
+    /// <summary>
+    /// How long the URL starting at <paramref name="i"/> is, or null when there is not one.
+    /// </summary>
+    /// <remarks>
+    /// <para>Runs to the first whitespace, then gives back the punctuation a sentence put there:
+    /// somebody writing "look at https://x.example/a." means the link to stop before the full
+    /// stop. Closing brackets go back the same way, but only when the URL does not contain the
+    /// matching opener — a Wikipedia address ending in "(film)" is one people actually paste.</para>
+    ///
+    /// <para>The scheme must be followed by something: "https://" alone is not an address, and
+    /// linkifying it produces a link to nowhere.</para>
+    /// </remarks>
+    private static int? UrlLengthAt(string body, int i)
+    {
+        var rest = body.AsSpan(i);
+
+        var scheme = rest.StartsWith("https://", StringComparison.OrdinalIgnoreCase) ? 8
+                   : rest.StartsWith("http://", StringComparison.OrdinalIgnoreCase) ? 7
+                   : 0;
+        if (scheme == 0) return null;
+
+        var end = i + scheme;
+        while (end < body.Length && !char.IsWhiteSpace(body[end])) end++;
+        if (end == i + scheme) return null;   // the scheme and nothing after it
+
+        while (end > i + scheme)
+        {
+            var last = body[end - 1];
+
+            if (last is '.' or ',' or ';' or ':' or '!' or '?' or '"' or '\'')
+            {
+                end--;
+                continue;
+            }
+
+            if (last is ')' or ']' && !body.AsSpan(i, end - i - 1).Contains(last == ')' ? '(' : '['))
+            {
+                end--;
+                continue;
+            }
+
+            break;
+        }
+
+        return end - i;
     }
 }

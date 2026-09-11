@@ -102,6 +102,12 @@ public interface IBenCaseClient
     /// <summary>Reports one comment on a case.</summary>
     Task<bool> ReportCaseCommentAsync(Guid caseId, Guid commentId, string? reason, CancellationToken token = default);
 
+    /// <summary>
+    /// What a link in a message points at, when it points at something of ours. Null otherwise —
+    /// nothing fetches anybody else's page; see the controller for why.
+    /// </summary>
+    Task<LinkPreview?> GetLinkPreviewAsync(string url, CancellationToken token = default);
+
     // ── Cases ─────────────────────────────────────────────────────────────────
 
     Task<LoadResult<CaseRecord>> GetOrgCasesAsync(Guid orgId, CancellationToken token = default);

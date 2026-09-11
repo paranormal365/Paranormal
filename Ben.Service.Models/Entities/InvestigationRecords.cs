@@ -178,3 +178,13 @@ public sealed record PostCaseCommentRequest(string Body);
 /// how a report queue ends up empty and a problem ends up unreported.
 /// </remarks>
 public sealed record ReportContentRequest(string? Reason);
+
+
+/// <summary>
+/// What a link in a message points at, for the card shown under it (item 233).
+/// </summary>
+/// <param name="Kind">"Case", "Tour", "Event", "Group" — the word above the title.</param>
+/// <param name="Title">What the thing is called.</param>
+/// <param name="Subtitle">Who it belongs to and roughly where, on one line.</param>
+/// <param name="Path">Where to go, root-relative, as this server resolved it.</param>
+public sealed record LinkPreview(string Kind, string Title, string? Subtitle, string Path);
