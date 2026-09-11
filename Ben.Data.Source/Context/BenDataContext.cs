@@ -109,6 +109,10 @@ namespace Ben.Data.Source.Context
         public virtual DbSet<OrgCalendarEventType> OrgCalendarEventTypes { get; set; }
         public virtual DbSet<OrgCalendarEvent> OrgCalendarEvents { get; set; }
         public virtual DbSet<Tour> Tours { get; set; }
+
+        // ── Hosted events (item 235) ────────────────────────────────────────
+        public virtual DbSet<HostedEvent> HostedEvents { get; set; }
+        public virtual DbSet<HostedEventNight> HostedEventNights { get; set; }
         public virtual DbSet<TourGuide> TourGuides { get; set; }
         public virtual DbSet<TourSocialLink> TourSocialLinks { get; set; }
         public virtual DbSet<MessagePoll> MessagePolls { get; set; }
@@ -718,6 +722,74 @@ namespace Ben.Data.Source.Context
                 .Property(t => t.ContactLine).HasMaxLength(500);
             modelBuilder.Entity<Tour>()
                 .Property(t => t.MailSubjectTemplate).HasMaxLength(200);
+
+            // ── Hosted events (item 235) ────────────────────────────────────
+            // The same shape as Tour above, for the same reasons. The name is unique per
+            // organization because it is what tells two of them apart — "Murder at the Manor" is
+            // one production however many times it is performed. Organization and Place are
+            // NoAction: a place in use by an event must be re-pointed rather than silently
+            // orphaned, and deleting an organization goes through its own purge.
+            modelBuilder.Entity<HostedEvent>()
+                .HasIndex(e => new { e.OrganizationId, e.Name }).IsUnique();
+            modelBuilder.Entity<HostedEvent>()
+                .HasIndex(e => new { e.OrganizationId, e.UrlName }).IsUnique();
+            modelBuilder.Entity<HostedEvent>()
+                .Property(e => e.Name).HasMaxLength(160);
+            modelBuilder.Entity<HostedEvent>()
+                .Property(e => e.UrlName).HasMaxLength(160);
+            modelBuilder.Entity<HostedEvent>()
+                .Property(e => e.Tagline).HasMaxLength(300);
+            modelBuilder.Entity<HostedEvent>()
+                .Property(e => e.TimeZoneId).HasMaxLength(100);
+            modelBuilder.Entity<HostedEvent>()
+                .Property(e => e.ContactLine).HasMaxLength(500);
+            modelBuilder.Entity<HostedEvent>()
+                .Property(e => e.MailSubjectTemplate).HasMaxLength(200);
+            modelBuilder.Entity<HostedEvent>()
+                .Property(e => e.CancelledReason).HasMaxLength(500);
+            // What the billing question asks — "which are live right now" — so it is the shape the
+            // index has.
+            modelBuilder.Entity<HostedEvent>()
+                .HasIndex(e => new { e.OrganizationId, e.IsPublished, e.ArchivedAtUtc });
+            modelBuilder.Entity<HostedEvent>()
+                .HasOne(e => e.Organization).WithMany()
+                .HasForeignKey(e => e.OrganizationId).OnDelete(DeleteBehavior.NoAction);
+            modelBuilder.Entity<HostedEvent>()
+                .HasOne(e => e.Place).WithMany()
+                .HasForeignKey(e => e.PlaceId).OnDelete(DeleteBehavior.NoAction);
+            modelBuilder.Entity<HostedEvent>()
+                .HasOne(e => e.CreatedByAppUser).WithMany()
+                .HasForeignKey(e => e.CreatedByAppUserId).OnDelete(DeleteBehavior.NoAction);
+            modelBuilder.Entity<HostedEvent>()
+                .HasOne(e => e.UpdatedByAppUser).WithMany()
+                .HasForeignKey(e => e.UpdatedByAppUserId).OnDelete(DeleteBehavior.NoAction);
+
+            // One night per date per event; the dates of a run may be months apart, but two rows
+            // for the same day are always a mistake. Cascade from the event: the nights ARE the
+            // event, not records of their own.
+            modelBuilder.Entity<HostedEventNight>()
+                .HasIndex(n => new { n.HostedEventId, n.Date }).IsUnique();
+            modelBuilder.Entity<HostedEventNight>()
+                .Property(n => n.Title).HasMaxLength(120);
+            modelBuilder.Entity<HostedEventNight>()
+                .HasOne(n => n.HostedEvent).WithMany(e => e.Nights)
+                .HasForeignKey(n => n.HostedEventId).OnDelete(DeleteBehavior.Cascade);
+            modelBuilder.Entity<HostedEventNight>()
+                .HasOne(n => n.CreatedByAppUser).WithMany()
+                .HasForeignKey(n => n.CreatedByAppUserId).OnDelete(DeleteBehavior.NoAction);
+            modelBuilder.Entity<HostedEventNight>()
+                .HasOne(n => n.UpdatedByAppUser).WithMany()
+                .HasForeignKey(n => n.UpdatedByAppUserId).OnDelete(DeleteBehavior.NoAction);
+
+            // ONE umbrella row per event, said by the database rather than by a convention
+            // somebody has to remember. Filtered so the thousands of ordinary calendar rows, which
+            // all have a null here, do not collide with each other.
+            modelBuilder.Entity<OrgCalendarEvent>()
+                .HasIndex(e => e.HostedEventId).IsUnique()
+                .HasFilter("[HostedEventId] IS NOT NULL");
+            modelBuilder.Entity<OrgCalendarEvent>()
+                .HasOne(e => e.HostedEvent).WithMany(h => h.CalendarRows)
+                .HasForeignKey(e => e.HostedEventId).OnDelete(DeleteBehavior.SetNull);
 
             // Guides: one row per person per tour, and per person per date. Cascade from the
             // thing they guide, NoAction on the person — deleting an account must not cascade

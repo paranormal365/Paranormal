@@ -300,6 +300,12 @@ builder.Services.AddScoped<Ben.Data.WebApi.Services.Billing.StripeIntegration.St
 builder.Services.AddScoped<Ben.Data.WebApi.Services.Billing.SubscriptionLimitGuard>();
 // Item 233: a tour added mid-period is charged for the days that are left.
 builder.Services.AddScoped<Ben.Data.WebApi.Services.Billing.TourAddOnService>();
+
+// Hosted events (item 235). The sync keeps each event's one umbrella calendar row saying what the
+// event says; the entitlement is the single place that answers "may this go live, and what does it
+// cost them".
+builder.Services.AddScoped<Ben.Data.WebApi.Services.Events.HostedEventCalendarSync>();
+builder.Services.AddScoped<Ben.Data.WebApi.Services.Events.HostedEventEntitlement>();
 // Item 233: the mail a tour guest gets, with the walk attached as a calendar file.
 builder.Services.AddScoped<Ben.Data.WebApi.Services.Tours.TourGuestMailer>();
 // Item 233: how long a file stays, for the plan it arrived under.

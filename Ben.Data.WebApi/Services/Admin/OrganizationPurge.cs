@@ -354,6 +354,11 @@ public sealed class OrganizationPurge
             // they block the group's deletion twice over. They go after the dates that name them,
             // which the line above has just taken, and before the addresses further down.
             await db.Tours.Where(x => x.OrganizationId == organizationId).ExecuteDeleteAsync(ct);
+            // Hosted events (item 235) block the deletion the same way a tour does: they point at
+            // the group and at a place, both NoAction. They go after the calendar rows above,
+            // because the umbrella row names its event. The nights cascade from the event, so
+            // taking the events takes them.
+            await db.HostedEvents.Where(x => x.OrganizationId == organizationId).ExecuteDeleteAsync(ct);
             await db.Cases.Where(x => x.OrganizationId == organizationId).ExecuteDeleteAsync(ct);
 
             await db.BillingLedgerEntries.Where(x => x.OrganizationId == organizationId).ExecuteDeleteAsync(ct);

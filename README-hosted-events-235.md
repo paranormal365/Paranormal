@@ -37,6 +37,30 @@ number, and the four guards that keep those enums honest all fired first and the
 
 Suite: .NET 8,213 pass, 0 fail. No migration, no behaviour change, nothing yet reads the new values.
 
+**Phase 1.1 done, 2026-09-11** — the model, the migration, the umbrella sync and the entitlement.
+
+- `HostedEvent` and `HostedEventNight`, `OrgCalendarEvent.HostedEventId` with a filtered unique
+  index so the database says "one umbrella" rather than a convention somebody has to remember.
+  Migration `20260911223215_HostedEvents`, reviewed for drops (all five are in `Down`, undoing only
+  what it made) and applied to `IsHauntedDb_player` with an explicit `--connection`.
+- `DatesAreSeparate` is in from the start, per Ben: false is a stay (consecutive nights, one booking
+  across several), true is a run where **the event is the production and each date is a performance
+  of it**. Billed once either way — a monthly show is one production on twelve dates.
+- `HostedEventCalendarSync` writes the umbrella row: the event's name, summary, place, zone and slug,
+  public only while published, spanning the first date's start to the last date's end **in the
+  event's own zone**. Eight tests pin the timekeeping with no database in them, including the
+  weekend that straddles the clocks going back — 30 October to 1 November 2026 reads as 52 hours off
+  a wall clock and is 53 hours lived, and the span carries the extra hour. My arithmetic was wrong
+  first and the test caught it.
+- `HostedEventEntitlement` is the single place that answers "may this go live, and what does it
+  cost": a plan holder against `ActiveHostedEvents` with the guard's own wording, everybody else
+  against credits, with a refusal that names the $99 and says nothing already built is lost.
+- `OrganizationPurgeCoverageTests` fired on both halves — a table belonging to a group that nothing
+  deletes, and a foreign key that would refuse the deletion. Hosted events now purge with their
+  group, after the calendar rows that name them.
+
+Suite: .NET 8,227 pass, 0 fail.
+
 Each phase records its own "Verified, not assumed" section here as it lands.
 
 ## Hard rules the plan keeps

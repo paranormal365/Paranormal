@@ -163,5 +163,26 @@ namespace Ben.Data.Source.Entities
         /// <summary>Who is leading this date (item 233).</summary>
         public virtual ICollection<OrgCalendarEventGuide> Guides { get; set; } = new List<OrgCalendarEventGuide>();
 
+        /// <summary>
+        /// The hosted event this row is the umbrella for (item 235). Null for every ordinary date.
+        /// </summary>
+        /// <remarks>
+        /// <para><b>An umbrella row is not edited here.</b> Its title, dates, place, zone, slug and
+        /// public flag are written from the <see cref="HostedEvent"/> by
+        /// <c>HostedEventCalendarSync</c>, and the calendar controller refuses a direct change with
+        /// a sentence naming the event. Two screens that both believe they own the same row is how
+        /// one of them ends up lying.</para>
+        ///
+        /// <para><b>And it exists so nothing else has to change.</b> Every part of the site that
+        /// already understands a public calendar event — the public list, the reminder job, the
+        /// calendar file, evidence submission, the <c>/o/{org}/events/{slug}</c> address, and the
+        /// app already in people's pockets — sees a hosted event as an ordinary one without
+        /// knowing what it is.</para>
+        /// </remarks>
+        public Guid? HostedEventId { get; set; }
+
+        /// <summary>The hosted event this row carries, when it is an umbrella.</summary>
+        public virtual HostedEvent? HostedEvent { get; set; }
+
     }
 }
