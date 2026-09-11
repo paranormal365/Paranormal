@@ -364,7 +364,25 @@ public sealed class TourSeatFlowTests
         var result = await PublicAs(world.Factory, guest).AcknowledgeSeat(world.TourDateId, default);
 
         var conflict = Assert.IsType<ConflictObjectResult>(result.Result);
-        Assert.Equal("There's no reserved seat here to confirm yet.", conflict.Value);
+        Assert.Equal("The tour hasn't answered this one yet.", conflict.Value);
+    }
+
+    [Fact]
+    public async Task A_refusal_can_be_acknowledged_too()
+    {
+        // Otherwise it counts on the guest's bell for ever: the acknowledgement is the only thing
+        // that clears that bucket, and reserved-only left a turned-down seat with no way out.
+        var world = await SeedAsync();
+        var guest = await GuestAsync(world, "sarah");
+        await PublicAs(world.Factory, guest).Rsvp(world.TourDateId, default);
+        var seatId = (await SeatOfAsync(world, guest, world.TourDateId))!.Id;
+        await BusinessAs(world.Factory, world.OwnerId)
+            .TurnDownSeat(world.OrgId, world.TourDateId, seatId, default);
+
+        var result = await PublicAs(world.Factory, guest).AcknowledgeSeat(world.TourDateId, default);
+
+        Assert.IsType<OkObjectResult>(result.Result);
+        Assert.NotNull((await SeatOfAsync(world, guest, world.TourDateId))!.GuestAcknowledgedUtc);
     }
 
     // ── What the page is told ────────────────────────────────────────────────

@@ -131,6 +131,12 @@ struct EventDetailView: View {
                 badge("Not this time", Theme.fog)
                 Text("\(event.organizationName) couldn't take this booking. Another date may have room.")
                     .font(.footnote).foregroundStyle(Theme.fog)
+                // Clears it off the bell. Without this a refusal counted for ever, because nothing
+                // else takes it off.
+                if event.mySeat?.acknowledgedUtc == nil {
+                    Button("Got it") { Task { await acknowledge() } }
+                        .buttonStyle(.bordered).disabled(busy)
+                }
 
             case .none where event.flags.hasRsvpd:
                 badge("You're coming", Theme.success)

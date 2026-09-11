@@ -452,8 +452,14 @@ public sealed class PublicEventController : BenControllerBase
             .FirstOrDefaultAsync(a => a.OrgCalendarEventId == eventId && a.AppUserId == userId, ct);
         if (seat is null) return NotFound();
 
-        if (seat.SeatStatus != TourSeatStatus.Reserved)
-            return Conflict("There's no reserved seat here to confirm yet.");
+        // Reserved OR turned down — any seat the business has ANSWERED.
+        //
+        // Reserved-only was the first rule and it left a refusal counting on the guest's bell for
+        // ever: nothing could clear it, because the only thing that clears it is this. A guest
+        // saying "got it" to bad news is exactly as reasonable as saying it to good news, and it
+        // is the difference between a notification and a permanent mark.
+        if (seat.SeatStatus is not (TourSeatStatus.Reserved or TourSeatStatus.TurnedDown))
+            return Conflict("The tour hasn't answered this one yet.");
 
         // Idempotent: pressing it twice is the same statement, and the FIRST time is the one worth
         // keeping — that is when they saw it.

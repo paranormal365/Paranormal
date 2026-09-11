@@ -596,10 +596,23 @@ see where each of your submissions stands on the same page.</p>
 They show up on the map on the front page, in <strong>What's near you</strong>, and on the business's own page,
 and each has a page of its own with its pictures, its guides, and when it runs.</p>
 <p><img alt="A tour's page" src="../Ben.Web.Website/wwwroot/help/media/getting-started/tour-page.png" /></p>
-<p>Signing up gets you an email with the meeting point, the time in the tour's own zone, who is
-leading it and what they look like, and a calendar file so your phone reminds you. You get the same
-again the night before. <strong>Money is arranged with the business</strong> — nothing is taken through this
-site, and the email says how they want to be paid.</p>
+<h3>Asking for a place</h3>
+<p>You <strong>ask</strong> for a place on a walk, and the tour confirms it. Say how many of you are coming — a
+sign-up can hold several places — and the page will say <em>your seat is with the tour</em> until somebody
+there decides.</p>
+<p><img alt="Your seat on a walk" src="../Ben.Web.Website/wwwroot/help/media/getting-started/tour-seat.png" />
+<em>Two places reserved, and the optional way to say you have seen it.</em></p>
+<p>When it is approved you get an email with the meeting point, the time in the tour's own zone, who
+is leading it and what they look like, and a calendar file so your phone reminds you. You get the
+same again the night before. If you are asked for something the tour cannot fit, they will say so
+and you can try another night.</p>
+<p><strong>Money is arranged with the business.</strong> Nothing is taken through this site; the tour's page and
+the email say how they want to be paid, and approving your seat is them saying that side of it is
+settled between you.</p>
+<p>Once a seat is reserved, <strong>Got it</strong> tells the tour you have seen it. That is entirely optional —
+your place is held either way — and it simply lets them know you are expecting to be there.</p>
+<p>A walk that is full still takes requests. It becomes a waiting list rather than a closed door, and
+the tour will come back to you if room appears.</p>
 <p>Afterwards you can rate the walk out of five and say a few words, and anything you sent in from the
 night is on the tour's page for you to download.</p>
 <p><strong>Times are the event's own.</strong> A walk that starts at eight in Nashville reads as eight wherever
@@ -892,8 +905,12 @@ show them to you again.</p>
 <td>The ones you're on, split into what's coming and what's been, with your assigned role and any evidence deadline. <strong>Where you've been</strong> draws the places you've investigated on a map.</td>
 </tr>
 <tr>
+<td><strong>Haunted Tours</strong></td>
+<td>Ghost walks near you, or near a place you look up, with how far away they are and when they next run. No account needed. Tapping one opens the walk — where you meet, how long it runs, who leads it and the nights coming up — and a night opens that night. Asking for a place is done there. <strong>Location is asked for, never taken</strong>: the tab opens on a list, and if you would rather not share where you are, type a city instead.</td>
+</tr>
+<tr>
 <td><strong>Events</strong></td>
-<td>Public events, readable without an account, and you can reserve a place. A night that belongs to a <strong>walking tour</strong> carries the tour's name under its title, because a walk is booked by its name and a business with three of them would otherwise show three rows reading "Saturday walk". Times are the <strong>clock of the place the night happens in</strong>, named beside them — a Nashville walk says 3:08 PM CDT whether you read it in Nashville, Tokyo or London — and an event whose organiser never said which zone it is in reads in UTC and says so. <strong>Add to calendar</strong> puts one straight into your own calendar.</td>
+<td>Public events, readable without an account, and you can reserve a place. A night that belongs to a <strong>walking tour</strong> carries the tour's name under its title, because a walk is booked by its name and a business with three of them would otherwise show three rows reading "Saturday walk". Times are the <strong>clock of the place the night happens in</strong>, named beside them — a Nashville walk says 3:08 PM CDT whether you read it in Nashville, Tokyo or London — and an event whose organiser never said which zone it is in reads in UTC and says so. <strong>Add to calendar</strong> puts one straight into your own calendar. Tapping a night opens it, with your seat on it, directions to the meeting point and who is guiding.</td>
 </tr>
 <tr>
 <td><strong>Field Kit</strong></td>
@@ -1153,6 +1170,18 @@ recordings and any share link you made of it. There is no undo.</p>
 </ul>
 <p>The place itself is never touched. Where a session happened is a fact about the recording, not a
 consequence of having shared it.</p>
+<h2>Your seat on a walk</h2>
+<p>Asking for a place on a ghost walk is a <strong>request</strong> — the tour confirms it. Say how many of you are
+coming, and the night's page will say your seat is with the tour until somebody there decides. When
+it is approved the page says how many places are reserved, and <strong>Got it</strong> tells them you have seen
+it. That is optional; your place is held either way.</p>
+<p><strong>The phone reminds you itself.</strong> Once a seat is reserved it sets two reminders — the night before,
+and an hour before — each carrying the meeting point, and both on the walk's own clock. They are
+set on the phone rather than sent from here, so they still arrive in a cellar with no signal. You
+are asked for permission at the moment you have a seat to be reminded about, and if you say no
+everything else goes on working.</p>
+<p>A seat that is turned down, or a walk you cancel, takes its reminders with it.</p>
+<p><strong>Money is arranged with the business.</strong> Nothing is taken through the app.</p>
 <h2>What you photographed on somebody else's event</h2>
 <p>If you go on a ghost walk or a paid event, you can offer what you caught to the group running it
 — and <strong>Settings → My evidence</strong> is where everything you have offered lives afterwards.</p>
@@ -3547,8 +3576,33 @@ otherwise. Scheduling a tour again costs nothing; the plan counts tours, not nig
 <p>A public date of a tour business has to name a tour. Without one there is nothing to tell a guest
 where to stand or who they are meeting, so the calendar refuses it and says so. A private date —
 a guides' meeting, a rehearsal — needs no tour.</p>
+<h3>Sign-ups: nobody has a place until you say so</h3>
+<p><img alt="The sign-ups waiting on a date" src="../Ben.Web.Services/Help/Media/organization-administration/tour-seats.png" />
+<em>Waiting on you first, because it is the only part of this page that is work.</em></p>
+<p>A sign-up for a walk is a <strong>request</strong>. It holds no place until a guide or manager approves it —
+which is where you say the money side is settled between you and your guest. <strong>IsHaunted never
+takes payment.</strong> Approving records that the two of you agree; how they pay you is yours to arrange.</p>
+<p>Open a date's <strong>Sign-ups</strong> from the tour's Dates list. The list shows a "waiting" count on each
+night, so you can see where the work is without opening every one.</p>
+<ul>
+<li><strong>Approve</strong> holds the places and sends your guest the tour's welcome email, with the meeting
+  point and the calendar file. Nothing goes to them before this — telling somebody where to stand
+  for a walk you have not agreed to would send them out to nothing.</li>
+<li><strong>Turn down</strong> says so plainly. The row is kept rather than deleted, because a guest who is not
+  coming has to be able to see that they are not coming.</li>
+</ul>
+<p>A sign-up can ask for <strong>more than one place</strong>, and a date's capacity counts places rather than
+people. If a party does not fit, the refusal names how many places are left — so you can go back
+to them about a smaller group rather than guessing.</p>
+<p><strong>A full walk keeps taking requests.</strong> The overflow is a waiting list you work through, not a
+closed door, and it stays your decision. If somebody turns a place down, the room is there for the
+next party in the queue.</p>
+<p>Once you have approved a seat, your guest can tap <strong>Got it</strong> to say they have seen it. That is
+entirely optional and nothing waits on it — it just tells you they are expecting to be there.
+Their sign-ups also show on your bell as <strong>Sign-ups waiting on you</strong>, for group owners and
+administrators.</p>
 <h3>The email your guests get</h3>
-<p>When somebody signs up for a date, and again the night before, they are sent an email about the
+<p>When somebody's seat is approved, and again the night before, they are sent an email about the
 walk with a <strong>calendar file</strong> attached, so it lands in their diary with the meeting point and their
 phone reminds them.</p>
 <p>You can write that email yourself under <strong>Tours → the tour → Guest email</strong>, or leave it empty and

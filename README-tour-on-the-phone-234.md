@@ -124,7 +124,7 @@ that release is through.
 
 ## Status
 
-Planned 2026-09-11. **Phases 1 to 4 built**; 5 to come.
+Planned 2026-09-11. **All five phases built.** Item 234 is closed in the backlog.
 
 ### Verified, not assumed
 
@@ -175,7 +175,28 @@ The location permission string in `Info.plist` now covers finding tours as well 
 session. **It must ship with the tours release, not before it**, or the string describes a use the
 build does not have.
 
+### Phase 5, verified
+
+Two notification buckets, one per direction, walked against the running API: an owner saw a
+sign-up waiting; the guest saw it once it was decided; **Got it** cleared theirs; deciding cleared
+the owner's.
+
+A member who is not an owner or administrator is deliberately **not** nagged about a queue they
+cannot work — a bell that rings for something somebody cannot act on is a bell people learn to
+ignore. The badge on the date itself is still there for anyone with the calendar grant.
+
 ### Found by building it
+
+**A turned-down seat could never be cleared from the bell.** Acknowledging was reserved-only, and
+acknowledging is the only thing that empties that bucket — so a refusal counted on the guest's bell
+until the night passed. Any ANSWERED seat can be acknowledged now, and both the web page and the
+phone offer the button on a refusal. Saying "got it" to bad news is as reasonable as saying it to
+good news, and it is the difference between a notification and a permanent mark.
+
+The notification tests were written against this file's fixed August dates, and a walk 30 days
+after 2026-08-09 is in the past by September. A future night has to be measured from `UtcNow`,
+which is what the endpoint compares against.
+
 
 `OrgTourDateSeats` loaded its data in `OnParametersSetAsync`, which runs before auth resolves on a
 hard navigation — so the page asked the API as nobody and rendered *That date could not be found*.
