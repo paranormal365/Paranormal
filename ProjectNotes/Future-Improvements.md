@@ -11614,10 +11614,10 @@ rules at the doors; **4** reviews; **5** help, screenshots, both PDFs, deploy no
 
 **Closed 2026-09-11.** All six phases shipped, merged to `develop` (888a63bd) and `master`
 (097859a9), suite green at 8,133. **Two pieces are not built and are named rather than implied:**
-the iPhone and iPad app still knows nothing about tours — Phase 1 promised the tour's name and its
-guides on an event there, the public endpoints and shared records are in place, and item 234 is the
-larger version of the same work; and an over-long recording is refused on length but never
-downscaled to 1080p. What the testing wrote to `IsHauntedDb_player`, with a back-out script, is in
+the phone shows a tour's NAME on an event and reads every time on the Swift half of the clock rule
+(`EventClock`, 2026-09-11), but nothing renders a date's guides yet and there is no tour browsing of
+its own — item 234 is the larger version of that; and an over-long recording is refused on length
+but never downscaled to 1080p. What the testing wrote to `IsHauntedDb_player`, with a back-out script, is in
 `ProjectNotes/Test-Data-Written-2026-09-11.md`.
 
 **Asked for mid-build and built on the same branch** (2026-09-11): the look pass across the tour,
