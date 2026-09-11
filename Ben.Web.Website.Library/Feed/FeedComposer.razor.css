@@ -132,3 +132,38 @@
         transition: none;
     }
 }
+
+/* A tool that is holding something — a time chosen, a place tagged — reads as on. Colour alone
+   would be the only signal, so it gets the tinted ground as well. */
+.composer-tool--on {
+    color: var(--bs-primary);
+    background: color-mix(in srgb, var(--bs-primary) 18%, transparent);
+}
+
+/* The schedule panel holds one field, so it need not be as wide as the GIF grid. */
+.composer-picker--schedule {
+    width: 15rem;
+}
+
+/* What the post is carrying, stated above the tools rather than hidden in a tooltip: a time
+   chosen by accident is invisible otherwise until the post fails to appear. */
+.composer-note {
+    display: flex;
+    align-items: center;
+    gap: .35rem;
+    margin-top: .5rem;
+    padding: .3rem .55rem;
+    border-radius: .45rem;
+    background: var(--bs-tertiary-bg);
+    color: var(--bs-secondary-color);
+    font-size: .85rem;
+}
+
+.composer-note ::deep svg {
+    width: .9rem;
+    height: .9rem;
+    flex: 0 0 auto;
+    fill: none !important;
+    stroke: currentColor;
+    stroke-width: 2;
+}

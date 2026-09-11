@@ -223,10 +223,8 @@ public sealed record OrgPublicFacts(
 public sealed record OrgPublicNextEvent(
     Guid Id, string Title, string? UrlName, DateTime StartDateTime, bool IsAllDay,
     string? City, string? State, int? AttendeeCapacity, int AttendingCount,
-    /// <summary>
-    /// The IANA zone the night happens in, when it is recorded — today, the tour's. Null means
-    /// nobody has said, and the reader is shown UTC and told so; see EventClock.
-    /// </summary>
+    // The IANA zone the night happens in, when it is recorded — today, the tour's. Null means
+    // nobody has said, and the reader is shown UTC and told so; see EventClock.
     string? TimeZoneId = null);
 
 

@@ -111,6 +111,9 @@ namespace Ben.Data.Source.Context
         public virtual DbSet<Tour> Tours { get; set; }
         public virtual DbSet<TourGuide> TourGuides { get; set; }
         public virtual DbSet<TourSocialLink> TourSocialLinks { get; set; }
+        public virtual DbSet<MessagePoll> MessagePolls { get; set; }
+        public virtual DbSet<MessagePollOption> MessagePollOptions { get; set; }
+        public virtual DbSet<MessagePollVote> MessagePollVotes { get; set; }
         public virtual DbSet<TourReview> TourReviews { get; set; }
         public virtual DbSet<TourGalleryImage> TourGalleryImages { get; set; }
         public virtual DbSet<OrgCalendarEventGuide> OrgCalendarEventGuides { get; set; }
@@ -1814,6 +1817,55 @@ namespace Ben.Data.Source.Context
             // what comes back without a sort.
             modelBuilder.Entity<OrgMessageHashtag>()
                 .HasIndex(e => new { e.Tag, e.DateCreated });
+
+            // Where a message says it was written, and when it was set to appear (item 233).
+            modelBuilder.Entity<OrgMessage>()
+                .Property(m => m.PostedPlaceName).HasMaxLength(200);
+            modelBuilder.Entity<OrgMessage>()
+                .Property(m => m.PostedLatitude).HasPrecision(9, 6);
+            modelBuilder.Entity<OrgMessage>()
+                .Property(m => m.PostedLongitude).HasPrecision(9, 6);
+            // The feed asks "has this one's time come" on every page, so the column is indexed
+            // with the date it is ordered by.
+            modelBuilder.Entity<OrgMessage>()
+                .HasIndex(m => new { m.ScheduledForUtc, m.DateCreated });
+
+            // ── MessagePoll (item 233) ────────────────────────────────────────
+            // One poll per message, and the poll goes when the message does: a question attached
+            // to nothing is not a question anybody can answer.
+            modelBuilder.Entity<MessagePoll>()
+                .HasIndex(p => p.OrgMessageId).IsUnique();
+            modelBuilder.Entity<MessagePoll>()
+                .Property(p => p.Question).HasMaxLength(300).IsRequired();
+            modelBuilder.Entity<MessagePoll>()
+                .HasOne(p => p.OrgMessage).WithMany()
+                .HasForeignKey(p => p.OrgMessageId).OnDelete(DeleteBehavior.Cascade);
+            modelBuilder.Entity<MessagePoll>()
+                .HasOne(p => p.CreatedByAppUser).WithMany()
+                .HasForeignKey(p => p.CreatedByAppUserId).OnDelete(DeleteBehavior.NoAction);
+
+            modelBuilder.Entity<MessagePollOption>()
+                .Property(o => o.Text).HasMaxLength(120).IsRequired();
+            modelBuilder.Entity<MessagePollOption>()
+                .HasOne(o => o.MessagePoll).WithMany(p => p.Options)
+                .HasForeignKey(o => o.MessagePollId).OnDelete(DeleteBehavior.Cascade);
+
+            // One vote per person per option. A single-answer poll is held to one row by the
+            // server; this index is what stops the same answer being counted twice whatever the
+            // caller does.
+            modelBuilder.Entity<MessagePollVote>()
+                .HasIndex(v => new { v.MessagePollId, v.MessagePollOptionId, v.AppUserId }).IsUnique();
+            modelBuilder.Entity<MessagePollVote>()
+                .HasOne(v => v.MessagePoll).WithMany()
+                .HasForeignKey(v => v.MessagePollId).OnDelete(DeleteBehavior.Cascade);
+            // NoAction on the option: the poll's cascade already takes the votes, and a second
+            // cascade path into the same table is what SQL Server refuses to create.
+            modelBuilder.Entity<MessagePollVote>()
+                .HasOne(v => v.MessagePollOption).WithMany(o => o.Votes)
+                .HasForeignKey(v => v.MessagePollOptionId).OnDelete(DeleteBehavior.NoAction);
+            modelBuilder.Entity<MessagePollVote>()
+                .HasOne(v => v.AppUser).WithMany()
+                .HasForeignKey(v => v.AppUserId).OnDelete(DeleteBehavior.NoAction);
 
             // ── OrgMessageReport ──────────────────────────────────────────────
             modelBuilder.Entity<OrgMessageReport>()

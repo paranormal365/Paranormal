@@ -79,9 +79,9 @@ public sealed class EventEvidenceController : BenControllerBase
         DateTime DateCreated,
         DateTime? PublishedToPlaceAtUtc = null,
         bool PlaceAcceptsArchive = false,
-        /// <summary>When it comes off the site, or null when nothing is counting (item 233).</summary>
+        // When it comes off the site, or null when nothing is counting (item 233).
         DateTime? ExpiresAtUtc = null,
-        /// <summary>Whether the business has kept it for good.</summary>
+        // Whether the business has kept it for good.
         bool IsKept = false);
 
     // ── the visitor's door ────────────────────────────────────────────────────

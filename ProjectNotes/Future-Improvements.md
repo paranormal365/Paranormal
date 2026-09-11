@@ -11612,6 +11612,17 @@ sites, editor with preview; **3** retention limits as tier data, expiry stamps, 
 notices, the 50-image gallery, keep for recordings, download while it lasts, five-minute and 1080p
 rules at the doors; **4** reviews; **5** help, screenshots, both PDFs, deploy notes, production data.
 
+**Asked for mid-build and built on the same branch** (2026-09-11): the look pass across the tour,
+event, group, events and group-cases pages; the clock rule (times render in the zone of the place,
+or UTC, never the server's); a tour's social links; a timezone on an event; the case vote widget
+rebuilt as one button with a dropdown, beside share, repost, comments and report; comments on a
+published case; link previews under any message carrying a web address; and the composer's row of
+tools — photo/video, GIF (through our own API, so the Giphy key never reaches a browser), poll,
+emoji, schedule and location. Ben's item 3 from the Twitter screenshot ("that is Grok AI, I don't
+know what AI — if any — I would put there") is deliberately not built. The poll widget is reusable
+by design: a poll belongs to a message, so the same pair of components serves a feed post, a case
+comment and a group's own message.
+
 ---
 
 ## 234. The tour on the phone: a reserved seat, notifications, and a Haunted Tours tab (FUTURE, Ben 2026-09-10)

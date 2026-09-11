@@ -52,6 +52,15 @@ Anyone with an account can vote on a published case, and on individual pieces of
 it. There are three answers: **confirms**, **inconclusive**, and **disputes**. You get one vote,
 and changing your mind replaces it rather than adding a second.
 
+![The vote button with its three choices open, and the row of actions beside it](/help/media/getting-started/case-actions.png)
+*One button to vote with, and the choices it offers. Everything in the row explains itself when you
+hover over it.*
+
+Voting is **one button**, under the counts. It carries a hollow thumb until you have voted, and the
+filled mark of your own answer afterwards, so you can always see what you said without reading a
+legend. Press it and the three choices appear underneath; pause on one and it tells you what it
+means. Pressing your own answer again takes the vote back.
+
 Alongside the three counts you will see a single **score**. It is the votes added up, with confirms
 counting **+1**, disputes **−1**, and inconclusive **0** — so a green **+4** means the people who
 looked lean towards something being there, and a red **−3** means they lean the other way.
@@ -62,6 +71,32 @@ score nowhere, which is exactly what "I've seen it and I genuinely can't say" sh
 The score is always shown with the number of votes behind it, because **+4** from five people and
 **+4** from ninety are not the same claim. A score of **0** can mean the case is evenly split or
 that everyone was undecided — the counts beside it tell you which.
+
+### The other buttons beside it
+
+Four more buttons sit in the same row, all the same height, and none of them carries a word — hover
+over one and it says what it is.
+
+- **Share** opens the places a case can go when you hover over it: Facebook, X, Bluesky, Reddit,
+  WhatsApp, email, and **Copy link**. On a phone, where there is nothing to hover over, pressing the
+  button opens your own share sheet instead.
+- **Repost** puts the case on the feed as a post by you. It is a link to the case — posting on
+  behalf of a group takes permission, and this is one person saying *look at this*.
+- **Comments** takes you straight down to the comments on this page, with the number on it.
+- **Report** flags the case for a site moderator. Reporting never hides anything by itself.
+
+If you are not signed in the counts are still there, with **Sign in** under them.
+
+## Commenting on a published case
+
+Under a published case is a box to say something about it. Comments are plain text — no formatting,
+no attachments — and yours can be deleted by you at any time. Somebody else's can be reported, which
+sends it to the same moderation queue as anything else.
+
+A web address typed into a comment, a message or a feed post gets a small card under it showing what
+it points at. Cards are only ever built for addresses **on this site** — a case, a tour, an event or
+a group — out of records we already hold, so they stay correct when something is renamed. A link
+somewhere else stays a link, with the site it belongs to named under it.
 
 ## Finding what's near you
 

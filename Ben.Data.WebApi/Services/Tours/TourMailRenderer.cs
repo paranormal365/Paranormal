@@ -31,7 +31,7 @@ namespace Ben.Data.WebApi.Services.Tours;
 public static class TourMailRenderer
 {
     /// <summary>Everything a tour mail can say, gathered once.</summary>
-    /// <param name="GuidePhotoUrls">Absolute URLs, already public. Empty when nobody has published one.</param>
+    /// <param name="GuidePhotos">Absolute URLs, already public. Empty when nobody has published one.</param>
     public sealed record TourMailFacts(
         string TourName,
         string? TourDescriptionHtml,

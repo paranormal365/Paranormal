@@ -86,6 +86,13 @@ public sealed class AdminFeedController : BenControllerBase
                 PostHidden = r.OrgMessage != null && r.OrgMessage.HiddenUtc != null,
                 PostIsComment = r.OrgMessage != null
                              && r.OrgMessage.ChannelType == OrgMessageChannel.PublicCaseComment,
+                // A comment lives on the case's page, so that is where a moderator has to be sent.
+                // Without this the row linked to /feed/{id}, which is a thread page that only
+                // knows feed posts — a link to nowhere.
+                CommentOrgUrl = r.OrgMessage != null && r.OrgMessage.Case != null
+                    ? r.OrgMessage.Case.Organization.UrlName : null,
+                CommentCaseUrlName = r.OrgMessage != null && r.OrgMessage.Case != null
+                    ? r.OrgMessage.Case.UrlName : null,
                 // The reference is built from the year and the per-org number, the way every
                 // other surface builds it — there is no stored column for it.
                 CaseYear = r.Case != null ? r.Case.CaseYear : (int?)null,
@@ -146,7 +153,9 @@ public sealed class AdminFeedController : BenControllerBase
                 : "Feed post",
             r.CaseId is not null && r.CaseOrgUrl is not null && r.CaseUrlName is not null
                 ? $"/o/{r.CaseOrgUrl}/cases/{r.CaseUrlName}"
-                : null)).ToList());
+                : r.PostIsComment && r.CommentOrgUrl is not null && r.CommentCaseUrlName is not null
+                    ? $"/o/{r.CommentOrgUrl}/cases/{r.CommentCaseUrlName}#case-comments"
+                    : null)).ToList());
     }
 
     /// <summary>
@@ -160,6 +169,10 @@ public sealed class AdminFeedController : BenControllerBase
     ///
     /// <para>Hiding is idempotent and records who did it. Un-hiding happens by dismissing a report
     /// against a hidden post, which is the same act read the other way round.</para>
+    ///
+    /// <para>A report about a published CASE resolves the same way, against the thing a case
+    /// actually has: upholding clears <c>IsPublic</c>, which takes it off the public site and
+    /// leaves the case whole for the group that worked it.</para>
     /// </remarks>
     [HttpPost("reports/{id:guid}/resolve")]
     public async Task<IActionResult> Resolve(
@@ -174,27 +187,57 @@ public sealed class AdminFeedController : BenControllerBase
         var report = await db.OrgMessageReports.FirstOrDefaultAsync(r => r.Id == id, ct);
         if (report is null) return NotFound();
 
-        var post = await db.OrgMessages.FirstOrDefaultAsync(m => m.Id == report.OrgMessageId, ct);
-        if (post is null) return NotFound();
-
         var now = DateTime.UtcNow;
+        List<OrgMessageReport> siblings;
 
-        // The post first, then every pending report against it — including this one.
-        if (request.Outcome == FeedReportOutcome.Hidden)
+        if (report.CaseId is { } caseId)
         {
-            post.HiddenUtc ??= now;
-            post.HiddenByAppUserId ??= userId;
+            // ── A published case (2026-09-11) ────────────────────────────────
+            // A case has no HiddenUtc: what makes one public is IsPublic, so upholding takes it
+            // off the public site and leaves the case itself whole for the group that worked it.
+            var reported = await db.Cases.FirstOrDefaultAsync(c => c.Id == caseId, ct);
+            if (reported is null) return NotFound();
+
+            if (request.Outcome == FeedReportOutcome.Hidden)
+            {
+                reported.IsPublic = false;
+            }
+            else
+            {
+                // Dismissing only puts a case back if THIS queue is what took it down. A group
+                // that unpublished its own case must not find it republished because somebody
+                // dismissed an unrelated complaint.
+                var takenDownHere = await db.OrgMessageReports.AsNoTracking()
+                    .AnyAsync(r => r.CaseId == caseId && r.Outcome == FeedReportOutcome.Hidden, ct);
+                if (takenDownHere) reported.IsPublic = true;
+            }
+
+            siblings = await db.OrgMessageReports
+                .Where(r => r.CaseId == caseId && r.Outcome == FeedReportOutcome.Pending)
+                .ToListAsync(ct);
         }
         else
         {
-            // Dismissing a report against a hidden post is how a post comes back.
-            post.HiddenUtc = null;
-            post.HiddenByAppUserId = null;
-        }
+            var post = await db.OrgMessages.FirstOrDefaultAsync(m => m.Id == report.OrgMessageId, ct);
+            if (post is null) return NotFound();
 
-        var siblings = await db.OrgMessageReports
-            .Where(r => r.OrgMessageId == report.OrgMessageId && r.Outcome == FeedReportOutcome.Pending)
-            .ToListAsync(ct);
+            // The post first, then every pending report against it — including this one.
+            if (request.Outcome == FeedReportOutcome.Hidden)
+            {
+                post.HiddenUtc ??= now;
+                post.HiddenByAppUserId ??= userId;
+            }
+            else
+            {
+                // Dismissing a report against a hidden post is how a post comes back.
+                post.HiddenUtc = null;
+                post.HiddenByAppUserId = null;
+            }
+
+            siblings = await db.OrgMessageReports
+                .Where(r => r.OrgMessageId == report.OrgMessageId && r.Outcome == FeedReportOutcome.Pending)
+                .ToListAsync(ct);
+        }
 
         foreach (var sibling in siblings)
         {

@@ -133,8 +133,18 @@ public sealed class HelpMediaCapture : BenTestBase
     /// When given, the shot is cropped to that element — nearly always the better picture, since
     /// a full-page shot of a data-heavy screen reduces the part being explained to a few pixels.
     /// </param>
+    /// <summary>
+    /// How much of the page around a selector to include, in CSS pixels.
+    /// </summary>
+    /// <param name="Width">
+    /// The whole region's width. Given when the element runs the width of its column and the
+    /// subject is one corner of it.
+    /// </param>
+    private sealed record Around(float Left = 0, float Top = 0, float Right = 0, float Bottom = 0, float? Width = null);
+
     private async Task ShootAsync(
-        string slug, string name, bool gated = false, string? selector = null, string? proves = null)
+        string slug, string name, bool gated = false, string? selector = null, string? proves = null,
+        Around? around = null)
     {
         // A screenshot of an empty state teaches nobody anything, and it is the failure mode this
         // fixture is most likely to hit silently: the page loads, renders "You aren't borrowing
@@ -174,7 +184,32 @@ public sealed class HelpMediaCapture : BenTestBase
             await Expect(target).ToBeVisibleAsync(new() { Timeout = 10_000 });
             await target.ScrollIntoViewIfNeededAsync();
             await Page.WaitForTimeoutAsync(200);
-            await target.ScreenshotAsync(new() { Path = path });
+
+            if (around is { } margin)
+            {
+                // An element screenshot is clipped to the element's own box, so anything drawn
+                // OUTSIDE it — an open dropdown, which is positioned over the page — is simply
+                // not in the picture. A region around the element catches it, and narrowing the
+                // width keeps a full-width strip from photographing as a letterbox.
+                var box = await target.BoundingBoxAsync()
+                    ?? throw new InvalidOperationException($"{selector} has no box to photograph.");
+
+                await Page.ScreenshotAsync(new()
+                {
+                    Path = path,
+                    Clip = new()
+                    {
+                        X = Math.Max(0, box.X - margin.Left),
+                        Y = Math.Max(0, box.Y - margin.Top),
+                        Width = margin.Width ?? box.Width + margin.Left + margin.Right,
+                        Height = box.Height + margin.Top + margin.Bottom,
+                    },
+                });
+            }
+            else
+            {
+                await target.ScreenshotAsync(new() { Path = path });
+            }
         }
         else
         {
@@ -341,6 +376,165 @@ public sealed class HelpMediaCapture : BenTestBase
 
         await GoAsync("/notifications");
         await ShootAsync("getting-started", "notifications.png", proves: "Waiting on you");
+    }
+
+    /// <summary>
+    /// The composer's row of tools, a poll as it is answered, and a link showing where it goes.
+    /// </summary>
+    /// <remarks>
+    /// Three shots from one post, because they are three parts of the same composer and taking
+    /// them separately would mean clearing and refilling the feed three times. The poll is
+    /// photographed AFTER somebody has answered it: an unanswered poll is a picture of two empty
+    /// bars, which shows nothing about what a poll does.
+    /// </remarks>
+    [Test]
+    [Description("the-feed: the composer's tools, a poll, and a link preview.")]
+    public async Task Capture_ComposerTools()
+    {
+        var wasOn = await FeedFlagAsync();
+        await SetFeedFlagAsync(true);
+
+        try
+        {
+            await ClearFeedForCaptureAsync();
+
+            // One seat throughout, and Sarah answers her own poll below. The Follow and Report
+            // controls are photographed in feed.png, where a second person's post is the point;
+            // here the subject is the composer and the poll, and a second sign-in only adds a
+            // way for the capture to fail.
+            await LoginAsync(UserEmail, UserPassword);
+            await GoToFeedForCaptureAsync();
+
+            // The tool row with the poll open — the shot for "Writing a poll".
+            var box = Page.Locator("#feed-composer");
+            await box.FillAsync("Planning next week's session — settle it for me.");
+            await Page.GetByRole(AriaRole.Button, new() { Name = "Add a poll" }).ClickAsync();
+            await Expect(Page.Locator(".poll-editor")).ToBeVisibleAsync(new() { Timeout = 15_000 });
+
+            var answers = Page.Locator(".poll-editor__option input");
+            await answers.Nth(0).FillAsync("The upstairs hall");
+            await answers.Nth(1).FillAsync("The cellar stairs");
+            await Page.Locator(".poll-editor input[placeholder='Ask something']")
+                .FillAsync("Where should we take the recorder next week?");
+            await ShootAsync("the-feed", "composer-tools.png", selector: ".card:has(#feed-composer)");
+
+            var post = Page.GetByRole(AriaRole.Button, new() { Name = "Post", Exact = true });
+            await Expect(post).ToBeEnabledAsync(new() { Timeout = 15_000 });
+            await post.ClickAsync();
+            await Expect(Page.Locator(".poll").First).ToBeVisibleAsync(new() { Timeout = 15_000 });
+
+            // A second post carrying a link to one of our own pages, for the preview card.
+            //
+            // The address is written as the SITE's, not as this machine's: a help screenshot
+            // showing "http://localhost:5078/..." teaches a reader an address that is not theirs.
+            // The card under it is resolved by the API against its own AppBaseUrl, so the capture
+            // run wants that pointed at the public host — see the README for the one-line
+            // override. When it is not, the card falls back to the plain host card, and the
+            // assertion below fails rather than shipping the wrong picture.
+            await ComposeForCaptureAsync(
+                $"Last month's write-up, if you missed it: {PublicSiteUrl}/o/{PublicGroupSlug}");
+
+            await GoToFeedForCaptureAsync();
+
+            // Not link-card--away: the point of the picture is one of OUR addresses, described
+            // out of our own records.
+            await Expect(Page.Locator(".link-card:not(.link-card--away)").First)
+                .ToBeVisibleAsync(new() { Timeout = 15_000 });
+            await ShootAsync("the-feed", "link-preview.png",
+                selector: ".bv-feed-post:has(.link-card)", proves: "Last month's write-up");
+
+            // Answer the poll, so the picture shows a poll with something in it.
+            var choice = Page.Locator(".poll__option").First;
+            await Expect(choice).ToBeVisibleAsync(new() { Timeout = 15_000 });
+            await choice.ClickAsync();
+            await Expect(Page.Locator(".poll__option--mine").First)
+                .ToBeVisibleAsync(new() { Timeout = 15_000 });
+
+            await ShootAsync("the-feed", "poll.png", selector: ".bv-feed-post:has(.poll)");
+        }
+        finally
+        {
+            await SetFeedFlagAsync(wasOn);
+        }
+    }
+
+    /// <summary>
+    /// The vote button with its three choices open, and the row of actions beside it.
+    /// </summary>
+    /// <remarks>
+    /// Signed in, because the row is what a reader who can act on a case sees — signed out it is
+    /// the counts and an invitation, which the paragraph above the picture already describes. The
+    /// choices are opened deliberately: the whole point of the redesign is that three buttons
+    /// became one, and a closed button photographs as a single icon that explains nothing.
+    /// </remarks>
+    [Test]
+    [Description("getting-started: the vote button and the actions beside it on a published case.")]
+    public async Task Capture_CaseActions()
+    {
+        await LoginAsync(UserEmail, UserPassword);
+
+        var found = await FirstPublicCaseAsync();
+        if (found is not { } theCase) { Assert.Ignore("No published case to photograph."); return; }
+
+        // Pressed with a vote already cast, the button TAKES THE VOTE BACK rather than offering
+        // the choices — which is the design, and which made the first version of this capture a
+        // picture of a closed button. Sarah has voted on the seeded cases, so the vote goes
+        // before the page loads and one press then opens the panel every time.
+        await ClearMyCaseVoteAsync(theCase.Id);
+
+        await GoAsync(theCase.Path);
+
+        var vote = Page.Locator(".vote-actions__vote > .vote-btn").First;
+        await Expect(vote).ToBeVisibleAsync(new() { Timeout = 30_000 });
+        await vote.ScrollIntoViewIfNeededAsync();
+        await vote.ClickAsync();
+        await Expect(Page.Locator(".vote-choices")).ToBeVisibleAsync(new() { Timeout = 10_000 });
+
+        // The widget is as wide as the column it sits in, and a shot of the whole width is a
+        // letterbox with a strip of icons in one corner. The row and its open panel are the
+        // subject.
+        await ShootAsync("getting-started", "case-actions.png", selector: ".vote-actions",
+            around: new Around(Left: 12, Top: 44, Right: 12, Bottom: 150, Width: 400));
+    }
+
+    /// <summary>A published case's id and public path, or null when there is none.</summary>
+    private async Task<(Guid Id, string Path)?> FirstPublicCaseAsync()
+    {
+        using var http = new HttpClient { BaseAddress = new Uri(ApiUrl) };
+        var page = await http.GetFromJsonAsync<System.Text.Json.JsonElement>(
+            $"/api/public/organizations/{PublicGroupSlug}/cases");
+
+        var items = page.ValueKind == System.Text.Json.JsonValueKind.Array
+            ? page
+            : page.TryGetProperty("items", out var inner) ? inner : default;
+        if (items.ValueKind != System.Text.Json.JsonValueKind.Array) return null;
+
+        // The list carries the slug; the id is on the case itself. Asked for rather than
+        // guessed, because the vote endpoints address a case by id.
+        foreach (var item in items.EnumerateArray())
+        {
+            if (!item.TryGetProperty("urlName", out var url)
+             || url.GetString() is not { Length: > 0 } name) continue;
+
+            var detail = await http.GetFromJsonAsync<System.Text.Json.JsonElement>(
+                $"/api/public/organizations/{PublicGroupSlug}/cases/{name}");
+            if (detail.TryGetProperty("caseId", out var id) && id.TryGetGuid(out var caseId))
+                return (caseId, $"/o/{PublicGroupSlug}/cases/{name}");
+        }
+
+        return null;
+    }
+
+    /// <summary>Takes back the capturing seat's vote on a case, so the picker opens on one press.</summary>
+    private async Task ClearMyCaseVoteAsync(Guid caseId)
+    {
+        var token = await TokenForCaptureAsync(UserEmail, UserPassword);
+        if (token is null) return;
+
+        using var http = new HttpClient { BaseAddress = new Uri(ApiUrl) };
+        http.DefaultRequestHeaders.Authorization =
+            new System.Net.Http.Headers.AuthenticationHeaderValue("Bearer", token);
+        using var _ = await http.DeleteAsync($"/api/public/cases/{caseId}/votes");
     }
 
     // ── Feed capture helpers ─────────────────────────────────────────────────
@@ -1179,6 +1373,19 @@ public sealed class HelpMediaCapture : BenTestBase
 
     /// <summary>The seeded investigation group whose public pages the documents show.</summary>
     private const string PublicGroupSlug = "paranormal365";
+
+    /// <summary>
+    /// The address the site has in a reader's world, for the one shot that photographs a URL.
+    /// </summary>
+    /// <remarks>
+    /// A screenshot is read by somebody who is not at this machine, so a body reading
+    /// <c>http://localhost:5078</c> is a wrong answer printed in the documentation. The API has to
+    /// agree that this host is ours for the card to resolve — run the capture with
+    /// <c>AppBaseUrl=https://ishaunted.com</c> — and the capture asserts the card rather than
+    /// accepting the stranger's version.
+    /// </remarks>
+    private static string PublicSiteUrl =>
+        (Environment.GetEnvironmentVariable("BEN_PUBLIC_SITE_URL") ?? "https://ishaunted.com").TrimEnd('/');
 
     /// <summary>
     /// The path of some public event, or null when none is scheduled.

@@ -65,7 +65,25 @@ public sealed record FeedPostRecord(
     bool GroupVerified = false,
     /// <summary>A person with the Moderator role cleared this post's media — distinct from the
     /// automatic screener's approval.</summary>
-    bool ModeratorReviewed = false);
+    bool ModeratorReviewed = false,
+    // ── The composer's other tools (item 233, Ben 2026-09-11) ────────────────
+    /// <summary>The poll on this post, counted, with this reader's own answer. Null for most posts.</summary>
+    MessagePollRecord? Poll = null,
+    /// <summary>
+    /// Where the author said they wrote it, and what that place is called. All three or none.
+    /// </summary>
+    decimal? PostedLatitude = null,
+    decimal? PostedLongitude = null,
+    string? PostedPlaceName = null,
+    /// <summary>
+    /// When it was set to appear, for a post that has not appeared yet.
+    /// </summary>
+    /// <remarks>
+    /// Only ever populated for the author, who is the only reader who sees an unreleased post at
+    /// all — and who needs to see that they scheduled it, which is the difference between
+    /// scheduling something and losing it.
+    /// </remarks>
+    DateTime? ScheduledForUtc = null);
 
 /// <summary>What kind of media a post carries.</summary>
 public enum FeedMediaKind
@@ -125,7 +143,17 @@ public sealed record FeedProfileRecord(
 /// tick it refuses the post.</param>
 public sealed record CreateFeedPostRequest(
     string Body, Guid? ParentMessageId = null, Guid? ExperienceTypeId = null,
-    Guid? SourceCaseId = null, bool ConsentToPublishPrivateEngagement = false);
+    Guid? SourceCaseId = null, bool ConsentToPublishPrivateEngagement = false,
+    // ── The composer's other tools (item 233, Ben 2026-09-11) ────────────────
+    // Appended with defaults, so every existing caller is unaffected.
+    /// <summary>A poll to attach, or null for an ordinary post.</summary>
+    NewPollRequest? Poll = null,
+    /// <summary>When to let it appear, or null for now.</summary>
+    DateTime? ScheduledForUtc = null,
+    /// <summary>Where it was written, when the author chose to say. All three or none.</summary>
+    decimal? PostedLatitude = null,
+    decimal? PostedLongitude = null,
+    string? PostedPlaceName = null);
 
 // ── Org attribution (item 186 F7) ────────────────────────────────────────────
 
@@ -261,3 +289,38 @@ public sealed record FeedModerationSummary(
 /// <param name="Alt">Giphy's own title, used as alt text — a GIF with no description is a GIF
 /// nobody using a screen reader can choose.</param>
 public sealed record GiphyItem(string Id, string PreviewUrl, string Url, string Alt);
+
+
+// ── Polls on a message (item 233, Ben 2026-09-11) ────────────────────────────
+
+/// <summary>
+/// A poll as a reader sees it, with the counts and their own answer.
+/// </summary>
+/// <param name="TotalVotes">How many people, not how many rows — a multiple-answer poll has
+/// more rows than voters, and a percentage over rows would not add up to anything.</param>
+/// <param name="MyOptionIds">What this reader chose. Empty when they have not, or are not signed in.</param>
+/// <param name="IsClosed">Whether voting has stopped, decided by the server against its own clock.</param>
+public sealed record MessagePollRecord(
+    Guid Id,
+    string Question,
+    IReadOnlyList<MessagePollOptionRecord> Options,
+    int TotalVotes,
+    IReadOnlyList<Guid> MyOptionIds,
+    bool AllowMultiple,
+    DateTime? ClosesAtUtc,
+    bool IsClosed);
+
+/// <summary>One answer, and how many chose it.</summary>
+public sealed record MessagePollOptionRecord(Guid Id, string Text, int Votes);
+
+/// <summary>A poll being written, as the composer sends it.</summary>
+/// <param name="Options">Between two and six. One answer is not a question and six is a survey.</param>
+/// <param name="ClosesInHours">Null for a poll that stays open.</param>
+public sealed record NewPollRequest(
+    string Question,
+    IReadOnlyList<string> Options,
+    bool AllowMultiple = false,
+    int? ClosesInHours = null);
+
+/// <summary>Which answers somebody is choosing. More than one only on a multiple-answer poll.</summary>
+public sealed record CastPollVoteRequest(IReadOnlyList<Guid> OptionIds);

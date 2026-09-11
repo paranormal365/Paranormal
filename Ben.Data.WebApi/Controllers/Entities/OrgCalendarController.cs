@@ -873,10 +873,8 @@ public sealed record UpsertCalendarEventRequest(
     // caller is unaffected; null guides means "leave whoever is already on it alone".
     Guid? TourId = null,
     IReadOnlyList<Guid>? GuideAppUserIds = null,
-    /// <summary>
-    /// The IANA zone this event happens in. Null on a tour date takes the tour's; null on
-    /// anything else leaves it unsaid, and a public listing then shows UTC and says so.
-    /// </summary>
+    // The IANA zone this event happens in. Null on a tour date takes the tour's; null on
+    // anything else leaves it unsaid, and a public listing then shows UTC and says so.
     string? TimeZoneId = null);
 
 public sealed record AddAttendeeByEmailRequest(string? Email);

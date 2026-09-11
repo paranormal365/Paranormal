@@ -242,6 +242,6 @@ public sealed class EventReminderJob : IScheduledJob
         string? EventUrlName,
         string OrganizationName,
         string? OrganizationUrlName,
-        /// <summary>The clock the event runs on, or null when nobody has said.</summary>
+        // The clock the event runs on, or null when nobody has said.
         string? TimeZoneId);
 }

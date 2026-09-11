@@ -1320,4 +1320,235 @@ public sealed class FeedControllerTests
         for (var i = 0; i < 4; i++)
             Assert.IsType<OkObjectResult>((await PostPhotoAsync(c, $"post {i}")).Result);
     }
+
+    // ── The composer's other tools (item 233, Ben 2026-09-11) ────────────────
+    //
+    // A poll, an hour to go up at, and the place it was written. Each is tested for the thing that
+    // would matter if it were wrong: a poll that reached the database with the answers it was
+    // given, a scheduled post that nobody but its author can see until its time, and a place that
+    // is all three fields or none.
+
+    private static async Task<ActionResult<FeedPostRecord>> PostWithAsync(
+        FeedController controller, CreateFeedPostRequest request)
+        => await controller.CreatePost(request, null, CancellationToken.None);
+
+    [Fact]
+    public async Task A_poll_is_written_with_its_answers_in_the_order_they_were_given()
+    {
+        var sarah   = MakeUser("sarahmitchell");
+        var factory = await SeedAsync(users: sarah);
+        var c       = Build(factory, sarah.Id);
+
+        var result = await PostWithAsync(c, new CreateFeedPostRequest(
+            "Which night?", Poll: new NewPollRequest("Which night?", ["Friday", "Saturday"], ClosesInHours: 24)));
+        var ok   = Assert.IsType<OkObjectResult>(result.Result);
+        var post = (FeedPostRecord)ok.Value!;
+
+        await using var db = factory.CreateDbContext();
+        var poll = await db.MessagePolls.SingleAsync(p => p.OrgMessageId == post.Id);
+        var options = await db.MessagePollOptions.Where(o => o.MessagePollId == poll.Id)
+            .OrderBy(o => o.SortOrder).Select(o => o.Text).ToListAsync();
+
+        Assert.Equal(["Friday", "Saturday"], options);
+        Assert.NotNull(poll.ClosesAtUtc);
+    }
+
+    [Fact]
+    public async Task A_blank_answer_box_is_dropped_rather_than_stored_as_an_empty_answer()
+    {
+        // The editor keeps empty boxes on screen so one does not vanish while somebody retypes;
+        // the server is what decides a poll's real answers.
+        var sarah   = MakeUser("sarahmitchell");
+        var factory = await SeedAsync(users: sarah);
+        var c       = Build(factory, sarah.Id);
+
+        var result = await PostWithAsync(c, new CreateFeedPostRequest(
+            "Pick one", Poll: new NewPollRequest("Pick one", ["Yes", "No", "  ", ""])));
+        var ok   = Assert.IsType<OkObjectResult>(result.Result);
+        var post = (FeedPostRecord)ok.Value!;
+
+        await using var db = factory.CreateDbContext();
+        var poll = await db.MessagePolls.SingleAsync(p => p.OrgMessageId == post.Id);
+        Assert.Equal(2, await db.MessagePollOptions.CountAsync(o => o.MessagePollId == poll.Id));
+    }
+
+    [Theory]
+    [InlineData("", new[] { "a", "b" }, "A poll needs a question.")]
+    [InlineData("One answer?", new[] { "only" }, "A poll needs at least two answers.")]
+    [InlineData("Seven?", new[] { "1", "2", "3", "4", "5", "6", "7" }, "A poll takes at most six answers.")]
+    [InlineData("Same?", new[] { "Yes", "yes" }, "Two of those answers are the same.")]
+    public async Task A_poll_that_cannot_work_is_refused_in_words(
+        string question, string[] options, string expected)
+    {
+        var sarah   = MakeUser("sarahmitchell");
+        var factory = await SeedAsync(users: sarah);
+        var c       = Build(factory, sarah.Id);
+
+        var result = await PostWithAsync(c, new CreateFeedPostRequest(
+            "body", Poll: new NewPollRequest(question, options)));
+        var bad = Assert.IsType<BadRequestObjectResult>(result.Result);
+        Assert.Equal(expected, bad.Value);
+    }
+
+    [Fact]
+    public async Task A_refused_poll_takes_the_post_with_it()
+    {
+        // Otherwise somebody's post appears without the question it was written to ask.
+        var sarah   = MakeUser("sarahmitchell");
+        var factory = await SeedAsync(users: sarah);
+        var c       = Build(factory, sarah.Id);
+
+        await PostWithAsync(c, new CreateFeedPostRequest("body", Poll: new NewPollRequest("Q", ["only"])));
+
+        await using var db = factory.CreateDbContext();
+        Assert.Empty(await db.OrgMessages.ToListAsync());
+    }
+
+    [Fact]
+    public async Task A_scheduled_post_is_not_in_anybody_elses_feed_until_its_hour()
+    {
+        var sarah   = MakeUser("sarahmitchell");
+        var marcus  = MakeUser("marcusreid");
+        var factory = await SeedAsync(users: [sarah, marcus]);
+
+        await PostWithAsync(Build(factory, sarah.Id), new CreateFeedPostRequest(
+            "Friday's walk", ScheduledForUtc: DateTime.UtcNow.AddDays(2)));
+
+        Assert.Empty(await ReadFeedAsync(Build(factory, marcus.Id)));
+        Assert.Empty(await ReadFeedAsync(BuildAnonymous(factory)));
+    }
+
+    [Fact]
+    public async Task Its_author_can_still_see_it_and_is_told_when_it_goes_up()
+    {
+        // The other half of the rule. A post its author cannot find is one they can neither check
+        // nor call back, which would make scheduling a door with nothing behind it.
+        var sarah   = MakeUser("sarahmitchell");
+        var factory = await SeedAsync(users: sarah);
+        var when    = DateTime.UtcNow.AddDays(2);
+
+        await PostWithAsync(Build(factory, sarah.Id), new CreateFeedPostRequest(
+            "Friday's walk", ScheduledForUtc: when));
+
+        var mine = Assert.Single(await ReadFeedAsync(Build(factory, sarah.Id)));
+        Assert.NotNull(mine.ScheduledForUtc);
+        Assert.Equal(when, mine.ScheduledForUtc!.Value, TimeSpan.FromSeconds(1));
+    }
+
+    [Fact]
+    public async Task An_hour_that_has_already_passed_is_the_same_as_no_hour_at_all()
+    {
+        var sarah   = MakeUser("sarahmitchell");
+        var marcus  = MakeUser("marcusreid");
+        var factory = await SeedAsync(users: [sarah, marcus]);
+
+        await PostWithAsync(Build(factory, sarah.Id), new CreateFeedPostRequest(
+            "Up now", ScheduledForUtc: DateTime.UtcNow.AddMinutes(-5)));
+
+        Assert.Single(await ReadFeedAsync(Build(factory, marcus.Id)));
+    }
+
+    [Fact]
+    public async Task A_scheduled_post_is_dated_the_hour_it_goes_up()
+    {
+        // Newest-first: dated when it was typed, a post written on Monday for Friday would arrive
+        // already buried under everything posted in between.
+        var sarah   = MakeUser("sarahmitchell");
+        var factory = await SeedAsync(users: sarah);
+        var when    = DateTime.UtcNow.AddDays(3);
+
+        await PostWithAsync(Build(factory, sarah.Id), new CreateFeedPostRequest("Later", ScheduledForUtc: when));
+
+        await using var db = factory.CreateDbContext();
+        var post = await db.OrgMessages.SingleAsync();
+        Assert.Equal(when, post.DateCreated, TimeSpan.FromSeconds(1));
+    }
+
+    [Fact]
+    public async Task Posting_a_waiting_post_now_puts_it_in_everybody_elses_feed()
+    {
+        var sarah   = MakeUser("sarahmitchell");
+        var marcus  = MakeUser("marcusreid");
+        var factory = await SeedAsync(users: [sarah, marcus]);
+        var author  = Build(factory, sarah.Id);
+
+        var created = (FeedPostRecord)Assert.IsType<OkObjectResult>(
+            (await PostWithAsync(author, new CreateFeedPostRequest(
+                "Friday's walk", ScheduledForUtc: DateTime.UtcNow.AddDays(2)))).Result).Value!;
+
+        Assert.IsType<OkObjectResult>((await author.PublishNow(created.Id, default)).Result);
+
+        var seen = Assert.Single(await ReadFeedAsync(Build(factory, marcus.Id)));
+        Assert.Equal(created.Id, seen.Id);
+    }
+
+    [Fact]
+    public async Task Nobody_else_can_release_or_call_back_somebody_elses_waiting_post()
+    {
+        var sarah   = MakeUser("sarahmitchell");
+        var marcus  = MakeUser("marcusreid");
+        var factory = await SeedAsync(users: [sarah, marcus]);
+
+        var created = (FeedPostRecord)Assert.IsType<OkObjectResult>(
+            (await PostWithAsync(Build(factory, sarah.Id), new CreateFeedPostRequest(
+                "Friday's walk", ScheduledForUtc: DateTime.UtcNow.AddDays(2)))).Result).Value!;
+
+        var stranger = Build(factory, marcus.Id);
+        Assert.IsType<ForbidResult>((await stranger.PublishNow(created.Id, default)).Result);
+        Assert.IsType<ForbidResult>(await stranger.CancelScheduled(created.Id, default));
+    }
+
+    [Fact]
+    public async Task Calling_back_a_waiting_post_takes_its_poll_with_it()
+    {
+        var sarah   = MakeUser("sarahmitchell");
+        var factory = await SeedAsync(users: sarah);
+        var author  = Build(factory, sarah.Id);
+
+        var created = (FeedPostRecord)Assert.IsType<OkObjectResult>(
+            (await PostWithAsync(author, new CreateFeedPostRequest(
+                "Which night?",
+                Poll: new NewPollRequest("Which night?", ["Friday", "Saturday"]),
+                ScheduledForUtc: DateTime.UtcNow.AddDays(2)))).Result).Value!;
+
+        Assert.IsType<NoContentResult>(await author.CancelScheduled(created.Id, default));
+
+        await using var db = factory.CreateDbContext();
+        Assert.Empty(await db.OrgMessages.ToListAsync());
+        Assert.Empty(await db.MessagePolls.ToListAsync());
+        Assert.Empty(await db.MessagePollOptions.ToListAsync());
+    }
+
+    [Fact]
+    public async Task A_post_that_is_already_up_cannot_be_called_back_here()
+    {
+        // The narrow door on purpose: an ordinary post is part of a conversation other people
+        // joined, and taking it away is a different question this endpoint does not answer.
+        var sarah   = MakeUser("sarahmitchell");
+        var factory = await SeedAsync(users: sarah);
+        var author  = Build(factory, sarah.Id);
+        var id      = await PostAsync(author, "Already up");
+
+        Assert.IsType<BadRequestObjectResult>(await author.CancelScheduled(id, default));
+
+        await using var db = factory.CreateDbContext();
+        Assert.Single(await db.OrgMessages.ToListAsync());
+    }
+
+    [Fact]
+    public async Task A_tagged_place_comes_back_with_the_post()
+    {
+        var sarah   = MakeUser("sarahmitchell");
+        var factory = await SeedAsync(users: sarah);
+        var c       = Build(factory, sarah.Id);
+
+        await PostWithAsync(c, new CreateFeedPostRequest(
+            "Cold down here", PostedLatitude: 36.1627m, PostedLongitude: -86.7816m,
+            PostedPlaceName: "Printers Alley, Nashville"));
+
+        var post = Assert.Single(await ReadFeedAsync(c));
+        Assert.Equal("Printers Alley, Nashville", post.PostedPlaceName);
+        Assert.Equal(36.1627m, post.PostedLatitude);
+        Assert.Equal(-86.7816m, post.PostedLongitude);
+    }
 }

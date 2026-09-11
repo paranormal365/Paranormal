@@ -144,6 +144,51 @@ the hosts it accepts, matched on a dot boundary; a link is checked when it saves
 is served, because an icon that says Instagram and opens somewhere else is link laundering on a
 page a reader is trusting the business for. Migration `TourSocialLinks`.
 
+## The composer's other tools (2026-09-11)
+
+Ben listed the row under a message box, from a Twitter screenshot: "1) Upload content like image
+or video. 2) Gif — pulls list of Gifs. 3) That is Grok AI, I don't know what AI — if any — I would
+put there. 4) Create a poll to vote on. 5) Emojis. 6) Schedule time for message to be displayed in
+the near future. 7) Tag the current location … which would mark it on a super small map alongside
+the message and add a 'said at {location}'. 8) This is the report flag."
+
+Built: photo/video, GIF, poll, emoji, schedule, location. **Item 3 is deliberately absent** — Ben
+has not decided what, if any, AI belongs there, and a button with nothing behind it is the write-only
+feature this project keeps refusing to ship.
+
+A poll belongs to a **message**, not to the feed, which is why `MessagePoll` hangs off `OrgMessage`
+and `BenPoll` / `BenPollEditor` know only a poll's id: the same widget serves a feed post, a case
+comment and a group's own message. `MessagePollController` counts DISTINCT voters, because on a
+multiple-answer poll a percentage of rows is a percentage of nothing anybody recognises.
+
+Two things the first pass got wrong and are now rules:
+
+- **A scheduled post is dated the hour it goes up.** The feed is newest-first, so a post written on
+  Monday for Friday would have arrived on Friday already buried under everything posted since.
+- **Its author can still see it,** marked *Goes up …*, with **Post it now** and **Cancel it**.
+  Without those it was a post nobody could find, check or call back — a door with nothing behind it.
+  `DELETE /api/feed/posts/{id}/schedule` is the narrowest delete there could be: your own post,
+  still waiting, therefore never seen.
+
+The **time is the reader's own clock**, converted once on the way out against
+`IBenUserState.BrowserTimeZone` — `TimeZoneInfo.Local` on a Blazor Server page is the zone of the
+machine in the rack, which is nobody's 8pm.
+
+Found while wiring it up, and fixed here:
+
+- **A report about a case could never be decided.** The queue learned to carry case reports on
+  2026-09-11, but `Resolve` still went straight to `OrgMessages` and answered 404 for every one of
+  them. Upholding now clears `Case.IsPublic`; dismissing puts a case back **only** if this queue is
+  what took it down, so a group that unpublished its own case does not find it republished.
+- **A reported comment linked to `/feed/{id}`,** a thread page that knows feed posts only. It now
+  points at the case the comment is on.
+- **`BenPoll` read auth state without following its resolution** — the prerender guard caught it.
+- **`Ben.Web.Website/wwwroot/css/app.css` is not served by anything.** `App.razor` loads
+  `wwwroot/app.css` through `Assets["app.css"]`; nothing references `css/app.css`, so the feed's
+  mention colours and its `white-space: pre-wrap` have never applied. This branch's own styles moved
+  to a scoped `FeedPostCard.razor.css`; the dead file is left for a separate pass rather than
+  revived untested at the end of this one.
+
 ## Left for production
 
 - Migrations `Tours`, `TourDetailsAndGuides`, `TourReviews`, `TourGallery`, `MediaRetention`,

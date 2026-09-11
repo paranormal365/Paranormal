@@ -102,12 +102,17 @@ public sealed class PublicLinkPreviewController : ControllerBase
         // /o/{org}
         if (parts is ["o", var groupSlug])
         {
+            // The kind, not the slug: repeating the address under the name says nothing a reader
+            // cannot already see in the link above the card.
             var found = await db.Organizations.AsNoTracking()
                 .Where(o => o.UrlName == groupSlug)
-                .Select(o => new LinkPreview(
-                    "Group", o.Name, o.UrlName, path))
+                .Select(o => new { o.Name, o.Kind })
                 .FirstOrDefaultAsync(ct);
-            return found is null ? NotFound() : Ok(found);
+
+            return found is null
+                ? NotFound()
+                : Ok(new LinkPreview(
+                    "Group", found.Name, OrganizationKindDefaults.DisplayName(found.Kind), path));
         }
 
         return NotFound();

@@ -3,7 +3,10 @@
 @using Ben.Service.Models.Feed
 @using Ben.Web.Services
 
+@using Ben.Web.Website.Library.Kit
 @inject IBenAdminClient Feed
+@inject IJSRuntime JS
+@inject IBenUserState UserState
 
 @*
     Writing a post.
@@ -77,6 +80,32 @@
             </div>
         }
 
+        @if (_poll is not null)
+        {
+            <BenPollEditor Value="@_poll" Changed="@(p => _poll = p)" />
+        }
+
+        @if (_scheduledFor is { } when)
+        {
+            <div class="composer-note" id="feed-composer-scheduled">
+                <BenIcon Name="clock" />
+                <span>Goes up @when.ToString("MM/dd/yyyy") at @when.ToString("h:mm tt")</span>
+            </div>
+        }
+
+        @if (_placeName is { } place)
+        {
+            <div class="composer-note" id="feed-composer-place">
+                <BenIcon Name="map-pin" />
+                <span>said at @place</span>
+                <button type="button" class="btn btn-link btn-sm p-0 ms-auto" @onclick="ClearPlace">Remove</button>
+            </div>
+        }
+        else if (_locationError is not null)
+        {
+            <div class="composer-note text-secondary" id="feed-composer-place-failed">@_locationError</div>
+        }
+
         @* The tools, as one row of icons (Ben, 2026-09-11). Each says what it is in a tooltip
            rather than in a word inside the button — the marks are ones people know, and a row of
            labelled buttons is a toolbar that pushes the Post button off a phone. *@
@@ -144,6 +173,55 @@
                 }
             </div>
 
+            @* Poll. The editor below is where it is written; this only opens and closes it. *@
+            <button type="button" class="composer-tool @(_poll is not null ? "composer-tool--on" : "")"
+                    title="Poll" aria-label="Add a poll"
+                    aria-pressed="@((_poll is not null).ToString().ToLowerInvariant())"
+                    @onclick="TogglePoll" disabled="@_busy">
+                <BenIcon Name="bar-chart-2" />
+            </button>
+
+            <div class="composer-tool__well">
+                <button type="button" class="composer-tool @(_scheduledFor is not null ? "composer-tool--on" : "")"
+                        title="Schedule" aria-label="Schedule this post"
+                        aria-expanded="@_scheduleOpen.ToString().ToLowerInvariant()"
+                        @onclick="@(() => { _scheduleOpen = !_scheduleOpen; _emojiOpen = false; _gifsOpen = false; })"
+                        disabled="@_busy">
+                    <BenIcon Name="clock" />
+                </button>
+
+                @if (_scheduleOpen)
+                {
+                    <div class="composer-picker composer-picker--schedule">
+                        <label class="small text-secondary d-block mb-1" for="composer-when">
+                            Show it from
+                        </label>
+                        @* The picker speaks the reader's own clock and the value is turned into
+                           UTC on the way out — a scheduled time typed as 8pm means 8pm where the
+                           person typing it is standing. *@
+                        <input id="composer-when" type="datetime-local" class="form-control form-control-sm"
+                               value="@(_scheduledFor?.ToString("yyyy-MM-ddTHH:mm"))"
+                               @onchange="OnScheduleChosen" />
+                        @if (_scheduledFor is not null)
+                        {
+                            <button type="button" class="btn btn-link btn-sm p-0 mt-1"
+                                    @onclick="@(() => { _scheduledFor = null; _scheduleOpen = false; })">
+                                Post it straight away
+                            </button>
+                        }
+                    </div>
+                }
+            </div>
+
+            @* Where it is being written. Asked for, never taken: a location attached without being
+               asked is somebody's whereabouts published on their behalf. *@
+            <button type="button" class="composer-tool @(_placeName is not null ? "composer-tool--on" : "")"
+                    title="@(_placeName is null ? "Tag where you are" : $"Tagged: {_placeName}")"
+                    aria-label="@(_placeName is null ? "Tag where you are" : $"Tagged at {_placeName}")"
+                    @onclick="ToggleLocationAsync" disabled="@(_busy || _locating)">
+                <BenIcon Name="map-pin" />
+            </button>
+
             @if (Remaining <= WarnBelow)
             {
                 <span class="small @(Remaining < 0 ? "text-danger" : "text-secondary")">@Remaining</span>
@@ -177,6 +255,94 @@
 
     private bool _gifsOpen;
     private bool _emojiOpen;
+    private bool _scheduleOpen;
+    private bool _locating;
+    private NewPollRequest? _poll;
+    private DateTime? _scheduledFor;
+    private decimal? _placeLatitude;
+    private decimal? _placeLongitude;
+    private string? _placeName;
+    private string? _locationError;
+
+    /// <summary>Opens a blank poll, or drops the one that is open.</summary>
+    private void TogglePoll()
+    {
+        _poll = _poll is null ? new NewPollRequest("", ["", ""], false, 24) : null;
+        _gifsOpen = false;
+        _emojiOpen = false;
+    }
+
+    /// <summary>
+    /// Takes the time from the picker as the READER's wall clock.
+    /// </summary>
+    /// <remarks>
+    /// A datetime-local box has no zone in it, and the person typing 8pm means 8pm where they are
+    /// standing. It is turned into an instant on the way out, once, in PostAsync.
+    /// </remarks>
+    private void OnScheduleChosen(ChangeEventArgs e)
+    {
+        _scheduledFor = DateTime.TryParse(e.Value?.ToString(), out var when) ? when : null;
+        _scheduleOpen = false;
+    }
+
+    /// <summary>
+    /// Tags where this is being written, or takes the tag off.
+    /// </summary>
+    /// <remarks>
+    /// <para>Asked for every time, never remembered and never taken quietly: a location attached
+    /// to a message without being asked for is somebody's whereabouts published on their
+    /// behalf.</para>
+    ///
+    /// <para>The name comes from reverse geocoding, and the post keeps the coordinates as well —
+    /// the name is what a reader sees, the coordinates are what the little map draws. A refusal,
+    /// or a browser with no geolocation at all, leaves the post exactly as it was and says so
+    /// rather than failing silently.</para>
+    /// </remarks>
+    private async Task ToggleLocationAsync()
+    {
+        if (_placeName is not null) { ClearPlace(); return; }
+
+        _locating = true;
+        _locationError = null;
+        try
+        {
+            var position = await JS.InvokeAsync<GeoPosition>("benGetCurrentPosition");
+            _placeLatitude = (decimal)position.Latitude;
+            _placeLongitude = (decimal)position.Longitude;
+
+            var place = await Feed.ReverseGeocodeAsync(position.Latitude, position.Longitude);
+            _placeName = Describe(place)
+                // Without a name the coordinates still work and still draw a map, so the tag is
+                // kept rather than thrown away over a geocoder that did not answer.
+                ?? $"{position.Latitude:F3}, {position.Longitude:F3}";
+        }
+        catch (JSException)
+        {
+            _locationError = "Your browser did not share a location.";
+            ClearPlace();
+        }
+        finally { _locating = false; }
+    }
+
+    private void ClearPlace()
+    {
+        _placeLatitude = null;
+        _placeLongitude = null;
+        _placeName = null;
+    }
+
+    /// <summary>The place in as few words as say where it is.</summary>
+    private static string? Describe(ReverseGeocodingResponse? place)
+    {
+        if (place is null) return null;
+
+        var parts = new[] { place.City, place.State }.Where(p => !string.IsNullOrWhiteSpace(p));
+        var text = string.Join(", ", parts);
+        return string.IsNullOrWhiteSpace(text) ? null : text;
+    }
+
+    /// <summary>What benGetCurrentPosition resolves with.</summary>
+    private sealed record GeoPosition(double Latitude, double Longitude);
     private string _gifTerm = "";
     private string? _gifError;
     private IReadOnlyList<Ben.Service.Models.Feed.GiphyItem> _gifs = [];
@@ -341,7 +507,19 @@
                     media: media,
                     mediaFileName: _media?.Name,
                     mediaContentType: _media?.ContentType,
-                    experienceTypeId: _experienceTypeId);
+                    experienceTypeId: _experienceTypeId,
+                    poll: _poll,
+                    // The box the time was typed into has no zone in it, and somebody who types
+                    // 8pm means 8pm where they are standing. It becomes an instant here, once,
+                    // against the READER's zone — TimeZoneInfo.Local on a Blazor Server page is
+                    // the zone of the machine in the rack, which is nobody's 8pm.
+                    scheduledForUtc: _scheduledFor is { } when
+                        ? TimeZoneInfo.ConvertTimeToUtc(
+                            DateTime.SpecifyKind(when, DateTimeKind.Unspecified), UserState.BrowserTimeZone)
+                        : null,
+                    postedLatitude: _placeLatitude,
+                    postedLongitude: _placeLongitude,
+                    postedPlaceName: _placeName);
             }
             catch (IOException)
             {
@@ -367,6 +545,10 @@
             _body = string.Empty;
             _media = null;
             _experienceTypeId = null;
+            _poll = null;
+            _scheduledFor = null;
+            _scheduleOpen = false;
+            ClearPlace();
             await OnPosted.InvokeAsync(post);
         }
         finally
