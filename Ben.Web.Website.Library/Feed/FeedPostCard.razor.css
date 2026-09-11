@@ -1,0 +1,12 @@
+/*
+    Line breaks the author typed are line breaks the reader sees. Without this a post written as
+    three short lines arrives as one run-on paragraph, which is not what they wrote.
+
+    The rule sits on the wrapper written in FeedPostCard.razor, not on the <FeedText> inside it, so
+    it needs no `::deep`: the child's text is a descendant, and `white-space` and `word-break` are
+    inherited properties that reach it through the wrapper.
+*/
+.bv-feed-post__body {
+    white-space: pre-wrap;
+    word-break: break-word;
+}
