@@ -271,7 +271,8 @@ public sealed class TourControllerTests
 
         var asGuide = Build(w.Factory, w.GuideId);
         var list = await asGuide.GetAll(w.OrgId, default);
-        Assert.Single(Assert.IsType<OkObjectResult>(list.Result).Value as IReadOnlyList<TourRecord>);
+        Assert.Single(Assert.IsAssignableFrom<IReadOnlyList<TourRecord>>(
+            Assert.IsType<OkObjectResult>(list.Result).Value));
 
         var attempt = await asGuide.Create(w.OrgId, Request(w.AddressId, "Sneaky Walk"), default);
         Assert.IsType<ForbidResult>(attempt.Result);
