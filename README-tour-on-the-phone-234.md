@@ -115,9 +115,16 @@ it, sorted by distance — no new server work to list a tour.
 A tour-seat bucket in the notification summary, in both directions: a business sees requests
 waiting, a guest sees an approval. Help text, screenshots, both PDFs, and the backlog entry closed.
 
+## Where the phone work stands
+
+**Staged and proven, not shipped.** Ben, 2026-09-11: *"Changes to iPhone and iPad are just being
+staged and proven for now. We are still waiting on version 1.0.3 (4) to be approved from Apple."*
+So nothing here bumps a build number or touches App Store metadata, and none of it goes out until
+that release is through.
+
 ## Status
 
-Planned 2026-09-11. **Phases 1 and 2 built**; 3, 4 and 5 to come.
+Planned 2026-09-11. **Phases 1, 2 and 3 built**; 4 and 5 to come.
 
 ### Verified, not assumed
 
@@ -133,6 +140,18 @@ Watched happening against the running site, not inferred from a passing test:
 - Turned down, the guest's page read *The tour couldn't take this booking* — the row is kept, not
   deleted, so somebody who is not coming can see that they are not coming.
 
+### Phase 3, verified
+
+- The events list opens a night. It had nowhere to go before — there was no event screen at all —
+  so a walk could be reserved and never looked at again.
+- `ishaunted://events/{id}` opens the right walk directly, which is the deep link that had been
+  falling through to a placeholder since the routes were written.
+- The screen reads the clock of the PLACE: a Nashville walk says CDT on a phone set to anything.
+- **Not yet exercised signed in on the device.** The three seat states render from the same record
+  the website renders, and the store and the reminder wording are covered by tests, but nobody has
+  stood in front of the phone with a reserved seat on it. Signing in there means typing a password,
+  which is not something this session does.
+
 ### Found by building it
 
 `OrgTourDateSeats` loaded its data in `OnParametersSetAsync`, which runs before auth resolves on a
@@ -140,6 +159,14 @@ hard navigation — so the page asked the API as nobody and rendered *That date 
 It waits for `AuthReady` now, the way the tour page beside it already did. This is the same trap
 recorded in the Blazor AuthReady rule, and it presents as a missing record rather than as a
 permission error, which is what makes it worth writing down twice.
+
+`Theme.haunt` is an ACCENT, not a panel colour. The seat panel used it as a background and came
+out a bright purple with grey text on it. `Theme.mist` is what every other card in the app uses.
+
+`PublicEventListItem` had no public initializer — Swift synthesizes one at `internal` visibility,
+so the app module could not build a row of its own, which the calendar sheet needs when the screen
+is holding the detail record. Declared inside the type, because an initializer added in an
+extension does not replace the synthesized one.
 
 The Playwright fixture's teardown had to **purge** its test business rather than delete it: a
 business with a tour, a date and sign-ups attached is refused by the ordinary delete, in words, and
