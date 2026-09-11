@@ -120,6 +120,12 @@ public interface IBenFeedClient
     // ── Moderation (SuperAdmin) ──────────────────────────────────────────────
 
     /// <summary>The moderation queue, oldest first. Omit the outcome for what is still pending.</summary>
+    /// <summary>
+    /// GIFs from Giphy, through our own API so the key never reaches a browser.
+    /// </summary>
+    /// <remarks>An empty term brings back what is trending, which is what an opened picker shows.</remarks>
+    Task<LoadResult<GiphyItem>> SearchGifsAsync(string? term, CancellationToken token = default);
+
     Task<LoadResult<FeedReportRecord>> GetFeedReportsAsync(
         FeedReportOutcome? outcome = null, CancellationToken token = default);
 

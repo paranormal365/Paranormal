@@ -251,3 +251,13 @@ public sealed record FeedModerationSummary(
     /// <summary>How many feed posts exist, visible or not. Content accumulating while the
     /// feature is dark is the reminder's reason to exist.</summary>
     int FeedPostCount = 0);
+
+
+/// <summary>
+/// One GIF from Giphy, trimmed to what a picker shows and what a post carries (item 233).
+/// </summary>
+/// <param name="PreviewUrl">The small rendition, for the grid.</param>
+/// <param name="Url">The full one, which is what gets posted.</param>
+/// <param name="Alt">Giphy's own title, used as alt text — a GIF with no description is a GIF
+/// nobody using a screen reader can choose.</param>
+public sealed record GiphyItem(string Id, string PreviewUrl, string Url, string Alt);

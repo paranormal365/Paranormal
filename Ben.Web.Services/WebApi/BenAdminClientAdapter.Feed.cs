@@ -156,6 +156,13 @@ public sealed partial class BenAdminClientAdapter
 
     // ── Moderation ───────────────────────────────────────────────────────────
 
+    public Task<LoadResult<GiphyItem>> SearchGifsAsync(string? term, CancellationToken token = default)
+        => _api.GetListAsync<GiphyItem>(
+               string.IsNullOrWhiteSpace(term)
+                   ? "/api/giphy/search"
+                   : $"/api/giphy/search?q={Uri.EscapeDataString(term.Trim())}",
+               token);
+
     public Task<LoadResult<FeedReportRecord>> GetFeedReportsAsync(
         FeedReportOutcome? outcome = null, CancellationToken token = default)
     {

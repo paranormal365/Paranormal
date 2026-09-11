@@ -77,22 +77,81 @@
             </div>
         }
 
-        <div class="d-flex align-items-center gap-2 mt-2">
+        @* The tools, as one row of icons (Ben, 2026-09-11). Each says what it is in a tooltip
+           rather than in a word inside the button — the marks are ones people know, and a row of
+           labelled buttons is a toolbar that pushes the Post button off a phone. *@
+        <div class="composer-tools mt-2">
             @* A label styled as a button: the file input itself is hidden because no browser
                lets its default rendering be styled, and every one of them renders it differently. *@
-            <label class="btn btn-outline-secondary btn-sm mb-0" title="Add a photo or video">
+            <label class="composer-tool mb-0" title="Photo or video">
                 <InputFile OnChange="OnMediaChosen" accept="image/*,video/*" class="d-none"
                            disabled="@_busy" />
                 <BenIcon Name="image" />
                 <span class="visually-hidden">Add a photo or video</span>
             </label>
 
+            <div class="composer-tool__well">
+                <button type="button" class="composer-tool" title="GIF" aria-label="Add a GIF"
+                        aria-expanded="@_gifsOpen.ToString().ToLowerInvariant()"
+                        @onclick="ToggleGifsAsync" disabled="@_busy">
+                    <BenIcon Name="film" />
+                </button>
+
+                @if (_gifsOpen)
+                {
+                    <div class="composer-picker" role="dialog" aria-label="Choose a GIF">
+                        <input class="form-control form-control-sm" placeholder="Search Giphy"
+                               value="@_gifTerm"
+                               @onchange="@(e => SearchGifsAsync(e.Value?.ToString()))" />
+
+                        @if (_gifError is not null)
+                        {
+                            <p class="small text-secondary mb-0 mt-2">@_gifError</p>
+                        }
+
+                        <div class="composer-picker__grid mt-2">
+                            @foreach (var gif in _gifs)
+                            {
+                                <button type="button" class="composer-picker__gif"
+                                        title="@gif.Alt" @onclick="@(() => ChooseGif(gif))">
+                                    <img src="@gif.PreviewUrl" alt="@gif.Alt" loading="lazy" />
+                                </button>
+                            }
+                        </div>
+                    </div>
+                }
+            </div>
+
+            <div class="composer-tool__well">
+                <button type="button" class="composer-tool" title="Emoji" aria-label="Add an emoji"
+                        aria-expanded="@_emojiOpen.ToString().ToLowerInvariant()"
+                        @onclick="@(() => _emojiOpen = !_emojiOpen)" disabled="@_busy">
+                    <BenIcon Name="smile" />
+                </button>
+
+                @if (_emojiOpen)
+                {
+                    @* A short list rather than every emoji there is. A full picker is a component
+                       and a font-loading problem; these are the ones this site's posts actually
+                       use, and anybody who wants another has their own keyboard. *@
+                    <div class="composer-picker composer-picker--emoji" role="group" aria-label="Emoji">
+                        @foreach (var emoji in Emoji)
+                        {
+                            <button type="button" class="composer-picker__emoji"
+                                    @onclick="@(() => Insert(emoji))">@emoji</button>
+                        }
+                    </div>
+                }
+            </div>
+
             @if (Remaining <= WarnBelow)
             {
                 <span class="small @(Remaining < 0 ? "text-danger" : "text-secondary")">@Remaining</span>
             }
 
-            <span class="small text-secondary">
+            @* The hint drops away on a narrow screen: the row must not wrap, and the Post button
+               matters more than a reminder about @@names. *@
+            <span class="small text-secondary d-none d-lg-inline">
                 Use <code>@@name</code> to mention somebody and <code>#tag</code> to tag a post.
             </span>
 
@@ -105,6 +164,75 @@
 </div>
 
 @code {
+    /// <summary>
+    /// The emoji offered, in the order they are offered.
+    /// </summary>
+    /// <remarks>
+    /// A short list on purpose. A complete picker is a component, a font-loading problem and a
+    /// search box; these are the ones a site about night walks actually uses, and anybody who
+    /// wants a different one has a keyboard that already offers every emoji there is.
+    /// </remarks>
+    private static readonly string[] Emoji =
+        ["👻", "😀", "😂", "😍", "😮", "😢", "👏", "🔥", "💀", "🕯️", "🌙", "🏚️", "📸", "🎧", "❤️", "👍"];
+
+    private bool _gifsOpen;
+    private bool _emojiOpen;
+    private string _gifTerm = "";
+    private string? _gifError;
+    private IReadOnlyList<Ben.Service.Models.Feed.GiphyItem> _gifs = [];
+
+    /// <summary>Opens the GIF picker, loading what is trending the first time.</summary>
+    private async Task ToggleGifsAsync()
+    {
+        _gifsOpen = !_gifsOpen;
+        _emojiOpen = false;
+        if (_gifsOpen && _gifs.Count == 0) await SearchGifsAsync(null);
+    }
+
+    private async Task SearchGifsAsync(string? term)
+    {
+        _gifTerm = term ?? "";
+        _gifError = null;
+
+        var result = await Feed.SearchGifsAsync(term);
+
+        // The refusal is kept rather than flattened into an empty grid: "nothing matched" and
+        // "Giphy could not be reached" look identical as an empty grid, and only one of them is
+        // worth trying again.
+        if (result.Failed)
+        {
+            _gifs = [];
+            _gifError = "GIFs aren't available just now.";
+            return;
+        }
+
+        _gifs = result.Items;
+        if (_gifs.Count == 0) _gifError = "Nothing matched.";
+    }
+
+    /// <summary>
+    /// Puts the GIF's address in the box, which is what posts it.
+    /// </summary>
+    /// <remarks>
+    /// A link rather than an upload: the image lives on Giphy, the body carries its address, and
+    /// the link card under the post renders it — so a GIF costs no storage here and needs no new
+    /// column to say a post has one.
+    /// </remarks>
+    private void ChooseGif(Ben.Service.Models.Feed.GiphyItem gif)
+    {
+        Insert(gif.Url);
+        _gifsOpen = false;
+    }
+
+    /// <summary>Adds text to the end of what is written, with a space if one is wanted.</summary>
+    private void Insert(string text)
+    {
+        var body = _body ?? "";
+        var gap = body.Length == 0 || body.EndsWith(' ') || body.EndsWith('\n') ? "" : " ";
+        _body = body + gap + text;
+        _emojiOpen = false;
+    }
+
     /// <summary>Matches the server's own limit, so the box refuses what the API would.</summary>
     private const int MaxLength = 1000;
 
