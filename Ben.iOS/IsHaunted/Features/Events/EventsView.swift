@@ -50,13 +50,17 @@ struct EventsView: View {
 
             case .loaded:
                 List(store?.events ?? []) { event in
-                    EventRow(
-                        event: event,
-                        isAttending: store?.attending.contains(event.id) == true,
-                        canRsvp: signedIn,
-                        isBusy: busyEventId == event.id,
-                        onRsvp: { Task { await rsvp(event) } },
-                        onCancel: { Task { await cancel(event) } })
+                    // Item 234: the row opens the night. It had nowhere to go before — there was
+                    // no event screen at all — so a walk could be reserved and never looked at.
+                    NavigationLink(value: AppRoute.eventDetail(event.id)) {
+                        EventRow(
+                            event: event,
+                            isAttending: store?.attending.contains(event.id) == true,
+                            canRsvp: signedIn,
+                            isBusy: busyEventId == event.id,
+                            onRsvp: { Task { await rsvp(event) } },
+                            onCancel: { Task { await cancel(event) } })
+                    }
                 }
                 .listStyle(.insetGrouped)
             }

@@ -9,6 +9,7 @@ using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.EntityFrameworkCore;
 using Ben.Data.WebApi.Services.Access;
+using Ben.Data.WebApi.Services.Tours;
 
 namespace Ben.Data.WebApi.Controllers.Entities;
 
@@ -141,8 +142,15 @@ public sealed class OrgCalendarEventController : BenControllerBase
         Ben.Data.Common.Interfaces.IEmailService email,
         Microsoft.Extensions.Options.IOptions<Ben.Data.Common.SiteIdentity> site,
         ILogger<OrgCalendarEventController> logger,
-        ICmsMarkupSanitizer sanitizer)
-    { _db = db; _mapper = mapper;  _security = security; _email = email; _site = site.Value; _logger = logger; _sanitizer = sanitizer; }
+        ICmsMarkupSanitizer sanitizer,
+        Ben.Data.WebApi.Services.Tours.TourGuestMailer tourMail)
+    { _db = db; _mapper = mapper;  _security = security; _email = email; _site = site.Value; _logger = logger; _sanitizer = sanitizer; _tourMail = tourMail; }
+
+    /// <summary>
+    /// The tour's own welcome, sent when a seat is APPROVED rather than when it is asked for
+    /// (item 234).
+    /// </summary>
+    private readonly Ben.Data.WebApi.Services.Tours.TourGuestMailer _tourMail;
 
     /// <summary>Cleans a description, preserving "no description" as null rather than "".</summary>
     private string? CleanDescription(string? description)
@@ -835,6 +843,103 @@ public sealed class OrgCalendarEventController : BenControllerBase
         await db.SaveChangesAsync(ct);
         return NoContent();
     }
+
+    // ── Seats on a tour date (item 234, Ben 2026-09-10) ──────────────────────
+    //
+    // Ben: "They would not be confirmed until the tour guide or manager approves them meaning they
+    // have settled how money will be or has been exchanged." THIS SITE NEVER TAKES THE MONEY.
+    // Approving is the business saying that side of it is sorted; nothing here is a payment record
+    // and nothing here should ever be read as one.
+
+    /// <summary>
+    /// Approves a seat: the places are held, and the guest is written to.
+    /// </summary>
+    /// <remarks>
+    /// <para>Refused when the places asked for do not fit, <b>in words that name how many are
+    /// left</b> — a business told only "full" cannot tell whether to approve a smaller party.</para>
+    ///
+    /// <para>Approving is what sends the tour's own welcome, with the walk attached as a calendar
+    /// file. Until this moment the guest has been told nothing but "we have your request", because
+    /// "here is where to stand" is untrue of a seat nobody has agreed to.</para>
+    /// </remarks>
+    [HttpPost("{eventId:guid}/attendees/{attendeeId:guid}/approve")]
+    public async Task<ActionResult<OrgCalendarEventAttendeeRecord>> ApproveSeat(
+        Guid orgId, Guid eventId, Guid attendeeId, CancellationToken ct)
+    {
+        if (!await IsAdminOrHasAsync(orgId, ct)) return Forbid();
+
+        await using var db = await _db.CreateDbContextAsync(ct);
+
+        var ev = await db.OrgCalendarEvents
+            .FirstOrDefaultAsync(e => e.Id == eventId && e.OrganizationId == orgId, ct);
+        if (ev is null) return NotFound();
+
+        var attendees = await db.OrgCalendarEventAttendees
+            .Where(a => a.OrgCalendarEventId == eventId).ToListAsync(ct);
+
+        var seat = attendees.FirstOrDefault(a => a.Id == attendeeId);
+        if (seat is null) return NotFound();
+        if (seat.SeatStatus == TourSeatStatus.Reserved) return Ok(await SeatRecordAsync(db, seat.Id, ct));
+
+        var wanted = Math.Max(1, seat.Seats);
+        var taken  = TourSeats.PlacesTaken(attendees, excludingAppUserId: seat.AppUserId);
+        if (TourSeats.WhyTheseSeatsCannotBeApproved(ev.AttendeeCapacity, taken, wanted) is { } refusal)
+            return Conflict(refusal);
+
+        seat.SeatStatus             = TourSeatStatus.Reserved;
+        seat.RsvpStatus             = RsvpStatus.Accepted;
+        seat.SeatDecidedUtc         = DateTime.UtcNow;
+        seat.SeatDecidedByAppUserId = GetCurrentUserId();
+        seat.GuestAcknowledgedUtc   = null;
+        await db.SaveChangesAsync(ct);
+
+        // Now it is true, so now it is sent.
+        if (await db.AppUsers.AsNoTracking()
+                .Where(u => u.Id == seat.AppUserId)
+                .Select(u => new { u.Email, u.DisplayName })
+                .FirstOrDefaultAsync(ct) is { Email: { Length: > 0 } address } guest)
+        {
+            await _tourMail.SendSignUpAsync(db, eventId, address, guest.DisplayName, ct);
+        }
+
+        return Ok(await SeatRecordAsync(db, seat.Id, ct));
+    }
+
+    /// <summary>
+    /// Turns a seat down, and says so.
+    /// </summary>
+    /// <remarks>
+    /// Recorded rather than deleted. A guest who is not coming has to be able to see that they are
+    /// not coming, and a row that vanishes reads to them as a request that was never received.
+    /// </remarks>
+    [HttpPost("{eventId:guid}/attendees/{attendeeId:guid}/turn-down")]
+    public async Task<ActionResult<OrgCalendarEventAttendeeRecord>> TurnDownSeat(
+        Guid orgId, Guid eventId, Guid attendeeId, CancellationToken ct)
+    {
+        if (!await IsAdminOrHasAsync(orgId, ct)) return Forbid();
+
+        await using var db = await _db.CreateDbContextAsync(ct);
+        if (!await db.OrgCalendarEvents.AnyAsync(e => e.Id == eventId && e.OrganizationId == orgId, ct))
+            return NotFound();
+
+        var seat = await db.OrgCalendarEventAttendees
+            .FirstOrDefaultAsync(a => a.Id == attendeeId && a.OrgCalendarEventId == eventId, ct);
+        if (seat is null) return NotFound();
+
+        seat.SeatStatus             = TourSeatStatus.TurnedDown;
+        seat.RsvpStatus             = RsvpStatus.Declined;
+        seat.SeatDecidedUtc         = DateTime.UtcNow;
+        seat.SeatDecidedByAppUserId = GetCurrentUserId();
+        await db.SaveChangesAsync(ct);
+
+        return Ok(await SeatRecordAsync(db, seat.Id, ct));
+    }
+
+    private async Task<OrgCalendarEventAttendeeRecord> SeatRecordAsync(
+        BenDataContext db, Guid attendeeId, CancellationToken ct)
+        => _mapper.Map<OrgCalendarEventAttendeeRecord>(
+            await db.OrgCalendarEventAttendees.AsNoTracking()
+                .Include(a => a.AppUser).FirstAsync(a => a.Id == attendeeId, ct));
 
     private async Task<bool> IsOrgMemberAsync(Guid orgId, CancellationToken ct)
     {

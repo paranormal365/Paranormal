@@ -41,7 +41,15 @@ public class OrgCalendarEventProfile : Profile
             .ForMember(d => d.EventTypeName,  o => o.MapFrom(s => s.EventType != null ? s.EventType.Name : null))
             .ForMember(d => d.EventTypeColor, o => o.MapFrom(s => s.EventType != null ? s.EventType.ColorClass : null))
             .ForMember(d => d.CaseReference,  o => o.MapFrom(s => s.Case != null ? $"#{s.Case.CaseYear}-{s.Case.OrgCaseNumber:D3}" : null))
-            .ForMember(d => d.AttendeeCount,  o => o.MapFrom(s => s.Attendees.Count))
+            // Item 234: PLACES, not rows — one sign-up may hold several. Every row written before
+            // seats existed holds exactly one, so this equals what it used to count.
+            .ForMember(d => d.AttendeeCount,  o => o.MapFrom(s =>
+                s.Attendees.Where(a => a.RsvpStatus == Ben.Data.Common.Enums.RsvpStatus.Accepted)
+                           .Sum(a => a.Seats < 1 ? 1 : a.Seats)))
+            // What is waiting on the business for this date, so a list of nights can say so
+            // without a second call per row.
+            .ForMember(d => d.SeatsWaiting, o => o.MapFrom(s =>
+                s.Attendees.Count(a => a.SeatStatus == Ben.Data.Common.Enums.TourSeatStatus.Requested)))
             // Flattened here so a caller rendering an event needs no second lookup just to show
             // where it is. Street and city only — the full postal form is more than a calendar row
             // can use, and the address itself is one click away.
@@ -68,6 +76,9 @@ public class OrgCalendarEventAttendeeProfile : Profile
     public OrgCalendarEventAttendeeProfile()
     {
         CreateMap<OrgCalendarEventAttendee, OrgCalendarEventAttendeeRecord>()
-            .ForMember(d => d.DisplayName, o => o.MapFrom(s => s.AppUser != null ? s.AppUser.DisplayName : null));
+            .ForMember(d => d.DisplayName, o => o.MapFrom(s => s.AppUser != null ? s.AppUser.DisplayName : null))
+            // Item 234: a business approving a seat needs to be able to reach the person. Their
+            // address is already theirs to see — they are coming on the walk.
+            .ForMember(d => d.Email, o => o.MapFrom(s => s.AppUser != null ? s.AppUser.Email : null));
     }
 }

@@ -47,7 +47,7 @@
 	<key>NSCameraUsageDescription</key>
 	<string>Capture photos and video during a field session, and for feed posts and case occurrences.</string>
 	<key>NSLocationWhenInUseUsageDescription</key>
-	<string>Stamps where you were standing on every reading, photo and recording in a field session, so a spike in the cellar isn't confused with one in the hall. It stays on this device unless you choose to upload the session to your group.</string>
+	<string>Finds ghost walks near you, and stamps where you were standing on every reading, photo and recording in a field session, so a spike in the cellar isn't confused with one in the hall. Looking for tours uses your position once, for that search. A session's readings stay on this device unless you choose to upload them to your group.</string>
 	<key>NSMicrophoneUsageDescription</key>
 	<string>Measures sound level and records audio during field sessions and EVP recordings, and captures sound with video for feed posts and case evidence.</string>
 	<key>NSMotionUsageDescription</key>

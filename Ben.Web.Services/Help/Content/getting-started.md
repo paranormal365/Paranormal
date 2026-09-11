@@ -465,10 +465,29 @@ and each has a page of its own with its pictures, its guides, and when it runs.
 
 ![A tour's page](/help/media/getting-started/tour-page.png)
 
-Signing up gets you an email with the meeting point, the time in the tour's own zone, who is
-leading it and what they look like, and a calendar file so your phone reminds you. You get the same
-again the night before. **Money is arranged with the business** — nothing is taken through this
-site, and the email says how they want to be paid.
+### Asking for a place
+
+You **ask** for a place on a walk, and the tour confirms it. Say how many of you are coming — a
+sign-up can hold several places — and the page will say *your seat is with the tour* until somebody
+there decides.
+
+![Your seat on a walk](/help/media/getting-started/tour-seat.png)
+*Two places reserved, and the optional way to say you have seen it.*
+
+When it is approved you get an email with the meeting point, the time in the tour's own zone, who
+is leading it and what they look like, and a calendar file so your phone reminds you. You get the
+same again the night before. If you are asked for something the tour cannot fit, they will say so
+and you can try another night.
+
+**Money is arranged with the business.** Nothing is taken through this site; the tour's page and
+the email say how they want to be paid, and approving your seat is them saying that side of it is
+settled between you.
+
+Once a seat is reserved, **Got it** tells the tour you have seen it. That is entirely optional —
+your place is held either way — and it simply lets them know you are expecting to be there.
+
+A walk that is full still takes requests. It becomes a waiting list rather than a closed door, and
+the tour will come back to you if room appears.
 
 Afterwards you can rate the walk out of five and say a few words, and anything you sent in from the
 night is on the tour's page for you to download.

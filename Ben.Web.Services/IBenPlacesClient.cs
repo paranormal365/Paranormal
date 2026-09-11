@@ -179,6 +179,22 @@ public interface IBenPlacesClient
     Task<bool> DeleteCalendarEventAsync(Guid orgId, Guid eventId, CancellationToken token = default);
 
     Task<LoadResult<OrgCalendarEventAttendeeRecord>> GetCalendarEventAttendeesAsync(Guid orgId, Guid eventId, CancellationToken token = default);
+
+    // ── Seats on a tour date (item 234) ─────────────────────────────────────
+
+    /// <summary>
+    /// Approves a sign-up: the places are held, and the guest gets the tour's welcome.
+    /// </summary>
+    /// <remarks>
+    /// The reason-carrying shape, because "only 2 places left on this date, and this is a request
+    /// for 4" is a sentence a business acts on. A bare null would send them looking for a fault.
+    /// </remarks>
+    Task<(OrgCalendarEventAttendeeRecord? Seat, string? Error)> ApproveSeatAsync(
+        Guid orgId, Guid eventId, Guid attendeeId, CancellationToken token = default);
+
+    /// <summary>Turns a sign-up down. Recorded, so the guest can see they are not coming.</summary>
+    Task<(OrgCalendarEventAttendeeRecord? Seat, string? Error)> TurnDownSeatAsync(
+        Guid orgId, Guid eventId, Guid attendeeId, CancellationToken token = default);
     Task<OrgCalendarEventAttendeeRecord?> AddCalendarAttendeeAsync(Guid orgId, Guid eventId, AddAttendeeRequest request, CancellationToken token = default);
 
     /// <summary>

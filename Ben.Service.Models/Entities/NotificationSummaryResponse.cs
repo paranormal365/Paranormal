@@ -65,7 +65,24 @@ public sealed record NotificationSummaryResponse(
     IReadOnlyList<OrgScopedBucket>? OrgMessagesByOrg = null,
     // Ben, same day: "show the cases — if they are messages from cases." Case messages break
     // down to the CASE, because the case's own thread is the only surface that answers them.
-    IReadOnlyList<CaseScopedBucket>? CaseMessagesAsOrgMemberByCase = null)
+    IReadOnlyList<CaseScopedBucket>? CaseMessagesAsOrgMemberByCase = null,
+    // ── Tour seats (item 234, Ben 2026-09-10) ───────────────────────────────
+    // Two directions, two buckets, because they are two different jobs: a business has people
+    // waiting on a decision, and a guest has a decision waiting to be read. One bucket carrying
+    // both would put "somebody approved your seat" in the same row as "nine people want places".
+    /// <summary>
+    /// Sign-ups waiting on a business this person can decide for.
+    /// </summary>
+    /// <remarks>The oldest is the one somebody has been waiting on longest, which is the point.</remarks>
+    NotificationBucket? TourSeatsToDecide = null,
+    /// <summary>
+    /// This person's own seats that have been decided and not yet acknowledged.
+    /// </summary>
+    /// <remarks>
+    /// Cleared by the guest's optional "Got it" — which is what makes the acknowledgement worth
+    /// having at all, and why nothing else depends on it.
+    /// </remarks>
+    NotificationBucket? MyTourSeats = null)
 {
     public static readonly NotificationSummaryResponse Empty = new(
         NotificationBucket.Empty, NotificationBucket.Empty, NotificationBucket.Empty,
@@ -76,7 +93,11 @@ public sealed record NotificationSummaryResponse(
     [JsonIgnore]
     public IReadOnlyList<NotificationBucket> AllBuckets =>
         [OrgMessages, CaseMessagesAsOrgMember, CaseMessagesAsClient, SystemMessages,
-         PendingPermissionRequests, InvestigationInvites, EquipmentCheckouts, FeedMentions];
+         PendingPermissionRequests, InvestigationInvites, EquipmentCheckouts, FeedMentions,
+         // Null on a payload written before item 234, which is why these are read through a
+         // fallback rather than dereferenced — an older client and an older server both survive.
+         TourSeatsToDecide ?? NotificationBucket.Empty,
+         MyTourSeats ?? NotificationBucket.Empty];
 
     /// <summary>Total across every bucket — the number on the bell.</summary>
     [JsonIgnore]

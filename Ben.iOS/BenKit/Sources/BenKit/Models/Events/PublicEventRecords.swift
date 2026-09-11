@@ -39,6 +39,42 @@ public struct PublicGuide: Sendable, Codable, Equatable, Hashable {
     public var photoUploadFileId: UUID?
 }
 
+/// Where a sign-up for a tour date has got to (item 234).
+///
+/// Ben: *"They would not be confirmed until the tour guide or manager approves them meaning they
+/// have settled how money will be or has been exchanged."* **This app never takes the money.** The
+/// state is the two of them agreeing, and nothing here is a payment record.
+public enum TourSeatStatus: Int, Sendable, Codable, Equatable {
+    /// Asked for. Holds no place yet, and the business has not looked at it.
+    case requested = 0
+    /// The guide or manager approved it. The places are held.
+    case reserved = 1
+    /// The business said no. Said plainly, because a guest who is not coming must know.
+    case turnedDown = 2
+}
+
+/// This reader's own seat on a tour date (item 234). Nil when they have asked for nothing.
+public struct PublicSeat: Sendable, Codable, Equatable {
+    /// Nil on an ordinary event, where signing up is simply coming.
+    public var status: TourSeatStatus?
+    /// How many places it holds.
+    public var seats: Int
+    /// When the business approved or turned it down.
+    public var decidedUtc: Date?
+    /// When the guest said back that they know. Optional, always — nothing waits on it.
+    public var acknowledgedUtc: Date?
+
+    public init(status: TourSeatStatus?, seats: Int, decidedUtc: Date?, acknowledgedUtc: Date?) {
+        self.status = status
+        self.seats = seats
+        self.decidedUtc = decidedUtc
+        self.acknowledgedUtc = acknowledgedUtc
+    }
+
+    /// "A place" or "3 places", so a badge reads as a sentence either way.
+    public var placesLabel: String { seats > 1 ? "\(seats) places" : "A place" }
+}
+
 /// One public event (`GET api/public/events/{eventId}`).
 public struct PublicEventRecord: Sendable, Codable, Equatable, Identifiable {
     public var id: UUID
@@ -66,8 +102,12 @@ public struct PublicEventRecord: Sendable, Codable, Equatable, Identifiable {
     /// The average a guest gave the tour, to one decimal, with the count behind it.
     public var tourRating: Decimal?
     public var tourRatingCount: Int
+    /// This reader's own seat, when they have asked for one (item 234).
+    public var mySeat: PublicSeat?
     /// The IANA zone the night happens in. Nil means nobody said, and the time is UTC.
     public var timeZoneId: String?
+
+
 }
 
 /// One public event as it appears in a list (`GET api/public/events`).
@@ -96,6 +136,40 @@ public struct PublicEventListItem: Sendable, Codable, Equatable, Identifiable {
     public var tourUrlName: String?
     /// The IANA zone the night happens in. Nil means nobody said, and the time is UTC.
     public var timeZoneId: String?
+
+    /// A public memberwise initializer.
+    ///
+    /// Swift synthesizes one, but only at `internal` visibility — so the app module, which is
+    /// where the calendar sheet lives, could not build a row of its own. Item 234's event screen
+    /// needs exactly that: it holds the DETAIL record and the sheet reads the list shape.
+    public init(
+        id: UUID, urlName: String?, organizationId: UUID, organizationName: String,
+        organizationUrlName: String, title: String, startDateTime: Date, endDateTime: Date,
+        isAllDay: Bool, city: String?, state: String?,
+        approximateLatitude: Decimal?, approximateLongitude: Decimal?,
+        attendingCount: Int, attendeeCapacity: Int?, isOnline: Bool,
+        tourName: String?, tourUrlName: String?, timeZoneId: String?
+    ) {
+        self.id = id
+        self.urlName = urlName
+        self.organizationId = organizationId
+        self.organizationName = organizationName
+        self.organizationUrlName = organizationUrlName
+        self.title = title
+        self.startDateTime = startDateTime
+        self.endDateTime = endDateTime
+        self.isAllDay = isAllDay
+        self.city = city
+        self.state = state
+        self.approximateLatitude = approximateLatitude
+        self.approximateLongitude = approximateLongitude
+        self.attendingCount = attendingCount
+        self.attendeeCapacity = attendeeCapacity
+        self.isOnline = isOnline
+        self.tourName = tourName
+        self.tourUrlName = tourUrlName
+        self.timeZoneId = timeZoneId
+    }
 }
 
 extension PublicEventListItem {

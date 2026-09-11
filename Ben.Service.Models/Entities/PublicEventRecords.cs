@@ -73,6 +73,8 @@ public sealed record PublicEventRecord(
     /// <summary>Average stars out of five, when anyone has rated the tour.</summary>
     decimal? TourRating = null,
     int TourRatingCount = 0,
+    /// <summary>This reader's own seat, when they have asked for one (item 234).</summary>
+    PublicSeatRecord? MySeat = null,
     /// <summary>
     /// The IANA zone the event happens in, when it is recorded — today, the tour's. Null means
     /// nobody has said, and the reader is shown UTC and told so; see EventClock.
@@ -81,6 +83,23 @@ public sealed record PublicEventRecord(
 
 /// <summary>A guide as a guest sees them: a name, and a face when they have published one.</summary>
 public sealed record PublicGuideRecord(string DisplayName, string? Handle, Guid? PhotoUploadFileId);
+
+/// <summary>
+/// This reader's own seat on a tour date (item 234). Null when they have not asked for one.
+/// </summary>
+/// <param name="Status">
+/// Where it has got to. Null on an ordinary event, where signing up is simply coming.
+/// </param>
+/// <param name="Seats">How many places it holds.</param>
+/// <param name="DecidedUtc">When the business approved or turned it down.</param>
+/// <param name="AcknowledgedUtc">
+/// When the guest said back that they know. Optional, always — nothing waits on it.
+/// </param>
+public sealed record PublicSeatRecord(
+    Ben.Data.Common.Enums.TourSeatStatus? Status,
+    int Seats,
+    DateTime? DecidedUtc,
+    DateTime? AcknowledgedUtc);
 
 /// <summary>One public event as it appears in a list.</summary>
 public sealed record PublicEventListItem(
@@ -124,7 +143,13 @@ public sealed record PublicEventListItem(
 /// <paramref name="DisplayName"/> is optional. An email is enough to come along, and demanding a
 /// name at the door is the kind of friction that loses the person the event was advertised to.
 /// </remarks>
-public sealed record RequestEventAttendanceRequest(string Email, string? DisplayName);
+public sealed record RequestEventAttendanceRequest(
+    string Email,
+    string? DisplayName,
+    /// <summary>
+    /// How many places, on a tour date (item 234). Null and 0 both mean one; the server clamps.
+    /// </summary>
+    int? Seats = null);
 
 /// <summary>What a confirmation link points at, shown before it is used.</summary>
 public sealed record EventAttendanceInviteInfo(

@@ -244,6 +244,14 @@ public sealed partial class BenAdminClientAdapter
     public Task<PublicEventRecord?> RsvpToEventAsync(Guid eventId, CancellationToken token = default)
         => _api.PostAsync<object, PublicEventRecord>($"/api/public/events/{eventId}/rsvp", new object(), token);
 
+    public Task<PublicEventRecord?> RsvpToEventAsync(Guid eventId, int seats, CancellationToken token = default)
+        => _api.PostAsync<object, PublicEventRecord>(
+               $"/api/public/events/{eventId}/rsvp?seats={seats}", new object(), token);
+
+    public Task<PublicEventRecord?> AcknowledgeSeatAsync(Guid eventId, CancellationToken token = default)
+        => _api.PostAsync<object, PublicEventRecord>(
+               $"/api/public/events/{eventId}/my-seat/acknowledge", new object(), token);
+
     public Task<bool> RequestEventAttendanceAsync(Guid eventId, string email, string? displayName, CancellationToken token = default)
         => _api.PostAnonymousVoidAsync($"/api/public/event-attendance/{eventId}/request",
                new RequestEventAttendanceRequest(email, displayName), token);

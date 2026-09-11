@@ -573,9 +573,40 @@ A public date of a tour business has to name a tour. Without one there is nothin
 where to stand or who they are meeting, so the calendar refuses it and says so. A private date —
 a guides' meeting, a rehearsal — needs no tour.
 
+### Sign-ups: nobody has a place until you say so
+
+![The sign-ups waiting on a date](help-media:organization-administration/tour-seats.png)
+*Waiting on you first, because it is the only part of this page that is work.*
+
+A sign-up for a walk is a **request**. It holds no place until a guide or manager approves it —
+which is where you say the money side is settled between you and your guest. **IsHaunted never
+takes payment.** Approving records that the two of you agree; how they pay you is yours to arrange.
+
+Open a date's **Sign-ups** from the tour's Dates list. The list shows a "waiting" count on each
+night, so you can see where the work is without opening every one.
+
+- **Approve** holds the places and sends your guest the tour's welcome email, with the meeting
+  point and the calendar file. Nothing goes to them before this — telling somebody where to stand
+  for a walk you have not agreed to would send them out to nothing.
+- **Turn down** says so plainly. The row is kept rather than deleted, because a guest who is not
+  coming has to be able to see that they are not coming.
+
+A sign-up can ask for **more than one place**, and a date's capacity counts places rather than
+people. If a party does not fit, the refusal names how many places are left — so you can go back
+to them about a smaller group rather than guessing.
+
+**A full walk keeps taking requests.** The overflow is a waiting list you work through, not a
+closed door, and it stays your decision. If somebody turns a place down, the room is there for the
+next party in the queue.
+
+Once you have approved a seat, your guest can tap **Got it** to say they have seen it. That is
+entirely optional and nothing waits on it — it just tells you they are expecting to be there.
+Their sign-ups also show on your bell as **Sign-ups waiting on you**, for group owners and
+administrators.
+
 ### The email your guests get
 
-When somebody signs up for a date, and again the night before, they are sent an email about the
+When somebody's seat is approved, and again the night before, they are sent an email about the
 walk with a **calendar file** attached, so it lands in their diary with the meeting point and their
 phone reminds them.
 
