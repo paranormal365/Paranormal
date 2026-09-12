@@ -53,6 +53,11 @@ day-by-day account of building it would say nothing to anyone using it now.
   puts a day-pass request on the venue's board, which the venue then confirms as usual. Nothing is
   held until they accept, and the screen says so.
 - The Field Kit's video is easier to find. Choosing what a session records — magnetic field, sound, video, location — now happens before the session opens, not part-way down a running session's screen.
+- A venue's rooms can now say what they sleep and whether they may be booked, which is separate
+  from whether they are shown publicly. A room left without a number is one to ask the venue
+  about; a room that says zero is one nobody sleeps in.
+- The event page now links to the venue's rooms, so describing them is one click from the event
+  that is going to offer them.
 
 ## 2026-09-11
 

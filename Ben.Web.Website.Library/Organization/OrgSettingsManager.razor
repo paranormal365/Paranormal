@@ -32,6 +32,7 @@ else
             {
                 <a class="btn btn-outline-secondary btn-sm" href="#settings-tours">Tours</a>
             }
+            <a class="btn btn-outline-secondary btn-sm" href="#settings-events">Hosted events</a>
             <a class="btn btn-outline-secondary btn-sm" href="#settings-promote">Promotion</a>
             <a class="btn btn-outline-secondary btn-sm" href="#settings-attribution">Feed attribution</a>
             <a class="btn btn-outline-secondary btn-sm" href="#settings-group">Group &amp; addresses</a>
@@ -77,6 +78,27 @@ else
             </div>
         </div>
     }
+
+    @* Item 235: the door to hosted events, for the same reason tours got one — an event carries
+       its dates, its rooms, its bookings and its menus, and a card here would dwarf the page. It
+       is deliberately NOT gated the way the tours card is: there is no "we host events" switch,
+       hosting is meant for every kind of group (a retreat and a lock-in are the same record as a
+       ghost hunt), and the events page itself says what publishing costs and holds the credits.
+       Hiding the door on kind would leave a page every group may use reachable only by typing its
+       address — the write-only shape this codebase keeps finding. *@
+    <div class="card mb-3" id="settings-events">
+        <div class="card-body d-flex align-items-center gap-3">
+            <BenIcon Name="calendar" Class="fs-4 text-primary" />
+            <div class="flex-grow-1">
+                <h6 class="card-title mb-0">Hosted events</h6>
+                <span class="small text-secondary">
+                    The weekends, dinners and runs of dates you put on, and the rooms, bookings and menus behind them.
+                </span>
+            </div>
+            <a class="btn btn-outline-primary" id="org-events-link"
+               href="@($"/organizations/{OrgId}/events")">Open events</a>
+        </div>
+    </div>
 
     @* Item 166 W3: the door to the promotion wizard. *@
     <div class="card mb-3" id="settings-promote">
