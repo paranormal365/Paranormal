@@ -40,10 +40,13 @@ namespace Ben.Data.WebApi.Controllers.Entities;
 [Route("api/organizations/{orgId:guid}/events/{eventId:guid}/menus")]
 public sealed class HostedEventMenuController : OrgCmsControllerBase
 {
+    private readonly Services.Access.HostedEventAccess _access;
+
     public HostedEventMenuController(
         IDbContextFactory<BenDataContext> dbFactory, IMapper mapper,
-        IOrganizationSecurityService security)
-        : base(dbFactory, mapper, security) { }
+        IOrganizationSecurityService security,
+        Services.Access.HostedEventAccess access)
+        : base(dbFactory, mapper, security) { _access = access; }
 
     /// <summary>Every sitting of this event, in the order they are served.</summary>
     [HttpGet]
@@ -79,8 +82,10 @@ public sealed class HostedEventMenuController : OrgCmsControllerBase
     {
         var userId = GetCurrentUserId();
         if (userId is null) return Unauthorized();
-        if (!await IsCmsAuthorizedAsync(userId.Value, orgId,
-                OrganizationSecurityTable.OrganizationSettings, OrganizationSecurityAction.Update, ct))
+        // Writing the menus is arranging the event, not spending its money. It used to ask for the
+        // group's settings key, which meant the person who plans the meals had to be somebody who
+        // could change the billing.
+        if (!await _access.CanEditEventAsync(userId.Value, orgId, ct))
             return Forbid();
 
         await using var db = await DbFactory.CreateDbContextAsync(ct);

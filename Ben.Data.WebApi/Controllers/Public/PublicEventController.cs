@@ -353,6 +353,16 @@ public sealed class PublicEventController : BenControllerBase
         // running. Retired is the same answer for a stronger reason.
         if (WhyTourIsNotTakingSignUps(ev) is { } tourClosed) return Conflict(tourClosed);
 
+        // THE UMBRELLA OF A HOSTED EVENT IS NOT A SIGN-UP SHEET (item 235 phase 4).
+        //
+        // A hosted event's places are rooms and seats, decided by the venue and recorded as
+        // bookings. This endpoint writes an attendee row directly, so on a hosted event it would
+        // have produced somebody Accepted with no booking behind them — on the door's list, in
+        // every count, with no room, no pass and nothing for the venue to have agreed to. The
+        // shipped phone calls exactly this endpoint, which is how it got there.
+        if (await WhyThisIsBookedElsewhereAsync(db, ev, ct) is { } elsewhere)
+            return Conflict(elsewhere);
+
         var attendees = await db.OrgCalendarEventAttendees
             .Where(a => a.OrgCalendarEventId == eventId)
             .ToListAsync(ct);
@@ -496,6 +506,16 @@ public sealed class PublicEventController : BenControllerBase
             .FirstOrDefaultAsync(a => a.OrgCalendarEventId == eventId && a.AppUserId == userId, ct);
         if (attendee is null) return NotFound();
 
+        // The same fence as accepting, and it matters more here. This row is a hosted booking's
+        // reflection, so declining it would leave a CONFIRMED booking — a room the venue has
+        // catered and staffed against — pointing at an attendee who says they are not coming. The
+        // booking is where that decision belongs, and the venue has to be told.
+        var umbrella = await db.OrgCalendarEvents.AsNoTracking()
+            .FirstOrDefaultAsync(e => e.Id == eventId, ct);
+        if (umbrella is not null
+            && await WhyThisIsBookedElsewhereAsync(db, umbrella, ct) is { } elsewhere)
+            return Conflict(elsewhere);
+
         attendee.RsvpStatus = RsvpStatus.Declined;
         attendee.DateRsvp   = DateTime.UtcNow;
         await db.SaveChangesAsync(ct);
@@ -607,6 +627,33 @@ public sealed class PublicEventController : BenControllerBase
          : !ev.Tour.IsBookable
             ? "This tour isn't taking sign-ups just now."
          : null;
+
+
+    /// <summary>
+    /// Why this calendar row's places are not this endpoint's to give out, or null when they are.
+    /// </summary>
+    /// <remarks>
+    /// <para>A hosted event has an ordinary calendar row behind it so that every existing list,
+    /// reminder and share card keeps working. That row is a REFLECTION of the bookings, written by
+    /// <c>BookingTransitions</c> and by nothing else. Letting the generic RSVP path write to it
+    /// would make the reflection disagree with the thing it reflects.</para>
+    ///
+    /// <para>The refusal names the page to go to, because the shipped phone reaches this endpoint
+    /// and a bare "no" would leave somebody tapping a button that does nothing.</para>
+    /// </remarks>
+    private static async Task<string?> WhyThisIsBookedElsewhereAsync(
+        BenDataContext db, OrgCalendarEvent ev, CancellationToken ct)
+    {
+        if (ev.HostedEventId is not { } hostedId) return null;
+
+        var name = await db.HostedEvents.AsNoTracking()
+            .Where(e => e.Id == hostedId)
+            .Select(e => e.Name)
+            .FirstOrDefaultAsync(ct) ?? "this event";
+
+        return $"Places at {name} are booked on the event's own page, not from the calendar. "
+             + "Open it there to ask for a room or pick a seat.";
+    }
 
     private static PublicEventFlags BuildFlags(
         OrgCalendarEvent ev, Guid userId, bool hasRsvpd, int acceptedCount,

@@ -37,6 +37,7 @@ namespace Ben.Data.WebApi.Controllers.Entities;
 public sealed class HostedEventBookingController : OrgCmsControllerBase
 {
     private readonly HostedEventCalendarSync _sync;
+    private readonly Services.Access.HostedEventAccess _access;
     private readonly EventGuestMailer _guestMail;
     private readonly Ben.Data.Common.Interfaces.IEmailService _email;
     private readonly Ben.Data.Common.SiteIdentity _site;
@@ -49,12 +50,16 @@ public sealed class HostedEventBookingController : OrgCmsControllerBase
         IDbContextFactory<BenDataContext> dbFactory, IMapper mapper,
         IOrganizationSecurityService security,
         HostedEventCalendarSync sync,
+        Services.Access.HostedEventAccess access,
         EventGuestMailer guestMail,
         Ben.Data.Common.Interfaces.IEmailService email,
         Microsoft.Extensions.Options.IOptions<Ben.Data.Common.SiteIdentity> site,
         ILogger<HostedEventBookingController> logger)
         : base(dbFactory, mapper, security)
-    { _sync = sync; _guestMail = guestMail; _email = email; _site = site.Value; _logger = logger; }
+    {
+        _sync = sync; _access = access; _guestMail = guestMail;
+        _email = email; _site = site.Value; _logger = logger;
+    }
 
     // ── reading ──────────────────────────────────────────────────────────────
 
@@ -73,7 +78,9 @@ public sealed class HostedEventBookingController : OrgCmsControllerBase
         if (userId is null) return Unauthorized();
 
         await using var db = await DbFactory.CreateDbContextAsync(ct);
-        if (!await IsMemberAsync(db, orgId, userId.Value, ct)) return Forbid();
+        // Membership is not enough. The board carries guests' names, addresses and dietary notes,
+        // and every member of a group has no business with any of the three.
+        if (!await CanReadBookingsAsync(userId.Value, orgId, ct)) return Forbid();
 
         var ev = await LoadEventAsync(db, orgId, eventId, ct);
         if (ev is null) return NotFound();
@@ -1060,10 +1067,27 @@ public sealed class HostedEventBookingController : OrgCmsControllerBase
 
     // ── plumbing ─────────────────────────────────────────────────────────────
 
+    /// <summary>
+    /// May this person decide who comes: confirm, turn down, release, edit, invite, issue passes.
+    /// </summary>
+    /// <remarks>
+    /// It used to ask whether they could change the group's SETTINGS, because that was the only key
+    /// wired up when the feature began — so the person who arranges the rooms had to be somebody
+    /// who could also change the billing. Deciding who comes is its own job and now has its own key.
+    /// </remarks>
     private Task<bool> CanDecideAsync(Guid userId, Guid orgId, CancellationToken ct)
-        => IsCmsAuthorizedAsync(userId, orgId,
-               OrganizationSecurityTable.OrganizationSettings,
-               OrganizationSecurityAction.Update, ct);
+        => _access.CanDecideBookingsAsync(userId, orgId, ct);
+
+    /// <summary>
+    /// May this person see guests' names, addresses and dietary notes.
+    /// </summary>
+    /// <remarks>
+    /// Separate from deciding, and it is the check that was missing. Any member could read the
+    /// board: a dietary note is a health disclosure somebody made to a venue so they would not be
+    /// poisoned, and an address is theirs.
+    /// </remarks>
+    private Task<bool> CanReadBookingsAsync(Guid userId, Guid orgId, CancellationToken ct)
+        => _access.CanReadBookingsAsync(userId, orgId, ct);
 
     private async Task<bool> IsMemberAsync(
         BenDataContext db, Guid orgId, Guid userId, CancellationToken ct)

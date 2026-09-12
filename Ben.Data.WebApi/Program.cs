@@ -317,6 +317,9 @@ builder.Services.AddScoped<Ben.Data.WebApi.Services.Billing.TourAddOnService>();
 // cost them".
 builder.Services.AddScoped<Ben.Data.WebApi.Services.Events.HostedEventCalendarSync>();
 builder.Services.AddScoped<Ben.Data.WebApi.Services.Events.HostedEventEntitlement>();
+// Item 235 phase 4: four jobs, four keys. Arranging an event is not deciding who comes, deciding
+// is not standing at the door, and none of the three is spending the group's money.
+builder.Services.AddScoped<Ben.Data.WebApi.Services.Access.HostedEventAccess>();
 // Item 235 phase 1B: warns a credit's holder thirty days before it lapses. It only speaks — an
 // unspent credit past its date is gone by the clock, so there is no state for a job to get wrong.
 builder.Services.AddScoped<Ben.Data.WebApi.Services.Scheduling.IScheduledJob,

@@ -418,7 +418,9 @@ public sealed class EventPassTests
 
         return new HostedEventBookingController(
             sqlite.Factory, new Mock<IMapper>().Object, security.Object,
-            new HostedEventCalendarSync(), mailer, email, site,
+            new HostedEventCalendarSync(),
+            new Ben.Data.WebApi.Services.Access.HostedEventAccess(security.Object),
+            mailer, email, site,
             NullLogger<HostedEventBookingController>.Instance)
         {
             ControllerContext = new ControllerContext
