@@ -440,6 +440,24 @@ public interface IBenOrganizationClient
         Guid orgId, Guid eventId, CancellationToken token = default);
 
     /// <summary>
+    /// What calling this event off would do to its credit, without doing anything.
+    /// </summary>
+    /// <remarks>
+    /// So the confirmation can say which is about to happen before the button is pressed, in the
+    /// same words the cancel itself will answer with.
+    /// </remarks>
+    Task<HostedEventCancellationEffect?> GetHostedEventCancellationEffectAsync(
+        Guid orgId, Guid eventId, CancellationToken token = default);
+
+    /// <summary>Says whether an event that set a minimum number is going ahead.</summary>
+    /// <remarks>
+    /// A no routes through cancelling, so the people with places are told and the credit follows
+    /// the same forty-eight hour rule as any other cancellation.
+    /// </remarks>
+    Task<(HostedEventRecord? Result, string? Error)> DecideHostedEventAsync(
+        Guid orgId, Guid eventId, bool going, CancellationToken token = default);
+
+    /// <summary>
     /// Changes how guests get a place: they pick one on the plan, or they ask and are placed.
     /// </summary>
     /// <remarks>

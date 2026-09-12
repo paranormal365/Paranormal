@@ -18,6 +18,20 @@ day-by-day account of building it would say nothing to anyone using it now.
 
 ## 2026-09-12
 
+- Events now move themselves along: on the site, then on now when the first night starts on the
+  venue's own clock, then over when the last one ends, then filed away a fortnight later. Nobody
+  has to remember to do any of it.
+- When an event is filed away, anybody still waiting on an answer is told it has passed rather than
+  left waiting for ever, and the organizer is told what was closed on their behalf.
+- Calling an event off more than 48 hours before it starts gives the event credit back, and the
+  event goes back to needing one — so it is never both paid for and refunded. Inside 48 hours the
+  credit stays spent, and putting the event back up then costs nothing. The card says which of the
+  two will happen before you press anything.
+- An event that has already happened can no longer be taken back to a draft. It ran, and it stays
+  on the record.
+- An event with a minimum number gets Yes-it's-on and No-call-it-off buttons, and a reminder a week
+  and a day before the date you said you would decide by. Calling it off for want of numbers works
+  exactly like any other cancellation.
 - An event now says what state it is in, in one word, everywhere it appears: draft, live, on now,
   over, archived or called off. It used to be worked out separately on each screen from three
   different flags, and they did not always agree.

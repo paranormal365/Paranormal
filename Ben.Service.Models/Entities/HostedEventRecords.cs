@@ -215,6 +215,20 @@ public sealed record UpsertHostedEventNightRequest(
     TimeSpan? EndsLocal = null,
     string? Notes = null);
 
+/// <summary>
+/// What calling an event off would do to the credit spent on it (item 235 phase 3).
+/// </summary>
+/// <param name="Sentence">
+/// The words the cancel itself will answer with, so the confirmation and the outcome can never
+/// read as two different things.
+/// </param>
+/// <remarks>
+/// A record and not a bare string: MVC serves a string through its plain-text formatter, and every
+/// client in this solution reads an answer as JSON. That mistake once took a whole admin screen
+/// down the moment its endpoint had something to say.
+/// </remarks>
+public sealed record HostedEventCancellationEffect(bool CreditComesBack, string Sentence);
+
 /// <summary>Changing how guests get a place on an event.</summary>
 public sealed record SetHostedEventBookingModeRequest(HostedEventBookingMode Mode);
 

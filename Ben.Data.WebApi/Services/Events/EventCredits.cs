@@ -118,6 +118,87 @@ public static class EventCredits
         credit.UpdatedByAppUserId = userId;
     }
 
+    /// <summary>
+    /// How long before an event starts that calling it off still returns the credit.
+    /// </summary>
+    /// <remarks>
+    /// Ben, 2026-09-12: <i>"Maybe up to 48 hours before event?"</i> Overridable per site; this is
+    /// what an unset setting means.
+    /// </remarks>
+    public static readonly TimeSpan CancellationWindow = TimeSpan.FromHours(48);
+
+    /// <summary>The credit that was spent on this event, if one was.</summary>
+    /// <remarks>
+    /// An event on a plan slot spent nothing, and one published before credits existed spent
+    /// nothing either, so a null here is ordinary rather than a fault.
+    /// </remarks>
+    public static Task<EventCredit?> SpentOnAsync(
+        BenDataContext db, Guid hostedEventId, CancellationToken ct)
+        => db.EventCredits.FirstOrDefaultAsync(
+               c => c.SpentOnHostedEventId == hostedEventId && c.SpentUtc != null, ct);
+
+    /// <summary>
+    /// Puts a spent credit back in the holder's pocket. The caller saves.
+    /// </summary>
+    /// <remarks>
+    /// <para><b>Un-spent, not refunded.</b> Ben, 2026-09-12: <i>"If it ends up getting cancelled,
+    /// we should refund the credit"</i> and <i>"We don't refund money, only credit."</i> So
+    /// <c>RefundedUtc</c> — which means the money went back and the credit is gone — is deliberately
+    /// not touched. Clearing where it was spent is what makes it spendable again.</para>
+    ///
+    /// <para><b>Its expiry is not extended.</b> A credit bought last October still lapses next
+    /// October whatever happened to the event it was spent on, because the year is what was sold.
+    /// A credit that comes back already lapsed is gone, and the cancel screen says so rather than
+    /// implying something is waiting that is not.</para>
+    /// </remarks>
+    public static void Unspend(EventCredit credit, Guid userId, DateTime now)
+    {
+        credit.SpentUtc = null;
+        credit.SpentOnHostedEventId = null;
+        credit.DateUpdated = now;
+        credit.UpdatedByAppUserId = userId;
+    }
+
+    /// <summary>
+    /// Whether calling this event off now returns its credit, and the sentence either way.
+    /// </summary>
+    /// <param name="startsUtc">When the event's first date begins, on the venue's own clock.</param>
+    /// <remarks>
+    /// <para>A window rather than "always" because a venue that cancels the morning of has already
+    /// had the benefit: the event was advertised, it took bookings, and people arranged their
+    /// weekend around it. A window rather than "never" because plans change and forty-eight hours
+    /// is enough notice that nobody has set off.</para>
+    ///
+    /// <para>Returns a sentence in both cases, because the cancel screen has to say which is about
+    /// to happen BEFORE somebody presses the button. Finding out afterwards that ninety-nine
+    /// dollars did not come back is the conversation this exists to avoid.</para>
+    /// </remarks>
+    public static (bool Returns, string Sentence) WhatCancellingDoesToTheCredit(
+        EventCredit? spent, DateTime startsUtc, DateTime now, TimeSpan window)
+    {
+        if (spent is null)
+            return (false, "No event credit was spent on this one, so there is nothing to come back.");
+
+        var deadline = startsUtc - window;
+        if (now > deadline)
+            return (false,
+                $"It is less than {Describe(window)} before this event starts, so the event credit "
+                + "spent on it does not come back.");
+
+        return (true,
+            spent.ExpiresUtc <= now
+                ? "The event credit spent on this comes back, but it has already lapsed, so there "
+                + "is nothing left to spend."
+                : $"The event credit spent on this comes back, and can be spent again until "
+                + $"{spent.ExpiresUtc:MM/dd/yyyy}.");
+    }
+
+    /// <summary>A window as somebody would say it: "48 hours", "2 days".</summary>
+    private static string Describe(TimeSpan window)
+        => window.TotalHours >= 48 && window.TotalHours % 24 == 0
+            ? $"{window.TotalDays:0} days"
+            : $"{window.TotalHours:0} hours";
+
     /// <summary>Credits about to lapse whose holder has not been warned.</summary>
     public static Task<List<EventCredit>> DueAWarningAsync(
         BenDataContext db, DateTime now, CancellationToken ct)

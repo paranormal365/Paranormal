@@ -911,8 +911,46 @@ Some events are only worth running if enough people come. Say the fewest, and th
 you will decide, and we will remind you a week before and again the day before. Leave both empty
 and the event runs whatever the numbers come to.
 
-Calling it off because the numbers did not come is the same as calling it off for any other
-reason: the people who had places are told, and the listing says so.
+Once the date is set, **Is it going ahead?** appears on the same card with two buttons. Saying yes
+records the decision and nothing else changes. Saying no calls the event off, which is the same as
+calling it off for any other reason: the people who had places are told, and the listing says so.
+
+### Calling it off, and your credit
+
+Ben's rule, and the site follows it exactly: **more than 48 hours before the event starts, the
+event credit you spent comes back.** Inside those 48 hours it does not. The event was advertised,
+it took bookings, and people arranged a weekend around it, so by then you have had what you paid
+for.
+
+The card says which of the two is about to happen *before* you press the button, in the same words
+the site will use afterwards.
+
+When the credit does come back, the event goes back to needing one — so publishing it again spends
+a credit, exactly as the first time. That is deliberate: you cannot end up holding both the credit
+and the event. When the credit does not come back, the event stays paid for and putting it up again
+costs nothing.
+
+A credit that comes back keeps its own expiry. One bought last October still lapses next October
+whatever happened to the event it was spent on, and if it has already lapsed the card says so
+rather than implying there is something waiting.
+
+**An event that has already happened cannot be taken back to a draft.** It ran; it stays on the
+record. Archive it if you want it off your list, or make a new event for the next one.
+
+### What happens without you
+
+An event moves itself along, on your venue's clock rather than ours:
+
+- **On the site** once you publish it.
+- **On now** when the first night starts.
+- **Over** when the last one ends. It stays readable and stops taking bookings, because a request
+  arriving after the night is somebody who has misread the date.
+- **Filed away** a fortnight later. It comes off your list and out of the counts; nothing is
+  destroyed.
+
+When it is filed away, anybody still waiting on an answer is told the event has passed rather than
+left waiting for ever, and you are told what was closed on your behalf. That is the one thing here
+that acts for you, and it only ever acts once the event is two weeks gone.
 
 ### The plan: rooms or seats
 

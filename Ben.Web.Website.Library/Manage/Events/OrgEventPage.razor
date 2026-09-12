@@ -677,6 +677,44 @@
                                     We'll remind you a week and a day before.
                                 </div>
                             </div>
+
+                            @if (ev.MinimumGuests is not null)
+                            {
+                                <div class="col-12" id="event-decision">
+                                    @if (ev.GoNoGoDecision is HostedEventGoNoGo.Undecided)
+                                    {
+                                        <div class="fw-semibold mb-1">Is it going ahead?</div>
+                                        <div class="d-flex gap-2 flex-wrap">
+                                            <button type="button" class="btn btn-outline-success"
+                                                    id="event-go" disabled="@_busy"
+                                                    @onclick="@(() => DecideAsync(going: true))">
+                                                Yes, it's on
+                                            </button>
+                                            <button type="button" class="btn btn-outline-danger"
+                                                    id="event-no-go" disabled="@_busy"
+                                                    @onclick="@(() => DecideAsync(going: false))">
+                                                No, call it off
+                                            </button>
+                                        </div>
+                                        <div class="form-text">
+                                            Calling it off here tells everybody who has a place, and
+                                            follows the same credit rule as any other cancellation.
+                                        </div>
+                                    }
+                                    else
+                                    {
+                                        <p class="mb-0 text-secondary">
+                                            @(ev.GoNoGoDecision is HostedEventGoNoGo.Go
+                                                ? "You said this one is going ahead."
+                                                : "You called this one off for want of numbers.")
+                                            @if (ev.GoNoGoDecidedUtc is { } decided)
+                                            {
+                                                <text> Decided @decided.ToLocalTime().ToString("MM/dd/yyyy").</text>
+                                            }
+                                        </p>
+                                    }
+                                </div>
+                            }
                         </div>
                         <div class="d-flex justify-content-end mt-3">
                             <button type="button" class="btn btn-primary" disabled="@_busy" @onclick="SaveAsync">
@@ -716,6 +754,15 @@
                         }
                         else
                         {
+                            @if (_cancellationEffect is { } effect)
+                            {
+                                @* Said before the button, not after it. Finding out afterwards
+                                   that ninety-nine dollars did not come back is the conversation
+                                   this line exists to avoid, and it is the server's own sentence —
+                                   the same one the cancel will answer with. *@
+                                <p class="fw-semibold @(effect.CreditComesBack ? "text-success" : "text-warning")"
+                                   id="event-cancel-effect">@effect.Sentence</p>
+                            }
                             <p class="text-secondary">
                                 <strong>Archiving</strong> stops it counting and takes it off your
                                 list; everything that happened stays. It happens by itself a
@@ -768,6 +815,7 @@
     private string _cancelReason = "";
     private readonly EventForm _form = new();
     private IReadOnlyList<HostedEventReadinessItem> _readiness = [];
+    private HostedEventCancellationEffect? _cancellationEffect;
     private readonly Dictionary<Guid, NightForm> _nights = [];
 
     /// <summary>The layout designer, shipped in phase 2 of item 235.</summary>
@@ -888,6 +936,30 @@
     {
         var result = await AdminClient.GetHostedEventReadinessAsync(OrgId, EventId);
         _readiness = result.Failed ? [] : result.Items;
+
+        // What cancelling would do to the credit, asked now so the card can say it before
+        // anybody presses anything.
+        _cancellationEffect = _event is { } ev && !OnThePublicSite(ev) && ev.FirstPublishedUtc is null
+            ? null
+            : await AdminClient.GetHostedEventCancellationEffectAsync(OrgId, EventId);
+    }
+
+    /// <summary>Says whether an event with a minimum number is going ahead.</summary>
+    private async Task DecideAsync(bool going)
+    {
+        _busy = true;
+        _error = null;
+        _note = null;
+
+        var (saved, error) = await AdminClient.DecideHostedEventAsync(OrgId, EventId, going);
+        _busy = false;
+
+        if (saved is null) { _error = error ?? "That couldn't be recorded just now."; return; }
+
+        _event = saved;
+        Fill(saved);
+        await LoadReadinessAsync();
+        _note = saved.PlanNote ?? (going ? "It's going ahead." : "Called off.");
     }
 
     /// <summary>Where a checklist item sends somebody: a card on this page, or a page of its own.</summary>

@@ -67,6 +67,16 @@ public static class SiteSettingKeys
     /// </remarks>
     public const string EventCreditPriceUsd = "events.credit-price-usd";
 
+    /// <summary>
+    /// How long before an event starts a cancellation still returns its credit, in hours.
+    /// </summary>
+    /// <remarks>
+    /// Ben, 2026-09-12: <i>"Maybe up to 48 hours before event?"</i> A setting rather than a constant
+    /// because it is a policy about somebody's ninety-nine dollars, and the right number is the
+    /// kind of thing that changes once real hosts have used it. Unset reads as 48.
+    /// </remarks>
+    public const string EventCancellationCreditWindowHours = "events.cancellation-credit-window-hours";
+
     /// <summary>Short notice shown site-wide — maintenance windows, outages. Empty = nothing shown.</summary>
     public const string SiteAnnouncement = "site.announcement";
 

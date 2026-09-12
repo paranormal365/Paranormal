@@ -130,7 +130,8 @@ public sealed class HostedEventControllerTests
 
         return new HostedEventController(
             f, mapper.Object, security.Object, sanitizer.Object,
-            new HostedEventCalendarSync(), new HostedEventEntitlement(limits))
+            new HostedEventCalendarSync(), new HostedEventEntitlement(limits),
+            new SiteSettingsService(f))
         {
             ControllerContext = new ControllerContext
             {
@@ -1044,5 +1045,189 @@ public sealed class HostedEventControllerTests
             (await controller.Publish(OrgId, record.Id, default)).Result);
 
         Assert.Equal(blocker.Sentence, Assert.IsType<string>(refusal.Value));
+    }
+
+    // ── the credit, and what "finalized" means (phase 3) ─────────────────────
+
+    /// <summary>
+    /// Calling an event off well before it starts hands the credit back AND unpays the event.
+    /// </summary>
+    /// <remarks>
+    /// The two are one fact. Handing back the credit while leaving the event marked as paid for
+    /// would let somebody cancel, keep the credit, and publish the same event again for nothing.
+    /// </remarks>
+    [Fact]
+    public async Task Calling_it_off_in_good_time_gives_the_credit_back_and_unpays_the_event()
+    {
+        var f = await SeedAsync();
+        await ExcludeHostingAsync(f);
+        var controller = Build(f);
+
+        // Far enough out that the 48-hour window is nowhere near.
+        var starts = DateTime.UtcNow.AddDays(60);
+        var record = Created(await controller.Create(OrgId, Weekend(
+            from: starts, to: starts.AddDays(1)), default));
+
+        Guid creditId;
+        await using (var db = await f.CreateDbContextAsync())
+        {
+            var credit = NewCredit(DateTime.UtcNow.AddDays(-1), DateTime.UtcNow.AddDays(364));
+            creditId = credit.Id;
+            db.EventCredits.Add(credit);
+            await db.SaveChangesAsync();
+        }
+
+        Assert.IsType<OkObjectResult>((await controller.Publish(OrgId, record.Id, default)).Result);
+
+        var off = Assert.IsType<HostedEventRecord>(
+            Assert.IsType<OkObjectResult>((await controller.Cancel(
+                OrgId, record.Id, new CancelHostedEventRequest("Nobody could come"), default)).Result).Value);
+
+        Assert.Contains("comes back", off.PlanNote ?? "");
+
+        await using var after = await f.CreateDbContextAsync();
+        var back = await after.EventCredits.FirstAsync(c => c.Id == creditId);
+        Assert.Null(back.SpentUtc);
+        Assert.Null(back.SpentOnHostedEventId);
+        // Not refunded: no money moved. Ben, 2026-09-12: "We don't refund money, only credit."
+        Assert.Null(back.RefundedUtc);
+
+        var unpaid = await after.HostedEvents.FirstAsync(e => e.Id == record.Id);
+        Assert.Null(unpaid.FirstPublishedUtc);
+    }
+
+    [Fact]
+    public async Task Calling_it_off_at_the_last_minute_does_not_give_the_credit_back()
+    {
+        // The event was advertised, it took bookings, and people arranged a weekend around it.
+        // Inside the window the host has had the benefit, and the event stays paid for — so
+        // putting it back up costs nothing, which is the other half of the same fairness.
+        var f = await SeedAsync();
+        await ExcludeHostingAsync(f);
+        var controller = Build(f);
+
+        var starts = DateTime.UtcNow.AddHours(6);
+        var record = Created(await controller.Create(OrgId, Weekend(
+            from: starts, to: starts.AddDays(1)), default));
+
+        Guid creditId;
+        await using (var db = await f.CreateDbContextAsync())
+        {
+            var credit = NewCredit(DateTime.UtcNow.AddDays(-1), DateTime.UtcNow.AddDays(364));
+            creditId = credit.Id;
+            db.EventCredits.Add(credit);
+            await db.SaveChangesAsync();
+        }
+
+        Assert.IsType<OkObjectResult>((await controller.Publish(OrgId, record.Id, default)).Result);
+
+        var off = Assert.IsType<HostedEventRecord>(
+            Assert.IsType<OkObjectResult>((await controller.Cancel(
+                OrgId, record.Id, new CancelHostedEventRequest("Called off"), default)).Result).Value);
+
+        Assert.Contains("does not come back", off.PlanNote ?? "");
+
+        await using var after = await f.CreateDbContextAsync();
+        Assert.NotNull((await after.EventCredits.FirstAsync(c => c.Id == creditId)).SpentUtc);
+        Assert.NotNull((await after.HostedEvents.FirstAsync(e => e.Id == record.Id)).FirstPublishedUtc);
+    }
+
+    [Fact]
+    public async Task The_cancel_screen_can_ask_what_would_happen_before_anything_happens()
+    {
+        // Finding out afterwards that ninety-nine dollars did not come back is the conversation
+        // this endpoint exists to avoid, and it answers in the same words the cancel will use.
+        var f = await SeedAsync();
+        var controller = Build(f);
+        var starts = DateTime.UtcNow.AddDays(60);
+        var record = Created(await controller.Create(OrgId, Weekend(
+            from: starts, to: starts.AddDays(1)), default));
+
+        var effect = Assert.IsType<HostedEventCancellationEffect>(
+            Assert.IsType<OkObjectResult>(
+                (await controller.CancellationEffect(OrgId, record.Id, default)).Result).Value);
+
+        Assert.False(effect.CreditComesBack);
+        Assert.Contains("nothing to come back", effect.Sentence);
+    }
+
+    [Fact]
+    public async Task An_event_that_has_happened_cannot_be_walked_back_into_a_draft()
+    {
+        // Ben, 2026-09-12: "Unless credit refunded, we can assume the event completed and is
+        // finalized." Without this the endpoint would take an ended event to Draft, and since its
+        // credit never came back it would then publish again for nothing: one credit, two events.
+        var f = await SeedAsync();
+        var controller = Build(f);
+        var record = Created(await controller.Create(OrgId, Weekend(), default));
+
+        Assert.IsType<OkObjectResult>((await controller.Publish(OrgId, record.Id, default)).Result);
+
+        await using (var db = await f.CreateDbContextAsync())
+        {
+            var hosted = await db.HostedEvents.FirstAsync(e => e.Id == record.Id);
+            hosted.LifecycleState = HostedEventLifecycleState.Ended;
+            hosted.EndedAtUtc = DateTime.UtcNow.AddDays(-1);
+            await db.SaveChangesAsync();
+        }
+
+        var refusal = Assert.IsType<BadRequestObjectResult>(
+            (await controller.Unpublish(OrgId, record.Id, default)).Result);
+
+        Assert.Contains("already happened", Assert.IsType<string>(refusal.Value));
+    }
+
+    // ── minimum numbers ──────────────────────────────────────────────────────
+
+    [Fact]
+    public async Task An_event_with_no_minimum_has_nothing_to_decide()
+    {
+        var f = await SeedAsync();
+        var controller = Build(f);
+        var record = Created(await controller.Create(OrgId, Weekend(), default));
+
+        var refusal = Assert.IsType<BadRequestObjectResult>(
+            (await controller.Go(OrgId, record.Id, default)).Result);
+
+        Assert.Contains("nothing to decide", Assert.IsType<string>(refusal.Value));
+    }
+
+    [Fact]
+    public async Task Saying_no_calls_it_off_under_exactly_the_same_rules()
+    {
+        // Routed through cancelling rather than being a state of its own: the people with places
+        // have to be told, the listing has to say so, and the credit has to follow the same rule.
+        var f = await SeedAsync();
+        var controller = Build(f);
+        var starts = DateTime.UtcNow.AddDays(60);
+        var record = Created(await controller.Create(OrgId, Weekend(
+            from: starts, to: starts.AddDays(1)) with { MinimumGuests = 20 }, default));
+
+        var off = Assert.IsType<HostedEventRecord>(
+            Assert.IsType<OkObjectResult>((await controller.NoGo(OrgId, record.Id, default)).Result).Value);
+
+        Assert.Equal(HostedEventLifecycleState.Cancelled, off.LifecycleState);
+        Assert.Equal(HostedEventGoNoGo.NoGo, off.GoNoGoDecision);
+        Assert.Contains("Everybody with a place has been told", off.PlanNote ?? "");
+    }
+
+    [Fact]
+    public async Task Bringing_a_called_off_event_back_reopens_the_decision_that_called_it_off()
+    {
+        // Otherwise a live event would sit there permanently marked "no go", and its reminders
+        // would never run again.
+        var f = await SeedAsync();
+        var controller = Build(f);
+        var starts = DateTime.UtcNow.AddDays(60);
+        var record = Created(await controller.Create(OrgId, Weekend(
+            from: starts, to: starts.AddDays(1)) with { MinimumGuests = 20 }, default));
+
+        Assert.IsType<OkObjectResult>((await controller.NoGo(OrgId, record.Id, default)).Result);
+
+        var back = Assert.IsType<HostedEventRecord>(
+            Assert.IsType<OkObjectResult>((await controller.Uncancel(OrgId, record.Id, default)).Result).Value);
+
+        Assert.Equal(HostedEventLifecycleState.Draft, back.LifecycleState);
+        Assert.Equal(HostedEventGoNoGo.Undecided, back.GoNoGoDecision);
     }
 }

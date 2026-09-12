@@ -40,14 +40,17 @@ public sealed class HostedEventController : OrgCmsControllerBase
     /// <summary>Longer than any real event and short enough to catch a typed year.</summary>
     public const int MaximumDates = 366;
 
+    private readonly SiteSettingsService _settings;
+
     public HostedEventController(
         IDbContextFactory<BenDataContext> dbFactory, IMapper mapper,
         IOrganizationSecurityService security,
         ICmsMarkupSanitizer sanitizer,
         HostedEventCalendarSync sync,
-        HostedEventEntitlement entitlement)
+        HostedEventEntitlement entitlement,
+        SiteSettingsService settings)
         : base(dbFactory, mapper, security)
-    { _sanitizer = sanitizer; _sync = sync; _entitlement = entitlement; }
+    { _sanitizer = sanitizer; _sync = sync; _entitlement = entitlement; _settings = settings; }
 
     // ── reading ──────────────────────────────────────────────────────────────
 
@@ -371,8 +374,46 @@ public sealed class HostedEventController : OrgCmsControllerBase
     /// not spent a second time: <c>FirstPublishedUtc</c> remembers that it was paid for.
     /// </remarks>
     [HttpPost("{eventId:guid}/unpublish")]
-    public Task<ActionResult<HostedEventRecord>> Unpublish(Guid orgId, Guid eventId, CancellationToken ct)
-        => SetAsync(orgId, eventId, e => e.LifecycleState = HostedEventLifecycleState.Draft, ct);
+    public async Task<ActionResult<HostedEventRecord>> Unpublish(
+        Guid orgId, Guid eventId, CancellationToken ct)
+    {
+        var userId = GetCurrentUserId();
+        if (userId is null) return Unauthorized();
+        if (!await IsCmsAuthorizedAsync(userId.Value, orgId,
+                OrganizationSecurityTable.OrganizationSettings, OrganizationSecurityAction.Update, ct))
+            return Forbid();
+
+        await using var db = await DbFactory.CreateDbContextAsync(ct);
+        var hosted = await db.HostedEvents
+            .Include(e => e.Nights)
+            .FirstOrDefaultAsync(e => e.Id == eventId && e.OrganizationId == orgId, ct);
+        if (hosted is null) return NotFound();
+
+        // AN EVENT THAT HAPPENED IS FINISHED. Ben, 2026-09-12: "Unless credit refunded, we can
+        // assume the event completed and is finalized." Nothing that has started or ended may be
+        // walked back into a draft — it took bookings, people came, and the credit it was paid for
+        // stands. Without this the endpoint would take an ended event back to Draft, and because
+        // its credit was never returned it would then publish again for nothing: one credit, two
+        // events.
+        if (hosted.LifecycleState is HostedEventLifecycleState.Live
+                                  or HostedEventLifecycleState.Ended
+                                  or HostedEventLifecycleState.Archived)
+            return BadRequest("This event has already happened, so it cannot be taken back to a "
+                            + "draft. Archive it if you want it off your list, or make a new event "
+                            + "for the next one.");
+
+        if (hosted.LifecycleState is not HostedEventLifecycleState.Published)
+            return Ok((await LoadAsync(db, orgId, eventId, ct))[0]);
+
+        hosted.LifecycleState = HostedEventLifecycleState.Draft;
+        hosted.DateUpdated = DateTime.UtcNow;
+        hosted.UpdatedByAppUserId = userId.Value;
+
+        await _sync.SyncAsync(db, hosted, userId.Value, ct);
+        await db.SaveChangesAsync(ct);
+
+        return Ok((await LoadAsync(db, orgId, eventId, ct))[0]);
+    }
 
     /// <summary>Stops it counting and takes it off the list. What happened is untouched.</summary>
     [HttpPost("{eventId:guid}/archive")]
@@ -414,17 +455,175 @@ public sealed class HostedEventController : OrgCmsControllerBase
     /// everybody who was coming with a dead link and no explanation.
     /// </remarks>
     [HttpPost("{eventId:guid}/cancel")]
-    public Task<ActionResult<HostedEventRecord>> Cancel(
+    public async Task<ActionResult<HostedEventRecord>> Cancel(
         Guid orgId, Guid eventId, [FromBody] CancelHostedEventRequest request, CancellationToken ct)
-        => SetAsync(orgId, eventId, e =>
+    {
+        var userId = GetCurrentUserId();
+        if (userId is null) return Unauthorized();
+        if (!await IsCmsAuthorizedAsync(userId.Value, orgId,
+                OrganizationSecurityTable.OrganizationSettings, OrganizationSecurityAction.Update, ct))
+            return Forbid();
+
+        await using var db = await DbFactory.CreateDbContextAsync(ct);
+        var hosted = await db.HostedEvents
+            .Include(e => e.Nights)
+            .FirstOrDefaultAsync(e => e.Id == eventId && e.OrganizationId == orgId, ct);
+        if (hosted is null) return NotFound();
+
+        if (HostedEventStates.CalledOff.Contains(hosted.LifecycleState))
+            return Ok((await LoadAsync(db, orgId, eventId, ct))[0]);
+
+        var now = DateTime.UtcNow;
+
+        // Both, and the state is the one anything reads. The stamp says when; it is not the answer
+        // to "is this off", which is what it used to be and what let the door go on taking bookings
+        // for a cancelled event the day the state column arrived.
+        hosted.LifecycleState = HostedEventLifecycleState.Cancelled;
+        hosted.CancelledAtUtc = now;
+        hosted.CancelledReason = request.Reason?.Trim() is { Length: > 0 } r ? r : null;
+        hosted.DateUpdated = now;
+        hosted.UpdatedByAppUserId = userId.Value;
+
+        var note = (await CreditBackAsync(db, hosted, userId.Value, now, ct)).Sentence;
+
+        await _sync.SyncAsync(db, hosted, userId.Value, ct);
+        await db.SaveChangesAsync(ct);
+
+        return Ok((await LoadAsync(db, orgId, eventId, ct))[0] with { PlanNote = note });
+    }
+
+    /// <summary>
+    /// What calling this event off would do to its credit, without doing anything.
+    /// </summary>
+    /// <remarks>
+    /// So the confirmation can say which is about to happen BEFORE the button is pressed. Finding
+    /// out afterwards that ninety-nine dollars did not come back is the conversation this exists to
+    /// avoid, and the sentence here is the one the cancel itself will answer with.
+    /// </remarks>
+    [HttpGet("{eventId:guid}/cancellation-effect")]
+    public async Task<ActionResult<HostedEventCancellationEffect>> CancellationEffect(
+        Guid orgId, Guid eventId, CancellationToken ct)
+    {
+        var userId = GetCurrentUserId();
+        if (userId is null) return Unauthorized();
+
+        await using var db = await DbFactory.CreateDbContextAsync(ct);
+        if (!await IsMemberAsync(db, orgId, userId.Value, ct)) return Forbid();
+
+        var hosted = await db.HostedEvents
+            .Include(e => e.Nights)
+            .FirstOrDefaultAsync(e => e.Id == eventId && e.OrganizationId == orgId, ct);
+        if (hosted is null) return NotFound();
+
+        var (returns, sentence) = await WeighTheCreditAsync(db, hosted, DateTime.UtcNow, ct);
+        return Ok(new HostedEventCancellationEffect(returns, sentence));
+    }
+
+    /// <summary>Whether the credit comes back, and the sentence to say about it.</summary>
+    private async Task<(bool Returns, string Sentence)> WeighTheCreditAsync(
+        BenDataContext db, HostedEvent hosted, DateTime now, CancellationToken ct)
+    {
+        var spent = await EventCredits.SpentOnAsync(db, hosted.Id, ct);
+        var (startsUtc, _) = HostedEventCalendarSync.Window(hosted, [.. hosted.Nights]);
+
+        var hours = (int)await _settings.GetDecimalAsync(
+            SiteSettingKeys.EventCancellationCreditWindowHours,
+            (decimal)EventCredits.CancellationWindow.TotalHours, ct);
+
+        return EventCredits.WhatCancellingDoesToTheCredit(
+            spent, startsUtc, now, TimeSpan.FromHours(hours));
+    }
+
+    /// <summary>Puts the credit back when the rules say it comes back. The caller saves.</summary>
+    private async Task<(bool Returned, string Sentence)> CreditBackAsync(
+        BenDataContext db, HostedEvent hosted, Guid userId, DateTime now, CancellationToken ct)
+    {
+        var (returns, sentence) = await WeighTheCreditAsync(db, hosted, now, ct);
+        if (!returns) return (false, sentence);
+
+        var spent = await EventCredits.SpentOnAsync(db, hosted.Id, ct);
+        if (spent is null) return (false, sentence);
+
+        EventCredits.Unspend(spent, userId, now);
+
+        // AND the event becomes unpaid again. Without this, cancelling inside the window would
+        // hand back the credit while FirstPublishedUtc went on saying the event had been paid
+        // for — so republishing it would cost nothing and the host would have both the credit and
+        // the event. The two facts are one fact: either this event is paid for, or the credit is
+        // back in their pocket.
+        //
+        // Outside the window the credit does NOT come back and this is left alone, which is also
+        // right: they paid, they got nothing, and putting it back up is free.
+        hosted.FirstPublishedUtc = null;
+
+        return (true, sentence);
+    }
+
+    /// <summary>
+    /// Says the event is going ahead, whatever the numbers came to.
+    /// </summary>
+    [HttpPost("{eventId:guid}/go")]
+    public Task<ActionResult<HostedEventRecord>> Go(Guid orgId, Guid eventId, CancellationToken ct)
+        => DecideAsync(orgId, eventId, HostedEventGoNoGo.Go, ct);
+
+    /// <summary>
+    /// Says it is not, which calls it off under exactly the same rules as any other cancellation.
+    /// </summary>
+    /// <remarks>
+    /// Routed through cancelling rather than being a state of its own: the people with places have
+    /// to be told, the listing has to say so, and the credit has to follow the forty-eight hour
+    /// rule. A separate "did not reach its numbers" state would have had to reimplement all three
+    /// and would eventually have got one of them wrong.
+    /// </remarks>
+    [HttpPost("{eventId:guid}/no-go")]
+    public Task<ActionResult<HostedEventRecord>> NoGo(Guid orgId, Guid eventId, CancellationToken ct)
+        => DecideAsync(orgId, eventId, HostedEventGoNoGo.NoGo, ct);
+
+    private async Task<ActionResult<HostedEventRecord>> DecideAsync(
+        Guid orgId, Guid eventId, HostedEventGoNoGo decision, CancellationToken ct)
+    {
+        var userId = GetCurrentUserId();
+        if (userId is null) return Unauthorized();
+        if (!await IsCmsAuthorizedAsync(userId.Value, orgId,
+                OrganizationSecurityTable.OrganizationSettings, OrganizationSecurityAction.Update, ct))
+            return Forbid();
+
+        await using var db = await DbFactory.CreateDbContextAsync(ct);
+        var hosted = await db.HostedEvents
+            .Include(e => e.Nights)
+            .FirstOrDefaultAsync(e => e.Id == eventId && e.OrganizationId == orgId, ct);
+        if (hosted is null) return NotFound();
+
+        if (hosted.MinimumGuests is null)
+            return BadRequest("This event has no minimum number, so there is nothing to decide. "
+                            + "It runs whatever the numbers come to.");
+
+        var now = DateTime.UtcNow;
+        hosted.GoNoGoDecision = decision;
+        hosted.GoNoGoDecidedUtc = now;
+        hosted.GoNoGoDecidedByAppUserId = userId.Value;
+        hosted.DateUpdated = now;
+        hosted.UpdatedByAppUserId = userId.Value;
+
+        string note;
+        if (decision == HostedEventGoNoGo.NoGo)
         {
-            // Both, and the state is the one anything reads. The stamp says when; it is not the
-            // answer to "is this off", which is what it used to be and what let the door go on
-            // taking bookings for a cancelled event the day the state column arrived.
-            e.LifecycleState = HostedEventLifecycleState.Cancelled;
-            e.CancelledAtUtc = DateTime.UtcNow;
-            e.CancelledReason = request.Reason?.Trim() is { Length: > 0 } r ? r : null;
-        }, ct);
+            hosted.LifecycleState = HostedEventLifecycleState.Cancelled;
+            hosted.CancelledAtUtc = now;
+            hosted.CancelledReason ??= "Not enough people to run it.";
+            note = "Called off. Everybody with a place has been told. "
+                 + (await CreditBackAsync(db, hosted, userId.Value, now, ct)).Sentence;
+        }
+        else
+        {
+            note = "It's going ahead.";
+        }
+
+        await _sync.SyncAsync(db, hosted, userId.Value, ct);
+        await db.SaveChangesAsync(ct);
+
+        return Ok((await LoadAsync(db, orgId, eventId, ct))[0] with { PlanNote = note });
+    }
 
     // ── the layout: what this event allocates (phase 2.4) ────────────────────
 
@@ -829,14 +1028,55 @@ public sealed class HostedEventController : OrgCmsControllerBase
     /// by a test, because nothing yet un-cancels anything.</para>
     /// </remarks>
     [HttpPost("{eventId:guid}/uncancel")]
-    public Task<ActionResult<HostedEventRecord>> Uncancel(Guid orgId, Guid eventId, CancellationToken ct)
-        => SetAsync(orgId, eventId, e =>
+    public async Task<ActionResult<HostedEventRecord>> Uncancel(
+        Guid orgId, Guid eventId, CancellationToken ct)
+    {
+        var userId = GetCurrentUserId();
+        if (userId is null) return Unauthorized();
+        if (!await IsCmsAuthorizedAsync(userId.Value, orgId,
+                OrganizationSecurityTable.OrganizationSettings, OrganizationSecurityAction.Update, ct))
+            return Forbid();
+
+        await using var db = await DbFactory.CreateDbContextAsync(ct);
+        var hosted = await db.HostedEvents
+            .Include(e => e.Nights)
+            .FirstOrDefaultAsync(e => e.Id == eventId && e.OrganizationId == orgId, ct);
+        if (hosted is null) return NotFound();
+
+        if (hosted.LifecycleState is HostedEventLifecycleState.VenueWithdrawn)
+            return BadRequest("The venue withdrew from this event, so it is not yours to put back "
+                            + "on. Make a new one wherever it is happening now.");
+
+        if (hosted.LifecycleState is not HostedEventLifecycleState.Cancelled)
+            return Ok((await LoadAsync(db, orgId, eventId, ct))[0]);
+
+        var now = DateTime.UtcNow;
+
+        hosted.LifecycleState = HostedEventLifecycleState.Draft;
+        hosted.CancelledAtUtc = null;
+        hosted.CancelledReason = null;
+        // Bringing it back reopens the decision it was called off by, so the reminders can run
+        // again. Leaving it decided would leave a live event permanently marked "no go".
+        if (hosted.GoNoGoDecision == HostedEventGoNoGo.NoGo)
         {
-            if (e.LifecycleState is not HostedEventLifecycleState.Cancelled) return;
-            e.LifecycleState = HostedEventLifecycleState.Draft;
-            e.CancelledAtUtc = null;
-            e.CancelledReason = null;
-        }, ct);
+            hosted.GoNoGoDecision = HostedEventGoNoGo.Undecided;
+            hosted.GoNoGoDecidedUtc = null;
+            hosted.GoNoGoDecidedByAppUserId = null;
+            hosted.GoNoGoWeekReminderSent = false;
+            hosted.GoNoGoDayReminderSent = false;
+        }
+        hosted.DateUpdated = now;
+        hosted.UpdatedByAppUserId = userId.Value;
+
+        await _sync.SyncAsync(db, hosted, userId.Value, ct);
+        await db.SaveChangesAsync(ct);
+
+        return Ok((await LoadAsync(db, orgId, eventId, ct))[0] with
+        {
+            PlanNote = "It's a draft again. Publishing it costs nothing — "
+                     + "it was paid for the first time.",
+        });
+    }
 
     // ── the work behind the endpoints ────────────────────────────────────────
 
