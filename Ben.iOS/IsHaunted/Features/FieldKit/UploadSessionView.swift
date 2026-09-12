@@ -36,6 +36,11 @@ struct UploadSessionView: View {
     @State private var durations: [String: TimeInterval] = [:]
     @State private var readingTimes: [Date] = []
     @State private var markerTimes: [Date] = []
+    /// The picture's shape for each video, read off the files at load, so the size a smaller
+    /// quality would produce is arithmetic rather than a guess.
+    @State private var videoShapes: [String: SessionVideoConverter.SourceVideo] = [:]
+    /// What quality the video goes up at. Untouched unless somebody chooses otherwise.
+    @State private var videoQuality = VideoQuality()
 
     private enum FileState: Equatable {
         case waiting, sending, sent, failed(String)
@@ -56,7 +61,9 @@ struct UploadSessionView: View {
                     }
                 } else {
                     destinationSection
+                    limitsSection
                     trimSection
+                    qualitySection
                     filesSection
                     sendSection
                     archiveSection
@@ -101,6 +108,89 @@ struct UploadSessionView: View {
             Text(chosenInvestigationId == nil
                  ? "Kept against your account only. You can send it to an investigation later."
                  : "The group working this investigation will be able to see it.")
+        }
+    }
+
+    /// What one upload carries, said before anybody starts choosing (Ben, 2026-09-12).
+    ///
+    /// **The phone is never limited.** Record all night, at whatever the camera gives. This
+    /// section exists because the upload is a different thing from the recording, and somebody
+    /// who does not know that reads a refusal as the app losing their evidence.
+    ///
+    /// Placed ABOVE the trimmer rather than beside the Send button, because it is the thing that
+    /// tells you what to do with the trimmer. A rule you meet only when a button greys out is a
+    /// rule you meet too late.
+    @ViewBuilder
+    private var limitsSection: some View {
+        Section {
+            Label("\(UploadAllowance.spokenVideo) of video, or \(UploadAllowance.spokenSize) in total, "
+                + "in each upload", systemImage: "arrow.up.circle")
+                .font(.callout)
+            Label("Send as many times as you need — narrow the window, send, move it along, send again",
+                  systemImage: "arrow.triangle.2.circlepath")
+                .font(.callout)
+            Label("Too heavy? Send the video at a smaller size instead of sending less of it",
+                  systemImage: "arrow.down.right.and.arrow.up.left")
+                .font(.callout)
+        } header: {
+            Text("How much goes at once")
+        } footer: {
+            Text("Your phone keeps recording for as long as you want and keeps everything it "
+               + "recorded. Only the upload is measured out, and only because video is far heavier "
+               + "than anything else a session holds — readings, marks, photos and sound are not "
+               + "rationed by time. Nothing you have already sent is changed by sending more, and "
+               + "sessions go up independently of one another.")
+        }
+        .accessibilityElement(children: .contain)
+        .accessibilityIdentifier("upload-limits")
+    }
+
+    /// Sending the same footage smaller, when weight is what is in the way (Ben, 2026-09-12).
+    ///
+    /// Offered, never applied on somebody's behalf: the first row is the untouched recording, and
+    /// it stays chosen unless a person picks otherwise. Degrading evidence is a decision with
+    /// consequences for whoever reviews it later, so it is theirs.
+    ///
+    /// Hidden entirely when weight is not the problem. A picker that appears on every upload
+    /// would teach people to reach for it, and most nights have nothing to fix.
+    @ViewBuilder
+    private var qualitySection: some View {
+        if let plan = currentPlan, plan.videoSecondsSent > 0,
+           plan.exceedsSizeAllowance || videoQuality.changesAnything {
+            Section {
+                ForEach(VideoQuality.offered) { quality in
+                    let size = plan.approximateBytesSent(atVideoQuality: quality)
+                    let fits = plan.fits(atVideoQuality: quality)
+                    Button {
+                        videoQuality = quality
+                    } label: {
+                        HStack {
+                            VStack(alignment: .leading, spacing: 1) {
+                                Text(quality.title)
+                                    .foregroundStyle(Theme.bone)
+                                Text("about \(ByteCountFormatter.string(fromByteCount: size, countStyle: .file))"
+                                     + (fits ? "" : " — still too heavy"))
+                                    .font(.caption2)
+                                    .foregroundStyle(fits ? Theme.fog : Theme.warning)
+                            }
+                            Spacer()
+                            if quality == videoQuality {
+                                Image(systemName: "checkmark").foregroundStyle(Theme.ecto)
+                            }
+                        }
+                    }
+                    .disabled(busy)
+                    .accessibilityIdentifier("video-quality-\(quality.id)")
+                }
+            } header: {
+                Text("Send the video smaller")
+            } footer: {
+                Text("Your phone keeps the recording exactly as it was filmed — this only changes "
+                   + "the copy that is sent. Sizes are estimates; a dark, still room usually "
+                   + "compresses better than this suggests.")
+            }
+            .accessibilityElement(children: .contain)
+            .accessibilityIdentifier("video-quality")
         }
     }
 
@@ -179,7 +269,10 @@ struct UploadSessionView: View {
                 .filter { chosen.contains($0.id) }
                 .map { TrimmableMedia(relativePath: $0.relativePath, kind: $0.kind,
                                       startedAt: $0.at,
-                                      duration: durations[$0.relativePath]) })
+                                      duration: durations[$0.relativePath],
+                                      byteCount: $0.byteCount,
+                                      videoHeight: videoShapes[$0.relativePath]?.height,
+                                      videoFrameRate: videoShapes[$0.relativePath]?.frameRate) })
     }
 
     private static func describe(_ decision: SessionTrimPlan.MediaDecision) -> String {
@@ -255,6 +348,10 @@ struct UploadSessionView: View {
         }
 
         Section {
+            if let plan = currentPlan, plan.approximateBytesSent > 0 {
+                allowanceRow(plan)
+            }
+
             Button {
                 Task { await send() }
             } label: {
@@ -265,13 +362,96 @@ struct UploadSessionView: View {
                 }
             }
             .buttonStyle(.borderedProminent)
-            .disabled(busy)
+            .disabled(busy || overAllowance)
             .accessibilityIdentifier("send-session")
         } footer: {
             if let uploadedAt = summary?.uploadedAt {
                 Text("Last sent \(uploadedAt.formatted(date: .abbreviated, time: .shortened)).")
             }
         }
+    }
+
+    /// Whether this window carries more video than one upload may.
+    ///
+    /// The phone is not limited — it records for as long as the night needs. This is the upload,
+    /// and only video is rationed, because only video is heavy enough to matter.
+    /// Whether anything still stops this window going as one upload.
+    ///
+    /// Two different problems with two different answers. Too much video is a length, and no
+    /// amount of re-encoding shortens it — that one needs clips. Too many bytes is a weight, and
+    /// a smaller quality is a real way through, so the gate reads the CHOSEN quality rather than
+    /// the recorded one.
+    private var overAllowance: Bool {
+        guard let plan = currentPlan else { return false }
+        return plan.exceedsVideoAllowance || !plan.fits(atVideoQuality: videoQuality)
+    }
+
+    /// What this window weighs, and what to do when it is too much.
+    ///
+    /// Said as a number BEFORE the button rather than as a refusal after it: somebody who has
+    /// waited twenty minutes for an upload to fail has learned the rule the expensive way.
+    @ViewBuilder
+    private func allowanceRow(_ plan: SessionTrimPlan) -> some View {
+        let size = ByteCountFormatter.string(
+            fromByteCount: plan.approximateBytesSent(atVideoQuality: videoQuality),
+            countStyle: .file)
+        VStack(alignment: .leading, spacing: 4) {
+            Label {
+                Text(plan.videoSecondsSent > 0
+                     ? "About \(size) — including \(Self.spoken(plan.videoSecondsSent)) of video"
+                     : "About \(size)")
+            } icon: {
+                Image(systemName: overAllowance
+                      ? "exclamationmark.triangle"
+                      : (plan.videoSecondsSent > 0 ? "video" : "waveform"))
+            }
+            .font(.caption)
+            .foregroundStyle(overAllowance ? Theme.warning : Theme.fog)
+
+            Text(explanation(for: plan))
+                .font(.caption2)
+                .foregroundStyle(Theme.fog)
+        }
+        .accessibilityElement(children: .contain)
+        .accessibilityIdentifier("upload-allowance")
+    }
+
+    /// The two ceilings, and only ever the one that is actually in the way.
+    ///
+    /// Neither is a limit on the phone. Record all night at whatever the camera gives; these are
+    /// about what one upload carries, and the answer to both is the same — narrow the window,
+    /// send, move it along, send again.
+    private func explanation(for plan: SessionTrimPlan) -> String {
+        if plan.exceedsVideoAllowance {
+            // A length, and no amount of re-encoding shortens it. Saying "send it smaller" here
+            // would send somebody through a slow export to the same refusal.
+            return "One upload carries \(UploadAllowance.spokenVideo) of video, and this window has "
+                 + "\(Self.spoken(plan.videoSecondsOverAllowance)) more than that. Drag the handles in to "
+                 + "make a clip of it, send that, then move the window along and send the next. "
+                 + "The whole recording stays on the phone until you have sent all of it."
+        }
+        if !plan.fits(atVideoQuality: videoQuality) {
+            // Weight, not length — and weight has a second way out that length does not.
+            let smaller = plan.smallestQualityThatFits()
+            return "One upload carries \(UploadAllowance.spokenSize). "
+                 + (smaller.map { "Send the video at \($0.title.lowercased()) below, or narrow the window." }
+                    ?? "Narrow the window, or untick a few files below.")
+        }
+        if videoQuality.changesAnything {
+            return "Going up at \(videoQuality.title.lowercased()), which fits. The recording on your "
+                 + "phone is untouched."
+        }
+        return "Readings, marks and where you were are never rationed. One upload carries "
+             + "\(UploadAllowance.spokenVideo) of video and \(UploadAllowance.spokenSize) in total, "
+             + "and this fits."
+    }
+
+    /// Minutes and seconds, the way somebody says them out loud.
+    private static func spoken(_ seconds: TimeInterval) -> String {
+        let whole = Int(seconds.rounded())
+        let minutes = whole / 60, remainder = whole % 60
+        if minutes == 0 { return "\(remainder)s" }
+        return remainder == 0 ? "\(minutes)m" : "\(minutes)m \(remainder)s"
     }
 
     /// Offered only once the session is actually on the server, because publishing is a thing
@@ -314,11 +494,28 @@ struct UploadSessionView: View {
         // session's readings are tens of thousands of lines and re-reading them on every drag
         // would make the handle stutter.
         await loadTrimData()
+        await loadVideoShapes()
 
         guard dependencies.session.me != nil else { return }
         let roster = InvestigationsStore(api: dependencies.api)
         await roster.load()
         investigations = roster.investigations
+    }
+
+    /// How tall and how fast each video actually is.
+    ///
+    /// Read from the files rather than assumed, because the estimate on the quality picker is the
+    /// only thing telling somebody whether 720p is enough — and a clip recorded at 720p already
+    /// must not be offered "720p" as a saving.
+    private func loadVideoShapes() async {
+        let converter = SessionVideoConverter()
+        var shapes: [String: SessionVideoConverter.SourceVideo] = [:]
+        for capture in captures where capture.kind == .video {
+            guard store.hasLocalFile(capture.relativePath, in: sessionId) else { continue }
+            shapes[capture.relativePath] = await converter.describe(
+                store.files.fileURL(for: sessionId, relativePath: capture.relativePath))
+        }
+        videoShapes = shapes
     }
 
     /// The session's span, its reading times, and how long each recording runs.
@@ -422,6 +619,15 @@ struct UploadSessionView: View {
                     let result = await SessionMediaTrimmer().cut(
                         original, from: from, duration: duration, into: scratch)
                     if case .cut(let trimmed) = result { url = trimmed }
+                }
+
+                // Then, and only if somebody chose it, the smaller copy. AFTER the cut, so the
+                // re-encode is spent on the seconds that are actually going rather than on an
+                // hour of a building being quiet. Same bargain as the trimmer: any failure sends
+                // what we already had.
+                if capture.kind == .video, videoQuality.changesAnything {
+                    let result = await SessionVideoConverter().convert(url, to: videoQuality, into: scratch)
+                    if case .converted(let smaller) = result { url = smaller }
                 }
 
                 // The digest is of what is actually SENT. Sending the original's digest with a

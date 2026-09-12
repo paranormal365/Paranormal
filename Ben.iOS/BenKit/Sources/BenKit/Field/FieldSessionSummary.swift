@@ -15,11 +15,15 @@ public struct FieldSessionSummary: Sendable, Identifiable, Equatable {
     public var captureCount: Int
     public var serverSessionId: UUID?
     public var uploadedAt: Date?
+    /// What the session was set up to record. Carried on the row so the live screen brings the
+    /// same instruments back up, video included, without reopening the model.
+    public var channels: CaptureChannels
 
     public init(id: UUID, startedAt: Date, endedAt: Date?, outcome: FieldSessionOutcome,
                 locationLabel: String?, investigationId: UUID?, investigationTitle: String?,
                 readingCount: Int, markerCount: Int, captureCount: Int,
-                serverSessionId: UUID? = nil, uploadedAt: Date? = nil) {
+                serverSessionId: UUID? = nil, uploadedAt: Date? = nil,
+                channels: CaptureChannels = .default) {
         self.id = id
         self.startedAt = startedAt
         self.endedAt = endedAt
@@ -32,6 +36,7 @@ public struct FieldSessionSummary: Sendable, Identifiable, Equatable {
         self.captureCount = captureCount
         self.serverSessionId = serverSessionId
         self.uploadedAt = uploadedAt
+        self.channels = channels
     }
 
     init(_ session: FieldSession) {
@@ -46,7 +51,8 @@ public struct FieldSessionSummary: Sendable, Identifiable, Equatable {
                   markerCount: session.markerCount,
                   captureCount: session.captureCount,
                   serverSessionId: session.serverSessionId,
-                  uploadedAt: session.uploadedAt)
+                  uploadedAt: session.uploadedAt,
+                  channels: session.channels)
     }
 
     /// Whether anybody has given this session a name of its own.

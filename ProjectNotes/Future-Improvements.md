@@ -11760,3 +11760,279 @@ values, three `TierCapability` values, four `CmsSectionType` values, `OrgMessage
 and five new enums. Three guards caught what the appends broke, which is what they are for: the
 permission map, the role editor's rows, and the permissions endpoint's probe list. A new
 `TierLabelCoverageTests` refuses a cap or capability a SuperAdmin would have to set by its enum name.
+
+---
+
+## 236. Room mapping with LiDAR: the phone knows which room it is in (FUTURE — iPhone and iPad, next version; not scoped for build)
+
+Ben, 2026-09-12: *"I would like to use the built in Lidar and front camera to map the rooms or
+locations… This makes the end user be able to actually map where they are when things happen
+without having to tell the field kit what room they are in."* And: *"I don't know if it is even
+doable or not, it just came to me there is the potential it would be another piece to set us
+apart."*
+
+**Verdict first: doable, in layers, and the first layer is genuinely worth building.** The part
+Ben most wants — the phone knowing which room a reading happened in without being told — is a
+solved problem on Apple's side, with a first-party framework that does the scanning, names the
+walls and doors, and merges rooms into a building. The parts that are *not* solved by anyone's
+framework are textured, photo-real walk-through models and merging those across visits into ever
+better ones. Those are real engineering with real compute cost, and this entry says exactly where
+the line is so nobody promises the second thing while building the first.
+
+### What Apple actually provides (checked 2026-09-12 against developer.apple.com)
+
+| Piece | What it is | Since | Matters because |
+|---|---|---|---|
+| **RoomPlan** — `RoomCaptureSession`, `RoomCaptureView`, `CapturedRoom` | Scans a room with LiDAR and returns a **parametric** model: walls, doors, windows, openings, floors, and recognised objects (bed, table, fireplace…) with dimensions and positions | iOS 16 | This is the room. Small (kilobytes), comparable, mergeable, and it is what "which room am I in" is computed against |
+| **`StructureBuilder`** → `CapturedStructure` | Merges several `CapturedRoom` scans "captured in the same physical vicinity" into one building | iOS 17 | Apple has done the within-visit merge for us |
+| `CapturedRoom.export` / `CapturedStructure.export` | USDZ model plus a metadata JSON | iOS 16 / 17 | The viewable file and the durable data, from the same call |
+| **ARKit `ARWorldMap`** | The tracked space's feature points and anchors, archivable, reloadable as `initialWorldMap` to **relocalize** a later session | iOS 12 | How a later visit snaps into the same coordinate frame. Apple's own guidance: it only works in the *same physical environment with similar lighting* |
+| ARKit scene reconstruction — `ARMeshAnchor` | The raw LiDAR mesh, live | iOS 13.4 | Change detection while the phone sits on a stand, and the geometry any texturing would drape over |
+| **Object Capture** — `PhotogrammetrySession` | Photos → textured 3D model | iOS 17 on device | **Objects only.** Apple documents it as "creating 3D objects from photographs", not rooms. It is not the room-texturing tool |
+| `ARGeoAnchor` | Lat/lon anchors matched against Apple's street imagery | iOS 14 | **Not usable indoors.** Coverage is street-level in about fifty US cities and excludes anywhere not drivable. Lat/lon is a *seed* for alignment, never the alignment |
+
+**Two corrections to the request, said plainly:**
+
+1. **It is the rear camera, not the front.** LiDAR and the wide camera are on the back of the
+   phone. The front TrueDepth camera is short-range and faces the person holding it. Mapping,
+   texturing and "did something move" all use the back, which is also what you point at a room
+   when the phone sits on a table.
+2. **LiDAR is a minority.** Every iPhone Pro and Pro Max from the 12 onward has it, and iPad Pro
+   from the 2020 models on. No standard, Plus, Air or mini does. Most members will not have it, so
+   the feature has to degrade: a phone without LiDAR keeps today's "tell me the room" and can still
+   *use* a map somebody else made (relocalization needs a camera, not LiDAR).
+
+### What a "map" is, concretely
+
+One scan produces up to four artefacts, and they are kept apart on purpose because they have
+different sizes, different lifetimes and different audiences:
+
+| Artefact | Size | Kept for | Shared? |
+|---|---|---|---|
+| **Structure JSON** — the parametric `CapturedRoom`/`CapturedStructure`: rooms as polygons, walls, doors, windows, objects, all with dimensions in metres | ~10–200 KB | Forever. This is the record everything else hangs off | Yes, under the visibility rules below |
+| **USDZ model** | 1–10 MB | Viewing (QuickLook on the phone; a 3D viewer on the web) | Yes, same rules |
+| **World map** — the archived `ARWorldMap` | 5–50 MB | Relocalizing on a later visit, so a second night lands in the first night's coordinates | Within the group only; it is a fingerprint of a room's contents |
+| **Keyframe bundle** — timed photos with camera poses, and optionally the raw mesh | 100 MB–GBs | Texturing, and any photo-real model later | Optional, phase 5, and it counts against the account's storage like video does |
+
+The first two are the product. The third makes repeat visits work. The fourth is the "impressive,
+complex 3D models" ambition and is deliberately last.
+
+### End to end: the app side
+
+**Scanning (a new step, not a session).** Mapping is its own activity, done once per place with
+the lights on, before or after an investigation — not something that runs during a session, because
+RoomPlan wants the phone swept slowly around a lit room and an investigation wants it still, in
+the dark, for hours. The screen says so.
+
+1. From a place (or from a session that has a place), **Map this place**. `RoomCaptureView` runs
+   Apple's own scanning UI: the person walks the room, the walls draw themselves.
+2. **Room by room.** Each finished room is a `CapturedRoom`; the person names it, and the name
+   becomes (or is matched to) a `PlaceRoom` — the entity item 197 already made for exactly this.
+3. **Merge.** `StructureBuilder` combines the rooms into one `CapturedStructure` for the building
+   and exports USDZ plus metadata.
+4. **Save the world map** at the end of the scan so the next visit can relocalize.
+5. **Upload** structure JSON + USDZ (small, always); world map (group only); keyframes (only if
+   the person opts in, with the size shown first, under the same allowance rules as video —
+   README-continuous-video-and-auto-clips.md and item 210's trimmer already established that the
+   phone is never limited and the upload is).
+
+**Using the map during a session — the actual feature.**
+
+6. When a session starts at a place that has a map, the app loads the world map and runs an
+   `ARWorldTrackingConfiguration` with `initialWorldMap` while the person walks in. Relocalization
+   takes a few seconds of the camera seeing the room. The screen shows *"Found your place in the
+   map"* or *"Couldn't match the room yet — move slowly, or name the room yourself"*, and the
+   manual room picker never goes away.
+7. Once relocalized, every reading, mark and capture gets a **position in the map frame**
+   (x, y, z in metres) alongside the GPS it already carries. The room is derived by point-in-polygon
+   against the structure's room footprints, and written to the same `room` field the Field Kit
+   fills today. Nothing downstream has to change to benefit.
+8. **Without relocalization** (new place, or it failed): the session records device pose relative
+   to its own start anyway, and if the person maps the place afterwards the rooms are applied
+   **retroactively** from the pose history. The night's readings get their rooms the next morning.
+9. Tracking costs battery and cannot run with the screen off. So the pose log runs at a low rate
+   (a fix a second is plenty; a person does not cross a room in less) and the camera stops the
+   moment the blackout overlay goes up, keeping the last good position. This is the same
+   foreground-only limitation continuous video has and it is stated on screen the same way.
+
+**Change detection — "did something move".** Two different questions, two different answers:
+
+- *During a session, phone on a stand pointed at the room* (Ben's stabilisation advice is
+  exactly right, and it goes in the UI copy): take the first thirty seconds' LiDAR mesh as the
+  baseline; thereafter any region whose depth differs from the baseline by more than a threshold
+  for more than a few seconds is a **`scene_changed` mark** with a bounding box, in the same
+  channel Sentry mode already uses for `scene_motion`. This is tractable and it is the one that
+  produces evidence. Camera-motion (someone picks the phone up) is detected already and suppresses
+  it.
+- *Between visits*: after alignment (below), compare the recognised object lists — RoomPlan
+  returns categories and positions — and report *"the chair by the north wall is 40 cm from where
+  it was in March"*. Reliable for the objects RoomPlan classifies; a general mesh diff is noisier
+  and is a phase-5 refinement, not a promise.
+
+### End to end: the server side
+
+**Entities.**
+
+- `PlaceMapCapture` — one scan: `PlaceId`, `OrganizationId` (who made it), `CapturedByAppUserId`,
+  `DeviceModel`, `CapturedAtUtc`, `StructureUploadFileId`, `ModelUploadFileId` (USDZ),
+  `WorldMapUploadFileId?`, `KeyframeBundleUploadFileId?`, SHA-256 of each, `RoomCount`,
+  `FloorAreaSquareMetres`, `Visibility` (the existing sharing scope), `AlignmentToCanonical`
+  (a 4×4 transform, null until aligned), `QualityScore`.
+- `PlaceMap` — the **canonical** map for a (place, organization) pair, or for the place itself
+  when public: the merged structure JSON, the USDZ, `Version`, and `Provenance` (which captures
+  contributed, weighted how). Rebuilt when a capture is added or accepted.
+- `PlaceRoomGeometry` — a footprint polygon per `PlaceRoom` in the canonical frame, with `Floor`.
+  This is the table that turns a position into a room name, and it is what makes rooms
+  *definitions* rather than labels.
+- `FieldSessionUpload` gains nothing new; readings already carry `position` in the device data
+  document, which gains `map_ref` (below).
+
+**Storage.** Files land through `IFileStorageService` under the organization or user, exactly as
+field sessions do, and `AccountStorageGuard` counts them. Parametric JSON is free in practice;
+world maps and keyframes are not, and the upload screen shows the weight before sending, as it now
+does for video.
+
+**Device data format.** A backwards-compatible v1.1 addition, keeping the spec vendor-neutral so
+any LiDAR scanner could feed it:
+
+- `position.map_ref: { map_id, x, y, z, room_id?, confidence }` on a reading, mark or capture.
+- `maps[]` companion list: `{ id, kind: "roomplan-structure" | "usdz" | "arworldmap", filename,
+  sha256, frame: "map" }`.
+
+### The "mesh side": compare, align, merge, refine
+
+This is the part Ben asked about most and the part with the most honest uncertainty in it.
+
+**Within one visit** — solved: `StructureBuilder`.
+
+**Across visits and devices** — three tiers, tried in order:
+
+1. **Relocalization** (best). If the new scan's device relocalized against the canonical world
+   map, its frame *is* the canonical frame. Zero registration needed.
+2. **Footprint registration** (good, ours to build). Room footprints are 2D polygons with wall
+   lengths and door positions; two scans of the same building match by 2D rigid registration
+   (rotation + translation, ICP on wall segments), **seeded by the compass heading and the GPS
+   fix** so the solver starts near the answer. Indoors GPS is tens of metres out, which is enough
+   to say "same building" and not enough to say anything else — a seed, never a solution. Confidence
+   comes from how much wall length agrees after registration; below a threshold it is refused and
+   the scan is kept as a separate, unmerged capture rather than force-fitted.
+3. **A person** (fallback). Show the two floor plans side by side and let somebody drag one onto
+   the other. Two minutes for a human, and it settles the cases where a building was renovated.
+
+**Merging** the parametric structures is then a vote per wall: walls that appear in several
+aligned captures within tolerance are kept with higher confidence; a wall in one capture only is
+kept but marked; an object present in some captures and not others is a *change*, not an error,
+and shows as such. Over visits the canonical map gets tighter, and each room's polygon settles.
+That is the "refine as time passes" Ben described, and for the parametric layer it is achievable
+with ordinary geometry.
+
+**Textures — "the camera to provide the mesh cover."** RoomPlan does not texture, and Object
+Capture is for objects. The honest options:
+
+- *On the phone*: project keyframe photos onto the `ARMeshAnchor` geometry at capture time. Works,
+  quality varies with lighting, and it is a custom renderer to write and maintain.
+- *On the server*: upload the keyframe bundle and reconstruct there (photogrammetry, or Gaussian
+  splatting for the "walk through" feel). Better results, and it needs a machine with a GPU and a
+  queue — an operational cost the site does not have today.
+- *Neither, for now*: ship the parametric map, the USDZ and the floor plan, and add textures as a
+  later opt-in. **This is the recommendation.** The floor plan with readings drawn on it is what a
+  reviewer uses every night; the photo-real model is what a visitor admires once.
+
+### Who may see what — the four cases, mapped onto rules that already exist
+
+Everything below reuses `PlaceKind`, the sharing scopes from `Places-and-Investigation-Sharing.md`
+(`GroupOnly` / `PlaceInvestigators` / `Public`), `OrganizationKind`, `OrganizationMemberRole`,
+`PlaceRoom` ownership, `Case.IsPrivateEngagement` and the client-consent rule for publishing case
+media. Contributing and seeing are two separate grants.
+
+| Where | Who may add a map or name rooms | Who sees it | Default scope | Notes |
+|---|---|---|---|---|
+| **Private residence** (`PlaceKind.PrivateResidence`, a case) | Members of the investigating group with `Member` or above | That group only | `GroupOnly` | Leaves the group **only** with the client's consent recorded, the same two-key rule as case media. A floor plan of somebody's home is the most sensitive artefact this app will hold: it is redacted with the address under private-engagement rules and it never enters the public archive. |
+| **Public location** (`PlaceKind.PublicLocation`, e.g. the Bell Witch Cave) | Any investigator of the place, and the property's own organization if it has one (`HauntedProperty`) | Everyone, at that address | `Public` | Every contribution merges into the place's canonical map. The property owner's rooms (`PlaceRoom`, already per-organization) are the names shown; visiting groups' names are matched to them. |
+| **Hosted event** (`HostedEvent`, `OrganizationKind.PublicEventProvider`) | The organizer's `Owner`, `Administrator` and `Manager` members | Ticket holders of that event, for the event's dates and afterwards for their own records; the organizer always | Event-scoped (a new scope: `EventAttendees`) | If the venue is a public place the place's public map is visible to all anyway; the *event* map (its room names, its layout for that weekend) is what stays with attendees. `HideExactLocation` on the event hides the map with the address. |
+| **Ghost walk tour** (`OrganizationKind.GhostWalkingTour`) | The tour's `Owner`, `Administrator`, `Manager` | Everyone | `Public` | A tour is outdoors and public by nature; its "rooms" are stops. Maps here are more useful as a route than a structure, and RoomPlan is not the tool for a street — this case mostly *consumes* public place maps rather than producing them. |
+
+A `SuperAdmin` sees everything, as everywhere else. Moderation applies to public maps as it does
+to public media: a scan uploaded to a public place is reviewable before it merges into the
+canonical map.
+
+### The web side
+
+- **Floor plan first.** Render the structure JSON as SVG: rooms, doors, windows, and the session's
+  readings drawn where they happened, with the timeline player's playhead moving a dot across it.
+  Cheap, fast on every device, and the thing that makes the feature legible.
+- **3D second.** USDZ opens natively on iPhone and iPad (QuickLook). On the web a glTF conversion
+  in a three.js viewer; nothing in the Telerik set does 3D, so this is the one place a JavaScript
+  library is the pragmatic answer and it loads only on the page that needs it.
+- **Compare view.** Two captures of the same place side by side, aligned, differences highlighted.
+
+### Playing a session back inside the map (Ben, 2026-09-12, added mid-write)
+
+*"This approach would also be able to provide a 3d review to pull from our own refined version of
+the 3d map to play back during field kit sessions."* Yes, and it falls out of M2 and M3 rather
+than needing its own pipeline, because every reading already has a position in the map frame:
+
+- **On the phone, at review.** The session's USDZ (the canonical, refined one for the place, not
+  the raw scan) opens in a RealityKit view; the timeline's playhead drives a marker through the
+  rooms, marks appear where they happened, the field strength colours a trail behind it, and a
+  capture's thumbnail hangs at the spot it was taken. The same `SessionReplay` that drives the
+  audio and video today drives this — it is another consumer of the playhead, exactly as the
+  video is.
+- **On site, in AR.** Because relocalization puts a live device in the map's frame, the previous
+  visit can be *overlaid on the room itself*: stand in the cellar, hold the phone up, and see
+  where last month's spikes were and where the chair stood. This is the most striking thing the
+  feature can do and it costs nothing beyond M2, since it is the same anchors drawn through the
+  camera instead of over a model.
+- **On the web.** The floor plan player (M1) is the everyday version; the three.js viewer gets
+  the same playhead binding in M3, so a member at a desk can scrub a night through the building.
+- **Pulling from the refined map is the point.** A session is played back in the *current*
+  canonical map, aligned through the capture's `AlignmentToCanonical`, so a session recorded
+  against a rough first scan improves visually as later scans tighten the model, without being
+  re-uploaded.
+
+This adds one deliverable to **M2** (phone playback in the model, and the AR overlay behind a
+feature flag) and one to **M3** (the web 3D playhead).
+
+### Build order
+
+| Phase | Delivers | Verification |
+|---|---|---|
+| **M0 — Feasibility spike (1–2 days, Ben's iPhone Pro)** | Scan two rooms with `RoomCaptureView`, merge with `StructureBuilder`, export, save a world map; come back the next day, in the dark, and see whether relocalization works and how long it takes; measure battery and heat for a 30-minute pose log | Device only. Decides whether M2 is real. |
+| **M1 — Capture, upload, view** | Map this place; `PlaceMapCapture` + `PlaceMap`; floor plan SVG on the place page; visibility per the table | BenKit tests for parsing the structure JSON and polygon math; server tests for the visibility matrix (every row of the table is a test); device for the scan |
+| **M2 — The phone knows the room** | Relocalize at session start; pose log; point-in-polygon room attribution; retroactive attribution when a place is mapped afterwards; manual picker always present; **session playback inside the model, and the on-site AR overlay** | BenKit tests for attribution and the retro pass using recorded pose logs as fixtures; device for relocalization |
+| **M3 — Across visits** | Footprint registration seeded by heading and GPS; canonical merge with per-wall confidence; the side-by-side manual fallback; the object-moved report; **the web 3D viewer with the timeline playhead** | Pure geometry, fully unit-testable with synthetic and recorded structures |
+| **M4 — Something moved, live** | Baseline mesh on a stand; `scene_changed` marks with bounding boxes on the timeline; stabilisation guidance in the UI | Device only |
+| **M5 — Textures (optional)** | Keyframe bundle capture and upload under the allowance rules; server reconstruction on a GPU queue; textured model on the web | Needs infrastructure that does not exist yet; decide after M1–M3 have earned it |
+
+### What has to be true before any of it ships
+
+- **Nothing here can be verified in the simulator.** No LiDAR, no camera, no ARKit tracking. Same
+  warning, in capital letters, as continuous video and for the same reason this branch learned
+  the hard way with Sign in with Apple. M0 is on a real phone or it does not count.
+- **Consent copy before the first scan of a home.** The sentence a member reads before mapping a
+  private residence has to say who will see the floor plan, and the client has to have said yes
+  to the group having it, which is a new line on the case's consent record.
+- **The battery notes need measuring, not estimating.** ARKit tracking plus LiDAR is heavier than
+  video. M0 produces the numbers the UI will show.
+- **iOS 17 is the floor for `StructureBuilder`**; the app's minimum is already iOS 18, so this
+  costs nothing.
+
+### Open questions
+
+1. Is a public place's canonical map contribute-to-see, the same open question the sharing spec
+   already carries for findings? Recommend no for maps — a map is more useful the more people can
+   use it, and the property is public anyway.
+2. When a private residence later becomes a public location (a house that becomes a museum), do
+   old private maps migrate? Recommend no: the consent was for that group, at that time.
+3. How long are world maps kept? They go stale when furniture moves. Recommend replacing on each
+   successful re-scan and expiring after a year unused.
+4. Whether to accept structure JSON from *other* LiDAR apps through the device data format, so a
+   group with a Matterport or Polycam habit can contribute. The format is designed to allow it;
+   the question is whether to promise it.
+
+**What I think** (asked directly): the first three phases are a real differentiator and are
+built from parts Apple maintains. A field session whose readings sit on a floor plan the phone
+drew, with the room named automatically and a second visit lining up with the first, is something
+no competitor in this space has. The photo-real walk-through is the part people will ask for and
+the part to resist promising until the plain version has proved itself on a real night in a real
+cellar.

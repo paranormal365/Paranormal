@@ -1,16 +1,18 @@
-# App Store submission — IsHaunted 1.0.2 (build 4)
+# App Store submission — IsHaunted 1.0.2 (build 5)
 
 Everything needed to build, upload and submit **1.0.2**, and every answer App Review has asked for
 so far. This supersedes `APP-STORE.md` for the submission itself; that file stays as the record of
 1.0.0 and the reasoning behind the listing.
 
-**State on 2026-09-09: SUBMITTED and waiting for review.**
+**State on 2026-09-12: build 4 REJECTED under Guideline 2.1(a) — a real bug, found and fixed.
+Build 5 is the answer and needs a new archive.** See §1a.
 
 | | |
 |---|---|
-| Item | iOS App 1.0.2, build **1.0.2 (4)** |
+| Item | iOS App 1.0.2, build **1.0.2 (5)** — 4 was rejected |
 | Type | App Version — not a beta build; check this, the two look alike in the list |
-| Submitted | 2026-09-09 12:27 PM, by Ben |
+| Build 4 submitted | 2026-09-09 12:27 PM, by Ben |
+| Build 4 reviewed | 2026-09-12, iPhone 17 Pro Max, iOS 26.6.2 — **rejected** |
 | Submission ID | `db9c74ed-6459-4029-9663-fcebe39c0503` |
 
 The archive was built on this tree, signed with the universal-links entitlement, and passed
@@ -47,11 +49,61 @@ was uploaded for 1.0.0.
 never sent as far as this repository knows; Ben's call on 2026-09-08 was to burn it and go up as 3,
 and the archive was built as 3 on 2026-09-09. **Xcode uploaded it as 4**: the Distribute wizard's
 *manage version and build number* was left on, and it incremented. Harmless, but it means the
-uploaded number is the authority and this file follows it. `CURRENT_PROJECT_VERSION` is now 4 so
-the tree and App Store Connect agree; the next upload is 5.
+uploaded number is the authority and this file follows it. `CURRENT_PROJECT_VERSION` is now 5,
+because 4 was uploaded, reviewed and rejected.
 
 **The build-number rule stands:** an uploaded `CFBundleVersion` is never reusable, even after a
 rejection. Turn that checkbox OFF and the number stays the one in the project.
+
+---
+
+## 1a. Why build 4 was rejected, and what build 5 changes
+
+> **Guideline 2.1(a) — Performance, App Completeness.** *"We were unable to access the app because
+> the app came back to login page when we logged in with Apple."* Reviewed 2026-09-12 on an
+> iPhone 17 Pro Max, iOS 26.6.2.
+
+Not a metadata complaint and not a false alarm. **The bug is real, it was reproduced here, and it
+made Sign in with Apple impossible for every new Apple identity.**
+
+**What happened.** An Apple identity nobody here has yet cannot become an account without a display
+name and a permanent @name, so the server answers `409 NeedsProfile` and the app is supposed to
+open the "Almost there" form. It never opened. The sheet was attached to the `Section` that draws
+the Apple button, and that section's own rows change in the same instant the sheet is asked for —
+the in-flight spinner disappears as the answer arrives. SwiftUI resolves that by tearing the
+presentation down **and dismissing the sign-in sheet that contains it**. The reviewer was returned
+to a signed-out profile with no form, no error and no explanation. Word for word what they wrote.
+
+**Why nobody here ever saw it.** Sign in with Apple cannot complete on an unprovisioned simulator
+or before Developer Program enrolment, so the flow past Apple's own sheet had never once been run
+by a person. `AppleSignInUITests` checks that the button exists and is hittable, which it always
+was. The reviewer was the first human being ever to get past that button.
+
+**Reproduced, then fixed, then re-checked** — 2026-09-12, iPhone 17 Pro Max simulator on iOS 26.5,
+the same device family as the review:
+
+| | Shipped build 4 | Build 5 |
+|---|---|---|
+| Tap through to the profile step | sign-in sheet vanishes, back to a signed-out Profile | "Almost there" opens over the sign-in sheet, Apple's name prefilled |
+
+**The fix**, in `AppleSignInSection.swift` and `SignInView.swift`:
+
+1. The flow's state moved into `AppleSignInFlow`, an `@Observable` object owned by `SignInView`,
+   and the sheet now hangs off that view's navigation stack. A presentation that no longer belongs
+   to a section cannot be torn down by that section's rows changing.
+2. **A sign-in that does not end signed in no longer closes the door.** The old code adopted the
+   token, then dismissed the sign-in form whatever `api/me` answered — so a session that died
+   between the two also looked like "came back to login page", silently. Dismissal now happens only
+   when the session really reaches `signedIn`, and every other outcome puts a sentence where the
+   person is looking.
+
+Nothing else in the package changes: same listing, same privacy answers, same screenshots and
+previews, same demo account, same server. See §7 for what a resubmission does and does not redo.
+
+**Reply to send in Resolution Center with build 5:** the crash-free path is the point — say that
+Sign in with Apple returned to the profile screen because the account-details step failed to
+present, that it is fixed in build 5, and that a reviewer signing in with Apple will now be asked
+for a display name and an @name (or offered to join an existing account) and will land signed in.
 
 ---
 
@@ -255,7 +307,7 @@ Do these in order. Steps 1–3 are one-time and only matter because of the new e
    `application/json` with no redirect. It ships with the website deploy from the same merge. iOS
    fetches it once at install and caches the answer.
 
-4. **Confirm the numbers.** In Xcode, target IsHaunted → General: Version **1.0.2**, Build **4**.
+4. **Confirm the numbers.** In Xcode, target IsHaunted → General: Version **1.0.2**, Build **5**.
    They are already set; this is a look, not an edit.
 
 5. **The two paid-plan sentences are already decided and changed** (§4) — nothing to do here.
@@ -276,7 +328,7 @@ Do these in order. Steps 1–3 are one-time and only matter because of the new e
    The heading then reads *iOS App Version 1.0.2*.
 
    This matters more than it looks: **App Store Connect only offers builds whose version string
-   matches the page**, so build 4 is invisible until the rename is saved. Learned on 2026-09-09,
+   matches the page**, so build 5 is invisible until the rename is saved. Learned on 2026-09-09,
    after this document had confidently said the opposite.
 
 9. **Fill the version page.** What's New from §2. Screenshots and previews from §5. Promotional
@@ -286,7 +338,7 @@ Do these in order. Steps 1–3 are one-time and only matter because of the new e
 10. **Swap the build.** The renamed version still carries **build 1** — the binary Apple rejected —
     and *Submit* will happily send it. App Store Connect warns with a **"Newer Build Available"**
     dialog rather than refusing, so read that dialog rather than clicking through it. Cancel,
-    remove the attached build on its row in the **Build** section, then choose **1.0.2 (4)** from
+    remove the attached build on its row in the **Build** section, then choose **1.0.2 (5)** from
     the list the empty slot offers.
 
     A build still sitting in TestFlight beta review is selectable here; the two queues are
@@ -312,11 +364,13 @@ rostered — the reviewer uses all three.
 Check App Store Connect → 1.0.2 → App Review → Resolution Center for the letter.
 
 - **Metadata only** (2.1 Information Needed, screenshot or wording complaints): fix in the form,
-  reply in Resolution Center, **Add for Review** again with the **same build 4**. No new build —
-  but check the Build section still says 4 before submitting, for the reason in §6 step 10.
+  reply in Resolution Center, **Add for Review** again with the **same build**. No new build —
+  but check the Build section still says the right number before submitting, for the reason in
+  §6 step 10.
 - **A code problem** (crash, a flow that does not work, a guideline that needs a change): fix it,
-  bump `CURRENT_PROJECT_VERSION` to **5** (marketing stays 1.0.2), Archive, Upload, select build 5
-  on the version page, reply in Resolution Center saying what changed, Add for Review.
+  bump `CURRENT_PROJECT_VERSION` to the next unused number (marketing stays 1.0.2), Archive,
+  Upload, select that build on the version page, reply in Resolution Center saying what changed,
+  Add for Review. This is the path build 4 → 5 took; see §1a.
 - The "How to Prevent Common Issues" list at the bottom of a 2.1 letter is boilerplate on every
   such letter, not findings.
 
@@ -330,7 +384,8 @@ they are the complaint), the demo account, the association file, the App ID capa
 Everything ticked below was re-verified against **this** tree on 2026-09-08, not carried from the
 2026-09-04 pass.
 
-- [x] `MARKETING_VERSION` 1.0.2, `CURRENT_PROJECT_VERSION` 3 — proven in a bundle built from this tree
+- [x] `MARKETING_VERSION` 1.0.2, `CURRENT_PROJECT_VERSION` **5** — 4 was uploaded and rejected (§1a)
+- [x] **The 2.1(a) Sign in with Apple bug is fixed and re-checked in the simulator** (§1a)
 - [x] No third-party frameworks or packages — every import re-read; zero remote package references
 - [x] `PrivacyInfo.xcprivacy` present; seven types, all linked, no tracking; App Privacy matches
 - [x] `ITSAppUsesNonExemptEncryption = false`
@@ -346,4 +401,23 @@ Everything ticked below was re-verified against **this** tree on 2026-09-08, not
 - [ ] Association file live on ishaunted.com (§6 step 3)
 - [ ] **Website and API deployed from this merge** — the softened server sentence ships with it
 - [ ] Demo account apple@apple.com verified working on production the day of submission
-- [ ] Archive, upload, + Version 1.0.2, fill, select build 3, submit
+- [ ] Archive, upload, select build **5** on the 1.0.2 page, reply in Resolution Center, submit
+
+---
+
+## 9. The build-5 archive
+
+Archived 2026-09-12 from `master` at `0734f6c7`, clean working tree. It is in the Organizer:
+`~/Library/Developer/Xcode/Archives/2026-09-12/IsHaunted 1.0.2 (5).xcarchive`. Version 1.0.2,
+build 5, `com.ishaunted.ios`, both entitlements present, dSYM included.
+
+**It is signed with "Apple Development", not "Apple Distribution", and that is expected here.**
+The Apple Distribution certificate is not in this Mac's keychain — only the development one is,
+though the App Store provisioning profile is present and valid to 2027-08-30. Organizer's
+**Distribute App → App Store Connect** re-signs the archive for distribution, so this is the right
+artifact to distribute; Xcode will fetch or issue the distribution certificate against Ben's Apple
+ID at that moment, which is the one step that cannot be done outside Xcode. If it asks to create a
+certificate, that is why.
+
+Resume the procedure at §6 step 6 (the archive is already made) — that is, Distribute, then the
+version page, the build swap and the Resolution Center reply from §1a.
