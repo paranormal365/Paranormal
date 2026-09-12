@@ -194,7 +194,7 @@ public sealed class PublicHostedEventBookingController : BenControllerBase
     /// the deadline has not passed.</para>
     /// </remarks>
     [HttpPost("{eventId:guid}/bookings")]
-    public async Task<ActionResult<MyHostedEventBookingRecord>> Request(
+    public async Task<ActionResult<MyHostedEventBookingRecord>> RequestAPlace(
         Guid eventId, [FromBody] RequestHostedEventBookingRequest request, CancellationToken ct)
     {
         var userId = GetCurrentUserId();

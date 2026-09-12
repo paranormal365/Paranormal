@@ -706,6 +706,9 @@ if (app.Configuration.GetValue("SeedData:Enabled", true))
     await Ben.Data.WebApi.SeedData.DevelopmentRosterSeeder.SeedAsync(app.Services, app.Configuration);
     // Last: needs the tiers, the groups and the past public event all to exist already.
     await Ben.Data.WebApi.SeedData.BillingDemoSeeder.SeedAsync(app.Services, app.Configuration);
+    // Item 235's two plans. Needs the host group from the development seeders above, and makes
+    // its own venue — a hotel with described rooms is the one thing the site had no example of.
+    await Ben.Data.WebApi.SeedData.HostedEventDemoSeeder.SeedAsync(app.Services, app.Configuration);
 
     // ── The backfills run a SECOND time, and have to ─────────────────────────
     //

@@ -24,7 +24,7 @@
     honest.
 *@
 
-<div class="plan @(Compact ? "plan--compact" : null) @Class"
+<div class="plan @(Model.Kind == HostedEventLayoutKind.Rooms ? "plan--rooms" : null) @(Compact ? "plan--compact" : null) @Class"
      id="@_containerId"
      style="--plan-columns:@(Columns);--plan-rows:@(Rows)">
 
@@ -95,6 +95,7 @@
                                 data-key="@unit.Key"
                                 data-state="@state.ToString().ToLowerInvariant()"
                                 data-selected="@(selected ? "true" : "false")"
+                                data-refused="@(Refused?.Contains(unit.Key) == true ? "true" : null)"
                                 disabled="@(!Answers(state))"
                                 tabindex="@(focused ? 0 : -1)"
                                 role="@(Mode == PlanMode.Read ? "gridcell" : "checkbox")"
@@ -151,6 +152,13 @@
     /// reads as free, so a caller that only knows about the taken ones need only send those.
     /// </remarks>
     [Parameter] public IReadOnlyDictionary<Guid, PlanCellState>? Occupancy { get; set; }
+
+    /// <summary>The units a refusal named, ringed so the sentence can be acted on.</summary>
+    /// <remarks>
+    /// "C4 and C5 still have confirmed bookings" is a fair sentence and a useless one on its own
+    /// in front of four hundred squares. The ring is what turns it into somewhere to look.
+    /// </remarks>
+    [Parameter] public IReadOnlySet<Guid>? Refused { get; set; }
 
     /// <summary>The most a guest may choose, so a party of three cannot hold four seats.</summary>
     [Parameter] public int? MaxSelectable { get; set; }

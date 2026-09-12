@@ -203,7 +203,7 @@
         </div>
     }
 
-    <BenPlan Model="@Model" Mode="PlanMode.Edit" Compact="@Dense"
+    <BenPlan Model="@Model" Mode="PlanMode.Edit" Compact="@Dense" Refused="@Refused"
              Selection="@_selection" SelectionChanged="@OnSelectionChanged"
              OnUnitActivated="@OpenSheet"
              OnEmptyActivated="@OnEmptyAsync"
@@ -344,6 +344,9 @@
 
     /// <summary>The server's own refusal, shown verbatim.</summary>
     [Parameter] public string? Error { get; set; }
+
+    /// <summary>The units that refusal named, ringed on the plan so it can be acted on.</summary>
+    [Parameter] public IReadOnlySet<Guid>? Refused { get; set; }
 
     [Parameter] public bool Busy { get; set; }
 

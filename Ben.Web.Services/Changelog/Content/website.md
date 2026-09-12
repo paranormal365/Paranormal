@@ -18,6 +18,14 @@ day-by-day account of building it would say nothing to anyone using it now.
 
 ## 2026-09-12
 
+- An event now has a plan you draw. A venue that lets rooms picks them from a list and places them
+  on a floor; an evening sold by the seat gets whole blocks of rows added at once, with a centre
+  aisle put in wherever you want one. Rows skip I and O, because on a printed ticket they read as
+  1 and 0.
+- Sections on a plan carry a name, a colour and a price, and the price is printed once for the
+  section rather than on every seat. Prices are shown to guests and never charged here.
+- The plan works on a phone, where it is there to be read and adjusted a room or a seat at a time,
+  and says so rather than pretending a four-hundred-seat house is an afternoon's work on a phone.
 - Site administrators can see every email the site has meant to send: when it was written, whether
   the mail server took it, how many times it has been tried and what went wrong. A message that
   failed can be put back in the queue, one at a time or all at once after a problem is fixed.

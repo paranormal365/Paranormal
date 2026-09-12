@@ -44,7 +44,7 @@ public sealed class HelpMediaCapture : BenTestBase
     /// </summary>
     public override BrowserNewContextOptions ContextOptions() => new()
     {
-        ViewportSize      = new ViewportSize { Width = 1440, Height = 900 },
+        ViewportSize      = new ViewportSize { Width = DesktopWidth, Height = DesktopHeight },
         DeviceScaleFactor = 2,
         ColorScheme       = ColorScheme.Dark,
     };
@@ -142,9 +142,46 @@ public sealed class HelpMediaCapture : BenTestBase
     /// </param>
     private sealed record Around(float Left = 0, float Top = 0, float Right = 0, float Bottom = 0, float? Width = null);
 
+    /// <param name="width">
+    /// Narrows the viewport for this one shot and restores it afterwards. A compact screen has to
+    /// be photographed compact: the help for "the plan on a phone" illustrated with a 1440-wide
+    /// desktop picture teaches the reader the opposite of what it says.
+    /// </param>
     private async Task ShootAsync(
         string slug, string name, bool gated = false, string? selector = null, string? proves = null,
-        Around? around = null)
+        Around? around = null, int? width = null)
+    {
+        if (width is { } narrow)
+        {
+            await Page.SetViewportSizeAsync(narrow, PhoneHeight);
+            // The layout reflows and Blazor re-renders what depends on it; a shot taken in the
+            // same frame catches the desktop arrangement at phone width, which is worse than
+            // either.
+            await Page.WaitForTimeoutAsync(500);
+        }
+
+        try
+        {
+            await ShootAtCurrentSizeAsync(slug, name, gated, selector, proves, around);
+        }
+        finally
+        {
+            if (width is not null)
+            {
+                await Page.SetViewportSizeAsync(DesktopWidth, DesktopHeight);
+                await Page.WaitForTimeoutAsync(300);
+            }
+        }
+    }
+
+    private const int DesktopWidth = 1440;
+    private const int DesktopHeight = 900;
+
+    /// <summary>An iPhone's height, so a narrow shot is a phone and not a letterbox.</summary>
+    private const int PhoneHeight = 812;
+
+    private async Task ShootAtCurrentSizeAsync(
+        string slug, string name, bool gated, string? selector, string? proves, Around? around)
     {
         // A screenshot of an empty state teaches nobody anything, and it is the failure mode this
         // fixture is most likely to hit silently: the page loads, renders "You aren't borrowing
@@ -1881,6 +1918,59 @@ public sealed class HelpMediaCapture : BenTestBase
             await SetFlagAsync(PublicationsFlag, wasOn);
         }
     }
+
+    /// <summary>
+    /// The layout designer, on all three of the screens Ben named (item 235 phase 2).
+    /// </summary>
+    /// <remarks>
+    /// <para>Three pictures because there are three answers. A hotel's floor plan is six squares
+    /// and reads anywhere; a 260-seat house is the case that decides whether the grid is any use;
+    /// and the same house at 375 pixels is the promise that a phone is read-mostly but not
+    /// useless. A help page that showed only the first would be describing the easy half.</para>
+    ///
+    /// <para>Both events come from <c>HostedEventDemoSeeder</c> with stable ids, which is what
+    /// lets this navigate straight to them rather than clicking through a list whose contents
+    /// depend on what else the run has done.</para>
+    /// </remarks>
+    [Test]
+    [Description("organization-administration: the plan, as rooms, as a theatre, and on a phone.")]
+    public async Task Capture_HostedEventPlan()
+    {
+        await LoginAsync(SuperAdminEmail, SuperAdminPassword);
+
+        var orgId = await OrgIdBySlugAsync("paranormal365");
+
+        await GoAsync($"/organizations/{orgId}/events/{SeededRoomsEventId}/layout");
+        await ShootAsync("organization-administration", "event-plan-rooms.png",
+            gated: true, proves: "The Blue Room");
+
+        await GoAsync($"/organizations/{orgId}/events/{SeededSeatsEventId}/layout");
+        // Two hundred and sixty squares take a moment to reach the page over a circuit, and the
+        // default wait inside ShootAsync is not enough for the largest screen on the site.
+        await Expect(Page.Locator(".plan__unit").Nth(259))
+            .ToBeAttachedAsync(new() { Timeout = 60_000 });
+        // The section names are asserted against the legend directly. ShootAsync's `proves` picks
+        // the FIRST element containing the text, and "Stalls" is also the caption in the row
+        // gutter, which is clipped to a 44-pixel column and therefore not "visible" — a true fact
+        // about the gutter and a useless one about this picture.
+        await Expect(Page.GetByTestId("plan-legend")).ToContainTextAsync("Stalls");
+        await Expect(Page.GetByTestId("plan-legend")).ToContainTextAsync("Balcony");
+        await ShootAsync("organization-administration", "event-plan-seats.png",
+            gated: true, proves: "An Evening of Evidence");
+
+        // The same 260 seats at iPhone width: squares a finger can hit, the grid taking the
+        // sideways scrolling, and the line that says arranging a house is a bigger screen's job.
+        await ShootAsync("organization-administration", "event-plan-phone.png",
+            gated: true, proves: "easier on a computer or an iPad", width: 375);
+    }
+
+    /// <summary>The seeded Thomas House weekend and the seeded 260-seat evening.</summary>
+    /// <remarks>
+    /// Written out rather than referenced: this project drives the running site over HTTP and has
+    /// no reference to the API's assemblies, the same reason the feature keys below are strings.
+    /// </remarks>
+    private const string SeededRoomsEventId = "40000002-0000-0000-0000-000000000002";
+    private const string SeededSeatsEventId = "40000002-0000-0000-0000-000000000003";
 
     /// <summary>
     /// The feature key, spelled out rather than referenced.

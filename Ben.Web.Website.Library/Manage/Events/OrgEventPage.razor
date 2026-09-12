@@ -140,15 +140,13 @@
                     </a>
                     <a class="list-group-item list-group-item-action" href="#event-guests">Your guests</a>
                     <a class="list-group-item list-group-item-action" href="#event-state">Ending it</a>
-                    @* The screens of their own that hang off this page. Plan, Bookings and Menus
-                       are pages the next phases build, and they are rendered as links only once
-                       those pages exist (HostedEventPagesShipped, in the code block) — this page
-                       is live, and a link that answers 404 is worse than a plain "soon". The rest
-                       are listed but plainly not ready, rather than absent: somebody setting an
-                       event up should be able to see what is coming. *@
-                    @IndexEntry("Plan", $"/organizations/{OrgId}/events/{EventId}/layout")
-                    @IndexEntry("Bookings", $"/organizations/{OrgId}/events/{EventId}/bookings")
-                    @IndexEntry("Menus", $"/organizations/{OrgId}/events/{EventId}/menus")
+                    @* The screens of their own that hang off this page. Each is a link only once
+                       its page exists — this page is live, and a link that answers 404 is worse
+                       than a plain "soon". The rest are listed but plainly not ready, rather than
+                       absent: somebody setting an event up should be able to see what is coming. *@
+                    @IndexEntry("Plan", $"/organizations/{OrgId}/events/{EventId}/layout", PlanPageShipped)
+                    @IndexEntry("Bookings", $"/organizations/{OrgId}/events/{EventId}/bookings", BoardPagesShipped)
+                    @IndexEntry("Menus", $"/organizations/{OrgId}/events/{EventId}/menus", BoardPagesShipped)
                     <span class="list-group-item text-secondary small">Programme — soon</span>
                     <span class="list-group-item text-secondary small">Staff and the door — soon</span>
                     <span class="list-group-item text-secondary small">Files — soon</span>
@@ -543,17 +541,21 @@
     private readonly EventForm _form = new();
     private readonly Dictionary<Guid, NightForm> _nights = [];
 
+    /// <summary>The layout designer, shipped in phase 2 of item 235.</summary>
+    private const bool PlanPageShipped = true;
+
     /// <summary>
-    /// Whether the plan, bookings and menus pages exist yet. False until phase 2 of item 235
-    /// lands the layout designer, which flips it to true; the board and the menus page follow in
-    /// phase 5 behind the same flag. Kept as one constant, and the index rows drawn by one helper,
-    /// so shipping the pages is a one-character change and the markup cannot drift between the
-    /// two states. A live page must never carry a link that answers 404.
+    /// The booking board and the menus page, which phase 5 builds.
     /// </summary>
-    private const bool HostedEventPagesShipped = false;
+    /// <remarks>
+    /// One flag per page rather than one for all of them: they shipped in different phases, and a
+    /// single flag meant shipping the first one lit three links, two of which answer 404. A live
+    /// page must never carry a link that goes nowhere.
+    /// </remarks>
+    private const bool BoardPagesShipped = false;
 
     /// <summary>One index row for a screen of its own: a link once it ships, "soon" until then.</summary>
-    private static RenderFragment IndexEntry(string label, string href) => HostedEventPagesShipped
+    private static RenderFragment IndexEntry(string label, string href, bool shipped) => shipped
         ? @<a class="list-group-item list-group-item-action" href="@href">@label</a>
         : @<span class="list-group-item text-secondary small">@label — soon</span>;
 

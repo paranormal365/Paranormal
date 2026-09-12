@@ -1,23 +1,52 @@
 /*
     The plan: a grid of squares, drawn once and read three ways (item 235 phase 2).
 
-    THE CELL SIZE IS A CLAMP, NOT A NUMBER. A twenty-column house has to fit a 1280 screen without
-    scrolling and stay tappable on a phone, and those are the same rule expressed as a range rather
-    than two rules that drift apart. Below the comfortable size the grid scrolls sideways in its own
-    box rather than the page doing it, which is the idiom BenTabs already uses for a wide strip.
+    THE SQUARES ARE PLAIN LENGTHS, AND THAT IS THE SECOND ATTEMPT.
+
+    The first sized both axes with clamp(… (100% - gutter) / columns …), meaning "shrink to fit the
+    screen, down to a floor". It does not work, and it fails silently: a percentage inside a GRID
+    ROW track resolves against the container's HEIGHT, which here is auto — so the row tracks
+    collapsed towards their floor, the grid came out 222px tall with 405px of content in it, and
+    `overflow-y: hidden` quietly cut six of a thirteen-row house off the bottom. Every unit was in
+    the DOM and passing its test; six rows were simply not on the screen. Caught by looking at a
+    screenshot, which is the entire reason phase 2 ends by looking at screenshots.
+
+    So: a comfortable fixed square, and the grid scrolls sideways in its own box when the house is
+    wider than the screen — the idiom BenTabs already uses for a wide strip. Seeing more at once is
+    a deliberate press of "Fit the whole plan", not a thing the layout guesses at.
 */
 
 .plan {
-    --plan-cell: clamp(1.5rem, calc((100% - var(--plan-gutter)) / var(--plan-columns) - 0.2rem), 2.75rem);
+    --plan-cell: 2.75rem;
+    --plan-row: 2.75rem;
     --plan-gutter: 3.5rem;
     --plan-gap: 0.2rem;
 }
 
+/*
+    A ROOM IS A NAME AND A SEAT IS A NUMBER, so they cannot be the same square. "The Colonel's
+    Room" in a 44-pixel box is "The C…", which tells a venue nothing and is what the first
+    screenshot of a floor plan showed. There are rarely more than a dozen rooms, so the space is
+    there to spend.
+*/
+.plan--rooms {
+    --plan-cell: 9rem;
+    --plan-row: 3.25rem;
+    --plan-gutter: 6rem;
+}
+
 /* Small squares, for a venue that wants the whole house on one screen. */
 .plan--compact {
-    --plan-cell: clamp(1.1rem, calc((100% - var(--plan-gutter)) / var(--plan-columns) - 0.15rem), 1.75rem);
+    --plan-cell: 1.75rem;
+    --plan-row: 1.75rem;
     --plan-gutter: 2.5rem;
     --plan-gap: 0.1rem;
+}
+
+.plan--compact.plan--rooms {
+    --plan-cell: 6rem;
+    --plan-row: 2.75rem;
+    --plan-gutter: 4rem;
 }
 
 /*
@@ -37,7 +66,7 @@
 .plan__grid {
     display: grid;
     grid-template-columns: var(--plan-gutter) repeat(var(--plan-columns), var(--plan-cell));
-    grid-auto-rows: var(--plan-cell);
+    grid-auto-rows: var(--plan-row);
     gap: var(--plan-gap);
     width: max-content;
     min-width: 100%;
@@ -127,8 +156,9 @@
     padding: 0 0.15rem;
 }
 
-/* Below this the label cannot be read anyway, so the glyph carries the square on its own. */
-.plan--compact .plan__unit-name { display: none; }
+/* Below this a seat's label cannot be read anyway, so the glyph carries the square on its own.
+   A room keeps its name at every size: a floor plan of six blank boxes is not a floor plan. */
+.plan--compact:not(.plan--rooms) .plan__unit-name { display: none; }
 
 .plan__unit-glyph {
     width: 0.75rem;
@@ -197,6 +227,18 @@
     font-weight: 600;
 }
 
+/*
+    Named by a refusal. Danger red and a heavier ring than a selection, because this is the one
+    outline a person is being asked to go and look at — and it survives alongside a selection
+    rather than replacing it, so ringing the two seats that blocked a save does not silently
+    change what the selection bar would act on.
+*/
+.plan__unit[data-refused="true"] {
+    outline: 3px solid var(--bs-danger);
+    outline-offset: -3px;
+    z-index: 1;
+}
+
 /* Under the pointer mid-sweep. Added by the module, removed before it reports. */
 .plan__unit--sweeping {
     outline: 2px dashed var(--bs-primary);
@@ -257,6 +299,15 @@
     .plan,
     .plan--compact {
         --plan-cell: 2.75rem;
+        --plan-row: 2.75rem;
+        --plan-gutter: 2.75rem;
+    }
+
+    /* A room still needs its name, so it keeps a wide box and the grid scrolls to it. */
+    .plan--rooms,
+    .plan--compact.plan--rooms {
+        --plan-cell: 8rem;
+        --plan-row: 3rem;
         --plan-gutter: 2.75rem;
     }
 

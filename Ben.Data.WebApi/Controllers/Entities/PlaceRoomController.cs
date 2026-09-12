@@ -277,6 +277,11 @@ public sealed record PlaceRoomRecord(
 /// not "clear it". A screen that edits only what a booking needs must not wipe the descriptions
 /// somebody typed on another one, which is exactly what a whole-object save would do.
 /// </remarks>
+/// <param name="ClearCapacity">
+/// Clears the capacity, because null on <c>Capacity</c> already means "leave it". A venue that
+/// stated a number and wants to go back to "we have not said" has no other way to say so, and "we
+/// have not said" is a real and useful state rather than a gap.
+/// </param>
 public sealed record SavePlaceRoomRequest(
     string? Name,
     string? Floor,
@@ -287,11 +292,4 @@ public sealed record SavePlaceRoomRequest(
     int? Capacity = null,
     bool? IsBookable = null,
     string? BedNote = null,
-    /// <summary>
-    /// Clears the capacity, because null on <see cref="Capacity"/> already means "leave it".
-    /// </summary>
-    /// <remarks>
-    /// A venue that stated a number and wants to go back to "we have not said" has no other way to
-    /// say so, and "we have not said" is a real and useful state rather than a gap.
-    /// </remarks>
     bool ClearCapacity = false);

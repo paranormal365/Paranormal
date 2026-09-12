@@ -270,4 +270,53 @@ public sealed class BenPlanTests
         Assert.Contains("plan--compact", html);
         Assert.Equal(4, Count(html, "class=\"plan__unit\""));
     }
+
+    [Fact]
+    public async Task A_floor_plan_asks_for_a_different_square_from_a_seating_plan()
+    {
+        // A room is a name and a seat is a number. Sized the same, "The Colonel's Room" renders as
+        // "The C…", which is what the first screenshot of a floor plan actually showed.
+        var rooms = new PlanModel(HostedEventLayoutKind.Rooms);
+        var key = rooms.AddRoom(Guid.NewGuid(), "The Colonel's Room", capacity: 1)!.Value;
+        rooms.Place(key, 0, 0);
+
+        Assert.Contains("plan--rooms", await RenderAsync(rooms));
+        Assert.DoesNotContain("plan--rooms", await RenderAsync(Stalls(1, 2)));
+    }
+
+    /// <summary>
+    /// A grid ROW track may never be sized by a percentage.
+    /// </summary>
+    /// <remarks>
+    /// <para>A percentage inside a row track resolves against the container's HEIGHT, which here
+    /// is auto. The first version of this stylesheet sized both axes with the same
+    /// <c>clamp(… (100% - gutter) / columns …)</c>, meaning "shrink to fit"; on a thirteen-row
+    /// house the row tracks collapsed towards their floor and <c>overflow-y: hidden</c> quietly cut
+    /// six rows off the bottom. Every unit was in the DOM and every test passed. It was found by
+    /// looking at a screenshot.</para>
+    ///
+    /// <para>A source scan rather than a render test because nothing about it is visible in HTML —
+    /// it is a rule about the stylesheet, and this is the cheapest thing that can hold it.</para>
+    /// </remarks>
+    [Fact]
+    public void No_row_track_is_sized_by_a_percentage()
+    {
+        var dir = new DirectoryInfo(AppContext.BaseDirectory);
+        while (dir is not null && !File.Exists(Path.Combine(dir.FullName, "Ben.slnx")))
+            dir = dir.Parent;
+        Assert.NotNull(dir);
+
+        var css = File.ReadAllText(Path.Combine(
+            dir!.FullName, "Ben.Web.Website.Library", "Kit", "Plans", "BenPlan.razor.css"));
+
+        var rowTrack = Regex.Match(css, @"grid-auto-rows:\s*([^;]+);");
+        Assert.True(rowTrack.Success, "BenPlan no longer sets grid-auto-rows. Update this guard.");
+
+        var token = rowTrack.Groups[1].Value.Trim();
+        Assert.StartsWith("var(", token);
+
+        // Whatever that token resolves to, no definition of it may contain a percentage.
+        foreach (Match definition in Regex.Matches(css, @"--plan-row:\s*([^;]+);"))
+            Assert.DoesNotContain("%", definition.Groups[1].Value);
+    }
 }

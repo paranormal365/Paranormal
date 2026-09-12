@@ -77,6 +77,28 @@ public sealed class PlanModel
         _saved = [.. _units];
     }
 
+    /// <summary>Reads what the server holds into something a person can rearrange.</summary>
+    /// <remarks>
+    /// Here rather than on the page because it is the inverse of <see cref="ToChoices"/>, and the
+    /// two have to agree about which fields survive a round trip. A room's square carries the
+    /// venue's own name for it and no label of its own, which is what makes renaming the room
+    /// rename it everywhere at once; a seat's name IS its label.
+    /// </remarks>
+    public static PlanModel From(
+        HostedEventLayoutKind kind, IEnumerable<HostedEventLayoutUnitRecord> units)
+        => new(kind, units.Select(u => new PlanUnit(
+            Key: Guid.NewGuid(),
+            Id: u.Id,
+            PlaceRoomId: u.PlaceRoomId,
+            Label: kind == HostedEventLayoutKind.Seats ? u.Name : null,
+            Section: u.Section,
+            Capacity: u.Capacity,
+            Price: u.Price,
+            Note: u.Note,
+            Row: u.LayoutRow,
+            Column: u.LayoutColumn,
+            DisplayName: u.Name)));
+
     public HostedEventLayoutKind Kind { get; private set; }
 
     public IReadOnlyList<PlanUnit> Units => _units;
@@ -110,6 +132,19 @@ public sealed class PlanModel
         => _units.FirstOrDefault(u => u.Row == row && u.Column == column);
 
     public PlanUnit? ByKey(Guid key) => _units.FirstOrDefault(u => u.Key == key);
+
+    /// <summary>This screen's handles on the units the server named by id.</summary>
+    /// <remarks>
+    /// A refusal comes back as a sentence and a list of ids — "C4 and C5 still have confirmed
+    /// bookings" is no use to somebody looking at four hundred squares unless the two squares are
+    /// ringed. Ids the plan no longer holds are dropped rather than throwing: the server may name
+    /// a unit this screen has just deleted, which is frequently the whole reason it refused.
+    /// </remarks>
+    public IReadOnlyList<Guid> KeysFor(IEnumerable<Guid> ids)
+    {
+        var named = ids.ToHashSet();
+        return [.. _units.Where(u => u.Id is { } id && named.Contains(id)).Select(u => u.Key)];
+    }
 
     /// <summary>Every section named on the plan, in the order the units were arranged.</summary>
     public IReadOnlyList<string> Sections =>

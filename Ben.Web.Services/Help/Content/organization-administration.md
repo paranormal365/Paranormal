@@ -846,10 +846,72 @@ in for a séance weekend sleeps four for that weekend and goes back to two after
 A room with confirmed bookings in it can't be untick­ed. Move those parties somewhere else first;
 dropping the room would leave them sleeping in one your event says it is not using.
 
-The two screens after this one are the **plan**, where the rooms — or the seats, for an event sold
-by the seat — are drawn out so everybody can see what is where, and the **board**, where requests
-wait for your decision. They are being built now; the index down the side of the event page lists
-them and will link to them the day they arrive.
+The **plan** is where the rooms — or the seats, for an event sold by the seat — are drawn out so
+everybody can see what is where. It has a page of its own, listed as *Plan* down the side of the
+event page. The **board**, where requests wait for your decision, is being built now; the index
+lists it and will link to it the day it arrives.
+
+### The plan: rooms or seats
+
+An event's plan holds one kind of thing, and you choose which while it is still empty: **Rooms** for
+a venue where people stay the night, **Seats** for an evening where they sit down. Once anything is
+on the plan the choice is settled and the buttons stop being offered — changing it would throw away
+everything arranged so far, and every booking made against it.
+
+![A floor plan of a hotel's rooms](help-media:organization-administration/event-plan-rooms.png)
+
+On a **Rooms** plan the list on the left holds every room the venue has marked bookable that is not
+yet on the plan. Pick one, then press an empty square to say where it goes. *Arrange them for me*
+lays out everything still waiting, one floor per row, which is usually close enough to right that
+you only nudge a couple. A room does not have to go on the plan at all — a cellar you describe and
+never let is simply left in the list.
+
+Rooms keep the venue's own names, so renaming a room on the venue's Rooms page renames it here and
+on every guest's booking at once. A row whose rooms all share a floor gets that floor's name in the
+margin, which is how a hotel ends up with its floors labelled without a column spent on it.
+
+### Laying out a theatre quickly
+
+![A 260-seat house with a centre aisle](help-media:organization-administration/event-plan-seats.png)
+
+**Add a block** is how a house gets built: how many rows, how many seats in each, where the letters
+start, which way the numbers run, and what the section is called and costs. A line under the form
+shows the first and the last seat before you commit — *13 rows × 20 = 260 seats, A1 … N20* — which
+is the cheapest way to catch a backwards row before you have named two hundred and sixty chairs.
+Press it twice for a Stalls and a Balcony.
+
+**Rows skip I and O.** On a printed ticket and a brass rail, I is a 1 and O is a 0, and dropping
+both is cheaper than every usher in the building explaining it for the life of the venue. So the
+rows run A to H, then J, K, L, M, N.
+
+**Insert an aisle** opens a gangway to the left of whatever you have chosen, pushing everything to
+its right one place over. The gap is genuinely empty — it is a walkway, not a row of seats nobody
+may sit in — and the seats keep their numbers, so you can relabel afterwards if the venue numbers
+across the aisle rather than through it.
+
+Choose seats by clicking them, or by dragging across a run with a mouse. Everything you press is
+added to the choice and pressing it again takes it back out, so there is no modifier key to
+remember; **Clear** on the bar is how you start over. With a selection you can set a section, a
+price or a note on all of them at once, relabel a whole block by row, nudge it about with the
+arrows, or take it off the plan.
+
+**Prices are shown to guests and never charged here.** Blank means "ask us", and zero means the
+seat is included. You and your guests settle up between yourselves.
+
+### The plan on a phone
+
+![The same 260-seat house at iPhone width](help-media:organization-administration/event-plan-phone.png)
+
+Laying a whole house out is a computer or an iPad job, and the page says so rather than pretending.
+On a phone the plan is there to be read and adjusted a square at a time: tap a room or a seat to
+open it, fix its price or its note, and save. The squares stay big enough to hit and the plan
+scrolls sideways inside its own box, so the page underneath never slides about.
+
+If you do want more of a big house on screen at once, *Fit the whole plan* under the tools button
+shrinks the squares. It is a deliberate press, not something the page decides for you.
+
+Nothing is saved until you press **Save the plan**, and the page says *Not saved yet* while there is
+anything to lose. Leaving with unsaved work asks first.
 
 #### Sleeps, bookable and beds
 
