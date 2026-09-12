@@ -46,7 +46,7 @@ public sealed class EventCapacityTests
                 Id = Guid.NewGuid(),
                 HostedEventBookingId = booking.Id,
                 HostedEventNightId = nightId,
-                PlaceRoomId = roomId,
+                HostedEventLayoutUnitId = roomId,
             });
         }
         return booking;
@@ -164,9 +164,9 @@ public sealed class EventCapacityTests
     {
         // A hotel putting four camp beds in a double for a séance weekend. The override wins, and
         // it keeps winning if the venue later re-describes the room.
-        var offered = new HostedEventRoom
+        var offered = new HostedEventLayoutUnit
         {
-            CapacityOverride = 4,
+            Capacity = 4,
             PlaceRoom = new PlaceRoom { Name = "Blue Room", Capacity = 2 },
         };
 
@@ -176,7 +176,7 @@ public sealed class EventCapacityTests
     [Fact]
     public void Without_an_override_the_rooms_own_capacity_is_used()
     {
-        var offered = new HostedEventRoom
+        var offered = new HostedEventLayoutUnit
         {
             PlaceRoom = new PlaceRoom { Name = "Blue Room", Capacity = 2 },
         };
@@ -189,7 +189,7 @@ public sealed class EventCapacityTests
     {
         // Null is "the venue has not said". Refusing bookings against it would make a venue's own
         // rooms unbookable until somebody filled in a form.
-        var offered = new HostedEventRoom { PlaceRoom = new PlaceRoom { Name = "Attic" } };
+        var offered = new HostedEventLayoutUnit { PlaceRoom = new PlaceRoom { Name = "Attic" } };
 
         Assert.Null(EventCapacity.CapacityOf(offered));
         Assert.Null(EventCapacity.BedsLeft(null, taken: 99));

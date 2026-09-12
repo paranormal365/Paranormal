@@ -45,14 +45,44 @@ public static class EventCapacity
     public static bool Holds(HostedEventBookingStatus status)
         => status == HostedEventBookingStatus.Confirmed;
 
-    /// <summary>What a room sleeps for this event: the event's override, else the room's own.</summary>
-    public static int? CapacityOf(HostedEventRoom offered)
-        => offered.CapacityOverride ?? offered.PlaceRoom?.Capacity;
+    /// <summary>
+    /// What a unit holds for this event: the event's own number, else the room's.
+    /// </summary>
+    /// <remarks>
+    /// A seat carries its own 1 and has no room behind it, so the fallback simply finds nothing —
+    /// which is the same answer as a room whose venue has never stated a capacity, and correctly
+    /// so in both cases: "we have not said" cannot be over-filled.
+    /// </remarks>
+    public static int? CapacityOf(HostedEventLayoutUnit unit)
+        => unit.Capacity ?? unit.PlaceRoom?.Capacity;
+
+    /// <summary>
+    /// What to call a unit: its own label, else the venue's name for the room behind it.
+    /// </summary>
+    /// <remarks>
+    /// A Rooms unit deliberately has no label of its own, so renaming the room renames it
+    /// everywhere at once rather than leaving an event showing last year's name for it.
+    /// </remarks>
+    /// <summary>
+    /// What to call what a party holds on one night.
+    /// </summary>
+    /// <remarks>
+    /// A night with no unit is somebody here for the day and going home again, and it says so —
+    /// an empty cell there reads as missing data rather than as a fact about the booking.
+    /// </remarks>
+    public static string NameOf(HostedEventBookingNight night)
+        => night.HostedEventLayoutUnit is { } unit ? NameOf(unit) : "Just for the day";
+
+    /// <inheritdoc cref="NameOf(HostedEventBookingNight)"/>
+    public static string NameOf(HostedEventLayoutUnit unit)
+        => unit.Label?.Trim() is { Length: > 0 } label ? label
+         : unit.PlaceRoom?.Name is { Length: > 0 } room ? room
+         : "That space";
 
     // ── Overnight: per room, per night ───────────────────────────────────────
 
     /// <summary>
-    /// How many people are already sleeping in one room on one night.
+    /// How many people are already in one unit on one night.
     /// </summary>
     /// <param name="bookings">Every booking for the event, with their nights loaded.</param>
     /// <param name="excludingBookingId">
@@ -62,13 +92,13 @@ public static class EventCapacity
     public static int PeopleIn(
         IEnumerable<HostedEventBooking> bookings,
         Guid nightId,
-        Guid placeRoomId,
+        Guid unitId,
         Guid? excludingBookingId = null)
         => bookings
             .Where(b => Holds(b.Status))
             .Where(b => excludingBookingId is not { } id || b.Id != id)
             .Where(b => b.Nights.Any(n => n.HostedEventNightId == nightId
-                                       && n.PlaceRoomId == placeRoomId))
+                                       && n.HostedEventLayoutUnitId == unitId))
             .Sum(b => Math.Max(1, b.PartySize));
 
     /// <summary>Beds still free in a room on a night, or null when the room states no capacity.</summary>
@@ -76,22 +106,31 @@ public static class EventCapacity
         => capacity is int cap ? Math.Max(0, cap - taken) : null;
 
     /// <summary>
-    /// Why this party cannot be confirmed into this room on this night, or null when it can.
+    /// Why this party cannot be confirmed into this unit on this night, or null when it can.
     /// </summary>
     /// <remarks>
-    /// Names the room and the number left, because a host refused with "full" cannot tell whether
-    /// to offer a smaller room, split the party, or say no.
+    /// <para>Names the unit and the number left, because a host refused with "full" cannot tell
+    /// whether to offer a smaller room, split the party, or say no.</para>
+    ///
+    /// <para><b>The verb follows the layout.</b> A room "sleeps" two more and a seat "seats" them;
+    /// a theatre told its seats sleep nobody would read as a bug, and the whole point of naming
+    /// the number is that the sentence is one a host can act on without translating it.</para>
     /// </remarks>
     public static string? WhyThisRoomCannotTakeThem(
-        string roomName, DateTime night, int? capacity, int taken, int partySize)
+        string unitName, DateTime night, int? capacity, int taken, int partySize,
+        HostedEventLayoutKind kind = HostedEventLayoutKind.Rooms)
     {
         if (BedsLeft(capacity, taken) is not { } left) return null;
         if (partySize <= left) return null;
 
         var date = night.ToString("MM/dd/yyyy");
-        return left == 0
-            ? $"{roomName} is full on {date}. Free a place there first, or put them somewhere else."
-            : $"{roomName} sleeps {left} more on {date}, and this is a party of {partySize}.";
+        if (left == 0)
+            return kind == HostedEventLayoutKind.Seats
+                ? $"{unitName} is taken on {date}. Free it first, or seat them somewhere else."
+                : $"{unitName} is full on {date}. Free a place there first, or put them somewhere else.";
+
+        var verb = kind == HostedEventLayoutKind.Seats ? "seats" : "sleeps";
+        return $"{unitName} {verb} {left} more on {date}, and this is a party of {partySize}.";
     }
 
     // ── Day passes: one number for the event ─────────────────────────────────

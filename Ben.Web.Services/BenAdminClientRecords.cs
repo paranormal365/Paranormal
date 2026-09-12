@@ -683,6 +683,17 @@ public sealed record OrgAreaActions(bool Create, bool Read, bool Update, bool De
 
 /// <summary>One of the caller's own groups, shaped for the sidebar (item 159).</summary>
 /// <summary>One named space inside a place — a hotel's Room 217, a cellar (item 197).</summary>
+/// <param name="Capacity">
+/// How many sleep here, when the venue has said. Null and zero differ: null is "we have not said"
+/// and cannot be over-filled, zero is "nobody sleeps in the chapel".
+/// </param>
+/// <param name="IsBookable">
+/// Whether an event may offer it. Separate from <paramref name="IsPublic"/>: a staff room can be
+/// named and kept off the public page and still never be somewhere a guest sleeps.
+/// </param>
+/// <param name="BedNote">
+/// What the beds are. A number cannot answer "will the two of us have to share a bed".
+/// </param>
 public sealed record PlaceRoomRecord(
     Guid     Id,
     Guid     PlaceId,
@@ -691,16 +702,28 @@ public sealed record PlaceRoomRecord(
     string?  Description,
     bool     IsPublic,
     int      SortOrder,
-    bool     IsActive);
+    bool     IsActive,
+    int?     Capacity = null,
+    bool     IsBookable = false,
+    string?  BedNote = null);
 
 /// <summary>Naming or editing a room. Sort order and active state are optional on an edit.</summary>
+/// <remarks>
+/// Every field added after the first release is optional and <b>null means "leave it alone"</b>,
+/// which is why clearing one takes an explicit flag. A screen that edits only what a booking needs
+/// would otherwise wipe the descriptions typed on another one.
+/// </remarks>
 public sealed record SavePlaceRoomRequest(
     string? Name,
     string? Floor,
     string? Description,
     bool    IsPublic,
     int?    SortOrder = null,
-    bool?   IsActive = null);
+    bool?   IsActive = null,
+    int?    Capacity = null,
+    bool?   IsBookable = null,
+    string? BedNote = null,
+    bool    ClearCapacity = false);
 
 public sealed record MyMembershipOrgItem(Guid OrganizationId, string Name);
 

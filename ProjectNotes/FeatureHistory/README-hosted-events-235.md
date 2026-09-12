@@ -345,6 +345,105 @@ back to back at Ben's ask, because a pass with no letter to travel in reaches no
 - **26 new tests**, one proved to discriminate by linking the pass instead of inlining it and
   watching only that test fail. Suite: .NET 8,400 pass, 0 fail, 9 skipped.
 
+**Phase 2.4a done, 2026-09-12 — the layout model.** The server half of the designer, before any
+screen is built on it.
+
+- **`HostedEventRoom` became `HostedEventLayoutUnit`**, and `HostedEvent` gained `LayoutKind`.
+  A unit is a room OR a seat: `PlaceRoomId` is now nullable, and a seat carries its own `Label`
+  instead. A Rooms unit deliberately has NO label, so renaming the venue's room renames it
+  everywhere at once rather than leaving last year's spelling on this year's plan.
+- **`HostedEventBookingNight.PlaceRoomId` became a nullable `HostedEventLayoutUnitId`**, and that
+  nullability is the answer to Ben's question about partial attendance (below).
+- **New on a unit:** `Section` ("Main Floor", "Balcony"), `Price`, and `LayoutRow`/`LayoutColumn`.
+  The plan is **a grid, not a canvas** — a hotel floor is a corridor with rooms either side and a
+  theatre is rows of seats, and two integers say both without asking a venue to be an architect.
+  Null is not zero: an unplaced unit sits in the designer's tray rather than landing on top of
+  whatever is in the corner.
+- **The position lives on the unit, not on `PlaceRoom`.** I had put it on the venue's room first
+  and reverted it before committing: a seat has no room behind it, and two places recording where
+  something sits would drift apart the first time one was edited.
+- **`EventCapacity` learned the difference in words only.** A room *sleeps* two more and a seat
+  *seats* them; a theatre told its seats sleep nobody reads as a bug. `NameOf` resolves label else
+  room name, so no screen has to know which kind it is looking at.
+- **The migration is hand-written as a RENAME.** EF scaffolded a drop-and-create, which would have
+  taken every offered room and, through the booking-night column, every confirmed party's room with
+  it. The one genuinely new piece of work in it is remapping `HostedEventBookingNights` from the
+  venue's room id to the event's unit id — a join, not a rename, because the same number pointing
+  at the wrong table is corruption nothing downstream would notice until a guest was sent to a room
+  somebody else was asleep in. `Down` reverses it and deletes what cannot exist in the old shape.
+- **The purge guard fired and was right.** Both keys are optional now, and an optional reference is
+  exactly the shape that refused a deletion here before (BenCo, 2026-09-03, on `OrgMessages.CaseId`
+  while `OrgMessages` was "purged" by `OrganizationId`). Each is now swept BY THE REFERENCE as well
+  as by the owner.
+- **Three room fields phase 2.1 created were write-only until now** — `Capacity`, `IsBookable` and
+  `BedNote` were on the table and on no record, so no screen could set them. Surfaced.
+- **11 new tests**, one proved to discriminate. Suite: .NET 8,411 pass, 0 fail, 9 skipped.
+
+**BEN'S QUESTION, 2026-09-12, AND WHAT IT FOUND.** *"How is partial events handled, like someone
+wants to come to the ghost hunt but not dinner nor presentation, do we offer something like that?
+Or maybe a three day event they want to be there only two days."*
+
+Three different things, and they had three different answers:
+
+1. **Two nights of three: already worked.** A booking's nights are rows, so a party takes the
+   Friday and Saturday and is simply absent on the Sunday. Now has a test saying so.
+2. **A day pass for the Saturday only: did NOT work, and does now.** A day-pass booking carried no
+   nights at all, so "which day" was unanswerable and the day-pass count was one lump for the whole
+   event. Making the unit optional on a night row fixes it: **the row means "we are here that
+   night" and holding a room is a separate fact about it.** That is what lets a three-day event
+   sell its Saturday, and what lets Saturday's cook know how many people are actually in the
+   building. A day pass with no rows at all still means the older, simpler thing — here for the
+   event, whichever days that turns out to be — and both are real.
+3. **The ghost hunt but not the dinner: phase 4, and unchanged.** Per-session opt-in inside a night
+   is what "Sessions and classes with capacity" is for. A night is atomic until then, and pretending
+   otherwise with a flag would be a worse version of the thing already planned.
+
+**DESIGN DECISION, 2026-09-12 — one layout per event, of one kind, and why dining is not one of
+them.** Ben, having looked at what The Events Calendar offers: *"Instead of just seat designer, we
+might need room designer as well in case the event is overnight."* Then: *"maybe the seat designer,
+room designer, there might need to be a table for eating designer. They only get one per event, but
+they are the three possibilities I can think of. Like a Diner Designer."*
+
+**"One per event" is the clue that makes this one feature rather than three.** An event picks a
+layout kind and gets one plan; there is no hotel that is also a theatre on the same weekend.
+
+**Rooms and seats are the same shape and are built together.** Both are chosen by the guest while
+booking, and both BOUND HOW MANY PEOPLE CAN COME — which is why both belong on the booking, why
+both are capacity-checked at confirm, and why one model and one designer cover them.
+
+**A dining plan is deliberately NOT the third kind, and this is the reasoning to keep.** A table
+bounds nothing: everybody who booked the weekend eats on Saturday whether or not the tables have
+been arranged. And a table is assigned by the ORGANISER after bookings close, from the confirmed
+list, working around who knows whom and who cannot sit near the nuts — the opposite workflow from
+a guest picking a room at the moment they ask. Folding it into "the allocatable unit a booking
+points at" would force two different workflows into one shape and the table half would fit badly.
+
+So the dining plan becomes **a seating assignment over confirmed bookings**, reusing the same
+canvas, in its own phase after the dietary sheet has something in it. It gets *better* for waiting:
+"table 4 has two coeliacs and the vegan" is the version worth having and it is only possible once
+bookings are confirmed and notes are collected. A party already books as a party, so keeping a
+booking together at a table is free; **anything beyond that needs a "who sits with whom" input that
+nothing in the model captures yet**, and that is a new idea rather than a missing field.
+
+**ONE EVENT, ONE VENUE — Ben, 2026-09-12: *"In case it got swept in, I don't want to allow multi
+venues."*** Nothing had swept it in and nothing will: `HostedEvent.PlaceId` is a single non-nullable
+venue, and the layout refuses any room that is not one this group has described for *that* place
+(`r.PlaceId == ev.PlaceId`). A group may still own as many venues as it likes — that is what the
+places list has always been — but **one event happens at one venue**, and the guard that says so is
+in `SetLayout`. Worth keeping because the alternative quietly ruins several things at once: a room
+number stops being unique, "which building is the Blue Room in" becomes a question, the calendar
+file cannot name one location, and the door has no single place to stand.
+
+**Also settled the same day, from the same screenshots:** revenue splits and in-cart ticket selling
+are **out of scope** — Ben: *"We do not offer billing through us right now"* — which is DECISION 1
+already. But *"We can tell them the price, but we do not collect money"*, so a unit carries a
+display price and the event carries a day-pass price, both shown and never charged. Null is "ask
+the venue" and zero is genuinely free; the two read differently to somebody deciding whether to
+come. And on the calendar mock-up: *"The calendar is just the concept, I do not expect it to look
+like that exactly because we have different colors and requirements."* What is worth borrowing from
+it is the **multi-day event drawn as a spanning bar** — which is what the umbrella row already is —
+and hover popovers for attendees, venue and availability.
+
 **BEN'S ASK, 2026-09-12, PLANNED AND NOT YET DONE — seed, walk, shoot, reprint.** In his words:
 *"You might want to seed records for these sections in the DEV database IsHauntedDb_player and get
 screen shots and helping data from the live test site and can use in help docs and pdfs also, you

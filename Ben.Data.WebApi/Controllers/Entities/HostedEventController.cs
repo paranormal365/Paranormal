@@ -370,15 +370,15 @@ public sealed class HostedEventController : OrgCmsControllerBase
             e.CancelledReason = request.Reason?.Trim() is { Length: > 0 } r ? r : null;
         }, ct);
 
-    // ── the rooms this event offers (phase 2) ────────────────────────────────
+    // ── the layout: what this event allocates (phase 2.4) ────────────────────
 
-    /// <summary>Which of the venue's rooms this event is offering, and what each sleeps.</summary>
+    /// <summary>What this event allocates, and what each of them holds.</summary>
     /// <remarks>
-    /// Readable by any member: knowing which rooms are in play is not a billing question, and the
-    /// booking board needs it to draw a grid.
+    /// Readable by any member: knowing what is in play is not a billing question, and the booking
+    /// board needs it to draw its grid.
     /// </remarks>
-    [HttpGet("{eventId:guid}/rooms")]
-    public async Task<ActionResult<IReadOnlyList<HostedEventRoomRecord>>> GetRooms(
+    [HttpGet("{eventId:guid}/layout")]
+    public async Task<ActionResult<HostedEventLayoutRecord>> GetLayout(
         Guid orgId, Guid eventId, CancellationToken ct)
     {
         var userId = GetCurrentUserId();
@@ -386,28 +386,35 @@ public sealed class HostedEventController : OrgCmsControllerBase
 
         await using var db = await DbFactory.CreateDbContextAsync(ct);
         if (!await IsMemberAsync(db, orgId, userId.Value, ct)) return Forbid();
-        if (!await db.HostedEvents.AnyAsync(e => e.Id == eventId && e.OrganizationId == orgId, ct))
-            return NotFound();
 
-        return Ok(await RoomsAsync(db, eventId, ct));
+        var ev = await db.HostedEvents
+            .FirstOrDefaultAsync(e => e.Id == eventId && e.OrganizationId == orgId, ct);
+        if (ev is null) return NotFound();
+
+        return Ok(await LayoutAsync(db, ev, ct));
     }
 
     /// <summary>
-    /// Sets the whole set of rooms this event offers.
+    /// Sets the whole plan: what kind it is, and every room or seat on it.
     /// </summary>
     /// <remarks>
-    /// <para><b>Replaces rather than merges</b>, because the screen is a list of tick boxes and
-    /// unticking one has to mean something. A room that still has bookings against it is refused
-    /// rather than quietly removed — the beds are occupied, and dropping the offer would leave a
-    /// confirmed party sleeping somewhere the event says it is not using.</para>
+    /// <para><b>Replaces rather than merges</b>, because the screen is one designer somebody
+    /// arranges and saves. A unit left out is removed — except one with confirmed bookings against
+    /// it, which is refused rather than quietly dropped: the beds are occupied, and dropping the
+    /// offer would leave a confirmed party sleeping somewhere the event says it is not using.</para>
     ///
-    /// <para>A room must belong to this event's own place and to this organization: rooms are
-    /// per-group per-place (item 197), so offering another group's description of the building
+    /// <para><b>A room must belong to this event's own place and to this organization.</b> Rooms
+    /// are per-group per-place (item 197), so offering another group's description of the building
     /// would put their words on your weekend.</para>
+    ///
+    /// <para><b>Changing the KIND of a plan that has bookings is refused.</b> A party confirmed
+    /// into the Blue Room cannot be silently reinterpreted as holding seat H9, and there is no
+    /// answer to what their room becomes — so the venue is told to release the bookings first and
+    /// decide deliberately.</para>
     /// </remarks>
-    [HttpPut("{eventId:guid}/rooms")]
-    public async Task<ActionResult<IReadOnlyList<HostedEventRoomRecord>>> SetRooms(
-        Guid orgId, Guid eventId, [FromBody] SetHostedEventRoomsRequest request, CancellationToken ct)
+    [HttpPut("{eventId:guid}/layout")]
+    public async Task<ActionResult<HostedEventLayoutRecord>> SetLayout(
+        Guid orgId, Guid eventId, [FromBody] SetHostedEventLayoutRequest request, CancellationToken ct)
     {
         var userId = GetCurrentUserId();
         if (userId is null) return Unauthorized();
@@ -420,47 +427,95 @@ public sealed class HostedEventController : OrgCmsControllerBase
             .FirstOrDefaultAsync(e => e.Id == eventId && e.OrganizationId == orgId, ct);
         if (ev is null) return NotFound();
 
-        var wanted = request.Rooms ?? [];
-        var wantedIds = wanted.Select(r => r.PlaceRoomId).ToHashSet();
+        var wanted = request.Units ?? [];
 
-        // Every room has to be one this group has defined for this event's own place.
-        var allowed = await db.PlaceRooms
-            .Where(r => r.OrganizationId == orgId && r.PlaceId == ev.PlaceId && r.IsActive)
-            .Select(r => r.Id)
-            .ToListAsync(ct);
-        if (wantedIds.Except(allowed).Any())
-            return BadRequest("One of those rooms is not a room this group has defined for the venue.");
-
-        var existing = await db.HostedEventRooms
-            .Where(r => r.HostedEventId == eventId)
-            .ToListAsync(ct);
-
-        // A room with beds in it cannot stop being offered.
-        var removing = existing.Where(r => !wantedIds.Contains(r.PlaceRoomId)).ToList();
-        if (removing.Count > 0)
+        // ── the kind, and what it demands of each unit ───────────────────────
+        if (request.Kind != ev.LayoutKind)
         {
-            var stillBooked = await db.HostedEventBookingNights
-                .Include(n => n.PlaceRoom)
-                .Where(n => n.HostedEventBooking.HostedEventId == eventId
-                         && n.HostedEventBooking.Status == HostedEventBookingStatus.Confirmed
-                         && removing.Select(r => r.PlaceRoomId).Contains(n.PlaceRoomId))
-                .Select(n => n.PlaceRoom.Name)
-                .Distinct()
-                .ToListAsync(ct);
-            if (stillBooked.Count > 0)
+            var held = await db.HostedEventBookingNights.AnyAsync(
+                n => n.HostedEventBooking.HostedEventId == eventId
+                  && n.HostedEventLayoutUnitId != null
+                  && n.HostedEventBooking.Status == HostedEventBookingStatus.Confirmed, ct);
+            if (held)
                 return BadRequest(
-                    $"{string.Join(" and ", stillBooked)} still {(stillBooked.Count == 1 ? "has" : "have")} "
-                  + "confirmed bookings. Move those parties first.");
-
-            db.HostedEventRooms.RemoveRange(removing);
+                    "Parties are already confirmed into this plan, so it can't change from "
+                  + $"{Describe(ev.LayoutKind)} to {Describe(request.Kind)}. Release those bookings "
+                  + "first if you really mean to start again.");
+            ev.LayoutKind = request.Kind;
         }
 
-        foreach (var choice in wanted)
+        if (request.Kind == HostedEventLayoutKind.Rooms)
         {
-            var row = existing.FirstOrDefault(r => r.PlaceRoomId == choice.PlaceRoomId);
+            if (wanted.Any(u => u.PlaceRoomId is null))
+                return BadRequest("Every room on the plan has to be one of the venue's own rooms.");
+
+            var allowed = await db.PlaceRooms
+                .Where(r => r.OrganizationId == orgId && r.PlaceId == ev.PlaceId && r.IsActive)
+                .Select(r => r.Id)
+                .ToListAsync(ct);
+            if (wanted.Select(u => u.PlaceRoomId!.Value).Except(allowed).Any())
+                return BadRequest("One of those rooms is not a room this group has defined for the venue.");
+
+            if (wanted.GroupBy(u => u.PlaceRoomId).Any(g => g.Count() > 1))
+                return BadRequest("A room can only be on the plan once.");
+        }
+        else
+        {
+            if (wanted.Any(u => u.PlaceRoomId is not null))
+                return BadRequest("A seat isn't one of the venue's rooms.");
+            if (wanted.Any(u => Trimmed(u.Label) is null))
+                return BadRequest("Every seat needs a label — \"H9\", \"Row C, 4\".");
+        }
+
+        // ── what is going, and what will not go ──────────────────────────────
+        var existing = await db.HostedEventLayoutUnits
+            .Include(u => u.PlaceRoom)
+            .Where(u => u.HostedEventId == eventId)
+            .ToListAsync(ct);
+
+        // Matched on the room for a Rooms plan and on the label for a Seats one, because those are
+        // the two things a person actually means by "the same one". Matching on nothing would
+        // delete and recreate every unit on every save, and every booking would lose its room.
+        HostedEventLayoutUnit? Match(HostedEventLayoutUnitChoice choice)
+            => request.Kind == HostedEventLayoutKind.Rooms
+                ? existing.FirstOrDefault(u => u.PlaceRoomId == choice.PlaceRoomId)
+                : existing.FirstOrDefault(u => u.Label != null
+                    && string.Equals(u.Label, Trimmed(choice.Label), StringComparison.OrdinalIgnoreCase));
+
+        var keeping = wanted.Select(Match).Where(u => u is not null).Select(u => u!.Id).ToHashSet();
+        var removing = existing.Where(u => !keeping.Contains(u.Id)).ToList();
+
+        if (removing.Count > 0)
+        {
+            var removingIds = removing.Select(u => u.Id).ToList();
+            var stillBooked = await db.HostedEventBookingNights
+                .Include(n => n.HostedEventLayoutUnit).ThenInclude(u => u!.PlaceRoom)
+                .Where(n => n.HostedEventBooking.HostedEventId == eventId
+                         && n.HostedEventBooking.Status == HostedEventBookingStatus.Confirmed
+                         && n.HostedEventLayoutUnitId != null
+                         && removingIds.Contains(n.HostedEventLayoutUnitId.Value))
+                .Select(n => n.HostedEventLayoutUnit!)
+                .ToListAsync(ct);
+
+            if (stillBooked.Count > 0)
+            {
+                var names = stillBooked.Select(EventCapacity.NameOf).Distinct().ToList();
+                return BadRequest(
+                    $"{string.Join(" and ", names)} still {(names.Count == 1 ? "has" : "have")} "
+                  + "confirmed bookings. Move those parties first.");
+            }
+
+            db.HostedEventLayoutUnits.RemoveRange(removing);
+        }
+
+        // ── writing the plan ─────────────────────────────────────────────────
+        for (var i = 0; i < wanted.Count; i++)
+        {
+            var choice = wanted[i];
+            var row = Match(choice);
             if (row is null)
             {
-                row = new HostedEventRoom
+                row = new HostedEventLayoutUnit
                 {
                     Id = Guid.NewGuid(),
                     HostedEventId = eventId,
@@ -468,33 +523,76 @@ public sealed class HostedEventController : OrgCmsControllerBase
                     DateCreated = DateTime.UtcNow,
                     CreatedByAppUserId = userId.Value,
                 };
-                db.HostedEventRooms.Add(row);
+                db.HostedEventLayoutUnits.Add(row);
             }
             else
             {
                 row.DateUpdated = DateTime.UtcNow;
                 row.UpdatedByAppUserId = userId.Value;
             }
-            row.CapacityOverride = choice.CapacityOverride is int c && c >= 0 ? c : null;
+
+            // A Rooms unit deliberately keeps no label, so renaming the venue's room renames it
+            // everywhere at once instead of leaving last year's name on this year's plan.
+            row.Label = request.Kind == HostedEventLayoutKind.Rooms ? null : Trimmed(choice.Label);
+            row.Section = Trimmed(choice.Section);
+            // A seat holds exactly one person, whatever was sent. A seat that holds three is not a
+            // seat, and one existing would quietly break every count that trusts the number.
+            row.Capacity = request.Kind == HostedEventLayoutKind.Seats
+                ? 1
+                : choice.Capacity is int c && c >= 0 ? c : null;
+            row.Price = choice.Price is decimal p && p >= 0 ? decimal.Round(p, 2) : null;
             row.Note = Trimmed(choice.Note);
-            row.SortOrder = choice.SortOrder;
+            // Taken as a pair: half a position is not a place on a plan, and storing one would
+            // leave a unit the designer could draw but never find again.
+            var placed = choice.LayoutRow is not null && choice.LayoutColumn is not null;
+            row.LayoutRow = placed ? choice.LayoutRow : null;
+            row.LayoutColumn = placed ? choice.LayoutColumn : null;
+            // Position in the list is the order, as everywhere else a screen sends a list it has
+            // already arranged.
+            row.SortOrder = i;
         }
 
         await db.SaveChangesAsync(ct);
-        return Ok(await RoomsAsync(db, eventId, ct));
+        return Ok(await LayoutAsync(db, ev, ct));
     }
 
-    private static async Task<IReadOnlyList<HostedEventRoomRecord>> RoomsAsync(
-        BenDataContext db, Guid eventId, CancellationToken ct)
-        => await db.HostedEventRooms
+    /// <summary>The plan as every screen reads it.</summary>
+    internal static async Task<HostedEventLayoutRecord> LayoutAsync(
+        BenDataContext db, HostedEvent ev, CancellationToken ct)
+    {
+        var units = await db.HostedEventLayoutUnits
             .AsNoTracking()
-            .Include(r => r.PlaceRoom)
-            .Where(r => r.HostedEventId == eventId)
-            .OrderBy(r => r.SortOrder).ThenBy(r => r.PlaceRoom.Name)
-            .Select(r => new HostedEventRoomRecord(
-                r.Id, r.PlaceRoomId, r.PlaceRoom.Name, r.PlaceRoom.Floor, r.PlaceRoom.BedNote,
-                r.CapacityOverride ?? r.PlaceRoom.Capacity, r.CapacityOverride, r.Note, r.SortOrder))
+            .Include(u => u.PlaceRoom)
+            .Where(u => u.HostedEventId == ev.Id)
+            .OrderBy(u => u.SortOrder)
             .ToListAsync(ct);
+
+        return new HostedEventLayoutRecord(
+            ev.Id,
+            ev.LayoutKind,
+            ev.DayPassCapacity,
+            ev.DayPassPrice,
+            units.Select(ToUnitRecord).ToList());
+    }
+
+    internal static HostedEventLayoutUnitRecord ToUnitRecord(HostedEventLayoutUnit u) => new(
+        u.Id,
+        u.PlaceRoomId,
+        EventCapacity.NameOf(u),
+        u.Section,
+        u.PlaceRoom?.Floor,
+        u.PlaceRoom?.BedNote,
+        EventCapacity.CapacityOf(u),
+        u.Capacity,
+        u.Price,
+        u.Note,
+        u.LayoutRow,
+        u.LayoutColumn,
+        u.SortOrder);
+
+    /// <summary>The kind, in the words a refusal uses.</summary>
+    private static string Describe(HostedEventLayoutKind kind)
+        => kind == HostedEventLayoutKind.Seats ? "seating" : "rooms";
 
     /// <summary>Un-does a cancellation, for the one that was a mis-click.</summary>
     [HttpPost("{eventId:guid}/uncancel")]

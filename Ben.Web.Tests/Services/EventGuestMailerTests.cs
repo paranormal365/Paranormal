@@ -242,6 +242,10 @@ public sealed class EventGuestMailerTests
         return n;
     }
 
+    /// <param name="BlueRoomId">
+    /// The event's LAYOUT UNIT for the Blue Room. A booking holds what the event offers, not the
+    /// venue's own row.
+    /// </param>
     private sealed record Seeded(Guid FridayId, Guid SaturdayId, Guid BlueRoomId);
 
     private static async Task IssuePassAsync(SqliteTestDb sqlite, Guid bookingId)
@@ -273,7 +277,7 @@ public sealed class EventGuestMailerTests
                 booking.Nights.Add(new HostedEventBookingNight
                 {
                     Id = Guid.NewGuid(), HostedEventBookingId = booking.Id,
-                    HostedEventNightId = nightId, PlaceRoomId = seeded.BlueRoomId,
+                    HostedEventNightId = nightId, HostedEventLayoutUnitId = seeded.BlueRoomId,
                     DateCreated = DateTime.UtcNow,
                 });
             }
@@ -339,6 +343,16 @@ public sealed class EventGuestMailerTests
         db.HostedEventNights.AddRange(friday, saturday);
 
         await db.SaveChangesAsync();
-        return new Seeded(friday.Id, saturday.Id, blue.Id);
+        // The event's plan, offering the one room. Without this the booking nights would point at
+        // a unit that does not exist and the letter would say "just for the day".
+        var blueUnit = new HostedEventLayoutUnit
+        {
+            Id = Guid.NewGuid(), HostedEventId = EventId, PlaceRoomId = blue.Id,
+            DateCreated = DateTime.UtcNow, CreatedByAppUserId = HostId,
+        };
+        db.HostedEventLayoutUnits.Add(blueUnit);
+        await db.SaveChangesAsync();
+
+        return new Seeded(friday.Id, saturday.Id, blueUnit.Id);
     }
 }

@@ -235,7 +235,7 @@ public sealed class EventGuestMailer
                 // showed a night as a single point in time would tell a guest nothing.
                 StartUtc: n.HostedEventNight.Date.Date.AddHours(18),
                 EndUtc: n.HostedEventNight.Date.Date.AddDays(1).AddHours(10),
-                Summary: $"{ev.Name} — {n.PlaceRoom?.Name ?? "your room"}",
+                Summary: $"{ev.Name} — {EventCapacity.NameOf(n) ?? "your room"}",
                 Description: null,
                 Location: venue,
                 Url: absolute,
@@ -264,13 +264,13 @@ public sealed class EventGuestMailer
             .Include(b => b.HostedEvent).ThenInclude(e => e.Organization)
             .Include(b => b.HostedEvent).ThenInclude(e => e.Place)
             .Include(b => b.Nights).ThenInclude(n => n.HostedEventNight)
-            .Include(b => b.Nights).ThenInclude(n => n.PlaceRoom)
+            .Include(b => b.Nights).ThenInclude(n => n.HostedEventLayoutUnit).ThenInclude(u => u!.PlaceRoom)
             .FirstOrDefaultAsync(b => b.Id == bookingId, ct);
 
     private static List<string> Where(HostedEventBooking booking)
         => booking.Nights
             .OrderBy(n => n.HostedEventNight.Date)
-            .Select(n => $"{n.HostedEventNight.Date:dddd, MMMM d} — {n.PlaceRoom?.Name ?? "your room"}")
+            .Select(n => $"{n.HostedEventNight.Date:dddd, MMMM d} — {EventCapacity.NameOf(n) ?? "your room"}")
             .ToList();
 
     private static string Greeting(HostedEventBooking booking)

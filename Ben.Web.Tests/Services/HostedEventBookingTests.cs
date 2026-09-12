@@ -31,6 +31,10 @@ public sealed class HostedEventBookingTests
     private static readonly Guid PlaceId = Guid.NewGuid();
     private static readonly Guid EventId = Guid.NewGuid();
 
+    /// <param name="BlueRoomId">
+    /// The event's LAYOUT UNIT for the Blue Room, not the venue's room. A booking holds what the
+    /// event offers, so that is what these tests allocate against.
+    /// </param>
     private sealed record Seeded(Guid FridayId, Guid SaturdayId, Guid BlueRoomId, Guid SuiteId);
 
     /// <summary>
@@ -98,20 +102,22 @@ public sealed class HostedEventBookingTests
         };
         db.HostedEventNights.AddRange(friday, saturday);
 
-        db.HostedEventRooms.AddRange(
-            new HostedEventRoom
-            {
-                Id = Guid.NewGuid(), HostedEventId = EventId, PlaceRoomId = blue.Id,
-                DateCreated = DateTime.UtcNow, CreatedByAppUserId = HostId,
-            },
-            new HostedEventRoom
-            {
-                Id = Guid.NewGuid(), HostedEventId = EventId, PlaceRoomId = suite.Id,
-                DateCreated = DateTime.UtcNow, CreatedByAppUserId = HostId,
-            });
+        // The event's own plan, offering two of the venue's rooms. Bookings hold the UNIT rather
+        // than the venue's room, so these ids are what the tests below allocate against.
+        var blueUnit = new HostedEventLayoutUnit
+        {
+            Id = Guid.NewGuid(), HostedEventId = EventId, PlaceRoomId = blue.Id,
+            DateCreated = DateTime.UtcNow, CreatedByAppUserId = HostId,
+        };
+        var suiteUnit = new HostedEventLayoutUnit
+        {
+            Id = Guid.NewGuid(), HostedEventId = EventId, PlaceRoomId = suite.Id, SortOrder = 1,
+            DateCreated = DateTime.UtcNow, CreatedByAppUserId = HostId,
+        };
+        db.HostedEventLayoutUnits.AddRange(blueUnit, suiteUnit);
 
         await db.SaveChangesAsync();
-        return new Seeded(friday.Id, saturday.Id, blue.Id, suite.Id);
+        return new Seeded(friday.Id, saturday.Id, blueUnit.Id, suiteUnit.Id);
     }
 
     private static HostedEventBooking NewBooking(
@@ -130,7 +136,7 @@ public sealed class HostedEventBookingTests
             booking.Nights.Add(new HostedEventBookingNight
             {
                 Id = Guid.NewGuid(), HostedEventBookingId = booking.Id,
-                HostedEventNightId = nightId, PlaceRoomId = roomId,
+                HostedEventNightId = nightId, HostedEventLayoutUnitId = roomId,
                 DateCreated = DateTime.UtcNow,
             });
         }
@@ -213,20 +219,20 @@ public sealed class HostedEventBookingTests
         var seeded = await SeedAsync(sqlite);
 
         await using var db = await sqlite.NewContextAsync();
-        var rooms = await db.HostedEventRooms.Include(r => r.PlaceRoom)
+        var rooms = await db.HostedEventLayoutUnits.Include(r => r.PlaceRoom)
             .Where(r => r.HostedEventId == EventId).ToListAsync();
 
-        var blue = rooms.First(r => r.PlaceRoomId == seeded.BlueRoomId);
-        var suite = rooms.First(r => r.PlaceRoomId == seeded.SuiteId);
+        var blue = rooms.First(r => r.Id == seeded.BlueRoomId);
+        var suite = rooms.First(r => r.Id == seeded.SuiteId);
 
         var refusal = EventCapacity.WhyThisRoomCannotTakeThem(
-            blue.PlaceRoom.Name, new DateTime(2026, 10, 30),
+            EventCapacity.NameOf(blue), new DateTime(2026, 10, 30),
             EventCapacity.CapacityOf(blue), taken: 0, partySize: 3);
         Assert.Contains("Blue Room", refusal);
         Assert.Contains("sleeps 2 more", refusal);
 
         Assert.Null(EventCapacity.WhyThisRoomCannotTakeThem(
-            suite.PlaceRoom.Name, new DateTime(2026, 10, 30),
+            EventCapacity.NameOf(suite), new DateTime(2026, 10, 30),
             EventCapacity.CapacityOf(suite), taken: 0, partySize: 3));
     }
 

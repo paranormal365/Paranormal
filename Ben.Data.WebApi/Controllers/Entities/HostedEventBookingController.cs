@@ -235,7 +235,7 @@ public sealed class HostedEventBookingController : OrgCmsControllerBase
         if (request.Note is not null) booking.Note = Trimmed(request.Note);
 
         var nights = request.Nights ?? booking.Nights
-            .Select(n => new HostedEventBookingNightChoice(n.HostedEventNightId, n.PlaceRoomId))
+            .Select(n => new HostedEventBookingNightChoice(n.HostedEventNightId, n.HostedEventLayoutUnitId))
             .ToList();
 
         // Only a booking that HOLDS beds can be over capacity, so a request is edited freely and
@@ -565,7 +565,7 @@ public sealed class HostedEventBookingController : OrgCmsControllerBase
             .Include(p => p.HostedEventBooking).ThenInclude(b => b.Guests)
             .Include(p => p.HostedEventBooking).ThenInclude(b => b.Nights)
                 .ThenInclude(n => n.HostedEventNight)
-            .Include(p => p.HostedEventBooking).ThenInclude(b => b.Nights).ThenInclude(n => n.PlaceRoom)
+            .Include(p => p.HostedEventBooking).ThenInclude(b => b.Nights).ThenInclude(n => n.HostedEventLayoutUnit).ThenInclude(u => u!.PlaceRoom)
             .Include(p => p.HostedEventBooking).ThenInclude(b => b.HostedEvent)
             .FirstOrDefaultAsync(p => p.Token == token, ct);
 
@@ -601,7 +601,7 @@ public sealed class HostedEventBookingController : OrgCmsControllerBase
             Nights: booking.Nights
                 .OrderBy(n => n.HostedEventNight.Date)
                 .Select(n => new HostedEventBookingNightRecord(
-                    n.HostedEventNightId, n.HostedEventNight.Date, n.PlaceRoomId, n.PlaceRoom.Name))
+                    n.HostedEventNightId, n.HostedEventNight.Date, n.HostedEventLayoutUnitId, EventCapacity.NameOf(n)))
                 .ToList(),
             GuestNames: booking.Guests.OrderBy(g => g.SortOrder).Select(g => g.DisplayName).ToList(),
             AlreadyCheckedInUtc: alreadyIn));
@@ -764,7 +764,7 @@ public sealed class HostedEventBookingController : OrgCmsControllerBase
             return EventCapacity.WhyTheseDayPassesCannotBeGiven(ev.DayPassCapacity, taken, party);
         }
 
-        var offered = await db.HostedEventRooms
+        var offered = await db.HostedEventLayoutUnits
             .Include(r => r.PlaceRoom)
             .Where(r => r.HostedEventId == ev.Id)
             .ToListAsync(ct);
@@ -777,14 +777,22 @@ public sealed class HostedEventBookingController : OrgCmsControllerBase
             if (!eventNights.TryGetValue(choice.HostedEventNightId, out var night))
                 return "One of those nights is not part of this event any more.";
 
-            var room = offered.FirstOrDefault(r => r.PlaceRoomId == choice.PlaceRoomId);
-            if (room is null)
-                return "That room is not one this event is offering. Add it to the event first.";
+            // A night with no unit is somebody here for the day and going home again, which holds
+            // nothing and so cannot be over capacity. It is how a three-night event sells its
+            // Saturday on its own, and refusing it here would make that impossible to say.
+            if (choice.HostedEventLayoutUnitId is not { } unitId) continue;
 
-            var taken = EventCapacity.PeopleIn(all, choice.HostedEventNightId, choice.PlaceRoomId,
+            var unit = offered.FirstOrDefault(u => u.Id == unitId);
+            if (unit is null)
+                return ev.LayoutKind == HostedEventLayoutKind.Seats
+                    ? "That seat is not one on this event's plan. Add it to the plan first."
+                    : "That room is not one this event is offering. Add it to the plan first.";
+
+            var taken = EventCapacity.PeopleIn(all, choice.HostedEventNightId, unitId,
                                                excludingBookingId: booking.Id);
             if (EventCapacity.WhyThisRoomCannotTakeThem(
-                    room.PlaceRoom.Name, night.Date, EventCapacity.CapacityOf(room), taken, party)
+                    EventCapacity.NameOf(unit), night.Date, EventCapacity.CapacityOf(unit),
+                    taken, party, ev.LayoutKind)
                 is { } refusal)
                 return refusal;
         }
@@ -859,7 +867,7 @@ public sealed class HostedEventBookingController : OrgCmsControllerBase
                 Id = Guid.NewGuid(),
                 HostedEventBookingId = booking.Id,
                 HostedEventNightId = choice.HostedEventNightId,
-                PlaceRoomId = choice.PlaceRoomId,
+                HostedEventLayoutUnitId = choice.HostedEventLayoutUnitId,
                 DateCreated = DateTime.UtcNow,
             });
         }
@@ -929,7 +937,7 @@ public sealed class HostedEventBookingController : OrgCmsControllerBase
     {
         var bookings = await db.HostedEventBookings
             .AsNoTracking()
-            .Include(b => b.Nights).ThenInclude(n => n.PlaceRoom)
+            .Include(b => b.Nights).ThenInclude(n => n.HostedEventLayoutUnit).ThenInclude(u => u!.PlaceRoom)
             .Include(b => b.Nights).ThenInclude(n => n.HostedEventNight)
             .Include(b => b.Guests)
             .Include(b => b.LeadAppUser)
@@ -950,7 +958,7 @@ public sealed class HostedEventBookingController : OrgCmsControllerBase
                 .OrderBy(n => n.HostedEventNight.Date)
                 .Select(n => new HostedEventBookingNightRecord(
                     n.HostedEventNightId, n.HostedEventNight.Date,
-                    n.PlaceRoomId, n.PlaceRoom.Name))
+                    n.HostedEventLayoutUnitId, EventCapacity.NameOf(n)))
                 .ToList(),
             b.Guests
                 .OrderBy(g => g.SortOrder)
@@ -964,26 +972,28 @@ public sealed class HostedEventBookingController : OrgCmsControllerBase
     private async Task<HostedEventBookingBoardRecord> BoardAsync(
         BenDataContext db, HostedEvent ev, bool canSeeDietary, CancellationToken ct)
     {
-        var offered = await db.HostedEventRooms
+        var offered = await db.HostedEventLayoutUnits
             .AsNoTracking()
             .Include(r => r.PlaceRoom)
             .Where(r => r.HostedEventId == ev.Id)
-            .OrderBy(r => r.SortOrder).ThenBy(r => r.PlaceRoom.Name)
+            // Sort order alone: it is what the designer wrote, and a seat has no room to fall back
+            // on — ordering by the room's name would throw on the first Seats layout.
+            .OrderBy(r => r.SortOrder)
             .ToListAsync(ct);
 
         var all = await AllBookingsAsync(db, ev.Id, ct);
         var nights = ev.Nights.OrderBy(n => n.Date).ToList();
 
-        var roomNights = new List<HostedEventRoomNightRecord>();
+        var unitNights = new List<HostedEventUnitNightRecord>();
         foreach (var night in nights)
         {
-            foreach (var room in offered)
+            foreach (var unit in offered)
             {
-                roomNights.Add(new HostedEventRoomNightRecord(
-                    night.Id, night.Date, room.PlaceRoomId, room.PlaceRoom.Name,
-                    EventCapacity.CapacityOf(room),
-                    EventCapacity.PeopleIn(all, night.Id, room.PlaceRoomId),
-                    AskedFor(all, night.Id, room.PlaceRoomId)));
+                unitNights.Add(new HostedEventUnitNightRecord(
+                    night.Id, night.Date, unit.Id, EventCapacity.NameOf(unit),
+                    EventCapacity.CapacityOf(unit),
+                    EventCapacity.PeopleIn(all, night.Id, unit.Id),
+                    AskedFor(all, night.Id, unit.Id)));
             }
         }
 
@@ -996,10 +1006,8 @@ public sealed class HostedEventBookingController : OrgCmsControllerBase
             all.Where(b => b.Kind == HostedEventBookingKind.DayPass
                         && b.Status == HostedEventBookingStatus.Requested)
                .Sum(b => Math.Max(1, b.PartySize)),
-            offered.Select(r => new HostedEventRoomRecord(
-                r.Id, r.PlaceRoomId, r.PlaceRoom.Name, r.PlaceRoom.Floor, r.PlaceRoom.BedNote,
-                EventCapacity.CapacityOf(r), r.CapacityOverride, r.Note, r.SortOrder)).ToList(),
-            roomNights,
+            offered.Select(HostedEventController.ToUnitRecord).ToList(),
+            unitNights,
             await BookingsAsync(db, ev.Id, canSeeDietary, ct));
     }
 
@@ -1026,11 +1034,11 @@ public sealed class HostedEventBookingController : OrgCmsControllerBase
     /// list rather than a closed door.
     /// </remarks>
     private static int AskedFor(
-        IEnumerable<HostedEventBooking> bookings, Guid nightId, Guid placeRoomId)
+        IEnumerable<HostedEventBooking> bookings, Guid nightId, Guid unitId)
         => bookings
             .Where(b => b.Status == HostedEventBookingStatus.Requested)
             .Where(b => b.Nights.Any(n => n.HostedEventNightId == nightId
-                                       && n.PlaceRoomId == placeRoomId))
+                                       && n.HostedEventLayoutUnitId == unitId))
             .Sum(b => Math.Max(1, b.PartySize));
 
     // ── plumbing ─────────────────────────────────────────────────────────────

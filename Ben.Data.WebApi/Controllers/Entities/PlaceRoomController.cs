@@ -101,6 +101,12 @@ public sealed class PlaceRoomController : BenControllerBase
             Floor = string.IsNullOrWhiteSpace(request.Floor) ? null : request.Floor.Trim(),
             Description = string.IsNullOrWhiteSpace(request.Description) ? null : request.Description.Trim(),
             IsPublic = request.IsPublic,
+            // What a booking needs to know (item 235 phase 2). A new room is NOT bookable unless
+            // asked for, the same say-so-before-it-is-used rule publishing follows: a room becomes
+            // somewhere a guest sleeps because somebody said so, not because it exists.
+            Capacity = request.Capacity is int c && c >= 0 ? c : null,
+            IsBookable = request.IsBookable ?? false,
+            BedNote = string.IsNullOrWhiteSpace(request.BedNote) ? null : request.BedNote.Trim(),
             // Appended rather than inserted: a new room goes at the end of the list its owner has
             // arranged, and they can move it.
             SortOrder = await db.PlaceRooms
@@ -150,6 +156,18 @@ public sealed class PlaceRoomController : BenControllerBase
         room.IsPublic = request.IsPublic;
         if (request.SortOrder is { } sort) room.SortOrder = sort;
         if (request.IsActive is { } active) room.IsActive = active;
+
+        // Null means LEAVE IT ALONE on everything added after the first release, which is why
+        // each clearing is its own explicit flag. The floor-plan screen sends positions and
+        // nothing else; a whole-object save from it would wipe the capacities and bed notes
+        // somebody typed on the list screen, and neither screen would look wrong while doing it.
+        if (request.ClearCapacity) room.Capacity = null;
+        else if (request.Capacity is int cap && cap >= 0) room.Capacity = cap;
+
+        if (request.IsBookable is { } bookable) room.IsBookable = bookable;
+        if (request.BedNote is not null)
+            room.BedNote = string.IsNullOrWhiteSpace(request.BedNote) ? null : request.BedNote.Trim();
+
         room.DateUpdated = DateTime.UtcNow;
         room.UpdatedByAppUserId = GetCurrentUserId();
 
@@ -182,10 +200,29 @@ public sealed class PlaceRoomController : BenControllerBase
     }
 
     private static PlaceRoomRecord ToRecord(PlaceRoom r) => new(
-        r.Id, r.PlaceId, r.Name, r.Floor, r.Description, r.IsPublic, r.SortOrder, r.IsActive);
+        r.Id, r.PlaceId, r.Name, r.Floor, r.Description, r.IsPublic, r.SortOrder, r.IsActive,
+        r.Capacity, r.IsBookable, r.BedNote);
 }
 
 /// <summary>One named space inside a place.</summary>
+/// <param name="Capacity">
+/// How many sleep here, when the venue has said. <b>Null and zero mean different things</b>: null
+/// is "we have not said" and cannot be over-filled; zero is "nobody sleeps in the chapel".
+/// </param>
+/// <param name="IsBookable">
+/// Whether an event may offer it to guests. Separate from <paramref name="IsPublic"/>, which is
+/// about the property's own page: a staff room can be named, attributed to readings and kept off
+/// the page, and still never be somewhere a guest sleeps.
+/// </param>
+/// <param name="BedNote">
+/// What the beds actually are. A number cannot answer "will the two of us have to share a bed",
+/// which is the question guests ask.
+/// </param>
+/// <remarks>
+/// <b>There is no floor-plan position here on purpose.</b> A plan belongs to an event's layout,
+/// not to the venue's description of its building — a seat has no room behind it at all, and two
+/// places to record where a room sits would drift apart the first time one of them was edited.
+/// </remarks>
 public sealed record PlaceRoomRecord(
     Guid Id,
     Guid PlaceId,
@@ -194,13 +231,32 @@ public sealed record PlaceRoomRecord(
     string? Description,
     bool IsPublic,
     int SortOrder,
-    bool IsActive);
+    bool IsActive,
+    int? Capacity = null,
+    bool IsBookable = false,
+    string? BedNote = null);
 
 /// <summary>Naming or editing a room. Sort order and active state are optional on an edit.</summary>
+/// <remarks>
+/// Every field added after the first release is optional and <b>null means "leave it alone"</b>,
+/// not "clear it". A screen that edits only what a booking needs must not wipe the descriptions
+/// somebody typed on another one, which is exactly what a whole-object save would do.
+/// </remarks>
 public sealed record SavePlaceRoomRequest(
     string? Name,
     string? Floor,
     string? Description,
     bool IsPublic,
     int? SortOrder = null,
-    bool? IsActive = null);
+    bool? IsActive = null,
+    int? Capacity = null,
+    bool? IsBookable = null,
+    string? BedNote = null,
+    /// <summary>
+    /// Clears the capacity, because null on <see cref="Capacity"/> already means "leave it".
+    /// </summary>
+    /// <remarks>
+    /// A venue that stated a number and wants to go back to "we have not said" has no other way to
+    /// say so, and "we have not said" is a real and useful state rather than a gap.
+    /// </remarks>
+    bool ClearCapacity = false);

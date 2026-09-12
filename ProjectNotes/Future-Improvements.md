@@ -12257,3 +12257,67 @@ chart of nothing looks like a chart of zero.
 Slices 1 to 5 are all reading or writing things the schema already has. Slice 6 is the first one
 that changes what the site knows about people, and it should be a separate decision with its own
 sentence in `/privacy`.
+
+## 238. Telling the venue somebody is asking: reservation alerts, a digest, and the staff room (item 235 follow-on — open, doable now)
+
+Ben, 2026-09-12, while phase 2.4 was being built:
+
+> Add future enhancement where we can send out notices to event organizers with summaries of who
+> is confirmed, any new reservations to contact with a link for them to log in and get the contact
+> information for the attendee and also ability to add this to the organizer or employee internal
+> messages. This might be triggered by someone signing up to reserve room or seat to give employee
+> notice new people are requesting reservation for "X".
+
+**Why it matters more than it sounds.** Everything item 235 built so far is pull: a request lands
+in a queue and waits for somebody to open the board. The bell rows added in phase 2.3 help a person
+who is already on the site. Nobody is *told*. A venue that checks on Monday has left a guest waiting
+since Friday, and a guest who waits three days books somewhere else — so the one number this
+feature moves is how fast a request is answered.
+
+### A. The alert, when somebody asks
+
+Triggered by a request arriving (the guest's own door, the umbrella RSVP, or a confirmed email
+invitation), to every member of the venue who may decide bookings.
+
+- **Say what is being asked for, not that something happened.** "A party of 4 has asked for the
+  Blue Room, Fri–Sat" is actionable; "you have a new notification" is not.
+- **Never carry the guest's contact details.** The letter links to the booking and the person signs
+  in to see who it is. Ben asked for exactly this — *"a link for them to log in and get the contact
+  information"* — and it is also the only version that survives a forwarded email.
+- **Batch, do not flood.** A weekend that sells out in an hour must not send forty letters. One
+  immediate letter, then a rolling window (fifteen minutes is a sensible first guess) that collapses
+  everything else into one "and 12 more".
+- **Per-person opt-out**, because the busiest venue is the one most likely to want only the digest.
+
+### B. The digest
+
+A scheduled summary per event, not per site: who is confirmed, who is still waiting and for how
+long, what is left in each room or seat, and anything undecided inside the booking deadline.
+
+- **Cadence is the venue's**, and the useful default is daily while an event is inside its booking
+  window and weekly outside it. A digest for an event nobody has asked about should not be sent at
+  all — an empty letter every morning is how people learn to filter you.
+- **The oldest undecided request is the headline.** That is the number a venue can act on, and it
+  is the one the bell already computes.
+- Reuses the existing job scheduling; nothing new is needed to run it.
+
+### C. Into the staff room
+
+Ben's *"ability to add this to the organizer or employee internal messages"*. The site already has
+organization messages, so this is a delivery target rather than a new feature: the same alert
+written into the group's own thread so a venue can discuss it where they discuss everything else,
+and so a member with no email still sees it.
+
+- Worth a **thread per event** rather than one per booking, or a busy weekend buries every other
+  conversation the group is having.
+
+### What has to be decided first
+
+- **Which permission receives them.** Today deciding a booking takes the settings key, which is
+  billing-level; phase 5 introduces the `Events` area and per-event staff, and that is the honest
+  audience for this. Building it before phase 5 means sending a venue's bookings to whoever can see
+  its bank details, which is broader than it should be. **So this follows phase 5, not phase 2.**
+- Whether the digest is per event or per venue when a venue runs several at once.
+- Whether an alert should ever go to a non-member (a hired door manager), which is the same
+  question phase 5 asks about non-member staff.
+

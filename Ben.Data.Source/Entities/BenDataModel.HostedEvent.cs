@@ -1,3 +1,4 @@
+using Ben.Data.Common.Enums;
 using Ben.Data.Common.Interfaces;
 
 namespace Ben.Data.Source.Entities
@@ -140,6 +141,31 @@ namespace Ben.Data.Source.Entities
         public int? DayPassCapacity { get; set; }
 
         /// <summary>
+        /// What a day pass costs, shown to guests and <b>never charged</b>.
+        /// </summary>
+        /// <remarks>
+        /// Ben, 2026-09-12: <i>"We can tell them the price, but we do not collect money."</i> The
+        /// venue settles it with the guest. Null is "ask the venue"; zero is a day pass that is
+        /// genuinely free, and the two read differently to somebody deciding whether to come.
+        /// </remarks>
+        public decimal? DayPassPrice { get; set; }
+
+        /// <summary>
+        /// What this event allocates to its guests — rooms to sleep in, or seats to sit in.
+        /// </summary>
+        /// <remarks>
+        /// <para><b>One per event</b> (Ben, 2026-09-12). There is no hotel that is also a theatre
+        /// on the same weekend, so an event picks a kind and gets one plan. Saying it here rather
+        /// than inferring it from which fields happen to be filled in is what keeps the booking
+        /// screen answerable: a guest is asked for a room, or asked for a seat, never asked which
+        /// sort of thing they would like to be asked for.</para>
+        ///
+        /// <para>Rooms is the default, because a hosted event is an overnight stay until somebody
+        /// says otherwise.</para>
+        /// </remarks>
+        public HostedEventLayoutKind LayoutKind { get; set; } = HostedEventLayoutKind.Rooms;
+
+        /// <summary>
         /// When the venue stops taking requests, in UTC. Null means it never does.
         /// </summary>
         /// <remarks>
@@ -210,7 +236,7 @@ namespace Ben.Data.Source.Entities
 
         /// <summary>The nights, or the performances — see <see cref="DatesAreSeparate"/>.</summary>
         public virtual ICollection<HostedEventNight> Nights { get; set; } = [];
-        public virtual ICollection<HostedEventRoom> Rooms { get; set; } = [];
+        public virtual ICollection<HostedEventLayoutUnit> LayoutUnits { get; set; } = [];
         public virtual ICollection<HostedEventBooking> Bookings { get; set; } = [];
 
         /// <summary>

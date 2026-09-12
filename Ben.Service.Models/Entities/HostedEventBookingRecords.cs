@@ -2,37 +2,80 @@ using Ben.Data.Common.Enums;
 
 namespace Ben.Service.Models.Entities;
 
-/// <summary>A room this event is offering, as the organiser's screen and the guest's both read it.</summary>
-/// <param name="Sleeps">
-/// What it sleeps for THIS event — the override where there is one, otherwise the room's own
-/// number. Null means the venue has never said, which is allowed and simply cannot be over-filled.
+/// <summary>
+/// One thing this event allocates — a room or a seat — as every screen reads it.
+/// </summary>
+/// <param name="PlaceRoomId">The venue's own room behind it, on a Rooms layout. Null for a seat.</param>
+/// <param name="Name">
+/// Its label, or the venue's name for the room behind it. Resolved on the server so no screen has
+/// to know that a Rooms unit deliberately carries no label of its own.
 /// </param>
-public sealed record HostedEventRoomRecord(
+/// <param name="Holds">
+/// What it holds for THIS event — the event's own number where there is one, otherwise the room's.
+/// Null means nobody has said, which is allowed and simply cannot be over-filled.
+/// </param>
+/// <param name="Price">
+/// Shown and <b>never charged</b>. Null is "ask the venue", not free; zero is genuinely free.
+/// </param>
+public sealed record HostedEventLayoutUnitRecord(
     Guid Id,
-    Guid PlaceRoomId,
+    Guid? PlaceRoomId,
     string Name,
+    string? Section,
     string? Floor,
     string? BedNote,
-    int? Sleeps,
-    int? CapacityOverride,
+    int? Holds,
+    int? Capacity,
+    decimal? Price,
     string? Note,
+    int? LayoutRow,
+    int? LayoutColumn,
     int SortOrder);
 
-/// <summary>Which rooms an event offers. Replaces the whole set, so unticking one removes it.</summary>
-public sealed record SetHostedEventRoomsRequest(IReadOnlyList<HostedEventRoomChoice> Rooms);
+/// <summary>
+/// The whole plan for an event, replacing whatever was there.
+/// </summary>
+/// <remarks>
+/// Replace-the-set, because the screen is one designer somebody arranges and saves. A unit left out
+/// is removed, and one with confirmed bookings against it is refused rather than quietly dropped.
+/// </remarks>
+public sealed record SetHostedEventLayoutRequest(
+    HostedEventLayoutKind Kind,
+    IReadOnlyList<HostedEventLayoutUnitChoice> Units);
 
-public sealed record HostedEventRoomChoice(
-    Guid PlaceRoomId,
-    int? CapacityOverride = null,
+/// <param name="PlaceRoomId">
+/// Required on a Rooms layout and refused on a Seats one: a seat is not one of the venue's rooms.
+/// </param>
+/// <param name="Label">
+/// Required on a Seats layout and ignored on a Rooms one, which uses the room's own name so that
+/// renaming the room renames it everywhere at once.
+/// </param>
+public sealed record HostedEventLayoutUnitChoice(
+    Guid? PlaceRoomId = null,
+    string? Label = null,
+    string? Section = null,
+    int? Capacity = null,
+    decimal? Price = null,
     string? Note = null,
-    int SortOrder = 0);
+    int? LayoutRow = null,
+    int? LayoutColumn = null);
 
-/// <summary>One night of one booking: which night, and which room they are in.</summary>
+/// <summary>
+/// One night of one booking: which night they are here, and what they hold that night.
+/// </summary>
+/// <param name="HostedEventLayoutUnitId">
+/// The room or seat, or null when they are here that day without one — somebody coming for
+/// Saturday and going home again.
+/// </param>
+/// <param name="UnitName">
+/// What to call it. "Just for the day" when they hold nothing, rather than an empty cell that
+/// reads as missing data.
+/// </param>
 public sealed record HostedEventBookingNightRecord(
     Guid HostedEventNightId,
     DateTime Date,
-    Guid PlaceRoomId,
-    string RoomName);
+    Guid? HostedEventLayoutUnitId,
+    string UnitName);
 
 /// <summary>Somebody in the party.</summary>
 /// <param name="DietaryNotes">
@@ -108,7 +151,15 @@ public sealed record RequestHostedEventBookingRequest(
     IReadOnlyList<HostedEventBookingGuestInput>? Guests = null,
     string? Note = null);
 
-public sealed record HostedEventBookingNightChoice(Guid HostedEventNightId, Guid PlaceRoomId);
+/// <summary>
+/// One night being asked for or given.
+/// </summary>
+/// <param name="HostedEventLayoutUnitId">
+/// The room or seat wanted, or null to say "here that day, sleeping elsewhere" — which is how a
+/// three-night event sells the Saturday on its own.
+/// </param>
+public sealed record HostedEventBookingNightChoice(
+    Guid HostedEventNightId, Guid? HostedEventLayoutUnitId = null);
 
 public sealed record HostedEventBookingGuestInput(
     string DisplayName,
@@ -160,19 +211,19 @@ public sealed record CreateHostedEventBookingOnBehalfRequest(
     bool ConfirmImmediately = false);
 
 /// <summary>
-/// How full each room is on each night, so a host can see the weekend at a glance.
+/// How full each room or seat is on each night, so a host sees the weekend at a glance.
 /// </summary>
-/// <param name="Taken">People confirmed into that room on that night.</param>
+/// <param name="Taken">People confirmed into it on that night.</param>
 /// <param name="Asked">
 /// People who have ASKED for it and hold nothing. Shown because over-asking is a fact worth
 /// seeing, and because it is the difference between a full house and a popular one.
 /// </param>
-public sealed record HostedEventRoomNightRecord(
+public sealed record HostedEventUnitNightRecord(
     Guid HostedEventNightId,
     DateTime Date,
-    Guid PlaceRoomId,
-    string RoomName,
-    int? Sleeps,
+    Guid HostedEventLayoutUnitId,
+    string UnitName,
+    int? Holds,
     int Taken,
     int Asked);
 
@@ -184,8 +235,8 @@ public sealed record HostedEventBookingBoardRecord(
     int? DayPassCapacity,
     int DayPassesTaken,
     int DayPassesAsked,
-    IReadOnlyList<HostedEventRoomRecord> Rooms,
-    IReadOnlyList<HostedEventRoomNightRecord> RoomNights,
+    IReadOnlyList<HostedEventLayoutUnitRecord> Units,
+    IReadOnlyList<HostedEventUnitNightRecord> UnitNights,
     IReadOnlyList<HostedEventBookingRecord> Bookings);
 
 /// <summary>
@@ -259,3 +310,22 @@ public sealed record HostedEventGuestInviteRecord(
     string Email,
     bool Sent,
     DateTime ExpiresUtc);
+
+/// <summary>
+/// An event's whole plan: what it allocates, and every room or seat on it.
+/// </summary>
+/// <param name="Kind">
+/// Rooms or seats. One per event — there is no hotel that is also a theatre on the same weekend,
+/// and saying it once is what lets a booking screen ask a guest a single answerable question.
+/// </param>
+/// <param name="DayPassCapacity">
+/// How many may come for the day without holding a unit. Null is "we have not limited it"; zero is
+/// "we do not sell them", and the two send a host to completely different places.
+/// </param>
+/// <param name="DayPassPrice">Shown, never charged. Null is "ask the venue"; zero is free.</param>
+public sealed record HostedEventLayoutRecord(
+    Guid HostedEventId,
+    HostedEventLayoutKind Kind,
+    int? DayPassCapacity,
+    decimal? DayPassPrice,
+    IReadOnlyList<HostedEventLayoutUnitRecord> Units);

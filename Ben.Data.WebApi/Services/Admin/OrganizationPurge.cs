@@ -369,8 +369,23 @@ public sealed class OrganizationPurge
             await db.HostedEventBookingNights
                 .Where(x => x.HostedEventBooking.HostedEvent.OrganizationId == organizationId)
                 .ExecuteDeleteAsync(ct);
-            await db.HostedEventRooms
+            // Both of these keys became NULLABLE in phase 2.4 — a night can be attendance with no
+            // room, and a unit can be a seat with no room behind it — and an optional reference is
+            // exactly the shape that has refused a deletion here before (BenCo, 2026-09-03, on
+            // OrgMessages.CaseId while OrgMessages was "purged" by OrganizationId). So each is also
+            // swept BY THE REFERENCE, not only by the owner: a night pointing at one of this
+            // group's units, and a unit pointing at one of this group's rooms, whoever's event
+            // they happen to belong to. If another group's event were offering our room, our
+            // deletion taking that offer with it is the correct outcome — the room is going away.
+            await db.HostedEventBookingNights
+                .Where(x => x.HostedEventLayoutUnitId != null
+                         && x.HostedEventLayoutUnit!.HostedEvent.OrganizationId == organizationId)
+                .ExecuteDeleteAsync(ct);
+            await db.HostedEventLayoutUnits
                 .Where(x => x.HostedEvent.OrganizationId == organizationId)
+                .ExecuteDeleteAsync(ct);
+            await db.HostedEventLayoutUnits
+                .Where(x => x.PlaceRoomId != null && x.PlaceRoom!.OrganizationId == organizationId)
                 .ExecuteDeleteAsync(ct);
             await db.HostedEvents.Where(x => x.OrganizationId == organizationId).ExecuteDeleteAsync(ct);
             await db.Cases.Where(x => x.OrganizationId == organizationId).ExecuteDeleteAsync(ct);

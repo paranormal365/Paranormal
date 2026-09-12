@@ -125,7 +125,7 @@ public sealed class PublicHostedEventBookingController : BenControllerBase
             .Include(b => b.HostedEvent).ThenInclude(e => e.Place)
             .Include(b => b.LeadAppUser)
             .Include(b => b.Nights).ThenInclude(n => n.HostedEventNight)
-            .Include(b => b.Nights).ThenInclude(n => n.PlaceRoom)
+            .Include(b => b.Nights).ThenInclude(n => n.HostedEventLayoutUnit).ThenInclude(u => u!.PlaceRoom)
             .FirstOrDefaultAsync(b => b.HostedEventId == eventId && b.LeadAppUserId == userId
                                    && b.Status != HostedEventBookingStatus.Cancelled, ct);
         if (booking is null) return NotFound();
@@ -153,7 +153,7 @@ public sealed class PublicHostedEventBookingController : BenControllerBase
             booking.Nights
                 .OrderBy(n => n.HostedEventNight.Date)
                 .Select(n => new HostedEventBookingNightRecord(
-                    n.HostedEventNightId, n.HostedEventNight.Date, n.PlaceRoomId, n.PlaceRoom.Name))
+                    n.HostedEventNightId, n.HostedEventNight.Date, n.HostedEventLayoutUnitId, EventCapacity.NameOf(n)))
                 .ToList()));
     }
 
@@ -423,7 +423,7 @@ public sealed class PublicHostedEventBookingController : BenControllerBase
                 Id = Guid.NewGuid(),
                 HostedEventBookingId = booking.Id,
                 HostedEventNightId = choice.HostedEventNightId,
-                PlaceRoomId = choice.PlaceRoomId,
+                HostedEventLayoutUnitId = choice.HostedEventLayoutUnitId,
                 DateCreated = DateTime.UtcNow,
             });
         }
@@ -467,7 +467,7 @@ public sealed class PublicHostedEventBookingController : BenControllerBase
             .Include(b => b.HostedEvent).ThenInclude(e => e.Organization)
             .Include(b => b.HostedEvent).ThenInclude(e => e.Place)
             .Include(b => b.Nights).ThenInclude(n => n.HostedEventNight)
-            .Include(b => b.Nights).ThenInclude(n => n.PlaceRoom)
+            .Include(b => b.Nights).ThenInclude(n => n.HostedEventLayoutUnit).ThenInclude(u => u!.PlaceRoom)
             .Include(b => b.Guests)
             .Where(b => b.LeadAppUserId == userId
                      && b.Status != HostedEventBookingStatus.Cancelled);
@@ -506,7 +506,7 @@ public sealed class PublicHostedEventBookingController : BenControllerBase
                 .OrderBy(n => n.HostedEventNight.Date)
                 .Select(n => new HostedEventBookingNightRecord(
                     n.HostedEventNightId, n.HostedEventNight.Date,
-                    n.PlaceRoomId, n.PlaceRoom.Name))
+                    n.HostedEventLayoutUnitId, EventCapacity.NameOf(n)))
                 .ToList(),
             b.Guests
                 .OrderBy(g => g.SortOrder)
