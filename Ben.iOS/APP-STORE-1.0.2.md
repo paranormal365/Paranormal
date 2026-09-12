@@ -307,7 +307,7 @@ Do these in order. Steps 1–3 are one-time and only matter because of the new e
    `application/json` with no redirect. It ships with the website deploy from the same merge. iOS
    fetches it once at install and caches the answer.
 
-4. **Confirm the numbers.** In Xcode, target IsHaunted → General: Version **1.0.2**, Build **4**.
+4. **Confirm the numbers.** In Xcode, target IsHaunted → General: Version **1.0.2**, Build **5**.
    They are already set; this is a look, not an edit.
 
 5. **The two paid-plan sentences are already decided and changed** (§4) — nothing to do here.
@@ -328,7 +328,7 @@ Do these in order. Steps 1–3 are one-time and only matter because of the new e
    The heading then reads *iOS App Version 1.0.2*.
 
    This matters more than it looks: **App Store Connect only offers builds whose version string
-   matches the page**, so build 4 is invisible until the rename is saved. Learned on 2026-09-09,
+   matches the page**, so build 5 is invisible until the rename is saved. Learned on 2026-09-09,
    after this document had confidently said the opposite.
 
 9. **Fill the version page.** What's New from §2. Screenshots and previews from §5. Promotional
@@ -338,7 +338,7 @@ Do these in order. Steps 1–3 are one-time and only matter because of the new e
 10. **Swap the build.** The renamed version still carries **build 1** — the binary Apple rejected —
     and *Submit* will happily send it. App Store Connect warns with a **"Newer Build Available"**
     dialog rather than refusing, so read that dialog rather than clicking through it. Cancel,
-    remove the attached build on its row in the **Build** section, then choose **1.0.2 (4)** from
+    remove the attached build on its row in the **Build** section, then choose **1.0.2 (5)** from
     the list the empty slot offers.
 
     A build still sitting in TestFlight beta review is selectable here; the two queues are
@@ -402,3 +402,22 @@ Everything ticked below was re-verified against **this** tree on 2026-09-08, not
 - [ ] **Website and API deployed from this merge** — the softened server sentence ships with it
 - [ ] Demo account apple@apple.com verified working on production the day of submission
 - [ ] Archive, upload, select build **5** on the 1.0.2 page, reply in Resolution Center, submit
+
+---
+
+## 9. The build-5 archive
+
+Archived 2026-09-12 from `master` at `0734f6c7`, clean working tree. It is in the Organizer:
+`~/Library/Developer/Xcode/Archives/2026-09-12/IsHaunted 1.0.2 (5).xcarchive`. Version 1.0.2,
+build 5, `com.ishaunted.ios`, both entitlements present, dSYM included.
+
+**It is signed with "Apple Development", not "Apple Distribution", and that is expected here.**
+The Apple Distribution certificate is not in this Mac's keychain — only the development one is,
+though the App Store provisioning profile is present and valid to 2027-08-30. Organizer's
+**Distribute App → App Store Connect** re-signs the archive for distribution, so this is the right
+artifact to distribute; Xcode will fetch or issue the distribution certificate against Ben's Apple
+ID at that moment, which is the one step that cannot be done outside Xcode. If it asks to create a
+certificate, that is why.
+
+Resume the procedure at §6 step 6 (the archive is already made) — that is, Distribute, then the
+version page, the build swap and the Resolution Center reply from §1a.
