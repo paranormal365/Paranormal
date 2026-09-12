@@ -18,6 +18,9 @@ day-by-day account of building it would say nothing to anyone using it now.
 
 ## 2026-09-12
 
+- A green tick now marks anything the site has actually proved — a confirmed email address,
+  two-factor being on — and says what was proved and when if you hover it. An amber one means the
+  opposite and always says what to do about it.
 - Adding an email address to your profile now confirms it. The link is sent as soon as you save,
   rather than waiting for you to find a button, and the card tells you what it did.
 - An email address has to be confirmed before it can be made your primary one, which was already

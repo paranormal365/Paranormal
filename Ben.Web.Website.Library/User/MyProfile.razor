@@ -144,6 +144,28 @@
                     <div class="d-flex flex-wrap gap-1 mt-2">
                         @* Chips, as the template's hero has — but each says something true about
                            this account rather than decorating it. *@
+                        @* The account address, marked the same way the emails card marks the
+                           others — this one was prose in a warning box and nothing at all once
+                           confirmed, so a confirmed account said less about itself than an
+                           ordinary contact row did. The unproved path is the resend button
+                           directly above, which is why the unproved state may be drawn. *@
+                        @if (_profile.EmailKind == EmailAddressKind.Ordinary)
+                        {
+                            <BenProven Chip="true"
+                                       Label="Email confirmed"
+                                       UnprovedText="Email not confirmed"
+                                       Proved="@_profile.EmailConfirmed"
+                                       Unproved="Use Send the link again above, then open the link we email you." />
+                        }
+                        else
+                        {
+                            @* Apple proved this one, and there is nothing here to confirm. *@
+                            <BenProven Chip="true"
+                                       Label="Signed in with Apple"
+                                       Proved="true"
+                                       Detail="Apple confirmed who you are; we never saw a password." />
+                        }
+
                         <span class="badge rounded-pill bg-secondary-subtle text-secondary-emphasis">
                             @(_profile.PublicPhoto is null ? "No public photo" : "Public photo set")
                         </span>
