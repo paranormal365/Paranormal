@@ -176,6 +176,7 @@
 
     private int _focusRow;
     private int _focusColumn;
+    private Guid? _anchor;
     private bool _swallowKey;
     private string? _announcement;
 
@@ -278,17 +279,34 @@
     /// True when the gesture began on something already chosen, which makes the whole sweep a
     /// deselection — the behaviour anybody who has used a spreadsheet expects.
     /// </param>
+    /// <param name="extend">
+    /// Shift was held: take everything in the rectangle between the last single choice and this
+    /// one. The only way to select a whole balcony on a touch screen, where no sweep is available.
+    /// </param>
     [JSInvokable]
-    public async Task GestureAsync(string[] keys, bool deselect)
+    public async Task GestureAsync(string[] keys, bool deselect, bool extend = false)
     {
         var touched = keys.Select(Guid.Parse).Where(k => Model.ByKey(k) is not null).ToList();
         if (touched.Count == 0) return;
 
         var next = new HashSet<Guid>(Selection);
-        foreach (var key in touched)
+
+        if (extend && _anchor is { } anchor && Model.ByKey(anchor) is { IsPlaced: true } from
+                   && Model.ByKey(touched[^1]) is { IsPlaced: true } to)
         {
-            if (deselect) next.Remove(key);
-            else if (CanAdd(next, key)) next.Add(key);
+            foreach (var key in Rectangle(from, to)) if (CanAdd(next, key)) next.Add(key);
+        }
+        else
+        {
+            foreach (var key in touched)
+            {
+                if (deselect) next.Remove(key);
+                else if (CanAdd(next, key)) next.Add(key);
+            }
+            // The anchor is where an extension will reach back to, so it follows a plain choice
+            // and is left alone by an extension — otherwise every shift-click would move the
+            // corner and a second one could never widen the same rectangle.
+            _anchor = touched[^1];
         }
 
         // Focus follows the gesture, so the keyboard carries on from where the mouse left off.
@@ -309,6 +327,20 @@
         _focusRow = row;
         _focusColumn = column;
         return OnEmptyActivated.InvokeAsync((row, column));
+    }
+
+    /// <summary>Every placed unit inside the box two units describe, corners included.</summary>
+    private IEnumerable<Guid> Rectangle(PlanUnit from, PlanUnit to)
+    {
+        var (r1, r2) = (Math.Min(from.Row!.Value, to.Row!.Value), Math.Max(from.Row!.Value, to.Row!.Value));
+        var (c1, c2) = (Math.Min(from.Column!.Value, to.Column!.Value), Math.Max(from.Column!.Value, to.Column!.Value));
+
+        return Model.Units
+            .Where(u => u.IsPlaced
+                     && u.Row >= r1 && u.Row <= r2
+                     && u.Column >= c1 && u.Column <= c2
+                     && Answers(StateOf(u)))
+            .Select(u => u.Key);
     }
 
     /// <summary>Whether one more may be chosen, given what a guest is allowed to hold.</summary>

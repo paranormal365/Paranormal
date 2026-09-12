@@ -192,6 +192,64 @@ public sealed class PlanModelTests
         Assert.Equal([0, 1, 2, 3], plan.Units.Select(u => u.Column!.Value).Order());
     }
 
+    [Fact]
+    public void An_aisle_goes_to_the_left_of_the_leftmost_seat_chosen()
+    {
+        // Somebody putting an aisle in is looking at the seat it should go beside, not counting
+        // columns — and having chosen a run, they mean the whole run to move, not its last seat.
+        var plan = Seats();
+        plan.AddBlock(1, 6);
+        var chosen = new[] { plan.At(0, 4)!.Key, plan.At(0, 2)!.Key, plan.At(0, 3)!.Key };
+
+        Assert.Equal(2, plan.AisleColumnFor(chosen));
+    }
+
+    [Fact]
+    public void With_nothing_chosen_an_aisle_goes_on_the_end_rather_than_through_the_house()
+    {
+        var plan = Seats();
+        plan.AddBlock(1, 6);
+
+        // Column 6: past the last seat. Zero would push every seat in the building one to the
+        // right, which is a plan nobody asked for and six rows of undo.
+        Assert.Equal(6, plan.AisleColumnFor([]));
+        // A key that is no longer on the plan counts as nothing chosen, not as column zero.
+        Assert.Equal(6, plan.AisleColumnFor([Guid.NewGuid()]));
+    }
+
+    // ── the sheet of boxes ───────────────────────────────────────────────────
+
+    [Fact]
+    public void Editing_one_unit_a_blank_box_clears_the_field()
+    {
+        var plan = Seats();
+        plan.AddBlock(1, 1, section: "Stalls", price: 24m);
+        var seat = plan.Units[0].Key;
+
+        plan.ApplySheet([seat], section: null, price: null, note: null, capacity: null,
+            blanksClear: true);
+
+        Assert.Null(plan.ByKey(seat)!.Section);
+        Assert.Null(plan.ByKey(seat)!.Price);
+    }
+
+    [Fact]
+    public void Editing_a_selection_a_blank_box_leaves_every_unit_as_it_was()
+    {
+        // The one that silently erases data if it is the wrong way round. Fifty seats are edited
+        // through boxes that all start empty; saving must not read that as "clear all fifty".
+        var plan = Seats();
+        plan.AddBlock(1, 2, section: "Stalls", price: 24m);
+        var keys = plan.Units.Select(u => u.Key).ToList();
+
+        plan.ApplySheet(keys, section: null, price: null, note: "No latecomers", capacity: null,
+            blanksClear: false);
+
+        Assert.All(plan.Units, u => Assert.Equal("Stalls", u.Section));
+        Assert.All(plan.Units, u => Assert.Equal(24m, u.Price));
+        Assert.All(plan.Units, u => Assert.Equal("No latecomers", u.Note));
+    }
+
     // ── moving a selection ───────────────────────────────────────────────────
 
     [Fact]

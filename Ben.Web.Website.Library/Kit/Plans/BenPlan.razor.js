@@ -66,6 +66,9 @@ export function attach(containerId, dotnet) {
             // A sweep that began on something already chosen unchooses everything it crosses,
             // which is what anybody who has used a spreadsheet expects.
             deselect: cell?.dataset.selected === 'true',
+            // Shift means "and everything between here and the last one I chose". It is the only
+            // way to take a whole balcony on a touch screen, where a sweep is not available.
+            extend: e.shiftKey === true,
             painting: e.pointerType === 'mouse' || e.pointerType === 'pen',
             seen: new Set(),
             order: [],
@@ -90,10 +93,10 @@ export function attach(containerId, dotnet) {
 
     const onUp = () => {
         if (!gesture) return;
-        const { order, deselect } = gesture;
+        const { order, deselect, extend } = gesture;
         gesture = null;
         clear();
-        if (order.length > 0) dotnet.invokeMethodAsync('GestureAsync', order, deselect);
+        if (order.length > 0) dotnet.invokeMethodAsync('GestureAsync', order, deselect, extend);
     };
 
     const onCancel = () => { gesture = null; clear(); };

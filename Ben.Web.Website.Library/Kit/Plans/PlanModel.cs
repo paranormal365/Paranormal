@@ -218,6 +218,20 @@ public sealed class PlanModel
                 _units[i] = _units[i] with { Column = c + 1 };
     }
 
+    /// <summary>Where an aisle goes, given what is chosen.</summary>
+    /// <remarks>
+    /// Somebody putting an aisle in is looking at the seat it should go beside, not counting
+    /// columns — so it opens to the LEFT of the leftmost chosen seat, and at the far right end
+    /// when nothing is chosen at all. Here rather than in the designer because it is arithmetic
+    /// over the plan, and arithmetic over the plan is what this class is for.
+    /// </remarks>
+    public int AisleColumnFor(IEnumerable<Guid> keys)
+        => keys.Select(k => ByKey(k)?.Column)
+               .Where(c => c is not null)
+               .Select(c => c!.Value)
+               .DefaultIfEmpty(LastColumn + 1)
+               .Min();
+
     /// <summary>Closes a gap, pulling everything to its right one square back.</summary>
     /// <remarks>Refused when the column is occupied: that would put two units in one square.</remarks>
     public bool RemoveColumn(int column)
@@ -303,6 +317,25 @@ public sealed class PlanModel
             _units[i] = u;
         }
     }
+
+    /// <summary>
+    /// Applies a sheet of boxes, where a blank box either clears the field or means "leave it".
+    /// </summary>
+    /// <param name="blanksClear">
+    /// True when one unit is being edited, where an emptied box plainly means "no price"; false
+    /// when a selection is, where every box starts empty and clearing on save would wipe what
+    /// fifty seats already say. Getting this backwards is how an editor silently erases data, so
+    /// it is one named argument in one tested place rather than four flags built at a call site.
+    /// </param>
+    public void ApplySheet(
+        IEnumerable<Guid> keys, string? section, decimal? price, string? note, int? capacity,
+        bool blanksClear)
+        => Apply(
+            keys,
+            section: section, clearSection: blanksClear && string.IsNullOrWhiteSpace(section),
+            price: price, clearPrice: blanksClear && price is null,
+            note: note, clearNote: blanksClear && string.IsNullOrWhiteSpace(note),
+            capacity: capacity, clearCapacity: blanksClear && capacity is null);
 
     /// <summary>Renames a selection of seats by pattern, in the order they are drawn.</summary>
     /// <remarks>
