@@ -1,0 +1,115 @@
+/*
+    The venue's rooms, on a phone.
+
+    This is the org side's first deliberate compact reflow (item 235 phase 1, decision 13). Until
+    now every management table on the site sat inside .table-responsive and scrolled sideways on
+    a phone, which is bearable for reading and hopeless for editing: an eight-column row with an
+    inline Save button puts the button a screen and a half to the right of the name you are
+    changing, and the number box you are typing into scrolls out from under your thumb. A venue
+    describing six rooms at the front desk is doing exactly that, on exactly that device.
+
+    Below 576px (Bootstrap's sm breakpoint, the same 575.98px edge PublicEventList reflows on)
+    each row becomes a stacked card. The heading row is hidden and every cell announces its own
+    column from data-label, which is why PlaceRoomsManager.razor puts one on every <td> and why
+    PlaceRoomsManagerSourceTests refuses a cell without it. Nothing is animated, so there is no
+    prefers-reduced-motion block: a table that is a card at one width and a table at another has
+    nothing that ought to move.
+
+    Colours are the --bs-* variables only, so the cards follow data-bs-theme like everything else.
+*/
+
+/* The Sleeps box is a three-digit number; at table width a full-width number input reads as a
+   column of empty boxes. */
+.rooms-table__sleeps {
+    max-width: 6.5rem;
+}
+
+@media (max-width: 575.98px) {
+    /* The wrapper's sideways scroll is what this whole file exists to avoid; with the rows
+       stacked there is nothing wide left to scroll. */
+    .rooms-table {
+        display: block;
+        margin-bottom: 0;
+    }
+
+    .rooms-table thead {
+        display: none;
+    }
+
+    .rooms-table tbody {
+        display: flex;
+        flex-direction: column;
+        gap: .6rem;
+    }
+
+    /* One room, one card. */
+    .rooms-table tr {
+        display: block;
+        padding: .35rem .75rem;
+        border: 1px solid var(--bs-border-color);
+        border-radius: .6rem;
+        background: var(--bs-body-bg);
+    }
+
+    /* A row being edited is the one the person is working on; give it the edge the focused
+       control would have if the whole card were one. */
+    .rooms-table tr.rooms-table__editing {
+        border-color: var(--bs-primary);
+    }
+
+    /* Label on the left, value on the right, and the value gets whatever is left. The table's
+       own cell borders are dropped: inside a card they read as ruled paper. */
+    .rooms-table td {
+        display: flex;
+        align-items: center;
+        gap: .75rem;
+        padding: .4rem 0;
+        border: 0;
+        border-bottom: 1px solid var(--bs-border-color-translucent);
+    }
+
+    .rooms-table td:last-child {
+        border-bottom: 0;
+    }
+
+    /* The column's name, because there is no heading row to look up to. A fixed width so the
+       values line up down the card the way they would down a column. */
+    .rooms-table td::before {
+        content: attr(data-label);
+        flex: 0 0 5.5rem;
+        font-size: .72rem;
+        font-weight: 650;
+        letter-spacing: .04em;
+        text-transform: uppercase;
+        color: var(--bs-secondary-color);
+    }
+
+    /* An input in an edited cell takes the value's room; min-width: 0 lets it shrink below its
+       intrinsic width instead of forcing the card wider than the phone. */
+    .rooms-table td > .form-control,
+    .rooms-table td > .form-check {
+        flex: 1 1 auto;
+        min-width: 0;
+    }
+
+    .rooms-table .rooms-table__sleeps {
+        max-width: none;
+    }
+
+    /* The buttons stop pretending to be a cell. Full width, wrapping, with the label above
+       rather than beside them — three buttons after a 5.5rem label do not fit on a 375px card. */
+    .rooms-table td.rooms-table__actions {
+        display: block;
+        white-space: normal;
+        padding-top: .6rem;
+    }
+
+    .rooms-table td.rooms-table__actions::before {
+        display: block;
+        margin-bottom: .4rem;
+    }
+
+    .rooms-table td.rooms-table__actions .btn {
+        margin-bottom: .35rem;
+    }
+}
