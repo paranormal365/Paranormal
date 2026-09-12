@@ -242,7 +242,13 @@ public static class BookingTransitions
     {
         var holding = Holds(booking.Status);
         foreach (var night in booking.Nights)
-            night.IsHolding = holding && night.ReleasedUtc is null;
+        {
+            // A booking that holds, holds all of its nights — including one it had released and
+            // has been given back, which is what confirming a party into a room they let go is.
+            // Releasing is the only thing that stamps the date, and it is below.
+            if (holding) night.ReleasedUtc = null;
+            night.IsHolding = holding;
+        }
 
         booking.DateUpdated = now;
         if (actorId is { } id) booking.UpdatedByAppUserId = id;

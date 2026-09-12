@@ -115,6 +115,27 @@ public interface IBenEventBookingClient
     Task<(HostedEventGuestInviteRecord? Result, string? Error)> InviteEventGuestAsync(
         Guid orgId, Guid eventId, InviteHostedEventGuestRequest request, CancellationToken token = default);
 
+    /// <summary>
+    /// Gives a party longer to be decided about, from now.
+    /// </summary>
+    /// <remarks>
+    /// What a host reaches for when a hold is about to lapse and they are not ready. Without it the
+    /// only choices are confirming a party they have not decided about, or letting the clock decide
+    /// for them.
+    /// </remarks>
+    Task<(HostedEventBookingRecord? Result, string? Error)> ExtendEventHoldAsync(
+        Guid orgId, Guid eventId, Guid bookingId, CancellationToken token = default);
+
+    /// <summary>
+    /// Gives back every hold on this event that has already run out, now.
+    /// </summary>
+    /// <remarks>
+    /// The job does it within five minutes anyway. Five minutes is a long time with somebody at a
+    /// desk asking whether the Blue Room is free.
+    /// </remarks>
+    Task<(HostedEventBookingBoardRecord? Result, string? Error)> ReleaseLapsedHoldsAsync(
+        Guid orgId, Guid eventId, CancellationToken token = default);
+
     // ── the kitchen ──────────────────────────────────────────────────────────
 
     /// <summary>

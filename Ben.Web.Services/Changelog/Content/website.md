@@ -18,6 +18,17 @@ day-by-day account of building it would say nothing to anyone using it now.
 
 ## 2026-09-12
 
+- Events have a **Bookings** page. It opens on what is waiting on you — every party nobody has
+  answered, soonest deadline first — rather than on a list of everybody you would have to search.
+- A party holding places says how long is left, and one button gives them longer without you
+  having to decide anything yet. If holds have already run out you can give them all back at once.
+- Opening a party asks where they are actually staying, starting from what they asked for. Moving
+  a party of three out of a double and into the suite is one change of a dropdown, and if they do
+  not fit the refusal names the room and how many more it sleeps.
+- The house below shows one night at a time: settled places solid, ones somebody is still holding
+  hatched, and ones you have held back marked as not on offer.
+- On a seating plan, the number of seats you pick is the size of your party. Holding one seat for
+  four people used to be possible and could never then be confirmed.
 - Where an event sells its places by seat, guests now pick their own on the plan and what they
   choose is held for them until the venue answers. Everybody else sees those squares as waiting on
   an answer and cannot take them.

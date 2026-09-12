@@ -90,6 +90,20 @@ public sealed partial class BenAdminClientAdapter
 
     // ── the kitchen ──────────────────────────────────────────────────────────
 
+    public Task<(HostedEventBookingRecord? Result, string? Error)> ExtendEventHoldAsync(
+        Guid orgId, Guid eventId, Guid bookingId, CancellationToken token = default)
+        => _api.SendExpectingReasonAsync<object, HostedEventBookingRecord>(
+               HttpMethod.Post,
+               $"/api/organizations/{orgId}/events/{eventId}/bookings/{bookingId}/hold/extend",
+               new { }, token);
+
+    public Task<(HostedEventBookingBoardRecord? Result, string? Error)> ReleaseLapsedHoldsAsync(
+        Guid orgId, Guid eventId, CancellationToken token = default)
+        => _api.SendExpectingReasonAsync<object, HostedEventBookingBoardRecord>(
+               HttpMethod.Post,
+               $"/api/organizations/{orgId}/events/{eventId}/bookings/holds/release-lapsed",
+               new { }, token);
+
     public Task<ItemResult<HostedEventDietaryRecord>> GetEventDietaryAsync(
         Guid orgId, Guid eventId, bool includeUnconfirmed, CancellationToken token = default)
     {

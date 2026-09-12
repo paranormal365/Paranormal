@@ -1,0 +1,38 @@
+@namespace Ben.Web.Website.Library.Manage.Events
+@using Ben.Data.Common.Enums
+
+@*
+    Where one party stands, in a word (item 235 phase 5).
+
+    Its own component for the same reason the event's state badge is: the board, the sheet and the
+    guest's own page all say this, and three copies pattern-matching one enum is three chances for
+    one of them to forget a value the day somebody adds one.
+*@
+
+<span class="badge @Css @Class">@Text</span>
+
+@code {
+    [Parameter, EditorRequired] public HostedEventBookingStatus Status { get; set; }
+    [Parameter] public string? Class { get; set; }
+
+    private string Text => Status switch
+    {
+        HostedEventBookingStatus.Requested => "Asked",
+        // "Holding" and not "Held": it is a thing they are doing now, not a thing done to them.
+        HostedEventBookingStatus.Held => "Holding",
+        HostedEventBookingStatus.Confirmed => "Confirmed",
+        HostedEventBookingStatus.TurnedDown => "Turned down",
+        HostedEventBookingStatus.Cancelled => "Let go",
+        HostedEventBookingStatus.Expired => "Hold ran out",
+        _ => "Unknown",
+    };
+
+    private string Css => Status switch
+    {
+        HostedEventBookingStatus.Confirmed => "bg-success",
+        HostedEventBookingStatus.Held => "bg-warning text-dark",
+        HostedEventBookingStatus.Requested => "bg-info text-dark",
+        HostedEventBookingStatus.TurnedDown => "bg-danger",
+        _ => "bg-secondary",
+    };
+}

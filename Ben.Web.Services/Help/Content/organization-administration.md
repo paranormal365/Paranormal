@@ -905,6 +905,54 @@ what their existing booking means — a hold would become nothing, an ask would 
 never chose — and neither is something you would find out about until the night. Decide the ones
 waiting first, and the switch is free again.
 
+### The booking board
+
+The **Bookings** page is where a weekend is actually run, and it opens on the one thing that
+matters: **Waiting on you**. Everything nobody has answered is at the top, soonest deadline first,
+and everything else is below it. A board that opened on a list of everybody would be a board you
+have to search before you can work.
+
+Each row says who, how many, what they asked for, and anything they wrote. **Confirm…** opens the
+party. **Turn down** tells them no. On an event where guests pick their own places there is a third
+button, **Give them longer**, and a line saying how long is left on their hold.
+
+**Why the hold matters.** A hold that runs out is a decision the clock took instead of you. So the
+row says "their hold runs out in about four hours" while there is still time to answer, and the
+button gives them another full stretch from the moment you press it — not from a deadline that has
+already gone.
+
+If holds have already run out, the header offers to **give them back now**. The site does it by
+itself within five minutes anyway; the button is there because five minutes is a long time with
+somebody standing at a desk asking whether the Blue Room is free.
+
+**The house** below shows one night at a time, with the night's own buttons at the top. A square
+that is settled is solid, one somebody is still holding is hatched, and one you have held back is
+marked as not on offer. Under it is how many are coming for the day on that night.
+
+### Deciding about one party
+
+Opening a party gives you the whole of it in one place, without losing your spot in the queue.
+
+**Where they are actually staying** is the question confirming asks. The pickers start on what the
+guest asked for, and you change them to wherever suits you: moving a party of three out of a double
+and into the suite is the ordinary thing, and making them turn it down and ask again would be
+absurd. Each choice says what the room sleeps and whether anybody is in it.
+
+If they do not fit, the refusal names the room and the number — "The Blue Room sleeps 2 more on
+10/30, and this is a party of 4" — because "full" on its own leaves you guessing whether a smaller
+party would go in.
+
+**The line for the guest** is optional and they read it. It goes out with the confirmation or the
+refusal.
+
+Confirming sends their pass at the same time. A guest who was told yes and given nothing to show at
+the door has to be looked up by name on the night, which is the queue this whole thing exists to
+remove.
+
+**A guest asking to get out** of a confirmed booking shows on the row and in the sheet. Releasing
+frees their places and tells them; their pass stops working. Keeping it changes nothing and leaves
+the ask on record.
+
 ### Holding a room or a seat back
 
 Not everything on a plan is for sale. Open a room or a seat and you can hold it back, either **for

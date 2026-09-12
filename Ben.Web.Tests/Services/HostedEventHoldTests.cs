@@ -9,6 +9,7 @@ using Ben.Service.Models.Entities;
 using Microsoft.AspNetCore.Http;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.EntityFrameworkCore;
+using Moq;
 using Xunit;
 
 namespace Ben.Web.Tests.Services;
@@ -108,6 +109,47 @@ public sealed class HostedEventHoldTests
                 },
             },
         };
+
+    /// <summary>The organizer's own board controller, signed in as the host.</summary>
+    private static Ben.Data.WebApi.Controllers.Entities.HostedEventBookingController BoardAs(
+        SqliteTestDb sqlite, Guid userId)
+    {
+        var security = new Moq.Mock<Ben.Service.RepositoryService.GenericInterfaces
+            .IOrganizationSecurityService>();
+        security.Setup(x => x.HasAccessAsync(
+                It.IsAny<Guid>(), It.IsAny<Guid>(), It.IsAny<OrganizationSecurityTable>(),
+                It.IsAny<OrganizationSecurityAction>(), It.IsAny<CancellationToken>()))
+            .ReturnsAsync(true);
+
+        var email = new Moq.Mock<Ben.Data.Common.Interfaces.IEmailService>();
+        email.SetupGet(e => e.IsConfigured).Returns(false);
+
+        var site = Microsoft.Extensions.Options.Options.Create(
+            new Ben.Data.Common.SiteIdentity { Name = "IsHaunted.com" });
+
+        return new Ben.Data.WebApi.Controllers.Entities.HostedEventBookingController(
+            sqlite.Factory,
+            new Moq.Mock<AutoMapper.IMapper>().Object,
+            security.Object,
+            new HostedEventCalendarSync(),
+            new Ben.Data.WebApi.Services.Access.HostedEventAccess(security.Object),
+            new EventGuestMailer(email.Object, site,
+                Microsoft.Extensions.Logging.Abstractions.NullLogger<EventGuestMailer>.Instance),
+            email.Object,
+            site,
+            Microsoft.Extensions.Logging.Abstractions.NullLogger<
+                Ben.Data.WebApi.Controllers.Entities.HostedEventBookingController>.Instance)
+        {
+            ControllerContext = new ControllerContext
+            {
+                HttpContext = new DefaultHttpContext
+                {
+                    User = new ClaimsPrincipal(new ClaimsIdentity(
+                        [new Claim(ClaimTypes.NameIdentifier, userId.ToString())], "Bearer")),
+                },
+            },
+        };
+    }
 
     private static HoldHostedEventPlacesRequest Picking(params Guid[] seats)
         => new([.. seats.Select(s => new HostedEventBookingNightChoice(FridayId, s))], seats.Length);
@@ -306,5 +348,75 @@ public sealed class HostedEventHoldTests
         // Kept, not deleted: the row is the record of what they held and when they let it go.
         Assert.All(letGo.Nights, n => Assert.NotNull(n.ReleasedUtc));
         Assert.All(letGo.Nights, n => Assert.False(n.IsHolding));
+    }
+
+    [Fact]
+    public async Task On_a_seating_plan_the_party_is_the_number_of_seats()
+    {
+        // A seat holds one person, so asking to hold ONE seat for four people is a booking the
+        // venue could never confirm — confirming checks capacity, a seat seats one, and the guest
+        // would sit in a queue that has no answer. Worse than being refused when they picked.
+        await using var sqlite = await SeedAsync();
+
+        var greedy = new HoldHostedEventPlacesRequest(
+            [new HostedEventBookingNightChoice(FridayId, SeatA1Id)], PartySize: 4);
+
+        Assert.IsType<OkObjectResult>(
+            (await As(sqlite, GuestId).HoldPlaces(EventId, greedy, default)).Result);
+
+        await using var db = await sqlite.NewContextAsync();
+        var booking = await db.HostedEventBookings.SingleAsync();
+
+        Assert.Equal(1, booking.PartySize);
+    }
+
+    [Fact]
+    public async Task Two_seats_is_a_party_of_two()
+    {
+        await using var sqlite = await SeedAsync();
+
+        Assert.IsType<OkObjectResult>(
+            (await As(sqlite, GuestId).HoldPlaces(
+                EventId, Picking(SeatA1Id, SeatA2Id), default)).Result);
+
+        await using var db = await sqlite.NewContextAsync();
+        Assert.Equal(2, (await db.HostedEventBookings.SingleAsync()).PartySize);
+    }
+
+    [Fact]
+    public async Task A_held_party_can_be_confirmed_into_the_seat_they_picked()
+    {
+        // Every confirm test before this one confirmed a party that had ASKED. A party that HELD
+        // arrives with night rows already marked as holding and an umbrella attendee already
+        // written, and confirming has to move all three without tripping over the rows it is
+        // replacing. A board walk found a 500 here; this is the smallest thing that reproduces it.
+        await using var sqlite = await SeedAsync();
+
+        Assert.IsType<OkObjectResult>(
+            (await As(sqlite, GuestId).HoldPlaces(EventId, Picking(SeatA1Id), default)).Result);
+
+        Guid bookingId;
+        await using (var db = await sqlite.NewContextAsync())
+            bookingId = (await db.HostedEventBookings.SingleAsync()).Id;
+
+        var board = BoardAs(sqlite, HostId);
+        var confirmed = await board.Confirm(OrgId, EventId, bookingId,
+            new ConfirmHostedEventBookingRequest(
+                [new HostedEventBookingNightChoice(FridayId, SeatA1Id)], "See you Friday."),
+            default);
+
+        Assert.IsType<OkObjectResult>(confirmed.Result);
+
+        await using var after = await sqlite.NewContextAsync();
+        var booking = await after.HostedEventBookings
+            .Include(b => b.Nights)
+            .FirstAsync(b => b.Id == bookingId);
+
+        Assert.Equal(HostedEventBookingStatus.Confirmed, booking.Status);
+        Assert.Null(booking.HoldExpiresUtc);
+        Assert.All(booking.Nights, n => Assert.True(n.IsHolding));
+
+        var attendee = await after.OrgCalendarEventAttendees.SingleAsync();
+        Assert.Equal(RsvpStatus.Accepted, attendee.RsvpStatus);
     }
 }

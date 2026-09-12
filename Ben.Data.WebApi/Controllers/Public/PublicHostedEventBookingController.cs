@@ -263,7 +263,7 @@ public sealed class PublicHostedEventBookingController : BenControllerBase
             Id = Guid.NewGuid(),
             HostedEventId = eventId,
             LeadAppUserId = userId,
-            PartySize = EventCapacity.ClampPartySize(request.PartySize),
+            PartySize = PartyPicking(ev, chosen, request.PartySize),
             Kind = HostedEventBookingKind.Overnight,
             Status = HostedEventBookingStatus.Requested,
             Note = Trimmed(request.Note),
@@ -290,6 +290,38 @@ public sealed class PublicHostedEventBookingController : BenControllerBase
         }
 
         return Ok(await ReloadAsync(db, userId, booking.Id, ct));
+    }
+
+    /// <summary>
+    /// How many people this picking is for: on a seating plan, the number of seats.
+    /// </summary>
+    /// <remarks>
+    /// <para><b>A seat holds one person, so four people is four seats.</b> Taking the number the
+    /// caller sent would let somebody hold ONE seat for a party of four — and the venue could then
+    /// never confirm it, because confirming checks capacity and a seat seats one. The guest would
+    /// sit in a queue that has no answer, which is worse than being refused at the moment they
+    /// picked. Found by a board walk whose confirmation was refused for exactly this.</para>
+    ///
+    /// <para>Rooms are different and the caller's number stands: a family of five picking one room
+    /// that sleeps five is right, and it is the room's capacity that judges it.</para>
+    ///
+    /// <para>The busiest night decides, since somebody taking two seats on Friday and one on
+    /// Saturday is a party of two who are not all staying.</para>
+    /// </remarks>
+    private static int PartyPicking(
+        HostedEvent hosted, IReadOnlyList<HostedEventBookingNightChoice> chosen, int asked)
+    {
+        if (hosted.LayoutKind != HostedEventLayoutKind.Seats)
+            return EventCapacity.ClampPartySize(asked);
+
+        var busiest = chosen
+            .Where(c => c.HostedEventLayoutUnitId is not null)
+            .GroupBy(c => c.HostedEventNightId)
+            .Select(g => g.Select(c => c.HostedEventLayoutUnitId).Distinct().Count())
+            .DefaultIfEmpty(0)
+            .Max();
+
+        return EventCapacity.ClampPartySize(busiest);
     }
 
     /// <summary>The most events one account may be holding places at, at once.</summary>

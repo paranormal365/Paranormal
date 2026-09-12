@@ -288,6 +288,101 @@ public sealed class HostedEventBookingController : OrgCmsControllerBase
     /// instead, because creating an account for a person who never asked for one is the guest
     /// door's job and there is exactly one of those.
     /// </remarks>
+    /// <summary>
+    /// Gives a party longer to be decided about.
+    /// </summary>
+    /// <remarks>
+    /// <para>What a host reaches for when a hold is about to lapse and they are not ready. Without
+    /// it the only choices are to confirm a party they have not decided about or to let the clock
+    /// take the decision for them, and neither is a decision.</para>
+    ///
+    /// <para>Extended from NOW rather than from the old deadline, which is what a host means by
+    /// "give me another day": from the moment they press it, not from a moment that has already
+    /// passed.</para>
+    /// </remarks>
+    [HttpPost("{bookingId:guid}/hold/extend")]
+    public async Task<ActionResult<HostedEventBookingRecord>> ExtendHold(
+        Guid orgId, Guid eventId, Guid bookingId, CancellationToken ct)
+    {
+        var userId = GetCurrentUserId();
+        if (userId is null) return Unauthorized();
+        if (!await CanDecideAsync(userId.Value, orgId, ct)) return Forbid();
+
+        await using var db = await DbFactory.CreateDbContextAsync(ct);
+        var ev = await LoadEventAsync(db, orgId, eventId, ct);
+        if (ev is null) return NotFound();
+
+        var booking = await LoadBookingAsync(db, eventId, bookingId, ct);
+        if (booking is null) return NotFound();
+
+        if (booking.Status != HostedEventBookingStatus.Held)
+            return Conflict("Only a party that picked their own places has a hold to extend.");
+
+        var now = DateTime.UtcNow;
+        booking.HoldExpiresUtc = now.AddMinutes(ev.HoldMinutes);
+        Touch(booking, userId.Value);
+        await db.SaveChangesAsync(ct);
+
+        return Ok(await OneAsync(db, eventId, booking.Id, ct));
+    }
+
+    /// <summary>
+    /// Gives back every hold on this event that has already run out, now.
+    /// </summary>
+    /// <remarks>
+    /// <para>The job does this within five minutes anyway. This exists because five minutes is a
+    /// long time with somebody standing at a desk asking whether the Blue Room is free — a host who
+    /// can see that three holds lapsed at three o'clock should be able to act on it rather than
+    /// wait for a timer they cannot see.</para>
+    ///
+    /// <para>The same transition the job uses, so a hold released by hand and one released by the
+    /// clock are the same thing afterwards. The guest is told either way.</para>
+    /// </remarks>
+    [HttpPost("holds/release-lapsed")]
+    public async Task<ActionResult<HostedEventBookingBoardRecord>> ReleaseLapsedHolds(
+        Guid orgId, Guid eventId, CancellationToken ct)
+    {
+        var userId = GetCurrentUserId();
+        if (userId is null) return Unauthorized();
+        if (!await CanDecideAsync(userId.Value, orgId, ct)) return Forbid();
+
+        await using var db = await DbFactory.CreateDbContextAsync(ct);
+        var ev = await LoadEventAsync(db, orgId, eventId, ct);
+        if (ev is null) return NotFound();
+
+        var now = DateTime.UtcNow;
+        var lapsed = await db.HostedEventBookings
+            .Include(b => b.Nights)
+            .Where(b => b.HostedEventId == eventId
+                     && b.Status == HostedEventBookingStatus.Held
+                     && b.HoldExpiresUtc != null
+                     && b.HoldExpiresUtc <= now)
+            .ToListAsync(ct);
+
+        foreach (var booking in lapsed)
+        {
+            BookingTransitions.Expire(booking, now);
+            await BookingTransitions.ApplyUmbrellaAsync(
+                db, _sync, ev, booking, userId.Value, now, ct);
+        }
+
+        if (lapsed.Count > 0) await db.SaveChangesAsync(ct);
+
+        // Told after the save, and never inside it: a letter that cannot be sent must not roll back
+        // the release, or the places stay stuck behind a mail server.
+        foreach (var booking in lapsed)
+        {
+            try { await _guestMail.SendHoldLapsedAsync(db, booking, ct); }
+            catch (Exception ex)
+            {
+                _logger.LogWarning(ex,
+                    "Booking {BookingId} was released but the guest could not be told.", booking.Id);
+            }
+        }
+
+        return Ok(await BoardAsync(db, ev, canSeeDietary: true, ct));
+    }
+
     [HttpPost("on-behalf")]
     public async Task<ActionResult<HostedEventBookingRecord>> CreateOnBehalf(
         Guid orgId, Guid eventId,
@@ -875,22 +970,51 @@ public sealed class HostedEventBookingController : OrgCmsControllerBase
     /// <c>RsvpStatus.Accepted</c> alongside <c>TourSeatStatus.Reserved</c>, exactly as a walk's
     /// approved seat does, because that is the pair every existing count already understands.
     /// </remarks>
+    /// <summary>
+    /// Makes the booking's nights match what was chosen, keeping the rows that already agree.
+    /// </summary>
+    /// <remarks>
+    /// <para><b>Reconciled, not replaced.</b> It used to delete every night row and write fresh
+    /// ones. That threw away each row's id and its release history for no reason — and worse, the
+    /// deleted rows were still tracked, so the transition that stamps "this row is holding" flipped
+    /// one of them from Deleted to Modified and the save asked SQL Server to update a row it was
+    /// deleting in the same batch. A 500, on the ordinary act of confirming a party who had picked
+    /// their own seat.</para>
+    ///
+    /// <para>Matching on night AND unit, because a party may hold two rooms on one night since
+    /// phase 4. A row that is still wanted keeps its identity; one that is not is removed; one that
+    /// is new is added.</para>
+    /// </remarks>
     private static void ReplaceNights(
         BenDataContext db, HostedEventBooking booking,
         IReadOnlyList<HostedEventBookingNightChoice> nights)
     {
-        if (booking.Nights.Count > 0) db.HostedEventBookingNights.RemoveRange(booking.Nights);
-        booking.Nights.Clear();
+        var wanted = nights
+            .GroupBy(n => (n.HostedEventNightId, n.HostedEventLayoutUnitId))
+            .Select(g => g.Last())
+            .ToList();
 
-        // Distinct by night AND unit. It used to be by night alone, on the belief that a party
-        // could hold only one thing per night — so confirming a family into a double and a twin
-        // silently kept the twin, and confirming a party of three at the theatre gave them one
-        // seat. The unique key is (booking, night, unit) now; what a duplicate means here is the
-        // same room written twice, which is an edit gone wrong rather than a family spreading out.
-        foreach (var choice in nights
-                     .GroupBy(n => (n.HostedEventNightId, n.HostedEventLayoutUnitId))
-                     .Select(g => g.Last()))
+        var keep = new HashSet<(Guid, Guid?)>(
+            wanted.Select(w => (w.HostedEventNightId, w.HostedEventLayoutUnitId)));
+
+        // Gone: rows nobody asked for any more.
+        foreach (var row in booking.Nights.ToList())
         {
+            if (keep.Contains((row.HostedEventNightId, row.HostedEventLayoutUnitId))) continue;
+            booking.Nights.Remove(row);
+            db.HostedEventBookingNights.Remove(row);
+        }
+
+        // New: the ones that are not already there.
+        var already = booking.Nights
+            .Select(n => (n.HostedEventNightId, n.HostedEventLayoutUnitId))
+            .ToHashSet();
+
+        foreach (var choice in wanted)
+        {
+            if (already.Contains((choice.HostedEventNightId, choice.HostedEventLayoutUnitId)))
+                continue;
+
             booking.Nights.Add(new HostedEventBookingNight
             {
                 Id = Guid.NewGuid(),
@@ -901,6 +1025,7 @@ public sealed class HostedEventBookingController : OrgCmsControllerBase
                 DateCreated = DateTime.UtcNow,
             });
         }
+
     }
 
     private static void ReplaceGuests(
@@ -995,7 +1120,8 @@ public sealed class HostedEventBookingController : OrgCmsControllerBase
                 .Select(g => new HostedEventBookingGuestRecord(
                     g.Id, g.DisplayName, g.AppUserId,
                     canSeeDietary ? g.DietaryNotes : null, g.SortOrder))
-                .ToList()))
+                .ToList(),
+            b.HoldExpiresUtc))
             .ToList();
     }
 
@@ -1021,6 +1147,7 @@ public sealed class HostedEventBookingController : OrgCmsControllerBase
         // parties is roughly half a million traversals to paint one screen, repeated on every
         // render, all of it recomputing the same handful of numbers.
         var occupancy = await PlanOccupancy.ReadAsync(db, ev.Id, ct);
+        var blocks = await PlanOccupancy.BlocksAsync(db, ev.Id, ct);
 
         var unitNights = new List<HostedEventUnitNightRecord>();
         foreach (var night in nights)
@@ -1032,7 +1159,10 @@ public sealed class HostedEventBookingController : OrgCmsControllerBase
                     night.Id, night.Date, unit.Id, EventCapacity.NameOf(unit),
                     EventCapacity.CapacityOf(unit),
                     cell.People,
-                    cell.Asked));
+                    cell.Asked,
+                    Pending: cell.HeldAs == HostedEventBookingStatus.Held,
+                    NotOffered: EventCapacity.WhyItIsNotOffered(
+                        blocks, unit.Id, night.Id, EventCapacity.NameOf(unit))));
             }
         }
 
@@ -1047,7 +1177,11 @@ public sealed class HostedEventBookingController : OrgCmsControllerBase
                .Sum(b => Math.Max(1, b.PartySize)),
             offered.Select(HostedEventController.ToUnitRecord).ToList(),
             unitNights,
-            await BookingsAsync(db, ev.Id, canSeeDietary, ct));
+            await BookingsAsync(db, ev.Id, canSeeDietary, ct),
+            DayPassNights: DayPassesByNight(all, nights),
+            BookingMode: ev.BookingMode,
+            LapsedHolds: all.Count(b => b.Status == HostedEventBookingStatus.Held
+                                     && b.HoldExpiresUtc <= DateTime.UtcNow));
     }
 
     /// <summary>Loads what the kitchen needs and hands it to <see cref="EventDietary"/> to read.</summary>
@@ -1063,6 +1197,31 @@ public sealed class HostedEventBookingController : OrgCmsControllerBase
                 .Where(b => b.HostedEventId == eventId)
                 .ToListAsync(ct),
             includeUnconfirmed);
+
+    /// <summary>
+    /// Day passes per night, for a run where one night is the busy one.
+    /// </summary>
+    /// <remarks>
+    /// One number for the whole event is right for a weekend somebody comes to once and wrong for a
+    /// three-night run: a host catering Saturday needs Saturday's number, not the sum. The
+    /// event-wide number stays as well, because it is what the capacity is set against.
+    /// </remarks>
+    private static List<HostedEventDayPassNightRecord> DayPassesByNight(
+        IReadOnlyList<HostedEventBooking> bookings, IReadOnlyList<HostedEventNight> nights)
+        => [.. nights.Select(night =>
+        {
+            var here = bookings
+                .Where(b => b.Kind == HostedEventBookingKind.DayPass)
+                .Where(b => b.Nights.Any(n => n.HostedEventNightId == night.Id
+                                           && n.ReleasedUtc == null))
+                .ToList();
+
+            return new HostedEventDayPassNightRecord(
+                night.Id, night.Date,
+                here.Where(b => EventCapacity.Holds(b.Status)).Sum(b => Math.Max(1, b.PartySize)),
+                here.Where(b => b.Status == HostedEventBookingStatus.Requested)
+                    .Sum(b => Math.Max(1, b.PartySize)));
+        })];
 
     // ── plumbing ─────────────────────────────────────────────────────────────
 

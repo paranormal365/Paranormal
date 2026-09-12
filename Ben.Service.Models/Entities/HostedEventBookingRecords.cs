@@ -115,7 +115,17 @@ public sealed record HostedEventBookingRecord(
     string? CancellationReason,
     DateTime DateCreated,
     IReadOnlyList<HostedEventBookingNightRecord> Nights,
-    IReadOnlyList<HostedEventBookingGuestRecord> Guests);
+    IReadOnlyList<HostedEventBookingGuestRecord> Guests,
+
+    /// <summary>
+    /// When a picked party's hold runs out. Null on anything that was never held.
+    /// </summary>
+    /// <remarks>
+    /// The board counts down from it, which is the whole reason it is on this record: a host
+    /// looking at their queue needs to know which of these decisions is about to be made for them.
+    /// Kept after the hold lapses, so an Expired booking can say when.
+    /// </remarks>
+    DateTime? HoldExpiresUtc = null);
 
 /// <summary>
 /// A guest's own booking, as their own screen and the phone read it.
@@ -263,6 +273,33 @@ public sealed record HostedEventUnitNightRecord(
     string UnitName,
     int? Holds,
     int Taken,
+    int Asked,
+
+    /// <summary>True when what is on it is a HOLD rather than a confirmation.</summary>
+    /// <remarks>
+    /// Drawn hatched rather than solid, because "somebody is deciding about this" and "this is
+    /// settled" are different facts to a host looking at their own house. Both count against
+    /// capacity; only one of them is finished.
+    /// </remarks>
+    bool Pending = false,
+
+    /// <summary>Why the venue is not offering it that night, or null when it is.</summary>
+    /// <remarks>
+    /// The reason a guest may read — "not on offer", "the venue is using this one" — never the
+    /// venue's own note about it.
+    /// </remarks>
+    string? NotOffered = null);
+
+/// <summary>How many day passes are out on one night.</summary>
+/// <remarks>
+/// Day passes were one number for the whole event, which is right for a weekend somebody comes to
+/// once and wrong for a three-night run where Saturday is the busy one. A host catering Saturday
+/// needs Saturday's number.
+/// </remarks>
+public sealed record HostedEventDayPassNightRecord(
+    Guid HostedEventNightId,
+    DateTime Date,
+    int Taken,
     int Asked);
 
 /// <summary>The whole booking picture for one event.</summary>
@@ -275,7 +312,24 @@ public sealed record HostedEventBookingBoardRecord(
     int DayPassesAsked,
     IReadOnlyList<HostedEventLayoutUnitRecord> Units,
     IReadOnlyList<HostedEventUnitNightRecord> UnitNights,
-    IReadOnlyList<HostedEventBookingRecord> Bookings);
+    IReadOnlyList<HostedEventBookingRecord> Bookings,
+
+    /// <summary>Day passes per night, for a run where one night is the busy one.</summary>
+    IReadOnlyList<HostedEventDayPassNightRecord>? DayPassNights = null,
+
+    /// <summary>How guests get a place here, which decides what the queue can offer to do.</summary>
+    /// <remarks>
+    /// Extending a hold is meaningless on an Ask event, and a board that offered it would be
+    /// offering a button that does nothing.
+    /// </remarks>
+    HostedEventBookingMode BookingMode = HostedEventBookingMode.Ask,
+
+    /// <summary>How many holds have already run out and are waiting to be given back.</summary>
+    /// <remarks>
+    /// The job gives them back within five minutes, but a host looking at a stale screen should see
+    /// that the number is about to change rather than wonder why a seat says taken.
+    /// </remarks>
+    int LapsedHolds = 0);
 
 /// <summary>
 /// One person the kitchen has to cook differently for.

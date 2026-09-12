@@ -1,0 +1,288 @@
+@namespace Ben.Web.Website.Library.Manage.Events
+
+@inject IBenAdminClient AdminClient
+
+@using Ben.Data.Common.Enums
+@using Ben.Service.Models.Entities
+@using Ben.Web.Website.Library.Kit
+
+@*
+    Everything a host does to one party, in one place (item 235 phase 5).
+
+    A SHEET AND NOT A PAGE, because the decision is about the party in the queue and the queue is
+    the context: sending somebody to another screen to say yes loses their place in a list they are
+    working down. It is fullscreen on a phone, where a dialog that leaves the row peeking round the
+    edge is a dialog somebody dismisses by accident.
+
+    WHERE THEY ACTUALLY SLEEP IS THE QUESTION CONFIRMING ASKS. A guest asked for the Blue Room; the
+    venue may well put them in the Suite, and making them turn the party down and start again would
+    be absurd. So every night carries a picker, defaulted to what they asked for, and the refusal
+    when they do not fit names the room and the number.
+*@
+
+<BenModal @bind-Visible="Visible" Title="@Title" Size="lg">
+    <ChildContent>
+        @if (Booking is { } party)
+        {
+            <div class="d-flex align-items-center gap-2 flex-wrap mb-2">
+                <BookingStatusBadge Status="@party.Status" />
+                <span class="text-secondary small">
+                    @party.PartySize @(party.PartySize == 1 ? "person" : "people")
+                </span>
+                @if (party.LeadEmail is { Length: > 0 } email)
+                {
+                    <span class="text-secondary small">· @email</span>
+                }
+            </div>
+
+            @if (party.Note is { Length: > 0 } said)
+            {
+                <p class="fst-italic mb-3">“@said”</p>
+            }
+
+            @if (party.CancellationRequestedUtc is not null)
+            {
+                <div class="alert alert-warning py-2" id="sheet-wants-out">
+                    <strong>They have asked to get out of this one.</strong>
+                    @if (party.CancellationReason is { Length: > 0 } why)
+                    {
+                        <text> “@why”</text>
+                    }
+                    <div class="small mt-1">
+                        Releasing frees their places and tells them. Keeping it changes nothing and
+                        leaves the ask on record.
+                    </div>
+                </div>
+            }
+
+            @if (_error is { Length: > 0 })
+            {
+                @* The server's own sentence, which names the room and the number. Rewriting it
+                   would lose both, and both are the only parts a host can act on. *@
+                <div class="alert alert-danger py-2" id="sheet-error" role="alert">@_error</div>
+            }
+
+            @if (party.Nights.Count > 0 && party.Kind == HostedEventBookingKind.Overnight)
+            {
+                <div class="fw-semibold mb-1">Where they are actually staying</div>
+                <p class="text-secondary small">
+                    They asked for what is selected. Put them wherever suits you.
+                </p>
+
+                @foreach (var night in party.Nights)
+                {
+                    var thisNight = night;
+                    <div class="mb-2">
+                        <label class="form-label small mb-1"
+                               for="@($"sheet-night-{thisNight.HostedEventNightId}")">
+                            @thisNight.Date.ToString("dddd MM/dd/yyyy")
+                        </label>
+                        <select id="@($"sheet-night-{thisNight.HostedEventNightId}")"
+                                class="form-select"
+                                value="@Chosen(thisNight.HostedEventNightId)"
+                                @onchange="e => Choose(thisNight.HostedEventNightId, e.Value?.ToString())">
+                            <option value="">Here that day, sleeping elsewhere</option>
+                            @foreach (var unit in Offered(thisNight.HostedEventNightId))
+                            {
+                                <option value="@unit.Id">@unit.Name</option>
+                            }
+                        </select>
+                    </div>
+                }
+            }
+
+            <div class="mt-3">
+                <label class="form-label" for="sheet-note">A line for the guest</label>
+                <input id="sheet-note" class="form-control" maxlength="500"
+                       placeholder="Optional — they read this"
+                       @bind="_note" @bind:event="oninput" />
+            </div>
+        }
+    </ChildContent>
+
+    <FooterContent>
+        @if (Booking is { } party)
+        {
+            <button type="button" class="btn btn-outline-secondary" disabled="@_busy"
+                    @onclick="CloseAsync">Not now</button>
+
+            @if (party.Status is HostedEventBookingStatus.Requested
+                              or HostedEventBookingStatus.Held)
+            {
+                <button type="button" class="btn btn-outline-danger" id="sheet-turn-down"
+                        disabled="@_busy" @onclick="TurnDownAsync">Turn down</button>
+                <button type="button" class="btn btn-primary" id="sheet-confirm"
+                        disabled="@_busy" @onclick="ConfirmAsync">
+                    @(_busy ? "Saving…" : "Confirm their places")
+                </button>
+            }
+            else if (party.Status is HostedEventBookingStatus.Confirmed)
+            {
+                <button type="button" class="btn btn-outline-danger" id="sheet-release"
+                        disabled="@_busy" @onclick="ReleaseAsync">Release their places</button>
+                <button type="button" class="btn btn-primary" id="sheet-save"
+                        disabled="@_busy" @onclick="ConfirmAsync">
+                    @(_busy ? "Saving…" : "Save where they are")
+                </button>
+            }
+        }
+    </FooterContent>
+</BenModal>
+
+@code {
+    [Parameter] public bool Visible { get; set; }
+    [Parameter] public EventCallback<bool> VisibleChanged { get; set; }
+
+    [Parameter] public Guid OrgId { get; set; }
+    [Parameter] public Guid EventId { get; set; }
+
+    /// <summary>The party being decided about. Null while the sheet is closed.</summary>
+    [Parameter] public HostedEventBookingRecord? Booking { get; set; }
+
+    /// <summary>The board, for the rooms and seats this event has to offer.</summary>
+    [Parameter] public HostedEventBookingBoardRecord? Board { get; set; }
+
+    /// <summary>Told what happened, in words the board shows above the queue.</summary>
+    [Parameter] public EventCallback<string> OnDecided { get; set; }
+
+    private readonly Dictionary<Guid, Guid?> _where = [];
+    private string? _note;
+    private string? _error;
+    private bool _busy;
+    private Guid? _loadedFor;
+
+    /// <summary>
+    /// Fills the pickers from what the party asked for, once per party.
+    /// </summary>
+    /// <remarks>
+    /// Once, keyed on the booking, so a re-render while somebody is choosing does not throw their
+    /// choice away and put the guest's original request back.
+    /// </remarks>
+    protected override void OnParametersSet()
+    {
+        if (Booking is not { } party || _loadedFor == party.Id) return;
+
+        _loadedFor = party.Id;
+        _note = null;
+        _error = null;
+        _where.Clear();
+        foreach (var night in party.Nights)
+            _where[night.HostedEventNightId] = night.HostedEventLayoutUnitId;
+    }
+
+    private string Title => Booking is { } party ? party.LeadName : "Booking";
+
+    private string Chosen(Guid nightId)
+        => _where.TryGetValue(nightId, out var unit) && unit is { } id ? id.ToString() : "";
+
+    private void Choose(Guid nightId, string? unitId)
+        => _where[nightId] = Guid.TryParse(unitId, out var id) ? id : null;
+
+    /// <summary>
+    /// What this event has to offer on a night, with anything the venue is holding back left out.
+    /// </summary>
+    /// <remarks>
+    /// A blocked room is not a choice, and offering one would produce a refusal the host could
+    /// have been spared. What they already hold stays in the list whatever else is true of it —
+    /// otherwise the picker would silently move a party out of the room they are already in.
+    /// </remarks>
+    private IReadOnlyList<(Guid Id, string Name)> Offered(Guid nightId)
+    {
+        if (Board is not { } board) return [];
+
+        var theirs = Booking?.Nights
+            .FirstOrDefault(n => n.HostedEventNightId == nightId)?.HostedEventLayoutUnitId;
+
+        return
+        [
+            .. board.UnitNights
+                .Where(n => n.HostedEventNightId == nightId)
+                .Where(n => n.NotOffered is null || n.HostedEventLayoutUnitId == theirs)
+                .OrderBy(n => n.UnitName, StringComparer.OrdinalIgnoreCase)
+                .Select(n => (Id: n.HostedEventLayoutUnitId, Name: Describe(n)))
+        ];
+    }
+
+    /// <summary>The room, and what is already in it, so a host is not choosing blind.</summary>
+    private static string Describe(HostedEventUnitNightRecord unit)
+    {
+        var holds = unit.Holds is { } capacity ? $" · sleeps {capacity}" : "";
+        var state = unit switch
+        {
+            { Pending: true } => " · somebody is holding it",
+            { Taken: > 0 } => " · taken",
+            _ => "",
+        };
+        return $"{unit.UnitName}{holds}{state}";
+    }
+
+    // ── the three decisions ──────────────────────────────────────────────────
+
+    private async Task ConfirmAsync()
+    {
+        if (Booking is not { } party) return;
+
+        _busy = true;
+        _error = null;
+
+        var nights = party.Kind == HostedEventBookingKind.Overnight
+            ? _where.Select(w => new HostedEventBookingNightChoice(w.Key, w.Value)).ToList()
+            : [.. party.Nights.Select(n => new HostedEventBookingNightChoice(
+                    n.HostedEventNightId, n.HostedEventLayoutUnitId))];
+
+        var (saved, error) = await AdminClient.ConfirmEventBookingAsync(
+            OrgId, EventId, party.Id, new ConfirmHostedEventBookingRequest(nights, Trimmed(_note)));
+
+        _busy = false;
+
+        if (saved is null)
+        {
+            _error = error ?? "That couldn't be confirmed just now.";
+            return;
+        }
+
+        await OnDecided.InvokeAsync(
+            $"{saved.LeadName} is confirmed, and has been sent their pass.");
+    }
+
+    private async Task TurnDownAsync()
+    {
+        if (Booking is not { } party) return;
+
+        _busy = true;
+        _error = null;
+
+        var (saved, error) = await AdminClient.TurnDownEventBookingAsync(
+            OrgId, EventId, party.Id, Trimmed(_note));
+
+        _busy = false;
+
+        if (saved is null) { _error = error ?? "That couldn't be turned down just now."; return; }
+
+        await OnDecided.InvokeAsync(
+            $"{saved.LeadName} has been told, and their places are back.");
+    }
+
+    private async Task ReleaseAsync()
+    {
+        if (Booking is not { } party) return;
+
+        _busy = true;
+        _error = null;
+
+        var (saved, error) = await AdminClient.CancelEventBookingAsync(
+            OrgId, EventId, party.Id, Trimmed(_note));
+
+        _busy = false;
+
+        if (saved is null) { _error = error ?? "That couldn't be released just now."; return; }
+
+        await OnDecided.InvokeAsync(
+            $"{saved.LeadName}'s places are back, and their pass no longer works.");
+    }
+
+    private Task CloseAsync() => VisibleChanged.InvokeAsync(false);
+
+    private static string? Trimmed(string? value)
+        => value?.Trim() is { Length: > 0 } v ? v : null;
+}
