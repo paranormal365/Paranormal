@@ -144,6 +144,16 @@ public sealed class HostedEventController : OrgCmsControllerBase
             DefaultEndLocal = request.DefaultEndLocal,
             LifecycleState = HostedEventLifecycleState.Draft,
             DayPassCapacity = request.DayPassCapacity,
+            DayPassPrice = request.DayPassPrice,
+            BookingsCloseAtUtc = request.BookingsCloseAtUtc,
+            BookingMode = request.BookingMode,
+            HoldMinutes = request.HoldMinutes,
+            VenueArrangement = request.VenueArrangement,
+            VenueContactName = Trimmed(request.VenueContactName),
+            VenueAgreedOnUtc = request.VenueAgreedOnUtc,
+            VenueReference = Trimmed(request.VenueReference),
+            MinimumGuests = request.MinimumGuests,
+            GoNoGoDeadlineUtc = request.GoNoGoDeadlineUtc,
             ContactLine = Trimmed(request.ContactLine),
             CoverUploadFileId = request.CoverUploadFileId,
             MailSubjectTemplate = Trimmed(request.MailSubjectTemplate),
@@ -200,6 +210,18 @@ public sealed class HostedEventController : OrgCmsControllerBase
         hosted.DefaultStartLocal = request.DefaultStartLocal;
         hosted.DefaultEndLocal = request.DefaultEndLocal;
         hosted.DayPassCapacity = request.DayPassCapacity;
+        hosted.DayPassPrice = request.DayPassPrice;
+        hosted.BookingsCloseAtUtc = request.BookingsCloseAtUtc;
+        hosted.HoldMinutes = request.HoldMinutes;
+        hosted.VenueArrangement = request.VenueArrangement;
+        hosted.VenueContactName = Trimmed(request.VenueContactName);
+        hosted.VenueAgreedOnUtc = request.VenueAgreedOnUtc;
+        hosted.VenueReference = Trimmed(request.VenueReference);
+        hosted.MinimumGuests = request.MinimumGuests;
+        hosted.GoNoGoDeadlineUtc = request.GoNoGoDeadlineUtc;
+        // Not the booking mode: changing it once people hold seats would silently convert their
+        // holds into nothing, or their asks into places they never picked. It has its own endpoint
+        // with its own refusal.
         hosted.ContactLine = Trimmed(request.ContactLine);
         hosted.CoverUploadFileId = request.CoverUploadFileId;
         hosted.MailSubjectTemplate = Trimmed(request.MailSubjectTemplate);
@@ -374,7 +396,11 @@ public sealed class HostedEventController : OrgCmsControllerBase
         => SetAsync(orgId, eventId, e =>
         {
             e.ArchivedAtUtc = null;
-            e.LifecycleState = e.EndedAtUtc is not null
+            // Ended when it already happened AND was live at the time, so last spring's weekend
+            // comes back as the record it is rather than as something bookable. Anything else
+            // comes back as a draft. Read from the event's own dates, not from a lifecycle
+            // timestamp: those say when a thing happened, never what the event is.
+            e.LifecycleState = e.HasEverBeenLive && e.EndsOn.Date < DateTime.UtcNow.Date
                 ? HostedEventLifecycleState.Ended
                 : HostedEventLifecycleState.Draft;
         }, ct);
@@ -713,11 +739,101 @@ public sealed class HostedEventController : OrgCmsControllerBase
     private static string Describe(HostedEventLayoutKind kind)
         => kind == HostedEventLayoutKind.Seats ? "seating" : "rooms";
 
-    /// <summary>Un-does a cancellation, for the one that was a mis-click.</summary>
+    /// <summary>
+    /// Changes how guests get a place: they pick one, or they ask and are placed.
+    /// </summary>
+    /// <remarks>
+    /// <para><b>Its own endpoint, not a field on the save form</b>, because it is the one setting
+    /// on this screen that would change the meaning of bookings that already exist. Switching a
+    /// Pick event to Ask turns everybody's held seats into nothing; switching the other way turns
+    /// their asks into places they never chose. Both are silent, and both are found out on the
+    /// night.</para>
+    ///
+    /// <para>So it is refused once anybody is waiting on an answer, and the refusal says how many
+    /// and what to do — decide them, and the switch is free again.</para>
+    /// </remarks>
+    [HttpPost("{eventId:guid}/booking-mode")]
+    public async Task<ActionResult<HostedEventRecord>> SetBookingMode(
+        Guid orgId, Guid eventId, [FromBody] SetHostedEventBookingModeRequest request,
+        CancellationToken ct)
+    {
+        var userId = GetCurrentUserId();
+        if (userId is null) return Unauthorized();
+        if (!await IsCmsAuthorizedAsync(userId.Value, orgId,
+                OrganizationSecurityTable.OrganizationSettings, OrganizationSecurityAction.Update, ct))
+            return Forbid();
+
+        await using var db = await DbFactory.CreateDbContextAsync(ct);
+        var hosted = await db.HostedEvents
+            .FirstOrDefaultAsync(e => e.Id == eventId && e.OrganizationId == orgId, ct);
+        if (hosted is null) return NotFound();
+
+        if (hosted.BookingMode == request.Mode)
+            return Ok((await LoadAsync(db, orgId, eventId, ct))[0]);
+
+        var live = await db.HostedEventBookings.CountAsync(
+            b => b.HostedEventId == eventId
+              && (b.Status == HostedEventBookingStatus.Requested
+               || b.Status == HostedEventBookingStatus.Confirmed), ct);
+
+        if (live > 0)
+            return Conflict(
+                $"{live} {(live == 1 ? "party is" : "parties are")} already booked or waiting on "
+                + "this event, and changing how places are chosen would change what their bookings "
+                + "mean. Decide the ones that are waiting first, or make a new event.");
+
+        hosted.BookingMode = request.Mode;
+        hosted.DateUpdated = DateTime.UtcNow;
+        hosted.UpdatedByAppUserId = userId.Value;
+        await db.SaveChangesAsync(ct);
+
+        return Ok((await LoadAsync(db, orgId, eventId, ct))[0]);
+    }
+
+    /// <summary>Everything standing between this event and going live.</summary>
+    /// <remarks>
+    /// The same list the publish button refuses from, so the page can never offer a publish the
+    /// server is about to bounce. Readable by any member: knowing what is missing is not a billing
+    /// question.
+    /// </remarks>
+    [HttpGet("{eventId:guid}/readiness")]
+    public async Task<ActionResult<IReadOnlyList<HostedEventReadinessItem>>> Readiness(
+        Guid orgId, Guid eventId, CancellationToken ct)
+    {
+        var userId = GetCurrentUserId();
+        if (userId is null) return Unauthorized();
+
+        await using var db = await DbFactory.CreateDbContextAsync(ct);
+        if (!await IsMemberAsync(db, orgId, userId.Value, ct)) return Forbid();
+
+        var hosted = await db.HostedEvents
+            .Include(e => e.Nights)
+            .Include(e => e.LayoutUnits)
+            .FirstOrDefaultAsync(e => e.Id == eventId && e.OrganizationId == orgId, ct);
+        if (hosted is null) return NotFound();
+
+        return Ok(HostedEventReadiness.Describe(hosted));
+    }
+
+    /// <summary>
+    /// Un-does a cancellation, for the one that was a mis-click.
+    /// </summary>
+    /// <remarks>
+    /// <para>Back to Draft, not back to Published. Everybody who had a place has already been told
+    /// it was off, so putting it back in front of strangers is a decision somebody makes on
+    /// purpose. Publishing again costs nothing: <c>FirstPublishedUtc</c> remembers it was paid for.
+    /// </para>
+    ///
+    /// <para><b>The state, not only the stamp.</b> Clearing the timestamp alone left the event
+    /// Cancelled for ever — the same fault the cancel endpoint had, found by auditing rather than
+    /// by a test, because nothing yet un-cancels anything.</para>
+    /// </remarks>
     [HttpPost("{eventId:guid}/uncancel")]
     public Task<ActionResult<HostedEventRecord>> Uncancel(Guid orgId, Guid eventId, CancellationToken ct)
         => SetAsync(orgId, eventId, e =>
         {
+            if (e.LifecycleState is not HostedEventLifecycleState.Cancelled) return;
+            e.LifecycleState = HostedEventLifecycleState.Draft;
             e.CancelledAtUtc = null;
             e.CancelledReason = null;
         }, ct);
@@ -864,6 +980,33 @@ public sealed class HostedEventController : OrgCmsControllerBase
             return "A number of day passes cannot be negative. Leave it empty for no limit, "
                  + "or zero for none at all.";
 
+        if (request.DayPassPrice is < 0)
+            return "A price cannot be negative. Leave it empty for \"ask us\", or zero for free.";
+
+        // The database has this as a check constraint, which would answer a 500. A person typing
+        // five minutes into a box deserves a sentence.
+        if (request.HoldMinutes is < 15 or > 20160)
+            return "A hold lasts between 15 minutes and 14 days. Less than a quarter of an hour is "
+                 + "not long enough to type a party's names into; more than a fortnight is a "
+                 + "booking nobody has confirmed.";
+
+        if (request.MinimumGuests is < 1)
+            return "A minimum of nobody is not a minimum. Leave it empty if the event runs whatever "
+                 + "the numbers come to.";
+
+        if (request.GoNoGoDeadlineUtc is { } deadline && deadline.Date > request.StartsOn.Date)
+            return "The go or no-go date is after the event starts, which is too late to be a "
+                 + "decision. Pick a date before it.";
+
+        if (request.MinimumGuests is null && request.GoNoGoDeadlineUtc is not null)
+            return "A go or no-go date needs a minimum number to decide against.";
+
+        if (request.VenueArrangement == HostedEventVenueArrangement.Self
+            && (!string.IsNullOrWhiteSpace(request.VenueContactName)
+                || request.VenueAgreedOnUtc is not null))
+            return "You have said this is your own venue and also named somebody who agreed to it. "
+                 + "Pick one: your own venue, or an arrangement made with somebody else.";
+
         if (request.DatesAreSeparate)
         {
             var dates = request.Dates ?? [];
@@ -963,7 +1106,9 @@ public sealed class HostedEventController : OrgCmsControllerBase
         if (eventId is { } id) query = query.Where(e => e.Id == id);
 
         var rows = await query
-            .OrderBy(e => e.ArchivedAtUtc != null)
+            // Filed-away events last. Read from the state, like everything else, so an event
+            // archived by the job and one archived by hand sort the same way.
+            .OrderBy(e => e.LifecycleState == HostedEventLifecycleState.Archived)
             .ThenBy(e => e.StartsOn)
             .Select(e => new
             {

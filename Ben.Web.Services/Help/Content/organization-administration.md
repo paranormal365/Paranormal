@@ -851,6 +851,69 @@ everybody can see what is where. It has a page of its own, listed as *Plan* down
 event page. The **board**, where requests wait for your decision, is being built now; the index
 lists it and will link to it the day it arrives.
 
+### Before you publish
+
+A draft costs nothing and shows nobody anything. Publishing is the moment it goes on your public
+page, starts taking bookings, and spends a slot or an event credit — so the page carries a
+checklist of everything standing in the way, and each line links to the place you fix it.
+
+There are four things. **At least one date**, because nobody can come to something with no date on
+it. **The venue's say-so**, below. **Somewhere to book** — a room or a seat on the plan, or a
+number of day passes; an event where everybody just turns up is fine, one with nothing at all is
+not. And **a contact line**, because this site never takes a guest's money and that line is the
+only thing on the page that says how anybody pays you.
+
+The publish button refuses in exactly the same words the checklist uses. If it says something is
+missing, it is the same thing the list is pointing at.
+
+### Who confirms the event is happening
+
+Under **The venue's say-so** you record how this event came to be allowed to happen where it is
+happening. There are three answers and they are genuinely different.
+
+**It's our own venue** is a hotel running its own weekend. Publishing is the whole declaration and
+nothing more is asked, because asking a hotel to prove it may use itself would be silly.
+
+**Somebody else's, arranged directly with them** is a hall you hired or a house whose owner said
+yes on the phone. Record who agreed and when, and their reference if there is one. We cannot check
+any of it — recording it is so that everybody knows what was arranged, and so that being asked
+reminds you to go and ask.
+
+**Somebody else's, and they're on this site** will one day mean the venue has to approve it here
+before you can publish. That is not built yet, and the page says so rather than pretending. For
+now, arrange it with them directly and record it as the middle option.
+
+### Pick or ask, and how long a hold lasts
+
+Under **Your guests** you choose how somebody gets a place.
+
+**They ask, you place them.** A request holds nothing until you confirm it, which means the event
+keeps taking requests after it is full and the overflow is a waiting list rather than a closed
+door. This suits a hotel putting families into the right rooms.
+
+**They pick on the plan.** A guest clicks or drags across the seats they want, and those seats are
+held for them — shown to everybody else as waiting on an answer, and unavailable — until you
+confirm or the hold lapses. This suits an evening sold by the seat, where two people spending the
+evening choosing the same row is the thing to prevent.
+
+A hold lasts as long as you say, from an hour to a fortnight, two days by default. When it lapses
+the seats go back and the guest is told; they stay on your list as a request, so nobody is silently
+dropped.
+
+**Changing between the two is refused once anybody is booked or waiting.** The switch would change
+what their existing booking means — a hold would become nothing, an ask would become a place they
+never chose — and neither is something you would find out about until the night. Decide the ones
+waiting first, and the switch is free again.
+
+### Minimum numbers
+
+Some events are only worth running if enough people come. Say the fewest, and the date by which
+you will decide, and we will remind you a week before and again the day before. Leave both empty
+and the event runs whatever the numbers come to.
+
+Calling it off because the numbers did not come is the same as calling it off for any other
+reason: the people who had places are told, and the listing says so.
+
 ### The plan: rooms or seats
 
 An event's plan holds one kind of thing, and you choose which while it is still empty: **Rooms** for

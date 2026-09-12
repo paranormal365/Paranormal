@@ -839,4 +839,210 @@ public sealed class HostedEventControllerTests
         return Assert.IsType<LayoutRefusalRecord>(
             Assert.IsType<ConflictObjectResult>(result.Result).Value);
     }
+
+    // ── how guests get a place (phase 3) ─────────────────────────────────────
+
+    [Fact]
+    public async Task How_guests_get_a_place_can_be_switched_while_nobody_is_waiting()
+    {
+        var f = await SeedAsync();
+        var controller = Build(f);
+        var record = Created(await controller.Create(OrgId, Weekend(), default));
+
+        // Ask is the default, because it is what every event on the branch already did.
+        Assert.Equal(HostedEventBookingMode.Ask, record.BookingMode);
+
+        var switched = Assert.IsType<HostedEventRecord>(
+            Assert.IsType<OkObjectResult>((await controller.SetBookingMode(
+                OrgId, record.Id, new SetHostedEventBookingModeRequest(HostedEventBookingMode.Pick),
+                default)).Result).Value);
+
+        Assert.Equal(HostedEventBookingMode.Pick, switched.BookingMode);
+    }
+
+    [Fact]
+    public async Task Switching_how_guests_get_a_place_is_refused_once_anybody_is_waiting()
+    {
+        // The refusal exists because the switch would change what existing bookings MEAN: holds
+        // become nothing, asks become places nobody chose. Both are silent, and both are found out
+        // on the night.
+        var f = await SeedAsync();
+        var controller = Build(f);
+        var record = Created(await controller.Create(OrgId, Weekend(), default));
+
+        await using (var db = await f.CreateDbContextAsync())
+        {
+            db.HostedEventBookings.Add(new HostedEventBooking
+            {
+                Id = Guid.NewGuid(), HostedEventId = record.Id, LeadAppUserId = OwnerId,
+                Kind = HostedEventBookingKind.Overnight,
+                Status = HostedEventBookingStatus.Requested, PartySize = 2,
+                DateCreated = DateTime.UtcNow, CreatedByAppUserId = OwnerId,
+            });
+            await db.SaveChangesAsync();
+        }
+
+        var refusal = Assert.IsType<ConflictObjectResult>((await controller.SetBookingMode(
+            OrgId, record.Id, new SetHostedEventBookingModeRequest(HostedEventBookingMode.Pick),
+            default)).Result);
+
+        var sentence = Assert.IsType<string>(refusal.Value);
+        Assert.Contains("1 party is already booked or waiting", sentence);
+        Assert.Contains("Decide the ones that are waiting", sentence);
+    }
+
+    [Fact]
+    public async Task A_turned_down_party_does_not_stop_the_switch()
+    {
+        // Only the ones still waiting on an answer count. A party turned down last month has no
+        // booking whose meaning could change.
+        var f = await SeedAsync();
+        var controller = Build(f);
+        var record = Created(await controller.Create(OrgId, Weekend(), default));
+
+        await using (var db = await f.CreateDbContextAsync())
+        {
+            db.HostedEventBookings.Add(new HostedEventBooking
+            {
+                Id = Guid.NewGuid(), HostedEventId = record.Id, LeadAppUserId = OwnerId,
+                Kind = HostedEventBookingKind.DayPass,
+                Status = HostedEventBookingStatus.TurnedDown, PartySize = 2,
+                DateCreated = DateTime.UtcNow, CreatedByAppUserId = OwnerId,
+            });
+            await db.SaveChangesAsync();
+        }
+
+        Assert.IsType<OkObjectResult>((await controller.SetBookingMode(
+            OrgId, record.Id, new SetHostedEventBookingModeRequest(HostedEventBookingMode.Pick),
+            default)).Result);
+    }
+
+    // ── the settings that used to be unreachable ─────────────────────────────
+
+    [Fact]
+    public async Task The_settings_a_booking_needs_can_actually_be_saved()
+    {
+        // Every one of these was on the record and on the table with no way to set it. A field a
+        // screen can read and nothing can write is a field that is always empty.
+        var f = await SeedAsync();
+        var controller = Build(f);
+        var record = Created(await controller.Create(OrgId, Weekend(), default));
+
+        var closes = new DateTime(2026, 10, 20, 0, 0, 0, DateTimeKind.Utc);
+        var decideBy = new DateTime(2026, 10, 15, 0, 0, 0, DateTimeKind.Utc);
+
+        var saved = Assert.IsType<HostedEventRecord>(
+            Assert.IsType<OkObjectResult>((await controller.Update(OrgId, record.Id, Weekend() with
+            {
+                DayPassPrice = 45m,
+                BookingsCloseAtUtc = closes,
+                HoldMinutes = 1440,
+                VenueArrangement = HostedEventVenueArrangement.External,
+                VenueContactName = "Mrs Cole",
+                VenueAgreedOnUtc = new DateTime(2026, 8, 1, 0, 0, 0, DateTimeKind.Utc),
+                VenueReference = "INV-4021",
+                MinimumGuests = 12,
+                GoNoGoDeadlineUtc = decideBy,
+            }, default)).Result).Value);
+
+        Assert.Equal(45m, saved.DayPassPrice);
+        Assert.Equal(closes, saved.BookingsCloseAtUtc);
+        Assert.Equal(1440, saved.HoldMinutes);
+        Assert.Equal(HostedEventVenueArrangement.External, saved.VenueArrangement);
+        Assert.Equal("Mrs Cole", saved.VenueContactName);
+        Assert.Equal("INV-4021", saved.VenueReference);
+        Assert.Equal(12, saved.MinimumGuests);
+        Assert.Equal(decideBy, saved.GoNoGoDeadlineUtc);
+    }
+
+    [Fact]
+    public async Task A_hold_shorter_than_a_quarter_hour_is_refused_in_words()
+    {
+        // The database has this as a check constraint, which answers a 500. A person typing five
+        // minutes into a box deserves a sentence.
+        var f = await SeedAsync();
+        var controller = Build(f);
+        var record = Created(await controller.Create(OrgId, Weekend(), default));
+
+        var refusal = Assert.IsType<BadRequestObjectResult>(
+            (await controller.Update(OrgId, record.Id,
+                Weekend() with { HoldMinutes = 5 }, default)).Result);
+
+        Assert.Contains("between 15 minutes and 14 days", Assert.IsType<string>(refusal.Value));
+    }
+
+    [Fact]
+    public async Task A_decision_date_after_the_event_starts_is_refused()
+    {
+        var f = await SeedAsync();
+        var controller = Build(f);
+        var record = Created(await controller.Create(OrgId, Weekend(), default));
+
+        var refusal = Assert.IsType<BadRequestObjectResult>(
+            (await controller.Update(OrgId, record.Id, Weekend() with
+            {
+                MinimumGuests = 10,
+                GoNoGoDeadlineUtc = new DateTime(2026, 11, 5, 0, 0, 0, DateTimeKind.Utc),
+            }, default)).Result);
+
+        Assert.Contains("too late to be a decision", Assert.IsType<string>(refusal.Value));
+    }
+
+    [Fact]
+    public async Task A_decision_date_with_nothing_to_decide_against_is_refused()
+    {
+        var f = await SeedAsync();
+        var controller = Build(f);
+        var record = Created(await controller.Create(OrgId, Weekend(), default));
+
+        var refusal = Assert.IsType<BadRequestObjectResult>(
+            (await controller.Update(OrgId, record.Id, Weekend() with
+            {
+                GoNoGoDeadlineUtc = new DateTime(2026, 10, 15, 0, 0, 0, DateTimeKind.Utc),
+            }, default)).Result);
+
+        Assert.Contains("needs a minimum number", Assert.IsType<string>(refusal.Value));
+    }
+
+    [Fact]
+    public async Task Saying_it_is_your_own_venue_and_naming_who_agreed_is_refused()
+    {
+        // Two contradictory answers saved together is a record nobody can act on: which is it?
+        var f = await SeedAsync();
+        var controller = Build(f);
+        var record = Created(await controller.Create(OrgId, Weekend(), default));
+
+        var refusal = Assert.IsType<BadRequestObjectResult>(
+            (await controller.Update(OrgId, record.Id, Weekend() with
+            {
+                VenueArrangement = HostedEventVenueArrangement.Self,
+                VenueContactName = "Mrs Cole",
+            }, default)).Result);
+
+        Assert.Contains("Pick one", Assert.IsType<string>(refusal.Value));
+    }
+
+    // ── the checklist the button refuses from ────────────────────────────────
+
+    [Fact]
+    public async Task The_checklist_and_the_refusal_are_the_same_sentence()
+    {
+        // The property that makes the checklist worth having: what the card says and what the
+        // button says are one string, so they can never read as two different problems.
+        var f = await SeedAsync();
+        var controller = Build(f);
+        var record = Created(await controller.Create(
+            OrgId, Weekend() with { ContactLine = null }, default));
+
+        var checklist = Assert.IsType<List<HostedEventReadinessItem>>(
+            Assert.IsType<OkObjectResult>(
+                (await controller.Readiness(OrgId, record.Id, default)).Result).Value);
+
+        var blocker = Assert.Single(checklist, i => !i.Done);
+
+        var refusal = Assert.IsType<BadRequestObjectResult>(
+            (await controller.Publish(OrgId, record.Id, default)).Result);
+
+        Assert.Equal(blocker.Sentence, Assert.IsType<string>(refusal.Value));
+    }
 }

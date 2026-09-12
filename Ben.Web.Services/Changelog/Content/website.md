@@ -18,6 +18,23 @@ day-by-day account of building it would say nothing to anyone using it now.
 
 ## 2026-09-12
 
+- An event now says what state it is in, in one word, everywhere it appears: draft, live, on now,
+  over, archived or called off. It used to be worked out separately on each screen from three
+  different flags, and they did not always agree.
+- Before you can publish an event, a checklist says exactly what is missing and links to the place
+  you fix it. The publish button refuses in the same words, so there are no surprises after you
+  press it.
+- An event records who agreed it may happen at its venue: your own place, or somebody you arranged
+  it with directly and when they said yes. Asking a venue that is on this site is coming later, and
+  the page says so rather than leaving the option out.
+- You can now say what a day costs, when bookings close, the fewest people that make the event
+  worth running, and the date by which you will decide. All of these were readable and none of them
+  could be set.
+- You choose whether guests ask for a place and you put them somewhere, or pick their own on the
+  plan and hold it until you answer. Switching is refused once anybody is booked or waiting,
+  because it would change what their booking means.
+- Un-calling-off an event brings it back as a draft, so putting it in front of people again is a
+  decision you make on purpose. Publishing it a second time costs nothing.
 - An event now has a plan you draw. A venue that lets rooms picks them from a list and places them
   on a floor; an evening sold by the seat gets whole blocks of rows added at once, with a centre
   aisle put in wherever you want one. Rows skip I and O, because on a printed ticket they read as

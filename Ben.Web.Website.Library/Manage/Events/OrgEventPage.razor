@@ -122,9 +122,15 @@
                             This one has been published before, so nothing more is charged for it.
                         </p>
                     }
+                    @if (_readiness.FirstOrDefault(i => !i.Done) is { } blocker)
+                    {
+                        @* The server refuses on exactly this item, in exactly these words. Saying
+                           it here as well is what stops the button being a trapdoor. *@
+                        <p class="text-danger mb-2" id="publish-blocked">@blocker.Sentence</p>
+                    }
                     <div class="d-flex gap-2">
                         <button type="button" class="btn btn-primary" id="publish-confirm-yes"
-                                disabled="@(_busy || _plan is { MayPublish: false })"
+                                disabled="@(_busy || _plan is { MayPublish: false } || _readiness.Any(i => !i.Done))"
                                 @onclick="PublishAsync">
                             @(_busy ? "Publishing…" : "Yes, publish it")
                         </button>
@@ -135,6 +141,39 @@
             </div>
         }
 
+        @* ── Ready to publish ────────────────────────────────────────── *@
+        @if (ev.LifecycleState is HostedEventLifecycleState.Draft && _readiness.Count > 0)
+        {
+            var left = _readiness.Count(i => !i.Done);
+            <div class="card mb-3 @(left == 0 ? "border-success" : "border-warning")" id="event-readiness">
+                <div class="card-header fw-semibold">
+                    @(left == 0
+                        ? "Ready to publish"
+                        : $"{left} thing{(left == 1 ? "" : "s")} before you can publish")
+                </div>
+                <ul class="list-group list-group-flush">
+                    @foreach (var item in _readiness)
+                    {
+                        <li class="list-group-item d-flex align-items-start gap-2">
+                            <BenIcon Name="@(item.Done ? "check-circle" : "alert-circle")"
+                                     Class="@(item.Done ? "text-success mt-1" : "text-warning mt-1")"
+                                     Title="@(item.Done ? "Done" : "Still to do")" />
+                            <div>
+                                <div class="fw-semibold">@item.Label</div>
+                                @if (!item.Done)
+                                {
+                                    @* The server's own sentence. The page must not paraphrase it,
+                                       or the checklist and the refusal read as two problems. *@
+                                    <div class="small text-secondary">@item.Sentence</div>
+                                    <a class="small" href="@ReadinessHref(item)">Go and fix it</a>
+                                }
+                            </div>
+                        </li>
+                    }
+                </ul>
+            </div>
+        }
+
         <div class="row g-3">
             <div class="col-12 col-lg-3">
                 <div class="list-group sticky-lg-top" style="top:1rem;" id="event-index">
@@ -142,6 +181,7 @@
                     <a class="list-group-item list-group-item-action" href="#event-dates">
                         @Capitalise(Plural(2, ev.DateNoun))
                     </a>
+                    <a class="list-group-item list-group-item-action" href="#event-venue">The venue's say-so</a>
                     <a class="list-group-item list-group-item-action" href="#event-guests">Your guests</a>
                     <a class="list-group-item list-group-item-action" href="#event-state">Ending it</a>
                     @* The screens of their own that hang off this page. Each is a link only once
@@ -446,6 +486,80 @@
                 </div>
 
                 @* ── Guests ──────────────────────────────────────────────── *@
+                @* ── The venue's say-so ──────────────────────────────────── *@
+                <div class="card mb-3" id="event-venue">
+                    <div class="card-header fw-semibold">The venue's say-so</div>
+                    <div class="card-body">
+                        <p class="text-secondary">
+                            Who agreed this event may happen at @ev.PlaceLabel. We cannot check it
+                            for you — recording it is so that everybody knows what was arranged, and
+                            so that being asked reminds you to ask.
+                        </p>
+
+                        <div class="row g-3">
+                            <div class="col-12">
+                                <label class="form-label" for="event-arrangement">The arrangement</label>
+                                <select id="event-arrangement" class="form-select"
+                                        @bind="_form.VenueArrangement">
+                                    <option value="@HostedEventVenueArrangement.Self">
+                                        It's our own venue
+                                    </option>
+                                    <option value="@HostedEventVenueArrangement.External">
+                                        Somebody else's, arranged directly with them
+                                    </option>
+                                    <option value="@HostedEventVenueArrangement.PlatformGrant">
+                                        Somebody else's, and they're on this site
+                                    </option>
+                                </select>
+                            </div>
+
+                            @if (_form.VenueArrangement == HostedEventVenueArrangement.External)
+                            {
+                                <div class="col-12 col-md-5">
+                                    <label class="form-label" for="event-venue-contact">
+                                        Who agreed it
+                                    </label>
+                                    <input id="event-venue-contact" class="form-control" maxlength="160"
+                                           placeholder="Mrs Cole, the manager"
+                                           @bind="_form.VenueContactName" />
+                                </div>
+                                <div class="col-6 col-md-3">
+                                    <label class="form-label" for="event-venue-agreed">When</label>
+                                    <input id="event-venue-agreed" type="date" class="form-control"
+                                           @bind="_form.VenueAgreedOn" />
+                                </div>
+                                <div class="col-6 col-md-4">
+                                    <label class="form-label" for="event-venue-reference">
+                                        Their reference
+                                    </label>
+                                    <input id="event-venue-reference" class="form-control" maxlength="120"
+                                           placeholder="optional" @bind="_form.VenueReference" />
+                                </div>
+                            }
+                            else if (_form.VenueArrangement == HostedEventVenueArrangement.PlatformGrant)
+                            {
+                                @* Offered and refused, rather than hidden: somebody whose venue is
+                                   another group on here should be told the answer, not left
+                                   hunting for a missing option. *@
+                                <div class="col-12">
+                                    <div class="alert alert-warning mb-0" id="event-venue-grant-soon">
+                                        Asking a venue on this site for permission isn't built yet.
+                                        For now, arrange it with them directly and record it above
+                                        as an arrangement made with them.
+                                    </div>
+                                </div>
+                            }
+                        </div>
+
+                        <div class="d-flex justify-content-end mt-3">
+                            <button type="button" class="btn btn-primary" id="save-venue"
+                                    disabled="@_busy" @onclick="SaveAsync">
+                                @(_busy ? "Saving…" : "Save")
+                            </button>
+                        </div>
+                    </div>
+                </div>
+
                 <div class="card mb-3" id="event-guests">
                     <div class="card-header fw-semibold">Your guests</div>
                     <div class="card-body">
@@ -460,11 +574,108 @@
                                     How many may come without a room. Empty for no limit, zero for none.
                                 </div>
                             </div>
-                            <div class="col-12 col-md-8 pt-md-4">
-                                <p class="text-secondary mb-0">
-                                    Rooms, who has a place, and what they eat arrive in the next
-                                    step. Until then, people reach you through the line above.
+                            <div class="col-6 col-md-4">
+                                <label class="form-label" for="event-day-pass-price">
+                                    What a day costs
+                                </label>
+                                <input id="event-day-pass-price" type="number" step="0.01" min="0"
+                                       class="form-control" placeholder="ask us"
+                                       @bind="_form.DayPassPrice" />
+                                <div class="form-text">
+                                    Shown to guests and never charged here. Empty means "ask us";
+                                    zero means it's free.
+                                </div>
+                            </div>
+                            <div class="col-6 col-md-4">
+                                <label class="form-label" for="event-bookings-close">
+                                    Bookings close
+                                </label>
+                                <input id="event-bookings-close" type="date" class="form-control"
+                                       @bind="_form.BookingsCloseOn" />
+                                <div class="form-text">
+                                    Empty means they never do. Requests already waiting are still
+                                    yours to decide after it.
+                                </div>
+                            </div>
+                        </div>
+
+                        <hr />
+
+                        <div class="row g-3">
+                            <div class="col-12">
+                                <div class="fw-semibold">How guests get a place</div>
+                            </div>
+                            <div class="col-12 col-md-6">
+                                <div class="btn-group" role="group" aria-label="How guests get a place">
+                                    <button type="button" id="mode-ask"
+                                            class="btn @(ev.BookingMode == HostedEventBookingMode.Ask ? "btn-primary" : "btn-outline-secondary")"
+                                            disabled="@_busy"
+                                            @onclick="@(() => SetModeAsync(HostedEventBookingMode.Ask))">
+                                        They ask, you place them
+                                    </button>
+                                    <button type="button" id="mode-pick"
+                                            class="btn @(ev.BookingMode == HostedEventBookingMode.Pick ? "btn-primary" : "btn-outline-secondary")"
+                                            disabled="@_busy"
+                                            @onclick="@(() => SetModeAsync(HostedEventBookingMode.Pick))">
+                                        They pick on the plan
+                                    </button>
+                                </div>
+                                <div class="form-text">
+                                    Asking holds nothing, so you keep taking requests after you are
+                                    full and the overflow is a waiting list. Picking holds what they
+                                    chose until you answer.
+                                </div>
+                            </div>
+
+                            @if (ev.BookingMode == HostedEventBookingMode.Pick)
+                            {
+                                <div class="col-12 col-md-6">
+                                    <label class="form-label" for="event-hold-hours">
+                                        A hold lasts
+                                    </label>
+                                    <select id="event-hold-hours" class="form-select"
+                                            @bind="_form.HoldMinutes">
+                                        <option value="60">an hour</option>
+                                        <option value="360">six hours</option>
+                                        <option value="1440">a day</option>
+                                        <option value="2880">two days</option>
+                                        <option value="10080">a week</option>
+                                        <option value="20160">a fortnight</option>
+                                    </select>
+                                    <div class="form-text">
+                                        Then it lapses and the seats go back, and the guest is told.
+                                        They stay on your list as a request.
+                                    </div>
+                                </div>
+                            }
+                        </div>
+
+                        <hr />
+
+                        <div class="row g-3">
+                            <div class="col-12">
+                                <div class="fw-semibold">Minimum numbers</div>
+                                <p class="text-secondary small mb-0">
+                                    For an event only worth running if enough people come. Leave
+                                    both empty and it runs whatever the numbers come to.
                                 </p>
+                            </div>
+                            <div class="col-6 col-md-4">
+                                <label class="form-label" for="event-minimum">
+                                    Fewest people
+                                </label>
+                                <input id="event-minimum" type="number" min="1" class="form-control"
+                                       placeholder="no minimum" @bind="_form.MinimumGuests" />
+                            </div>
+                            <div class="col-6 col-md-4">
+                                <label class="form-label" for="event-go-no-go">
+                                    Decide by
+                                </label>
+                                <input id="event-go-no-go" type="date" class="form-control"
+                                       @bind="_form.GoNoGoDeadline" />
+                                <div class="form-text">
+                                    We'll remind you a week and a day before.
+                                </div>
                             </div>
                         </div>
                         <div class="d-flex justify-content-end mt-3">
@@ -479,16 +690,29 @@
                 <div class="card mb-3" id="event-state">
                     <div class="card-header fw-semibold">Ending it</div>
                     <div class="card-body">
-                        @if (ev.CancelledAtUtc is not null)
+                        @if (ev.LifecycleState is HostedEventLifecycleState.VenueWithdrawn)
+                        {
+                            @* Not the organizer's doing, so it is not theirs to undo. *@
+                            <div class="alert alert-danger mb-0">
+                                <strong>The venue withdrew@(ev.CancelledReason is { Length: > 0 } pulled ? $" — {pulled}" : "").</strong>
+                                Everybody who had a place has been told. Make a new event wherever
+                                it is happening now.
+                            </div>
+                        }
+                        else if (ev.LifecycleState is HostedEventLifecycleState.Cancelled)
                         {
                             <div class="alert alert-danger">
                                 <strong>Called off@(ev.CancelledReason is { Length: > 0 } why ? $" — {why}" : "").</strong>
                                 Everybody who had a place can see that it is off.
                             </div>
-                            <button type="button" class="btn btn-outline-secondary" disabled="@_busy"
-                                    @onclick="@(() => StateAsync("uncancel"))">
+                            <button type="button" class="btn btn-outline-secondary" id="uncancel-event"
+                                    disabled="@_busy" @onclick="@(() => StateAsync("uncancel"))">
                                 It's back on
                             </button>
+                            <p class="text-secondary small mt-2 mb-0">
+                                It comes back as a draft, so putting it in front of strangers again
+                                is a decision you make on purpose. Publishing it costs nothing.
+                            </p>
                         }
                         else
                         {
@@ -500,7 +724,7 @@
                                 and now is not — the listing says so, and the people coming are told.
                             </p>
                             <div class="d-flex gap-2 flex-wrap align-items-start">
-                                @if (ev.ArchivedAtUtc is null)
+                                @if (ev.LifecycleState is not HostedEventLifecycleState.Archived)
                                 {
                                     <button type="button" class="btn btn-outline-secondary" id="archive-event"
                                             disabled="@_busy" @onclick="@(() => StateAsync("archive"))">
@@ -543,6 +767,7 @@
     private string? _note;
     private string _cancelReason = "";
     private readonly EventForm _form = new();
+    private IReadOnlyList<HostedEventReadinessItem> _readiness = [];
     private readonly Dictionary<Guid, NightForm> _nights = [];
 
     /// <summary>The layout designer, shipped in phase 2 of item 235.</summary>
@@ -604,7 +829,16 @@
         public bool HideExactLocation { get; set; }
         public bool CollectsEvidence { get; set; }
         public int? DayPassCapacity { get; set; }
+        public decimal? DayPassPrice { get; set; }
+        public DateTime? BookingsCloseOn { get; set; }
         public string? ContactLine { get; set; }
+        public int HoldMinutes { get; set; } = 2880;
+        public HostedEventVenueArrangement VenueArrangement { get; set; }
+        public string? VenueContactName { get; set; }
+        public DateTime? VenueAgreedOn { get; set; }
+        public string? VenueReference { get; set; }
+        public int? MinimumGuests { get; set; }
+        public DateTime? GoNoGoDeadline { get; set; }
     }
 
     private sealed class NightForm
@@ -637,9 +871,113 @@
         {
             _orgUrlName ??= (await AdminClient.GetOrganizationAsync(OrgId))?.UrlName;
             Fill(ev);
+            await LoadReadinessAsync();
         }
 
         _loading = false;
+    }
+
+    /// <summary>
+    /// The checklist, from the server, so it says exactly what the publish button would refuse.
+    /// </summary>
+    /// <remarks>
+    /// A failed fetch leaves the card off rather than drawing an empty one. "Nothing left to do"
+    /// over a request that never arrived is the worst of the three things it could say.
+    /// </remarks>
+    private async Task LoadReadinessAsync()
+    {
+        var result = await AdminClient.GetHostedEventReadinessAsync(OrgId, EventId);
+        _readiness = result.Failed ? [] : result.Items;
+    }
+
+    /// <summary>Where a checklist item sends somebody: a card on this page, or a page of its own.</summary>
+    private string ReadinessHref(HostedEventReadinessItem item)
+        => item.Href.StartsWith('#')
+            ? item.Href
+            : $"/organizations/{OrgId}/events/{EventId}{item.Href}";
+
+    /// <summary>The venue's own clock, which is the only one these dates mean anything in.</summary>
+    private TimeZoneInfo Zone
+    {
+        get
+        {
+            try
+            {
+                return _event?.TimeZoneId is { Length: > 0 } id
+                    ? TimeZoneInfo.FindSystemTimeZoneById(id)
+                    : TimeZoneInfo.Utc;
+            }
+            catch (Exception e) when (e is TimeZoneNotFoundException or InvalidTimeZoneException)
+            {
+                return TimeZoneInfo.Utc;
+            }
+        }
+    }
+
+    /// <summary>
+    /// The end of a chosen day, in the venue's zone, as an instant.
+    /// </summary>
+    /// <remarks>
+    /// <b>Not midnight UTC.</b> A venue that says bookings close on the 20th means the end of the
+    /// 20th where it is standing. Stamping midnight UTC would have closed them at six o'clock on
+    /// the evening of the 19th in Nashville — a whole day early, and only ever noticed by the guest
+    /// it turned away.
+    /// </remarks>
+    private DateTime? EndOfDayUtc(DateTime? day)
+        => day is { } d
+            ? TimeZoneInfo.ConvertTimeToUtc(
+                  DateTime.SpecifyKind(d.Date.AddDays(1).AddSeconds(-1), DateTimeKind.Unspecified), Zone)
+            : null;
+
+    /// <summary>
+    /// Midday of a chosen day, in the venue's zone. For a date that is a record, not a deadline.
+    /// </summary>
+    /// <remarks>
+    /// Midday rather than midnight so that reading it back in any zone lands on the same day. "When
+    /// did the venue agree" is a fact about a day; an hour of it would be a false precision that
+    /// could show as the day before.
+    /// </remarks>
+    private DateTime? MiddayUtc(DateTime? day)
+        => day is { } d
+            ? TimeZoneInfo.ConvertTimeToUtc(
+                  DateTime.SpecifyKind(d.Date.AddHours(12), DateTimeKind.Unspecified), Zone)
+            : null;
+
+    /// <summary>Which day an instant falls on, read on the venue's clock.</summary>
+    private DateTime? DayIn(DateTime? utc)
+        => utc is { } u
+            ? TimeZoneInfo.ConvertTimeFromUtc(
+                  DateTime.SpecifyKind(u, DateTimeKind.Utc), Zone).Date
+            : null;
+
+    /// <summary>
+    /// Switches how guests get a place, through the endpoint that can refuse it.
+    /// </summary>
+    /// <remarks>
+    /// Not part of the save: the server turns it down once anybody is booked or waiting, and a
+    /// refusal that also discarded the name somebody had just typed would be two problems.
+    /// </remarks>
+    private async Task SetModeAsync(HostedEventBookingMode mode)
+    {
+        if (_event is not { } ev || ev.BookingMode == mode) return;
+
+        _busy = true;
+        _error = null;
+        _note = null;
+
+        var (saved, error) = await AdminClient.SetHostedEventBookingModeAsync(OrgId, EventId, mode);
+        _busy = false;
+
+        if (saved is null) { _error = error ?? "That couldn't be changed just now."; return; }
+
+        _event = saved;
+        Fill(saved);
+        // The checklist is computed from what was just written, so it is re-asked rather than
+        // left showing the state of the page before the save.
+        await LoadReadinessAsync();
+        _note = mode == HostedEventBookingMode.Pick
+            ? "Guests now pick their own places on the plan."
+            : "Guests now ask for a place and you put them somewhere.";
     }
 
     /// <summary>Copies the record into the forms, so an edit is never lost by a reload.</summary>
@@ -656,7 +994,16 @@
         _form.HideExactLocation = ev.HideExactLocation;
         _form.CollectsEvidence = ev.CollectsEvidence;
         _form.DayPassCapacity = ev.DayPassCapacity;
+        _form.DayPassPrice = ev.DayPassPrice;
+        _form.BookingsCloseOn = DayIn(ev.BookingsCloseAtUtc);
         _form.ContactLine = ev.ContactLine;
+        _form.HoldMinutes = ev.HoldMinutes;
+        _form.VenueArrangement = ev.VenueArrangement;
+        _form.VenueContactName = ev.VenueContactName;
+        _form.VenueAgreedOn = DayIn(ev.VenueAgreedOnUtc);
+        _form.VenueReference = ev.VenueReference;
+        _form.MinimumGuests = ev.MinimumGuests;
+        _form.GoNoGoDeadline = DayIn(ev.GoNoGoDeadlineUtc);
 
         _nights.Clear();
         foreach (var night in ev.Nights)
@@ -694,8 +1041,20 @@
             DefaultStartLocal: _form.DefaultStartLocal,
             DefaultEndLocal: _form.DefaultEndLocal,
             DayPassCapacity: _form.DayPassCapacity,
+            DayPassPrice: _form.DayPassPrice,
             ContactLine: _form.ContactLine,
             CollectsEvidence: _form.CollectsEvidence,
+            // Days typed on a form, stored as instants. A deadline is the END of that day on the
+            // venue's own clock; a record of when somebody agreed is the middle of it, so that
+            // reading it back anywhere lands on the same day.
+            BookingsCloseAtUtc: EndOfDayUtc(_form.BookingsCloseOn),
+            HoldMinutes: _form.HoldMinutes,
+            VenueArrangement: _form.VenueArrangement,
+            VenueContactName: _form.VenueContactName,
+            VenueAgreedOnUtc: MiddayUtc(_form.VenueAgreedOn),
+            VenueReference: _form.VenueReference,
+            MinimumGuests: _form.MinimumGuests,
+            GoNoGoDeadlineUtc: EndOfDayUtc(_form.GoNoGoDeadline),
             // A run keeps the dates it already has; they are edited one at a time below.
             Dates: ev.DatesAreSeparate ? [.. ev.Nights.Select(n => n.Date)] : null,
             NewVenue: movingTo == Guid.Empty ? _newVenue.ToRequest() : null);
@@ -707,6 +1066,9 @@
 
         _event = saved;
         Fill(saved);
+        // The checklist is computed from what was just written, so it is re-asked rather than
+        // left showing the state of the page before the save.
+        await LoadReadinessAsync();
         StopChangingVenue();
         _note = "Saved.";
     }
@@ -727,6 +1089,9 @@
 
         _event = saved;
         Fill(saved);
+        // The checklist is computed from what was just written, so it is re-asked rather than
+        // left showing the state of the page before the save.
+        await LoadReadinessAsync();
         _note = "Saved.";
     }
 
@@ -742,6 +1107,9 @@
 
         _event = saved;
         Fill(saved);
+        // The checklist is computed from what was just written, so it is re-asked rather than
+        // left showing the state of the page before the save.
+        await LoadReadinessAsync();
         // The server's own sentence: how much was spent, or that nothing was.
         _note = saved.PlanNote ?? "It's live.";
         _plan = await AdminClient.GetHostedEventPlanAsync(OrgId);
@@ -758,6 +1126,9 @@
 
         _event = saved;
         Fill(saved);
+        // The checklist is computed from what was just written, so it is re-asked rather than
+        // left showing the state of the page before the save.
+        await LoadReadinessAsync();
         _plan = await AdminClient.GetHostedEventPlanAsync(OrgId);
     }
 
@@ -772,6 +1143,9 @@
 
         _event = saved;
         Fill(saved);
+        // The checklist is computed from what was just written, so it is re-asked rather than
+        // left showing the state of the page before the save.
+        await LoadReadinessAsync();
         _cancelReason = "";
     }
 

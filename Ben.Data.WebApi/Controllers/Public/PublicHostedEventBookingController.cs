@@ -204,7 +204,10 @@ public sealed class PublicHostedEventBookingController : BenControllerBase
 
         var ev = await BookableEventAsync(db, eventId, ct);
         if (ev is null) return NotFound();
-        if (ev.CancelledAtUtc is not null)
+        // Defensive: BookableEventAsync already excludes anything that is not taking bookings, so
+        // this cannot fire today. It reads the state rather than the stamp anyway, because a second
+        // reader on a different source of truth is how the two came to disagree in the first place.
+        if (HostedEventStates.CalledOff.Contains(ev.LifecycleState))
             return Conflict("This event has been called off.");
         if (!EventCapacity.IsOpenForRequests(ev, DateTime.UtcNow))
             return Conflict("This event has stopped taking bookings.");

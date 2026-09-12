@@ -304,6 +304,17 @@ public sealed partial class BenAdminClientAdapter
                HttpMethod.Post, $"/api/organizations/{orgId}/events/{eventId}/cancel",
                new CancelHostedEventRequest(reason), token);
 
+    public Task<LoadResult<HostedEventReadinessItem>> GetHostedEventReadinessAsync(
+        Guid orgId, Guid eventId, CancellationToken token = default)
+        => _api.GetListAsync<HostedEventReadinessItem>(
+               $"/api/organizations/{orgId}/events/{eventId}/readiness", token);
+
+    public Task<(HostedEventRecord? Result, string? Error)> SetHostedEventBookingModeAsync(
+        Guid orgId, Guid eventId, HostedEventBookingMode mode, CancellationToken token = default)
+        => _api.SendExpectingReasonAsync<SetHostedEventBookingModeRequest, HostedEventRecord>(
+               HttpMethod.Post, $"/api/organizations/{orgId}/events/{eventId}/booking-mode",
+               new SetHostedEventBookingModeRequest(mode), token);
+
     public Task<ItemResult<PublicHostedEventRecord>> GetPublicHostedEventAsync(
         Guid hostedEventId, CancellationToken token = default)
         => _api.GetItemAsync<PublicHostedEventRecord>(

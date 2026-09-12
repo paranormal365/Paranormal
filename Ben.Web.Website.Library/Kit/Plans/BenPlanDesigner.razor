@@ -61,7 +61,7 @@
             <button type="button" class="btn btn-sm btn-primary" id="plan-open-tray"
                     aria-expanded="@_trayOpen.ToString().ToLowerInvariant()"
                     disabled="@Busy" @onclick="() => _trayOpen = !_trayOpen">
-                <BenIcon Name="list" Class="me-1" />Rooms to place (@Untrayed.Count)
+                <BenIcon Name="list" Class="me-1" />Rooms to place (@Tray.Count)
             </button>
             <button type="button" class="btn btn-sm btn-outline-secondary" id="plan-auto-arrange"
                     disabled="@(Busy || Model.Unplaced.Count == 0)" @onclick="AutoArrange">
@@ -121,7 +121,7 @@
     @if (_trayOpen && Model.Kind == HostedEventLayoutKind.Rooms)
     {
         <div class="plan-designer__tray" id="plan-tray">
-            @if (Untrayed.Count == 0)
+            @if (Tray.Count == 0)
             {
                 <p class="text-secondary small mb-0">
                     Every bookable room this venue has described is already on the plan. Rooms are
@@ -133,7 +133,7 @@
                 <p class="plan-designer__tray-how small mb-2">
                     Pick a room, then press an empty square to say where it goes.
                 </p>
-                @foreach (var floor in Untrayed
+                @foreach (var floor in Tray
                     .GroupBy(r => r.Floor?.Trim() ?? "")
                     .OrderBy(g => g.Key, StringComparer.OrdinalIgnoreCase))
                 {
@@ -144,9 +144,9 @@
                         @foreach (var room in floor)
                         {
                             var chosen = room;
-                            <button type="button" class="btn btn-sm btn-outline-primary"
-                                    id="@($"plan-tray-{chosen.PlaceRoomId}")"
-                                    disabled="@Busy" @onclick="() => AddRoom(chosen)">
+                            <button type="button" id="@chosen.ElementId"
+                                    class="btn btn-sm @(IsChosen(chosen) ? "btn-primary" : "btn-outline-primary")"
+                                    disabled="@Busy" @onclick="() => TakeFromTray(chosen)">
                                 @chosen.Name
                                 <span class="plan-designer__tray-detail">
                                     @(chosen.Capacity is { } holds ? $"sleeps {holds}" : "sleeps ?")@(chosen.BedNote is { Length: > 0 } beds ? $" · {beds}" : "")
@@ -393,9 +393,56 @@
     /// <summary>Small squares because the page said so, or because somebody pressed Fit.</summary>
     private bool Dense => Compact || _fit;
 
-    /// <summary>Rooms the venue has that are not on the plan yet.</summary>
-    private IReadOnlyList<PlanRoomOption> Untrayed =>
-        [.. Rooms.Where(r => Model.Units.All(u => u.PlaceRoomId != r.PlaceRoomId))];
+    /// <summary>
+    /// One room waiting to be placed, from either of the two piles it can be waiting in.
+    /// </summary>
+    /// <param name="Key">
+    /// Set when it is already a unit on this plan that simply has no square yet. Null when it is
+    /// still only one of the venue's rooms and pressing it will add it.
+    /// </param>
+    private sealed record TrayEntry(
+        string ElementId, string Name, string? Floor, int? Capacity, string? BedNote,
+        Guid? Key, Guid? PlaceRoomId);
+
+    /// <summary>
+    /// Every room that is not on the plan, whether or not this event has adopted it yet.
+    /// </summary>
+    /// <remarks>
+    /// <para><b>Two piles, one list, and it took a broken screen to see why.</b> A room can be
+    /// waiting in either of two states: a unit of this event that has no square yet, or one of the
+    /// venue's rooms this event has never taken. The first version of this listed only the second,
+    /// so pressing <i>Back to the list</i> took a room off the grid and it appeared nowhere at all
+    /// — not on the plan, not in the list, and recoverable only by undo. To a venue that is a
+    /// deleted room.</para>
+    ///
+    /// <para>Unplaced units come first: they are the ones somebody just put down and is about to
+    /// pick up again.</para>
+    /// </remarks>
+    private IReadOnlyList<TrayEntry> Tray
+    {
+        get
+        {
+            var loose = Model.Unplaced.Select(u =>
+            {
+                var room = u.PlaceRoomId is { } id
+                    ? Rooms.FirstOrDefault(r => r.PlaceRoomId == id)
+                    : null;
+                return new TrayEntry(
+                    $"plan-tray-{u.Key}", u.Name, room?.Floor,
+                    u.Capacity ?? room?.Capacity, room?.BedNote, u.Key, u.PlaceRoomId);
+            });
+
+            var never = Rooms
+                .Where(r => Model.Units.All(u => u.PlaceRoomId != r.PlaceRoomId))
+                .Select(r => new TrayEntry(
+                    $"plan-tray-{r.PlaceRoomId}", r.Name, r.Floor, r.Capacity, r.BedNote,
+                    Key: null, PlaceRoomId: r.PlaceRoomId));
+
+            return [.. loose, .. never];
+        }
+    }
+
+    private bool IsChosen(TrayEntry entry) => entry.Key is { } key && _selection.Contains(key);
 
     private string NextRowName => PlanLabels.RowName(Model.LastRow + 1);
 
@@ -475,11 +522,27 @@
     /// <summary>Opens a gap left of what is chosen, or at the far right when nothing is.</summary>
     private void InsertAisle() => Model.InsertColumn(Model.AisleColumnFor(_selection));
 
-    /// <summary>Adds a room and chooses it, so the next empty square pressed is where it goes.</summary>
-    private void AddRoom(PlanRoomOption room)
+    /// <summary>
+    /// Picks a room up out of the list, so the next empty square pressed is where it goes.
+    /// </summary>
+    /// <remarks>
+    /// Adopting a room the event has never used and re-selecting one it already has are the same
+    /// gesture to the person doing it, so they are the same button. Only the first of them adds
+    /// anything.
+    /// </remarks>
+    private void TakeFromTray(TrayEntry entry)
     {
-        if (Model.AddRoom(room.PlaceRoomId, room.Name, room.Capacity) is { } key)
+        if (entry.Key is { } existing)
+        {
+            _selection = [existing];
+            return;
+        }
+
+        if (entry.PlaceRoomId is { } roomId
+            && Model.AddRoom(roomId, entry.Name, entry.Capacity) is { } key)
+        {
             _selection = [key];
+        }
     }
 
     private void AutoArrange()

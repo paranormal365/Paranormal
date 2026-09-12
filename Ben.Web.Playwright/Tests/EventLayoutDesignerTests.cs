@@ -55,6 +55,33 @@ public class EventLayoutDesignerTests : BenTestBase
         await Expect(Page.Locator(".plan__grid")).ToBeVisibleAsync(new() { Timeout = 30_000 });
     }
 
+    /// <summary>
+    /// Makes sure at least one room is waiting in the list, whatever the database has been through.
+    /// </summary>
+    /// <remarks>
+    /// <para><b>Written after this fixture broke itself.</b> An earlier version placed a room and
+    /// saved without putting it back, so two runs against one database left every bookable room on
+    /// the plan and every later run failed waiting for a tray button that could not exist. The save
+    /// test restores what it takes now, but a fixture that only works on a database no earlier
+    /// version of itself has touched is not a fixture anybody can trust.</para>
+    ///
+    /// <para>So it establishes its own precondition rather than assuming the seed: takes one room
+    /// off the plan and saves, but only when the list is empty. On a fresh database it does
+    /// nothing at all.</para>
+    /// </remarks>
+    private async Task EnsureARoomIsWaitingAsync()
+    {
+        if (await Page.Locator("#plan-tray button").CountAsync() > 0) return;
+
+        await Page.Locator(".plan__unit").First.ClickAsync();
+        await Page.Locator("#plan-unplace").ClickAsync();
+        await Expect(Page.Locator("#plan-tray button").First)
+            .ToBeVisibleAsync(new() { Timeout = 10_000 });
+
+        await SaveAsync();
+        await ReopenAsync();
+    }
+
     // ── the seating plan ─────────────────────────────────────────────────────
 
     [Test]
@@ -137,6 +164,7 @@ public class EventLayoutDesignerTests : BenTestBase
     public async Task A_floor_plan_shows_the_rooms_still_waiting_to_be_placed()
     {
         await OpenAsync(RoomsEventId, Desktop);
+        await EnsureARoomIsWaitingAsync();
 
         // Every bookable room is either on the plan or in the tray, and never both nor neither.
         // Asserted as the invariant rather than as "two are waiting", so this does not quietly
@@ -164,6 +192,7 @@ public class EventLayoutDesignerTests : BenTestBase
     public async Task Placing_a_room_is_choose_it_then_press_a_square()
     {
         await OpenAsync(RoomsEventId, Desktop);
+        await EnsureARoomIsWaitingAsync();
 
         var before = await Page.Locator(".plan__unit").CountAsync();
 
@@ -180,6 +209,7 @@ public class EventLayoutDesignerTests : BenTestBase
     public async Task Saving_a_plan_survives_a_reload()
     {
         await OpenAsync(RoomsEventId, Desktop);
+        await EnsureARoomIsWaitingAsync();
 
         var before = await Page.Locator(".plan__unit").CountAsync();
         var namesBefore = await Page.Locator(".plan__unit-name").AllInnerTextsAsync();

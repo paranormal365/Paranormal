@@ -92,6 +92,66 @@ public sealed class HostedEventLifecycleTests
         Assert.False(over.IsTakingBookings);
     }
 
+    /// <summary>
+    /// Nothing decides what an event IS by reading one of its timestamps.
+    /// </summary>
+    /// <remarks>
+    /// <para><b>The whole point of the column, as a rule.</b> The stamps say WHEN something
+    /// happened and are still written; the state says WHAT the event is. The moment a second reader
+    /// starts deriving the second from the first, the two can disagree — which is precisely how a
+    /// cancelled event went on counting against a price band and how the email door went on letting
+    /// people in.</para>
+    ///
+    /// <para>A source scan, because the fault is a shape rather than a behaviour: each individual
+    /// reader was correct in isolation, and no test of any one of them could see the problem. Half
+    /// the readers migrated is worse than none, and this is what refuses that state. Assignments
+    /// are allowed — the endpoints have to write the stamps — so only reads are counted.</para>
+    /// </remarks>
+    [Fact]
+    public void No_hosted_event_decides_what_it_is_from_a_timestamp()
+    {
+        var root = new DirectoryInfo(AppContext.BaseDirectory);
+        while (root is not null && !File.Exists(Path.Combine(root.FullName, "Ben.slnx")))
+            root = root.Parent;
+        Assert.NotNull(root);
+
+        // Where the question gets asked. Migrations write the stamps by definition, and the entity
+        // itself is where the derived properties live.
+        var searched = new[]
+        {
+            Path.Combine(root!.FullName, "Ben.Data.WebApi"),
+            Path.Combine(root.FullName, "Ben.Web.Website.Library"),
+        };
+
+        var offences = new List<string>();
+
+        foreach (var dir in searched)
+        foreach (var file in Directory.EnumerateFiles(dir, "*.*", SearchOption.AllDirectories))
+        {
+            if (Path.GetExtension(file) is not (".cs" or ".razor")) continue;
+            if (file.Contains($"{Path.DirectorySeparatorChar}obj{Path.DirectorySeparatorChar}")
+             || file.Contains($"{Path.DirectorySeparatorChar}bin{Path.DirectorySeparatorChar}")) continue;
+
+            var text = File.ReadAllText(file);
+            foreach (var (line, number) in text.Split('\n').Select((l, i) => (l, i + 1)))
+            {
+                // An assignment is fine — something has to stamp them.
+                if (Regex.IsMatch(line, @"(CancelledAtUtc|ArchivedAtUtc|LiveAtUtc|EndedAtUtc)\s*=[^=]")) continue;
+
+                // A read used as a condition is the fault: "is null", "is not null", "!= null".
+                if (Regex.IsMatch(line,
+                        @"(CancelledAtUtc|ArchivedAtUtc|LiveAtUtc|EndedAtUtc)\s*(is\s+(not\s+)?null|[!=]=\s*null)"))
+                {
+                    offences.Add($"{Path.GetFileName(file)}:{number} {line.Trim()}");
+                }
+            }
+        }
+
+        Assert.True(offences.Count == 0,
+            "These decide what an event is from a timestamp. LifecycleState is the answer; the "
+            + "stamps only say when.\n  " + string.Join("\n  ", offences));
+    }
+
     // ── the migration ────────────────────────────────────────────────────────
 
     private static string MigrationSource()

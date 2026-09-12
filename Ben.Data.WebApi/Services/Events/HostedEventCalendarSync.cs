@@ -1,3 +1,4 @@
+using Ben.Data.Common.Enums;
 using Ben.Data.Source.Context;
 using Ben.Data.Source.Entities;
 using Microsoft.EntityFrameworkCore;
@@ -83,12 +84,16 @@ public sealed class HostedEventCalendarSync
             row.UpdatedByAppUserId = userId;
         }
 
-        row.Title = hostedEvent.CancelledAtUtc is null
-            ? hostedEvent.Name
-            // Said in the title because that is the one line every list, every share card and every
-            // phone notification shows. A cancelled event that reads like a live one is the worst
-            // thing on this screen.
-            : $"CANCELLED — {hostedEvent.Name}";
+        // Said in the title because that is the one line every list, every share card and every
+        // phone notification shows. A cancelled event that reads like a live one is the worst thing
+        // on this screen. A venue that withdrew is named separately: to somebody holding a place it
+        // is a different sentence, and "cancelled" would read as the organizer's doing.
+        row.Title = hostedEvent.LifecycleState switch
+        {
+            HostedEventLifecycleState.Cancelled => $"CANCELLED — {hostedEvent.Name}",
+            HostedEventLifecycleState.VenueWithdrawn => $"CANCELLED (venue withdrew) — {hostedEvent.Name}",
+            _ => hostedEvent.Name,
+        };
 
         row.Description = Summarise(hostedEvent.Description ?? hostedEvent.Tagline);
         row.PlaceId = hostedEvent.PlaceId;

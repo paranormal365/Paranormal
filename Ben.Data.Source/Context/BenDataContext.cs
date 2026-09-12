@@ -787,6 +787,10 @@ namespace Ben.Data.Source.Context
             modelBuilder.Entity<HostedEvent>()
                 .HasOne(e => e.UpdatedByAppUser).WithMany()
                 .HasForeignKey(e => e.UpdatedByAppUserId).OnDelete(DeleteBehavior.NoAction);
+            modelBuilder.Entity<HostedEvent>()
+                .HasOne(e => e.GoNoGoDecidedByAppUser).WithMany()
+                .HasForeignKey(e => e.GoNoGoDecidedByAppUserId)
+                .IsRequired(false).OnDelete(DeleteBehavior.NoAction);
 
             // One night per date per event; the dates of a run may be months apart, but two rows
             // for the same day are always a mistake. Cascade from the event: the nights ARE the

@@ -176,7 +176,37 @@ public sealed record UpsertHostedEventRequest(
     /// <summary>
     /// A venue the site has never listed, entered here rather than somewhere else first.
     /// </summary>
-    NewVenueRequest? NewVenue = null);
+    NewVenueRequest? NewVenue = null,
+
+    /// <summary>When the venue stops taking requests. Null means it never does.</summary>
+    DateTime? BookingsCloseAtUtc = null,
+
+    /// <summary>Shown to guests and never charged. Null is "ask the venue"; zero is free.</summary>
+    decimal? DayPassPrice = null,
+
+    /// <summary>Whether guests pick their place on the plan or ask for one and are placed.</summary>
+    HostedEventBookingMode BookingMode = HostedEventBookingMode.Ask,
+
+    /// <summary>How long a picked place is held for, in minutes. 15 to 20160.</summary>
+    int HoldMinutes = 2880,
+
+    /// <summary>How this event came to be allowed to happen where it happens.</summary>
+    HostedEventVenueArrangement VenueArrangement = HostedEventVenueArrangement.Self,
+
+    /// <summary>Who at the venue agreed, for an arrangement made off this site.</summary>
+    string? VenueContactName = null,
+
+    /// <summary>When they agreed.</summary>
+    DateTime? VenueAgreedOnUtc = null,
+
+    /// <summary>The venue's own reference for it — a contract or invoice number.</summary>
+    string? VenueReference = null,
+
+    /// <summary>The fewest people that make it worth running. Null means it runs regardless.</summary>
+    int? MinimumGuests = null,
+
+    /// <summary>When the organizer has to decide whether it is going ahead.</summary>
+    DateTime? GoNoGoDeadlineUtc = null);
 
 /// <summary>Changing one date of an event.</summary>
 public sealed record UpsertHostedEventNightRequest(
@@ -184,6 +214,9 @@ public sealed record UpsertHostedEventNightRequest(
     TimeSpan? StartsLocal = null,
     TimeSpan? EndsLocal = null,
     string? Notes = null);
+
+/// <summary>Changing how guests get a place on an event.</summary>
+public sealed record SetHostedEventBookingModeRequest(HostedEventBookingMode Mode);
 
 /// <summary>Calling an event off, with the reason the people who have places will read.</summary>
 public sealed record CancelHostedEventRequest(string? Reason = null);

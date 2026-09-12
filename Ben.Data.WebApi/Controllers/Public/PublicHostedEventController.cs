@@ -149,7 +149,7 @@ public sealed class PublicHostedEventController : ControllerBase
             r.Event.DayPassCapacity,
             r.Event.ContactLine,
             r.Event.CoverUploadFileId,
-            r.Event.CancelledAtUtc is not null,
+            HostedEventStates.CalledOff.Contains(r.Event.LifecycleState),
             r.Event.CancelledReason,
             r.Event.CollectsEvidence,
             [.. r.Nights.Select(n => HostedEventController.ToNight(n, r.Event))]);

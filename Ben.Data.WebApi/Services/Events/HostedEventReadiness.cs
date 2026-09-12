@@ -25,12 +25,13 @@ namespace Ben.Data.WebApi.Services.Events;
 public static class HostedEventReadiness
 {
     /// <summary>
-    /// One thing that has to be true, whether it is, and where to go and do it.
+    /// Everything that has to be true, in the order somebody would fix it.
     /// </summary>
-    /// <param name="Href">
-    /// Relative to the event's own page, so the checklist can link to the card that fixes it. The
-    /// website turns it into a real URL; the API has no business knowing the site's routes.
-    /// </param>
+    /// <remarks>
+    /// Each item's <c>Href</c> is relative to the event's own page, so the checklist can link to
+    /// the card that fixes it. The website turns it into a real URL; the API has no business
+    /// knowing the site's routes.
+    /// </remarks>
     public static IReadOnlyList<HostedEventReadinessItem> Describe(HostedEvent hosted)
     {
         var noun = hosted.DatesAreSeparate ? "date" : "night";

@@ -263,6 +263,11 @@ namespace Ben.Data.Source.Entities
         public DateTime? GoNoGoDecidedUtc { get; set; }
 
         /// <summary>Who made it.</summary>
+        /// <remarks>
+        /// A real foreign key with a navigation, like every other "by whom" on this entity. A bare
+        /// Guid would be invisible to the person-purge census, which counts what points at somebody
+        /// by walking the foreign keys — so deleting them would leave this event naming a ghost.
+        /// </remarks>
         public Guid? GoNoGoDecidedByAppUserId { get; set; }
 
         /// <summary>
@@ -332,6 +337,7 @@ namespace Ben.Data.Source.Entities
         public virtual Place Place { get; set; } = null!;
         public virtual AppUser CreatedByAppUser { get; set; } = null!;
         public virtual AppUser? UpdatedByAppUser { get; set; }
+        public virtual AppUser? GoNoGoDecidedByAppUser { get; set; }
 
         /// <summary>The nights, or the performances — see <see cref="DatesAreSeparate"/>.</summary>
         public virtual ICollection<HostedEventNight> Nights { get; set; } = [];

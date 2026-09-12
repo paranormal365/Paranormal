@@ -138,17 +138,52 @@ public sealed class BenPlanDesignerTests
 
     // ── the tray ─────────────────────────────────────────────────────────────
 
+    /// <summary>
+    /// A room taken off the plan is in the list, not nowhere.
+    /// </summary>
+    /// <remarks>
+    /// <para><b>The bug this is here for.</b> A room can be waiting in two different states: a unit
+    /// of this event with no square yet, and one of the venue's rooms this event has never taken.
+    /// The tray listed only the second. So pressing <i>Back to the list</i> unplaced the unit — it
+    /// stayed a unit, so it was still excluded from the list of rooms not yet taken — and the room
+    /// appeared nowhere at all. On the plan: no. In the list: no. Recoverable only by undo, and to
+    /// a venue indistinguishable from having deleted it.</para>
+    ///
+    /// <para>Nothing caught it. The model's own tests were right, the designer's own tests were
+    /// right, and the two were right about different piles. It surfaced when a Playwright fixture
+    /// tried to put a room back and found no button to press.</para>
+    /// </remarks>
     [Fact]
-    public async Task The_tray_counts_only_the_rooms_that_are_not_on_the_plan_yet()
+    public async Task A_room_taken_off_the_plan_goes_back_into_the_list()
     {
+        var plan = new PlanModel(HostedEventLayoutKind.Rooms);
+        var key = plan.AddRoom(BlueRoom, "The Blue Room", 2)!.Value;
+        plan.Place(key, 0, 0);
+
+        Assert.Contains("Rooms to place (1)", await RenderAsync(plan, ThomasHouse()));
+
+        plan.Unplace([key]);
+        var html = await RenderAsync(plan, ThomasHouse());
+
+        // Both of them: the one just taken off, and the one never added.
+        Assert.Contains("Rooms to place (2)", html);
+        Assert.Contains("The Blue Room", html);
+        Assert.Contains($"id=\"plan-tray-{key}\"", html);
+    }
+
+    [Fact]
+    public async Task A_room_the_event_has_taken_but_not_placed_is_never_offered_twice()
+    {
+        // Once as the unit it is, and never again as a venue room going spare. Two buttons for one
+        // room is two rooms as far as anybody pressing them is concerned.
         var plan = new PlanModel(HostedEventLayoutKind.Rooms);
         plan.AddRoom(BlueRoom, "The Blue Room", 2);
 
         var html = await RenderAsync(plan, ThomasHouse());
 
-        // Offering a room a second time makes a duplicate unit the venue then has to find and
-        // delete, and the plan would claim two Blue Rooms to a guest choosing.
-        Assert.Contains("Rooms to place (1)", html);
+        Assert.Contains("Rooms to place (2)", html);
+        Assert.Single(Regex.Matches(html, Regex.Escape("The Blue Room")));
+        Assert.DoesNotContain($"id=\"plan-tray-{BlueRoom}\"", html);
     }
 
     [Fact]

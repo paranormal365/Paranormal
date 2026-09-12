@@ -429,6 +429,27 @@ public interface IBenOrganizationClient
         Guid orgId, Guid eventId, string? reason, CancellationToken token = default);
 
     /// <summary>
+    /// Everything standing between this event and going live.
+    /// </summary>
+    /// <remarks>
+    /// The same list the publish button refuses from, which is the point: a rule the server
+    /// enforces and the screen cannot see is met as a mysterious refusal after the button has been
+    /// pressed.
+    /// </remarks>
+    Task<LoadResult<HostedEventReadinessItem>> GetHostedEventReadinessAsync(
+        Guid orgId, Guid eventId, CancellationToken token = default);
+
+    /// <summary>
+    /// Changes how guests get a place: they pick one on the plan, or they ask and are placed.
+    /// </summary>
+    /// <remarks>
+    /// Refused once anybody is booked or waiting, because the switch would change what their
+    /// bookings mean. The refusal says how many and what to do about them.
+    /// </remarks>
+    Task<(HostedEventRecord? Result, string? Error)> SetHostedEventBookingModeAsync(
+        Guid orgId, Guid eventId, HostedEventBookingMode mode, CancellationToken token = default);
+
+    /// <summary>
     /// A published event as a visitor sees it — its dates, its venue, whether it is a stay or a run.
     /// </summary>
     /// <remarks>
