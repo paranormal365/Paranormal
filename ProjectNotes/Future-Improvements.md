@@ -12321,3 +12321,104 @@ and so a member with no email still sees it.
 - Whether an alert should ever go to a non-member (a hired door manager), which is the same
   question phase 5 asks about non-member staff.
 
+
+## 239. The mail outbox: every letter recorded, retried, and answerable (PLATFORM — open, recommended, doable now)
+
+Ben, 2026-09-12:
+
+> Should we create an email db table and a task to send them so we can timestamp when they are
+> created and when they are sent or if they have been sent. basically in order to verify all
+> e-mails generated get sent and if it doesn't send on the first try it will try to send it on the
+> next try.
+
+**Yes.** This is the transactional-outbox pattern and the site has already been bitten by not
+having it. `AdminMailDiagnosticsController`'s own doc comment records the incident: *"Ben signed up
+on 2026-08-31, received nothing, and there was no way to find out why: the sender swallowed its own
+failure, and the one log line that recorded it was a Warning, below the database sink's Error
+threshold. So the failure left no trace at all."* The diagnostics screen answers "can this machine
+send **right now**"; nothing answers "did **that** letter go, and if not, why, and will it be tried
+again". Today the answer to the second question is always no — every one of the twenty call sites
+catches, logs at Warning, and moves on.
+
+### Why it is cheap: the seam already exists
+
+`IEmailService` (`Ben.Data.Common/Interfaces/IEmailService.cs`) is one interface with one real
+implementation (`SmtpEmailService`) and one method that matters (`SendAsync(EmailMessage)`; the
+three-argument overload defaults into it). So the outbox is a **decorator**, not a rewrite:
+
+- `OutboxEmailService : IEmailService` — writes a row and returns. Registered as `IEmailService`.
+- `SmtpEmailService` stays, registered as itself, used only by the sender job and by
+  `AdminMailDiagnosticsController` (which must keep sending immediately and surfacing the raw
+  exception — a diagnostic that queues is not a diagnostic).
+- `MailSenderJob : IScheduledJob` beside `EventCreditExpiryJob`, claiming and sending.
+
+All twenty callers — Identity's own password and confirmation mail, the tour mailer, the event
+mailer, the client status mailer, the reminder job, the invite doors — are covered without being
+edited.
+
+### The table
+
+`OutboxEmail`: Id, To, Subject, HtmlBody, ReplyTo, Attachments (JSON of name/type/bytes, or a
+child table), **Kind** (a short string like `event-booking-confirmed` so a screen can group and a
+retention rule can differ), correlation ids (OrganizationId?, AppUserId?, a free `SubjectRef`),
+`CreatedUtc`, `Attempts`, `NextAttemptUtc`, `ClaimedUtc`/`ClaimedBy`, **`AcceptedBySmtpUtc`**,
+`FailedUtc`, `LastError`, `BodyScrubbedUtc`. Indexes: `(NextAttemptUtc) WHERE AcceptedBySmtpUtc IS
+NULL AND FailedUtc IS NULL` for the job's only query, and `(CreatedUtc)` for the screen.
+
+### Five things worth deciding, that the one-line ask does not settle
+
+1. **"Sent" must mean "the SMTP server accepted it", not "it arrived."** Naming the column
+   `AcceptedBySmtpUtc` rather than `SentUtc` is the whole difference between an honest screen and
+   one that claims delivery it cannot know. Real delivery needs bounce webhooks from a provider we
+   do not have; that is a later item, and the column name should not pretend otherwise.
+2. **Transient and permanent failures are not the same.** A 5xx for a mailbox that does not exist
+   must not be retried six times; a socket timeout or a 4xx must. MailKit's `SmtpCommandException`
+   carries the status code. Without this split the queue fills with dead addresses and the screen
+   stops being read. Recommended backoff: 1 min, 5, 15, 60, 6 h, 24 h, then `Failed` — about
+   31 hours of trying — and straight to `Failed` on a permanent reply, with the reply text kept.
+3. **A stored body is personal data, and sometimes a credential.** A hosted-event confirmation
+   carries the pass QR inlined as base64; the token behind it is a working door credential. It is
+   already in `HostedEventPasses`, so the outbox adds no new *kind* of secret, but it does put it
+   in a second table and every backup. Recommended: **scrub the body and attachments after
+   acceptance + 30 days, keeping the metadata row for ever** (`BodyScrubbedUtc`), so "did it go"
+   is answerable a year later and "what did it say" for a month. Same shape as the media retention
+   job. Cap the stored body (say 256 KB) and record truncation rather than refusing the enqueue.
+4. **When mail is not configured, enqueue anyway.** Then the day SMTP is switched on, everything
+   queued goes out. This changes what several screens should say — item 235's invite result field
+   is literally called `Sent` and would become `Queued`, and the copyable-link fallbacks stay but
+   stop being the only record. Better semantics, but it is a wording change across the site.
+5. **A crash between "SMTP accepted" and "row marked" sends twice.** Claim-then-send-then-mark
+   makes that window small and one-sided: at worst a duplicate letter, never a lost one. That is
+   the right way round and should be said out loud in the class comment rather than discovered.
+
+### Two steps, because the second is the expensive half
+
+- **239a — the decorator.** `OutboxEmailService` writes through its own `DbContext`; the job sends.
+  Fixes the actual complaint: nothing is lost to a transient failure, every letter is visible, a
+  SuperAdmin can retry one or see why it died. Twenty call sites unchanged. **This is most of the
+  value for a fraction of the work.**
+- **239b — enqueue inside the caller's transaction.** 239a still has a hairline window: a booking
+  saves, the process dies, the letter was never enqueued. Closing it means the enqueue joins the
+  caller's `SaveChanges`, which means the mailers take the caller's `db` — `EventGuestMailer`
+  already does; several others do not. Worth doing for the letters where silence is expensive
+  (a confirmed booking, a password reset, an invitation), not for all twenty.
+
+### The screen
+
+Extend `AdminMailDiagnosticsController` and its page rather than building a second one: a list of
+recent letters with Kind, To, Created, Attempts, state and the last error; filters for Failed and
+Waiting; **Retry now** on one and on all failed; the existing "can this box send" probe stays at
+the top. This is the screen that would have answered the 2026-08-31 question in five seconds.
+
+### Sequencing
+
+Not part of item 235, but three of its phases add letters (the decision letters exist, hold-lapsed
+and go/no-go land in phases 4 and 3, the digest in phase 8), so **239a is best done right after
+item 235 phase 1 merges and before phase 3** — phase 1 slice D is editing `EventGuestMailer` and
+would conflict. Tests: `OutboxEmailServiceTests` (an unconfigured send still enqueues; a body over
+the cap is truncated and says so), `MailSenderJobTests` (transient retries with backoff, permanent
+fails at once, a claimed row is not claimed twice, running twice sends once),
+`MailRetentionTests` (a scrubbed row keeps its metadata), and a source guard
+`EveryMailerGoesThroughTheOutboxTests` (no class outside `SmtpEmailService`, the sender job and the
+diagnostics controller may take `SmtpEmailService` directly).
+
