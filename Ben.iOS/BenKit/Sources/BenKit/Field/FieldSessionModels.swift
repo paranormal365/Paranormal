@@ -92,6 +92,14 @@ public final class FieldSession {
     public var batteryPercentAtStart: Double?
     public var deviceModel: String
 
+    /// What this session was set up to record, chosen before it opened and adjustable on the live
+    /// screen. Stored so a session that outlives the app's process comes back recording the same
+    /// things — and so the video button is where it was left, rather than gone.
+    ///
+    /// OPTIONAL on purpose: an added optional attribute is the one shape SwiftData will migrate
+    /// without being asked, and every session recorded before this existed ran the defaults.
+    public var channelsRaw: Int?
+
     /// Set once the session's document has reached the server. The device keeps everything
     /// regardless — this says what is safe to delete, never what has been deleted.
     public var serverSessionId: UUID?
@@ -110,6 +118,7 @@ public final class FieldSession {
                 investigationTitle: String? = nil,
                 batteryPercentAtStart: Double? = nil,
                 deviceModel: String,
+                channels: CaptureChannels = .default,
                 timezoneIdentifier: String = TimeZone.current.identifier) {
         self.id = id
         self.startedAt = startedAt
@@ -123,6 +132,7 @@ public final class FieldSession {
         self.captureCount = 0
         self.batteryPercentAtStart = batteryPercentAtStart
         self.deviceModel = deviceModel
+        self.channelsRaw = channels.rawValue
         self.timezoneIdentifier = timezoneIdentifier
         self.markers = []
         self.captures = []
@@ -131,6 +141,13 @@ public final class FieldSession {
     public var outcome: FieldSessionOutcome {
         get { FieldSessionOutcome(rawValue: outcomeRaw) ?? .interrupted }
         set { outcomeRaw = newValue.rawValue }
+    }
+
+    /// A session recorded before channels were remembered ran the defaults, and says so rather
+    /// than coming back recording nothing.
+    public var channels: CaptureChannels {
+        get { channelsRaw.map(CaptureChannels.init(rawValue:)) ?? .default }
+        set { channelsRaw = newValue.rawValue }
     }
 
     /// How long it ran. An interrupted session has no honest end, so it reports what was

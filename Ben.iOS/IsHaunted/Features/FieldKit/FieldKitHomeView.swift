@@ -55,7 +55,7 @@ struct FieldKitHomeView: View {
             let finished = store.sessions.filter { !$0.isOpen }
             if finished.isEmpty {
                 Section {
-                    Text("Nothing recorded yet. A session logs magnetic field, sound and where you were, and holds the photos and audio you capture along the way.")
+                    Text("Nothing recorded yet. A session logs magnetic field, sound and where you were, and holds the photos, video and audio you capture along the way.")
                         .font(.callout)
                         .foregroundStyle(Theme.fog)
                 }
@@ -80,8 +80,8 @@ struct FieldKitHomeView: View {
         }
         .navigationTitle("Field Kit")
         .sheet(isPresented: $starting) {
-            StartSessionSheet { label, investigation in
-                await start(label: label, investigation: investigation)
+            StartSessionSheet { label, investigation, channels in
+                await start(label: label, investigation: investigation, channels: channels)
             }
             .environment(dependencies)
         }
@@ -95,12 +95,14 @@ struct FieldKitHomeView: View {
         .onAppear { store.load() }
     }
 
-    private func start(label: String?, investigation: MyInvestigation?) async {
+    private func start(label: String?, investigation: MyInvestigation?,
+                       channels: CaptureChannels) async {
         do {
             let id = try store.startSession(
                 locationLabel: label,
                 investigationId: investigation?.investigationId,
-                investigationTitle: investigation?.title)
+                investigationTitle: investigation?.title,
+                channels: channels)
             starting = false
             router.push(.fieldSession(id))
         } catch {
@@ -183,9 +185,13 @@ private struct StartSessionSheet: View {
     @Environment(AppDependencies.self) private var dependencies
     @Environment(\.dismiss) private var dismiss
 
-    var onStart: (String?, MyInvestigation?) async -> Void
+    var onStart: (String?, MyInvestigation?, CaptureChannels) async -> Void
 
     @State private var label = ""
+    /// What this session will record. Chosen HERE, not hunted for on the live screen: video was
+    /// off by default and its button only appears once the channel is on, so the camera was
+    /// effectively invisible to anyone who did not already know where to look.
+    @State private var channels: CaptureChannels = .default
     @State private var investigations: [MyInvestigation] = []
     /// Selected by id, not by value — MyInvestigation is a server-shaped record and
     /// making it Hashable to please a Picker would be the tail wagging the dog.
@@ -217,11 +223,34 @@ private struct StartSessionSheet: View {
                 }
 
                 Section {
+                    ForEach(CaptureChannels.orderedForDisplay, id: \.rawValue) { channel in
+                        Toggle(isOn: Binding(
+                            get: { channels.contains(channel) },
+                            set: { isOn in
+                                if isOn { channels.insert(channel) } else { channels.remove(channel) }
+                            })
+                        ) {
+                            VStack(alignment: .leading, spacing: 1) {
+                                Label(channel.title, systemImage: channel.icon)
+                                Text(channel.costNote)
+                                    .font(.caption2).foregroundStyle(Theme.fog)
+                            }
+                        }
+                        .tint(Theme.ecto)
+                        .accessibilityIdentifier("start-channel-\(channel.title.lowercased())")
+                    }
+                } header: {
+                    Text("What to record")
+                } footer: {
+                    Text("You can change any of these while the session is running.")
+                }
+
+                Section {
                     Button {
                         Task {
                             busy = true
                             await onStart(label.trimmingCharacters(in: .whitespacesAndNewlines)
-                                            .isEmpty ? nil : label, chosenInvestigation)
+                                            .isEmpty ? nil : label, chosenInvestigation, channels)
                             busy = false
                         }
                     } label: {
