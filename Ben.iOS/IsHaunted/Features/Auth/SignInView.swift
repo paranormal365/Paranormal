@@ -13,6 +13,10 @@ struct SignInView: View {
     @State private var countdown: Int = 0
     @State private var countdownTask: Task<Void, Never>?
 
+    /// Sign in with Apple's whole flow, owned HERE rather than by the section that draws the
+    /// button, so the form it leads to is presented by the form — see ``AppleSignInFlow``.
+    @State private var apple = AppleSignInFlow()
+
     private var session: SessionStore { dependencies.session }
 
     var body: some View {
@@ -55,7 +59,7 @@ struct SignInView: View {
                               || session.state == .fetchingIdentity)
                 }
 
-                AppleSignInSection { dismiss() }
+                AppleSignInSection(flow: apple) { dismiss() }
             }
             .navigationTitle("Sign in")
             .navigationBarTitleDisplayMode(.inline)
@@ -78,6 +82,15 @@ struct SignInView: View {
                 startCountdown(from: newValue)
             }
             .onDisappear { countdownTask?.cancel() }
+        }
+        // On the navigation stack, NOT on the Apple section, and not stacked on the form beside
+        // the two-factor sheet either. A presentation asked for by a section whose own rows are
+        // changing that same instant — the spinner going away as the answer arrives — is torn down
+        // along with the sign-in sheet that contains it. Nothing appeared and the app fell back to
+        // a signed-out profile with no message, which is what App Review reported on 2026-09-12.
+        .sheet(isPresented: $apple.collecting) {
+            AppleProfileSheet(flow: apple) { dismiss() }
+                .environment(dependencies)
         }
     }
 
