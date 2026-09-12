@@ -126,6 +126,45 @@ public sealed class EventGuestMailerTests
         }
     }
 
+    // ── the diary keeps the venue's clock ────────────────────────────────────
+
+    [Fact]
+    public async Task A_night_in_the_diary_starts_at_six_at_the_venue_not_at_six_utc()
+    {
+        // The first version wrote Date.AddHours(18) into a builder that stamps everything as UTC,
+        // so a Nashville dinner landed in a guest's calendar at one in the afternoon. The event is
+        // in America/Chicago, where 30 October 2026 is still daylight time: six in the evening
+        // there is 23:00Z, and ten the next morning is 15:00Z.
+        var text = await CalendarTextAsync(overnight: true);
+
+        Assert.Contains("DTSTART:20261030T230000Z", text);
+        Assert.Contains("DTEND:20261031T150000Z", text);
+    }
+
+    [Fact]
+    public async Task The_clocks_going_back_do_not_move_the_saturday_night()
+    {
+        // Central time leaves daylight saving at two in the morning on 1 November 2026 — in the
+        // middle of the Saturday night. Each end is converted on its own: six on Saturday is still
+        // 23:00Z, and ten on Sunday is now 16:00Z, an hour later than a fixed sixteen-hour span
+        // from the start would have put the check-out.
+        var text = await CalendarTextAsync(overnight: true);
+
+        Assert.Contains("DTSTART:20261031T230000Z", text);
+        Assert.Contains("DTEND:20261101T160000Z", text);
+    }
+
+    [Fact]
+    public async Task A_day_pass_is_one_entry_that_also_starts_at_six_at_the_venue()
+    {
+        // No nights, so one entry for the whole event — converted through the same zone, not
+        // written as if the venue kept Greenwich time.
+        var text = await CalendarTextAsync(overnight: false);
+
+        Assert.Equal(1, Count(text, "BEGIN:VEVENT"));
+        Assert.Contains("DTSTART:20261030T230000Z", text);
+    }
+
     // ── the no ───────────────────────────────────────────────────────────────
 
     [Fact]
@@ -234,6 +273,23 @@ public sealed class EventGuestMailerTests
             new EventGuestMailer(email.Object, Site(), NullLogger<EventGuestMailer>.Instance));
     }
 
+    /// <summary>The calendar file a confirmed booking's letter carries, as text.</summary>
+    private static async Task<string> CalendarTextAsync(bool overnight)
+    {
+        await using var sqlite = await SqliteTestDb.CreateAsync();
+        var seeded = await SeedAsync(sqlite);
+        var bookingId = await BookAsync(sqlite, HostedEventBookingStatus.Confirmed, seeded,
+                                        overnight: overnight);
+        await IssuePassAsync(sqlite, bookingId);
+
+        var (sent, mailer) = Mailer();
+        await using (var db = await sqlite.NewContextAsync())
+            await mailer.SendDecisionAsync(db, bookingId, default);
+
+        var calendar = Assert.Single(Assert.Single(sent).Attachments!);
+        return System.Text.Encoding.UTF8.GetString(calendar.Content);
+    }
+
     private static int Count(string text, string needle)
     {
         var n = 0;
@@ -326,6 +382,9 @@ public sealed class EventGuestMailerTests
         {
             Id = EventId, OrganizationId = OrgId, PlaceId = PlaceId,
             Name = "Halloween Lock-In", UrlName = "halloween-lock-in",
+            // Said rather than left to the column default: the diary tests above assert Central
+            // time, and a default that moved would fail them for a reason nobody could see.
+            TimeZoneId = "America/Chicago",
             StartsOn = Friday, EndsOn = Saturday, IsPublished = true, DayPassCapacity = 10,
             DateCreated = DateTime.UtcNow, CreatedByAppUserId = HostId,
         });

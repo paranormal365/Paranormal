@@ -1,7 +1,19 @@
+using AutoMapper;
+using Ben.Data.Common;
 using Ben.Data.Common.Enums;
+using Ben.Data.Common.Interfaces;
 using Ben.Data.Source.Entities;
+using Ben.Data.WebApi.Controllers.Entities;
 using Ben.Data.WebApi.Services.Events;
+using Ben.Service.Models.Entities;
+using Ben.Service.RepositoryService.GenericInterfaces;
+using Microsoft.AspNetCore.Http;
+using Microsoft.AspNetCore.Mvc;
 using Microsoft.EntityFrameworkCore;
+using Microsoft.Extensions.Logging.Abstractions;
+using Microsoft.Extensions.Options;
+using Moq;
+using System.Security.Claims;
 using Xunit;
 
 namespace Ben.Web.Tests.Services;
@@ -203,6 +215,107 @@ public sealed class EventPassTests
             EventPasses.WhyThisScanIsRefused(gone, EventId, null));
     }
 
+    // ── sending it again (item 235 phase 1) ──────────────────────────────────
+
+    [Fact]
+    public async Task Sending_the_pass_again_posts_the_whole_confirmation_and_stamps_the_pass()
+    {
+        // "Send my pass again" from a guest means "I have nothing", so it is the confirmation
+        // letter that goes — code drawn in, diary attached — and the pass records that it went.
+        await using var sqlite = await SqliteTestDb.CreateAsync();
+        await SeedAsync(sqlite);
+        var bookingId = await AddBookingAsync(sqlite, HostedEventBookingStatus.Confirmed);
+        await IssuePassAsync(sqlite, bookingId);
+
+        var (sent, email) = ConfiguredMail();
+        var result = await Controller(sqlite, email).EmailPass(OrgId, EventId, bookingId, default);
+
+        var record = Assert.IsType<HostedEventPassRecord>(
+            Assert.IsType<OkObjectResult>(result.Result).Value);
+        Assert.NotNull(record.EmailedUtc);
+
+        var letter = Assert.Single(sent);
+        Assert.Contains("data:image/png;base64,", letter.HtmlBody);
+        Assert.NotEmpty(letter.Attachments ?? []);
+    }
+
+    [Fact]
+    public async Task Sending_again_with_no_live_pass_is_refused_in_words()
+    {
+        // A confirmed booking whose pass was withdrawn has nothing to post. The host is told to
+        // issue one, not handed a 200 for a letter with no code in it.
+        await using var sqlite = await SqliteTestDb.CreateAsync();
+        await SeedAsync(sqlite);
+        var bookingId = await AddBookingAsync(sqlite, HostedEventBookingStatus.Confirmed);
+
+        var (sent, email) = ConfiguredMail();
+        var result = await Controller(sqlite, email).EmailPass(OrgId, EventId, bookingId, default);
+
+        var refusal = Assert.IsType<string>(Assert.IsType<BadRequestObjectResult>(result.Result).Value);
+        Assert.Contains("no live pass", refusal);
+        Assert.Empty(sent);
+    }
+
+    [Fact]
+    public async Task Sending_again_where_no_mail_is_set_up_says_so()
+    {
+        // The mailer answers a quiet false when there is no mail service, which is right after a
+        // confirmation and wrong here: a host must not wait for a letter nobody posted.
+        await using var sqlite = await SqliteTestDb.CreateAsync();
+        await SeedAsync(sqlite);
+        var bookingId = await AddBookingAsync(sqlite, HostedEventBookingStatus.Confirmed);
+        await IssuePassAsync(sqlite, bookingId);
+
+        var email = new Mock<IEmailService>();
+        email.SetupGet(e => e.IsConfigured).Returns(false);
+
+        var result = await Controller(sqlite, email.Object).EmailPass(OrgId, EventId, bookingId, default);
+
+        var refusal = Assert.IsType<string>(Assert.IsType<ConflictObjectResult>(result.Result).Value);
+        Assert.Contains("no outgoing mail", refusal);
+        email.Verify(e => e.SendAsync(It.IsAny<EmailMessage>(), It.IsAny<CancellationToken>()),
+                     Times.Never);
+    }
+
+    [Fact]
+    public async Task Sending_again_when_the_post_fails_says_nothing_was_posted()
+    {
+        await using var sqlite = await SqliteTestDb.CreateAsync();
+        await SeedAsync(sqlite);
+        var bookingId = await AddBookingAsync(sqlite, HostedEventBookingStatus.Confirmed);
+        await IssuePassAsync(sqlite, bookingId);
+
+        var email = new Mock<IEmailService>();
+        email.SetupGet(e => e.IsConfigured).Returns(true);
+        email.Setup(e => e.SendAsync(It.IsAny<EmailMessage>(), It.IsAny<CancellationToken>()))
+             .ThrowsAsync(new InvalidOperationException("no smtp host"));
+
+        var result = await Controller(sqlite, email.Object).EmailPass(OrgId, EventId, bookingId, default);
+
+        var refusal = Assert.IsType<string>(Assert.IsType<ConflictObjectResult>(result.Result).Value);
+        Assert.Contains("nothing was posted", refusal);
+
+        // And the pass does not claim to have gone out.
+        await using var db = await sqlite.NewContextAsync();
+        Assert.Null((await db.HostedEventPasses.SingleAsync()).EmailedUtc);
+    }
+
+    [Fact]
+    public async Task Only_a_decider_may_send_the_pass_again()
+    {
+        await using var sqlite = await SqliteTestDb.CreateAsync();
+        await SeedAsync(sqlite);
+        var bookingId = await AddBookingAsync(sqlite, HostedEventBookingStatus.Confirmed);
+        await IssuePassAsync(sqlite, bookingId);
+
+        var (sent, email) = ConfiguredMail();
+        var result = await Controller(sqlite, email, decider: false)
+            .EmailPass(OrgId, EventId, bookingId, default);
+
+        Assert.IsType<ForbidResult>(result.Result);
+        Assert.Empty(sent);
+    }
+
     // ── the picture ──────────────────────────────────────────────────────────
 
     [Fact]
@@ -262,6 +375,62 @@ public sealed class EventPassTests
             PartySize = 2,
         },
     };
+
+    private static async Task IssuePassAsync(SqliteTestDb sqlite, Guid bookingId)
+    {
+        await using var db = await sqlite.NewContextAsync();
+        var booking = await db.HostedEventBookings.FirstAsync(b => b.Id == bookingId);
+        await EventPasses.EnsureAsync(db, booking, HostId, default);
+        await db.SaveChangesAsync();
+    }
+
+    /// <summary>A mail service that works, and the letters it was handed.</summary>
+    private static (List<EmailMessage> Sent, IEmailService Email) ConfiguredMail()
+    {
+        var sent = new List<EmailMessage>();
+        var email = new Mock<IEmailService>();
+        email.SetupGet(e => e.IsConfigured).Returns(true);
+        email.Setup(e => e.SendAsync(It.IsAny<EmailMessage>(), It.IsAny<CancellationToken>()))
+             .Callback<EmailMessage, CancellationToken>((m, _) => sent.Add(m))
+             .Returns(Task.CompletedTask);
+        return (sent, email.Object);
+    }
+
+    /// <summary>
+    /// The host's booking controller, signed in as the host.
+    /// </summary>
+    /// <param name="decider">
+    /// Whether the security service says this person may decide bookings. False is an ordinary
+    /// member, who may read the board but not post a guest's pass.
+    /// </param>
+    private static HostedEventBookingController Controller(
+        SqliteTestDb sqlite, IEmailService email, bool decider = true)
+    {
+        var security = new Mock<IOrganizationSecurityService>();
+        security.Setup(s => s.HasAccessAsync(
+                    It.IsAny<Guid>(), It.IsAny<Guid>(),
+                    It.IsAny<OrganizationSecurityTable>(), It.IsAny<OrganizationSecurityAction>(),
+                    It.IsAny<CancellationToken>()))
+                .ReturnsAsync(decider);
+
+        var site = Options.Create(new SiteIdentity { Name = "Test", BaseUrl = "https://test.local" });
+        var mailer = new EventGuestMailer(email, site, NullLogger<EventGuestMailer>.Instance);
+
+        return new HostedEventBookingController(
+            sqlite.Factory, new Mock<IMapper>().Object, security.Object,
+            new HostedEventCalendarSync(), mailer, email, site,
+            NullLogger<HostedEventBookingController>.Instance)
+        {
+            ControllerContext = new ControllerContext
+            {
+                HttpContext = new DefaultHttpContext
+                {
+                    User = new ClaimsPrincipal(new ClaimsIdentity(
+                        [new Claim(ClaimTypes.NameIdentifier, HostId.ToString())], "Bearer")),
+                },
+            },
+        };
+    }
 
     private static async Task<Guid> AddBookingAsync(
         SqliteTestDb sqlite, HostedEventBookingStatus status)
