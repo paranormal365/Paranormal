@@ -1,0 +1,272 @@
+/*
+    The plan: a grid of squares, drawn once and read three ways (item 235 phase 2).
+
+    THE CELL SIZE IS A CLAMP, NOT A NUMBER. A twenty-column house has to fit a 1280 screen without
+    scrolling and stay tappable on a phone, and those are the same rule expressed as a range rather
+    than two rules that drift apart. Below the comfortable size the grid scrolls sideways in its own
+    box rather than the page doing it, which is the idiom BenTabs already uses for a wide strip.
+*/
+
+.plan {
+    --plan-cell: clamp(1.5rem, calc((100% - var(--plan-gutter)) / var(--plan-columns) - 0.2rem), 2.75rem);
+    --plan-gutter: 3.5rem;
+    --plan-gap: 0.2rem;
+}
+
+/* Small squares, for a venue that wants the whole house on one screen. */
+.plan--compact {
+    --plan-cell: clamp(1.1rem, calc((100% - var(--plan-gutter)) / var(--plan-columns) - 0.15rem), 1.75rem);
+    --plan-gutter: 2.5rem;
+    --plan-gap: 0.1rem;
+}
+
+/*
+    The scroller, not the page. A plan wider than the screen scrolls inside this box; the page
+    behind it never gains a horizontal bar, which is the thing that makes a site feel broken on a
+    phone. pan-x pan-y pinch-zoom keeps every one of those gestures the browser's — a venue reading
+    a four-hundred-seat house on an iPad will pinch it, and taking that away to win a drag would be
+    a poor trade.
+*/
+.plan__scroll {
+    overflow-x: auto;
+    overflow-y: hidden;
+    touch-action: pan-x pan-y pinch-zoom;
+    padding-bottom: 0.25rem;
+}
+
+.plan__grid {
+    display: grid;
+    grid-template-columns: var(--plan-gutter) repeat(var(--plan-columns), var(--plan-cell));
+    grid-auto-rows: var(--plan-cell);
+    gap: var(--plan-gap);
+    width: max-content;
+    min-width: 100%;
+    outline: none;
+}
+
+/* ── the edges ─────────────────────────────────────────────────────────── */
+
+.plan__heading {
+    display: flex;
+    align-items: center;
+    font-size: 0.7rem;
+    line-height: 1;
+    color: var(--bs-secondary-color);
+    user-select: none;
+}
+
+.plan__heading--column { justify-content: center; }
+
+.plan__heading--row {
+    justify-content: flex-start;
+    gap: 0.35rem;
+    padding-right: 0.4rem;
+    overflow: hidden;
+}
+
+.plan__row-letter {
+    font-weight: 600;
+    color: var(--bs-body-color);
+}
+
+/*
+    A row whose units all share a section gets its name in the gutter, which is what gives a hotel
+    its floor captions without a column of its own. Truncated rather than wrapped: the gutter is
+    one cell tall and a wrapped caption would push the whole row out of line.
+*/
+.plan__row-section {
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+    opacity: 0.75;
+}
+
+/* ── the squares ───────────────────────────────────────────────────────── */
+
+.plan__unit,
+.plan__empty {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    padding: 0;
+    border-radius: 0.2rem;
+    font-size: 0.6rem;
+    line-height: 1;
+    overflow: hidden;
+    position: relative;
+}
+
+.plan__empty {
+    border: 1px dashed var(--bs-border-color);
+    background: transparent;
+}
+
+.plan__empty:hover { background: var(--bs-tertiary-bg); }
+
+.plan__unit {
+    border: 1px solid var(--bs-border-color);
+    /*
+        The section's own colour, generated from its name by TourPlate so two sections are never
+        the same and nobody has to pick one. Very pale, because the square's STATE is what a person
+        is reading and a strong section colour would shout over it.
+    */
+    background: hsl(var(--plate-hue, 220deg) 45% 96%);
+    color: var(--bs-body-color);
+    cursor: pointer;
+}
+
+:root[data-theme="dark"] .plan__unit,
+:root[data-bs-theme="dark"] .plan__unit {
+    background: hsl(var(--plate-hue, 220deg) 25% 20%);
+}
+
+.plan__unit-name {
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+    padding: 0 0.15rem;
+}
+
+/* Below this the label cannot be read anyway, so the glyph carries the square on its own. */
+.plan--compact .plan__unit-name { display: none; }
+
+.plan__unit-glyph {
+    width: 0.75rem;
+    height: 0.75rem;
+    flex: 0 0 auto;
+}
+
+/* What a room holds, in the corner, so a plan says how many beds are where. */
+.plan__unit-holds {
+    position: absolute;
+    right: 0.1rem;
+    bottom: 0.05rem;
+    font-size: 0.5rem;
+    font-weight: 600;
+    opacity: 0.7;
+}
+
+/* ── what a square is ──────────────────────────────────────────────────── */
+/*
+    Every state carries a colour AND a glyph AND words in its aria-label, never colour alone.
+    About one man in twelve cannot separate the red from the green, and a seating plan that tells
+    him nothing is one that sells him somebody else's seat.
+*/
+
+.plan__unit[data-state="mine"] {
+    background: var(--bs-primary);
+    border-color: var(--bs-primary);
+    color: #fff;
+}
+
+/* Hatched, so "somebody is deciding about this" is legible without any colour at all. */
+.plan__unit[data-state="pending"] {
+    background: repeating-linear-gradient(
+        45deg,
+        var(--bs-warning-bg-subtle, #fff3cd) 0 4px,
+        var(--bs-tertiary-bg) 4px 8px);
+    border-color: var(--bs-warning-border-subtle, #ffe69c);
+    cursor: not-allowed;
+}
+
+.plan__unit[data-state="taken"] {
+    background: var(--bs-secondary-bg);
+    color: var(--bs-secondary-color);
+    cursor: not-allowed;
+}
+
+.plan__unit[data-state="blocked"] {
+    background: var(--bs-tertiary-bg);
+    color: var(--bs-secondary-color);
+    border-style: dashed;
+    cursor: not-allowed;
+}
+
+.plan__unit[data-state="notoffered"] {
+    background: transparent;
+    color: var(--bs-secondary-color);
+    border-style: dashed;
+    opacity: 0.6;
+    cursor: not-allowed;
+}
+
+/* Chosen while arranging: a ring rather than a fill, so the section's colour still shows. */
+.plan__unit[data-selected="true"] {
+    outline: 2px solid var(--bs-primary);
+    outline-offset: -2px;
+    font-weight: 600;
+}
+
+/* Under the pointer mid-sweep. Added by the module, removed before it reports. */
+.plan__unit--sweeping {
+    outline: 2px dashed var(--bs-primary);
+    outline-offset: -2px;
+}
+
+.plan__unit:focus-visible,
+.plan__empty:focus-visible {
+    outline: 3px solid var(--bs-primary);
+    outline-offset: 1px;
+    z-index: 1;
+}
+
+/* ── the legend ────────────────────────────────────────────────────────── */
+/*
+    The price lives here, once per section, rather than in four hundred squares. Same fact, one
+    place to check it, and a square small enough to fit a house on a screen has no room for it.
+*/
+
+.plan__legend {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 0.25rem 1rem;
+    margin: 0.75rem 0 0;
+    padding: 0;
+    list-style: none;
+    font-size: 0.8rem;
+    color: var(--bs-secondary-color);
+}
+
+.plan__legend-item {
+    display: flex;
+    align-items: center;
+    gap: 0.4rem;
+}
+
+.plan__legend-swatch {
+    width: 0.85rem;
+    height: 0.85rem;
+    border-radius: 0.2rem;
+    border: 1px solid var(--bs-border-color);
+    background: hsl(var(--plate-hue, 220deg) 45% 96%);
+    flex: 0 0 auto;
+}
+
+:root[data-theme="dark"] .plan__legend-swatch,
+:root[data-bs-theme="dark"] .plan__legend-swatch {
+    background: hsl(var(--plate-hue, 220deg) 25% 20%);
+}
+
+/* ── phones ────────────────────────────────────────────────────────────── */
+/*
+    Forty-four pixels is the smallest square a finger hits reliably, so below the tablet breakpoint
+    the clamp's floor rises to meet it and the grid scrolls instead of shrinking. A plan that fits
+    the screen but cannot be tapped is not a plan that works on a phone.
+*/
+@media (max-width: 767.98px) {
+    .plan,
+    .plan--compact {
+        --plan-cell: 2.75rem;
+        --plan-gutter: 2.75rem;
+    }
+
+    .plan__unit-name { font-size: 0.65rem; }
+    .plan--compact .plan__unit-name { display: flex; }
+}
+
+@media (prefers-reduced-motion: reduce) {
+    .plan__unit,
+    .plan__empty {
+        transition: none;
+    }
+}
