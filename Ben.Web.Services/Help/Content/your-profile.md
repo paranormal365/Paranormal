@@ -80,6 +80,16 @@ the one thing that lets somebody invite you to a calendar event by typing your a
 lookup deliberately ignores your sign-in address, so an unpublished account cannot be found by
 guessing.
 
+## The tick
+
+A **green tick** next to something means we proved it, not that somebody typed it. It appears
+against a confirmed email address, against two-factor when it is on, and on your account address in
+the band at the top of the page. Hover it and it tells you what was proved and when.
+
+An **amber mark** means the opposite, and it always says what to do about it. You will not see one
+against something you cannot change: a fact with no way to prove it gets no mark at all, because a
+warning you can do nothing about is just an accusation.
+
 ## Confirming an email address
 
 An email address cannot be made **public** or **primary** until you have confirmed it. That stops

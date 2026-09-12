@@ -41,9 +41,13 @@
             </div>
             @if (_status is not null)
             {
-                <span class="badge @(_status.Enabled ? "bg-success" : "bg-secondary-subtle text-secondary-emphasis")">
-                    @(_status.Enabled ? "On" : "Off")
-                </span>
+                @* Shared with the emails card, the profile hero and the admin grid. Off has a
+                   path — the setup below — so it is drawn; see BenProven for when it would not be. *@
+                <BenProven Chip="true"
+                           Label="Two-factor on"
+                           UnprovedText="Two-factor off"
+                           Proved="@_status.Enabled"
+                           Unproved="Set it up below: scan the code with an authenticator app." />
             }
         </div>
 

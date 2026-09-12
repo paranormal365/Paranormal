@@ -1,0 +1,120 @@
+@*
+    One mark for "this was proved", used everywhere a fact about an account is proved rather than
+    merely asserted (item 237).
+
+    WHY IT IS SHARED. Four screens were inventing four of these: a green "Confirmed" pill on the
+    emails card, a bare tick with a date in the admin grid, an "On" pill on the two-factor panel,
+    and prose in the profile hero. Four marks that mean the same thing and look like four different
+    things teach a reader that a tick means whatever this screen felt like — and the day one of them
+    is wrong, nobody notices, because there is nothing to compare it against.
+
+    THE RULE IT ENFORCES, and the reason it is a component rather than a CSS class: an unproved
+    fact renders NOTHING unless there is something a person can do about it. `Unproved` is the
+    sentence naming that something, and leaving it null is how a caller says "there is no path".
+    Drawing "Not verified" against a fact nobody can change is a dead end — the same failure as a
+    refusal with no way through — and this makes it impossible to ship by accident rather than
+    something to remember. It is why phone numbers get no mark here: `UserPhone.IsValidated`
+    exists, and nothing in the product can ever set it.
+
+    Colour carries one meaning: proved. Nothing else on this component is ever green.
+*@
+
+@if (Proved)
+{
+    @if (Chip)
+    {
+        <span class="badge rounded-pill bg-success-subtle text-success-emphasis @Class"
+              title="@ProvedTitle" @attributes="Extra">
+            <BenIcon Name="check" Class="me-1" />@Label
+        </span>
+    }
+    else
+    {
+        <span class="text-success @Class" title="@ProvedTitle" @attributes="Extra">
+            <BenIcon Name="check" Title="@ProvedTitle" />
+            @if (ShowLabel)
+            {
+                <span class="small ms-1">@Label</span>
+            }
+        </span>
+    }
+}
+else if (!string.IsNullOrWhiteSpace(Unproved))
+{
+    @if (Chip)
+    {
+        <span class="badge rounded-pill bg-warning-subtle text-warning-emphasis @Class"
+              title="@Unproved" @attributes="Extra">
+            <BenIcon Name="alert-circle" Class="me-1" />@UnprovedLabel
+        </span>
+    }
+    else
+    {
+        <span class="text-warning @Class" title="@Unproved" @attributes="Extra">
+            <BenIcon Name="alert-circle" Title="@Unproved" />
+            @if (ShowLabel)
+            {
+                <span class="small ms-1">@UnprovedLabel</span>
+            }
+        </span>
+    }
+}
+
+@code {
+    /// <summary>What was proved, in the words a reader wants: "Confirmed", "Two-factor on".</summary>
+    [Parameter, EditorRequired] public string Label { get; set; } = "Confirmed";
+
+    /// <summary>Whether it is proved.</summary>
+    [Parameter] public bool Proved { get; set; }
+
+    /// <summary>
+    /// What to do about it when it is not proved yet — shown as the tooltip, and its presence is
+    /// what allows the unproved state to be drawn at all.
+    /// </summary>
+    /// <remarks>
+    /// Null means there is no path, and then NOTHING is drawn. See the remarks at the top: a mark
+    /// that can never turn is worse than no mark, because it reads as a fault the person caused.
+    /// </remarks>
+    [Parameter] public string? Unproved { get; set; }
+
+    /// <summary>What the unproved state is called. Defaults to "Not " plus the label, lowercased.</summary>
+    [Parameter] public string? UnprovedText { get; set; }
+
+    /// <summary>When it was proved. Appended to the tooltip, in US format like the rest of the site.</summary>
+    [Parameter] public DateTime? On { get; set; }
+
+    /// <summary>Anything more the tooltip should say — how it was proved, by whom.</summary>
+    [Parameter] public string? Detail { get; set; }
+
+    /// <summary>A pill, for a row of chips. Otherwise a bare tick beside a value.</summary>
+    [Parameter] public bool Chip { get; set; }
+
+    /// <summary>Whether the bare form prints its label as well as its tick. Chips always do.</summary>
+    [Parameter] public bool ShowLabel { get; set; } = true;
+
+    [Parameter] public string? Class { get; set; }
+
+    [Parameter(CaptureUnmatchedValues = true)]
+    public IReadOnlyDictionary<string, object>? Extra { get; set; }
+
+    private string UnprovedLabel =>
+        UnprovedText ?? $"Not {Label.ToLowerInvariant()}";
+
+    /// <summary>
+    /// The tooltip on a proved fact: what, when, and anything else worth saying.
+    /// </summary>
+    /// <remarks>
+    /// The date is the point. "Confirmed" alone invites the question this answers, and an
+    /// administrator looking at somebody else's account is usually asking exactly when.
+    /// </remarks>
+    private string ProvedTitle
+    {
+        get
+        {
+            var parts = new List<string> { Label };
+            if (On is { } on) parts.Add(on.ToString("MM/dd/yyyy"));
+            if (!string.IsNullOrWhiteSpace(Detail)) parts.Add(Detail!);
+            return string.Join(" · ", parts);
+        }
+    }
+}
