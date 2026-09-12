@@ -165,7 +165,39 @@ public sealed record RequestHostedEventBookingRequest(
 /// three-night event sells the Saturday on its own.
 /// </param>
 public sealed record HostedEventBookingNightChoice(
-    Guid HostedEventNightId, Guid? HostedEventLayoutUnitId = null);
+    Guid HostedEventNightId, Guid? HostedEventLayoutUnitId = null, int? People = null);
+
+/// <summary>A guest picking their own places on the plan (item 235 phase 4).</summary>
+/// <remarks>
+/// Separate from asking, because they are different acts with different consequences: an ask holds
+/// nothing and joins a queue, a pick takes the squares out of everybody else's reach until the
+/// venue answers. One endpoint serving both would have had to guess which the caller meant.
+/// </remarks>
+public sealed record HoldHostedEventPlacesRequest(
+    IReadOnlyList<HostedEventBookingNightChoice> Nights,
+    int PartySize,
+    IReadOnlyList<HostedEventBookingGuestInput>? Guests = null,
+    string? Note = null);
+
+/// <summary>
+/// Why a hold could not be taken, and what the plan looks like now (item 235 phase 4).
+/// </summary>
+/// <param name="Sentence">
+/// Names the square that went, because "those seats are taken" in front of four hundred of them
+/// tells a guest nothing they can act on.
+/// </param>
+/// <param name="TakenUnitIds">
+/// The squares somebody else got. The picker rings these and leaves the rest of the selection
+/// alone, so a party of four who lost one seat does not have to choose all four again.
+/// </param>
+/// <remarks>
+/// Returned as the body of a 409 so the picker can repaint without a second round trip. The whole
+/// point of losing a race is that the loser finds out immediately and can choose again while the
+/// rest of the row is still free.
+/// </remarks>
+public sealed record HoldRefusedRecord(
+    string Sentence,
+    IReadOnlyList<Guid> TakenUnitIds);
 
 public sealed record HostedEventBookingGuestInput(
     string DisplayName,

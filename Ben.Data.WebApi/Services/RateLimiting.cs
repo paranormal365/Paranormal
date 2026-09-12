@@ -73,6 +73,21 @@ public static class RateLimiting
     /// </remarks>
     public const string AudioProcessingPolicy = "audio-processing";
 
+    /// <summary>
+    /// Taking and giving back places on a hosted event's plan (item 235 phase 4).
+    /// </summary>
+    /// <remarks>
+    /// <para>The abuse this invites is not volume, it is denial: a script that holds every seat in
+    /// the house for two days empties a venue's weekend without booking anything. The per-caller
+    /// ceiling is deliberately low because a person picking seats presses this button once, twice
+    /// if they lose a race, and never thirty times a minute.</para>
+    ///
+    /// <para>The real defence is elsewhere and has to be — an attacker has more than one account.
+    /// A cap on how many holds one account may have at once, and the hold expiry that gives them
+    /// back, are what bound the damage; this only slows the loudest version down.</para>
+    /// </remarks>
+    public const string HostedBookingPolicy = "hosted-booking";
+
     // Defaults, all per caller per minute. A SuperAdmin can override each one from the site
     // settings page; configuration (RateLimits:*) is the fallback, and these are the last resort.
     // See RateLimitSettingsProvider for how the current values reach the partition factory without
@@ -86,6 +101,9 @@ public static class RateLimiting
     /// several sessions running over, and everyone reloading the page while they wait.
     /// </summary>
     internal const int DefaultEventAttendancePerMinute = 300;
+
+    /// <summary>Thirty a minute: a person picking seats, not a script taking a house.</summary>
+    internal const int DefaultHostedBookingPerMinute = 30;
     /// <summary>
     /// Enough for somebody working steadily \u2014 trying a gain, undoing it, clipping two regions,
     /// running a scan \u2014 and nowhere near enough to keep a server busy decoding.
@@ -141,6 +159,7 @@ public static class RateLimiting
             options.AddPolicy(AuthPolicy,            context => FixedWindowByClient(context, Limits(context).Auth));
             options.AddPolicy(EventAttendancePolicy, context => FixedWindowByClient(context, Limits(context).EventAttendance));
             options.AddPolicy(AudioProcessingPolicy, context => FixedWindowByClient(context, Limits(context).AudioProcessing));
+            options.AddPolicy(HostedBookingPolicy,   context => FixedWindowByClient(context, DefaultHostedBookingPerMinute));
         });
 
         return services;

@@ -882,9 +882,14 @@ public sealed class HostedEventBookingController : OrgCmsControllerBase
         if (booking.Nights.Count > 0) db.HostedEventBookingNights.RemoveRange(booking.Nights);
         booking.Nights.Clear();
 
-        // Distinct by night: a party cannot hold two rooms on one night, and the unique index
-        // would otherwise refuse the whole save with an error nobody could act on.
-        foreach (var choice in nights.GroupBy(n => n.HostedEventNightId).Select(g => g.Last()))
+        // Distinct by night AND unit. It used to be by night alone, on the belief that a party
+        // could hold only one thing per night — so confirming a family into a double and a twin
+        // silently kept the twin, and confirming a party of three at the theatre gave them one
+        // seat. The unique key is (booking, night, unit) now; what a duplicate means here is the
+        // same room written twice, which is an edit gone wrong rather than a family spreading out.
+        foreach (var choice in nights
+                     .GroupBy(n => (n.HostedEventNightId, n.HostedEventLayoutUnitId))
+                     .Select(g => g.Last()))
         {
             booking.Nights.Add(new HostedEventBookingNight
             {
@@ -892,6 +897,7 @@ public sealed class HostedEventBookingController : OrgCmsControllerBase
                 HostedEventBookingId = booking.Id,
                 HostedEventNightId = choice.HostedEventNightId,
                 HostedEventLayoutUnitId = choice.HostedEventLayoutUnitId,
+                People = choice.People,
                 DateCreated = DateTime.UtcNow,
             });
         }
@@ -1008,16 +1014,25 @@ public sealed class HostedEventBookingController : OrgCmsControllerBase
         var all = await AllBookingsAsync(db, ev.Id, ct);
         var nights = ev.Nights.OrderBy(n => n.Date).ToList();
 
+        // THREE QUERIES, NOT HALF A MILLION LIST WALKS.
+        //
+        // This used to ask PeopleIn once per unit per night, and each call walked every booking on
+        // the event and every night of each. Thirteen rows over three nights with two hundred
+        // parties is roughly half a million traversals to paint one screen, repeated on every
+        // render, all of it recomputing the same handful of numbers.
+        var occupancy = await PlanOccupancy.ReadAsync(db, ev.Id, ct);
+
         var unitNights = new List<HostedEventUnitNightRecord>();
         foreach (var night in nights)
         {
             foreach (var unit in offered)
             {
+                occupancy.TryGetValue((night.Id, unit.Id), out var cell);
                 unitNights.Add(new HostedEventUnitNightRecord(
                     night.Id, night.Date, unit.Id, EventCapacity.NameOf(unit),
                     EventCapacity.CapacityOf(unit),
-                    EventCapacity.PeopleIn(all, night.Id, unit.Id),
-                    AskedFor(all, night.Id, unit.Id)));
+                    cell.People,
+                    cell.Asked));
             }
         }
 
@@ -1048,22 +1063,6 @@ public sealed class HostedEventBookingController : OrgCmsControllerBase
                 .Where(b => b.HostedEventId == eventId)
                 .ToListAsync(ct),
             includeRequests);
-
-    /// <summary>
-    /// People who have asked for a room on a night and hold nothing.
-    /// </summary>
-    /// <remarks>
-    /// Shown beside what is taken because over-asking is a fact a host needs: it is the difference
-    /// between a full house and a popular one, and it is what turns the overflow into a waiting
-    /// list rather than a closed door.
-    /// </remarks>
-    private static int AskedFor(
-        IEnumerable<HostedEventBooking> bookings, Guid nightId, Guid unitId)
-        => bookings
-            .Where(b => b.Status == HostedEventBookingStatus.Requested)
-            .Where(b => b.Nights.Any(n => n.HostedEventNightId == nightId
-                                       && n.HostedEventLayoutUnitId == unitId))
-            .Sum(b => Math.Max(1, b.PartySize));
 
     // ── plumbing ─────────────────────────────────────────────────────────────
 

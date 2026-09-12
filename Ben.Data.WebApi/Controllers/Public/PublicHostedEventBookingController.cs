@@ -197,6 +197,185 @@ public sealed class PublicHostedEventBookingController : BenControllerBase
     /// <para>What IS checked: the event exists and is published, it has not been called off, and
     /// the deadline has not passed.</para>
     /// </remarks>
+    /// <summary>
+    /// Takes the places a guest picked on the plan and holds them until the venue answers.
+    /// </summary>
+    /// <remarks>
+    /// <para><b>Its own endpoint, not a flag on asking.</b> Asking holds nothing and joins a queue;
+    /// picking takes squares out of everybody else's reach. They are different acts with different
+    /// consequences, and one endpoint serving both would have had to guess which the caller meant.
+    /// </para>
+    ///
+    /// <para><b>The race is settled by the database, not by this method.</b> Two guests pressing
+    /// the button a millisecond apart both see the seat free before either writes. So the insert is
+    /// attempted and the unique index decides; the loser catches the violation, re-reads what
+    /// actually happened, and is told which square went by name with the rest of their choice
+    /// intact. Checking first and writing second would simply lose the race more slowly.</para>
+    ///
+    /// <para><b>A cap per account, because rate limiting cannot see the real abuse.</b> Holding
+    /// every seat in a house for two days empties a venue's weekend without booking anything, and
+    /// an attacker has more than one address. Five live holds is more than any real guest needs.
+    /// </para>
+    /// </remarks>
+    [HttpPost("{eventId:guid}/holds")]
+    [Microsoft.AspNetCore.RateLimiting.EnableRateLimiting(Services.RateLimiting.HostedBookingPolicy)]
+    public async Task<ActionResult<MyHostedEventBookingRecord>> HoldPlaces(
+        Guid eventId, [FromBody] HoldHostedEventPlacesRequest request, CancellationToken ct)
+    {
+        var userId = GetCurrentUserId();
+        if (userId == Guid.Empty) return Unauthorized();
+
+        await using var db = await _db.CreateDbContextAsync(ct);
+
+        var ev = await BookableEventAsync(db, eventId, ct);
+        if (ev is null) return NotFound();
+
+        if (ev.BookingMode != HostedEventBookingMode.Pick)
+            return Conflict("Places at this event are asked for and the venue puts you somewhere, "
+                          + "rather than picked on the plan.");
+
+        if (!EventCapacity.IsOpenForRequests(ev, DateTime.UtcNow))
+            return Conflict("This event has stopped taking bookings.");
+
+        var chosen = request.Nights ?? [];
+        if (chosen.Count == 0)
+            return BadRequest("Pick at least one place before holding anything.");
+
+        if (await WhyTheseNightsAreNotRealAsync(db, eventId, chosen, ct) is { } bad)
+            return BadRequest(bad);
+
+        if (await db.HostedEventBookings.AnyAsync(
+                b => b.HostedEventId == eventId && b.LeadAppUserId == userId
+                  && BookingTransitions.Waiting.Contains(b.Status), ct))
+            return Conflict("You already have places at this event waiting on the venue. "
+                          + "Let those go first if you want to choose differently.");
+
+        if (await CountMyLiveHoldsAsync(db, userId, ct) >= MaximumLiveHolds)
+            return Conflict($"You are holding places at {MaximumLiveHolds} events already. "
+                          + "Wait for a venue to answer, or let one go, before choosing more.");
+
+        if (await WhatIsNotOnOfferAsync(db, eventId, chosen, ct) is { } withheld)
+            return Conflict(withheld);
+
+        var now = DateTime.UtcNow;
+        var booking = new HostedEventBooking
+        {
+            Id = Guid.NewGuid(),
+            HostedEventId = eventId,
+            LeadAppUserId = userId,
+            PartySize = EventCapacity.ClampPartySize(request.PartySize),
+            Kind = HostedEventBookingKind.Overnight,
+            Status = HostedEventBookingStatus.Requested,
+            Note = Trimmed(request.Note),
+            DateCreated = now,
+            CreatedByAppUserId = userId,
+        };
+        db.HostedEventBookings.Add(booking);
+
+        WriteNights(booking, chosen);
+        WriteGuests(booking, request.Guests ?? []);
+
+        BookingTransitions.Hold(booking, ev, now);
+        await BookingTransitions.ApplyUmbrellaAsync(db, _sync, ev, booking, userId, now, ct);
+
+        try
+        {
+            await db.SaveChangesAsync(ct);
+        }
+        catch (DbUpdateException ex) when (IsSomebodyGotThereFirst(ex))
+        {
+            // Somebody else's insert won. Re-read what is actually held now and say which squares
+            // went, so the picker can repaint and the guest keeps the rest of their choice.
+            return Conflict(await WhoGotThereFirstAsync(db, eventId, chosen, ct));
+        }
+
+        return Ok(await ReloadAsync(db, userId, booking.Id, ct));
+    }
+
+    /// <summary>The most events one account may be holding places at, at once.</summary>
+    /// <remarks>
+    /// Five is more than any real guest needs and far fewer than a script wants. It bounds the
+    /// damage a determined person can do with one account; the hold expiry bounds how long they can
+    /// do it for.
+    /// </remarks>
+    private const int MaximumLiveHolds = 5;
+
+    private static Task<int> CountMyLiveHoldsAsync(
+        BenDataContext db, Guid userId, CancellationToken ct)
+        => db.HostedEventBookings.CountAsync(
+               b => b.LeadAppUserId == userId
+                 && b.Status == HostedEventBookingStatus.Held, ct);
+
+    /// <summary>Whether this failure is the arbiter index refusing a second party.</summary>
+    /// <remarks>
+    /// 2601 and 2627 are SQL Server's two unique-violation numbers; 19 is SQLite's, which the tests
+    /// run on. Anything else is a real fault and must not be dressed up as a lost race.
+    /// </remarks>
+    private static bool IsSomebodyGotThereFirst(DbUpdateException ex)
+        => ex.InnerException?.GetType().GetProperty("SqliteErrorCode")?.GetValue(ex.InnerException)
+               is int sqlite && sqlite == 19
+        || ex.InnerException?.GetType().GetProperty("Number")?.GetValue(ex.InnerException)
+               is int number && number is 2601 or 2627;
+
+    /// <summary>Which of the squares this guest picked are now somebody else's, in words.</summary>
+    private async Task<HoldRefusedRecord> WhoGotThereFirstAsync(
+        BenDataContext db, Guid eventId,
+        IReadOnlyList<HostedEventBookingNightChoice> chosen, CancellationToken ct)
+    {
+        // A fresh context: the failed save left the old one holding a booking that does not exist.
+        await using var fresh = await _db.CreateDbContextAsync(ct);
+
+        var occupancy = await PlanOccupancy.ReadAsync(fresh, eventId, ct);
+
+        var taken = chosen
+            .Where(c => c.HostedEventLayoutUnitId is { } unit
+                     && occupancy.TryGetValue((c.HostedEventNightId, unit), out var cell)
+                     && cell.BookingId is not null)
+            .Select(c => c.HostedEventLayoutUnitId!.Value)
+            .Distinct()
+            .ToList();
+
+        var names = await fresh.HostedEventLayoutUnits.AsNoTracking()
+            .Where(u => taken.Contains(u.Id))
+            .Include(u => u.PlaceRoom)
+            .ToListAsync(ct);
+
+        var said = names.Count switch
+        {
+            0 => "Somebody took one of those places a moment ago. Have another look at the plan.",
+            1 => $"{EventCapacity.NameOf(names[0])} was taken a moment ago. Pick another.",
+            _ => $"{string.Join(" and ", names.Select(EventCapacity.NameOf))} were taken a moment "
+               + "ago. Pick again for those; the rest of your choice is still free.",
+        };
+
+        return new HoldRefusedRecord(said, taken);
+    }
+
+    /// <summary>Why the venue is not offering one of these squares, or null when it is.</summary>
+    private static async Task<string?> WhatIsNotOnOfferAsync(
+        BenDataContext db, Guid eventId,
+        IReadOnlyList<HostedEventBookingNightChoice> chosen, CancellationToken ct)
+    {
+        var blocks = await PlanOccupancy.BlocksAsync(db, eventId, ct);
+        if (blocks.Count == 0) return null;
+
+        foreach (var choice in chosen)
+        {
+            if (choice.HostedEventLayoutUnitId is not { } unitId) continue;
+
+            var unit = await db.HostedEventLayoutUnits.AsNoTracking()
+                .Include(u => u.PlaceRoom)
+                .FirstOrDefaultAsync(u => u.Id == unitId, ct);
+            if (unit is null) continue;
+
+            if (EventCapacity.WhyItIsNotOffered(
+                    blocks, unitId, choice.HostedEventNightId, EventCapacity.NameOf(unit)) is { } why)
+                return why;
+        }
+
+        return null;
+    }
+
     [HttpPost("{eventId:guid}/bookings")]
     public async Task<ActionResult<MyHostedEventBookingRecord>> RequestAPlace(
         Guid eventId, [FromBody] RequestHostedEventBookingRequest request, CancellationToken ct)
@@ -455,10 +634,23 @@ public sealed class PublicHostedEventBookingController : BenControllerBase
             : null;
     }
 
+    /// <summary>
+    /// Writes one row per place per night, and keeps every one of them.
+    /// </summary>
+    /// <remarks>
+    /// <b>Grouped by night AND unit.</b> It used to group by night alone and keep the last, which
+    /// silently threw away every place but one: a party picking three seats got one seat, and a
+    /// family taking a double and a twin got the twin. That was the same wrong assumption the night
+    /// key carried until phase 4 — a party holds one thing per night — and it survived in the
+    /// writer after the key was widened. Found by a hold test whose second guest was allowed a seat
+    /// somebody already had, because the seat that clashed had been discarded before the insert.
+    /// </remarks>
     private static void WriteNights(
         HostedEventBooking booking, IReadOnlyList<HostedEventBookingNightChoice> nights)
     {
-        foreach (var choice in nights.GroupBy(n => n.HostedEventNightId).Select(g => g.Last()))
+        foreach (var choice in nights
+                     .GroupBy(n => (n.HostedEventNightId, n.HostedEventLayoutUnitId))
+                     .Select(g => g.Last()))
         {
             booking.Nights.Add(new HostedEventBookingNight
             {
@@ -466,6 +658,7 @@ public sealed class PublicHostedEventBookingController : BenControllerBase
                 HostedEventBookingId = booking.Id,
                 HostedEventNightId = choice.HostedEventNightId,
                 HostedEventLayoutUnitId = choice.HostedEventLayoutUnitId,
+                People = choice.People,
                 DateCreated = DateTime.UtcNow,
             });
         }

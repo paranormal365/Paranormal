@@ -35,16 +35,21 @@ public sealed class BookingWriterGuardTests
     /// Assignments that are the booking's own truth, and must move together.
     /// </summary>
     /// <remarks>
-    /// <c>IsHolding</c> is here for the same reason as the rest: it is the parent's status copied
-    /// onto the night row so the database's arbiter index can read it, and a second writer would
-    /// mean either a room nobody can book or two parties in one bed.
+    /// <para><c>IsHolding</c> is here for the same reason as the rest: it is the parent's status
+    /// copied onto the night row so the database's arbiter index can read it, and a second writer
+    /// would mean either a room nobody can book or two parties in one bed.</para>
+    ///
+    /// <para><b>Every pattern refuses a following <c>=</c>.</b> Without that,
+    /// <c>ReleasedUtc == null</c> in a query reads as an assignment, and the guard accused the
+    /// read-only occupancy aggregate of writing the column it was filtering on. A guard that cannot
+    /// tell a comparison from an assignment is one somebody eventually deletes.</para>
     /// </remarks>
     private static readonly (string Pattern, string What)[] Guarded =
     [
-        (@"\.Status\s*=\s*HostedEventBookingStatus\.", "a booking's status"),
-        (@"\.IsHolding\s*=", "whether a night holds its unit"),
-        (@"\.ReleasedUtc\s*=", "when a night went back"),
-        (@"\.UmbrellaAttendeeId\s*=", "the umbrella attendee link"),
+        (@"\.Status\s*=(?!=)\s*HostedEventBookingStatus\.", "a booking's status"),
+        (@"\.IsHolding\s*=(?!=)", "whether a night holds its unit"),
+        (@"\.ReleasedUtc\s*=(?!=)", "when a night went back"),
+        (@"\.UmbrellaAttendeeId\s*=(?!=)", "the umbrella attendee link"),
     ];
 
     private static DirectoryInfo RepoRoot()
