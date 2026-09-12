@@ -529,6 +529,60 @@ public sealed class HostedEventBookingController : OrgCmsControllerBase
     }
 
     /// <summary>
+    /// Sends the confirmation letter, pass and diary file included, again.
+    /// </summary>
+    /// <remarks>
+    /// <para>For the guest who says the email never came. It is the whole confirmation rather than
+    /// a bare picture of the code, because "send my pass again" from a guest means "I have
+    /// nothing", not "I have everything but the square". <see cref="EventGuestMailer"/> stamps
+    /// <c>EmailedUtc</c> on the pass as it goes, so the board's "not sent yet" mark clears.</para>
+    ///
+    /// <para><b>The truth is told to the caller.</b> The mailer itself is best effort and answers
+    /// false rather than throwing, which is right after a confirmation — the decision stands
+    /// whatever the mail did. It is wrong here: a host who pressed <i>Send</i> and was told 200
+    /// while nothing was posted would stand at a door wondering why the guest has no code. So no
+    /// mail service, no address and a send that failed are each a refusal in words that says
+    /// which, and what to do instead (item 235 phase 1).</para>
+    /// </remarks>
+    [HttpPost("{bookingId:guid}/pass/email")]
+    public async Task<ActionResult<HostedEventPassRecord>> EmailPass(
+        Guid orgId, Guid eventId, Guid bookingId, CancellationToken ct)
+    {
+        var userId = GetCurrentUserId();
+        if (userId is null) return Unauthorized();
+
+        await using var db = await DbFactory.CreateDbContextAsync(ct);
+        if (!await CanDecideAsync(userId.Value, orgId, ct)) return Forbid();
+
+        var booking = await LoadBookingForPassAsync(db, orgId, eventId, bookingId, ct);
+        if (booking is null) return NotFound();
+        if (!EventPasses.MayHaveAPass(booking.Status))
+            return BadRequest("Confirm the booking first. There is no pass to send until then.");
+
+        var pass = await EventPasses.LiveAsync(db, bookingId, ct);
+        if (pass is null)
+            return BadRequest("This booking has no live pass to send. Issue one first.");
+
+        if (!_guestMail.IsConfigured)
+            return Conflict("This site has no outgoing mail set up, so the letter cannot be sent. "
+                          + "Show them the pass from this screen instead.");
+
+        var to = await db.AppUsers.AsNoTracking()
+            .Where(u => u.Id == booking.LeadAppUserId)
+            .Select(u => u.Email)
+            .FirstOrDefaultAsync(ct);
+        if (string.IsNullOrWhiteSpace(to))
+            return Conflict("This guest's account has no email address, so there is nobody to "
+                          + "post the letter to.");
+
+        if (!await _guestMail.SendDecisionAsync(db, booking.Id, ct))
+            return Conflict("The letter could not be sent just now and nothing was posted. Try "
+                          + "again in a minute, or show them the pass from this screen.");
+
+        return Ok(await PassRecordAsync(db, pass.Id, ct));
+    }
+
+    /// <summary>
     /// Scans a code at the door and says who has just walked in.
     /// </summary>
     /// <remarks>

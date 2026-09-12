@@ -207,17 +207,36 @@ public sealed class EventGuestMailer
 
     // ── the diary ────────────────────────────────────────────────────────────
 
+    /// <summary>Six in the evening at the venue: when "you are staying here tonight" begins.</summary>
+    private static readonly TimeSpan NightBegins = new(18, 0, 0);
+
+    /// <summary>Ten the next morning at the venue: when it ends.</summary>
+    private static readonly TimeSpan NightEnds = new(10, 0, 0);
+
+    /// <summary>Two in the morning after the last date, for a day pass that runs late.</summary>
+    private static readonly TimeSpan DayPassEnds = new(2, 0, 0);
+
     /// <summary>
     /// One calendar entry per booked night, or one for the whole event on a day pass.
     /// </summary>
     /// <remarks>
-    /// Each night keeps its own uid, so a later letter updates each entry rather than every night
-    /// overwriting the last and leaving a guest with one entry for a three-night stay.
+    /// <para>Each night keeps its own uid, so a later letter updates each entry rather than every
+    /// night overwriting the last and leaving a guest with one entry for a three-night stay.</para>
+    ///
+    /// <para><b>Every time here is a wall-clock time at the venue</b>, converted to UTC through the
+    /// event's own zone — the same zone <see cref="HostedEventCalendarSync"/> uses for the public
+    /// list, so the diary and the list can never disagree about where the Thomas House is. The
+    /// first version of this wrote <c>Date.AddHours(18)</c> and handed it to a builder that stamps
+    /// everything as UTC, which put a Nashville dinner in a guest's calendar at one in the
+    /// afternoon (item 235 phase 1). A night is also converted at each end rather than as a start
+    /// plus sixteen hours: on the weekend the clocks go back, the Saturday night is an hour longer
+    /// and a fixed span would have put the Sunday check-out at nine.</para>
     /// </remarks>
     private byte[] CalendarFor(HostedEventBooking booking, HostedEvent? ev)
     {
         if (ev is null) return [];
 
+        var zone = HostedEventCalendarSync.ZoneOf(ev.TimeZoneId);
         var venue = ev.Place?.Name;
         var url = ev.UrlName is { Length: > 0 } slug && ev.Organization?.UrlName is { Length: > 0 } org
             ? _site.AbsoluteUrl($"/o/{org}/events/{slug}")
@@ -233,8 +252,8 @@ public sealed class EventGuestMailer
                 // An overnight stay is not a timed appointment. Six in the evening to ten the next
                 // morning is the honest span of "you are staying here tonight", and a calendar that
                 // showed a night as a single point in time would tell a guest nothing.
-                StartUtc: n.HostedEventNight.Date.Date.AddHours(18),
-                EndUtc: n.HostedEventNight.Date.Date.AddDays(1).AddHours(10),
+                StartUtc: AtVenueUtc(n.HostedEventNight.Date, NightBegins, zone),
+                EndUtc: AtVenueUtc(n.HostedEventNight.Date.AddDays(1), NightEnds, zone),
                 Summary: $"{ev.Name} — {EventCapacity.NameOf(n) ?? "your room"}",
                 Description: null,
                 Location: venue,
@@ -243,8 +262,8 @@ public sealed class EventGuestMailer
                 OrganizerEmail: ev.Organization?.PublicEmail)).ToList()
             : [new IcsBuilder.IcsEvent(
                 Uid: $"{booking.Id}@ishaunted.com",
-                StartUtc: ev.StartsOn.Date.AddHours(18),
-                EndUtc: ev.EndsOn.Date.AddDays(1).AddHours(2),
+                StartUtc: AtVenueUtc(ev.StartsOn, NightBegins, zone),
+                EndUtc: AtVenueUtc(ev.EndsOn.AddDays(1), DayPassEnds, zone),
                 Summary: ev.Name,
                 Description: null,
                 Location: venue,
@@ -253,6 +272,21 @@ public sealed class EventGuestMailer
                 OrganizerEmail: ev.Organization?.PublicEmail)];
 
         return IcsBuilder.BuildBytes(entries);
+    }
+
+    /// <summary>A wall-clock time on a date at the venue, as the instant it actually is.</summary>
+    /// <remarks>
+    /// The zone is <see cref="HostedEventCalendarSync.ZoneOf"/>'s, falling back to UTC for an id
+    /// this machine has never heard of, so a strange zone costs an offset and never the letter.
+    /// Six in the evening and ten in the morning never fall inside the hour a clock skips, but the
+    /// conversion throws if one ever did, and a thrown exception here loses the whole diary for
+    /// the sake of one entry — so it is nudged an hour, the way the umbrella row's times are.
+    /// </remarks>
+    private static DateTime AtVenueUtc(DateTime date, TimeSpan timeOfDay, TimeZoneInfo zone)
+    {
+        var local = DateTime.SpecifyKind(date.Date + timeOfDay, DateTimeKind.Unspecified);
+        if (zone.IsInvalidTime(local)) local = local.AddHours(1);
+        return TimeZoneInfo.ConvertTimeToUtc(local, zone);
     }
 
     // ── plumbing ─────────────────────────────────────────────────────────────

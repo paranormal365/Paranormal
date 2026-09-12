@@ -109,8 +109,15 @@ public sealed class PublicHostedEventBookingController : BenControllerBase
     /// many they are — a pass only a machine can read is a pass that fails on the one evening it
     /// matters.</para>
     ///
-    /// <para>A guest whose place is not confirmed has no pass and is told what to wait for, rather
-    /// than being shown an empty box.</para>
+    /// <para><b>A withdrawn pass is still shown</b>, with the reason on it. The first version
+    /// answered "the venue hasn't issued your pass yet" the moment the only pass was revoked, which
+    /// told a guest whose booking had just been turned down that they were waiting for something.
+    /// The latest pass comes back whatever its state: the live one when there is one, otherwise the
+    /// most recently withdrawn, so a guest can show it to somebody who can tell them why. A revoked
+    /// pass that was replaced is simply history — the replacement is the pass.</para>
+    ///
+    /// <para>Only a booking that has never had a pass at all is told what to wait for, rather than
+    /// being shown an empty box.</para>
     /// </remarks>
     [HttpGet("{eventId:guid}/my-booking/pass")]
     public async Task<ActionResult<MyHostedEventPassRecord>> GetMyPass(
@@ -130,18 +137,20 @@ public sealed class PublicHostedEventBookingController : BenControllerBase
                                    && b.Status != HostedEventBookingStatus.Cancelled, ct);
         if (booking is null) return NotFound();
 
-        if (!EventPasses.MayHaveAPass(booking.Status))
-            return StatusCode(StatusCodes.Status403Forbidden,
-                "Your pass is issued when the venue confirms your place.");
-
-        var pass = await db.HostedEventPasses.AsNoTracking()
+        var passes = await db.HostedEventPasses.AsNoTracking()
             .Include(p => p.CheckedInByAppUser)
-            .Where(p => p.HostedEventBookingId == booking.Id && p.RevokedUtc == null)
+            .Where(p => p.HostedEventBookingId == booking.Id)
             .OrderByDescending(p => p.IssuedUtc)
-            .FirstOrDefaultAsync(ct);
+            .ToListAsync(ct);
+
+        // The live one when there is one; failing that the most recently withdrawn, which still
+        // carries the reason the door would read out.
+        var pass = passes.FirstOrDefault(p => p.RevokedUtc == null) ?? passes.FirstOrDefault();
         if (pass is null)
             return StatusCode(StatusCodes.Status403Forbidden,
-                "The venue hasn't issued your pass yet. Ask them for one.");
+                EventPasses.MayHaveAPass(booking.Status)
+                    ? "The venue hasn't issued your pass yet. Ask them for one."
+                    : "Your pass is issued when the venue confirms your place.");
 
         return Ok(new MyHostedEventPassRecord(
             Entities.HostedEventBookingController.ToRecord(pass),
@@ -339,6 +348,11 @@ public sealed class PublicHostedEventBookingController : BenControllerBase
     /// <para><b>A confirmed booking is not.</b> The venue has catered, staffed and possibly turned
     /// somebody else away against it, so this records the ask and tells them; the host releases it
     /// from their own screen. A room freed without the host knowing is a room that stays empty.</para>
+    ///
+    /// <para><b>A turned-down booking has nothing to withdraw</b>, and is told so. The first
+    /// version fell through to the confirmed branch and recorded a cancellation request against a
+    /// booking the venue had already said no to — a host would have seen "asked to cancel" on a
+    /// party that was never coming (item 235 phase 1).</para>
     /// </remarks>
     [HttpDelete("{eventId:guid}/my-booking")]
     public async Task<ActionResult<MyHostedEventBookingRecord>> Withdraw(
@@ -364,7 +378,10 @@ public sealed class PublicHostedEventBookingController : BenControllerBase
             return NoContent();
         }
 
-        // Confirmed, or already turned down: record the ask rather than acting on it.
+        if (booking.Status == HostedEventBookingStatus.TurnedDown)
+            return Conflict("This booking was already turned down; there is nothing to withdraw.");
+
+        // Confirmed: record the ask rather than acting on it.
         booking.CancellationRequestedUtc ??= DateTime.UtcNow;
         booking.CancellationReason = Trimmed(reason);
         booking.DateUpdated = DateTime.UtcNow;
