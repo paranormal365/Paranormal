@@ -66,7 +66,10 @@ public sealed class MyContactInfoController : BenControllerBase
 
     [HttpPost("emails")]
     public async Task<ActionResult<MyEmailRecord>> CreateEmail(
-        [FromBody] UpsertMyEmailRequest request, CancellationToken ct)
+        [FromBody] UpsertMyEmailRequest request,
+        [FromServices] Ben.Data.Common.Interfaces.IEmailService emailService,
+        [FromServices] IConfiguration configuration,
+        CancellationToken ct)
     {
         var userId = GetCurrentUserId();
 
@@ -76,6 +79,12 @@ public sealed class MyContactInfoController : BenControllerBase
         // class remarks on why public requires validated. Coercing this silently would hide the
         // rule from whoever wrote the client; refusing it surfaces the rule immediately.
         if (request.IsPublic) return BadRequest("A new email address must be validated before it can be made public.");
+        // And it cannot be PRIMARY yet either, for the same reason and by the same rule. Primary
+        // is the address this person is presented by — the one a screen reaches for when it needs
+        // "their email" — so letting an unproven one take that label is the same mistake as
+        // publishing it, only quieter. Ben found this on 2026-09-12: he added an address, marked it
+        // primary, and nothing had ever checked that he could read it.
+        if (request.IsPrimary) return BadRequest("A new email address must be confirmed before it can be made your primary one.");
 
         await using var db = await _dbContextFactory.CreateDbContextAsync(ct);
         if (!await db.UserEmailTypes.AnyAsync(t => t.Id == request.UserEmailTypeId, ct))
@@ -87,7 +96,7 @@ public sealed class MyContactInfoController : BenControllerBase
             AppUserId = userId,
             UserEmailTypeId = request.UserEmailTypeId,
             EmailAddress = address,
-            IsPrimary = request.IsPrimary,
+            IsPrimary = false,
             IsPublic = false,
             IsHidden = false,
             IsValidated = false,
@@ -97,14 +106,20 @@ public sealed class MyContactInfoController : BenControllerBase
             CreatedByAppUserId = userId,
         };
 
-        if (request.IsPrimary) await UnsetOtherPrimaryEmailsAsync(db, userId, ct);
-
         db.UserEmails.Add(entity);
         await db.SaveChangesAsync(ct);
 
         _ = TryAuditAsync(_auditLog.LogCreateAsync(nameof(UserEmail), entity.Id, entity, userId, AppSources.WebApi));
 
-        return Ok(ToRecord(entity));
+        // THE CONFIRMATION GOES NOW, without being asked for.
+        //
+        // It used to wait for somebody to notice a "Send confirmation link" button beside the row,
+        // which is a button most people never press — so an address sat unconfirmed for ever and
+        // could never become primary or public. Adding an address IS the request to confirm it;
+        // there is no other reason to type one in.
+        var (link, emailSent) = await IssueValidationAsync(db, entity, userId, emailService, configuration, ct);
+
+        return Ok(ToRecord(entity) with { ValidationLink = link, ValidationEmailSent = emailSent });
     }
 
     [HttpPut("emails/{id:guid}")]
@@ -146,6 +161,12 @@ public sealed class MyContactInfoController : BenControllerBase
         {
             entity.IsPublic = request.IsPublic;
         }
+
+        // Primary follows the same rule as public: an address nobody has proved they can read
+        // must not become the one this person is presented by. Refused rather than coerced, so the
+        // client learns the rule instead of wondering why a tick did not stick.
+        if (request.IsPrimary && !entity.IsValidated)
+            return BadRequest("Confirm this email address before making it your primary one.");
 
         entity.EmailAddress = address;
         entity.UserEmailTypeId = request.UserEmailTypeId;
@@ -204,33 +225,8 @@ public sealed class MyContactInfoController : BenControllerBase
         if (entity.DateValidationSent is { } lastSent && DateTime.UtcNow - lastSent < ResendCooldown)
             return BadRequest("A validation email was just sent. Please wait a minute before requesting another.");
 
-        var before = new UserEmail { Id = entity.Id, DateValidationSent = entity.DateValidationSent };
-
-        // Regenerating invalidates whatever link was already out there — only the newest one may
-        // be redeemed, so an old email sitting in an inbox can't validate a since-changed address.
-        entity.ValidationToken = GenerateToken();
-        entity.DateValidationSent = DateTime.UtcNow;
-        await db.SaveChangesAsync(ct);
-
-        var appBaseUrl = configuration["AppBaseUrl"]?.TrimEnd('/') ?? string.Empty;
-        var link = $"{appBaseUrl}/validate-email/{entity.ValidationToken}";
-
-        var emailSent = false;
-        if (emailService.IsConfigured)
-        {
-            try
-            {
-                var maskedForSubject = System.Net.WebUtility.HtmlEncode(entity.EmailAddress);
-                var body = $"<p>Confirm that <strong>{maskedForSubject}</strong> belongs to your {_site.Name} account.</p>" +
-                           $"<p><a href=\"{link}\">Confirm this email address</a></p>" +
-                           $"<p>This link expires in {ValidationLifetime.TotalDays:0} days.</p>";
-                await emailService.SendAsync(entity.EmailAddress, "Confirm your email address", body, ct);
-                emailSent = true;
-            }
-            catch { /* best-effort — the link below still works */ }
-        }
-
-        _ = TryAuditAsync(_auditLog.LogUpdateAsync(nameof(UserEmail), entity.Id, before, entity, userId, AppSources.WebApi));
+        var (link, emailSent) = await IssueValidationAsync(
+            db, entity, userId, emailService, configuration, ct);
 
         return Ok(new SendValidationResponse(link, emailSent));
     }
@@ -567,6 +563,59 @@ public sealed class MyContactInfoController : BenControllerBase
     private static readonly TimeSpan ResendCooldown = TimeSpan.FromSeconds(60);
     internal static readonly TimeSpan ValidationLifetime = TimeSpan.FromDays(7);
 
+    /// <summary>
+    /// Issues a fresh confirmation link for an address and emails it, returning the link either way.
+    /// </summary>
+    /// <remarks>
+    /// <para>Shared by adding an address and by asking for another link, because two copies of this
+    /// would eventually disagree about the token's lifetime or about what happens when there is no
+    /// mail server.</para>
+    ///
+    /// <para><b>Regenerating retires whatever link was already out there.</b> Only the newest may
+    /// be redeemed, so an old email sitting in an inbox cannot confirm a since-changed address.</para>
+    ///
+    /// <para><b>The link comes back whether or not it was emailed.</b> On a machine with no SMTP —
+    /// which is every development machine — the caller shows it instead, so the flow is walkable.
+    /// A send that throws is swallowed for the same reason: the address is saved and the link
+    /// works, and failing the whole request over a mail server would lose both.</para>
+    /// </remarks>
+    private async Task<(string Link, bool EmailSent)> IssueValidationAsync(
+        BenDataContext db,
+        UserEmail entity,
+        Guid userId,
+        Ben.Data.Common.Interfaces.IEmailService emailService,
+        IConfiguration configuration,
+        CancellationToken ct)
+    {
+        var before = new UserEmail { Id = entity.Id, DateValidationSent = entity.DateValidationSent };
+
+        entity.ValidationToken = GenerateToken();
+        entity.DateValidationSent = DateTime.UtcNow;
+        await db.SaveChangesAsync(ct);
+
+        var appBaseUrl = configuration["AppBaseUrl"]?.TrimEnd('/') ?? string.Empty;
+        var link = $"{appBaseUrl}/validate-email/{entity.ValidationToken}";
+
+        var emailSent = false;
+        if (emailService.IsConfigured)
+        {
+            try
+            {
+                var maskedForSubject = System.Net.WebUtility.HtmlEncode(entity.EmailAddress);
+                var body = $"<p>Confirm that <strong>{maskedForSubject}</strong> belongs to your {_site.Name} account.</p>" +
+                           $"<p><a href=\"{link}\">Confirm this email address</a></p>" +
+                           $"<p>This link expires in {ValidationLifetime.TotalDays:0} days.</p>";
+                await emailService.SendAsync(entity.EmailAddress, "Confirm your email address", body, ct);
+                emailSent = true;
+            }
+            catch { /* best-effort — the link still works */ }
+        }
+
+        _ = TryAuditAsync(_auditLog.LogUpdateAsync(nameof(UserEmail), entity.Id, before, entity, userId, AppSources.WebApi));
+
+        return (link, emailSent);
+    }
+
     private static string GenerateToken()
         => WebEncoders.Base64UrlEncode(RandomNumberGenerator.GetBytes(32));
 
@@ -628,7 +677,14 @@ public sealed class MyContactInfoController : BenControllerBase
 
 public sealed record MyEmailRecord(
     Guid Id, Guid UserEmailTypeId, string EmailAddress, bool IsPrimary, bool IsPublic,
-    bool IsValidated, DateTime? DateValidated, DateTime? DateValidationSent, int SortOrder);
+    bool IsValidated, DateTime? DateValidated, DateTime? DateValidationSent, int SortOrder,
+    /// <summary>
+    /// Set only on the response to ADDING an address, which issues a confirmation link straight
+    /// away. Null everywhere else: a live token has no business in a list response, and the
+    /// client only needs it on a machine with no mail server, where it is shown instead.
+    /// </summary>
+    string? ValidationLink = null,
+    bool ValidationEmailSent = false);
 
 public sealed record UpsertMyEmailRequest(
     Guid UserEmailTypeId, string? EmailAddress, bool IsPrimary, bool IsPublic, int SortOrder = 0);

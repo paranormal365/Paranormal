@@ -550,7 +550,13 @@ public sealed record CreateOrgInvestigationRequest(
 
 public sealed record MyEmailRecord(
     Guid Id, Guid UserEmailTypeId, string EmailAddress, bool IsPrimary, bool IsPublic,
-    bool IsValidated, DateTime? DateValidated, DateTime? DateValidationSent, int SortOrder);
+    bool IsValidated, DateTime? DateValidated, DateTime? DateValidationSent, int SortOrder,
+    /// <summary>
+    /// Set only on the response to ADDING an address, which now issues a confirmation link
+    /// straight away. Null everywhere else — a live token has no business in a list response.
+    /// </summary>
+    string? ValidationLink = null,
+    bool ValidationEmailSent = false);
 
 public sealed record UpsertMyEmailRequest(
     Guid UserEmailTypeId, string? EmailAddress, bool IsPrimary, bool IsPublic, int SortOrder = 0);

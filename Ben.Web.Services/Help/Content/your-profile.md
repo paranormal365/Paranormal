@@ -62,6 +62,10 @@ Mark one email and one phone as **Primary** if you want a single obvious "reach 
 a new one primary clears the old one automatically: it is a slot, not a checkbox you can tick
 twice.
 
+**An email address has to be confirmed before it can be primary**, the same as before it can be
+public — primary is the address you are presented by, and neither should be an address nobody has
+proved they can read. So a new one is added, confirmed, and then promoted.
+
 Addresses are looked up on a map as you type. If the lookup finds the place, the coordinates are
 stored with the address; if it does not, the address still saves — it simply has no pin.
 
@@ -78,12 +82,17 @@ guessing.
 
 ## Confirming an email address
 
-An email address cannot be made public until you have confirmed it. That stops anyone typing a
-stranger's address into their own profile and then receiving that stranger's invitations.
+An email address cannot be made **public** or **primary** until you have confirmed it. That stops
+anyone typing a stranger's address into their own profile and then receiving that stranger's
+invitations — or being presented by an address that is not theirs.
 
-Press **Send confirmation link** next to the address. If the system is set up to send mail, the
-link arrives in that inbox. If it is not — which is normal on a test system — the page shows you
-the link instead so you can copy it.
+**Adding an address sends its confirmation straight away.** You do not have to ask for it: typing
+an address in is the request to confirm it, and the card tells you the link has gone. If the system
+is not set up to send mail — which is normal on a test system — the page shows you the link instead
+so you can copy it.
+
+**Send confirmation link** next to an unconfirmed address gets you another one, a minute after the
+last.
 
 Opening the link shows the address, partly hidden, and a **Confirm** button. You do not have to
 be signed in, and you can open it on any device. The address is only confirmed when you press the

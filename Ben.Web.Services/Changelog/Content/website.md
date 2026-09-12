@@ -18,6 +18,10 @@ day-by-day account of building it would say nothing to anyone using it now.
 
 ## 2026-09-12
 
+- Adding an email address to your profile now confirms it. The link is sent as soon as you save,
+  rather than waiting for you to find a button, and the card tells you what it did.
+- An email address has to be confirmed before it can be made your primary one, which was already
+  true of making it public.
 - The Field Kit's video is easier to find. Choosing what a session records — magnetic field, sound, video, location — now happens before the session opens, not part-way down a running session's screen.
 
 ## 2026-09-11
