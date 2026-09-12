@@ -113,6 +113,12 @@ namespace Ben.Data.Source.Context
         // ── Hosted events (item 235) ────────────────────────────────────────
         public virtual DbSet<HostedEvent> HostedEvents { get; set; }
         public virtual DbSet<HostedEventNight> HostedEventNights { get; set; }
+        public virtual DbSet<HostedEventRoom> HostedEventRooms { get; set; }
+        public virtual DbSet<HostedEventBooking> HostedEventBookings { get; set; }
+        public virtual DbSet<HostedEventBookingNight> HostedEventBookingNights { get; set; }
+        public virtual DbSet<HostedEventBookingGuest> HostedEventBookingGuests { get; set; }
+        public virtual DbSet<HostedEventMenu> HostedEventMenus { get; set; }
+        public virtual DbSet<HostedEventMenuItem> HostedEventMenuItems { get; set; }
         public virtual DbSet<EventCredit> EventCredits { get; set; }
         public virtual DbSet<TourGuide> TourGuides { get; set; }
         public virtual DbSet<TourSocialLink> TourSocialLinks { get; set; }
@@ -781,6 +787,116 @@ namespace Ben.Data.Source.Context
             modelBuilder.Entity<HostedEventNight>()
                 .HasOne(n => n.UpdatedByAppUser).WithMany()
                 .HasForeignKey(n => n.UpdatedByAppUserId).OnDelete(DeleteBehavior.NoAction);
+
+            // ── Bookings: rooms offered, parties, nights, guests (item 235 phase 2) ──
+            // A room may be offered once per event. Offering it twice is always a mistake, and it
+            // would make "is the Blue Room free" a question with two answers.
+            modelBuilder.Entity<HostedEventRoom>()
+                .HasIndex(r => new { r.HostedEventId, r.PlaceRoomId }).IsUnique();
+            modelBuilder.Entity<HostedEventRoom>()
+                .Property(r => r.Note).HasMaxLength(500);
+            modelBuilder.Entity<HostedEventRoom>()
+                .HasOne(r => r.HostedEvent).WithMany(e => e.Rooms)
+                .HasForeignKey(r => r.HostedEventId).OnDelete(DeleteBehavior.Cascade);
+            // NoAction to the room itself: a PlaceRoom is the venue's own description of its
+            // building and outlives the event, so deleting an event must not reach into it.
+            modelBuilder.Entity<HostedEventRoom>()
+                .HasOne(r => r.PlaceRoom).WithMany()
+                .HasForeignKey(r => r.PlaceRoomId).OnDelete(DeleteBehavior.NoAction);
+            modelBuilder.Entity<HostedEventRoom>()
+                .HasOne(r => r.CreatedByAppUser).WithMany()
+                .HasForeignKey(r => r.CreatedByAppUserId).OnDelete(DeleteBehavior.NoAction);
+            modelBuilder.Entity<HostedEventRoom>()
+                .HasOne(r => r.UpdatedByAppUser).WithMany()
+                .HasForeignKey(r => r.UpdatedByAppUserId).OnDelete(DeleteBehavior.NoAction);
+
+            // The grid the venue reads every morning: this event's bookings by state.
+            modelBuilder.Entity<HostedEventBooking>()
+                .HasIndex(b => new { b.HostedEventId, b.Status });
+            // And the guest's own: "what have I asked for".
+            modelBuilder.Entity<HostedEventBooking>()
+                .HasIndex(b => new { b.LeadAppUserId, b.Status });
+            modelBuilder.Entity<HostedEventBooking>()
+                .Property(b => b.Note).HasMaxLength(2000);
+            modelBuilder.Entity<HostedEventBooking>()
+                .Property(b => b.DecisionNote).HasMaxLength(1000);
+            modelBuilder.Entity<HostedEventBooking>()
+                .HasOne(b => b.HostedEvent).WithMany(e => e.Bookings)
+                .HasForeignKey(b => b.HostedEventId).OnDelete(DeleteBehavior.Cascade);
+            modelBuilder.Entity<HostedEventBooking>()
+                .HasOne(b => b.LeadAppUser).WithMany()
+                .HasForeignKey(b => b.LeadAppUserId).OnDelete(DeleteBehavior.NoAction);
+            modelBuilder.Entity<HostedEventBooking>()
+                .HasOne(b => b.DecidedByAppUser).WithMany()
+                .HasForeignKey(b => b.DecidedByAppUserId).OnDelete(DeleteBehavior.NoAction);
+            modelBuilder.Entity<HostedEventBooking>()
+                .HasOne(b => b.CreatedByAppUser).WithMany()
+                .HasForeignKey(b => b.CreatedByAppUserId).OnDelete(DeleteBehavior.NoAction);
+            modelBuilder.Entity<HostedEventBooking>()
+                .HasOne(b => b.UpdatedByAppUser).WithMany()
+                .HasForeignKey(b => b.UpdatedByAppUserId).OnDelete(DeleteBehavior.NoAction);
+
+            // One row per booking per night. A party cannot hold two rooms on one night — that is
+            // two bookings — and the unique index is what stops an edit quietly creating one.
+            modelBuilder.Entity<HostedEventBookingNight>()
+                .HasIndex(n => new { n.HostedEventBookingId, n.HostedEventNightId }).IsUnique();
+            // The capacity question, in the shape it is asked: who is in this room on this night.
+            modelBuilder.Entity<HostedEventBookingNight>()
+                .HasIndex(n => new { n.HostedEventNightId, n.PlaceRoomId });
+            modelBuilder.Entity<HostedEventBookingNight>()
+                .HasOne(n => n.HostedEventBooking).WithMany(b => b.Nights)
+                .HasForeignKey(n => n.HostedEventBookingId).OnDelete(DeleteBehavior.Cascade);
+            // NoAction on both of the others: SQL Server refuses multiple cascade paths into the
+            // same table, and the booking's cascade already clears these rows.
+            modelBuilder.Entity<HostedEventBookingNight>()
+                .HasOne(n => n.HostedEventNight).WithMany()
+                .HasForeignKey(n => n.HostedEventNightId).OnDelete(DeleteBehavior.NoAction);
+            modelBuilder.Entity<HostedEventBookingNight>()
+                .HasOne(n => n.PlaceRoom).WithMany()
+                .HasForeignKey(n => n.PlaceRoomId).OnDelete(DeleteBehavior.NoAction);
+
+            modelBuilder.Entity<HostedEventBookingGuest>()
+                .Property(g => g.DisplayName).HasMaxLength(160).IsRequired();
+            modelBuilder.Entity<HostedEventBookingGuest>()
+                .Property(g => g.DietaryNotes).HasMaxLength(1000);
+            modelBuilder.Entity<HostedEventBookingGuest>()
+                .HasOne(g => g.HostedEventBooking).WithMany(b => b.Guests)
+                .HasForeignKey(g => g.HostedEventBookingId).OnDelete(DeleteBehavior.Cascade);
+            modelBuilder.Entity<HostedEventBookingGuest>()
+                .HasOne(g => g.AppUser).WithMany()
+                .HasForeignKey(g => g.AppUserId).OnDelete(DeleteBehavior.NoAction);
+
+            // ── Menus (item 235 phase 2) ─────────────────────────────────────
+            modelBuilder.Entity<HostedEventMenu>()
+                .Property(m => m.Title).HasMaxLength(120).IsRequired();
+            modelBuilder.Entity<HostedEventMenu>()
+                .Property(m => m.Notes).HasMaxLength(2000);
+            modelBuilder.Entity<HostedEventMenu>()
+                .HasIndex(m => m.HostedEventNightId);
+            modelBuilder.Entity<HostedEventMenu>()
+                .HasOne(m => m.HostedEventNight).WithMany()
+                .HasForeignKey(m => m.HostedEventNightId).OnDelete(DeleteBehavior.Cascade);
+            modelBuilder.Entity<HostedEventMenu>()
+                .HasOne(m => m.CreatedByAppUser).WithMany()
+                .HasForeignKey(m => m.CreatedByAppUserId).OnDelete(DeleteBehavior.NoAction);
+            modelBuilder.Entity<HostedEventMenu>()
+                .HasOne(m => m.UpdatedByAppUser).WithMany()
+                .HasForeignKey(m => m.UpdatedByAppUserId).OnDelete(DeleteBehavior.NoAction);
+
+            modelBuilder.Entity<HostedEventMenuItem>()
+                .Property(i => i.Name).HasMaxLength(200).IsRequired();
+            modelBuilder.Entity<HostedEventMenuItem>()
+                .Property(i => i.Course).HasMaxLength(60);
+            modelBuilder.Entity<HostedEventMenuItem>()
+                .Property(i => i.Description).HasMaxLength(1000);
+            modelBuilder.Entity<HostedEventMenuItem>()
+                .Property(i => i.DietaryTags).HasMaxLength(300);
+            modelBuilder.Entity<HostedEventMenuItem>()
+                .HasOne(i => i.HostedEventMenu).WithMany(m => m.Items)
+                .HasForeignKey(i => i.HostedEventMenuId).OnDelete(DeleteBehavior.Cascade);
+
+            // PlaceRoom gains what a booking needs to know about it (item 235 phase 2).
+            modelBuilder.Entity<PlaceRoom>().Property(e => e.BedNote).HasMaxLength(200);
 
             // ── Event credits (item 235) ────────────────────────────────────
             // One credit, one event. Owned by a group OR a person — Ben said "the member or group"

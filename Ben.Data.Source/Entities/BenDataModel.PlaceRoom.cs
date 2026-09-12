@@ -68,6 +68,35 @@ namespace Ben.Data.Source.Entities
         public int SortOrder { get; set; }
 
         /// <summary>
+        /// How many people sleep here, when the venue has said. Null means nobody has stated it.
+        /// </summary>
+        /// <remarks>
+        /// Null and zero mean different things and both are real: null is "we have not said", and
+        /// zero is "nobody sleeps in the chapel". A booking against a room with no stated capacity
+        /// is allowed and simply cannot be refused for being over it, which is the right way round
+        /// — a venue that has not filled this in should not find its own rooms unbookable.
+        /// </remarks>
+        public int? Capacity { get; set; }
+
+        /// <summary>
+        /// Whether an event may offer this room to guests.
+        /// </summary>
+        /// <remarks>
+        /// Separate from <see cref="IsPublic"/>, which is about the property's public page. A
+        /// staff room can be named, attributed to readings and kept off the page, and still never
+        /// be somewhere a guest sleeps. Defaults to false for the same reason publishing does: a
+        /// room becomes bookable because somebody said so, not because it exists.
+        /// </remarks>
+        public bool IsBookable { get; set; }
+
+        /// <summary>What the beds actually are — "one double, two singles", "four bunks".</summary>
+        /// <remarks>
+        /// A number cannot answer "will the two of us have to share a bed", which is the question
+        /// guests actually ask, so the count and the arrangement are kept apart.
+        /// </remarks>
+        public string? BedNote { get; set; }
+
+        /// <summary>
         /// Retired rooms stay, so anything already attributed to them still reads.
         /// </summary>
         public bool IsActive { get; set; } = true;

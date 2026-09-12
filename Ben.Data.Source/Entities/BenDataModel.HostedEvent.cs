@@ -140,6 +140,17 @@ namespace Ben.Data.Source.Entities
         public int? DayPassCapacity { get; set; }
 
         /// <summary>
+        /// When the venue stops taking requests, in UTC. Null means it never does.
+        /// </summary>
+        /// <remarks>
+        /// A deadline the venue sets so it can cater and staff to a known number. Closing bookings
+        /// does not touch the ones already made: a request still waiting on the day it closes is
+        /// still the venue's to decide, because a guest who asked in time should not be refused by
+        /// a clock while the host was asleep.
+        /// </remarks>
+        public DateTime? BookingsCloseAtUtc { get; set; }
+
+        /// <summary>
         /// How to reach the host and how the money is settled — free text, shown to guests.
         /// </summary>
         /// <remarks>
@@ -199,6 +210,8 @@ namespace Ben.Data.Source.Entities
 
         /// <summary>The nights, or the performances — see <see cref="DatesAreSeparate"/>.</summary>
         public virtual ICollection<HostedEventNight> Nights { get; set; } = [];
+        public virtual ICollection<HostedEventRoom> Rooms { get; set; } = [];
+        public virtual ICollection<HostedEventBooking> Bookings { get; set; } = [];
 
         /// <summary>
         /// The umbrella calendar row, and only ever one.

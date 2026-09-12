@@ -143,6 +143,30 @@ found" when the truth is "we couldn't ask" sends them off to invent one that alr
 and refused the branch until both chapters existed. The lapsed-credit test was proved to
 discriminate by removing the lower bound from `DueAWarningAsync` and watching only that test fail.
 
+**Phase 2.1 done, 2026-09-12** — the booking model, its migration, and the counting rule.
+
+- Six tables and four columns, all additive: `HostedEventRoom` (which rooms this event offers, with
+  a capacity override for the weekend a double sleeps four), `HostedEventBooking` (a party, not a
+  person), `HostedEventBookingNight` (one row per booking per night per room, because capacity is
+  asked per room per night and a range would make it a question about overlapping intervals),
+  `HostedEventBookingGuest` (an account is optional — a guest brings a partner who will never sign
+  up), `HostedEventMenu` + `HostedEventMenuItem`. `PlaceRoom` gains `Capacity?`, `IsBookable` and
+  `BedNote`; `HostedEvent` gains `BookingsCloseAtUtc?`. Migration `20260912141103_HostedEventBookings`,
+  `Up` reviewed operation by operation — four AddColumn, six CreateTable, eighteen CreateIndex, no
+  drops and no alters — and applied to `IsHauntedDb_player` with an explicit `--connection`.
+- **`HostedEventBookingStatus` is a new enum rather than `TourSeatStatus`.** That one has no way to
+  say a guest withdrew, because a walk's sign-up is simply deleted; a booking cannot be, since the
+  room-nights it held and the dietary notes it carried are a record the venue has already catered
+  against. `Cancelled` is a state, kept and dated. The word differs too: a room is *confirmed*, not
+  *reserved*.
+- **`EventCapacity`**, mirroring `TourSeats` for the reason that class exists — four screens asking
+  the same question four ways is four chances to put two parties in one bed. Only `Confirmed` holds
+  anything (DECISION 7); a party of zero still counts as one person; a room with a null capacity
+  cannot be over-filled while a room stating zero sleeps nobody; and editing excludes the booking's
+  own beds, so moving a party from the Blue Room to the Suite is not refused by itself.
+- **27 tests, proved to discriminate**: letting a request hold a bed failed three of them, and
+  counting the event instead of the night failed one. Both were reverted and the suite is green.
+
 **TWO CONFIGURATION FINDINGS, both from phase 0's new enum values and neither yet fixed.** On
 `IsHauntedDb_player`, and almost certainly on production too:
 
