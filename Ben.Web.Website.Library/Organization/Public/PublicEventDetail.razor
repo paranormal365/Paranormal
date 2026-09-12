@@ -756,9 +756,18 @@ else
 
         // Only when this date is a hosted event's umbrella. An ordinary public event has no such
         // thing and the page is unchanged for it — which is the point of the umbrella.
-        _hosted = _event?.HostedEventId is { } hostedId
-            ? await AdminClient.GetPublicHostedEventAsync(hostedId)
-            : null;
+        _hosted = null;
+        if (_event?.HostedEventId is { } hostedId)
+        {
+            var hosted = await AdminClient.GetPublicHostedEventAsync(hostedId);
+            _hosted = hosted.Item;
+
+            // A refusal with a sentence is shown as a sentence, in the page's own error line. The
+            // umbrella event itself loaded, so this is not "Event not found" — the dates could not
+            // be fetched, and the server said why. A 404 with no sentence leaves the page as it
+            // was: an umbrella whose hosted half is gone still has a calendar row worth showing.
+            if (hosted.Failed && hosted.Reason is { } why) _error = why;
+        }
 
         if (_event is not null)
         {
