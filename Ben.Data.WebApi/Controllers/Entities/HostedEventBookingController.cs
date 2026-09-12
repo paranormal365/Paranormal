@@ -37,6 +37,7 @@ namespace Ben.Data.WebApi.Controllers.Entities;
 public sealed class HostedEventBookingController : OrgCmsControllerBase
 {
     private readonly HostedEventCalendarSync _sync;
+    private readonly EventGuestMailer _guestMail;
     private readonly Ben.Data.Common.Interfaces.IEmailService _email;
     private readonly Ben.Data.Common.SiteIdentity _site;
     private readonly ILogger<HostedEventBookingController> _logger;
@@ -48,11 +49,12 @@ public sealed class HostedEventBookingController : OrgCmsControllerBase
         IDbContextFactory<BenDataContext> dbFactory, IMapper mapper,
         IOrganizationSecurityService security,
         HostedEventCalendarSync sync,
+        EventGuestMailer guestMail,
         Ben.Data.Common.Interfaces.IEmailService email,
         Microsoft.Extensions.Options.IOptions<Ben.Data.Common.SiteIdentity> site,
         ILogger<HostedEventBookingController> logger)
         : base(dbFactory, mapper, security)
-    { _sync = sync; _email = email; _site = site.Value; _logger = logger; }
+    { _sync = sync; _guestMail = guestMail; _email = email; _site = site.Value; _logger = logger; }
 
     // ── reading ──────────────────────────────────────────────────────────────
 
@@ -155,7 +157,17 @@ public sealed class HostedEventBookingController : OrgCmsControllerBase
         Touch(booking, userId.Value);
 
         await AttachUmbrellaAttendeeAsync(db, ev, booking, userId.Value, ct);
+
+        // The pass is part of confirming, not a second thing a host has to remember. A guest who
+        // was told yes and given nothing to show at the door has to be looked up by name on the
+        // night, which is the queue this whole feature exists to remove.
+        await EventPasses.EnsureAsync(db, booking, userId.Value, ct);
+
         await db.SaveChangesAsync(ct);
+
+        // After the save, and best effort. A guest who is confirmed but whose letter bounced is a
+        // confirmed guest; a letter sent about a confirmation that then failed to save is a lie.
+        await _guestMail.SendDecisionAsync(db, booking.Id, ct);
 
         return Ok(await OneAsync(db, eventId, booking.Id, ct));
     }
@@ -212,6 +224,13 @@ public sealed class HostedEventBookingController : OrgCmsControllerBase
         var booking = await LoadBookingAsync(db, eventId, bookingId, ct);
         if (booking is null) return NotFound();
 
+        // Read before anything moves: a pass says who and how many and which nights, so a change
+        // to any of those makes the code in somebody's pocket say the wrong thing.
+        var changesWhatThePassSays =
+            (request.PartySize is int wanted
+                && EventCapacity.ClampPartySize(wanted) != booking.PartySize)
+            || request.Nights is not null;
+
         if (request.PartySize is int size) booking.PartySize = EventCapacity.ClampPartySize(size);
         if (request.Note is not null) booking.Note = Trimmed(request.Note);
 
@@ -236,7 +255,18 @@ public sealed class HostedEventBookingController : OrgCmsControllerBase
         // The umbrella row carries the party size, so an edit that changes it has to say so or
         // every count on the site keeps the old number.
         if (EventCapacity.Holds(booking.Status))
+        {
             await AttachUmbrellaAttendeeAsync(db, ev, booking, userId.Value, ct);
+
+            // A pass is never edited, only replaced. The old one is revoked with a reason a door
+            // can read aloud, so a guest showing the code they were sent first is told it was
+            // superseded rather than that it was never real.
+            if (changesWhatThePassSays)
+                await EventPasses.ReissueAsync(db, booking, userId.Value,
+                    "The booking changed. Ask them for the newer pass.", ct);
+            else
+                await EventPasses.EnsureAsync(db, booking, userId.Value, ct);
+        }
 
         await db.SaveChangesAsync(ct);
         return Ok(await OneAsync(db, eventId, booking.Id, ct));
@@ -410,7 +440,219 @@ public sealed class HostedEventBookingController : OrgCmsControllerBase
         return Ok(new HostedEventGuestInviteRecord(email, sent, expires));
     }
 
+    // ── passes and the door (phase 3) ────────────────────────────────────────
+
+    /// <summary>
+    /// Gives a confirmed booking a pass, or hands back the one it already has.
+    /// </summary>
+    /// <remarks>
+    /// Confirming already issues one, so this exists for the host who cannot see a pass and wants
+    /// one — and it is deliberately the same call, not a second kind of pass. Two live codes for
+    /// one party is two codes at a door, one of which is the wrong one.
+    /// </remarks>
+    [HttpPost("{bookingId:guid}/pass")]
+    public async Task<ActionResult<HostedEventPassRecord>> IssuePass(
+        Guid orgId, Guid eventId, Guid bookingId, CancellationToken ct)
+    {
+        var userId = GetCurrentUserId();
+        if (userId is null) return Unauthorized();
+
+        await using var db = await DbFactory.CreateDbContextAsync(ct);
+        if (!await CanDecideAsync(userId.Value, orgId, ct)) return Forbid();
+
+        var booking = await LoadBookingForPassAsync(db, orgId, eventId, bookingId, ct);
+        if (booking is null) return NotFound();
+        if (!EventPasses.MayHaveAPass(booking.Status))
+            return BadRequest("Confirm the booking first. A pass for a booking nobody has agreed to "
+                            + "is a ticket somebody would turn up holding.");
+
+        var pass = await EventPasses.EnsureAsync(db, booking, userId.Value, ct);
+        await db.SaveChangesAsync(ct);
+
+        return Ok(await PassRecordAsync(db, pass.Id, ct));
+    }
+
+    /// <summary>Withdraws a pass, in words the door can read out.</summary>
+    [HttpPost("{bookingId:guid}/pass/revoke")]
+    public async Task<ActionResult<HostedEventPassRecord>> RevokePass(
+        Guid orgId, Guid eventId, Guid bookingId,
+        [FromBody] RevokeHostedEventPassRequest request, CancellationToken ct)
+    {
+        var userId = GetCurrentUserId();
+        if (userId is null) return Unauthorized();
+
+        if (Trimmed(request.Reason) is not { } reason)
+            return BadRequest("Say why. The door reads this out to whoever is holding the pass.");
+
+        await using var db = await DbFactory.CreateDbContextAsync(ct);
+        if (!await CanDecideAsync(userId.Value, orgId, ct)) return Forbid();
+
+        var booking = await LoadBookingForPassAsync(db, orgId, eventId, bookingId, ct);
+        if (booking is null) return NotFound();
+
+        var pass = await EventPasses.LiveAsync(db, bookingId, ct);
+        if (pass is null) return BadRequest("This booking has no live pass to withdraw.");
+
+        EventPasses.Revoke(pass, userId.Value, reason);
+        await db.SaveChangesAsync(ct);
+
+        return Ok(await PassRecordAsync(db, pass.Id, ct));
+    }
+
+    /// <summary>Withdraws the current pass and issues a fresh one in its place.</summary>
+    /// <remarks>
+    /// For the guest who lost the letter, and for the booking that changed in a way an edit did
+    /// not catch. The new pass remembers the one it replaced, so "what happened to the code I was
+    /// sent" always has an answer.
+    /// </remarks>
+    [HttpPost("{bookingId:guid}/pass/reissue")]
+    public async Task<ActionResult<HostedEventPassRecord>> ReissuePass(
+        Guid orgId, Guid eventId, Guid bookingId,
+        [FromBody] RevokeHostedEventPassRequest? request, CancellationToken ct)
+    {
+        var userId = GetCurrentUserId();
+        if (userId is null) return Unauthorized();
+
+        await using var db = await DbFactory.CreateDbContextAsync(ct);
+        if (!await CanDecideAsync(userId.Value, orgId, ct)) return Forbid();
+
+        var booking = await LoadBookingForPassAsync(db, orgId, eventId, bookingId, ct);
+        if (booking is null) return NotFound();
+        if (!EventPasses.MayHaveAPass(booking.Status))
+            return BadRequest("Confirm the booking first.");
+
+        var pass = await EventPasses.ReissueAsync(db, booking, userId.Value,
+            Trimmed(request?.Reason) ?? "The venue issued a replacement pass.", ct);
+        await db.SaveChangesAsync(ct);
+
+        return Ok(await PassRecordAsync(db, pass.Id, ct));
+    }
+
+    /// <summary>
+    /// Scans a code at the door and says who has just walked in.
+    /// </summary>
+    /// <remarks>
+    /// <para><b>Every refusal is a sentence somebody can say aloud</b> to the person in front of
+    /// them. "Invalid" does not say whether to send them to the desk, wait, or turn them away —
+    /// and the person on the door is usually not the person who took the booking.</para>
+    ///
+    /// <para><b>A second scan is not a refusal.</b> A door that turned away the same party walking
+    /// back in from the car park would be worse than one that says when they first arrived and
+    /// lets a human decide. The first arrival is the one kept.</para>
+    ///
+    /// <para>Send <c>checkIn: false</c> to look without admitting anybody, which is what a host
+    /// testing a code before the doors open wants.</para>
+    /// </remarks>
+    [HttpPost("door/scan")]
+    public async Task<ActionResult<HostedEventScanResult>> Scan(
+        Guid orgId, Guid eventId, [FromBody] ScanHostedEventPassRequest request, CancellationToken ct)
+    {
+        var userId = GetCurrentUserId();
+        if (userId is null) return Unauthorized();
+
+        await using var db = await DbFactory.CreateDbContextAsync(ct);
+        if (!await CanDecideAsync(userId.Value, orgId, ct)) return Forbid();
+
+        if (!await db.HostedEvents.AnyAsync(e => e.Id == eventId && e.OrganizationId == orgId, ct))
+            return NotFound();
+
+        var token = request.Token?.Trim();
+        if (string.IsNullOrWhiteSpace(token))
+            return Ok(Refused("Nothing was scanned. Try again, or look them up by name."));
+
+        var pass = await db.HostedEventPasses
+            .Include(p => p.HostedEventBooking).ThenInclude(b => b.LeadAppUser)
+            .Include(p => p.HostedEventBooking).ThenInclude(b => b.Guests)
+            .Include(p => p.HostedEventBooking).ThenInclude(b => b.Nights)
+                .ThenInclude(n => n.HostedEventNight)
+            .Include(p => p.HostedEventBooking).ThenInclude(b => b.Nights).ThenInclude(n => n.PlaceRoom)
+            .Include(p => p.HostedEventBooking).ThenInclude(b => b.HostedEvent)
+            .FirstOrDefaultAsync(p => p.Token == token, ct);
+
+        // Named, so the commonest real case — somebody showing last month's code — gets an answer
+        // that ends the conversation instead of starting an argument.
+        var otherEventName = pass is not null
+                          && pass.HostedEventBooking.HostedEventId != eventId
+            ? pass.HostedEventBooking.HostedEvent?.Name
+            : null;
+
+        if (EventPasses.WhyThisScanIsRefused(pass, eventId, otherEventName) is { } refusal)
+            return Ok(Refused(refusal));
+
+        var booking = pass!.HostedEventBooking;
+        var alreadyIn = pass.CheckedInUtc;
+
+        if (request.CheckIn && pass.CheckedInUtc is null)
+        {
+            pass.CheckedInUtc = DateTime.UtcNow;
+            pass.CheckedInByAppUserId = userId.Value;
+            pass.DateUpdated = DateTime.UtcNow;
+            pass.UpdatedByAppUserId = userId.Value;
+            await db.SaveChangesAsync(ct);
+        }
+
+        return Ok(new HostedEventScanResult(
+            Admitted: true,
+            Refusal: null,
+            HostedEventBookingId: booking.Id,
+            LeadName: booking.LeadAppUser?.DisplayName ?? "Somebody",
+            PartySize: EventCapacity.ClampPartySize(booking.PartySize),
+            Kind: booking.Kind,
+            Nights: booking.Nights
+                .OrderBy(n => n.HostedEventNight.Date)
+                .Select(n => new HostedEventBookingNightRecord(
+                    n.HostedEventNightId, n.HostedEventNight.Date, n.PlaceRoomId, n.PlaceRoom.Name))
+                .ToList(),
+            GuestNames: booking.Guests.OrderBy(g => g.SortOrder).Select(g => g.DisplayName).ToList(),
+            AlreadyCheckedInUtc: alreadyIn));
+
+        static HostedEventScanResult Refused(string why)
+            => new(false, why, null, null, null, null, null, null, null);
+    }
+
     // ── the work ─────────────────────────────────────────────────────────────
+
+    private static Task<HostedEventBooking?> LoadBookingForPassAsync(
+        BenDataContext db, Guid orgId, Guid eventId, Guid bookingId, CancellationToken ct)
+        => db.HostedEventBookings
+            .FirstOrDefaultAsync(b => b.Id == bookingId
+                                   && b.HostedEventId == eventId
+                                   && b.HostedEvent.OrganizationId == orgId, ct);
+
+    /// <summary>One pass, as every screen reads it.</summary>
+    internal static async Task<HostedEventPassRecord> PassRecordAsync(
+        BenDataContext db, Guid passId, CancellationToken ct)
+    {
+        var pass = await db.HostedEventPasses.AsNoTracking()
+            .Include(p => p.CheckedInByAppUser)
+            .FirstAsync(p => p.Id == passId, ct);
+
+        return ToRecord(pass);
+    }
+
+    /// <summary>
+    /// The picture's address, built the same way everywhere.
+    /// </summary>
+    /// <remarks>
+    /// Keyed by the TOKEN rather than the pass id, so the image URL a guest's browser caches stops
+    /// working the moment the pass is replaced. A URL keyed by the pass id would go on serving the
+    /// old code from a cache after a reissue, which is the one failure a reissue exists to prevent.
+    /// </remarks>
+    internal static string PassImageUrl(string token) => $"/api/public/event-passes/{token}.png";
+
+    internal static HostedEventPassRecord ToRecord(HostedEventPass pass)
+        => new(
+            pass.Id,
+            pass.HostedEventBookingId,
+            pass.Token,
+            PassImageUrl(pass.Token),
+            pass.IssuedUtc,
+            pass.RevokedUtc,
+            pass.RevokedReason,
+            pass.EmailedUtc,
+            pass.CheckedInUtc,
+            pass.CheckedInByAppUser?.DisplayName,
+            pass.ReissuedFromHostedEventPassId is not null);
 
     /// <summary>
     /// Sends the invitation, and reports honestly whether it went.
@@ -482,7 +724,20 @@ public sealed class HostedEventBookingController : OrgCmsControllerBase
         // existing count stop including them, which is the whole reason that row exists.
         await ReleaseUmbrellaAttendeeAsync(db, booking, ct);
 
+        // And the pass goes with it, in the same save. A guest holding a live code for a booking
+        // that was cancelled is a guest a door waves through.
+        await EventPasses.RevokeAllAsync(db, booking.Id, userId.Value,
+            status == HostedEventBookingStatus.TurnedDown
+                ? "The venue could not take this booking."
+                : "The venue released this booking.", ct);
+
         await db.SaveChangesAsync(ct);
+
+        // A guest who is not coming must be told exactly as reliably as one who is, which is why
+        // this is the same call the confirmation makes rather than a second path that could quietly
+        // stop being used.
+        await _guestMail.SendDecisionAsync(db, booking.Id, ct);
+
         return Ok(await OneAsync(db, eventId, booking.Id, ct));
     }
 

@@ -121,6 +121,20 @@ public static class NotificationRows
                 $"Your seat has been decided · {NotificationBadge.DescribeAge(mine.OldestUnreadUtc)}",
                 "calendar", "/events", mine));
 
+        // ── Hosted-event bookings (item 235) ─────────────────────────────────
+        // Their own rows rather than folded into the tour ones. A row reading "sign-ups waiting"
+        // that lands on a walk's screen when what is waiting is a hotel weekend sends somebody to
+        // the wrong page, and the two are decided from different screens.
+        if (s.EventBookingsToDecide is { Count: > 0 } bookings)
+            rows.Add(new("Bookings waiting on you",
+                $"People asking for a place at your events · oldest {NotificationBadge.DescribeAge(bookings.OldestUnreadUtc)}",
+                "home", "/organizations", bookings));
+
+        if (s.MyEventBookings is { Count: > 0 } myBookings)
+            rows.Add(new("A venue answered you",
+                $"Your booking has been decided · {NotificationBadge.DescribeAge(myBookings.OldestUnreadUtc)}",
+                "key", "/events", myBookings));
+
         // Last: being named on a public post waits on nothing. It still gets a row, because the
         // total counts it and a number that explains everything except one item reads as wrong.
         if (s.FeedMentions.Count > 0)

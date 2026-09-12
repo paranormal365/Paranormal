@@ -260,7 +260,11 @@ public sealed class NotificationSummaryController : BenControllerBase
                     .Where(a => a.SeatStatus == TourSeatStatus.Requested
                              && myAdminOrgIds.Contains(a.OrgCalendarEvent.OrganizationId)
                              // A night already past is not a decision anybody still needs to make.
-                             && a.OrgCalendarEvent.StartDateTime > DateTime.UtcNow)
+                             && a.OrgCalendarEvent.StartDateTime > DateTime.UtcNow
+                             // Item 235: an umbrella row's requested seats belong to a hosted
+                             // event's own bucket below. Counting them here would put a hotel
+                             // weekend behind a bell row that lands on a walk's screen.
+                             && a.OrgCalendarEvent.HostedEventId == null)
                     .Select(a => (DateTime?)a.DateCreated),
                 ct);
 
@@ -272,9 +276,37 @@ public sealed class NotificationSummaryController : BenControllerBase
                          && a.SeatStatus != null
                          && a.SeatStatus != TourSeatStatus.Requested
                          && a.GuestAcknowledgedUtc == null
-                         && a.OrgCalendarEvent.StartDateTime > DateTime.UtcNow)
+                         && a.OrgCalendarEvent.StartDateTime > DateTime.UtcNow
+                         && a.OrgCalendarEvent.HostedEventId == null)
                 // Dated by the DECISION, so "waiting since" means since somebody answered them.
                 .Select(a => a.SeatDecidedUtc),
+            ct);
+
+        // ── Hosted events, the same two sides (item 235 phase 2.3) ───────────
+        // Read off the BOOKING rather than the umbrella attendee row, because the booking is where
+        // a hosted event's truth lives: a request has no attendee row at all until somebody
+        // confirms it, so counting attendees would show a venue an empty queue.
+        var eventBookingsToDecide = myAdminOrgIds.Count == 0
+            ? NotificationBucket.Empty
+            : await BucketAsync(
+                db.HostedEventBookings.AsNoTracking()
+                    .Where(b => b.Status == HostedEventBookingStatus.Requested
+                             && myAdminOrgIds.Contains(b.HostedEvent.OrganizationId)
+                             // A weekend already over is not a decision anybody still needs to make.
+                             && b.HostedEvent.EndsOn >= DateTime.UtcNow.Date)
+                    .Select(b => (DateTime?)b.DateCreated),
+                ct);
+
+        // A guest whose booking was answered, and who has not said they read it. Includes a
+        // cancellation they never asked for, which is the one they most need to see.
+        var myEventBookings = await BucketAsync(
+            db.HostedEventBookings.AsNoTracking()
+                .Where(b => b.LeadAppUserId == userId
+                         && b.Status != HostedEventBookingStatus.Requested
+                         && b.GuestAcknowledgedUtc == null
+                         && b.HostedEvent.EndsOn >= DateTime.UtcNow.Date)
+                // Dated by the DECISION, so "waiting since" means since somebody answered them.
+                .Select(b => b.DecidedUtc),
             ct);
 
         return Ok(new NotificationSummaryResponse(
@@ -284,7 +316,9 @@ public sealed class NotificationSummaryController : BenControllerBase
             CaseMessagesAsOrgMemberByCase:
                 [.. caseMessagesAsOrgByCase.OrderBy(b => b.OrganizationName).ThenBy(b => b.CaseTitle)],
             TourSeatsToDecide: seatsToDecide,
-            MyTourSeats: mySeats));
+            MyTourSeats: mySeats,
+            EventBookingsToDecide: eventBookingsToDecide,
+            MyEventBookings: myEventBookings));
     }
 
     /// <summary>The aggregate a breakdown folds to — the bell's total stays the sum of its rows.</summary>

@@ -20,6 +20,13 @@ belongs there; this is for the part underneath.
 
 ## 2026-09-12
 
+- A confirmed booking carries a pass: an opaque code that admits one party to one event, revocable
+  at any time, replaced automatically whenever the booking changes. It is served as a picture so a
+  letter, a printed page and a phone all show the same thing.
+- Scanning a pass takes a signed-in member of the venue who may decide bookings, and answers with
+  the party rather than with a yes or no alone.
+- Confirming, turning down or releasing a booking writes to the guest, with the pass and one
+  calendar entry per booked night. Mail failures never undo the decision.
 - An event's menus and its dietary sheet can be read and written. Menus reach guests whose place a
   venue has confirmed; dietary notes are health information and reach only staff who can decide a
   booking, never a public page or an ordinary member.

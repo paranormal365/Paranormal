@@ -285,11 +285,97 @@ discriminate by removing the lower bound from `DueAWarningAsync` and watching on
   `organization-administration.md` (inviting by email, menus, the dietary sheet), website and
   service changelog entries, `ProjectNotes/DailyLogs/2026-09-12.md`. Product PDF rebuilt.
 
-**Ben's ask, 2026-09-12, taken next:** *"We should probably send a confirmation e-mail or offer it.
-Generate a QR code for the confirmation the event organizer can scan to check them in when they
-arrive so check in is smoother."* That is phase 2.3 (mail) and phase 3 (QR passes) as already
-planned, brought forward to run back to back — 2.3's `EventGuestMailer` first, because a pass with
-no letter to travel in reaches nobody.
+**Phase 2.3 + phase 3 done together, 2026-09-12** — the confirmation letter and the QR pass. Run
+back to back at Ben's ask, because a pass with no letter to travel in reaches nobody.
+
+- **`EventGuestMailer` sits beside `TourGuestMailer` rather than inside it.** A walk's welcome talks
+  about a meeting point, a guide's face and how long you are on your feet; a weekend at a hotel has
+  a room, a set of nights and a dinner. One template bent around both is wrong for each.
+- **One method sends all three answers** — confirmed, turned down, released. Two methods is how the
+  unhappy letter quietly stops being sent, and a guest who is not coming has to be told exactly as
+  reliably as one who is.
+- **`IcsBuilder` learned to write several entries.** A weekend is one calendar file with one VEVENT
+  per booked night, each naming the room and keeping its own uid — sharing one uid would make every
+  night overwrite the last and leave a three-night stay as a single entry. The single-event
+  overload is now `Build([e])` and a test asserts the tour's file is byte-identical, because a
+  changed shape would add a duplicate walk to a guest's diary.
+- **The pass is drawn INTO the letter, not linked from it.** Most mail clients block remote pictures
+  until somebody clicks, and a guest at a door whose pass never loaded has no pass. The link is
+  there too, for the client that strips data URIs instead.
+- **`QRCoder` 1.6.0, `PngByteQRCode`** — writes the PNG itself, no imaging library, so it behaves
+  the same on a Mac and on a Linux server, which is not true of anything built on `System.Drawing`.
+  Error correction M: a printed pass gets folded and a screen one gets thumbprints, and the level
+  above makes the picture denser for a camera in bad light. The token is hex rather than base64url
+  because a QR stores upper-case alphanumerics in a denser mode — the same secret in fewer squares.
+- **One pass admits the party.** Three of the four people arriving together may never have had an
+  email address here, and four people at a door each hunting for their own code is worse than one
+  person holding one. The scan answers with the party size so the door counts heads.
+- **A pass is never edited, only replaced.** An edit that changes the party size or the nights
+  revokes the old pass and issues a new one carrying `ReissuedFromHostedEventPassId`. That is what
+  makes a revoked pass a fact rather than a gap: a door shown an old code is told it was
+  *replaced*, which is a different sentence from being told it was never real. Revoked rows are
+  kept for exactly that reason.
+- **The token carries nothing** — not the booking, not the event, not a name. It is looked up
+  rather than decoded, so one cannot be forged by construction, and somebody who photographs a
+  printed pass over a shoulder learns a random string.
+- **The image endpoint is anonymous, and that is the right call.** It is what an `<img>` in a
+  letter points at and what a printed page fetches, neither of which carries a session. Anybody who
+  can reach the URL already knows the token, so serving the picture adds nothing they did not have.
+  The token being in the path does put it in access logs — the same trade every confirmation link
+  on this site already makes, and the reason the token carries nothing and can be withdrawn. Served
+  `private, no-store`, because a proxy holding one party's ticket to hand to the next request is
+  the one caching mistake that matters here. A revoked pass still draws: a picture that vanished
+  would look like a broken site rather than a withdrawn ticket, and the door's answer is the place
+  that says so.
+- **Every door refusal is a sentence somebody can read aloud.** Last month's code names the other
+  event, because that is the commonest real case and naming it ends the conversation where
+  "invalid" starts an argument. A withdrawn pass reads out the venue's own reason, which is why the
+  reason is required rather than optional.
+- **A second scan is not a refusal.** The door is told when they first arrived and left to decide;
+  turning away the same party walking back from the car park would be a worse door. The first
+  arrival is the one kept, and it lives on the pass rather than the booking so a reissue does not
+  inherit it.
+- **Two new bell rows, `EventBookingsToDecide` and `MyEventBookings`**, read off the BOOKING rather
+  than the umbrella attendee — a request has no attendee row until somebody confirms it, so
+  counting attendees would show a venue an empty queue. **The tour buckets now exclude umbrella
+  rows**, which they did not before: a hosted booking was being counted as a tour seat, so the bell
+  said "a tour answered you" and landed on a walk's screen.
+- **Migration `20260912160940_EventPasses`** — one CreateTable, no drops in `Up`, `Down` drops only
+  what `Up` made. Applied to `IsHauntedDb_player` with an explicit `--connection`.
+- **26 new tests**, one proved to discriminate by linking the pass instead of inlining it and
+  watching only that test fail. Suite: .NET 8,400 pass, 0 fail, 9 skipped.
+
+**BEN'S ASK, 2026-09-12, PLANNED AND NOT YET DONE — seed, walk, shoot, reprint.** In his words:
+*"You might want to seed records for these sections in the DEV database IsHauntedDb_player and get
+screen shots and helping data from the live test site and can use in help docs and pdfs also, you
+might want to refresh some of the PDFs where we have worked on them and they are different now."*
+
+This becomes **phase 2.8**, run after 2.4 builds the pages, because there is nothing to photograph
+until there is a screen. It is the same shape as item 165's doc-refresh pass and item 214's App
+Store set, so it follows their machinery rather than inventing any.
+
+- **2.8a — Seed a real weekend on `IsHauntedDb_player`.** The Thomas House Hotel as a
+  HauntedProperty with six described rooms of honest capacities, a three-night Halloween Lock-In
+  published against a granted credit, day passes, half a dozen bookings spread across Requested,
+  Confirmed and TurnedDown, a party of four in a room that sleeps two so the refusal can be
+  photographed, named guests with dietary notes that include two different wordings of the same
+  requirement, breakfast/lunch/dinner/snacks menus on every night, and one guest invited by email
+  who has not clicked yet. A seeder in the existing seed project, **never a hand-typed row**, so it
+  can be re-run after a schema change. Item 148's rule holds: real-shaped data, plainly marked as
+  simulated.
+- **2.8b — Walk it on the running site as three people** — the venue's owner, an ordinary member
+  who must NOT see dietary notes, and a guest. That walk is also the phase's verification, so it
+  is not extra work.
+- **2.8c — Capture.** `HelpMediaCapture` in the Playwright project already takes the dark-mode
+  help screenshots; add the hosted-event screens to it. `InvestorMediaCapture` for anything the
+  investor overview should carry.
+- **2.8d — Reprint every document, not only the one that changed.** Product documentation, the six
+  persona PDFs, both iOS PDFs, the investor overview and the tour-business offer.
+
+**Eight PDFs were already reprinted on 2026-09-12** against the help text as it stands, because
+that half needed no new screen: the six persona documents and both iOS documents were stale from
+the Field Kit, changelog, verified-tick and booking work. The product documentation is rebuilt with
+every phase and was already current.
 
 **TWO CONFIGURATION FINDINGS, both from phase 0's new enum values and neither yet fixed.** On
 `IsHauntedDb_player`, and almost certainly on production too:

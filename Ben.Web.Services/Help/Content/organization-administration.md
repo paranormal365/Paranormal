@@ -927,6 +927,59 @@ Menus are shown to guests whose place you have **confirmed**, not to the public.
 what somebody has booked, and you may not want the hotel down the road costing your catering before
 you have sold the weekend. A guest still waiting is told you publish it once their place is agreed.
 
+### The confirmation email and the pass
+
+**Confirming a booking sends the guest a letter, and the letter carries their pass.** You do not
+have to remember to send anything — a guest who was told yes and given nothing to show has to be
+looked up by name at the door, which is the queue this whole thing exists to remove.
+
+The letter says which nights they have and which room they are in, repeats anything you typed in
+the decision note, and carries a **QR code**. Turning a booking down or releasing one sends a
+letter too, using the same machinery, so the guest who is *not* coming is told exactly as reliably
+as the one who is. A refusal carries your reason, because a refusal with none reads as arbitrary
+and the commonest reason is one the guest can act on.
+
+Attached to a confirmation is a **calendar file with one entry per night**, each naming the room.
+A single entry across the whole weekend would sit there as one block and tell them nothing about
+where they are sleeping on Saturday.
+
+If your site has no mail configured, nothing is sent and the decision still stands. A guest who is
+confirmed but whose letter bounced is a confirmed guest.
+
+#### The pass, and the door
+
+**One pass admits the whole party.** Not one each: three of the four people arriving together may
+never have had an email address here, and four people at a door each hunting for their own code is
+worse than one person holding one.
+
+Scan it at the door and you are told who they are, how many, which nights and which room. If the
+code will not scan — a flat battery, a camera that will not focus in the dark — everything the scan
+would have told you is also written on the guest's own pass screen in words, so you can let them in
+anyway.
+
+**Every refusal at the door is a sentence you can read out.** Not "invalid", which does not tell
+you whether to send somebody to the desk, wait, or turn them away:
+
+- a code from another event names that event, because somebody showing last month's is the
+  commonest case and naming it ends the conversation;
+- a withdrawn pass reads out the reason you gave when you withdrew it;
+- a booking not yet confirmed says so, rather than pretending the code is fake.
+
+**Scanning the same party twice is not refused.** You are told when they first arrived and left to
+decide — a door that turned people away for walking back in from the car park would be a worse
+door.
+
+#### Replacing a pass
+
+**A pass is never edited, only replaced.** Change a booking's party size or its nights and the old
+pass is withdrawn automatically and a new one issued, so the code in somebody's pocket can never
+quietly say the wrong thing. **Reissue** does the same on purpose, for the guest who lost the
+letter. **Revoke** withdraws one without replacing it, and asks you for a reason, because that
+reason is what the door reads out.
+
+A withdrawn pass is kept rather than deleted. Somebody showing an old code is told it was replaced,
+which is a different sentence from being told it was never real.
+
 ### The dietary sheet
 
 **Dietary tally** turns every guest's note into the sheet the kitchen actually works from.

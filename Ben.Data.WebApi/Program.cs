@@ -312,6 +312,7 @@ builder.Services.AddScoped<Ben.Data.WebApi.Services.Scheduling.IScheduledJob,
                            Ben.Data.WebApi.Services.Scheduling.EventCreditExpiryJob>();
 // Item 233: the mail a tour guest gets, with the walk attached as a calendar file.
 builder.Services.AddScoped<Ben.Data.WebApi.Services.Tours.TourGuestMailer>();
+builder.Services.AddScoped<Ben.Data.WebApi.Services.Events.EventGuestMailer>();
 // Item 233: how long a file stays, for the plan it arrived under.
 builder.Services.AddScoped<Ben.Data.WebApi.Services.Media.MediaRetentionPolicy>();
 // Item 233: warns people what is about to go, then takes it.

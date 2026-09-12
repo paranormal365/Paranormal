@@ -100,6 +100,63 @@ public sealed class PublicHostedEventBookingController : BenControllerBase
         return Ok(await Entities.HostedEventMenuController.MenusAsync(db, eventId, ct));
     }
 
+    /// <summary>
+    /// The guest's own pass, with enough words on it to get in without a scanner.
+    /// </summary>
+    /// <remarks>
+    /// <para>The human summary travels with the code deliberately. A door with a flat battery, or
+    /// a camera that will not focus in the dark, still has to be able to see who this is and how
+    /// many they are — a pass only a machine can read is a pass that fails on the one evening it
+    /// matters.</para>
+    ///
+    /// <para>A guest whose place is not confirmed has no pass and is told what to wait for, rather
+    /// than being shown an empty box.</para>
+    /// </remarks>
+    [HttpGet("{eventId:guid}/my-booking/pass")]
+    public async Task<ActionResult<MyHostedEventPassRecord>> GetMyPass(
+        Guid eventId, CancellationToken ct)
+    {
+        var userId = GetCurrentUserId();
+        if (userId == Guid.Empty) return Unauthorized();
+
+        await using var db = await _db.CreateDbContextAsync(ct);
+
+        var booking = await db.HostedEventBookings.AsNoTracking()
+            .Include(b => b.HostedEvent).ThenInclude(e => e.Place)
+            .Include(b => b.LeadAppUser)
+            .Include(b => b.Nights).ThenInclude(n => n.HostedEventNight)
+            .Include(b => b.Nights).ThenInclude(n => n.PlaceRoom)
+            .FirstOrDefaultAsync(b => b.HostedEventId == eventId && b.LeadAppUserId == userId
+                                   && b.Status != HostedEventBookingStatus.Cancelled, ct);
+        if (booking is null) return NotFound();
+
+        if (!EventPasses.MayHaveAPass(booking.Status))
+            return StatusCode(StatusCodes.Status403Forbidden,
+                "Your pass is issued when the venue confirms your place.");
+
+        var pass = await db.HostedEventPasses.AsNoTracking()
+            .Include(p => p.CheckedInByAppUser)
+            .Where(p => p.HostedEventBookingId == booking.Id && p.RevokedUtc == null)
+            .OrderByDescending(p => p.IssuedUtc)
+            .FirstOrDefaultAsync(ct);
+        if (pass is null)
+            return StatusCode(StatusCodes.Status403Forbidden,
+                "The venue hasn't issued your pass yet. Ask them for one.");
+
+        return Ok(new MyHostedEventPassRecord(
+            Entities.HostedEventBookingController.ToRecord(pass),
+            booking.HostedEvent?.Name ?? "An event",
+            booking.HostedEvent?.Place?.Name,
+            booking.LeadAppUser?.DisplayName ?? "You",
+            booking.PartySize,
+            booking.Kind,
+            booking.Nights
+                .OrderBy(n => n.HostedEventNight.Date)
+                .Select(n => new HostedEventBookingNightRecord(
+                    n.HostedEventNightId, n.HostedEventNight.Date, n.PlaceRoomId, n.PlaceRoom.Name))
+                .ToList()));
+    }
+
     // ── asking ───────────────────────────────────────────────────────────────
 
     /// <summary>

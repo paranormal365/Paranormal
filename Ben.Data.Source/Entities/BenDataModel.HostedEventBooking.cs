@@ -136,6 +136,15 @@ namespace Ben.Data.Source.Entities
 
         public virtual ICollection<HostedEventBookingNight> Nights { get; set; } = [];
         public virtual ICollection<HostedEventBookingGuest> Guests { get; set; } = [];
+
+        /// <summary>
+        /// Every pass ever issued against this booking, revoked ones included.
+        /// </summary>
+        /// <remarks>
+        /// The revoked ones are kept on purpose. A door shown an old code must be told it was
+        /// replaced, which is a different sentence from being told it was never real.
+        /// </remarks>
+        public virtual ICollection<HostedEventPass> Passes { get; set; } = [];
     }
 
     /// <summary>

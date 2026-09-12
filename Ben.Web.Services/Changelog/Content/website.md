@@ -33,6 +33,16 @@ day-by-day account of building it would say nothing to anyone using it now.
 - Bookings can be changed after they are confirmed, by the venue or by the guest. A guest asks the
   venue to release a confirmed room rather than freeing it themselves, because the venue has
   catered and staffed against it.
+- Confirming a booking now emails the guest, with a QR pass they show at the door and a calendar
+  entry for each night they have booked. One code admits the whole party. Turning a booking down or
+  releasing one writes too, and carries the venue's own reason.
+- A venue can scan a pass at the door and be told who has arrived, how many, and which room —
+  or be told in plain words why a code does not admit anybody, which is more use than "invalid".
+- Changing a confirmed booking replaces its pass automatically, so a code in somebody's pocket can
+  never quietly say the wrong thing. A pass can also be reissued for a guest who lost the letter,
+  or withdrawn with a reason the door reads out.
+- The bell now has its own rows for event bookings, separate from tour sign-ups, so a notification
+  lands on the screen the decision is actually made from.
 - An event can publish what it is serving. One card holds every sitting of the weekend — breakfast,
   lunch, dinner, a late supper, snacks — with the dishes under each and what is in them. Guests
   whose place has been confirmed can read it.

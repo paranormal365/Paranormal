@@ -119,6 +119,7 @@ namespace Ben.Data.Source.Context
         public virtual DbSet<HostedEventBookingGuest> HostedEventBookingGuests { get; set; }
         public virtual DbSet<HostedEventMenu> HostedEventMenus { get; set; }
         public virtual DbSet<HostedEventMenuItem> HostedEventMenuItems { get; set; }
+        public virtual DbSet<HostedEventPass> HostedEventPasses { get; set; }
         public virtual DbSet<EventCredit> EventCredits { get; set; }
         public virtual DbSet<TourGuide> TourGuides { get; set; }
         public virtual DbSet<TourSocialLink> TourSocialLinks { get; set; }
@@ -896,6 +897,32 @@ namespace Ben.Data.Source.Context
             modelBuilder.Entity<HostedEventMenuItem>()
                 .HasOne(i => i.HostedEventMenu).WithMany(m => m.Items)
                 .HasForeignKey(i => i.HostedEventMenuId).OnDelete(DeleteBehavior.Cascade);
+
+            // ── The pass a door scans (item 235 phase 3) ────────────────────
+            // The token is the whole of the secret and it is looked up rather than decoded, so the
+            // unique index is not an optimisation — it is what makes "this code is that party"
+            // a fact the database enforces rather than a hope.
+            modelBuilder.Entity<HostedEventPass>()
+                .Property(p => p.Token).HasMaxLength(128).IsRequired();
+            modelBuilder.Entity<HostedEventPass>()
+                .HasIndex(p => p.Token).IsUnique();
+            // "Show me this booking's passes, newest first" — the organiser's row, and the guest's.
+            modelBuilder.Entity<HostedEventPass>()
+                .HasIndex(p => new { p.HostedEventBookingId, p.IssuedUtc });
+            modelBuilder.Entity<HostedEventPass>()
+                .Property(p => p.RevokedReason).HasMaxLength(500);
+            modelBuilder.Entity<HostedEventPass>()
+                .HasOne(p => p.HostedEventBooking).WithMany(b => b.Passes)
+                .HasForeignKey(p => p.HostedEventBookingId).OnDelete(DeleteBehavior.Cascade);
+            modelBuilder.Entity<HostedEventPass>()
+                .HasOne(p => p.CreatedByAppUser).WithMany()
+                .HasForeignKey(p => p.CreatedByAppUserId).OnDelete(DeleteBehavior.NoAction);
+            modelBuilder.Entity<HostedEventPass>()
+                .HasOne(p => p.UpdatedByAppUser).WithMany()
+                .HasForeignKey(p => p.UpdatedByAppUserId).OnDelete(DeleteBehavior.NoAction);
+            modelBuilder.Entity<HostedEventPass>()
+                .HasOne(p => p.CheckedInByAppUser).WithMany()
+                .HasForeignKey(p => p.CheckedInByAppUserId).OnDelete(DeleteBehavior.NoAction);
 
             // PlaceRoom gains what a booking needs to know about it (item 235 phase 2).
             modelBuilder.Entity<PlaceRoom>().Property(e => e.BedNote).HasMaxLength(200);
