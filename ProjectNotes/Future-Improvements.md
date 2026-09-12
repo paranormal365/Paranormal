@@ -12424,3 +12424,45 @@ fails at once, a claimed row is not claimed twice, running twice sends once),
 `EveryMailerGoesThroughTheOutboxTests` (no class outside `SmtpEmailService`, the sender job and the
 diagnostics controller may take `SmtpEmailService` directly).
 
+
+## 240. Two branches parked with real work on them (HOUSEKEEPING — come back to both)
+
+Found on 2026-09-12 while clearing stale worktrees. Both worktrees are gone; **both branches are
+kept and pushed**, and neither is merged. Written down because a branch nobody has a note about is
+a branch nobody remembers, and one of these was only ever in a working directory.
+
+### A. `feature/equipment-make-category-filter` — Ben: *"save the equipment one and make a note to come back to it later"*
+
+Tip `62ce47e6`, pushed. **275 lines that had never been committed at all** — they were sitting
+uncommitted in a worktree and would have gone with it. Committed as an explicit WIP, and **never
+built or tested in that state**, so the first thing to do on picking it up is build it.
+
+What it does, from the diff:
+
+- **Every make stays listed in the picker, even when it has nothing in the chosen category.**
+  Dropping the empty ones hides exactly the make somebody needs the first time anybody registers,
+  say, a FLIR audio recorder — and typing "FLIR" back in is then refused as a probable duplicate,
+  which is a dead end with no way out of it. Labelling is the honest half: the choice stays, it
+  just stops looking like a promise of models underneath it.
+- Loading states on the make and model selects, so a select is never enabled while empty.
+- The empty case says **which** of the three things it is, because broken, still loading, and
+  genuinely nothing here otherwise render identically — and points at the input below that fixes it.
+- Files: `Equipment/MyEquipmentItemEditor.razor`, `Organization/Equipment/OrgEquipmentEditor.razor`,
+  `Help/Content/your-equipment.md`, and 66 lines of `Ben.Web.Playwright/Tests/EquipmentTests.cs`.
+
+**To finish:** build it, run `EquipmentTests` through `scripts/run-e2e.sh --filter EquipmentTests`,
+check the help wording against the shipped screens, then merge. It is self-contained and touches
+nothing item 235 touches.
+
+### B. `claude/xenodochial-pare-b58e81` — the dead stylesheet
+
+Tip `faf4046a`, one commit ahead of master: *"The stylesheet nothing ever loaded, and the three
+things it was hiding"*. Moves 54 lines out of `Ben.Web.Website/wwwroot/css/app.css` into scoped
+component CSS for `FeedPostCard`, `FeedText` and `MailRow` — rules that were never loaded, and so
+three components were rendering without styling somebody had written for them.
+
+**One thing to fix before merging:** it adds `README-dead-app-css-scoped.md` and
+`README-remaining-work-nine-phases.md` at the repository ROOT, which is no longer where those live
+— all 118 of them moved to `ProjectNotes/FeatureHistory/` on 2026-09-12. `git mv` both as part of
+the merge, or the root fills up again.
+
