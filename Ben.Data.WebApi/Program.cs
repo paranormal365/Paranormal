@@ -306,6 +306,10 @@ builder.Services.AddScoped<Ben.Data.WebApi.Services.Billing.TourAddOnService>();
 // cost them".
 builder.Services.AddScoped<Ben.Data.WebApi.Services.Events.HostedEventCalendarSync>();
 builder.Services.AddScoped<Ben.Data.WebApi.Services.Events.HostedEventEntitlement>();
+// Item 235 phase 1B: warns a credit's holder thirty days before it lapses. It only speaks — an
+// unspent credit past its date is gone by the clock, so there is no state for a job to get wrong.
+builder.Services.AddScoped<Ben.Data.WebApi.Services.Scheduling.IScheduledJob,
+                           Ben.Data.WebApi.Services.Scheduling.EventCreditExpiryJob>();
 // Item 233: the mail a tour guest gets, with the walk attached as a calendar file.
 builder.Services.AddScoped<Ben.Data.WebApi.Services.Tours.TourGuestMailer>();
 // Item 233: how long a file stays, for the plan it arrived under.

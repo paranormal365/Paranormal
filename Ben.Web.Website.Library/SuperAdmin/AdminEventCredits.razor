@@ -1,0 +1,310 @@
+@page "/admin/event-credits"
+
+@inject IBenAdminClient AdminClient
+@inject IBenUserState UserState
+@inject NavigationManager NavManager
+@inject BenToastService Toasts
+@using Ben.Service.Models.Admin
+@using Ben.Web.Services.WebApi
+@using Ben.Web.Website.Library.Kit
+@using Ben.Web.Website.Library.Manage.Icon
+@using Ben.Web.Website.Library.Help
+
+<PageTitle>SuperAdmin — Event Credits</PageTitle>
+
+@*
+    Item 235, phase 1B.4. Granting and refunding are both a person's decision rather than a rule,
+    and both live here rather than on a group's own page — nobody grants or refunds themselves.
+
+    Without this screen, EventCredit.RefundedUtc would be a column only SQL could write: a rule the
+    code keeps and no screen can reach, which is the shape of a half-built feature rather than a
+    decision. The grant is the other half of that: until it existed, the only way a credit could
+    reach a group was a live card payment, so support had nothing to offer somebody whose payment
+    did not land — and this screen's own refund could never be exercised, because there was never a
+    credit to refund.
+*@
+
+<div class="container-fluid px-3">
+    <div class="row mb-3 align-items-center">
+        <div class="col">
+            <h3 class="mb-0">Event Credits<HelpLink Slug="site-administration" Anchor="event-credits" /></h3>
+            <p class="text-secondary small mb-0">
+                One credit publishes one event and lasts a year. Spent credits are never handed
+                back — a live event whose credit was returned would make its own payment untrue.
+            </p>
+        </div>
+        <div class="col-auto">
+            <button type="button" class="btn btn-primary text-nowrap" id="grant-open" @onclick="OpenGrant">
+                <BenIcon Name="plus" Class="me-1" />Grant credits
+            </button>
+        </div>
+    </div>
+
+    <div class="d-flex gap-2 mb-3 align-items-end">
+        <div style="min-width:16rem;">
+            <label class="form-label small mb-1">Group</label>
+            <BenSelect Data="@_orgOptions" @bind-Value="@_filterOrgId" TextField="@nameof(OrgOption.Name)"
+                       ValueField="@nameof(OrgOption.Id)" DefaultText="— All groups —" Width="100%" />
+        </div>
+        <button type="button" class="btn btn-outline-secondary btn-sm" @onclick="LoadAsync">Apply</button>
+    </div>
+
+    <BenListState TItem="AdminEventCreditRecord" Result="@_result" Loading="@_loading"
+                  EmptyText="No event credits have been bought yet" OnRetry="@LoadAsync">
+        <TelerikGrid Data="@_result.Items" TItem="AdminEventCreditRecord" Sortable="false" Pageable="true" PageSize="25">
+            <GridColumns>
+                <GridColumn Title="Bought" Width="105px">
+                    <Template>@(((AdminEventCreditRecord)context).PurchasedUtc.ToString("MM/dd/yyyy"))</Template>
+                </GridColumn>
+                <GridColumn Title="Holder">
+                    <Template>@(((AdminEventCreditRecord)context).OwnerName)</Template>
+                </GridColumn>
+                <GridColumn Title="Status" Width="230px">
+                    <Template>
+                        @{ var c = (AdminEventCreditRecord)context; }
+                        <span class="badge @Badge(c) me-2">@State(c)</span>
+                        @if (c.SpentOnEventName is { } name) { <span>@name</span> }
+                        else if (c.RefundedReason is { } why) { <span class="text-secondary small">@why</span> }
+                        else if (c.GrantedReason is { } given) { <span class="text-secondary small">@given</span> }
+                    </Template>
+                </GridColumn>
+                <GridColumn Title="Good until" Width="115px">
+                    <Template>
+                        @{ var c = (AdminEventCreditRecord)context; }
+                        @c.ExpiresUtc.ToString("MM/dd/yyyy")
+                        @if (c.ExpiryWarningSentUtc is not null)
+                        {
+                            <BenIcon Name="mail" Class="ms-1 text-secondary" Title="The holder has been warned" />
+                        }
+                    </Template>
+                </GridColumn>
+                <GridColumn Title="Paid" Width="110px">
+                    <Template>
+                        @{ var c = (AdminEventCreditRecord)context; }
+                        @if (c.GrantedReason is not null)
+                        {
+                            @*  Nobody paid for this one. "$0.00" in a money column reads as a bug
+                                and invites somebody to go looking for the missing payment.  *@
+                            <span class="badge bg-primary">Granted</span>
+                        }
+                        else
+                        {
+                            @($"${c.PriceAtPurchase:0.00}")
+                        }
+                    </Template>
+                </GridColumn>
+                <GridColumn Title="Receipt" Width="100px">
+                    <Template>@(((AdminEventCreditRecord)context).ReceiptNumber ?? "—")</Template>
+                </GridColumn>
+                <GridColumn Title="" Width="120px">
+                    <Template>
+                        @{ var c = (AdminEventCreditRecord)context; }
+                        @if (c.RefundedUtc is null && c.SpentUtc is null)
+                        {
+                            <button type="button" class="btn btn-sm btn-outline-danger text-nowrap"
+                                    @onclick="() => OpenRefund(c)">Refund</button>
+                        }
+                    </Template>
+                </GridColumn>
+            </GridColumns>
+        </TelerikGrid>
+    </BenListState>
+</div>
+
+@* ── Grant dialog ──────────────────────────────────────────────────────────── *@
+<BenModal @bind-Visible="@_showGrant" Title="Grant event credits">
+    <ChildContent>
+        <p class="mb-2">
+            Credits handed over rather than bought — a purchase that never landed, an apology, or a
+            credit somebody was promised. They behave exactly like bought ones: a year to use,
+            spent when an event is published, oldest first.
+        </p>
+        <p class="text-secondary small">
+            <strong>Nothing reaches the ledger.</strong> A $0 charge and payment pair would put a
+            sale that never happened into the money trail, so the reason below and your name on the
+            row are the whole record of it.
+        </p>
+        <div class="row g-3">
+            <div class="col-12">
+                <label class="form-label fw-semibold">Group</label>
+                <BenSelect Data="@_orgOptions" @bind-Value="@_grantOrgId" TextField="@nameof(OrgOption.Name)"
+                           ValueField="@nameof(OrgOption.Id)" DefaultText="— Choose a group —" Width="100%" />
+            </div>
+            <div class="col-6">
+                <label class="form-label fw-semibold" for="grant-quantity">How many</label>
+                <input id="grant-quantity" type="number" class="form-control" min="1"
+                       max="@MaximumPerGrant" @bind="_grantQuantity" />
+            </div>
+            <div class="col-12">
+                <label class="form-label fw-semibold" for="grant-reason">Why</label>
+                <input id="grant-reason" type="text" class="form-control" @bind="_grantReason"
+                       @bind:event="oninput" placeholder="Payment taken but never landed, support ticket 412…" />
+            </div>
+        </div>
+        @if (_grantError is not null)
+        {
+            <div class="alert alert-danger mt-3 mb-0">@_grantError</div>
+        }
+        <div class="dialog-footer-actions">
+            <span class="dialog-footer-spacer"></span>
+            <button type="button" class="btn btn-secondary" @onclick="@(() => _showGrant = false)">Cancel</button>
+            <button type="button" class="btn btn-primary" id="grant-save" @onclick="GrantAsync"
+                    disabled="@(_busy || _grantOrgId == Guid.Empty || string.IsNullOrWhiteSpace(_grantReason))">
+                @(_busy ? "Granting…" : "Grant them")
+            </button>
+        </div>
+    </ChildContent>
+</BenModal>
+
+@* ── Refund dialog ─────────────────────────────────────────────────────────── *@
+<BenModal @bind-Visible="@_showRefund" Title="Refund an event credit">
+    <ChildContent>
+        @if (_refunding is { } c)
+        {
+            <p class="mb-2">
+                <strong>@c.OwnerName</strong> paid <strong>$@c.PriceAtPurchase.ToString("0.00")</strong>
+                for this credit on @c.PurchasedUtc.ToString("MM/dd/yyyy"). Refunding it means it can
+                never be spent, whatever its date says.
+            </p>
+            <p class="text-secondary small">
+                This marks the credit and writes the ledger row. It does not move any money —
+                give that back through Stripe, and untick the ledger row if you do, so the same
+                refund is not counted twice.
+            </p>
+            <div class="mb-3">
+                <label class="form-label fw-semibold" for="refund-reason">Why</label>
+                <input id="refund-reason" type="text" class="form-control" @bind="_refundReason"
+                       @bind:event="oninput" placeholder="Bought twice by mistake, support ticket 412…" />
+            </div>
+            <div class="d-flex align-items-center gap-2 mb-2">
+                <input type="checkbox" class="form-check-input" id="refund-ledger" @bind="_refundWritesLedger" />
+                <label for="refund-ledger" class="form-label mb-0">
+                    Write the credit adjustment on the group's ledger
+                </label>
+            </div>
+        }
+        @if (_refundError is not null)
+        {
+            <div class="alert alert-danger mt-3 mb-0">@_refundError</div>
+        }
+        <div class="dialog-footer-actions">
+            <span class="dialog-footer-spacer"></span>
+            <button type="button" class="btn btn-secondary" @onclick="@(() => _showRefund = false)">Cancel</button>
+            <button type="button" class="btn btn-danger" id="refund-save" @onclick="RefundAsync"
+                    disabled="@(_busy || string.IsNullOrWhiteSpace(_refundReason))">
+                @(_busy ? "Refunding…" : "Refund it")
+            </button>
+        </div>
+    </ChildContent>
+</BenModal>
+
+@code {
+    private bool _loading = true;
+    private bool _busy;
+    private LoadResult<AdminEventCreditRecord> _result;
+    private List<OrgOption> _orgOptions = [];
+    private Guid _filterOrgId;
+
+    /// <summary>The server clamps to this; the input says so rather than letting a typo be refused.</summary>
+    private const int MaximumPerGrant = 20;
+
+    private bool _showGrant;
+    private Guid _grantOrgId;
+    private int _grantQuantity = 1;
+    private string _grantReason = "";
+    private string? _grantError;
+
+    private bool _showRefund;
+    private AdminEventCreditRecord? _refunding;
+    private string _refundReason = "";
+    private bool _refundWritesLedger = true;
+    private string? _refundError;
+
+    private record OrgOption(Guid Id, string Name);
+
+    protected override async Task OnInitializedAsync()
+    {
+        if (!await UserState.WaitUntilAuthReadyAsync(RendererInfo.IsInteractive)) return;
+        if (!UserState.IsSuperAdmin || UserState.IsImpersonating) { NavManager.NavigateTo("/"); return; }
+
+        var orgs = await AdminClient.GetOrganizationSubscriptionsAsync();
+        if (!orgs.Failed)
+            _orgOptions = [.. orgs.Items.Select(o => new OrgOption(o.OrganizationId, o.OrganizationName)).OrderBy(o => o.Name)];
+        await LoadAsync();
+    }
+
+    private async Task LoadAsync()
+    {
+        _loading = true;
+        StateHasChanged();
+        _result = await AdminClient.GetEventCreditsAsync(_filterOrgId == Guid.Empty ? null : _filterOrgId);
+        _loading = false;
+        StateHasChanged();
+    }
+
+    private void OpenGrant()
+    {
+        _grantOrgId = _filterOrgId;
+        _grantQuantity = 1;
+        _grantReason = "";
+        _grantError = null;
+        _showGrant = true;
+    }
+
+    private async Task GrantAsync()
+    {
+        _busy = true; _grantError = null;
+        try
+        {
+            var (result, error) = await AdminClient.GrantEventCreditsAsync(
+                _grantOrgId, new GrantEventCreditsRequest(_grantQuantity, _grantReason.Trim()));
+            if (result is null) { _grantError = error ?? "The credits were not granted."; return; }
+
+            Toasts.Success(result.Count == 1
+                ? "One credit granted."
+                : $"{result.Count} credits granted.");
+            _showGrant = false;
+            await LoadAsync();
+        }
+        finally { _busy = false; }
+    }
+
+    private void OpenRefund(AdminEventCreditRecord credit)
+    {
+        _refunding = credit;
+        _refundReason = "";
+        _refundWritesLedger = true;
+        _refundError = null;
+        _showRefund = true;
+    }
+
+    private async Task RefundAsync()
+    {
+        if (_refunding is not { } credit) return;
+
+        _busy = true; _refundError = null;
+        try
+        {
+            var (result, error) = await AdminClient.RefundEventCreditAsync(
+                credit.Id, new RefundEventCreditRequest(_refundReason.Trim(), _refundWritesLedger));
+            if (result is null) { _refundError = error ?? "The refund did not go through."; return; }
+
+            Toasts.Success($"Refunded — {result.OwnerName} can no longer spend that credit.");
+            _showRefund = false;
+            await LoadAsync();
+        }
+        finally { _busy = false; }
+    }
+
+    private static string State(AdminEventCreditRecord c)
+        => c.RefundedUtc is not null ? "Refunded"
+         : c.SpentUtc is not null ? "Spent on"
+         : c.ExpiresUtc <= DateTime.UtcNow ? "Expired"
+         : "Ready";
+
+    private static string Badge(AdminEventCreditRecord c)
+        => c.RefundedUtc is not null ? "bg-secondary"
+         : c.SpentUtc is not null ? "bg-info"
+         : c.ExpiresUtc <= DateTime.UtcNow ? "bg-warning text-dark"
+         : "bg-success";
+}

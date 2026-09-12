@@ -105,6 +105,11 @@
                     {
                         <p class="@(_plan.MayPublish ? "text-secondary" : "text-danger") mb-2">
                             @_plan.Sentence
+                            @if (_plan.PaysWith == "credit" && !_plan.MayPublish && ev.FirstPublishedUtc is null)
+                            {
+                                <a class="ms-1" id="publish-buy-credits"
+                                   href="@($"/organizations/{OrgId}/billing#event-credits")">Buy an event credit</a>
+                            }
                         </p>
                     }
                     @if (ev.FirstPublishedUtc is not null)

@@ -162,4 +162,35 @@ public interface IBenBillingClient
     /// <summary>A payment row's receipt as bytes, for the downloadFileFromBase64 hand-off.
     /// Null when the row is not a payment or the caller may not see it.</summary>
     Task<(byte[] Data, string FileName)?> DownloadReceiptAsync(Guid organizationId, Guid entryId, CancellationToken token = default);
+
+    // ── Event credits (item 235) ──────────────────────────────────────────────
+
+    /// <summary>
+    /// Opens a Stripe Checkout page for <paramref name="quantity"/> event credits. Org-gated on
+    /// the settings key, because it spends the group's money.
+    /// </summary>
+    Task<(StartCheckoutResponse? Result, string? Error)> StartEventCreditCheckoutAsync(
+        Guid organizationId, int quantity, CancellationToken token = default);
+
+    /// <summary>
+    /// What a credit costs today and what this group holds, spent credits included. An
+    /// <c>ItemResult</c> so a refusal cannot be drawn as "this group has no credits" — the two
+    /// look identical on a card and only one of them is somebody's money.
+    /// </summary>
+    Task<ItemResult<OrgEventCreditsView>> GetOrgEventCreditsAsync(
+        Guid organizationId, CancellationToken token = default);
+
+    /// <summary>Every credit ever sold. SuperAdmin.</summary>
+    Task<LoadResult<AdminEventCreditRecord>> GetEventCreditsAsync(
+        Guid? orgId = null, CancellationToken token = default);
+
+    /// <summary>
+    /// Hands a group credits nobody paid for — the support remedy, not a sale. SuperAdmin.
+    /// </summary>
+    Task<(IReadOnlyList<AdminEventCreditRecord>? Result, string? Error)> GrantEventCreditsAsync(
+        Guid organizationId, GrantEventCreditsRequest request, CancellationToken token = default);
+
+    /// <summary>Refunds an unspent credit so it can never be spent. SuperAdmin.</summary>
+    Task<(AdminEventCreditRecord? Result, string? Error)> RefundEventCreditAsync(
+        Guid creditId, RefundEventCreditRequest request, CancellationToken token = default);
 }

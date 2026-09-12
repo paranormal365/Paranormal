@@ -804,6 +804,8 @@ namespace Ben.Data.Source.Context
                 .Property(c => c.ReceiptNumber).HasMaxLength(40);
             modelBuilder.Entity<EventCredit>()
                 .Property(c => c.RefundedReason).HasMaxLength(500);
+            modelBuilder.Entity<EventCredit>()
+                .Property(c => c.GrantedReason).HasMaxLength(500);
             // Fulfilment is idempotent on the payment: a webhook Stripe sends twice must not hand
             // somebody two credits. Filtered because everything before a payment has none.
             modelBuilder.Entity<EventCredit>()

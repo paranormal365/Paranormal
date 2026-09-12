@@ -44,6 +44,15 @@
     {
         <div class="alert @(_plan.MayPublish ? "alert-secondary" : "alert-warning")" id="events-plan-note">
             @_plan.Sentence
+            @*  A refusal with nowhere to go is a dead end. Credits are bought on the billing page,
+                so the sentence that says one is needed carries the way to one.  *@
+            @if (_plan.PaysWith == "credit")
+            {
+                <a class="ms-1" id="events-buy-credits"
+                   href="@($"/organizations/{OrgId}/billing#event-credits")">
+                    @(_plan.MayPublish ? "See your credits" : "Buy an event credit")
+                </a>
+            }
         </div>
     }
 

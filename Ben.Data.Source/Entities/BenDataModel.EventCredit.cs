@@ -76,6 +76,30 @@ namespace Ben.Data.Source.Entities
         /// <summary>The event it went on, so "have we paid for this one?" has one answer for ever.</summary>
         public Guid? SpentOnHostedEventId { get; set; }
 
+        /// <summary>
+        /// Why this credit was handed over rather than bought. Null for every credit somebody paid
+        /// for, which is nearly all of them.
+        /// </summary>
+        /// <remarks>
+        /// <para>A granted credit is the remedy for the cases a payment cannot answer: a purchase
+        /// that never landed, an apology, a credit somebody was promised. Before it existed the
+        /// only way to put one in a group's hands was a live card payment, so support had nothing
+        /// to offer and the refund screen could not be exercised at all.</para>
+        ///
+        /// <para><b>It is not a sale.</b> <see cref="PriceAtPurchase"/> is zero, there is no
+        /// provider reference and no receipt, and nothing reaches the ledger — a $0 charge and
+        /// payment pair would put a sale that never happened into the money trail. The reason and
+        /// <see cref="CreatedByAppUserId"/> are the record instead, which is why the reason is
+        /// required.</para>
+        ///
+        /// <para>In every other respect it behaves exactly like a bought one: a year to use, spent
+        /// at publish, oldest first, warned at thirty days, refundable while unspent.</para>
+        /// </remarks>
+        public string? GrantedReason { get; set; }
+
+        /// <summary>True when nobody paid for this one. See <see cref="GrantedReason"/>.</summary>
+        public bool WasGranted => GrantedReason is not null;
+
         /// <summary>When it was refunded. A SuperAdmin's act, never a button.</summary>
         public DateTime? RefundedUtc { get; set; }
 

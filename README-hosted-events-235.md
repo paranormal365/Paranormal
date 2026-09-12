@@ -119,10 +119,83 @@ deletion, and `LoadResultRenderedGuardTests` on the venue search swallowing a re
 that was refused and a search that found nothing look identical to a person, and saying "no venues
 found" when the truth is "we couldn't ask" sends them off to invent one that already exists.
 
-**Not yet done in 1B:** the expiry-warning job, the billing page's credits card, and the Playwright
-walk through test-mode Checkout.
+**Phase 1B finished, 2026-09-12** — the warning job, the card, the SuperAdmin refund, and the walk.
 
-Suite: .NET 8,254 pass, 0 fail.
+- `EventCreditExpiryJob` warns the holder thirty days out, once per credit, marked on the credit
+  itself. **Email where there is an address, the bell where there is not** — a credit somebody paid
+  for must not lapse unannounced because a group has no reachable billing contact or a deployment
+  has no mail server, and on a dev machine that is every deployment. The marker is stamped after
+  the send, so a failure is retried and the residual risk is a duplicate rather than silence.
+- The **credits card** on a group's billing page, at `#event-credits`: what is held and when each
+  lapses, what each cost, and — for the ones already spent — which event each went on, because the
+  question a year later is "did we pay for the October weekend?" and a list that drops the answer
+  cannot be asked. The refusals on the events list and the publish confirmation both link into that
+  anchor, so no refusal is a dead end. Its `ItemResult` means a refusal can never be drawn as "this
+  group has no credits" — one of those is somebody's money.
+- **`/admin/event-credits`**, and it exists because `RefundedUtc` was otherwise a column only SQL
+  could write. A refund needs a reason, marks the credit unspendable whatever its date, and writes
+  the credit adjustment on the ledger — untickable for one already put back through Stripe. A
+  **spent** credit is refused and the refusal names the event: handing back the credit for a live
+  event would make that event's own payment record untrue, and re-publishing would then never
+  charge. An **expired** one may still be refunded, which is the goodwill case.
+
+**Twenty-five .NET tests and three Playwright tests.** The help-link guards fired first, as designed,
+and refused the branch until both chapters existed. The lapsed-credit test was proved to
+discriminate by removing the lower bound from `DueAWarningAsync` and watching only that test fail.
+
+**TWO CONFIGURATION FINDINGS, both from phase 0's new enum values and neither yet fixed.** On
+`IsHauntedDb_player`, and almost certainly on production too:
+
+1. **Every band includes `HostEvents`**, so no group is ever asked for a credit and the whole $99
+   product is unreachable. That is the fail-open rule working as designed — a capability nobody has
+   ruled on is included — but it means the credit path is live code nobody can reach until a
+   SuperAdmin unticks hosting on Free, Small group and Large group. This is Ben's pricing decision,
+   so it has not been made here.
+2. **The `Events` permission area is on no band.** Phase 0 added it as area 10 and no band has been
+   told about it, so custom roles cannot be granted anything under Events on any plan. Owners and
+   administrators pass by role and would never notice.
+
+The Playwright test that walks the refusal skips itself on this deployment for finding 1, and says
+so rather than passing quietly.
+
+**The SuperAdmin grant, added on Ben's word, 2026-09-12.** Nothing could put a credit in a group's
+hands except a real card payment, so support had no remedy for "they paid and it never landed" and
+the refund screen beside it could not be exercised on any deployment — there was never a credit to
+refund. Phase 1B.6 had assumed a test-mode Checkout stub that does not exist.
+
+- `GrantedReason` on `EventCredit`, migration `20260912122616_EventCreditGrants` — one nullable
+  column, `Down` drops only what `Up` made, applied to `IsHauntedDb_player` with an explicit
+  `--connection`.
+- **A grant is not a sale and writes nothing to the ledger.** A $0 charge and payment pair would
+  put a sale that never happened into the money trail, and a receipt would say somebody paid
+  nothing. The reason and the granting admin are the record instead, which is why the reason is
+  required rather than optional.
+- **Ordinary in every other respect** — a year to use, spent at publish, oldest first, warned at
+  thirty days, refundable while unspent. A granted credit that behaved differently would be a
+  second product wearing the first one's name.
+- It reads as **Granted** on the admin grid and **Given to you** on the group's card, never
+  "$0.00": a zero in a money column reads as a bug and sends somebody hunting for a lost payment.
+- Refunding a granted credit revokes it and writes no ledger row, because there is nothing to hand
+  back. That guard was proved to discriminate by removing it and watching only that test fail.
+- The quantity is clamped rather than refused, at the same ceiling the purchase uses — a typed 500
+  is a slip, not an instruction.
+
+Suite: .NET 8,277 pass, 0 fail. Playwright: the credit and admin categories, 18 pass and one
+skipped for finding 1, against the running site on `IsHauntedDb_player`.
+
+**FIVE PRE-EXISTING PLAYWRIGHT FAILURES ON THIS BRANCH, none of them from this phase.** A full run
+turned up `OrgList_ShowsBenCo`, `TheMapTabDrawsTheMap`,
+`A_visitor_reads_the_groups_finding_on_the_public_case_page`,
+`CaseDetail_AuthUser_AllThreeVoteButtonsVisible` and `VoteCounts_PersistAfterPageReload`. Every one
+of them reproduces identically with this phase's work stashed and the branch built from `HEAD`, so
+they belong to the branch already and want their own look. The sidebar one is the clearest read: the
+group's name resolves in the DOM and is `hidden`, which is a collapsed sidebar rather than a missing
+group. `The_share_dialog_offers_a_picker_and_a_choice_fills_the_card` failed once and passed on the
+re-run, so it is flaky rather than broken.
+
+**A full clean Playwright run is still owed on this branch.** The one attempted here was compromised
+— the solution was rebuilt underneath it, which is the same mistake as restarting a host mid-run —
+and it was stopped rather than reported.
 
 Each phase records its own "Verified, not assumed" section here as it lands.
 

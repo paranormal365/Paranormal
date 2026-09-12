@@ -51,6 +51,9 @@ public class AdminPageTests : BenTestBase
         // Deleting a person (2026-09-04). It belongs in this list for exactly the reason the list
         // exists: only a SuperAdmin can open it, so nobody else would ever find it broken.
         ("/admin/delete-user",         "Delete a person"),
+        // Item 235. Only a SuperAdmin can open it, and it is the only screen that can refund a
+        // credit — so if it breaks, nobody else would ever find out.
+        ("/admin/event-credits",       "Event Credits"),
     };
 
     [Test]

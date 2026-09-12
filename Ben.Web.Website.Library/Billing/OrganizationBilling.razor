@@ -202,6 +202,117 @@
         </div>
         }
 
+        @* ── Event credits (item 235) ─────────────────────────────────────── *@
+        @*  Here rather than in the events section because the question it answers is "what have
+            we paid for?", and that question is asked on the billing page. The publish refusal
+            links straight to this anchor.  *@
+        <div class="card mb-4" id="event-credits">
+            <div class="card-body">
+                <h2 class="h5 card-title">Event credits</h2>
+                <p class="text-secondary small">
+                    One credit publishes one event, whatever it costs to run and however many
+                    nights it lasts. A credit is good for a year from the day you buy it, is spent
+                    the moment an event goes live, and is not returned if you take that event down.
+                </p>
+
+                @if (_credits.Failed)
+                {
+                    @*  A card that says "no credits" when the truth is "we couldn't ask" tells
+                        somebody they have nothing when they may be holding hundreds of dollars.  *@
+                    <div class="alert alert-warning mb-0">
+                        @(_credits.Reason ?? "Your credits couldn't be loaded just now.")
+                    </div>
+                }
+                else if (_credits.Item is { } view)
+                {
+                    <p class="mb-3">
+                        @if (view.Spendable == 0)
+                        {
+                            <text>This group holds <strong>no credits</strong> ready to use.</text>
+                        }
+                        else
+                        {
+                            <text><strong>@view.Spendable</strong> ready to use@(NextExpiry(view) is { } next
+                                ? $", the next expiring {next:MM/dd/yyyy}" : "").</text>
+                        }
+                    </p>
+
+                    @if (view.OnSale)
+                    {
+                        <div class="row g-2 align-items-end mb-3" style="max-width:520px;">
+                            <div class="col-auto">
+                                <label class="form-label small" for="credit-quantity">How many</label>
+                                <input id="credit-quantity" type="number" class="form-control" style="width:6rem;"
+                                       min="1" max="@view.MaximumPerPurchase" @bind="_creditQuantity" />
+                            </div>
+                            <div class="col-auto">
+                                <div class="text-secondary small">Each</div>
+                                <strong>$@view.UnitPrice.ToString("0.00")</strong>
+                            </div>
+                            <div class="col-auto">
+                                <div class="text-secondary small">Total</div>
+                                <strong>$@((view.UnitPrice * Math.Clamp(_creditQuantity, 1, view.MaximumPerPurchase)).ToString("0.00"))</strong>
+                                <span class="text-secondary small">plus tax</span>
+                            </div>
+                            <div class="col-auto">
+                                <button type="button" class="btn btn-primary text-nowrap" id="buy-event-credits"
+                                        @onclick="BuyCreditsAsync" disabled="@_buyingCredits">
+                                    @(_buyingCredits ? "Opening…" : "Buy credits")
+                                </button>
+                            </div>
+                        </div>
+                    }
+                    else
+                    {
+                        <div class="alert alert-secondary">
+                            Event credits aren't on sale at the moment. Anything this group already
+                            holds still works.
+                        </div>
+                    }
+
+                    @if (_creditError is not null)
+                    {
+                        <div class="alert alert-danger">@_creditError</div>
+                    }
+
+                    @if (view.Credits.Count > 0)
+                    {
+                        <div class="table-responsive">
+                            <table class="table table-sm align-middle mb-0">
+                                <thead><tr>
+                                    <th>Bought</th><th>Good until</th><th>Status</th>
+                                    <th class="text-end">Paid</th><th>Receipt</th>
+                                </tr></thead>
+                                <tbody>
+                                @foreach (var c in view.Credits)
+                                {
+                                    <tr>
+                                        <td class="text-nowrap">@c.PurchasedUtc.ToString("MM/dd/yyyy")</td>
+                                        <td class="text-nowrap">@c.ExpiresUtc.ToString("MM/dd/yyyy")</td>
+                                        <td>
+                                            <span class="badge @CreditBadge(c) me-2">@CreditState(c)</span>
+                                            @if (c.SpentOnEventName is { } name)
+                                            {
+                                                <span>@name</span>
+                                            }
+                                        </td>
+                                        <td class="text-end text-nowrap">
+                                            @*  Nobody paid for a granted one, and "$0.00" in a
+                                                money column reads as a mistake rather than a
+                                                gift.  *@
+                                            @(c.GrantedReason is null ? $"${c.PriceAtPurchase:0.00}" : "Given to you")
+                                        </td>
+                                        <td class="text-nowrap">@(c.ReceiptNumber ?? "—")</td>
+                                    </tr>
+                                }
+                                </tbody>
+                            </table>
+                        </div>
+                    }
+                }
+            </div>
+        </div>
+
         @* ── The money trail ──────────────────────────────────────────────── *@
         <h2 class="h5 mt-4 mb-2">Billing history</h2>
         <BenListState TItem="OrgBillingHistoryRecord" Result="@_history" Loading="@false"
@@ -299,6 +410,10 @@
     private MyMemberSeatRecord? _mySeat;
     private bool _startingSeatCheckout;
     private string? _seatError;
+    private ItemResult<OrgEventCreditsView> _credits;
+    private int _creditQuantity = 1;
+    private bool _buyingCredits;
+    private string? _creditError;
 
     protected override async Task OnInitializedAsync()
     {
@@ -320,6 +435,11 @@
                 "Seat paid — you're all set. Your receipt is available below.");
         else if (query.Contains("checkout=cancelled"))
             _checkoutBanner = ("alert-secondary", "Checkout was cancelled. Nothing was charged.");
+        else if (query.Contains("credits=success"))
+            _checkoutBanner = ("alert-success",
+                "Payment received — your event credits are below, and the receipt is in the history.");
+        else if (query.Contains("credits=cancelled"))
+            _checkoutBanner = ("alert-secondary", "Checkout was cancelled. No credits were bought.");
 
         await LoadAsync();
         await RefreshQuoteAsync();
@@ -333,6 +453,7 @@
         _mySeat = (await AdminClient.GetMySeatAsync(OrgId)).Items.FirstOrDefault();
         _subscription = await AdminClient.GetMySubscriptionAsync(OrgId);
         _history = await AdminClient.GetOrgBillingHistoryAsync(OrgId);
+        _credits = await AdminClient.GetOrgEventCreditsAsync(OrgId);
         // The subscription view answers null for BOTH "no row yet" (a free group) and a refusal.
         // The history call can tell the difference, so it decides which page this person gets.
         _forbidden = _subscription is null && _history.Failed && !_history.SessionExpired;
@@ -392,6 +513,44 @@
         }
         finally { _startingSeatCheckout = false; }
     }
+
+    private async Task BuyCreditsAsync()
+    {
+        _buyingCredits = true;
+        _creditError = null;
+        try
+        {
+            var max = _credits.Item?.MaximumPerPurchase ?? 1;
+            var (result, error) = await AdminClient.StartEventCreditCheckoutAsync(
+                OrgId, Math.Clamp(_creditQuantity, 1, max));
+            if (result is null) { _creditError = error ?? "Couldn't start checkout — try again."; return; }
+
+            // forceLoad for the same reason as the subscription checkout: Stripe's page is not a
+            // Blazor route, and SPA navigation would 404 inside the app.
+            Nav.NavigateTo(result.RedirectUrl, forceLoad: true);
+        }
+        finally { _buyingCredits = false; }
+    }
+
+    /// <summary>When the next usable credit lapses, so the card can say it without arithmetic.</summary>
+    private static DateTime? NextExpiry(OrgEventCreditsView view)
+        => view.Credits
+            .Where(c => c.SpentUtc is null && c.RefundedUtc is null && c.ExpiresUtc > DateTime.UtcNow)
+            .OrderBy(c => c.ExpiresUtc)
+            .Select(c => (DateTime?)c.ExpiresUtc)
+            .FirstOrDefault();
+
+    private static string CreditState(OrgEventCreditRecord c)
+        => c.RefundedUtc is not null ? "Refunded"
+         : c.SpentUtc is not null ? "Spent on"
+         : c.ExpiresUtc <= DateTime.UtcNow ? "Expired"
+         : "Ready";
+
+    private static string CreditBadge(OrgEventCreditRecord c)
+        => c.RefundedUtc is not null ? "bg-secondary"
+         : c.SpentUtc is not null ? "bg-info"
+         : c.ExpiresUtc <= DateTime.UtcNow ? "bg-warning text-dark"
+         : "bg-success";
 
     private async Task DownloadReceiptAsync(Guid entryId, int number)
     {

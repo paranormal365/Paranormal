@@ -775,6 +775,32 @@ it.
 **An event is only ever charged once.** Take it down and put it back up as often as you need — the
 first time paid for it, and there is no second charge for the life of that event.
 
+### Buying event credits
+
+Credits are bought on your group's **Billing** page, under **Event credits**, and the sentence on
+the Events page that says you need one links straight to it. Buy one or several at a time; payment
+happens on Stripe's secure page, and the receipt lands in your billing history like every other one.
+
+A credit lasts **a year from the day you buy it**. Two things have to be true when you spend it: the
+credit itself has to be in date, and the event's first date has to fall inside that year. So a credit
+bought today cannot be parked on an event dated three years out — if that is what you are planning,
+buy the credit nearer the time. When it will not stretch, the refusal names both dates so you can see
+exactly why.
+
+Credits are spent **oldest first**, so the one closest to running out is always the one used.
+
+The card lists everything you hold: what is ready, what each one cost, when it lapses, and — for the
+ones already spent — which event each went on. That last column is the answer to "did we pay for the
+October weekend?", a year later.
+
+**Thirty days before a credit lapses we write to you**, so it never quietly disappears. An unspent
+credit past its date is gone; we do not extend it and it is not refunded automatically. If something
+went wrong — you bought two by mistake, or never got to use one — ask us, and a refund is something a
+person here does by hand.
+
+A credit that says **Given to you** rather than a price is one we handed over: a payment that did
+not land, or something we owed you. It works exactly like one you bought.
+
 ### Taking it down, archiving it, calling it off
 
 **Un-publish** takes it off the public site. Nothing is destroyed and nothing is refunded.
