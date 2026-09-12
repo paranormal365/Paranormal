@@ -24,6 +24,16 @@
             <div class="alert alert-danger py-2 small mt-3 mb-0">@_error</div>
         }
 
+        @* Said on the card rather than as a toast that has gone by the time the page settles:
+           this is the answer to "did that work?", and it is wanted where the change is. *@
+        @if (_saved is not null)
+        {
+            <div class="alert alert-success py-2 small mt-3 mb-0 d-flex align-items-start gap-2">
+                <BenIcon Name="check-circle" Class="mt-1" />
+                <span>@_saved</span>
+            </div>
+        }
+
         @if (_loading)
         {
             <div class="text-secondary small mt-3">Loading…</div>
@@ -132,9 +142,18 @@
                         <div class="col-12">
                             <div class="form-check">
                                 <input type="checkbox" class="form-check-input" id="email-primary"
-                                       checked="@_formIsPrimary"
+                                       checked="@_formIsPrimary" disabled="@(!CanBePrimary)"
                                        @onchange="@(e => _formIsPrimary = (bool)(e.Value ?? false))" />
-                                <label class="form-check-label" for="email-primary">Primary email</label>
+                                <label class="form-check-label" for="email-primary">
+                                    Primary email
+                                    @if (!CanBePrimary)
+                                    {
+                                        <span class="text-secondary small d-block">
+                                            Confirm this address first. We'll email you a link as
+                                            soon as you save it.
+                                        </span>
+                                    }
+                                </label>
                             </div>
                             <div class="form-check">
                                 <input type="checkbox" class="form-check-input" id="email-public"
@@ -186,6 +205,8 @@
     private bool _loading = true;
     private bool _saving;
     private string? _error;
+    /// <summary>What the last save did, in a sentence. Cleared when anything else starts.</summary>
+    private string? _saved;
 
     private bool  _showForm;
     private Guid? _editId;
@@ -198,6 +219,11 @@
     // rejects the other cases too — this only keeps the checkbox from lying about it.
     private bool CanPublishForm =>
         _editId is not null && _rows.FirstOrDefault(r => r.Id == _editId)?.IsValidated == true;
+
+    // Primary follows exactly the same rule, and for the same reason: it is the address this
+    // person is presented by, and an address nobody has proved they can read should not be it.
+    // Ben found the gap on 2026-09-12 by adding an address and marking it primary.
+    private bool CanBePrimary => CanPublishForm;
 
     private MyEmailRecord? _deleteTarget;
 
@@ -235,7 +261,9 @@
         _editId = null;
         _formAddress = string.Empty;
         _formTypeId = _types.FirstOrDefault()?.Id ?? Guid.Empty;
-        _formIsPrimary = _rows.Count == 0;
+        // NOT defaulted to primary any more, even for a first address: it cannot be primary until
+        // it is confirmed, and a tick that the save refuses is a tick that lied.
+        _formIsPrimary = false;
         _formIsPublic = false;
         _error = null;
         _showForm = true;
@@ -262,11 +290,13 @@
 
         _saving = true;
         _error = null;
+        _saved = null;
 
+        var wasNew = _editId is null;
         var request = new UpsertMyEmailRequest(_formTypeId, _formAddress.Trim(), _formIsPrimary, _formIsPublic);
-        var result = _editId is null
+        var result = wasNew
             ? await AdminClient.CreateMyEmailAsync(request)
-            : await AdminClient.UpdateMyEmailAsync(_editId.Value, request);
+            : await AdminClient.UpdateMyEmailAsync(_editId!.Value, request);
 
         _saving = false;
 
@@ -274,6 +304,24 @@
         {
             _error = "That could not be saved. Check the address and try again.";
             return;
+        }
+
+        // A save that says nothing is indistinguishable from a save that was refused, which is
+        // exactly what Ben hit: he added an address, came back to the page, and nothing on it
+        // said anything had happened. So the card says what it did, naming the address.
+        _saved = wasNew
+            ? (result.ValidationEmailSent
+                ? $"{result.EmailAddress} added. We've emailed you a link to confirm it."
+                : $"{result.EmailAddress} added. Use the confirmation link below.")
+            : $"{result.EmailAddress} updated.";
+
+        // On a machine with no mail server the link is the only way through, and adding an address
+        // now issues one — so show it here rather than making somebody press Send as well.
+        if (wasNew && result.ValidationLink is not null && !result.ValidationEmailSent)
+        {
+            _linkFor = result.Id;
+            _lastLink = result.ValidationLink;
+            _lastEmailSent = false;
         }
 
         _showForm = false;
