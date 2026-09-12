@@ -584,6 +584,32 @@ public sealed class PublicHostedEventBookingController : BenControllerBase
         if (booking.Status == HostedEventBookingStatus.TurnedDown)
             return Conflict("This booking was already turned down; there is nothing to withdraw.");
 
+        // HELD: let go at once, and the places go straight back to the house.
+        //
+        // There was no branch for this, so a guest who picked seats and changed their mind fell
+        // through to the confirmed path below and merely REQUESTED a cancellation — the seats
+        // stayed theirs until the hold lapsed, out of everybody's reach, for a booking they had
+        // already abandoned. Nothing has been decided and nothing catered against, so there is
+        // nobody to ask.
+        //
+        // Cancelled rather than deleted: the row is the record of what they held and when they let
+        // it go, which is the whole of the conversation if they ring up later. The nights are
+        // released, so the arbiter index frees the seat immediately.
+        if (booking.Status == HostedEventBookingStatus.Held)
+        {
+            var now = DateTime.UtcNow;
+            BookingTransitions.Cancel(booking, userId, Trimmed(reason) ?? "Let go by the guest.", now);
+
+            var hosted = await db.HostedEvents
+                .Include(e => e.Nights)
+                .FirstOrDefaultAsync(e => e.Id == booking.HostedEventId, ct);
+            if (hosted is not null)
+                await BookingTransitions.ApplyUmbrellaAsync(db, _sync, hosted, booking, userId, now, ct);
+
+            await db.SaveChangesAsync(ct);
+            return NoContent();
+        }
+
         // Confirmed: record the ask rather than acting on it.
         booking.CancellationRequestedUtc ??= DateTime.UtcNow;
         booking.CancellationReason = Trimmed(reason);

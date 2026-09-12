@@ -276,4 +276,35 @@ public sealed class HostedEventHoldTests
         // block and exactly what must not reach a guest.
         Assert.DoesNotContain("owner's family", said);
     }
+
+    [Fact]
+    public async Task A_guest_who_changes_their_mind_gives_the_seat_straight_back()
+    {
+        // There was no branch for a held booking in the withdraw endpoint, so a guest who picked
+        // seats and changed their mind fell through to the confirmed path and merely REQUESTED a
+        // cancellation. The seats stayed theirs until the hold lapsed — out of everybody's reach,
+        // for a booking they had abandoned. Nothing has been decided and nothing catered against,
+        // so there is nobody to ask.
+        await using var sqlite = await SeedAsync();
+
+        Assert.IsType<OkObjectResult>(
+            (await As(sqlite, GuestId).HoldPlaces(EventId, Picking(SeatA1Id), default)).Result);
+
+        Assert.IsType<NoContentResult>(
+            (await As(sqlite, GuestId).Withdraw(EventId, reason: null, default)).Result);
+
+        // And somebody else can have it at once.
+        Assert.IsType<OkObjectResult>(
+            (await As(sqlite, RivalId).HoldPlaces(EventId, Picking(SeatA1Id), default)).Result);
+
+        await using var db = await sqlite.NewContextAsync();
+        var letGo = await db.HostedEventBookings
+            .Include(b => b.Nights)
+            .FirstAsync(b => b.LeadAppUserId == GuestId);
+
+        Assert.Equal(HostedEventBookingStatus.Cancelled, letGo.Status);
+        // Kept, not deleted: the row is the record of what they held and when they let it go.
+        Assert.All(letGo.Nights, n => Assert.NotNull(n.ReleasedUtc));
+        Assert.All(letGo.Nights, n => Assert.False(n.IsHolding));
+    }
 }
