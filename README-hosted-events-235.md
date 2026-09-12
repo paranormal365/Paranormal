@@ -167,6 +167,35 @@ discriminate by removing the lower bound from `DueAWarningAsync` and watching on
 - **27 tests, proved to discriminate**: letting a request hold a bed failed three of them, and
   counting the event instead of the night failed one. Both were reverted and the suite is green.
 
+**Phase 2.2a done, 2026-09-12** — the venue's side of bookings: the board, the decisions, the rooms.
+
+- **`HostedEventBookingController`** at `api/organizations/{orgId}/events/{eventId}/bookings`. The
+  board is one call — rooms offered, how full each is per room per night, and every booking — because
+  a host deciding a Saturday needs all three on one screen. Confirm puts the party in rooms that
+  need not be the ones they asked for, since moving a party of three out of a double and into the
+  suite is the commonest thing a host does and making them turn it down and ask again would be
+  absurd. Turn-down and cancel both release the umbrella row. Edit re-checks capacity but excludes
+  the booking's own beds, so a party moving rooms is not refused by the beds it is leaving.
+- **Confirmation writes the umbrella attendee** with `RsvpStatus.Accepted` alongside
+  `TourSeatStatus.Reserved` and `Seats` = party size — the pair every existing count already
+  understands, so the public list, the reminder job, the calendar file and the shipped phone all
+  count the party without knowing what a booking is. A test asserts `TourSeats.PlacesTaken` reads
+  it, which is the actual contract.
+- **Rooms offered** on `HostedEventController` (`GET`/`PUT .../rooms`). Replaces the whole set,
+  because the screen is tick boxes; refuses a room with confirmed bookings rather than quietly
+  dropping it, and refuses a room belonging to another group's description of the venue.
+- **A guard caught a real defect before it shipped.** `OrganizationPurgeCoverageTests` named
+  `HostedEventBookingNights.PlaceRoomId` and `HostedEventRooms.PlaceRoomId` as NoAction references
+  the group purge never deletes — so deleting a group would have been refused by the database,
+  which is exactly what happened on production twice before that guard existed. Both are now purged
+  before `PlaceRooms`.
+- **8 behaviour tests on `SqliteTestDb`** with foreign keys on, proved to discriminate: dropping the
+  unique index on booking-night failed the "a party cannot hold two rooms on one night" test. Suite:
+  .NET 5,095 pass, 0 fail.
+- **Still open in 2.2**: the guest's own door (request, my-booking, acknowledge, cancel), the
+  anonymous email path, create-on-behalf by email through the guest-invite token, the dietary tally
+  and menus endpoints. Create-on-behalf takes an existing account today and says so.
+
 **TWO CONFIGURATION FINDINGS, both from phase 0's new enum values and neither yet fixed.** On
 `IsHauntedDb_player`, and almost certainly on production too:
 

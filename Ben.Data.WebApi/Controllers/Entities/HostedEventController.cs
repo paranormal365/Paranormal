@@ -370,6 +370,132 @@ public sealed class HostedEventController : OrgCmsControllerBase
             e.CancelledReason = request.Reason?.Trim() is { Length: > 0 } r ? r : null;
         }, ct);
 
+    // ── the rooms this event offers (phase 2) ────────────────────────────────
+
+    /// <summary>Which of the venue's rooms this event is offering, and what each sleeps.</summary>
+    /// <remarks>
+    /// Readable by any member: knowing which rooms are in play is not a billing question, and the
+    /// booking board needs it to draw a grid.
+    /// </remarks>
+    [HttpGet("{eventId:guid}/rooms")]
+    public async Task<ActionResult<IReadOnlyList<HostedEventRoomRecord>>> GetRooms(
+        Guid orgId, Guid eventId, CancellationToken ct)
+    {
+        var userId = GetCurrentUserId();
+        if (userId is null) return Unauthorized();
+
+        await using var db = await DbFactory.CreateDbContextAsync(ct);
+        if (!await IsMemberAsync(db, orgId, userId.Value, ct)) return Forbid();
+        if (!await db.HostedEvents.AnyAsync(e => e.Id == eventId && e.OrganizationId == orgId, ct))
+            return NotFound();
+
+        return Ok(await RoomsAsync(db, eventId, ct));
+    }
+
+    /// <summary>
+    /// Sets the whole set of rooms this event offers.
+    /// </summary>
+    /// <remarks>
+    /// <para><b>Replaces rather than merges</b>, because the screen is a list of tick boxes and
+    /// unticking one has to mean something. A room that still has bookings against it is refused
+    /// rather than quietly removed — the beds are occupied, and dropping the offer would leave a
+    /// confirmed party sleeping somewhere the event says it is not using.</para>
+    ///
+    /// <para>A room must belong to this event's own place and to this organization: rooms are
+    /// per-group per-place (item 197), so offering another group's description of the building
+    /// would put their words on your weekend.</para>
+    /// </remarks>
+    [HttpPut("{eventId:guid}/rooms")]
+    public async Task<ActionResult<IReadOnlyList<HostedEventRoomRecord>>> SetRooms(
+        Guid orgId, Guid eventId, [FromBody] SetHostedEventRoomsRequest request, CancellationToken ct)
+    {
+        var userId = GetCurrentUserId();
+        if (userId is null) return Unauthorized();
+        if (!await IsCmsAuthorizedAsync(userId.Value, orgId,
+                OrganizationSecurityTable.OrganizationSettings, OrganizationSecurityAction.Update, ct))
+            return Forbid();
+
+        await using var db = await DbFactory.CreateDbContextAsync(ct);
+        var ev = await db.HostedEvents
+            .FirstOrDefaultAsync(e => e.Id == eventId && e.OrganizationId == orgId, ct);
+        if (ev is null) return NotFound();
+
+        var wanted = request.Rooms ?? [];
+        var wantedIds = wanted.Select(r => r.PlaceRoomId).ToHashSet();
+
+        // Every room has to be one this group has defined for this event's own place.
+        var allowed = await db.PlaceRooms
+            .Where(r => r.OrganizationId == orgId && r.PlaceId == ev.PlaceId && r.IsActive)
+            .Select(r => r.Id)
+            .ToListAsync(ct);
+        if (wantedIds.Except(allowed).Any())
+            return BadRequest("One of those rooms is not a room this group has defined for the venue.");
+
+        var existing = await db.HostedEventRooms
+            .Where(r => r.HostedEventId == eventId)
+            .ToListAsync(ct);
+
+        // A room with beds in it cannot stop being offered.
+        var removing = existing.Where(r => !wantedIds.Contains(r.PlaceRoomId)).ToList();
+        if (removing.Count > 0)
+        {
+            var stillBooked = await db.HostedEventBookingNights
+                .Include(n => n.PlaceRoom)
+                .Where(n => n.HostedEventBooking.HostedEventId == eventId
+                         && n.HostedEventBooking.Status == HostedEventBookingStatus.Confirmed
+                         && removing.Select(r => r.PlaceRoomId).Contains(n.PlaceRoomId))
+                .Select(n => n.PlaceRoom.Name)
+                .Distinct()
+                .ToListAsync(ct);
+            if (stillBooked.Count > 0)
+                return BadRequest(
+                    $"{string.Join(" and ", stillBooked)} still {(stillBooked.Count == 1 ? "has" : "have")} "
+                  + "confirmed bookings. Move those parties first.");
+
+            db.HostedEventRooms.RemoveRange(removing);
+        }
+
+        foreach (var choice in wanted)
+        {
+            var row = existing.FirstOrDefault(r => r.PlaceRoomId == choice.PlaceRoomId);
+            if (row is null)
+            {
+                row = new HostedEventRoom
+                {
+                    Id = Guid.NewGuid(),
+                    HostedEventId = eventId,
+                    PlaceRoomId = choice.PlaceRoomId,
+                    DateCreated = DateTime.UtcNow,
+                    CreatedByAppUserId = userId.Value,
+                };
+                db.HostedEventRooms.Add(row);
+            }
+            else
+            {
+                row.DateUpdated = DateTime.UtcNow;
+                row.UpdatedByAppUserId = userId.Value;
+            }
+            row.CapacityOverride = choice.CapacityOverride is int c && c >= 0 ? c : null;
+            row.Note = Trimmed(choice.Note);
+            row.SortOrder = choice.SortOrder;
+        }
+
+        await db.SaveChangesAsync(ct);
+        return Ok(await RoomsAsync(db, eventId, ct));
+    }
+
+    private static async Task<IReadOnlyList<HostedEventRoomRecord>> RoomsAsync(
+        BenDataContext db, Guid eventId, CancellationToken ct)
+        => await db.HostedEventRooms
+            .AsNoTracking()
+            .Include(r => r.PlaceRoom)
+            .Where(r => r.HostedEventId == eventId)
+            .OrderBy(r => r.SortOrder).ThenBy(r => r.PlaceRoom.Name)
+            .Select(r => new HostedEventRoomRecord(
+                r.Id, r.PlaceRoomId, r.PlaceRoom.Name, r.PlaceRoom.Floor, r.PlaceRoom.BedNote,
+                r.CapacityOverride ?? r.PlaceRoom.Capacity, r.CapacityOverride, r.Note, r.SortOrder))
+            .ToListAsync(ct);
+
     /// <summary>Un-does a cancellation, for the one that was a mis-click.</summary>
     [HttpPost("{eventId:guid}/uncancel")]
     public Task<ActionResult<HostedEventRecord>> Uncancel(Guid orgId, Guid eventId, CancellationToken ct)

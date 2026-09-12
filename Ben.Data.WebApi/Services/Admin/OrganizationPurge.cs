@@ -362,6 +362,16 @@ public sealed class OrganizationPurge
             // the group and at a place, both NoAction. They go after the calendar rows above,
             // because the umbrella row names its event. The nights cascade from the event, so
             // taking the events takes them.
+            // A booking's nights and an event's offered rooms both point at a PlaceRoom with
+            // NoAction, so they have to go before the rooms further down. They are taken here
+            // rather than there because they also hang off the event, and deleting the event
+            // first would be refused by these same rows (item 235 phase 2).
+            await db.HostedEventBookingNights
+                .Where(x => x.HostedEventBooking.HostedEvent.OrganizationId == organizationId)
+                .ExecuteDeleteAsync(ct);
+            await db.HostedEventRooms
+                .Where(x => x.HostedEvent.OrganizationId == organizationId)
+                .ExecuteDeleteAsync(ct);
             await db.HostedEvents.Where(x => x.OrganizationId == organizationId).ExecuteDeleteAsync(ct);
             await db.Cases.Where(x => x.OrganizationId == organizationId).ExecuteDeleteAsync(ct);
 
