@@ -1,5 +1,19 @@
 # Item 235: Hosted events — venues, multi-night events, bookings, sessions, staff, files, pages, collaboration, and the phone
 
+> **SUPERSEDED FOR PHASES AND DECISIONS, 2026-09-12.** Ben asked for the arc to be re-planned from
+> day one after the retrospective (*"lets completely start hosted-events-235 from scratch and you
+> plan out this design in detail with any missing or overlooked options or gaps and break it into
+> logical phases"*). The plan of record is now
+> **[`README-hosted-events-235-v2.md`](README-hosted-events-235-v2.md)** — fifteen phases, the
+> fifteen decisions Ben made that day, a model diff against this branch, the invariants, a
+> keep/change/rewrite verdict per file, and twenty-four defects and gaps with the phase that fixes
+> each. This file is kept for its **Status** history (what phases 0–2.4a actually shipped and why)
+> and its Decisions list; where the two disagree, v2 wins. In particular: old DECISION 7 ("only
+> Confirmed holds") is superseded by soft holds in Pick mode; "never archive with an undecided
+> booking" is superseded by expire-then-archive; and cancelling an event now restores its credit
+> 48 hours or more before the first night.
+
+
 ## Context
 
 Ben, 2026-09-11, on the three kinds of paying customer: personal, ghost tours, and **event creators**, "the one I don't think we have addressed". His brief across the day, kept in his words in the README that Phase 0 writes:

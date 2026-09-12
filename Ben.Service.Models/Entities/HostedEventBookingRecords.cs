@@ -43,6 +43,11 @@ public sealed record SetHostedEventLayoutRequest(
     HostedEventLayoutKind Kind,
     IReadOnlyList<HostedEventLayoutUnitChoice> Units);
 
+/// <param name="Id">
+/// The existing unit this choice is, when it is one. Matched by id FIRST, then by room or label:
+/// without it, renaming a seat that has a confirmed party in it reads as delete-and-create, and
+/// the delete is refused because the seat is booked. With it, a rename is a rename.
+/// </param>
 /// <param name="PlaceRoomId">
 /// Required on a Rooms layout and refused on a Seats one: a seat is not one of the venue's rooms.
 /// </param>
@@ -51,6 +56,7 @@ public sealed record SetHostedEventLayoutRequest(
 /// renaming the room renames it everywhere at once.
 /// </param>
 public sealed record HostedEventLayoutUnitChoice(
+    Guid? Id = null,
     Guid? PlaceRoomId = null,
     string? Label = null,
     string? Section = null,
@@ -329,3 +335,16 @@ public sealed record HostedEventLayoutRecord(
     int? DayPassCapacity,
     decimal? DayPassPrice,
     IReadOnlyList<HostedEventLayoutUnitRecord> Units);
+
+/// <summary>
+/// Why a plan could not be saved, in words AND in ids.
+/// </summary>
+/// <remarks>
+/// The sentence is for the person; the ids are for the designer, which rings the offending units
+/// so a venue with four hundred seats is not left reading "C4 and C5 still have confirmed bookings"
+/// and hunting for row C. Returned as a 409 body, which is what lets the website tell it apart from
+/// a plain refusal.
+/// </remarks>
+public sealed record LayoutRefusalRecord(
+    string Sentence,
+    IReadOnlyList<Guid> UnitIds);
