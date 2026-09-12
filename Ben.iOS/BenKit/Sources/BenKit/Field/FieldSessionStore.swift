@@ -78,12 +78,16 @@ public final class FieldSessionStore {
     // ── The running session ───────────────────────────────────────────────────
 
     /// Brings the instruments up for a session and starts reading them.
+    /// `channels` defaults to what the session was SET UP with, not to the app's defaults: a
+    /// session opened for video and left running must come back with video, and passing
+    /// `.default` here is how the picker's choice used to be thrown away on the next launch.
     public func activate(_ id: UUID, policy: SamplingPolicy = .default,
-                         channels: CaptureChannels = .default) async {
+                         channels: CaptureChannels? = nil) async {
         guard active?.sessionId != id else { return }
         await active?.end()
 
         guard let summary = summary(for: id) else { return }
+        let channels = channels ?? summary.channels
         let log = ReadingLog(fileURL: files.readingLogURL(for: id))
         let sensors = makeSensors()
         let engine = FieldSessionEngine(sessionId: id, log: log, sensors: sensors,
@@ -118,6 +122,8 @@ public final class FieldSessionStore {
             row.captureCount = captures.count
             row.baselineEmfMicrotesla = session.baselines.magneticMicrotesla
             row.baselineSoundDbfs = session.baselines.soundDbfs
+            // Switching video on at 2am is a decision about this session, not about this launch.
+            row.channels = session.channels
             for capture in captures where !row.captures.contains(where: { $0.id == capture.id }) {
                 let stored = FieldCapture(
                     id: capture.id, at: capture.at, kind: capture.kind,
@@ -196,7 +202,8 @@ public final class FieldSessionStore {
             .map { CaptureMark(id: $0.id, at: $0.at, kind: $0.kind,
                                relativePath: $0.relativePath,
                                latitude: $0.latitude, longitude: $0.longitude,
-                               isRepresentative: $0.isRepresentative, room: $0.room) }
+                               isRepresentative: $0.isRepresentative, room: $0.room,
+                               byteCount: $0.byteCount) }
             .sorted { $0.at < $1.at }
 
         return ReplaySource(
@@ -237,7 +244,8 @@ public final class FieldSessionStore {
             .map { CaptureMark(id: $0.id, at: $0.at, kind: $0.kind,
                                relativePath: $0.relativePath,
                                latitude: $0.latitude, longitude: $0.longitude,
-                               isRepresentative: $0.isRepresentative, room: $0.room) }
+                               isRepresentative: $0.isRepresentative, room: $0.room,
+                               byteCount: $0.byteCount) }
     }
 
     /// Writes a Device Data Format v1 bundle for a session, carrying the chosen files.
@@ -374,7 +382,8 @@ public final class FieldSessionStore {
     public func startSession(locationLabel: String?,
                              investigationId: UUID? = nil,
                              investigationTitle: String? = nil,
-                             batteryPercent: Double? = nil) throws -> UUID {
+                             batteryPercent: Double? = nil,
+                             channels: CaptureChannels = .default) throws -> UUID {
         guard let context else { throw FieldSessionError.unavailable }
 
         let id = UUID()
@@ -387,7 +396,8 @@ public final class FieldSessionStore {
             investigationId: investigationId,
             investigationTitle: investigationTitle,
             batteryPercentAtStart: batteryPercent,
-            deviceModel: deviceModel)
+            deviceModel: deviceModel,
+            channels: channels)
         context.insert(session)
         try context.save()
 
@@ -497,10 +507,14 @@ public struct CaptureMark: Sendable, Equatable, Identifiable {
     public var isRepresentative: Bool
     /// The room the operator said they were in when this was captured.
     public var room: String?
+    /// What the file weighs on the phone, so an upload can be weighed before it is attempted
+    /// rather than after it has run for twenty minutes.
+    public var byteCount: Int64
 
     public init(id: UUID, at: Date, kind: CaptureKind, relativePath: String,
                 latitude: Double? = nil, longitude: Double? = nil,
-                isRepresentative: Bool = false, room: String? = nil) {
+                isRepresentative: Bool = false, room: String? = nil,
+                byteCount: Int64 = 0) {
         self.id = id
         self.at = at
         self.kind = kind
@@ -509,6 +523,7 @@ public struct CaptureMark: Sendable, Equatable, Identifiable {
         self.longitude = longitude
         self.isRepresentative = isRepresentative
         self.room = room
+        self.byteCount = byteCount
     }
 }
 

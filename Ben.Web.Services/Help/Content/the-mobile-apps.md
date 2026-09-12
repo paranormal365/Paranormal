@@ -71,16 +71,20 @@ is still identified in that cellar.
    recognise it by next week, so a room beats a timestamp.
 3. If you are signed in and on an investigation, pick it. If not, leave it as it is; you can
    attach the session to an investigation later.
-4. Tap **Open the session**. The live screen opens but **nothing is being recorded yet** — the
+4. Under **What to record**, choose the channels: magnetic field, sound, video and location, each
+   with what it costs in battery. Magnetic field, sound and location start on and **video starts
+   off**, because video is the one that ends a night early. All four can be changed later while
+   the session is running.
+5. Tap **Open the session**. The live screen opens but **nothing is being recorded yet** — the
    gauge runs so you can see the room, and the bar says *not started*. Take your time here.
-5. Set up. Name the room, switch channels on or off, and once the room has settled for a few
+6. Set up. Name the room, switch channels on or off, and once the room has settled for a few
    seconds tap **Set base**. Everything you record is measured against what this room reads
    when nothing is happening, and it is far better set before the clock starts than after.
-6. Tap **Start**. The clock begins, readings start landing, and Mark, Note, EVP and the capture
+7. Tap **Start**. The clock begins, readings start landing, and Mark, Note, EVP and the capture
    buttons appear — none of them exist before Start, because a mark before the clock began
    would belong to no moment.
-7. Work. Tap **Mark** whenever something happens, or **Note** to add a line about it.
-8. Tap **Stop** when you are done. The session opens for review straight away.
+8. Work. Tap **Mark** whenever something happens, or **Note** to add a line about it.
+9. Tap **Stop** when you are done. The session opens for review straight away.
 
 If the night turns out to be nothing before you ever press Start, tap **Discard** next to the
 Start button. The session is removed and the space comes back at once. A session that was
@@ -115,9 +119,13 @@ evidence.
 
 ### Choosing what a session records
 
-Switches decide what is running: **magnetic field**, **audio**, **video** and **location**. Each
-says what it costs. Switching one off tears it down rather than leaving it running quietly —
-which is the whole reason to switch video off at two in the morning.
+Four channels: **magnetic field**, **audio**, **video** and **location**. Each says what it costs.
+You choose them on the **New session** sheet before the session opens, and the same switches are on
+the running session's screen under *Recording* — switching one off tears it down rather than
+leaving it running quietly, which is the whole reason to switch video off at two in the morning.
+
+Video starts **off**. With it on, a **Video** button appears in the capture bar next to Photo.
+Photographs are always available whatever the channels say.
 
 Video is captured as **clips**, not a continuous recording. Five hours of video is tens of
 gigabytes and a flat battery long before the night is over.
@@ -307,6 +315,28 @@ times after the session's own name, on the website's list, in the player and in 
 cites it. A session sent whole keeps its name.
 
 **Send the whole session** puts both dots back at the ends.
+
+### How much goes at once
+
+Your phone is never limited. It records for as long as the night needs, at whatever the camera
+gives, and it keeps every second of that afterwards. What is measured out is the **upload**.
+
+One upload carries **5 minutes of video** and **500 MB in total**. Readings, marks, photographs and
+sound are not rationed by time — a whole night of instruments and audio goes in one send. Only
+video is, because a minute of video outweighs an hour of everything else.
+
+Above the Send button the screen says what this window weighs and how much video is in it. If it
+is over, there are two ways through, and the screen offers whichever one fits the problem:
+
+- **Too long?** Drag the handles in to make a clip of it, send that, then move the window along and
+  send the next. You can send as many times as it takes, and nothing already sent is changed by
+  sending more.
+- **Too heavy?** Under **Send the video smaller** you can send the footage at 1080p or 720p, and at
+  24 frames a second, with the size each choice would produce shown beside it. This changes only
+  the copy that is sent; the recording on your phone stays exactly as it was filmed.
+
+Sizes on that screen are estimates. A dark, still room compresses better than the estimate
+suggests, so the real upload is usually smaller.
 
 ### Exporting a session
 
