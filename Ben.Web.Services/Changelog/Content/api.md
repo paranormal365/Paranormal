@@ -40,6 +40,16 @@ belongs there; this is for the part underneath.
 - One upload now carries up to 5 minutes of video and 500 MB in total. Recording on the phone is
   not limited in any way — this is only about how much travels at once, and a session can be sent
   in as many goes as it takes.
+- An event's plan can be saved with each seat's own identity, so renaming a seat somebody has
+  already booked is a rename and not a new seat with an empty one left behind.
+- When a plan cannot be saved, the refusal names the seats in the way, in a form a screen can
+  point at as well as a person can read.
+- A confirmed guest's pass can be emailed to them again.
+- A pass that has been withdrawn can still be read by its guest, who is told it was withdrawn
+  rather than that it was never issued.
+- The calendar entries for an event's nights now carry the venue's own evening rather than a
+  universal clock.
+- A venue with an event at it can be merged into its duplicate, and the event follows.
 
 ## 2026-09-11
 

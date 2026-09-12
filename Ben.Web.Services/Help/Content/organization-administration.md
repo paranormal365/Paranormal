@@ -814,6 +814,16 @@ says CANCELLED in its title — the one line everybody actually reads, on your p
 and on somebody's phone — and the reason you give is shown to the people who had places. The event is
 kept rather than deleted, because somebody who was coming needs to be able to see that it is off.
 
+### If the event is called off, your credit
+
+Call an event off **48 hours or more before its first night** and the credit it was published with
+comes back to you — as a credit, ready for the next event, and never as money. Call it off later
+than that and the credit is spent: by then the venue, the kitchen and the people who were coming
+have all made their arrangements, and so have we.
+
+An event that took one of your plan's own slots rather than a credit simply frees the slot, and the
+slot is yours again at once.
+
 ### The date on your calendar
 
 Every event puts one entry on your group's calendar, spanning the whole thing from the first date's
@@ -832,6 +842,29 @@ in for a séance weekend sleeps four for that weekend and goes back to two after
 
 A room with confirmed bookings in it can't be untick­ed. Move those parties somewhere else first;
 dropping the room would leave them sleeping in one your event says it is not using.
+
+The two screens after this one are the **plan**, where the rooms — or the seats, for an event sold
+by the seat — are drawn out so everybody can see what is where, and the **board**, where requests
+wait for your decision. Both open from the index down the side of the event page.
+
+#### Sleeps, bookable and beds
+
+The rooms themselves live on the venue's own **Rooms** page, which the event's Details card links
+to as *Describe the venue's rooms*. Each room can say what it sleeps, whether it may be booked, and
+how many beds it has.
+
+**Sleeps** left blank means nobody has said: ask the venue, and an event that offers the room will
+have to give a number of its own. **Zero** is a decision — a room nobody sleeps in, a parlour or a
+séance room that guests visit and leave. The two look alike on a form and mean opposite things on a
+booking, so a blank is never quietly read as zero.
+
+**Bookable** is separate from **Public**. Public says whether a visitor can read about the room on
+the venue's page; bookable says whether a party can take it for the night. A famous room can be
+public and never booked — the owner sleeps in it — and a plain twin can be bookable without earning
+a paragraph on the page. Ticking one does nothing to the other.
+
+**Beds** is for a room offered by the bed rather than as a whole: a bunk room with six beds is six
+places, and a party can take one of them, two, or all six.
 
 #### How a booking works
 

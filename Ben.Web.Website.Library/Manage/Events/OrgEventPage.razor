@@ -140,9 +140,15 @@
                     </a>
                     <a class="list-group-item list-group-item-action" href="#event-guests">Your guests</a>
                     <a class="list-group-item list-group-item-action" href="#event-state">Ending it</a>
-                    @* The sections later phases fill in. Listed but plainly not ready, rather than
-                       absent: somebody setting an event up should be able to see what is coming. *@
-                    <span class="list-group-item text-secondary small">Rooms and bookings — soon</span>
+                    @* The screens of their own that hang off this page. Plan, Bookings and Menus
+                       are pages the next phases build, and they are rendered as links only once
+                       those pages exist (HostedEventPagesShipped, in the code block) — this page
+                       is live, and a link that answers 404 is worse than a plain "soon". The rest
+                       are listed but plainly not ready, rather than absent: somebody setting an
+                       event up should be able to see what is coming. *@
+                    @IndexEntry("Plan", $"/organizations/{OrgId}/events/{EventId}/layout")
+                    @IndexEntry("Bookings", $"/organizations/{OrgId}/events/{EventId}/bookings")
+                    @IndexEntry("Menus", $"/organizations/{OrgId}/events/{EventId}/menus")
                     <span class="list-group-item text-secondary small">Programme — soon</span>
                     <span class="list-group-item text-secondary small">Staff and the door — soon</span>
                     <span class="list-group-item text-secondary small">Files — soon</span>
@@ -248,6 +254,16 @@
                                                 id="change-venue" @onclick="StartChangingVenue">
                                             Move it somewhere else
                                         </button>
+                                        @* The rooms an event offers are the venue's own list, and
+                                           the plan is drawn from it. Without this door somebody
+                                           reaches an empty plan with no idea where rooms come from. *@
+                                        @if (ev.PlaceId != Guid.Empty)
+                                        {
+                                            <a class="btn btn-sm btn-link p-0" id="venue-rooms-link"
+                                               href="@($"/organizations/{OrgId}/places/{ev.PlaceId}/rooms")">
+                                                <BenIcon Name="home" Class="me-1" />Describe the venue's rooms
+                                            </a>
+                                        }
                                     </div>
                                 }
                                 else
@@ -526,6 +542,20 @@
     private string _cancelReason = "";
     private readonly EventForm _form = new();
     private readonly Dictionary<Guid, NightForm> _nights = [];
+
+    /// <summary>
+    /// Whether the plan, bookings and menus pages exist yet. False until phase 2 of item 235
+    /// lands the layout designer, which flips it to true; the board and the menus page follow in
+    /// phase 5 behind the same flag. Kept as one constant, and the index rows drawn by one helper,
+    /// so shipping the pages is a one-character change and the markup cannot drift between the
+    /// two states. A live page must never carry a link that answers 404.
+    /// </summary>
+    private const bool HostedEventPagesShipped = false;
+
+    /// <summary>One index row for a screen of its own: a link once it ships, "soon" until then.</summary>
+    private static RenderFragment IndexEntry(string label, string href) => HostedEventPagesShipped
+        ? @<a class="list-group-item list-group-item-action" href="@href">@label</a>
+        : @<span class="list-group-item text-secondary small">@label — soon</span>;
 
     private bool _changingVenue;
     private string _venueSearch = "";
