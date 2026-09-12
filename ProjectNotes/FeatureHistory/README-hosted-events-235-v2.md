@@ -242,6 +242,19 @@ the defects found by the three planners that need no model change are fixed.
 - **Verified by**: describe six Thomas House rooms on the running site; follow *Plan* from the event
   page and get an empty plan, not a 404.
 
+### Interlude after phase 1 — item 239, the mail outbox (Ben, 2026-09-12: *"Yes, do that after merging Phase 1"*)
+
+Not an item-235 phase, but it lands **between phase 1 and phase 2** by Ben's decision, because
+three phases from here on add letters and it is cheaper to be born inside the outbox than
+retrofitted into it. `OutboxEmailService` decorates `IEmailService` (one seam, twenty callers
+untouched), `MailSenderJob` sends with backoff, transient and permanent failures are told apart,
+bodies are scrubbed after thirty days while the metadata stays for ever, an unconfigured
+deployment queues anyway, and the mail diagnostics screen grows the list of every letter with a
+Retry. Full design and the five judgement calls: item 239 in `ProjectNotes/Future-Improvements.md`.
+**Consequence for this plan:** phase 5's invite result field `Sent` becomes `Queued`, and every
+"we could not send it" sentence in phases 3–8 becomes "it is queued" — write them that way from
+the start rather than changing them later.
+
 ### Phase 2 — The layout designer (the first screen)
 
 **Goal**: a venue lays out a Rooms plan in two minutes and a 400-seat Seats plan in five, on a

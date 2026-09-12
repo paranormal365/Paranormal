@@ -12410,12 +12410,14 @@ recent letters with Kind, To, Created, Attempts, state and the last error; filte
 Waiting; **Retry now** on one and on all failed; the existing "can this box send" probe stays at
 the top. This is the screen that would have answered the 2026-08-31 question in five seconds.
 
-### Sequencing
+### Sequencing — DECIDED by Ben, 2026-09-12: *"Yes, do that after merging Phase 1"*
 
-Not part of item 235, but three of its phases add letters (the decision letters exist, hold-lapsed
-and go/no-go land in phases 4 and 3, the digest in phase 8), so **239a is best done right after
-item 235 phase 1 merges and before phase 3** — phase 1 slice D is editing `EventGuestMailer` and
-would conflict. Tests: `OutboxEmailServiceTests` (an unconfigured send still enqueues; a body over
+**239a and 239b run immediately after item 235 phase 1 merges, before phase 2 (the layout
+designer).** Not part of item 235, but three of its phases add letters (the decision letters
+exist; hold-lapsed and go/no-go land in phases 4 and 3; the digest in phase 8), and phase 1's
+slice D is editing `EventGuestMailer` right now, so mail cannot be touched until that merges.
+Doing it here means every letter item 235 adds from phase 3 onwards is born inside the outbox
+rather than retrofitted into it. Tests: `OutboxEmailServiceTests` (an unconfigured send still enqueues; a body over
 the cap is truncated and says so), `MailSenderJobTests` (transient retries with backoff, permanent
 fails at once, a claimed row is not claimed twice, running twice sends once),
 `MailRetentionTests` (a scrubbed row keeps its metadata), and a source guard
