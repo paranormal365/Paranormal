@@ -13,7 +13,12 @@
 @* Item 197. A property whose reported haunting IS the attraction is described by its rooms, not
    its address — "Room 217's history" is what a guest reads. The phone already stamps a room name
    onto every reading it takes; this is where those names come from, so two nights running use the
-   same one instead of two spellings of it. *@
+   same one instead of two spellings of it.
+
+   Item 235 phase 1. The same rooms are what a hosted event offers its guests, so a room now also
+   says how many sleep in it, whether an event may offer it at all, and what the beds are. Those
+   three were write-only until this screen learned them: the API had carried them since phase 2.1
+   and nothing on the site could set one. *@
 
 <div class="container-fluid px-3">
 
@@ -26,14 +31,15 @@
                     <text>The spaces inside <strong>@_place.Name</strong> your group has named.</text>
                 }
                 Naming them lets a night's readings be attributed to a room rather than typed out
-                again each time, and lets a room carry its own history.
+                again each time, lets a room carry its own history, and is where an event's
+                booking plan learns which rooms it may offer.
             </p>
         </div>
     </div>
 
     @if (_error is not null)
     {
-        <div class="alert alert-danger" role="alert">@_error</div>
+        <div class="alert alert-danger" role="alert" id="rooms-error">@_error</div>
     }
 
     @if (_result.Failed || _loading)
@@ -52,29 +58,60 @@
                     <input id="room-name" class="form-control" maxlength="120" placeholder="Room 217"
                            @bind="_name" @bind:event="oninput" />
                 </div>
-                <div class="col-12 col-md-2">
+                <div class="col-12 col-md-3">
                     <label class="form-label" for="room-floor">Floor or wing</label>
                     <input id="room-floor" class="form-control" maxlength="60" placeholder="Second floor"
                            @bind="_floor" @bind:event="oninput" />
                 </div>
-                <div class="col-12 col-md-4">
+                <div class="col-12 col-md-6">
                     <label class="form-label" for="room-desc">Description</label>
                     <input id="room-desc" class="form-control" maxlength="1000"
                            placeholder="Guests report a knock at 3am." @bind="_description" @bind:event="oninput" />
                 </div>
-                <div class="col-6 col-md-2 d-flex align-items-center gap-2 pt-md-4">
-                    <input type="checkbox" class="form-check-input" id="room-public" @bind="_isPublic" />
-                    <label class="form-label mb-0" for="room-public">Show publicly</label>
+
+                @* Blank is a real answer here, not a missing one. A venue that has not said how many
+                   sleep in a room has a room that cannot be over-filled by a plan; a venue that said
+                   zero has a chapel. The placeholder says so because a number box with nothing in it
+                   otherwise reads as "you forgot". *@
+                <div class="col-6 col-md-2">
+                    <label class="form-label" for="room-sleeps">Sleeps</label>
+                    <input id="room-sleeps" type="number" min="0" max="999" class="form-control"
+                           placeholder="Not said" @bind="_sleeps" @bind:event="oninput" />
                 </div>
-                <div class="col-6 col-md-1">
-                    <button type="button" class="btn btn-primary w-100"
-                            disabled="@(_saving || string.IsNullOrWhiteSpace(_name))"
-                            @onclick="AddAsync">Add</button>
+                <div class="col-6 col-md-2">
+                    <div class="form-check form-switch mb-2">
+                        <input type="checkbox" class="form-check-input" id="room-bookable" @bind="_isBookable" />
+                        <label class="form-check-label" for="room-bookable">Bookable</label>
+                    </div>
+                </div>
+                <div class="col-12 col-md-4">
+                    <label class="form-label" for="room-beds">Beds</label>
+                    <input id="room-beds" class="form-control" maxlength="200"
+                           placeholder="one king, two twins + a cot" @bind="_bedNote" @bind:event="oninput" />
+                </div>
+                <div class="col-6 col-md-2">
+                    <div class="form-check mb-2">
+                        <input type="checkbox" class="form-check-input" id="room-public" @bind="_isPublic" />
+                        <label class="form-check-label" for="room-public">Show publicly</label>
+                    </div>
+                </div>
+                <div class="col-6 col-md-2">
+                    @* Gated on the busy flag only. A button disabled while the name box "looks empty"
+                       is one circuit round trip behind the keyboard, and the click that lands in that
+                       window is dropped by the browser without a word (W-A12). The handler refuses in
+                       a sentence instead. *@
+                    <button type="button" class="btn btn-primary w-100" id="room-add"
+                            disabled="@_saving" @onclick="AddAsync">Add</button>
                 </div>
             </div>
             <div class="form-text mt-2">
                 A room is private until you say otherwise — it is somewhere people sleep, so
-                publishing one stays a decision.
+                publishing one stays a decision. <strong>Sleeps</strong> and <strong>Bookable</strong>
+                are what an event's booking plan reads: only a bookable room can be offered to a guest,
+                and Sleeps is how many it will hold. Leaving Sleeps blank means "we have not said" and a
+                plan will not limit it; zero means nobody sleeps there — a chapel, a cellar — which is a
+                different thing. <strong>Beds</strong> answers the question a number cannot: whether
+                two people will have to share one.
             </div>
         </div></div>
 
@@ -88,13 +125,19 @@
         }
         else
         {
+            @* Every <td> carries the column's name in data-label, because below 576px the table
+               reflows to stacked cards (see PlaceRoomsManager.razor.css) and the heading row is
+               hidden; the cell has to say what it is. A cell without one would show a bare "2". *@
             <div class="table-responsive">
-                <table class="table table-sm align-middle" data-testid="rooms-table">
+                <table class="table table-sm align-middle rooms-table" data-testid="rooms-table">
                     <thead>
                         <tr>
                             <th scope="col">Room</th>
                             <th scope="col">Floor</th>
                             <th scope="col">Description</th>
+                            <th scope="col">Sleeps</th>
+                            <th scope="col">Bookable</th>
+                            <th scope="col">Beds</th>
                             <th scope="col">Public</th>
                             <th scope="col">Actions</th>
                         </tr>
@@ -102,29 +145,114 @@
                     <tbody>
                     @foreach (var room in _rooms)
                     {
-                        <tr data-testid="room-row">
-                            <td class="fw-semibold">@room.Name</td>
-                            <td class="text-secondary">@(room.Floor ?? "—")</td>
-                            <td class="text-secondary small">@(room.Description ?? "—")</td>
-                            <td>
-                                @if (room.IsPublic)
-                                {
-                                    <span class="badge bg-success-subtle text-success-emphasis">Public</span>
-                                }
-                                else
-                                {
-                                    <span class="badge bg-body-secondary text-body-emphasis">Private</span>
-                                }
-                            </td>
-                            <td class="text-nowrap">
-                                <button type="button" class="btn btn-sm btn-outline-secondary text-nowrap me-1"
-                                        disabled="@_saving" @onclick="() => TogglePublicAsync(room)">
-                                    @(room.IsPublic ? "Make private" : "Make public")
-                                </button>
-                                <button type="button" class="btn btn-sm btn-outline-danger text-nowrap"
-                                        disabled="@_saving" @onclick="() => RemoveAsync(room)">Remove</button>
-                            </td>
-                        </tr>
+                        @if (_editingId == room.Id)
+                        {
+                            @* The row's own cells become inputs, with ids per row so two rows in edit
+                               at once could never share a label — only one is ever open, but the id
+                               scheme should not depend on that staying true. *@
+                            <tr data-testid="room-row" class="rooms-table__editing">
+                                <td data-label="Room">
+                                    <label class="visually-hidden" for="room-name-@room.Id">Room</label>
+                                    <input id="room-name-@room.Id" class="form-control form-control-sm"
+                                           maxlength="120" @bind="_editName" @bind:event="oninput" />
+                                </td>
+                                <td data-label="Floor">
+                                    <label class="visually-hidden" for="room-floor-@room.Id">Floor</label>
+                                    <input id="room-floor-@room.Id" class="form-control form-control-sm"
+                                           maxlength="60" @bind="_editFloor" @bind:event="oninput" />
+                                </td>
+                                <td data-label="Description">
+                                    <label class="visually-hidden" for="room-desc-@room.Id">Description</label>
+                                    <input id="room-desc-@room.Id" class="form-control form-control-sm"
+                                           maxlength="1000" @bind="_editDescription" @bind:event="oninput" />
+                                </td>
+                                <td data-label="Sleeps">
+                                    <label class="visually-hidden" for="room-sleeps-@room.Id">Sleeps</label>
+                                    <input id="room-sleeps-@room.Id" type="number" min="0" max="999"
+                                           class="form-control form-control-sm rooms-table__sleeps"
+                                           placeholder="Not said" @bind="_editSleeps" @bind:event="oninput" />
+                                </td>
+                                <td data-label="Bookable">
+                                    <div class="form-check form-switch mb-0">
+                                        <input type="checkbox" class="form-check-input" id="room-bookable-@room.Id"
+                                               @bind="_editBookable" />
+                                        <label class="form-check-label" for="room-bookable-@room.Id">Bookable</label>
+                                    </div>
+                                </td>
+                                <td data-label="Beds">
+                                    <label class="visually-hidden" for="room-beds-@room.Id">Beds</label>
+                                    <input id="room-beds-@room.Id" class="form-control form-control-sm"
+                                           maxlength="200" placeholder="one king, two twins + a cot"
+                                           @bind="_editBedNote" @bind:event="oninput" />
+                                </td>
+                                <td data-label="Public">
+                                    @if (room.IsPublic)
+                                    {
+                                        <span class="badge bg-success-subtle text-success-emphasis">Public</span>
+                                    }
+                                    else
+                                    {
+                                        <span class="badge bg-body-secondary text-body-emphasis">Private</span>
+                                    }
+                                </td>
+                                <td data-label="Actions" class="text-nowrap rooms-table__actions">
+                                    <button type="button" class="btn btn-sm btn-primary text-nowrap me-1"
+                                            disabled="@_saving" @onclick="() => SaveRowAsync(room)">Save</button>
+                                    <button type="button" class="btn btn-sm btn-outline-secondary text-nowrap"
+                                            disabled="@_saving" @onclick="CancelEdit">Cancel</button>
+                                </td>
+                            </tr>
+                        }
+                        else
+                        {
+                            <tr data-testid="room-row">
+                                <td data-label="Room" class="fw-semibold">@room.Name</td>
+                                <td data-label="Floor" class="text-secondary">@(room.Floor ?? "—")</td>
+                                <td data-label="Description" class="text-secondary small">@(room.Description ?? "—")</td>
+                                <td data-label="Sleeps" class="text-secondary">
+                                    @* Null and zero must not look alike in the one place a venue checks
+                                       what it said. A dash is "not said"; zero is spelled out because a
+                                       bare 0 beside a dash reads as the same nothing. *@
+                                    @(room.Capacity switch
+                                    {
+                                        null => "—",
+                                        0 => "0 · nobody sleeps here",
+                                        var n => n.ToString(),
+                                    })
+                                </td>
+                                <td data-label="Bookable">
+                                    @if (room.IsBookable)
+                                    {
+                                        <span class="badge bg-info-subtle text-info-emphasis" data-testid="room-bookable">Bookable</span>
+                                    }
+                                    else
+                                    {
+                                        <span class="text-secondary small">Not offered</span>
+                                    }
+                                </td>
+                                <td data-label="Beds" class="text-secondary small">@(room.BedNote ?? "—")</td>
+                                <td data-label="Public">
+                                    @if (room.IsPublic)
+                                    {
+                                        <span class="badge bg-success-subtle text-success-emphasis">Public</span>
+                                    }
+                                    else
+                                    {
+                                        <span class="badge bg-body-secondary text-body-emphasis">Private</span>
+                                    }
+                                </td>
+                                <td data-label="Actions" class="text-nowrap rooms-table__actions">
+                                    <button type="button" class="btn btn-sm btn-outline-primary text-nowrap me-1"
+                                            disabled="@_saving" @onclick="() => BeginEdit(room)">Edit</button>
+                                    <button type="button" class="btn btn-sm btn-outline-secondary text-nowrap me-1"
+                                            disabled="@_saving" @onclick="() => TogglePublicAsync(room)">
+                                        @(room.IsPublic ? "Make private" : "Make public")
+                                    </button>
+                                    <button type="button" class="btn btn-sm btn-outline-danger text-nowrap"
+                                            disabled="@_saving" @onclick="() => RemoveAsync(room)">Remove</button>
+                                </td>
+                            </tr>
+                        }
                     }
                     </tbody>
                 </table>
@@ -144,10 +272,24 @@
     private bool _saving;
     private string? _error;
 
+    // The add form.
     private string _name = "";
     private string _floor = "";
     private string _description = "";
+    private int? _sleeps;
+    private bool _isBookable;
+    private string _bedNote = "";
     private bool _isPublic;
+
+    // The one row open for editing, and its working copy. Kept apart from the add form so
+    // starting an edit does not throw away a half-typed new room.
+    private Guid? _editingId;
+    private string _editName = "";
+    private string _editFloor = "";
+    private string _editDescription = "";
+    private int? _editSleeps;
+    private bool _editBookable;
+    private string _editBedNote = "";
 
     protected override async Task OnInitializedAsync()
     {
@@ -175,14 +317,27 @@
     private async Task AddAsync()
     {
         var name = _name.Trim();
-        if (string.IsNullOrWhiteSpace(name)) return;
+        if (string.IsNullOrWhiteSpace(name))
+        {
+            _error = "A room needs a name before it can be added.";
+            return;
+        }
+        if (_sleeps is < 0)
+        {
+            _error = "Sleeps cannot be a negative number. Leave it blank if you have not said, or zero if nobody sleeps there.";
+            return;
+        }
 
         _saving = true;
         _error = null;
         try
         {
+            // A new room is NOT bookable unless the switch was turned on, the same say-so-before-
+            // it-is-used rule publishing follows: a room becomes somewhere a guest sleeps because
+            // somebody said so, not because it exists.
             var created = await AdminClient.CreatePlaceRoomAsync(OrgId, PlaceId,
-                new SavePlaceRoomRequest(name, _floor, _description, _isPublic));
+                new SavePlaceRoomRequest(name, _floor, _description, _isPublic,
+                    Capacity: _sleeps, IsBookable: _isBookable, BedNote: _bedNote));
 
             // A refusal the page discards is worse than no rule at all: the server declines a
             // duplicate name, and saying nothing would look like the Add button was broken.
@@ -193,6 +348,69 @@
             }
 
             _name = ""; _floor = ""; _description = ""; _isPublic = false;
+            _sleeps = null; _isBookable = false; _bedNote = "";
+            await LoadAsync();
+        }
+        finally { _saving = false; }
+    }
+
+    private void BeginEdit(PlaceRoomRecord room)
+    {
+        _error = null;
+        _editingId = room.Id;
+        _editName = room.Name;
+        _editFloor = room.Floor ?? "";
+        _editDescription = room.Description ?? "";
+        _editSleeps = room.Capacity;
+        _editBookable = room.IsBookable;
+        _editBedNote = room.BedNote ?? "";
+    }
+
+    /// <summary>Puts the row back exactly as it was; nothing typed into it reaches the server.</summary>
+    private void CancelEdit()
+    {
+        _editingId = null;
+    }
+
+    private async Task SaveRowAsync(PlaceRoomRecord room)
+    {
+        var name = _editName.Trim();
+        if (string.IsNullOrWhiteSpace(name))
+        {
+            _error = "A room needs a name. Use Remove if you meant to take it away.";
+            return;
+        }
+        if (_editSleeps is < 0)
+        {
+            _error = "Sleeps cannot be a negative number. Leave it blank if you have not said, or zero if nobody sleeps there.";
+            return;
+        }
+
+        _saving = true;
+        _error = null;
+        try
+        {
+            // Every booking field is sent BY NAME, and a blank Sleeps is sent as ClearCapacity.
+            // The server treats a null on any field added after the first release as "leave it
+            // alone" — right for a screen that edits one thing, wrong here, where an emptied box
+            // means the venue has gone back to "we have not said". Sending the four-argument form
+            // from this row would look like a successful save and change nothing a guest reads.
+            // PlaceRoomsManagerSourceTests pins the named arguments so a later edit cannot slip
+            // back to the short form.
+            var updated = await AdminClient.UpdatePlaceRoomAsync(OrgId, PlaceId, room.Id,
+                new SavePlaceRoomRequest(name, _editFloor, _editDescription, room.IsPublic,
+                    Capacity: _editSleeps,
+                    IsBookable: _editBookable,
+                    BedNote: _editBedNote,
+                    ClearCapacity: _editSleeps is null));
+
+            if (updated is null)
+            {
+                _error = $"Couldn't save \"{name}\" — this place may already have a room by that name.";
+                return;
+            }
+
+            _editingId = null;
             await LoadAsync();
         }
         finally { _saving = false; }
@@ -204,6 +422,10 @@
         _error = null;
         try
         {
+            // Deliberately the short form: this button changes one flag, so it sends one flag and
+            // leaves Sleeps, Bookable and Beds to the server's "null means leave it alone" rule.
+            // Re-sending the row's copies of them would write whatever this list happened to be
+            // told — and a list that omitted a field would then wipe it on every Make public.
             var updated = await AdminClient.UpdatePlaceRoomAsync(OrgId, PlaceId, room.Id,
                 new SavePlaceRoomRequest(room.Name, room.Floor, room.Description, !room.IsPublic));
 
@@ -221,9 +443,10 @@
         {
             if (!await AdminClient.DeletePlaceRoomAsync(OrgId, PlaceId, room.Id))
             {
-                _error = $"Couldn't remove \"{room.Name}\".";
+                _error = $"Couldn't remove \"{room.Name}\" — an event's plan may still be offering it.";
                 return;
             }
+            if (_editingId == room.Id) _editingId = null;
             await LoadAsync();
         }
         finally { _saving = false; }
