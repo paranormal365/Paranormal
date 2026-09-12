@@ -580,4 +580,232 @@ public sealed class HostedEventControllerTests
 
         Assert.Contains("before the first", Assert.IsType<string>(refusal.Value));
     }
+
+    // ── the layout: matched by id, refused with ids ──────────────────────────
+    //
+    // Item 235 phase 1, defect 13: renaming a booked seat used to read as delete-and-create, and
+    // the delete was refused because the seat was booked. A choice now carries the unit's id, and
+    // the one refusal a designer has to DRAW — "these seats still have parties in them" — comes
+    // back as a 409 with the ids, so a four-hundred-seat plan can ring the two that matter.
+
+    [Fact]
+    public async Task Renaming_a_seat_with_a_confirmed_party_keeps_its_id_and_its_booking()
+    {
+        var f = await SeedAsync();
+        var controller = Build(f);
+        var record = Created(await controller.Create(OrgId, Weekend(), default));
+
+        var plan = Saved(await controller.SetLayout(OrgId, record.Id, Seats(("C4", null), ("C5", null)), default));
+        var c4 = plan.Units.Single(u => u.Name == "C4");
+        var c5 = plan.Units.Single(u => u.Name == "C5");
+        await BookAsync(f, record, c4.Id);
+
+        // Before the id existed this was "remove C4, add C4a", and C4 is booked, so it was refused.
+        var renamed = Saved(await controller.SetLayout(OrgId, record.Id,
+            Seats(("C4a", c4.Id), ("C5", c5.Id)), default));
+
+        var still = Assert.Single(renamed.Units, u => u.Id == c4.Id);
+        Assert.Equal("C4a", still.Name);
+        Assert.Equal(2, renamed.Units.Count);
+
+        await using var db = await f.CreateDbContextAsync();
+        var night = await db.HostedEventBookingNights.SingleAsync();
+        // The party is still in the same seat, whatever it is called now.
+        Assert.Equal(c4.Id, night.HostedEventLayoutUnitId);
+    }
+
+    [Fact]
+    public async Task A_choice_carrying_another_events_unit_id_is_refused_by_name()
+    {
+        var f = await SeedAsync();
+        var controller = Build(f);
+        var ours = Created(await controller.Create(OrgId, Weekend("Ours"), default));
+        var theirs = Created(await controller.Create(OrgId, Weekend("Theirs"), default));
+
+        var theirSeat = Saved(await controller.SetLayout(OrgId, theirs.Id, Seats(("H9", null)), default))
+            .Units.Single();
+
+        // Sent against OUR event with THEIR seat's id. Matching it would move their booked seat
+        // onto our plan; creating a new unit for it would give it a second identity. Neither.
+        var refusal = Assert.IsType<BadRequestObjectResult>(
+            (await controller.SetLayout(OrgId, ours.Id, Seats(("H9", theirSeat.Id)), default)).Result);
+
+        var sentence = Assert.IsType<string>(refusal.Value);
+        Assert.Contains("H9", sentence);
+        Assert.Contains("another event", sentence);
+
+        await using var db = await f.CreateDbContextAsync();
+        // Nothing was written on either side.
+        Assert.Equal(0, await db.HostedEventLayoutUnits.CountAsync(u => u.HostedEventId == ours.Id));
+        Assert.Equal(theirs.Id, (await db.HostedEventLayoutUnits.SingleAsync(u => u.Id == theirSeat.Id)).HostedEventId);
+    }
+
+    [Fact]
+    public async Task Removing_booked_units_answers_409_naming_exactly_those_units()
+    {
+        var f = await SeedAsync();
+        var controller = Build(f);
+        var record = Created(await controller.Create(OrgId, Weekend(), default));
+
+        var plan = Saved(await controller.SetLayout(OrgId, record.Id,
+            Seats(("C4", null), ("C5", null), ("C6", null)), default));
+        var c4 = plan.Units.Single(u => u.Name == "C4");
+        var c5 = plan.Units.Single(u => u.Name == "C5");
+        var c6 = plan.Units.Single(u => u.Name == "C6");
+        // Two parties in C4 and C5 across the weekend; C6 is empty. Three nights in C4, so the
+        // sentence would read "C4 and C4 and C4 and C5" if the ids were not distinct.
+        await BookAsync(f, record, c4.Id, c4.Id, c4.Id);
+        await BookAsync(f, record, c5.Id);
+
+        // Keep only C6. C4 and C5 would go, and they cannot.
+        var refusal = Assert.IsType<ConflictObjectResult>(
+            (await controller.SetLayout(OrgId, record.Id, Seats(("C6", c6.Id)), default)).Result);
+
+        var body = Assert.IsType<LayoutRefusalRecord>(refusal.Value);
+        // The exact sentence a person read before the ids arrived — the record adds, it does not
+        // reword.
+        Assert.Equal("C4 and C5 still have confirmed bookings. Move those parties first.", body.Sentence);
+        // Exactly the booked units, once each, and not the empty one being kept.
+        Assert.Equal([c4.Id, c5.Id], body.UnitIds);
+
+        await using var db = await f.CreateDbContextAsync();
+        // And nothing was removed — refused means refused.
+        Assert.Equal(3, await db.HostedEventLayoutUnits.CountAsync(u => u.HostedEventId == record.Id));
+    }
+
+    [Fact]
+    public async Task The_same_unit_sent_twice_is_refused_by_name()
+    {
+        var f = await SeedAsync();
+        var controller = Build(f);
+        var record = Created(await controller.Create(OrgId, Weekend(), default));
+        var c4 = Saved(await controller.SetLayout(OrgId, record.Id, Seats(("C4", null)), default)).Units.Single();
+
+        // Two choices, one row: whichever was written last would silently win.
+        var refusal = Assert.IsType<BadRequestObjectResult>(
+            (await controller.SetLayout(OrgId, record.Id, Seats(("C4", c4.Id), ("C4b", c4.Id)), default)).Result);
+
+        Assert.Contains("C4", Assert.IsType<string>(refusal.Value));
+        Assert.Contains("twice", Assert.IsType<string>(refusal.Value));
+    }
+
+    [Fact]
+    public async Task A_rooms_plan_still_matches_by_room_when_no_id_is_sent()
+    {
+        // The designer's first save, and any older client, sends no ids. A Rooms plan matched by
+        // the room before ids existed and must go on doing so, or that first save would delete and
+        // recreate every unit and every booking would lose its room.
+        var f = await SeedAsync();
+        var (blue, red) = await RoomsAsync(f);
+        var controller = Build(f);
+        var record = Created(await controller.Create(OrgId, Weekend(), default));
+
+        var first = Saved(await controller.SetLayout(OrgId, record.Id, Rooms((blue, null), (red, null)), default));
+        var blueUnit = first.Units.Single(u => u.PlaceRoomId == blue);
+        await BookAsync(f, record, blueUnit.Id);
+
+        // Saved again with no ids and a new capacity on the Blue Room — the unit is the same unit.
+        var second = Saved(await controller.SetLayout(OrgId, record.Id,
+            new SetHostedEventLayoutRequest(HostedEventLayoutKind.Rooms,
+            [
+                new HostedEventLayoutUnitChoice(PlaceRoomId: blue, Capacity: 3),
+                new HostedEventLayoutUnitChoice(PlaceRoomId: red),
+            ]), default));
+
+        var kept = Assert.Single(second.Units, u => u.PlaceRoomId == blue);
+        Assert.Equal(blueUnit.Id, kept.Id);
+        Assert.Equal(3, kept.Holds);
+        Assert.Equal(first.Units.Single(u => u.PlaceRoomId == red).Id,
+                     second.Units.Single(u => u.PlaceRoomId == red).Id);
+    }
+
+    [Fact]
+    public async Task A_rooms_unit_matched_by_id_can_move_to_another_room_and_keep_its_party()
+    {
+        // "Whatever its label or room now says." The Blue Room's boiler fails on the Thursday and
+        // the venue points that unit at the Red Room instead; the party confirmed into it goes too.
+        var f = await SeedAsync();
+        var (blue, red) = await RoomsAsync(f);
+        var controller = Build(f);
+        var record = Created(await controller.Create(OrgId, Weekend(), default));
+
+        var unit = Saved(await controller.SetLayout(OrgId, record.Id, Rooms((blue, null)), default)).Units.Single();
+        await BookAsync(f, record, unit.Id);
+
+        var moved = Saved(await controller.SetLayout(OrgId, record.Id, Rooms((red, unit.Id)), default)).Units.Single();
+
+        Assert.Equal(unit.Id, moved.Id);
+        Assert.Equal(red, moved.PlaceRoomId);
+        Assert.Equal("Red Room", moved.Name);
+
+        await using var db = await f.CreateDbContextAsync();
+        Assert.Equal(unit.Id, (await db.HostedEventBookingNights.SingleAsync()).HostedEventLayoutUnitId);
+    }
+
+    private static SetHostedEventLayoutRequest Seats(params (string Label, Guid? Id)[] seats)
+        => new(HostedEventLayoutKind.Seats,
+               seats.Select(s => new HostedEventLayoutUnitChoice(Id: s.Id, Label: s.Label)).ToList());
+
+    private static SetHostedEventLayoutRequest Rooms(params (Guid PlaceRoomId, Guid? Id)[] rooms)
+        => new(HostedEventLayoutKind.Rooms,
+               rooms.Select(r => new HostedEventLayoutUnitChoice(Id: r.Id, PlaceRoomId: r.PlaceRoomId)).ToList());
+
+    /// <summary>Two of the venue's rooms, described by this group, so a Rooms plan has something to offer.</summary>
+    private static async Task<(Guid Blue, Guid Red)> RoomsAsync(IDbContextFactory<BenDataContext> f)
+    {
+        await using var db = await f.CreateDbContextAsync();
+        var blue = Guid.NewGuid();
+        var red = Guid.NewGuid();
+        foreach (var (id, name) in new[] { (blue, "Blue Room"), (red, "Red Room") })
+        {
+            db.PlaceRooms.Add(new PlaceRoom
+            {
+                Id = id, OrganizationId = OrgId, PlaceId = VenueId, Name = name, Capacity = 2,
+                IsBookable = true, IsActive = true,
+                DateCreated = DateTime.UtcNow, CreatedByAppUserId = OwnerId,
+            });
+        }
+        await db.SaveChangesAsync();
+        return (blue, red);
+    }
+
+    /// <summary>
+    /// A confirmed party in the given units, one night each in order — the same unit three times is
+    /// a three-night stay.
+    /// </summary>
+    private static async Task BookAsync(
+        IDbContextFactory<BenDataContext> f, HostedEventRecord record, params Guid[] unitIds)
+    {
+        await using var db = await f.CreateDbContextAsync();
+        var booking = new HostedEventBooking
+        {
+            Id = Guid.NewGuid(), HostedEventId = record.Id, LeadAppUserId = OwnerId,
+            PartySize = 1, Kind = HostedEventBookingKind.Overnight,
+            Status = HostedEventBookingStatus.Confirmed,
+            DateCreated = DateTime.UtcNow, CreatedByAppUserId = OwnerId,
+        };
+        for (var i = 0; i < unitIds.Length; i++)
+        {
+            booking.Nights.Add(new HostedEventBookingNight
+            {
+                Id = Guid.NewGuid(), HostedEventBookingId = booking.Id,
+                HostedEventNightId = record.Nights[i].Id, HostedEventLayoutUnitId = unitIds[i],
+                DateCreated = DateTime.UtcNow,
+            });
+        }
+        db.HostedEventBookings.Add(booking);
+        await db.SaveChangesAsync();
+    }
+
+    private static HostedEventLayoutRecord Saved(ActionResult<HostedEventLayoutRecord> result)
+    {
+        // As with Created: the refusals are sentences, so a failure here reads the sentence out.
+        if (result.Result is BadRequestObjectResult bad)
+            Assert.Fail($"Saving the plan was refused: {bad.Value}");
+        if (result.Result is ConflictObjectResult conflict)
+            Assert.Fail($"Saving the plan was refused: {(conflict.Value as LayoutRefusalRecord)?.Sentence ?? conflict.Value}");
+
+        return Assert.IsType<HostedEventLayoutRecord>(
+            Assert.IsType<OkObjectResult>(result.Result).Value);
+    }
 }

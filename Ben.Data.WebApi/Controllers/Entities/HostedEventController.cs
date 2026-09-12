@@ -411,6 +411,22 @@ public sealed class HostedEventController : OrgCmsControllerBase
     /// into the Blue Room cannot be silently reinterpreted as holding seat H9, and there is no
     /// answer to what their room becomes — so the venue is told to release the bookings first and
     /// decide deliberately.</para>
+    ///
+    /// <para><b>A choice that carries an <c>Id</c> IS that unit, whatever its label or room now
+    /// says.</b> Before the id existed, "the same one" was decided by the room on a Rooms plan and
+    /// the label on a Seats plan — which made renaming a booked seat read as delete C4, create C4a,
+    /// and the delete was refused because C4 is booked. The designer's first save has no ids yet,
+    /// so a choice without one still matches by room or label. An id that is not one of this
+    /// event's units is refused in words rather than matched: it is either another event's seat or
+    /// one somebody removed since the designer was opened, and quietly creating a new unit for it
+    /// would hide both.</para>
+    ///
+    /// <para><b>The booked-removal refusal is a 409 carrying <see cref="LayoutRefusalRecord"/></b>
+    /// — the same sentence a person reads, plus the ids of the units still holding parties. Every
+    /// other refusal here is a 400 with a sentence, and the website shows those verbatim; this one
+    /// is different because a designer with four hundred seats has to RING the two that are the
+    /// problem, and a sentence alone would leave the venue hunting for row C. The distinct status
+    /// is what lets the website tell "read this" from "ring these".</para>
     /// </remarks>
     [HttpPut("{eventId:guid}/layout")]
     public async Task<ActionResult<HostedEventLayoutRecord>> SetLayout(
@@ -428,6 +444,9 @@ public sealed class HostedEventController : OrgCmsControllerBase
         if (ev is null) return NotFound();
 
         var wanted = request.Units ?? [];
+        // The venue's rooms by name, on a Rooms plan; empty on a Seats one. Kept so a refusal about
+        // a room can say "Blue Room" rather than quote a guid at somebody.
+        var roomNames = new Dictionary<Guid, string>();
 
         // ── the kind, and what it demands of each unit ───────────────────────
         if (request.Kind != ev.LayoutKind)
@@ -449,11 +468,10 @@ public sealed class HostedEventController : OrgCmsControllerBase
             if (wanted.Any(u => u.PlaceRoomId is null))
                 return BadRequest("Every room on the plan has to be one of the venue's own rooms.");
 
-            var allowed = await db.PlaceRooms
+            roomNames = await db.PlaceRooms
                 .Where(r => r.OrganizationId == orgId && r.PlaceId == ev.PlaceId && r.IsActive)
-                .Select(r => r.Id)
-                .ToListAsync(ct);
-            if (wanted.Select(u => u.PlaceRoomId!.Value).Except(allowed).Any())
+                .ToDictionaryAsync(r => r.Id, r => r.Name, ct);
+            if (wanted.Select(u => u.PlaceRoomId!.Value).Except(roomNames.Keys).Any())
                 return BadRequest("One of those rooms is not a room this group has defined for the venue.");
 
             if (wanted.GroupBy(u => u.PlaceRoomId).Any(g => g.Count() > 1))
@@ -473,14 +491,45 @@ public sealed class HostedEventController : OrgCmsControllerBase
             .Where(u => u.HostedEventId == eventId)
             .ToListAsync(ct);
 
-        // Matched on the room for a Rooms plan and on the label for a Seats one, because those are
-        // the two things a person actually means by "the same one". Matching on nothing would
+        // ── an id that is not one of ours ────────────────────────────────────
+        // Refused, not matched and not created. A stale designer sending a seat somebody removed,
+        // and a request carrying another event's seat, would both otherwise become a brand-new unit
+        // wearing an old identity — and a booking board that quietly showed it.
+        var byId = existing.ToDictionary(u => u.Id);
+        var claimed = wanted.Where(c => c.Id is not null).Select(c => c.Id!.Value).ToList();
+        if (wanted.FirstOrDefault(c => c.Id is Guid id && !byId.ContainsKey(id)) is { } stranger)
+        {
+            var elsewhere = await db.HostedEventLayoutUnits.AnyAsync(u => u.Id == stranger.Id, ct);
+            return BadRequest(elsewhere
+                ? $"{NameForRefusal(stranger)} belongs to another event's plan, so it can't be saved "
+                  + "on this one. Reload the plan and try again."
+                : $"{NameForRefusal(stranger)} is no longer on this plan — somebody may have removed "
+                  + "it since you opened the designer. Reload the plan and try again.");
+        }
+        if (claimed.GroupBy(id => id).FirstOrDefault(g => g.Count() > 1) is { } twice)
+            return BadRequest(
+                $"{EventCapacity.NameOf(byId[twice.Key])} was sent twice. A unit can only be on the plan once.");
+
+        // Matched on the id when the choice carries one, because that is the unit whatever it is
+        // now called: a rename is a rename, not a removal the booking refuses. A choice with no id —
+        // the designer's first save, or an older client — matches on the room for a Rooms plan and
+        // on the label for a Seats one, the two things a person means by "the same one", and only
+        // among the units no id-carrying choice has already claimed, so a new seat given a booked
+        // seat's old label cannot become a second write to the same row. Matching on nothing would
         // delete and recreate every unit on every save, and every booking would lose its room.
+        var unclaimed = existing.Where(u => !claimed.Contains(u.Id)).ToList();
         HostedEventLayoutUnit? Match(HostedEventLayoutUnitChoice choice)
-            => request.Kind == HostedEventLayoutKind.Rooms
-                ? existing.FirstOrDefault(u => u.PlaceRoomId == choice.PlaceRoomId)
-                : existing.FirstOrDefault(u => u.Label != null
+            => choice.Id is Guid id ? byId[id]
+             : request.Kind == HostedEventLayoutKind.Rooms
+                ? unclaimed.FirstOrDefault(u => u.PlaceRoomId == choice.PlaceRoomId)
+                : unclaimed.FirstOrDefault(u => u.Label != null
                     && string.Equals(u.Label, Trimmed(choice.Label), StringComparison.OrdinalIgnoreCase));
+
+        // What a refusal calls a choice that is not (yet) a unit: its label, else its room's name.
+        string NameForRefusal(HostedEventLayoutUnitChoice choice)
+            => Trimmed(choice.Label)
+            ?? (choice.PlaceRoomId is Guid r && roomNames.TryGetValue(r, out var room) ? room : null)
+            ?? "One of those units";
 
         var keeping = wanted.Select(Match).Where(u => u is not null).Select(u => u!.Id).ToHashSet();
         var removing = existing.Where(u => !keeping.Contains(u.Id)).ToList();
@@ -499,10 +548,18 @@ public sealed class HostedEventController : OrgCmsControllerBase
 
             if (stillBooked.Count > 0)
             {
-                var names = stillBooked.Select(EventCapacity.NameOf).Distinct().ToList();
-                return BadRequest(
+                // One entry per unit, in plan order, so the sentence and the ids name the same
+                // seats in the same order and a party booked for three nights is not "C4 and C4
+                // and C4". A 409 with the record, not a 400 with the sentence: the designer needs
+                // the ids to ring the seats, and the status is how it knows they are there.
+                var booked = stillBooked
+                    .GroupBy(u => u.Id).Select(g => g.First())
+                    .OrderBy(u => u.SortOrder).ToList();
+                var names = booked.Select(EventCapacity.NameOf).Distinct().ToList();
+                return Conflict(new LayoutRefusalRecord(
                     $"{string.Join(" and ", names)} still {(names.Count == 1 ? "has" : "have")} "
-                  + "confirmed bookings. Move those parties first.");
+                  + "confirmed bookings. Move those parties first.",
+                    booked.Select(u => u.Id).ToList()));
             }
 
             db.HostedEventLayoutUnits.RemoveRange(removing);
@@ -519,7 +576,6 @@ public sealed class HostedEventController : OrgCmsControllerBase
                 {
                     Id = Guid.NewGuid(),
                     HostedEventId = eventId,
-                    PlaceRoomId = choice.PlaceRoomId,
                     DateCreated = DateTime.UtcNow,
                     CreatedByAppUserId = userId.Value,
                 };
@@ -531,6 +587,10 @@ public sealed class HostedEventController : OrgCmsControllerBase
                 row.UpdatedByAppUserId = userId.Value;
             }
 
+            // Written on every save, not only when the row is new: a unit matched by its id IS that
+            // unit whatever room the designer now points it at, and the party confirmed into it
+            // goes where it goes. A Seats plan never has one — a seat is not one of the venue's rooms.
+            row.PlaceRoomId = request.Kind == HostedEventLayoutKind.Rooms ? choice.PlaceRoomId : null;
             // A Rooms unit deliberately keeps no label, so renaming the venue's room renames it
             // everywhere at once instead of leaving last year's name on this year's plan.
             row.Label = request.Kind == HostedEventLayoutKind.Rooms ? null : Trimmed(choice.Label);
