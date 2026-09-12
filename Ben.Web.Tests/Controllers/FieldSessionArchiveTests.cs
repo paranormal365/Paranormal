@@ -913,6 +913,69 @@ public sealed class PlaceMergeTests
         Assert.Equal(keep, (await after.FieldSessionUploads.SingleAsync()).PlaceId);
     }
 
+    /// <summary>
+    /// A hosted event follows its venue into the surviving record.
+    /// </summary>
+    /// <remarks>
+    /// <para><c>HostedEvents.PlaceId</c> is a NoAction key, so until the merge repointed it the
+    /// delete of any place that had ever hosted an event was refused by the database — and the
+    /// duplicate most worth folding is exactly the one with a weekend on it (item 235 phase 1).</para>
+    ///
+    /// <para>On SQLite rather than the in-memory store, deliberately: the in-memory store enforces
+    /// no keys, so without the repoint it would have deleted the place and left the event stranded,
+    /// which is a different failure from the one production had. Here the missing line is the
+    /// refusal it was.</para>
+    /// </remarks>
+    [Fact]
+    public async Task A_hosted_event_follows_its_venue_into_the_surviving_record()
+    {
+        await using var sqlite = await SqliteTestDb.CreateAsync();
+        var userId = Guid.NewGuid();
+        var orgId = Guid.NewGuid();
+        var keep = Guid.NewGuid();
+        var drop = Guid.NewGuid();
+        var eventId = Guid.NewGuid();
+
+        await using (var db = await sqlite.NewContextAsync())
+        {
+            db.AppUsers.Add(new AppUser
+            {
+                Id = userId, UserName = "a@t.com", NormalizedUserName = "A@T.COM",
+                Email = "a@t.com", DisplayName = "Admin", DateCreated = DateTime.UtcNow,
+            });
+            db.Organizations.Add(new Organization
+            {
+                Id = orgId, Name = "The Thomas House", UrlName = "thomas-house",
+                DateCreated = DateTime.UtcNow, CreatedByAppUserId = userId,
+            });
+            foreach (var (id, name) in new[] { (keep, "Thomas House Hotel"), (drop, "The Thomas House") })
+                db.Places.Add(new Place
+                {
+                    Id = id, Name = name, City = "Red Boiling Springs", State = "TN",
+                    Kind = PlaceKind.PublicLocation, Latitude = 36.5340m, Longitude = -85.8497m,
+                    DateCreated = DateTime.UtcNow, CreatedByAppUserId = userId,
+                });
+            db.HostedEvents.Add(new HostedEvent
+            {
+                Id = eventId, OrganizationId = orgId, PlaceId = drop,
+                Name = "Halloween Lock-In", UrlName = "halloween-lock-in",
+                StartsOn = new DateTime(2026, 10, 30), EndsOn = new DateTime(2026, 11, 1),
+                DateCreated = DateTime.UtcNow, CreatedByAppUserId = userId,
+            });
+            await db.SaveChangesAsync();
+        }
+
+        var result = await Controller(sqlite.Factory, userId).Merge(
+            drop, new Ben.Data.WebApi.Controllers.Admin.AdminPlaceMergeController.MergeRequest(keep), default);
+        var merged = (Ben.Data.WebApi.Controllers.Admin.AdminPlaceMergeController.MergeResult)
+            Assert.IsType<OkObjectResult>(result.Result).Value!;
+        Assert.Equal(1, merged.HostedEvents);
+
+        await using var after = await sqlite.NewContextAsync();
+        Assert.Null(await after.Places.FindAsync(drop));
+        Assert.Equal(keep, (await after.HostedEvents.SingleAsync(e => e.Id == eventId)).PlaceId);
+    }
+
     [Fact]
     public async Task A_place_cannot_be_merged_into_itself_or_into_nothing()
     {

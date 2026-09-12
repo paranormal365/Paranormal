@@ -19,10 +19,10 @@ namespace Ben.Data.WebApi.Controllers.Admin;
 /// testing left three "Bell Witch Cave" records, which is precisely the mess the feature promises
 /// not to make. Without a merge the only cure is a database console.</para>
 ///
-/// <para><b>It moves everything, then deletes.</b> Investigations, cases, calendar events, field
-/// sessions and rooms all point at places; leaving any behind would orphan somebody's work at a
-/// record nothing links to any more. The delete is the last statement, in the same transaction, so
-/// a failure half way leaves both places intact rather than one gutted.</para>
+/// <para><b>It moves everything, then deletes.</b> Investigations, cases, calendar events, hosted
+/// events, field sessions and rooms all point at places; leaving any behind would orphan somebody's
+/// work at a record nothing links to any more. The delete is the last statement, in the same
+/// transaction, so a failure half way leaves both places intact rather than one gutted.</para>
 ///
 /// <para><b>SuperAdmin only, and irreversible.</b> Nothing records which place a row used to point
 /// at, so a merge cannot be undone by anything short of restoring a backup. That is acceptable for
@@ -163,7 +163,7 @@ public sealed class AdminPlaceMergeController : BenControllerBase
     /// </summary>
     public sealed record MergeResult(
         Guid SurvivingPlaceId, int Investigations, int Cases, int CalendarEvents,
-        int FieldSessions, int Rooms);
+        int FieldSessions, int Rooms, int HostedEvents);
 
     /// <summary>Moves everything from one place onto another and deletes the empty one.</summary>
     [HttpPost("{id:guid}/merge")]
@@ -193,6 +193,15 @@ public sealed class AdminPlaceMergeController : BenControllerBase
             x => x.PlaceId = request.IntoPlaceId, ct);
         var events = await RepointAsync(db.OrgCalendarEvents.Where(x => x.PlaceId == id),
             x => x.PlaceId = request.IntoPlaceId, ct);
+
+        // Hosted events (item 235) point at their venue with a NoAction key, so until this line
+        // existed a merge of any place that had ever hosted one reached the delete below and was
+        // refused by SQL — and the duplicate most worth folding is exactly the record with a
+        // weekend on it. The umbrella calendar row moved above; the event it belongs to has to
+        // move with it, or the two would disagree about where the weekend is.
+        var hostedEvents = await RepointAsync(db.HostedEvents.Where(x => x.PlaceId == id),
+            x => x.PlaceId = request.IntoPlaceId, ct);
+
         var sessions = await RepointAsync(db.FieldSessionUploads.Where(x => x.PlaceId == id),
             x => x.PlaceId = request.IntoPlaceId, ct);
 
@@ -211,10 +220,10 @@ public sealed class AdminPlaceMergeController : BenControllerBase
 
         _log.LogInformation(
             "Place {Losing} merged into {Surviving}: {Investigations} investigations, {Cases} cases, "
-          + "{Events} events, {Sessions} sessions, {Rooms} rooms moved.",
-            id, request.IntoPlaceId, investigations, cases, events, sessions, rooms);
+          + "{Events} events, {HostedEvents} hosted events, {Sessions} sessions, {Rooms} rooms moved.",
+            id, request.IntoPlaceId, investigations, cases, events, hostedEvents, sessions, rooms);
 
         return Ok(new MergeResult(
-            request.IntoPlaceId, investigations, cases, events, sessions, rooms));
+            request.IntoPlaceId, investigations, cases, events, sessions, rooms, hostedEvents));
     }
 }
