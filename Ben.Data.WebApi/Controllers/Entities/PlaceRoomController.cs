@@ -179,10 +179,17 @@ public sealed class PlaceRoomController : BenControllerBase
     /// Retires a room, or deletes it outright when nothing has been attributed to it yet.
     /// </summary>
     /// <remarks>
-    /// A room that has been used is deactivated rather than removed, so anything recorded in it
-    /// still reads afterwards — the same rule equipment and duties follow. Nothing points at rooms
-    /// yet, so today this always deletes; the branch is written now so that when field sessions do
-    /// attribute to a room, retiring one cannot orphan a night's work.
+    /// <para>A room that has been used is deactivated rather than removed, so anything recorded in
+    /// it still reads afterwards — the same rule equipment and duties follow. Field sessions do not
+    /// attribute to a room row yet, so today this deletes; the branch is kept so that when they do,
+    /// retiring one cannot orphan a night's work.</para>
+    ///
+    /// <para><b>A room on an event's plan is refused, by name</b> (item 235 phase 1). The plan's
+    /// unit points at the room with a NoAction key, so the delete used to reach SQL and come back
+    /// as a 500 — a venue saw "something went wrong" for a room it had itself put on a plan. It is
+    /// a refusal rather than a cascade because taking a room off a plan releases whoever was booked
+    /// into it, which is not something the rooms list should be able to do by accident; and the
+    /// answer names the event so the person knows which plan to open.</para>
     /// </remarks>
     [HttpDelete("{roomId:guid}")]
     public async Task<IActionResult> Delete(Guid orgId, Guid placeId, Guid roomId, CancellationToken ct)
@@ -193,6 +200,27 @@ public sealed class PlaceRoomController : BenControllerBase
         var room = await db.PlaceRooms.FirstOrDefaultAsync(
             r => r.Id == roomId && r.OrganizationId == orgId && r.PlaceId == placeId, ct);
         if (room is null) return NotFound();
+
+        // Oldest plan first, so the event named is the one that put the room on a plan first.
+        // De-duplicated here rather than with Distinct in SQL, which would throw that order away;
+        // a room is on a handful of plans, not thousands.
+        var eventNames = (await db.HostedEventLayoutUnits.AsNoTracking()
+                .Where(u => u.PlaceRoomId == roomId)
+                .OrderBy(u => u.DateCreated)
+                .Select(u => u.HostedEvent.Name)
+                .ToListAsync(ct))
+            .Distinct().ToList();
+        if (eventNames.Count > 0)
+        {
+            var others = eventNames.Count - 1;
+            var plans = others switch
+            {
+                0 => eventNames[0],
+                1 => $"{eventNames[0]} and 1 other event",
+                _ => $"{eventNames[0]} and {others} other events",
+            };
+            return Conflict($"{room.Name} is on the plan of {plans}. Take it off the plan first.");
+        }
 
         db.PlaceRooms.Remove(room);
         await db.SaveChangesAsync(ct);
