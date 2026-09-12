@@ -81,6 +81,75 @@ internal static class HostedEventDemoSeeder
         await SeedVenueAsync(db, host, owner.Id, now);
         await SeedRoomsEventAsync(db, host, owner.Id, now);
         await SeedSeatsEventAsync(db, host, owner.Id, now);
+        await SeedWhatTheVenueKeepsAsync(db, owner.Id, now);
+    }
+
+    /// <summary>
+    /// A room held back for one night and a pair of seats blocked for the whole run.
+    /// </summary>
+    /// <remarks>
+    /// <para>Both cases, because they are the two a venue actually has and they read differently to
+    /// a guest: the Suite is the owner's family on the Friday and free on the Saturday, and the two
+    /// seats behind the pillar are never sold at all.</para>
+    ///
+    /// <para>The note on the house-held one is deliberately the kind of thing a host really writes,
+    /// so that anything leaking it onto a public plan is obvious the moment somebody looks.</para>
+    /// </remarks>
+    private static async Task SeedWhatTheVenueKeepsAsync(
+        BenDataContext db, Guid ownerId, DateTime now)
+    {
+        if (await db.HostedEventUnitBlocks.AnyAsync(
+                b => b.HostedEventLayoutUnit.HostedEventId == RoomsEventId
+                  || b.HostedEventLayoutUnit.HostedEventId == SeatsEventId))
+            return;
+
+        var friday = await db.HostedEventNights
+            .Where(n => n.HostedEventId == RoomsEventId)
+            .OrderBy(n => n.Date)
+            .FirstOrDefaultAsync();
+
+        var suite = await db.HostedEventLayoutUnits
+            .FirstOrDefaultAsync(u => u.HostedEventId == RoomsEventId
+                                   && u.PlaceRoom!.Name == "The Suite");
+
+        if (friday is not null && suite is not null)
+        {
+            db.HostedEventUnitBlocks.Add(new HostedEventUnitBlock
+            {
+                Id = Guid.NewGuid(),
+                HostedEventLayoutUnitId = suite.Id,
+                HostedEventNightId = friday.Id,
+                Kind = HostedEventBlockKind.HouseHeld,
+                Note = "Mrs Cole's family are in it on the Friday.",
+                DateCreated = now,
+                CreatedByAppUserId = ownerId,
+            });
+        }
+
+        // Two seats behind the pillar, every night of the run.
+        var behindThePillar = await db.HostedEventLayoutUnits
+            .Where(u => u.HostedEventId == SeatsEventId
+                     && (u.Label == "G1" || u.Label == "G2"))
+            .ToListAsync();
+
+        foreach (var seat in behindThePillar)
+        {
+            db.HostedEventUnitBlocks.Add(new HostedEventUnitBlock
+            {
+                Id = Guid.NewGuid(),
+                HostedEventLayoutUnitId = seat.Id,
+                HostedEventNightId = null,
+                Kind = HostedEventBlockKind.Blocked,
+                Note = "Behind the pillar — nobody can see the stage.",
+                DateCreated = now,
+                CreatedByAppUserId = ownerId,
+            });
+        }
+
+        await db.SaveChangesAsync();
+        Console.WriteLine(
+            "[HostedEventDemoSeeder] Held back the Suite on the Friday and blocked two seats "
+            + "behind the pillar.");
     }
 
     // ── the venue, and the rooms it has described ────────────────────────────

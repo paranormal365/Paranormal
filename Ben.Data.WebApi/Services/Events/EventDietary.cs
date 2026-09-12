@@ -31,17 +31,22 @@ public static class EventDietary
     /// Every booking for the event, with guests and nights loaded. Which of them count is decided
     /// here rather than by the caller's query, so the rule lives in one place.
     /// </param>
-    /// <param name="includeRequests">
-    /// Folds in parties the venue has not decided on, for a host ordering ahead of a weekend that
-    /// is not settled. The answer carries this back, so a cook cannot read a provisional number as
-    /// a settled one.
+    /// <param name="includeUnconfirmed">
+    /// <para>Folds in every party the venue has not decided on — the ones who asked AND the ones
+    /// holding places they picked — for a host ordering ahead of a weekend that is not settled. The
+    /// answer carries this back, so a cook cannot read a provisional number as a settled one.</para>
+    ///
+    /// <para>It was called <c>includeRequests</c> and counted only the ones who asked, which was
+    /// right when a request was the only way to be undecided. Since guests can pick their own
+    /// places, a held party is just as undecided and just as hungry, and leaving them out would
+    /// have under-catered exactly the events that fill up fastest.</para>
     /// </param>
     public static HostedEventDietaryRecord Summarise(
-        Guid eventId, IEnumerable<HostedEventBooking> bookings, bool includeRequests)
+        Guid eventId, IEnumerable<HostedEventBooking> bookings, bool includeUnconfirmed)
     {
         var counted = bookings
             .Where(b => b.Status == HostedEventBookingStatus.Confirmed
-                     || (includeRequests && b.Status == HostedEventBookingStatus.Requested))
+                     || (includeUnconfirmed && BookingTransitions.Waiting.Contains(b.Status)))
             .OrderBy(b => b.DateCreated)
             .ToList();
 
@@ -86,7 +91,7 @@ public static class EventDietary
             .ToList();
 
         return new HostedEventDietaryRecord(
-            eventId, includeRequests, expected, lines.Count, unnamed, tally, lines);
+            eventId, includeUnconfirmed, expected, lines.Count, unnamed, tally, lines);
     }
 
     /// <summary>The same words written the same way, so two people saying one thing count as two.</summary>

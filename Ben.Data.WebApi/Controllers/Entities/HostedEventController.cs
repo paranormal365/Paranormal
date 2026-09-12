@@ -531,7 +531,8 @@ public sealed class HostedEventController : OrgCmsControllerBase
             (decimal)EventCredits.CancellationWindow.TotalHours, ct);
 
         return EventCredits.WhatCancellingDoesToTheCredit(
-            spent, startsUtc, now, TimeSpan.FromHours(hours));
+            spent, startsUtc, now, TimeSpan.FromHours(hours),
+            theVenueWithdrew: hosted.LifecycleState == HostedEventLifecycleState.VenueWithdrawn);
     }
 
     /// <summary>Puts the credit back when the rules say it comes back. The caller saves.</summary>

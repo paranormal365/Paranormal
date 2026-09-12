@@ -1230,4 +1230,125 @@ public sealed class HostedEventControllerTests
         Assert.Equal(HostedEventLifecycleState.Draft, back.LifecycleState);
         Assert.Equal(HostedEventGoNoGo.Undecided, back.GoNoGoDecision);
     }
+
+    // ── drafting is free, publishing is what costs ───────────────────────────
+
+    /// <summary>
+    /// A whole event can be built, edited and laid out without spending anything.
+    /// </summary>
+    /// <remarks>
+    /// <para><b>Ben, 2026-09-12:</b> <i>"When creating an event, you can draft it out from
+    /// beginning to end without it deducting the credit. When you set it live, then credit is
+    /// deducted unless withdrawn."</i></para>
+    ///
+    /// <para>Worth a test of its own rather than trusting that no future phase adds a second place
+    /// that charges. Every later phase adds screens to a draft — the programme, the staff, the
+    /// files, the page — and any one of them could reach for the entitlement without anybody
+    /// noticing until a host complained that setting up cost them ninety-nine dollars.</para>
+    /// </remarks>
+    [Fact]
+    public async Task Drafting_a_whole_event_costs_nothing()
+    {
+        var f = await SeedAsync();
+        await ExcludeHostingAsync(f);
+        var controller = Build(f);
+
+        Guid creditId;
+        await using (var db = await f.CreateDbContextAsync())
+        {
+            var credit = NewCredit(DateTime.UtcNow.AddDays(-1), DateTime.UtcNow.AddDays(364));
+            creditId = credit.Id;
+            db.EventCredits.Add(credit);
+            await db.SaveChangesAsync();
+        }
+
+        // Build it out, end to end: create, rename, add a description, change the dates, lay a
+        // plan out, and change the plan again.
+        var record = Created(await controller.Create(OrgId, Weekend(), default));
+
+        Assert.IsType<OkObjectResult>((await controller.Update(OrgId, record.Id, Weekend(
+            name: "Thomas House Séance Weekend") with
+        {
+            Description = "Two nights in the most haunted hotel in Tennessee.",
+            DayPassCapacity = 20,
+            DayPassPrice = 45m,
+        }, default)).Result);
+
+        Assert.IsType<OkObjectResult>((await controller.SetLayout(OrgId, record.Id,
+            new SetHostedEventLayoutRequest(HostedEventLayoutKind.Seats,
+                [new HostedEventLayoutUnitChoice(Label: "A1", Capacity: 1, LayoutRow: 0, LayoutColumn: 0),
+                 new HostedEventLayoutUnitChoice(Label: "A2", Capacity: 1, LayoutRow: 0, LayoutColumn: 1)]),
+            default)).Result);
+
+        Assert.IsType<OkObjectResult>((await controller.SetLayout(OrgId, record.Id,
+            new SetHostedEventLayoutRequest(HostedEventLayoutKind.Seats,
+                [new HostedEventLayoutUnitChoice(Label: "A1", Capacity: 1, LayoutRow: 0, LayoutColumn: 0)]),
+            default)).Result);
+
+        // Nothing has been charged, and nothing is marked as ever having been live.
+        await using var after = await f.CreateDbContextAsync();
+        var untouched = await after.EventCredits.FirstAsync(c => c.Id == creditId);
+        Assert.Null(untouched.SpentUtc);
+        Assert.Null(untouched.SpentOnHostedEventId);
+
+        var still = await after.HostedEvents.FirstAsync(e => e.Id == record.Id);
+        Assert.Equal(HostedEventLifecycleState.Draft, still.LifecycleState);
+        Assert.Null(still.FirstPublishedUtc);
+    }
+
+    [Fact]
+    public async Task Setting_it_live_is_the_moment_it_costs_and_it_costs_once()
+    {
+        var f = await SeedAsync();
+        await ExcludeHostingAsync(f);
+        var controller = Build(f);
+        var record = Created(await controller.Create(OrgId, Weekend(), default));
+
+        await using (var db = await f.CreateDbContextAsync())
+        {
+            db.EventCredits.Add(NewCredit(DateTime.UtcNow.AddDays(-1), DateTime.UtcNow.AddDays(364)));
+            db.EventCredits.Add(NewCredit(DateTime.UtcNow.AddDays(-2), DateTime.UtcNow.AddDays(363)));
+            await db.SaveChangesAsync();
+        }
+
+        Assert.IsType<OkObjectResult>((await controller.Publish(OrgId, record.Id, default)).Result);
+
+        // Exactly one, and publishing again after taking it down never spends a second.
+        await using (var db = await f.CreateDbContextAsync())
+            Assert.Equal(1, await db.EventCredits.CountAsync(c => c.SpentUtc != null));
+
+        Assert.IsType<OkObjectResult>((await controller.Unpublish(OrgId, record.Id, default)).Result);
+        Assert.IsType<OkObjectResult>((await controller.Publish(OrgId, record.Id, default)).Result);
+
+        await using (var db = await f.CreateDbContextAsync())
+            Assert.Equal(1, await db.EventCredits.CountAsync(c => c.SpentUtc != null));
+    }
+
+    /// <summary>
+    /// A venue pulling out gives the credit back whatever the timing.
+    /// </summary>
+    /// <remarks>
+    /// The forty-eight hour window exists because an organizer who calls their own event off at the
+    /// last minute has already had the benefit of it. None of that is true here: they did nothing
+    /// wrong, and somebody whose venue withdrew two days beforehand has had the worse week.
+    /// </remarks>
+    [Fact]
+    public void A_venue_withdrawing_returns_the_credit_however_late_it_is()
+    {
+        var now = DateTime.UtcNow;
+        var credit = NewCredit(now.AddDays(-1), now.AddDays(364));
+        var startsInAnHour = now.AddHours(1);
+
+        var (organizerCancelled, theirSentence) = EventCredits.WhatCancellingDoesToTheCredit(
+            credit, startsInAnHour, now, TimeSpan.FromHours(48));
+
+        Assert.False(organizerCancelled);
+        Assert.Contains("does not come back", theirSentence);
+
+        var (venueWithdrew, itsSentence) = EventCredits.WhatCancellingDoesToTheCredit(
+            credit, startsInAnHour, now, TimeSpan.FromHours(48), theVenueWithdrew: true);
+
+        Assert.True(venueWithdrew);
+        Assert.Contains("whatever the timing", itsSentence);
+    }
 }

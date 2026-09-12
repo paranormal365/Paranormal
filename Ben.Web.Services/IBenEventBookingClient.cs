@@ -121,14 +121,15 @@ public interface IBenEventBookingClient
     /// What the kitchen has to cook differently — confirmed parties by default.
     /// </summary>
     /// <remarks>
-    /// <paramref name="includeRequests"/> folds in the parties still waiting, for a host ordering
+    /// <paramref name="includeUnconfirmed"/> folds in every party still waiting — asked or holding —
+    /// for a host ordering
     /// ahead of a weekend that has not been decided yet; the record says which it is, so a cook
     /// cannot read a provisional number as a settled one. Takes the deciding permission, not
     /// membership: everything in it is health information about named individuals, which is why
     /// this is an <see cref="ItemResult{T}"/> and a refusal must not look like an empty sheet.
     /// </remarks>
     Task<ItemResult<HostedEventDietaryRecord>> GetEventDietaryAsync(
-        Guid orgId, Guid eventId, bool includeRequests, CancellationToken token = default);
+        Guid orgId, Guid eventId, bool includeUnconfirmed, CancellationToken token = default);
 
     /// <summary>Every sitting of this event, in the order they are served.</summary>
     Task<ItemResult<HostedEventMenusRecord>> GetEventMenusAsync(

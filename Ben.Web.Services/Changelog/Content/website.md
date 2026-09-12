@@ -18,6 +18,20 @@ day-by-day account of building it would say nothing to anyone using it now.
 
 ## 2026-09-12
 
+- Where an event sells its places by seat, guests now pick their own on the plan and what they
+  choose is held for them until the venue answers. Everybody else sees those squares as waiting on
+  an answer and cannot take them.
+- If two people reach for the same seat at the same moment, one of them gets it and the other is
+  told which seat went, by name, with the rest of their choice still theirs.
+- A hold lasts as long as the venue said. When it runs out the places go back and the guest is told
+  — they stay on the venue's list and are welcome to choose again.
+- A venue can hold a room or a seat back, either for one night or for the whole run, and say
+  whether it is out of use or being used by the venue itself. What a guest sees is which of those
+  two it is, never the venue's own note about it.
+- A family can now take two rooms, and a party of three can take three seats. Before, a booking
+  quietly kept only one of them.
+- Guests' names, addresses and dietary notes on the booking board now need permission to read.
+  Any member of the group could see them.
 - Events now move themselves along: on the site, then on now when the first night starts on the
   venue's own clock, then over when the last one ends, then filed away a fortnight later. Nobody
   has to remember to do any of it.

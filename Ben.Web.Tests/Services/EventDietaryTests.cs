@@ -76,7 +76,7 @@ public sealed class EventDietaryTests
                     [("Ada", "coeliac"), ("Bertie", null)], Friday),
             Booking("Still Asking", 2, HostedEventBookingStatus.Requested,
                     [("Clara", "vegan"), ("Dev", null)], Friday),
-        ], includeRequests: false);
+        ], includeUnconfirmed: false);
 
         Assert.Equal(2, sheet.PeopleExpected);
         Assert.Equal(1, sheet.PeopleWithNotes);
@@ -93,8 +93,8 @@ public sealed class EventDietaryTests
                     [("Clara", "vegan"), ("Dev", null)], Friday),
         ];
 
-        var settled = EventDietary.Summarise(EventId, bookings, includeRequests: false);
-        var provisional = EventDietary.Summarise(EventId, bookings, includeRequests: true);
+        var settled = EventDietary.Summarise(EventId, bookings, includeUnconfirmed: false);
+        var provisional = EventDietary.Summarise(EventId, bookings, includeUnconfirmed: true);
 
         Assert.False(settled.IncludesRequests);
         Assert.True(provisional.IncludesRequests);
@@ -132,7 +132,7 @@ public sealed class EventDietaryTests
         var sheet = EventDietary.Summarise(EventId, [
             Booking("A Family", 4, HostedEventBookingStatus.Confirmed,
                     [("Ada", "coeliac"), ("Bertie", null)], Friday),
-        ], includeRequests: false);
+        ], includeUnconfirmed: false);
 
         Assert.Equal(4, sheet.PeopleExpected);
         Assert.Equal(1, sheet.PeopleWithNotes);
@@ -145,7 +145,7 @@ public sealed class EventDietaryTests
         var sheet = EventDietary.Summarise(EventId, [
             Booking("Miscounted", 1, HostedEventBookingStatus.Confirmed,
                     [("Ada", null), ("Bertie", null), ("Clara", null)], Friday),
-        ], includeRequests: false);
+        ], includeUnconfirmed: false);
 
         Assert.Equal(0, sheet.PeopleUnnamed);
     }
@@ -157,7 +157,7 @@ public sealed class EventDietaryTests
         var sheet = EventDietary.Summarise(EventId, [
             Booking("A Party", 2, HostedEventBookingStatus.Confirmed,
                     [("Ada", "   "), ("Bertie", "")], Friday),
-        ], includeRequests: false);
+        ], includeUnconfirmed: false);
 
         Assert.Equal(0, sheet.PeopleWithNotes);
         Assert.Empty(sheet.Lines);
@@ -173,7 +173,7 @@ public sealed class EventDietaryTests
                     [("Ada", "Vegan"), ("Bertie", "vegan")], Friday),
             Booking("Another", 2, HostedEventBookingStatus.Confirmed,
                     [("Clara", "  vegan  "), ("Dev", "coeliac")], Friday),
-        ], includeRequests: false);
+        ], includeUnconfirmed: false);
 
         var vegan = Assert.Single(sheet.Tally, t => t.Notes.Trim().Equals(
             "vegan", StringComparison.OrdinalIgnoreCase));
@@ -191,7 +191,7 @@ public sealed class EventDietaryTests
         var sheet = EventDietary.Summarise(EventId, [
             Booking("A Party", 2, HostedEventBookingStatus.Confirmed,
                     [("Ada", "no nuts"), ("Bertie", "nut allergy")], Friday),
-        ], includeRequests: false);
+        ], includeUnconfirmed: false);
 
         Assert.Equal(2, sheet.Tally.Count);
         Assert.All(sheet.Tally, t => Assert.Equal(1, t.People));
@@ -207,7 +207,7 @@ public sealed class EventDietaryTests
                     [("Ada", "coeliac")], Saturday, Friday),
             Booking("Day Trippers", 1, HostedEventBookingStatus.Confirmed,
                     [("Bertie", "vegan")]),
-        ], includeRequests: false);
+        ], includeUnconfirmed: false);
 
         var weekend = Assert.Single(sheet.Lines, l => l.GuestName == "Ada");
         Assert.Equal([Friday, Saturday], weekend.Nights);
@@ -220,7 +220,7 @@ public sealed class EventDietaryTests
     [Fact]
     public void An_event_nobody_has_booked_is_an_empty_sheet_rather_than_no_answer()
     {
-        var sheet = EventDietary.Summarise(EventId, [], includeRequests: true);
+        var sheet = EventDietary.Summarise(EventId, [], includeUnconfirmed: true);
 
         Assert.Equal(0, sheet.PeopleExpected);
         Assert.Empty(sheet.Tally);

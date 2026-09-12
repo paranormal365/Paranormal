@@ -93,7 +93,7 @@ public sealed class HostedEventBookingController : OrgCmsControllerBase
     /// </summary>
     /// <remarks>
     /// <para><b>Confirmed parties by default</b>, because that is who the venue is buying food for.
-    /// Requests can be folded in with <c>includeRequests</c> for a host ordering ahead of a
+    /// Undecided parties can be folded in with <c>includeUnconfirmed</c> for a host ordering ahead of a
     /// weekend that has not been decided yet — and the answer says which it is, so a cook cannot
     /// read a provisional number as a settled one.</para>
     ///
@@ -102,7 +102,7 @@ public sealed class HostedEventBookingController : OrgCmsControllerBase
     /// </remarks>
     [HttpGet("dietary")]
     public async Task<ActionResult<HostedEventDietaryRecord>> GetDietary(
-        Guid orgId, Guid eventId, [FromQuery] bool includeRequests, CancellationToken ct)
+        Guid orgId, Guid eventId, [FromQuery] bool includeUnconfirmed, CancellationToken ct)
     {
         var userId = GetCurrentUserId();
         if (userId is null) return Unauthorized();
@@ -113,7 +113,7 @@ public sealed class HostedEventBookingController : OrgCmsControllerBase
         var ev = await LoadEventAsync(db, orgId, eventId, ct);
         if (ev is null) return NotFound();
 
-        return Ok(await DietaryAsync(db, eventId, includeRequests, ct));
+        return Ok(await DietaryAsync(db, eventId, includeUnconfirmed, ct));
     }
 
     // ── deciding ─────────────────────────────────────────────────────────────
@@ -1052,7 +1052,7 @@ public sealed class HostedEventBookingController : OrgCmsControllerBase
 
     /// <summary>Loads what the kitchen needs and hands it to <see cref="EventDietary"/> to read.</summary>
     private static async Task<HostedEventDietaryRecord> DietaryAsync(
-        BenDataContext db, Guid eventId, bool includeRequests, CancellationToken ct)
+        BenDataContext db, Guid eventId, bool includeUnconfirmed, CancellationToken ct)
         => EventDietary.Summarise(
             eventId,
             await db.HostedEventBookings
@@ -1062,7 +1062,7 @@ public sealed class HostedEventBookingController : OrgCmsControllerBase
                 .Include(b => b.LeadAppUser)
                 .Where(b => b.HostedEventId == eventId)
                 .ToListAsync(ct),
-            includeRequests);
+            includeUnconfirmed);
 
     // ── plumbing ─────────────────────────────────────────────────────────────
 

@@ -174,10 +174,25 @@ public static class EventCredits
     /// dollars did not come back is the conversation this exists to avoid.</para>
     /// </remarks>
     public static (bool Returns, string Sentence) WhatCancellingDoesToTheCredit(
-        EventCredit? spent, DateTime startsUtc, DateTime now, TimeSpan window)
+        EventCredit? spent, DateTime startsUtc, DateTime now, TimeSpan window,
+        bool theVenueWithdrew = false)
     {
         if (spent is null)
             return (false, "No event credit was spent on this one, so there is nothing to come back.");
+
+        // A VENUE PULLING OUT IGNORES THE WINDOW ENTIRELY.
+        //
+        // The window exists because an organizer who calls their own event off at the last minute
+        // has already had the benefit of it. None of that is true when the venue withdraws: the
+        // organizer did nothing wrong, and somebody whose venue pulled out two days beforehand has
+        // already had the worse week.
+        if (theVenueWithdrew)
+            return (true,
+                spent.ExpiresUtc <= now
+                    ? "The venue withdrew, so the event credit comes back — but it has already "
+                    + "lapsed, so there is nothing left to spend."
+                    : $"The venue withdrew, so the event credit comes back whatever the timing, and "
+                    + $"can be spent again until {spent.ExpiresUtc:MM/dd/yyyy}.");
 
         var deadline = startsUtc - window;
         if (now > deadline)

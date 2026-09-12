@@ -905,6 +905,50 @@ what their existing booking means — a hold would become nothing, an ask would 
 never chose — and neither is something you would find out about until the night. Decide the ones
 waiting first, and the switch is free again.
 
+### Holding a room or a seat back
+
+Not everything on a plan is for sale. Open a room or a seat and you can hold it back, either **for
+one night** or **for the whole run**, and say which of two things it is: **out of use** — behind a
+pillar, out of order, kept for the crew — or **the venue is using it**.
+
+Guests see the difference between those two and never see your note about it. Write "Mrs Cole's
+family are in it on the Friday" if that is what it is; what a guest is told is that the venue is
+using that room on that night.
+
+A held-back place cannot be picked or confirmed into, and it goes back to being available the
+moment you remove the block.
+
+### When two guests want the same seat
+
+On an event where guests pick their own places, two people can reach for the same seat within the
+same second. One of them gets it. The other is told which seat went, by name, and keeps everything
+else they had chosen — so a party of four who lost one seat picks one seat again rather than
+starting over.
+
+That is settled by the database rather than by the page, which is why it is reliable: there is no
+window in which both people can be told yes.
+
+**A hold lasts as long as you said** under *Your guests*. When it runs out the places go back and
+the guest is told what happened — that the hold ran out, not that you turned them down — and they
+stay on your list. You can still offer them a place.
+
+### Who can see what
+
+Four different things, and they are deliberately separate permissions:
+
+- **Seeing the event and its plan** is open to any member. What an event offers is mostly on the
+  public page anyway.
+- **Changing the event** — its dates, its plan, its blocks, its menus — is arranging it.
+- **Seeing the bookings** means guests' names, their email addresses and their dietary notes. A
+  dietary note is a health disclosure somebody made to you so they would not be poisoned, and it is
+  not something a whole group's membership needs. This used to be open to every member.
+- **Deciding the bookings** is confirming, turning down, releasing, editing and issuing passes.
+- **Running the door** is scanning passes and marking people arrived. Somebody on the door sees
+  tonight's dietary flags and nothing else — not addresses, not phone numbers.
+
+**Publishing is separate again** and needs whoever can change the group's settings, because it is
+the one act that spends money.
+
 ### Minimum numbers
 
 Some events are only worth running if enough people come. Say the fewest, and the date by which

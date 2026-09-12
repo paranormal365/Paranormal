@@ -45,7 +45,7 @@ public sealed class EventBookingClientRouteTests
         "/api/organizations/{orgId}/events/{eventId}/layout\"",
         // the board
         "/api/organizations/{orgId}/events/{eventId}/bookings\"",
-        "/api/organizations/{orgId}/events/{eventId}/bookings/dietary?includeRequests={flag}\"",
+        "/api/organizations/{orgId}/events/{eventId}/bookings/dietary?includeUnconfirmed={flag}\"",
         "/api/organizations/{orgId}/events/{eventId}/bookings/{bookingId}/confirm\"",
         "/api/organizations/{orgId}/events/{eventId}/bookings/{bookingId}/turn-down\"",
         "/api/organizations/{orgId}/events/{eventId}/bookings/{bookingId}/cancel\"",
@@ -236,10 +236,10 @@ public sealed class EventBookingClientRouteTests
     public async Task The_dietary_sheet_spells_the_flag_the_way_the_API_documents_it()
     {
         var (client, handler) = Build(body: "null");
-        await client.GetEventDietaryAsync(Org, Event, includeRequests: true);
+        await client.GetEventDietaryAsync(Org, Event, includeUnconfirmed: true);
 
         Assert.Equal(HttpMethod.Get, handler.LastRequest!.Method);
-        Assert.EndsWith("/bookings/dietary?includeRequests=true", handler.LastRequest.RequestUri!.PathAndQuery);
+        Assert.EndsWith("/bookings/dietary?includeUnconfirmed=true", handler.LastRequest.RequestUri!.PathAndQuery);
     }
 
     [Fact]
