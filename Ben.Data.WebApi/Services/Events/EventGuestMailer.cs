@@ -205,6 +205,69 @@ public sealed class EventGuestMailer
         return ($"Your booking at {ev?.Name ?? "the event"} has been released", body.ToString());
     }
 
+    /// <summary>
+    /// Tells a guest their hold ran out before the venue answered.
+    /// </summary>
+    /// <remarks>
+    /// <para><b>Its own letter, not the released one.</b> "Your booking has been released" reads as
+    /// a decision somebody made about them; this is the opposite — nobody decided anything, the
+    /// clock ran out, and they are still on the list. Sending the wrong one of the two would have a
+    /// guest believe they had been turned down.</para>
+    ///
+    /// <para>Says when it lapsed, in the venue's own time, because "when?" is the first thing
+    /// anybody asks and the first thing the venue needs in order to answer them.</para>
+    /// </remarks>
+    /// <returns>True when a letter was sent.</returns>
+    public async Task<bool> SendHoldLapsedAsync(
+        BenDataContext db, HostedEventBooking booking, CancellationToken ct)
+    {
+        if (!_email.IsConfigured) return false;
+
+        var loaded = await LoadAsync(db, booking.Id, ct);
+        if (loaded is null) return false;
+
+        var to = loaded.LeadAppUser?.Email;
+        if (string.IsNullOrWhiteSpace(to)) return false;
+
+        var ev = loaded.HostedEvent;
+        var name = Safe(ev?.Name ?? "the event");
+
+        var body = new System.Text.StringBuilder();
+        body.Append($"<p>{Greeting(loaded)}</p>");
+        body.Append($"<p>The places you chose at <strong>{name}</strong> were held for you until "
+                  + $"{WhenItLapsed(loaded, ev)}, and the venue had not answered by then — so they "
+                  + "have gone back and somebody else may take them.</p>");
+        body.Append("<p><strong>You are still on the venue's list.</strong> They can still offer "
+                  + "you a place, and you are welcome to choose again if what you wanted is still "
+                  + "free.</p>");
+
+        await _email.SendAsync(new EmailMessage(
+            to,
+            $"The places you chose at {ev?.Name ?? "the event"} have gone back",
+            body.ToString(),
+            ReplyTo: ev?.Organization?.PublicEmail), ct);
+
+        return true;
+    }
+
+    /// <summary>When the hold ran out, on the venue's clock rather than the server's.</summary>
+    private static string WhenItLapsed(HostedEventBooking booking, HostedEvent? ev)
+    {
+        if (booking.HoldExpiresUtc is not { } at) return "the deadline";
+
+        try
+        {
+            var zone = TimeZoneInfo.FindSystemTimeZoneById(ev?.TimeZoneId ?? "UTC");
+            var local = TimeZoneInfo.ConvertTimeFromUtc(
+                DateTime.SpecifyKind(at, DateTimeKind.Utc), zone);
+            return local.ToString("h:mm tt on MM/dd/yyyy");
+        }
+        catch (Exception e) when (e is TimeZoneNotFoundException or InvalidTimeZoneException)
+        {
+            return at.ToString("h:mm tt on MM/dd/yyyy") + " UTC";
+        }
+    }
+
     // ── the diary ────────────────────────────────────────────────────────────
 
     /// <summary>Six in the evening at the venue: when "you are staying here tonight" begins.</summary>

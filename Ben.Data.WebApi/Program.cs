@@ -325,6 +325,10 @@ builder.Services.AddScoped<Ben.Data.WebApi.Services.Scheduling.IScheduledJob,
 // own clock, so no screen has to work it out from two dates and a time zone.
 builder.Services.AddScoped<Ben.Data.WebApi.Services.Scheduling.IScheduledJob,
                            Ben.Data.WebApi.Services.Scheduling.HostedEventLifecycleJob>();
+// Item 235 phase 4: gives back the places nobody answered for in time. Without it a guest who
+// picked three seats and forgot would keep them out of everybody's reach for ever.
+builder.Services.AddScoped<Ben.Data.WebApi.Services.Scheduling.IScheduledJob,
+                           Ben.Data.WebApi.Services.Scheduling.HoldExpiryJob>();
 // Item 233: the mail a tour guest gets, with the walk attached as a calendar file.
 builder.Services.AddScoped<Ben.Data.WebApi.Services.Tours.TourGuestMailer>();
 builder.Services.AddScoped<Ben.Data.WebApi.Services.Events.EventGuestMailer>();

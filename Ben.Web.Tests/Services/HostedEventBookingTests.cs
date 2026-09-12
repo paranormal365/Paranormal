@@ -372,21 +372,148 @@ public sealed class HostedEventBookingTests
 
     // ── what the database itself refuses ─────────────────────────────────────
 
+    /// <summary>
+    /// A party CAN take two rooms on one night, and the model was wrong to forbid it.
+    /// </summary>
+    /// <remarks>
+    /// <para>This test used to assert the opposite, because the night rows were unique on
+    /// (booking, night) alone. That said a party could hold only one thing on any night, which is
+    /// wrong twice over: a family of five takes a double AND a twin, and a party of three at the
+    /// theatre takes three seats. Worse, it was wrong quietly — every group-by that trusted the
+    /// shape collapsed a party's three seats into one, so a sold-out house read as two-thirds
+    /// empty.</para>
+    ///
+    /// <para>The unit is part of the key now, and what stops a DUPLICATE is the same row twice
+    /// rather than a second room.</para>
+    /// </remarks>
     [Fact]
-    public async Task A_party_cannot_hold_two_rooms_on_one_night()
+    public async Task A_party_can_take_two_rooms_on_one_night()
     {
-        // The unique index is what stops an edit quietly creating one, and a party in two rooms is
-        // a party counted twice against the house.
+        await using var sqlite = await SqliteTestDb.CreateAsync();
+        var seeded = await SeedAsync(sqlite);
+
+        await using (var db = await sqlite.NewContextAsync())
+        {
+            var booking = NewBooking(GuestId, 5, HostedEventBookingStatus.Confirmed,
+                                     nights: [(seeded.FridayId, seeded.BlueRoomId),
+                                              (seeded.FridayId, seeded.SuiteId)]);
+            db.HostedEventBookings.Add(booking);
+            await db.SaveChangesAsync();
+        }
+
+        await using (var db = await sqlite.NewContextAsync())
+            Assert.Equal(2, await db.HostedEventBookingNights.CountAsync());
+    }
+
+    [Fact]
+    public async Task The_same_room_cannot_be_written_onto_one_booking_twice()
+    {
+        // What the widened key still refuses: the same room, the same night, the same party. That
+        // is an edit gone wrong rather than a family spreading out.
         await using var sqlite = await SqliteTestDb.CreateAsync();
         var seeded = await SeedAsync(sqlite);
 
         await using var db = await sqlite.NewContextAsync();
         var booking = NewBooking(GuestId, 2, HostedEventBookingStatus.Confirmed,
                                  nights: [(seeded.FridayId, seeded.BlueRoomId),
-                                          (seeded.FridayId, seeded.SuiteId)]);
+                                          (seeded.FridayId, seeded.BlueRoomId)]);
         db.HostedEventBookings.Add(booking);
 
         await Assert.ThrowsAnyAsync<DbUpdateException>(() => db.SaveChangesAsync());
+    }
+
+    /// <summary>
+    /// Two live parties cannot hold one room on one night. The DATABASE refuses it.
+    /// </summary>
+    /// <remarks>
+    /// The rule this whole phase turns on. Two guests pressing "hold these seats" a millisecond
+    /// apart both pass any check written in C#: each reads the seat as free before the other
+    /// writes. Nothing in the application layer can fix that, and a unique index can.
+    /// </remarks>
+    [Fact]
+    public async Task Two_live_parties_cannot_hold_the_same_room_on_the_same_night()
+    {
+        await using var sqlite = await SqliteTestDb.CreateAsync();
+        var seeded = await SeedAsync(sqlite);
+
+        await using (var db = await sqlite.NewContextAsync())
+        {
+            var first = NewBooking(GuestId, 2, HostedEventBookingStatus.Confirmed,
+                                   nights: (seeded.FridayId, seeded.BlueRoomId));
+            foreach (var n in first.Nights) n.IsHolding = true;
+            db.HostedEventBookings.Add(first);
+            await db.SaveChangesAsync();
+        }
+
+        await using (var db = await sqlite.NewContextAsync())
+        {
+            var second = NewBooking(OtherGuestId, 2, HostedEventBookingStatus.Held,
+                                    nights: (seeded.FridayId, seeded.BlueRoomId));
+            foreach (var n in second.Nights) n.IsHolding = true;
+            db.HostedEventBookings.Add(second);
+
+            await Assert.ThrowsAnyAsync<DbUpdateException>(() => db.SaveChangesAsync());
+        }
+    }
+
+    [Fact]
+    public async Task A_room_that_went_back_can_be_taken_by_somebody_else()
+    {
+        // The other half of the same rule. A released night is history, so the room is free — and
+        // the row stays, because a venue asked about a weekend somebody thought they had needs to
+        // see that they once held it.
+        await using var sqlite = await SqliteTestDb.CreateAsync();
+        var seeded = await SeedAsync(sqlite);
+
+        await using (var db = await sqlite.NewContextAsync())
+        {
+            var gone = NewBooking(GuestId, 2, HostedEventBookingStatus.Cancelled,
+                                  nights: (seeded.FridayId, seeded.BlueRoomId));
+            foreach (var n in gone.Nights)
+            {
+                n.IsHolding = false;
+                n.ReleasedUtc = DateTime.UtcNow;
+            }
+            db.HostedEventBookings.Add(gone);
+            await db.SaveChangesAsync();
+        }
+
+        await using (var db = await sqlite.NewContextAsync())
+        {
+            var next = NewBooking(OtherGuestId, 2, HostedEventBookingStatus.Confirmed,
+                                  nights: (seeded.FridayId, seeded.BlueRoomId));
+            foreach (var n in next.Nights) n.IsHolding = true;
+            db.HostedEventBookings.Add(next);
+            await db.SaveChangesAsync();
+        }
+
+        await using (var readback = await sqlite.NewContextAsync())
+            Assert.Equal(2, await readback.HostedEventBookingNights.CountAsync());
+    }
+
+    [Fact]
+    public async Task Many_parties_may_all_ask_for_the_same_room()
+    {
+        // The waiting list Ask mode exists for. A request NAMES a room and holds nothing, so the
+        // arbiter must let twelve parties all want the Blue Room and leave the venue to pick one.
+        // An index that could not tell a preference from a holding closed this door outright.
+        await using var sqlite = await SqliteTestDb.CreateAsync();
+        var seeded = await SeedAsync(sqlite);
+
+        await using (var db = await sqlite.NewContextAsync())
+        {
+            foreach (var lead in new[] { GuestId, OtherGuestId, HostId })
+            {
+                var asked = NewBooking(lead, 2, HostedEventBookingStatus.Requested,
+                                       nights: (seeded.FridayId, seeded.BlueRoomId));
+                foreach (var n in asked.Nights) n.IsHolding = false;
+                db.HostedEventBookings.Add(asked);
+            }
+            await db.SaveChangesAsync();
+        }
+
+        await using (var db = await sqlite.NewContextAsync())
+            Assert.Equal(3, await db.HostedEventBookingNights.CountAsync());
     }
 
     [Fact]

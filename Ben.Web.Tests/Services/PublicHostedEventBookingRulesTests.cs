@@ -191,7 +191,7 @@ public sealed class PublicHostedEventBookingRulesTests
 
     /// <summary>The guest's controller, signed in as the guest.</summary>
     private static PublicHostedEventBookingController Guest(SqliteTestDb sqlite)
-        => new(sqlite.Factory)
+        => new(sqlite.Factory, new HostedEventCalendarSync())
         {
             ControllerContext = new ControllerContext
             {

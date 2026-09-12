@@ -47,6 +47,7 @@ public sealed class HostedEventLifecycleJob : IScheduledJob
 
     private readonly IDbContextFactory<BenDataContext> _dbFactory;
     private readonly IEmailService _email;
+    private readonly HostedEventCalendarSync _sync;
     private readonly PlatformMessageService _messages;
     private readonly SiteIdentity _site;
     private readonly ILogger<HostedEventLifecycleJob> _logger;
@@ -54,12 +55,14 @@ public sealed class HostedEventLifecycleJob : IScheduledJob
     public HostedEventLifecycleJob(
         IDbContextFactory<BenDataContext> dbFactory,
         IEmailService email,
+        HostedEventCalendarSync sync,
         PlatformMessageService messages,
         IOptions<SiteIdentity> site,
         ILogger<HostedEventLifecycleJob> logger)
     {
         _dbFactory = dbFactory;
         _email = email;
+        _sync = sync;
         _messages = messages;
         _site = site.Value;
         _logger = logger;
@@ -173,18 +176,26 @@ public sealed class HostedEventLifecycleJob : IScheduledJob
         BenDataContext db, HostedEvent hosted, DateTime now, CancellationToken ct)
     {
         var waiting = await db.HostedEventBookings
+            .Include(b => b.Nights)
             .Where(b => b.HostedEventId == hosted.Id
                      && b.Status == HostedEventBookingStatus.Requested)
             .ToListAsync(ct);
+
+        foreach (var booking in waiting) booking.HostedEvent = hosted;
 
         if (waiting.Count == 0) return false;
 
         foreach (var booking in waiting)
         {
-            booking.Status = HostedEventBookingStatus.TurnedDown;
-            booking.DecisionNote = "The event has passed.";
-            booking.DecidedUtc = now;
-            booking.DateUpdated = now;
+            // Through the one writer, so the nights go back and the umbrella row goes with them.
+            // Writing the status here directly is how a turned-down party stayed an attendee and
+            // went on being counted and reminded.
+            BookingTransitions.TurnDown(
+                booking, booking.HostedEvent.CreatedByAppUserId, "The event has passed.", now);
+
+            await BookingTransitions.ApplyUmbrellaAsync(
+                db, _sync, booking.HostedEvent, booking,
+                booking.HostedEvent.CreatedByAppUserId, now, ct);
         }
 
         await db.SaveChangesAsync(ct);

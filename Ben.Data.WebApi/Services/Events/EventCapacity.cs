@@ -12,14 +12,17 @@ namespace Ben.Data.WebApi.Services.Events;
 /// asking the same question four ways is four chances for them to disagree about whether a house
 /// is full, and the one that gets it wrong puts two parties in one bed.</para>
 ///
-/// <para><b>Only a confirmed booking holds anything</b> (DECISION 7). A request holds no room and
-/// no place, so a queue of hopefuls cannot fill a weekend and the venue keeps taking requests
-/// after it is full — which turns the overflow into a waiting list somebody can work through
-/// rather than a closed door. Requests are still shown to the host as "asked for", because
-/// over-asking is a fact worth seeing.</para>
+/// <para><b>A held or a confirmed booking holds a unit-night; a request holds nothing</b> (item 235
+/// phase 4, superseding DECISION 7's "only Confirmed"). On an Ask event nobody holds anything until
+/// the venue agrees, so a queue of hopefuls cannot fill a weekend and the overflow is a waiting
+/// list rather than a closed door. On a Pick event what a guest chose is theirs until the venue
+/// answers, because a hold that did not count would be a promise the site could not keep. Requests
+/// are still shown to the host as "asked for", because over-asking is a fact worth seeing.</para>
 ///
-/// <para><b>Capacity counts people, not bookings.</b> A party of four in a room that sleeps two is
-/// the mistake this exists to catch, and counting rows would miss it entirely.</para>
+/// <para><b>A unit is let to ONE party, and capacity bounds that party.</b> Two strangers are never
+/// put in the same twin because the arithmetic allowed it, so the question is "whose is this room
+/// tonight" and the answer is a booking or nobody. Capacity still refuses a family of five in a
+/// double. Counting rows rather than people would miss that entirely.</para>
 ///
 /// <para><b>A room with no stated capacity cannot be over-filled.</b> Null is "the venue has not
 /// said", and refusing bookings against it would make a venue's own rooms unbookable until it
@@ -42,8 +45,14 @@ public static class EventCapacity
     public static int ClampPartySize(int? partySize) => Math.Clamp(partySize ?? 1, 1, MaxPartySize);
 
     /// <summary>Whether this booking's state holds capacity.</summary>
+    /// <remarks>
+    /// Held as well as Confirmed, since item 235 phase 4. A picked seat that did not count would
+    /// be a promise the site could not keep: everybody else would go on being offered it while one
+    /// guest believed it was theirs. Requested still counts for nothing, which is what lets an Ask
+    /// event keep taking requests after it is full.
+    /// </remarks>
     public static bool Holds(HostedEventBookingStatus status)
-        => status == HostedEventBookingStatus.Confirmed;
+        => BookingTransitions.Holds(status);
 
     /// <summary>
     /// What a unit holds for this event: the event's own number, else the room's.
@@ -94,12 +103,78 @@ public static class EventCapacity
         Guid nightId,
         Guid unitId,
         Guid? excludingBookingId = null)
+        => LiveNightsIn(bookings, nightId, unitId, excludingBookingId)
+            .Sum(x => x.People);
+
+    /// <summary>
+    /// The one party in a unit on a night, or null when nothing live holds it.
+    /// </summary>
+    /// <remarks>
+    /// <para><b>One party, not a sum of heads.</b> A room is let to a party, not to a number of
+    /// individuals: two strangers are never put in the same twin because the arithmetic allowed it.
+    /// So the question a screen actually asks is "whose is this room tonight", and the answer is a
+    /// booking or nobody. The database agrees — a filtered unique index makes a second live party
+    /// in the same unit-night impossible to write.</para>
+    ///
+    /// <para>Capacity still matters, but it bounds the party rather than accumulating strangers:
+    /// a family of five cannot take a double.</para>
+    /// </remarks>
+    public static HostedEventBooking? PartyIn(
+        IEnumerable<HostedEventBooking> bookings,
+        Guid nightId,
+        Guid unitId,
+        Guid? excludingBookingId = null)
+        => LiveNightsIn(bookings, nightId, unitId, excludingBookingId)
+            .Select(x => x.Booking)
+            .FirstOrDefault();
+
+    /// <summary>Every live holding of one unit on one night, with how many it is holding for.</summary>
+    /// <remarks>
+    /// A released night is history and never counts — that is the column the database's own index
+    /// filters on, and reading it any other way here would make the two disagree.
+    /// </remarks>
+    private static IEnumerable<(HostedEventBooking Booking, int People)> LiveNightsIn(
+        IEnumerable<HostedEventBooking> bookings,
+        Guid nightId,
+        Guid unitId,
+        Guid? excludingBookingId)
         => bookings
             .Where(b => Holds(b.Status))
             .Where(b => excludingBookingId is not { } id || b.Id != id)
-            .Where(b => b.Nights.Any(n => n.HostedEventNightId == nightId
-                                       && n.HostedEventLayoutUnitId == unitId))
-            .Sum(b => Math.Max(1, b.PartySize));
+            .SelectMany(b => b.Nights
+                .Where(n => n.HostedEventNightId == nightId
+                         && n.HostedEventLayoutUnitId == unitId
+                         && n.ReleasedUtc is null)
+                // People on the night when the party is split across rooms, else the whole party.
+                .Select(n => (Booking: b, People: Math.Max(1, n.People ?? b.PartySize))));
+
+    /// <summary>
+    /// Whether a unit is on offer on a night at all, given what the venue is holding back.
+    /// </summary>
+    /// <param name="blocks">Every block on this event's units, night-specific and whole-run.</param>
+    public static bool IsOffered(
+        IEnumerable<HostedEventUnitBlock> blocks, Guid unitId, Guid nightId)
+        => !blocks.Any(b => b.HostedEventLayoutUnitId == unitId
+                         && (b.HostedEventNightId is null || b.HostedEventNightId == nightId));
+
+    /// <summary>Why the venue is not offering this one, in words a guest may read.</summary>
+    /// <remarks>
+    /// The venue's own note is never returned. "Mrs Cole's family" is exactly what a host writes on
+    /// a block and exactly what must not reach a public plan; what a guest gets is the difference
+    /// between "not on offer" and "the venue is using this one".
+    /// </remarks>
+    public static string? WhyItIsNotOffered(
+        IEnumerable<HostedEventUnitBlock> blocks, Guid unitId, Guid nightId, string unitName)
+    {
+        var block = blocks.FirstOrDefault(
+            b => b.HostedEventLayoutUnitId == unitId
+              && (b.HostedEventNightId is null || b.HostedEventNightId == nightId));
+
+        return block is null ? null
+            : block.Kind == HostedEventBlockKind.HouseHeld
+                ? $"{unitName} is being used by the venue that night."
+                : $"{unitName} is not on offer that night.";
+    }
 
     /// <summary>Beds still free in a room on a night, or null when the room states no capacity.</summary>
     public static int? BedsLeft(int? capacity, int taken)

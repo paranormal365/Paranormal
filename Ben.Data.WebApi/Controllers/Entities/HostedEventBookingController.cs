@@ -148,15 +148,13 @@ public sealed class HostedEventBookingController : OrgCmsControllerBase
             return BadRequest(refusal);
 
         ReplaceNights(db, booking, nights);
-        booking.Status = HostedEventBookingStatus.Confirmed;
-        booking.DecidedUtc = DateTime.UtcNow;
-        booking.DecidedByAppUserId = userId.Value;
-        booking.DecisionNote = Trimmed(request.DecisionNote);
+        BookingTransitions.Confirm(booking, userId.Value, request.DecisionNote, DateTime.UtcNow);
         // A decision the guest has not seen yet, whatever they had seen before.
         booking.GuestAcknowledgedUtc = null;
         Touch(booking, userId.Value);
 
-        await AttachUmbrellaAttendeeAsync(db, ev, booking, userId.Value, ct);
+        await BookingTransitions.ApplyUmbrellaAsync(
+            db, _sync, ev, booking, userId.Value, DateTime.UtcNow, ct);
 
         // The pass is part of confirming, not a second thing a host has to remember. A guest who
         // was told yes and given nothing to show at the door has to be looked up by name on the
@@ -256,7 +254,8 @@ public sealed class HostedEventBookingController : OrgCmsControllerBase
         // every count on the site keeps the old number.
         if (EventCapacity.Holds(booking.Status))
         {
-            await AttachUmbrellaAttendeeAsync(db, ev, booking, userId.Value, ct);
+            await BookingTransitions.ApplyUmbrellaAsync(
+                db, _sync, ev, booking, userId.Value, DateTime.UtcNow, ct);
 
             // A pass is never edited, only replaced. The old one is revoked with a reason a door
             // can read aloud, so a guest showing the code they were sent first is told it was
@@ -310,6 +309,8 @@ public sealed class HostedEventBookingController : OrgCmsControllerBase
             LeadAppUserId = leadId,
             PartySize = EventCapacity.ClampPartySize(request.PartySize),
             Kind = request.Kind,
+            // Set through BookingTransitions immediately below, which is the only place a status
+            // is ever decided. The initialiser needs a value and this is the one it will keep.
             Status = HostedEventBookingStatus.Requested,
             Note = Trimmed(request.Note),
             DateCreated = DateTime.UtcNow,
@@ -329,10 +330,9 @@ public sealed class HostedEventBookingController : OrgCmsControllerBase
             if (await WhyItCannotBeConfirmedAsync(db, ev, booking, nights, all, ct) is { } refusal)
                 return BadRequest(refusal);
 
-            booking.Status = HostedEventBookingStatus.Confirmed;
-            booking.DecidedUtc = DateTime.UtcNow;
-            booking.DecidedByAppUserId = userId.Value;
-            await AttachUmbrellaAttendeeAsync(db, ev, booking, userId.Value, ct);
+            var now = DateTime.UtcNow;
+            BookingTransitions.Confirm(booking, userId.Value, note: null, now);
+            await BookingTransitions.ApplyUmbrellaAsync(db, _sync, ev, booking, userId.Value, now, ct);
         }
 
         await db.SaveChangesAsync(ct);
@@ -767,16 +767,23 @@ public sealed class HostedEventBookingController : OrgCmsControllerBase
         var booking = await LoadBookingAsync(db, eventId, bookingId, ct);
         if (booking is null) return NotFound();
 
-        booking.Status = status;
-        booking.DecidedUtc = DateTime.UtcNow;
-        booking.DecidedByAppUserId = userId.Value;
-        booking.DecisionNote = Trimmed(note);
+        var now = DateTime.UtcNow;
+        if (status == HostedEventBookingStatus.TurnedDown)
+            BookingTransitions.TurnDown(booking, userId.Value, note, now);
+        else
+            BookingTransitions.Cancel(booking, userId.Value, note, now);
+
         booking.GuestAcknowledgedUtc = null;
         Touch(booking, userId.Value);
 
-        // Whatever they held, they hold no longer. Removing the umbrella row is what makes every
-        // existing count stop including them, which is the whole reason that row exists.
-        await ReleaseUmbrellaAttendeeAsync(db, booking, ct);
+        // Whatever they held, they hold no longer. The umbrella row going is what makes every
+        // existing count stop including them, which is the whole reason that row exists — and it
+        // is written by the same call, so the two can never disagree.
+        var releasedFrom = await db.HostedEvents
+            .FirstOrDefaultAsync(e => e.Id == booking.HostedEventId, ct);
+        if (releasedFrom is not null)
+            await BookingTransitions.ApplyUmbrellaAsync(
+                db, _sync, releasedFrom, booking, userId.Value, now, ct);
 
         // And the pass goes with it, in the same save. A guest holding a live code for a booking
         // that was cancelled is a guest a door waves through.
@@ -861,50 +868,6 @@ public sealed class HostedEventBookingController : OrgCmsControllerBase
     /// <c>RsvpStatus.Accepted</c> alongside <c>TourSeatStatus.Reserved</c>, exactly as a walk's
     /// approved seat does, because that is the pair every existing count already understands.
     /// </remarks>
-    private async Task AttachUmbrellaAttendeeAsync(
-        BenDataContext db, HostedEvent ev, HostedEventBooking booking, Guid actorId,
-        CancellationToken ct)
-    {
-        var umbrella = await _sync.SyncAsync(db, ev, actorId, ct);
-
-        var attendee = booking.UmbrellaAttendeeId is { } id
-            ? await db.OrgCalendarEventAttendees.FirstOrDefaultAsync(a => a.Id == id, ct)
-            : await db.OrgCalendarEventAttendees.FirstOrDefaultAsync(
-                a => a.OrgCalendarEventId == umbrella.Id && a.AppUserId == booking.LeadAppUserId, ct);
-
-        if (attendee is null)
-        {
-            attendee = new OrgCalendarEventAttendee
-            {
-                Id = Guid.NewGuid(),
-                OrgCalendarEventId = umbrella.Id,
-                AppUserId = booking.LeadAppUserId,
-                DateCreated = DateTime.UtcNow,
-                CreatedByAppUserId = actorId,
-            };
-            db.OrgCalendarEventAttendees.Add(attendee);
-        }
-
-        attendee.RsvpStatus = RsvpStatus.Accepted;
-        attendee.SeatStatus = TourSeatStatus.Reserved;
-        attendee.Seats = EventCapacity.ClampPartySize(booking.PartySize);
-        attendee.DateRsvp = DateTime.UtcNow;
-        attendee.SeatDecidedUtc = DateTime.UtcNow;
-        attendee.SeatDecidedByAppUserId = actorId;
-
-        booking.UmbrellaAttendeeId = attendee.Id;
-    }
-
-    private async Task ReleaseUmbrellaAttendeeAsync(
-        BenDataContext db, HostedEventBooking booking, CancellationToken ct)
-    {
-        if (booking.UmbrellaAttendeeId is not { } id) return;
-
-        var attendee = await db.OrgCalendarEventAttendees.FirstOrDefaultAsync(a => a.Id == id, ct);
-        if (attendee is not null) db.OrgCalendarEventAttendees.Remove(attendee);
-        booking.UmbrellaAttendeeId = null;
-    }
-
     private static void ReplaceNights(
         BenDataContext db, HostedEventBooking booking,
         IReadOnlyList<HostedEventBookingNightChoice> nights)

@@ -4,6 +4,7 @@ using Ben.Data.Source.Context;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore.Infrastructure;
 using Microsoft.EntityFrameworkCore.Metadata;
+using Microsoft.EntityFrameworkCore.Migrations;
 using Microsoft.EntityFrameworkCore.Storage.ValueConversion;
 
 #nullable disable
@@ -11,9 +12,11 @@ using Microsoft.EntityFrameworkCore.Storage.ValueConversion;
 namespace Ben.Data.Source.Migrations
 {
     [DbContext(typeof(BenDataContext))]
-    partial class BenDataContextModelSnapshot : ModelSnapshot
+    [Migration("20260912222433_HostedEventSoftHolds")]
+    partial class HostedEventSoftHolds
     {
-        protected override void BuildModel(ModelBuilder modelBuilder)
+        /// <inheritdoc />
+        protected override void BuildTargetModel(ModelBuilder modelBuilder)
         {
 #pragma warning disable 612, 618
             modelBuilder
@@ -3738,9 +3741,6 @@ namespace Ben.Data.Source.Migrations
                     b.Property<Guid>("HostedEventNightId")
                         .HasColumnType("uniqueidentifier");
 
-                    b.Property<bool>("IsHolding")
-                        .HasColumnType("bit");
-
                     b.Property<int?>("People")
                         .HasColumnType("int");
 
@@ -3754,7 +3754,7 @@ namespace Ben.Data.Source.Migrations
                     b.HasIndex("HostedEventNightId", "HostedEventLayoutUnitId")
                         .IsUnique()
                         .HasDatabaseName("UX_HostedEventBookingNights_LiveUnitNight")
-                        .HasFilter("[IsHolding] = 1 AND [HostedEventLayoutUnitId] IS NOT NULL AND [ReleasedUtc] IS NULL");
+                        .HasFilter("[HostedEventLayoutUnitId] IS NOT NULL AND [ReleasedUtc] IS NULL");
 
                     b.HasIndex("HostedEventBookingId", "HostedEventNightId", "HostedEventLayoutUnitId")
                         .IsUnique()

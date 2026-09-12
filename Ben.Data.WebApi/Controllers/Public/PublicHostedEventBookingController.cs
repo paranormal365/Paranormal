@@ -33,7 +33,11 @@ public sealed class PublicHostedEventBookingController : BenControllerBase
 {
     private readonly IDbContextFactory<BenDataContext> _db;
 
-    public PublicHostedEventBookingController(IDbContextFactory<BenDataContext> db) { _db = db; }
+    private readonly HostedEventCalendarSync _sync;
+
+    public PublicHostedEventBookingController(
+        IDbContextFactory<BenDataContext> db, HostedEventCalendarSync sync)
+    { _db = db; _sync = sync; }
 
     // ── what I have asked for ────────────────────────────────────────────────
 
@@ -302,12 +306,16 @@ public sealed class PublicHostedEventBookingController : BenControllerBase
         // the venue agreed to is not what is being asked for any more.
         if (wasConfirmed && changesWhatWasAgreed)
         {
-            booking.Status = HostedEventBookingStatus.Requested;
-            booking.DecidedUtc = null;
+            BookingTransitions.Request(booking, DateTime.UtcNow);
             booking.DecidedByAppUserId = null;
-            booking.DecisionNote = null;
             booking.GuestAcknowledgedUtc = null;
-            await ReleaseUmbrellaAsync(db, booking, ct);
+
+            var hosted = await db.HostedEvents
+                .Include(e => e.Nights)
+                .FirstOrDefaultAsync(e => e.Id == booking.HostedEventId, ct);
+            if (hosted is not null)
+                await BookingTransitions.ApplyUmbrellaAsync(
+                    db, _sync, hosted, booking, booking.LeadAppUserId, DateTime.UtcNow, ct);
         }
 
         booking.DateUpdated = DateTime.UtcNow;
@@ -483,16 +491,6 @@ public sealed class PublicHostedEventBookingController : BenControllerBase
                 DateCreated = DateTime.UtcNow,
             });
         }
-    }
-
-    private static async Task ReleaseUmbrellaAsync(
-        BenDataContext db, HostedEventBooking booking, CancellationToken ct)
-    {
-        if (booking.UmbrellaAttendeeId is not { } id) return;
-
-        var attendee = await db.OrgCalendarEventAttendees.FirstOrDefaultAsync(a => a.Id == id, ct);
-        if (attendee is not null) db.OrgCalendarEventAttendees.Remove(attendee);
-        booking.UmbrellaAttendeeId = null;
     }
 
     private static IQueryable<HostedEventBooking> MineQuery(BenDataContext db, Guid userId)

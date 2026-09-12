@@ -156,6 +156,17 @@ namespace Ben.Data.Source.Entities
         public HostedEventBookingStatus Status { get; set; } = HostedEventBookingStatus.Requested;
 
         /// <summary>When the venue decided, and who decided. Null while it is still a request.</summary>
+        /// <summary>
+        /// When a picked place stops being theirs. Null on anything that was never held.
+        /// </summary>
+        /// <remarks>
+        /// <b>Kept after the hold lapses</b>, deliberately. Once the status is Expired this is the
+        /// record of WHEN it lapsed, which is the first thing a guest asks and the first thing the
+        /// venue needs in order to answer them. Clearing it would leave the site knowing that a
+        /// hold had gone and nothing about when.
+        /// </remarks>
+        public DateTime? HoldExpiresUtc { get; set; }
+
         public DateTime? DecidedUtc { get; set; }
         public Guid? DecidedByAppUserId { get; set; }
 
@@ -259,6 +270,52 @@ namespace Ben.Data.Source.Entities
         /// leave "which days is this day pass for" unanswerable.</para>
         /// </remarks>
         public Guid? HostedEventLayoutUnitId { get; set; }
+
+        /// <summary>
+        /// Whether this row actually holds its unit, rather than merely naming a preference.
+        /// </summary>
+        /// <remarks>
+        /// <para><b>Denormalised on purpose, and it is the parent's status.</b> True exactly when
+        /// the booking is Held or Confirmed. It exists because SQL Server's filtered indexes cannot
+        /// join: the arbiter that stops two parties taking one room has to decide from this row
+        /// alone, and "is the booking that owns me holding anything" is not a question a filter can
+        /// ask.</para>
+        ///
+        /// <para><b>Without it the index was wrong.</b> On an Ask event a request names a PREFERRED
+        /// room and holds nothing — twelve parties may all ask for the Blue Room, and the venue
+        /// picks one. An index that could not tell a preference from a holding refused the second
+        /// request outright, which would have closed the waiting list the Ask mode exists for.</para>
+        ///
+        /// <para><b>One writer.</b> Only <c>BookingTransitions</c> sets it, alongside the status it
+        /// mirrors, and a test asserts the two can never disagree.</para>
+        /// </remarks>
+        public bool IsHolding { get; set; }
+
+        /// <summary>
+        /// When this night stopped being held. Null while it still is.
+        /// </summary>
+        /// <remarks>
+        /// <para><b>This is the column the database arbitrates on.</b> A filtered unique index over
+        /// (night, unit) where the unit is set and this is null is what makes it impossible for two
+        /// live parties to hold the same room on the same night — not a check in C#, which two
+        /// requests a millisecond apart will both pass.</para>
+        ///
+        /// <para><b>Stamped, never deleted.</b> The row stays so the venue can see that this party
+        /// once had this room, which matters when somebody rings up about a weekend they thought
+        /// they had.</para>
+        /// </remarks>
+        public DateTime? ReleasedUtc { get; set; }
+
+        /// <summary>
+        /// How many of the party are in this unit on this night. Null means all of them.
+        /// </summary>
+        /// <remarks>
+        /// A family of five taking a double and a twin is one booking across two rooms, and each
+        /// room needs to know how many it is holding or neither can be capacity-checked. Null is
+        /// the ordinary case — one party, one room — and avoids making every existing row state
+        /// a number that is already on the booking.
+        /// </remarks>
+        public int? People { get; set; }
 
         public DateTime DateCreated { get; set; }
 

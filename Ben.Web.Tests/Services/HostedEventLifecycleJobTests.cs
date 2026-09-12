@@ -3,6 +3,7 @@ using Ben.Data.Common.Enums;
 using Ben.Data.Common.Interfaces;
 using Ben.Data.Source.Entities;
 using Ben.Data.WebApi.Services;
+using Ben.Data.WebApi.Services.Events;
 using Ben.Data.WebApi.Services.Scheduling;
 using Microsoft.Extensions.Logging.Abstractions;
 using Microsoft.Extensions.Options;
@@ -143,6 +144,7 @@ public sealed class HostedEventLifecycleJobTests
     private static HostedEventLifecycleJob Build(SqliteTestDb db)
         => new(db.Factory,
                new NoMailServer(),
+               new HostedEventCalendarSync(),
                new PlatformMessageService(db.Factory),
                Options.Create(new SiteIdentity { Name = "IsHaunted.com" }),
                NullLogger<HostedEventLifecycleJob>.Instance);

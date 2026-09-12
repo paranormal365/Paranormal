@@ -114,6 +114,7 @@ namespace Ben.Data.Source.Context
         public virtual DbSet<HostedEvent> HostedEvents { get; set; }
         public virtual DbSet<HostedEventNight> HostedEventNights { get; set; }
         public virtual DbSet<HostedEventLayoutUnit> HostedEventLayoutUnits { get; set; }
+        public virtual DbSet<HostedEventUnitBlock> HostedEventUnitBlocks { get; set; }
         public virtual DbSet<HostedEventBooking> HostedEventBookings { get; set; }
         public virtual DbSet<HostedEventBookingNight> HostedEventBookingNights { get; set; }
         public virtual DbSet<HostedEventBookingGuest> HostedEventBookingGuests { get; set; }
@@ -792,6 +793,39 @@ namespace Ben.Data.Source.Context
                 .HasForeignKey(e => e.GoNoGoDecidedByAppUserId)
                 .IsRequired(false).OnDelete(DeleteBehavior.NoAction);
 
+            // ── what the venue is holding back ────────────────────────────────
+            //
+            // Two filtered unique indexes rather than one, because "this night" and "every night"
+            // are two different rows and each may exist once. Without the second, a unit could be
+            // blocked for the whole run twice over and unblocking it once would look like it had
+            // worked.
+            modelBuilder.Entity<HostedEventUnitBlock>()
+                .HasIndex(b => new { b.HostedEventLayoutUnitId, b.HostedEventNightId })
+                .IsUnique()
+                .HasFilter("[HostedEventNightId] IS NOT NULL");
+            modelBuilder.Entity<HostedEventUnitBlock>()
+                .HasIndex(b => b.HostedEventLayoutUnitId)
+                .IsUnique()
+                .HasFilter("[HostedEventNightId] IS NULL");
+            modelBuilder.Entity<HostedEventUnitBlock>()
+                .Property(b => b.Note).HasMaxLength(500);
+            // Cascade from the unit: a block IS a fact about that square, and a square that no
+            // longer exists cannot be held back.
+            modelBuilder.Entity<HostedEventUnitBlock>()
+                .HasOne(b => b.HostedEventLayoutUnit).WithMany()
+                .HasForeignKey(b => b.HostedEventLayoutUnitId).OnDelete(DeleteBehavior.Cascade);
+            // But NOT from the night, or deleting a date would cascade through two paths into the
+            // same rows and SQL Server refuses the whole schema.
+            modelBuilder.Entity<HostedEventUnitBlock>()
+                .HasOne(b => b.HostedEventNight).WithMany()
+                .HasForeignKey(b => b.HostedEventNightId).OnDelete(DeleteBehavior.NoAction);
+            modelBuilder.Entity<HostedEventUnitBlock>()
+                .HasOne(b => b.CreatedByAppUser).WithMany()
+                .HasForeignKey(b => b.CreatedByAppUserId).OnDelete(DeleteBehavior.NoAction);
+            modelBuilder.Entity<HostedEventUnitBlock>()
+                .HasOne(b => b.UpdatedByAppUser).WithMany()
+                .HasForeignKey(b => b.UpdatedByAppUserId).OnDelete(DeleteBehavior.NoAction);
+
             // One night per date per event; the dates of a run may be months apart, but two rows
             // for the same day are always a mistake. Cascade from the event: the nights ARE the
             // event, not records of their own.
@@ -878,13 +912,54 @@ namespace Ben.Data.Source.Context
                 .HasOne(b => b.UpdatedByAppUser).WithMany()
                 .HasForeignKey(b => b.UpdatedByAppUserId).OnDelete(DeleteBehavior.NoAction);
 
-            // One row per booking per night. A party cannot hold two rooms on one night — that is
-            // two bookings — and the unique index is what stops an edit quietly creating one.
+            // ONE LIVE BOOKING PER PERSON PER EVENT. Somebody who asks twice is one party asking
+            // twice, and two rows would have the venue decide the same people's weekend separately
+            // — confirming one and turning down the other, with no way to tell which is real.
+            // Filtered so that a turned-down party may ask again, which is an ordinary thing.
+            modelBuilder.Entity<HostedEventBooking>()
+                .HasIndex(b => new { b.HostedEventId, b.LeadAppUserId })
+                .IsUnique()
+                .HasFilter("[Status] IN (0, 1, 4)")
+                .HasDatabaseName("UX_HostedEventBookings_OneLivePerLead");
+
+            // ONE ROW PER BOOKING PER NIGHT PER UNIT, and the unit is the part that was missing.
+            //
+            // It used to be unique on (booking, night) alone, which said a party could hold only
+            // one thing on any night. That is wrong twice over: a family of five takes a double AND
+            // a twin, and a party of three at the theatre takes three seats. Every group-by that
+            // trusted the old shape collapsed a party's three seats into one, so the house looked
+            // two-thirds empty while it was sold out.
             modelBuilder.Entity<HostedEventBookingNight>()
-                .HasIndex(n => new { n.HostedEventBookingId, n.HostedEventNightId }).IsUnique();
-            // The capacity question, in the shape it is asked: who is in this unit on this night.
+                .HasIndex(n => new
+                {
+                    n.HostedEventBookingId, n.HostedEventNightId, n.HostedEventLayoutUnitId,
+                })
+                .IsUnique();
+
+            // THE ARBITER. One live party per unit per night, enforced by the database.
+            //
+            // Two guests pressing "hold these seats" a millisecond apart both pass any check
+            // written in C#: each reads the seat as free before the other writes. Nothing in the
+            // application layer can fix that — not a transaction, not a re-read, not a lock the
+            // second worker cannot see. A unique index can, because one of the two inserts fails
+            // and the loser is told which seat went, in words, with the plan repainted.
+            //
+            // Filtered on three things, and each earns its place. A day pass holds no unit (null)
+            // and any number of parties may have one. A released night is history. And a REQUEST
+            // merely names a preferred room — twelve parties may all ask for the Blue Room and the
+            // venue picks one, so an index that could not tell a preference from a holding would
+            // refuse the second request and close the waiting list Ask mode exists for.
             modelBuilder.Entity<HostedEventBookingNight>()
-                .HasIndex(n => new { n.HostedEventNightId, n.HostedEventLayoutUnitId });
+                .HasIndex(n => new { n.HostedEventNightId, n.HostedEventLayoutUnitId })
+                .IsUnique()
+                .HasFilter("[IsHolding] = 1 AND [HostedEventLayoutUnitId] IS NOT NULL AND [ReleasedUtc] IS NULL")
+                .HasDatabaseName("UX_HostedEventBookingNights_LiveUnitNight");
+
+            // And the unfiltered one the board reads: who is in this unit on this night, including
+            // the ones that have been released.
+            modelBuilder.Entity<HostedEventBookingNight>()
+                .HasIndex(n => new { n.HostedEventNightId, n.HostedEventLayoutUnitId, n.ReleasedUtc })
+                .HasDatabaseName("IX_HostedEventBookingNights_UnitNightHistory");
             modelBuilder.Entity<HostedEventBookingNight>()
                 .HasOne(n => n.HostedEventBooking).WithMany(b => b.Nights)
                 .HasForeignKey(n => n.HostedEventBookingId).OnDelete(DeleteBehavior.Cascade);
