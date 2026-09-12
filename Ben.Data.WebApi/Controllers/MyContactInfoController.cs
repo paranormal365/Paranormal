@@ -675,14 +675,16 @@ public sealed class MyContactInfoController : BenControllerBase
 // even though they overlap heavily with the admin ones, so the self-service contract can carry its
 // own fields (DateValidationSent) without touching the admin surface.
 
+// ValidationLink is set ONLY on the response to ADDING an address, which issues a confirmation
+// link straight away. Null everywhere else: a live token has no business in a list response, and
+// the client only needs it on a machine with no mail server, where it is shown instead.
+//
+// A plain comment, not a doc comment: /// inside a positional record's parameter list is not a
+// valid place for one (CS1587), and hoisting it to a <param> tag would leave the other ten
+// parameters undocumented and trade one warning for several.
 public sealed record MyEmailRecord(
     Guid Id, Guid UserEmailTypeId, string EmailAddress, bool IsPrimary, bool IsPublic,
     bool IsValidated, DateTime? DateValidated, DateTime? DateValidationSent, int SortOrder,
-    /// <summary>
-    /// Set only on the response to ADDING an address, which issues a confirmation link straight
-    /// away. Null everywhere else: a live token has no business in a list response, and the
-    /// client only needs it on a machine with no mail server, where it is shown instead.
-    /// </summary>
     string? ValidationLink = null,
     bool ValidationEmailSent = false);
 
