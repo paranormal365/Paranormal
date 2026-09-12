@@ -762,11 +762,17 @@ else
             var hosted = await AdminClient.GetPublicHostedEventAsync(hostedId);
             _hosted = hosted.Item;
 
-            // A refusal with a sentence is shown as a sentence, in the page's own error line. The
-            // umbrella event itself loaded, so this is not "Event not found" — the dates could not
-            // be fetched, and the server said why. A 404 with no sentence leaves the page as it
-            // was: an umbrella whose hosted half is gone still has a calendar row worth showing.
-            if (hosted.Failed && hosted.Reason is { } why) _error = why;
+            // A refusal somebody WROTE is shown; the one this client generates from a status code
+            // is not. Both arrive as a Reason and only the first is meant for a visitor: "The
+            // server answered 404 (Not Found)." is the most useful line a deploy can give an
+            // operator and the least useful thing to put in a red alert on a page a stranger
+            // opened to read about a ghost walk. An umbrella whose hosted half is unpublished or
+            // gone answers exactly that 404, and it still has a calendar row worth showing, so the
+            // page carries on as it did before the dates section existed.
+            if (hosted.Failed
+                && hosted.Reason is { } why
+                && !Ben.Web.Services.WebApi.ApiResponseMapper.IsGeneratedStatusSentence(why))
+                _error = why;
         }
 
         if (_event is not null)

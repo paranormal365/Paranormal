@@ -193,10 +193,15 @@ public interface IBenEventBookingClient
 
     /// <summary>This person's booking at one event.</summary>
     /// <remarks>
-    /// The server answers 404 when they have none, which arrives here as <c>Failed</c> with no
-    /// reason — the same as an unreachable API. A page that wants to offer "ask for a place" on
-    /// that state should read the event's public record first, which says whether bookings are
-    /// open, rather than inferring it from this failing.
+    /// <para><b>"They have none" and "we could not ask" both arrive as <c>Failed</c>, and they are
+    /// not distinguishable here.</b> The server answers a bodyless 404 for the first, which the
+    /// client turns into the generated sentence "The server answered 404 (Not Found)."; an
+    /// unreachable API fails with no reason at all. Neither is a sentence to put in front of a
+    /// guest, and <c>ApiResponseMapper.IsGeneratedStatusSentence</c> is how a page tells a written
+    /// refusal from a generated one before showing it.</para>
+    ///
+    /// <para>So a page that wants to offer "ask for a place" should read the event's public record
+    /// first — it says whether bookings are open — rather than inferring it from this failing.</para>
     /// </remarks>
     Task<ItemResult<MyHostedEventBookingRecord>> GetMyHostedEventBookingAsync(
         Guid eventId, CancellationToken token = default);
@@ -221,22 +226,26 @@ public interface IBenEventBookingClient
     Task<(MyHostedEventBookingRecord? Result, string? Error)> UpdateMyHostedEventBookingAsync(
         Guid eventId, EditHostedEventBookingRequest request, CancellationToken token = default);
 
-    /// <summary>Says the guest has read what the venue decided. Clears their bell.</summary>
-    /// <remarks>Any answer, not only a yes: a refusal that could never be acknowledged would sit on somebody's bell for ever.</remarks>
+    /// <summary>Says the guest has read what the venue decided, which clears their bell.</summary>
+    /// <remarks>
+    /// Any answer, not only a yes. A refusal nobody could acknowledge would sit on somebody's bell
+    /// for ever, and saying "got it" to bad news is exactly as reasonable as saying it to good.
+    /// </remarks>
     Task<(MyHostedEventBookingRecord? Result, string? Error)> AcknowledgeMyHostedEventBookingAsync(
         Guid eventId, CancellationToken token = default);
 
     /// <summary>
-    /// Takes a request back, or asks the venue to release a confirmed booking.
+    /// Takes a request back, or asks the venue to release a booking it has already confirmed.
     /// </summary>
     /// <remarks>
-    /// A request is simply withdrawn. A confirmed booking is not: the venue has catered, staffed
-    /// and possibly turned somebody else away against it, so the server records the ask and the
-    /// host releases it from their own screen. Either way <c>Withdrawn</c> is true — the page reads
-    /// the booking again to learn which happened. A booking already turned down answers 409 with a
-    /// sentence, which arrives as <c>Error</c>.
+    /// <para><b>The answer's shape is the answer.</b> A request is simply deleted and
+    /// <paramref name="StillStanding"/> comes back null; a CONFIRMED booking is not — the venue has
+    /// catered, staffed and possibly turned somebody else away against it, so the ask is recorded
+    /// and the booking comes back with its cancellation request set. "It is gone" and "you have
+    /// asked them to release it" are opposite things to tell a guest, and a screen has to be able
+    /// to tell them apart.</para>
     /// </remarks>
-    Task<(bool Withdrawn, string? Error)> WithdrawMyHostedEventBookingAsync(
+    Task<(MyHostedEventBookingRecord? StillStanding, string? Error)> WithdrawMyHostedEventBookingAsync(
         Guid eventId, string? reason, CancellationToken token = default);
 
     /// <summary>The guest's own pass, with enough words on it to get in without a scanner.</summary>

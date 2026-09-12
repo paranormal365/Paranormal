@@ -133,8 +133,10 @@ public sealed class PublicHostedEventBookingController : BenControllerBase
             .Include(b => b.LeadAppUser)
             .Include(b => b.Nights).ThenInclude(n => n.HostedEventNight)
             .Include(b => b.Nights).ThenInclude(n => n.HostedEventLayoutUnit).ThenInclude(u => u!.PlaceRoom)
-            .FirstOrDefaultAsync(b => b.HostedEventId == eventId && b.LeadAppUserId == userId
-                                   && b.Status != HostedEventBookingStatus.Cancelled, ct);
+            // A CANCELLED booking is included here, unlike everywhere else on this door. The
+            // venue released it and revoked the pass with a reason; the guest is the one person
+            // who needs to be able to show that pass to somebody and be told why it will not work.
+            .FirstOrDefaultAsync(b => b.HostedEventId == eventId && b.LeadAppUserId == userId, ct);
         if (booking is null) return NotFound();
 
         var passes = await db.HostedEventPasses.AsNoTracking()
@@ -143,14 +145,25 @@ public sealed class PublicHostedEventBookingController : BenControllerBase
             .OrderByDescending(p => p.IssuedUtc)
             .ToListAsync(ct);
 
-        // The live one when there is one; failing that the most recently withdrawn, which still
-        // carries the reason the door would read out.
-        var pass = passes.FirstOrDefault(p => p.RevokedUtc == null) ?? passes.FirstOrDefault();
+        // The live one when there is one; failing that the most recently WITHDRAWN — ordered by
+        // when it was withdrawn rather than when it was issued, because a reissue-then-revoke
+        // leaves the newer pass revoked first and its reason is the current one.
+        var pass = passes.FirstOrDefault(p => p.RevokedUtc == null)
+                ?? passes.OrderByDescending(p => p.RevokedUtc).FirstOrDefault();
+
         if (pass is null)
-            return StatusCode(StatusCodes.Status403Forbidden,
-                EventPasses.MayHaveAPass(booking.Status)
-                    ? "The venue hasn't issued your pass yet. Ask them for one."
-                    : "Your pass is issued when the venue confirms your place.");
+            // Three states, three sentences, because the waiting one said to somebody the venue
+            // has already refused is the wrong sentence at the worst moment.
+            return StatusCode(StatusCodes.Status403Forbidden, booking.Status switch
+            {
+                HostedEventBookingStatus.Confirmed =>
+                    "The venue hasn't issued your pass yet. Ask them for one.",
+                HostedEventBookingStatus.TurnedDown =>
+                    "The venue couldn't take this booking, so there is no pass.",
+                HostedEventBookingStatus.Cancelled =>
+                    "This booking was released, so there is no pass.",
+                _ => "Your pass is issued when the venue confirms your place.",
+            });
 
         return Ok(new MyHostedEventPassRecord(
             Entities.HostedEventBookingController.ToRecord(pass),

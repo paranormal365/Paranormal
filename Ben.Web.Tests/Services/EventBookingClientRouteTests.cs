@@ -200,9 +200,10 @@ public sealed class EventBookingClientRouteTests
         // ampersand would hand the server half of it and the apostrophe would be a matter of luck.
         var (client, handler) = Build();
 
-        var (withdrawn, error) = await client.WithdrawMyHostedEventBookingAsync(Event, "mother's ill & the car's gone");
+        var (stillStanding, error) = await client.WithdrawMyHostedEventBookingAsync(Event, "mother's ill & the car's gone");
 
-        Assert.True(withdrawn);
+        // A 204 means the request was simply deleted: nothing comes back and nothing is wrong.
+        Assert.Null(stillStanding);
         Assert.Null(error);
         Assert.Equal(HttpMethod.Delete, handler.LastRequest!.Method);
         Assert.Equal($"/api/public/hosted-events/{Event}/my-booking?reason=mother%27s%20ill%20%26%20the%20car%27s%20gone",
@@ -225,9 +226,9 @@ public sealed class EventBookingClientRouteTests
         var (client, _) = Build(HttpStatusCode.Conflict,
             "That booking was turned down, so there is nothing to withdraw.", "text/plain");
 
-        var (withdrawn, error) = await client.WithdrawMyHostedEventBookingAsync(Event, null);
+        var (stillStanding, error) = await client.WithdrawMyHostedEventBookingAsync(Event, null);
 
-        Assert.False(withdrawn);
+        Assert.Null(stillStanding);
         Assert.Equal("That booking was turned down, so there is nothing to withdraw.", error);
     }
 
@@ -314,5 +315,28 @@ public sealed class EventBookingClientRouteTests
         Assert.Equal(Event, result!.HostedEventId);
         Assert.Null(error);
         Assert.Null(conflict);
+    }
+
+    [Fact]
+    public async Task A_confirmed_booking_comes_back_so_the_guest_learns_it_was_only_asked_about()
+    {
+        // Withdrawing means two different things and the answer's SHAPE is which. A request is
+        // deleted and 204 comes back empty; a confirmed booking is kept, because the venue has
+        // catered against it, and the record returns carrying the ask. A client that discarded the
+        // body could not tell a guest "it is gone" from "you have asked them to release it".
+        var (client, _) = Build(HttpStatusCode.OK,
+            """
+            {"id":"33333333-3333-3333-3333-333333333333",
+             "hostedEventId":"22222222-2222-2222-2222-222222222222",
+             "eventName":"Halloween Lock-In","partySize":2,"kind":0,"status":1,
+             "cancellationRequestedUtc":"2026-10-01T12:00:00Z",
+             "nights":[],"guests":[]}
+            """, "application/json");
+
+        var (stillStanding, error) = await client.WithdrawMyHostedEventBookingAsync(Event, "car broke down");
+
+        Assert.Null(error);
+        Assert.NotNull(stillStanding);
+        Assert.NotNull(stillStanding!.CancellationRequestedUtc);
     }
 }

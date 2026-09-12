@@ -39,9 +39,9 @@ public sealed partial class BenAdminClientAdapter
         Guid orgId, Guid placeId, Guid roomId, SavePlaceRoomRequest request, CancellationToken token = default)
         => _api.PutAsync<SavePlaceRoomRequest, PlaceRoomRecord>($"{Rooms(orgId, placeId)}/{roomId}", request, token);
 
-    public Task<bool> DeletePlaceRoomAsync(
+    public Task<(bool Deleted, string? Error)> DeletePlaceRoomAsync(
         Guid orgId, Guid placeId, Guid roomId, CancellationToken token = default)
-        => _api.DeleteAsync($"{Rooms(orgId, placeId)}/{roomId}", token);
+        => _api.DeleteExpectingReasonAsync($"{Rooms(orgId, placeId)}/{roomId}", token);
 
     public Task<LoadResult<PlaceInvestigationRow>> GetPlaceInvestigationsAsync(
         Guid placeId, CancellationToken token = default)

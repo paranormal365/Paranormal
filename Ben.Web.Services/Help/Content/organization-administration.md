@@ -816,13 +816,16 @@ kept rather than deleted, because somebody who was coming needs to be able to se
 
 ### If the event is called off, your credit
 
-Call an event off **48 hours or more before its first night** and the credit it was published with
-comes back to you — as a credit, ready for the next event, and never as money. Call it off later
-than that and the credit is spent: by then the venue, the kitchen and the people who were coming
-have all made their arrangements, and so have we.
+An event that took one of your plan's own slots rather than a credit frees the slot when you call
+it off, and the slot is yours again at once.
 
-An event that took one of your plan's own slots rather than a credit simply frees the slot, and the
-slot is yours again at once.
+**For an event published with a credit, the rule we are building to is this:** call it off 48 hours
+or more before its first night and the credit comes back to you — as a credit, ready for the next
+event, and never as money. Call it off later than that and the credit is spent, because by then the
+venue, the kitchen and the people who were coming have all made their arrangements.
+
+**That return is not switched on yet.** Until it is, calling off an event published with a credit
+does not give the credit back on its own — ask us and we will put one back on your account.
 
 ### The date on your calendar
 
@@ -845,7 +848,8 @@ dropping the room would leave them sleeping in one your event says it is not usi
 
 The two screens after this one are the **plan**, where the rooms — or the seats, for an event sold
 by the seat — are drawn out so everybody can see what is where, and the **board**, where requests
-wait for your decision. Both open from the index down the side of the event page.
+wait for your decision. They are being built now; the index down the side of the event page lists
+them and will link to them the day they arrive.
 
 #### Sleeps, bookable and beds
 
@@ -863,8 +867,11 @@ the venue's page; bookable says whether a party can take it for the night. A fam
 public and never booked — the owner sleeps in it — and a plain twin can be bookable without earning
 a paragraph on the page. Ticking one does nothing to the other.
 
-**Beds** is for a room offered by the bed rather than as a whole: a bunk room with six beds is six
-places, and a party can take one of them, two, or all six.
+**Beds** is a description, in your own words — "one king", "two twins and a cot", "four bunks". It
+answers the question a number cannot: *will the two of us have to share a bed?* It is not a count
+and nothing is booked by it; **Sleeps** is the number a booking is checked against. A room let out
+bed by bed is described as several rooms — "Bunk 1" through "Bunk 6", each sleeping one — because a
+party takes a room, and six beds sold separately are six things to take.
 
 #### How a booking works
 

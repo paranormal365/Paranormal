@@ -720,10 +720,15 @@ public sealed class HostedEventControllerTests
     }
 
     [Fact]
-    public async Task A_rooms_unit_matched_by_id_can_move_to_another_room_and_keep_its_party()
+    public async Task A_rooms_unit_cannot_be_pointed_at_a_different_room_and_the_refusal_says_what_to_do()
     {
-        // "Whatever its label or room now says." The Blue Room's boiler fails on the Thursday and
-        // the venue points that unit at the Red Room instead; the party confirmed into it goes too.
+        // The Blue Room's boiler fails and the venue tries to point that unit at the Red Room.
+        // Refused, for two reasons that agree. A unit's room is its identity, so repointing it
+        // would move whoever is confirmed into it without telling anybody — the honest way is to
+        // take one off the plan and add the other, where the removal is refused by name if a party
+        // is in it. And mechanically it cannot be allowed: (HostedEventId, PlaceRoomId) is uniquely
+        // indexed, so two units swapping rooms in one save collide inside a single SaveChanges and
+        // the venue would meet a database error instead of a sentence.
         var f = await SeedAsync();
         var (blue, red) = await RoomsAsync(f);
         var controller = Build(f);
@@ -732,13 +737,16 @@ public sealed class HostedEventControllerTests
         var unit = Saved(await controller.SetLayout(OrgId, record.Id, Rooms((blue, null)), default)).Units.Single();
         await BookAsync(f, record, unit.Id);
 
-        var moved = Saved(await controller.SetLayout(OrgId, record.Id, Rooms((red, unit.Id)), default)).Units.Single();
+        var refusal = Refused(await controller.SetLayout(OrgId, record.Id, Rooms((red, unit.Id)), default));
 
-        Assert.Equal(unit.Id, moved.Id);
-        Assert.Equal(red, moved.PlaceRoomId);
-        Assert.Equal("Red Room", moved.Name);
+        Assert.Contains("Blue Room", refusal.Sentence);
+        Assert.Contains("Take it off the plan and add the other room", refusal.Sentence);
+        Assert.Equal([unit.Id], refusal.UnitIds);
 
+        // Nothing moved: the party is still in the room the venue agreed to.
         await using var db = await f.CreateDbContextAsync();
+        var stored = await db.HostedEventLayoutUnits.SingleAsync();
+        Assert.Equal(blue, stored.PlaceRoomId);
         Assert.Equal(unit.Id, (await db.HostedEventBookingNights.SingleAsync()).HostedEventLayoutUnitId);
     }
 
@@ -807,5 +815,23 @@ public sealed class HostedEventControllerTests
 
         return Assert.IsType<HostedEventLayoutRecord>(
             Assert.IsType<OkObjectResult>(result.Result).Value);
+    }
+
+    /// <summary>
+    /// The refusal a save was expected to produce, as the record a designer can act on.
+    /// </summary>
+    /// <remarks>
+    /// A 409 carrying <see cref="LayoutRefusalRecord"/> rather than a 400 carrying a sentence,
+    /// because the designer needs the ids to ring the offending units and the status is how it
+    /// knows they are there. A save that unexpectedly succeeded fails here by name.
+    /// </remarks>
+    private static LayoutRefusalRecord Refused(ActionResult<HostedEventLayoutRecord> result)
+    {
+        if (result.Result is OkObjectResult) Assert.Fail("The plan saved; a refusal was expected.");
+        if (result.Result is BadRequestObjectResult bad)
+            Assert.Fail($"Refused with a plain sentence, not a record a designer can use: {bad.Value}");
+
+        return Assert.IsType<LayoutRefusalRecord>(
+            Assert.IsType<ConflictObjectResult>(result.Result).Value);
     }
 }

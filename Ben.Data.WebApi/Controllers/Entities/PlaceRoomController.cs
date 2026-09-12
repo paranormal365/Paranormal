@@ -65,8 +65,15 @@ public sealed class PlaceRoomController : BenControllerBase
         var rooms = await db.PlaceRooms.AsNoTracking()
             .Where(r => r.OrganizationId == orgId && r.PlaceId == placeId)
             .OrderBy(r => r.SortOrder).ThenBy(r => r.Name)
+            // Projected by hand rather than through ToRecord because this one runs in SQL, which
+            // is exactly why it is the easy one to leave a field out of — and leaving one out here
+            // is not a display bug. The rooms screen prefills its inline editor from this list and
+            // saves the whole row back, so a field missing from the projection comes back as null
+            // and CLEARS what somebody typed. Capacity, IsBookable and BedNote were absent until
+            // 2026-09-12 and would have wiped every one of them on the first edit.
             .Select(r => new PlaceRoomRecord(
-                r.Id, r.PlaceId, r.Name, r.Floor, r.Description, r.IsPublic, r.SortOrder, r.IsActive))
+                r.Id, r.PlaceId, r.Name, r.Floor, r.Description, r.IsPublic, r.SortOrder, r.IsActive,
+                r.Capacity, r.IsBookable, r.BedNote))
             .ToListAsync(ct);
 
         return Ok(rooms);

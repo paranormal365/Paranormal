@@ -559,10 +559,33 @@ public sealed class HostedEventController : OrgCmsControllerBase
                 return Conflict(new LayoutRefusalRecord(
                     $"{string.Join(" and ", names)} still {(names.Count == 1 ? "has" : "have")} "
                   + "confirmed bookings. Move those parties first.",
-                    booked.Select(u => u.Id).ToList()));
+                    booked.Select(u => u.Id).Distinct().ToList()));
             }
 
             db.HostedEventLayoutUnits.RemoveRange(removing);
+        }
+
+        // A choice that names an existing unit AND a different room is asking for the swap the
+        // comment below refuses. Said out loud here rather than quietly ignored, because a
+        // designer that appears to save a change it did not make is worse than one that explains.
+        if (request.Kind == HostedEventLayoutKind.Rooms)
+        {
+            var repointed = wanted
+                .Select(c => (Choice: c, Unit: Match(c)))
+                .Where(x => x.Unit is not null
+                         && x.Choice.PlaceRoomId is not null
+                         && x.Unit!.PlaceRoomId != x.Choice.PlaceRoomId)
+                .Select(x => x.Unit!)
+                .ToList();
+            if (repointed.Count > 0)
+            {
+                var names = repointed.Select(EventCapacity.NameOf).Distinct().ToList();
+                return Conflict(new LayoutRefusalRecord(
+                    $"{string.Join(" and ", names)} cannot be changed into a different room. "
+                  + "Take it off the plan and add the other room instead, so anybody booked into it "
+                  + "is moved on purpose.",
+                    repointed.Select(u => u.Id).Distinct().ToList()));
+            }
         }
 
         // ── writing the plan ─────────────────────────────────────────────────
@@ -587,10 +610,16 @@ public sealed class HostedEventController : OrgCmsControllerBase
                 row.UpdatedByAppUserId = userId.Value;
             }
 
-            // Written on every save, not only when the row is new: a unit matched by its id IS that
-            // unit whatever room the designer now points it at, and the party confirmed into it
-            // goes where it goes. A Seats plan never has one — a seat is not one of the venue's rooms.
-            row.PlaceRoomId = request.Kind == HostedEventLayoutKind.Rooms ? choice.PlaceRoomId : null;
+            // Written only when the row is NEW. A unit's room is its identity, not a property of
+            // it: repointing an existing unit at another room would move whoever is confirmed into
+            // it without telling anybody, and the honest way to stop offering the Blue Room and
+            // start offering the Red one is to take one off the plan and add the other — where the
+            // removal is refused by name if a party is in it. It also cannot be allowed
+            // mechanically: (HostedEventId, PlaceRoomId) is uniquely indexed, so two units swapping
+            // rooms in one save collides inside a single SaveChanges, and the guest would see a
+            // database error rather than a sentence. A Seats unit never has a room at all.
+            if (row.PlaceRoomId is null && request.Kind == HostedEventLayoutKind.Rooms)
+                row.PlaceRoomId = choice.PlaceRoomId;
             // A Rooms unit deliberately keeps no label, so renaming the venue's room renames it
             // everywhere at once instead of leaving last year's name on this year's plan.
             row.Label = request.Kind == HostedEventLayoutKind.Rooms ? null : Trimmed(choice.Label);

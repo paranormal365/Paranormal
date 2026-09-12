@@ -441,9 +441,14 @@
         _error = null;
         try
         {
-            if (!await AdminClient.DeletePlaceRoomAsync(OrgId, PlaceId, room.Id))
+            // The server's own sentence, never a guess at it. It knows which event is still
+            // offering the room and says so by name; this screen does not, and the guess it used
+            // to make ("an event's plan may still be offering it") was shown just as confidently
+            // to somebody whose room was on no plan at all.
+            var (deleted, error) = await AdminClient.DeletePlaceRoomAsync(OrgId, PlaceId, room.Id);
+            if (!deleted)
             {
-                _error = $"Couldn't remove \"{room.Name}\" — an event's plan may still be offering it.";
+                _error = error ?? $"\"{room.Name}\" couldn't be removed just now. Try again shortly.";
                 return;
             }
             if (_editingId == room.Id) _editingId = null;

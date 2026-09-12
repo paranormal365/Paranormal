@@ -175,14 +175,22 @@ public sealed partial class BenAdminClientAdapter
                HttpMethod.Post, $"/api/public/hosted-events/{eventId}/my-booking/acknowledge",
                new { }, token);
 
-    public Task<(bool Withdrawn, string? Error)> WithdrawMyHostedEventBookingAsync(
+    public Task<(MyHostedEventBookingRecord? StillStanding, string? Error)> WithdrawMyHostedEventBookingAsync(
         Guid eventId, string? reason, CancellationToken token = default)
     {
-        // DELETE carries no body, so the guest's reason travels as a query string — escaped,
-        // because "can't make it, my mother's ill & the car's gone" is a perfectly ordinary reason
-        // and an ampersand in a raw query string would silently hand the server half of it.
+        // The reason travels as a query string — escaped, because "can't make it, my mother's ill
+        // & the car's gone" is a perfectly ordinary reason and an ampersand in a raw query string
+        // would silently hand the server half of it.
         var query = string.IsNullOrWhiteSpace(reason) ? "" : "?reason=" + Uri.EscapeDataString(reason.Trim());
-        return _api.DeleteExpectingReasonAsync(MyBookingUrl(eventId) + query, token);
+
+        // Kept rather than discarded, because the answer's SHAPE is the answer. Withdrawing means
+        // two different things on this door: a request is deleted and the server answers 204, and
+        // a confirmed booking is not — the venue has catered against it, so the ask is recorded and
+        // the booking comes back with CancellationRequestedUtc set. A helper that threw the body
+        // away left a screen unable to tell "it is gone" from "you have asked them to release it",
+        // which are opposite things to say to a guest.
+        return _api.SendExpectingReasonAsync<object, MyHostedEventBookingRecord>(
+            HttpMethod.Delete, MyBookingUrl(eventId) + query, new { }, token);
     }
 
     public Task<ItemResult<MyHostedEventPassRecord>> GetMyHostedEventPassAsync(

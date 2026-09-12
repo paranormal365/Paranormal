@@ -135,6 +135,44 @@ public sealed class PlaceRoomTests
     /// event is the difference between a refusal and a dead end: the person knows which plan to
     /// open.
     /// </remarks>
+    /// <summary>
+    /// Every field a booking needs survives the round trip through the list.
+    /// </summary>
+    /// <remarks>
+    /// <para><b>This is a data-loss guard, not a display one.</b> The rooms screen prefills its
+    /// inline editor from the list and saves the whole row back, so a field the list projection
+    /// forgets comes back as null and CLEARS what somebody typed. Capacity, IsBookable and BedNote
+    /// were added to the table in phase 2.1 and to the record on 2026-09-12, and the list's own
+    /// hand-written projection — which runs in SQL, and is therefore the one place a field is easy
+    /// to leave out of — still omitted all three. The first edit of any room would have wiped
+    /// them.</para>
+    ///
+    /// <para>Written against the whole record rather than the three fields, so the next column
+    /// added is caught the same way instead of needing somebody to remember this happened.</para>
+    /// </remarks>
+    [Fact]
+    public async Task Every_field_a_booking_needs_survives_the_list()
+    {
+        var w = await BuildAsync();
+        var controller = Controller(w, w.HotelOwner);
+
+        var created = Assert.IsType<PlaceRoomRecord>(Assert.IsType<OkObjectResult>(
+            (await controller.Create(w.HotelId, w.PlaceId, new SavePlaceRoomRequest(
+                Name: "Room 217", Floor: "Second floor", Description: "A knock at 3am.",
+                IsPublic: true, Capacity: 2, IsBookable: true, BedNote: "one king"),
+                default)).Result).Value);
+
+        var listed = Assert.IsType<List<PlaceRoomRecord>>(Assert.IsType<OkObjectResult>(
+            (await controller.GetAll(w.HotelId, w.PlaceId, default)).Result).Value).Single();
+
+        // Compared whole: the record IS the contract, and a field-by-field test only guards the
+        // fields whoever wrote it happened to think of.
+        Assert.Equal(created, listed);
+        Assert.Equal(2, listed.Capacity);
+        Assert.True(listed.IsBookable);
+        Assert.Equal("one king", listed.BedNote);
+    }
+
     [Fact]
     public async Task A_room_on_an_events_plan_is_refused_by_the_events_name()
     {
