@@ -85,3 +85,36 @@ there when mail could not be sent — so on a dev machine adding an address is o
 
 `your-profile.md` rewritten around the new behaviour, the website changelog given two entries, the
 product PDF rebuilt. Item 237's slice A is marked fixed on the branch that carries it.
+
+---
+
+## Correction, same day: that failure was not pre-existing on master
+
+I reported `TitleSuggestedRolesTests.Both_halves_are_reachable_from_a_screen` as a pre-existing
+failure on master, having "confirmed" it by stashing this branch's work and re-running. That check
+proved nothing: it ran in the same **worktree** either way.
+
+**The guard fails whenever the suite is run from a git worktree, on any branch.** It walked up to
+`Ben.slnx`, then excluded every path containing `/worktrees/`. From the main checkout that skips
+the other branches parked inside it. From *inside* a worktree it excludes the entire tree — the
+scan sees zero files and the guard reports the feature inert because it never opened a single
+screen. The exclusion was right; the substring was not. It is the same trap the comment two
+methods below already describes for path separators on Windows.
+
+**Both directions were live in that one file.** The positive scan (must be called) failed falsely.
+The negative scan (must not be read outside these files) would have passed *vacuously*, seeing
+nothing to object to — the quieter and worse half.
+
+And the wider version: the other forty-odd source-scanning guards exclude nothing at all, so from
+the main checkout they read every worktree under `.claude/worktrees/` and **a guard can be
+satisfied by a file that exists only on another branch**.
+
+**Fixed** on `fix/source-scan-guards-in-a-worktree`: `Ben.Web.Tests/Support/RepoFiles.cs` resolves
+the root and excludes worktrees *nested in that root* by prefix, never by substring, plus build
+output. Both scans in `TitleSuggestedRolesTests` now go through it, and both assert the scan found
+something before judging what it found. Five tests on the helper itself, proved to discriminate:
+restoring the substring exclusion fails three of them and the guard with them.
+
+Converting the remaining guards is not done here — several deliberately scan one project rather
+than the root, and sweeping 40 files I have not read would be a worse change than a documented
+helper the next one uses.
