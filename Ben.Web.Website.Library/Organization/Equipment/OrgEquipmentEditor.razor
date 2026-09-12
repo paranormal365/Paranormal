@@ -20,12 +20,28 @@
 
         <div class="mb-2">
             <label class="form-label fw-semibold">Make</label>
-            <BenSelect Data="@_brands" Value="@_brandId" ValueChanged="@((Guid? v) => OnBrandChangedAsync(v))" TextField="@nameof(EquipmentBrandRecord.Name)" ValueField="@nameof(EquipmentBrandRecord.Id)" DefaultText="Choose a make…" Width="100%" Enabled="@(_categoryId is not null)" />
+            @* Same cascade as MyEquipmentItemEditor, and the same trap: makes are not filtered by
+               category, only models are, so a valid make can lead nowhere. Every make stays
+               listed — this editor has no propose path, so hiding one would remove a group's only
+               route to gear whose model is already in the catalog under another category. *@
+            <BenSelect Data="@_brandOptions" Value="@_brandId" ValueChanged="@((Guid? v) => OnBrandChangedAsync(v))" TextField="@nameof(BrandOption.Label)" ValueField="@nameof(BrandOption.Id)" DefaultText="Choose a make…" Width="100%" Enabled="@(_categoryId is not null)" />
         </div>
 
         <div class="mb-2">
             <label class="form-label fw-semibold">Model</label>
-            <BenSelect Data="@_models" Value="@_modelId" ValueChanged="@((Guid? v) => _modelId = v)" TextField="@nameof(EquipmentModelRecord.Name)" ValueField="@nameof(EquipmentModelRecord.Id)" DefaultText="Choose a model…" Width="100%" Enabled="@(_brandId is not null)" />
+            <BenSelect Data="@_models" Value="@_modelId" ValueChanged="@((Guid? v) => _modelId = v)" TextField="@nameof(EquipmentModelRecord.Name)" ValueField="@nameof(EquipmentModelRecord.Id)" DefaultText="@ModelPlaceholder" Width="100%" Enabled="@(_brandId is not null && !_modelsLoading)" />
+
+            @* Nothing here proposes a model, so this says where the one path that does lives
+               rather than pretending the empty select is a choice. *@
+            @if (_brandId is not null && !_modelsLoading && _models.Count == 0)
+            {
+                <div class="alert alert-info py-2 px-3 mt-2 mb-0 small">
+                    No <strong>@CategoryName</strong> models are listed under
+                    <strong>@BrandName</strong> yet. Choose a different make above, or add the model
+                    from <a href="/my-equipment">My Equipment</a> — new models proposed there show up
+                    here too.
+                </div>
+            }
         </div>
 
         @* Plain inputs: Telerik text boxes commit on blur, which drops the last keystroke when
@@ -121,6 +137,12 @@
     private List<EquipmentBrandRecord> _brands = [];
     private List<EquipmentModelRecord> _models = [];
 
+    /// <summary>One row of the make picker — the label depends on the category chosen above it.</summary>
+    private sealed record BrandOption(Guid Id, string Label);
+
+    private List<BrandOption> _brandOptions = [];
+    private HashSet<Guid> _brandsWithModelsHere = [];
+
     private Guid? _categoryId, _brandId, _modelId;
     private string _displayName = string.Empty;
     private string _serialNumber = string.Empty;
@@ -131,8 +153,17 @@
     private IReadOnlyList<EquipmentItemPhotoRecord> _photos = [];
 
     private bool _busy;
+    private bool _modelsLoading;
     private string? _error;
     private Guid? _loadedFor;
+
+    private string? CategoryName => _categories.FirstOrDefault(c => c.Id == _categoryId)?.Name;
+    private string? BrandName    => _brands.FirstOrDefault(b => b.Id == _brandId)?.Name;
+
+    private string ModelPlaceholder =>
+        _modelsLoading                              ? "Loading models…"
+        : _brandId is not null && _models.Count == 0 ? "No models listed yet"
+        : "Choose a model…";
 
     protected override async Task OnParametersSetAsync()
     {
@@ -156,6 +187,8 @@
             _includeInGlobalCatalog = false;
             _models = [];
             _photos = [];
+            _brandsWithModelsHere = [];
+            RebuildBrandOptions();
         }
         else
         {
@@ -171,6 +204,7 @@
             // Work back from the model so the cascading pickers open on the right rungs.
             _categoryId = _categories.FirstOrDefault(c => c.Name == Item.CategoryName)?.Id;
             _brandId    = _brands.FirstOrDefault(b => b.Name == Item.BrandName)?.Id;
+            await RefreshBrandCoverageAsync();
             if (_brandId is not null)
                 _models = [.. await AdminClient.GetEquipmentModelsForBrandAsync(_brandId.Value, _categoryId)];
         }
@@ -193,15 +227,54 @@
     {
         _categoryId = categoryId;
         _brandId = null; _modelId = null; _models = [];
-        await Task.CompletedTask;
+        await RefreshBrandCoverageAsync();
     }
 
     private async Task OnBrandChangedAsync(Guid? brandId)
     {
         _brandId = brandId;
         _modelId = null;
-        _models = brandId is null ? [] : [.. await AdminClient.GetEquipmentModelsForBrandAsync(brandId.Value, _categoryId)];
+        _models = [];
+
+        if (brandId is null) return;
+
+        _modelsLoading = true;
+        StateHasChanged();
+        try
+        {
+            _models = [.. await AdminClient.GetEquipmentModelsForBrandAsync(brandId.Value, _categoryId)];
+        }
+        finally
+        {
+            _modelsLoading = false;
+        }
     }
+
+    /// <summary>
+    /// Works out which makes have a model in the chosen category, for the picker's labels.
+    /// </summary>
+    /// <remarks>
+    /// One category-filtered model search, not one call per make: it already returns every model in
+    /// the category carrying its make's id.
+    /// </remarks>
+    private async Task RefreshBrandCoverageAsync()
+    {
+        _brandsWithModelsHere = _categoryId is null
+            ? []
+            : [.. (await AdminClient.SearchEquipmentModelsAsync(categoryId: _categoryId)).Select(m => m.EquipmentBrandId)];
+        RebuildBrandOptions();
+    }
+
+    /// <summary>With no category chosen there is nothing to be missing, so the names stand alone.</summary>
+    private void RebuildBrandOptions()
+        => _brandOptions =
+        [
+            .. _brands.Select(b => new BrandOption(
+                b.Id,
+                _categoryId is null || _brandsWithModelsHere.Contains(b.Id)
+                    ? b.Name
+                    : $"{b.Name} (no models in this category yet)"))
+        ];
 
     private async Task SaveAsync()
     {

@@ -39,8 +39,14 @@ Site administrators can see equipment records, as they can everywhere else in th
 
 ## Adding a piece of equipment
 
-Choose a category first — that narrows the makes and models to sensible ones. Then pick the make,
-then the model, then give it a name you will recognise in a list, like "my backup recorder".
+Choose a category first, then the make, then the model, then give it a name you will recognise in
+a list, like "my backup recorder".
+
+The category narrows the models, not the makes. Every make stays on the list on purpose: the first
+person to own a FLIR audio recorder has to be able to choose FLIR and add the model under it. Makes
+with nothing in the category you picked say so — *FLIR (no models in this category yet)* — and if
+you pick one anyway, the model list tells you it is empty and points at adding the model, rather
+than sitting there blank with no explanation.
 
 ## When you don't know the make or model
 

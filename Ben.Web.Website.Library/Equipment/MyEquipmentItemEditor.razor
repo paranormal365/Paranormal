@@ -28,7 +28,12 @@
 
         <div class="mb-3">
             <label class="form-label fw-semibold">Make</label>
-            <BenSelect Data="@_brands" Value="@_brandId" ValueChanged="@((Guid? v) => OnBrandChangedAsync(v))" TextField="@nameof(EquipmentBrandRecord.Name)" ValueField="@nameof(EquipmentBrandRecord.Id)" Enabled="@(_categoryId is not null)" DefaultText="Choose a make…" Width="100%" />
+            @* Every make stays listed, including the ones with nothing in this category. Dropping
+               them would hide exactly the make somebody needs the first time anyone registers, say,
+               a FLIR audio recorder — and typing "FLIR" back in is then refused as a probable
+               duplicate, which is a dead end with no way out of it. Labelling is the honest half:
+               the choice is still there, it just no longer looks like a promise of models. *@
+            <BenSelect Data="@_brandOptions" Value="@_brandId" ValueChanged="@((Guid? v) => OnBrandChangedAsync(v))" TextField="@nameof(BrandOption.Label)" ValueField="@nameof(BrandOption.Id)" Enabled="@(_categoryId is not null && !_brandsLoading)" DefaultText="@BrandPlaceholder" Width="100%" />
             <div class="form-text">
                 No manufacturer, or homemade? Pick <strong>Generic / Unbranded</strong>.
             </div>
@@ -70,10 +75,22 @@
 
         <div class="mb-3">
             <label class="form-label fw-semibold" for="myequipmentitemeditor-model-f471">Model</label>
-            <BenSelect Data="@_models" Value="@_modelId" ValueChanged="@((Guid? v) => _modelId = v)" TextField="@nameof(EquipmentModelRecord.Name)" ValueField="@nameof(EquipmentModelRecord.Id)" Enabled="@(_brandId is not null)" DefaultText="Choose a model…" Width="100%" />
+            <BenSelect Data="@_models" Value="@_modelId" ValueChanged="@((Guid? v) => _modelId = v)" TextField="@nameof(EquipmentModelRecord.Name)" ValueField="@nameof(EquipmentModelRecord.Id)" Enabled="@(_brandId is not null && !_modelsLoading)" DefaultText="@ModelPlaceholder" Width="100%" />
 
             @if (_brandId is not null)
             {
+                @* An empty select says nothing at all: broken, still loading, and "there is
+                   genuinely nothing here" all render identically. Say which of the three it is,
+                   and point at the input immediately below that fixes it. *@
+                @if (!_modelsLoading && _models.Count == 0)
+                {
+                    <div class="alert alert-info py-2 px-3 mt-2 mb-0 small">
+                        No <strong>@CategoryName</strong> models are listed under
+                        <strong>@BrandName</strong> yet. Add yours below — it joins the catalog for
+                        everyone — or choose a different make above.
+                    </div>
+                }
+
                 <div class="d-flex gap-2 mt-2">
                     <input id="myequipmentitemeditor-model-f471" class="form-control form-control-sm" placeholder="Or add a model that isn't listed"
                            value="@_newModelName"
@@ -224,6 +241,14 @@
 @code {
     private const string GenericModelName = "Generic (model not specified)";
 
+    /// <summary>One row of the make picker: the make's id, and the label shown for it.</summary>
+    /// <remarks>
+    /// A projection rather than <see cref="EquipmentBrandRecord"/> itself because the label depends
+    /// on the category chosen above it — the same make reads "FLIR" under Thermal Imaging and
+    /// "FLIR (no models in this category yet)" under Audio Recorder.
+    /// </remarks>
+    private sealed record BrandOption(Guid Id, string Label);
+
     [Parameter] public bool Visible { get; set; }
     [Parameter] public EventCallback<bool> VisibleChanged { get; set; }
 
@@ -235,6 +260,12 @@
     private List<EquipmentCategoryRecord> _categories = [];
     private List<EquipmentBrandRecord> _brands = [];
     private List<EquipmentModelRecord> _models = [];
+
+    /// <summary>The makes as the picker shows them. See <see cref="BrandOption"/>.</summary>
+    private List<BrandOption> _brandOptions = [];
+
+    /// <summary>Makes with at least one model in the chosen category — the labels come from this.</summary>
+    private HashSet<Guid> _brandsWithModelsHere = [];
 
     private Guid? _categoryId;
     private Guid? _brandId;
@@ -250,6 +281,23 @@
     private bool _includeInGlobalCatalog;
     private EquipmentLoanAudience _loanAudience = EquipmentLoanAudience.NotLoanable;
 
+    private string? CategoryName => _categories.FirstOrDefault(c => c.Id == _categoryId)?.Name;
+    private string? BrandName    => _brands.FirstOrDefault(b => b.Id == _brandId)?.Name;
+
+    private string BrandPlaceholder => _brandsLoading ? "Loading makes…" : "Choose a make…";
+
+    /// <summary>
+    /// What the closed model picker reads when it has nothing to offer.
+    /// </summary>
+    /// <remarks>
+    /// The placeholder carries the state as well as the prompt, so the picker is legible without
+    /// opening it — "Loading models…" and "No models listed yet" used to look the same.
+    /// </remarks>
+    private string ModelPlaceholder =>
+        _modelsLoading                          ? "Loading models…"
+        : _brandId is not null && _models.Count == 0 ? "No models listed yet — add one below"
+        : "Choose a model…";
+
     private bool HasAudience(EquipmentLoanAudience flag) => (_loanAudience & flag) != 0;
 
     private void ToggleAudience(EquipmentLoanAudience flag, bool on)
@@ -257,6 +305,8 @@
 
     private bool _isEdit;
     private bool _busy;
+    private bool _brandsLoading;
+    private bool _modelsLoading;
     private bool _loaded;
     private string? _error;
     private Guid? _loadedForItemId;
@@ -277,7 +327,7 @@
         {
             _isEdit = false;
             _categoryId = null; _brandId = null; _modelId = null;
-            _brands = []; _models = [];
+            _brands = []; _models = []; _brandOptions = []; _brandsWithModelsHere = [];
             _displayName = string.Empty; _serialNumber = string.Empty;
             _acquisitionDate = null; _notes = string.Empty;
             _websiteUrl = string.Empty;
@@ -300,8 +350,9 @@
             _categoryId = model?.EquipmentCategoryId;
             _brandId    = model?.EquipmentBrandId;
             _modelId    = Item.EquipmentModelId;
-            if (_categoryId is not null) _brands = [.. await AdminClient.GetEquipmentBrandsAsync()];
-            if (_brandId is not null) _models = [.. await AdminClient.GetEquipmentModelsForBrandAsync(_brandId.Value, _categoryId)];
+            await ReloadBrandsAsync();
+            if (_brandId is not null && _categoryId is not null)
+                _models = [.. await AdminClient.GetEquipmentModelsForBrandAsync(_brandId.Value, _categoryId)];
         }
 
         _newBrandName = string.Empty;
@@ -314,17 +365,77 @@
         _categoryId = categoryId;
         _brandId = null; _modelId = null;
         _models = [];
-        _brands = categoryId is null ? [] : [.. await AdminClient.GetEquipmentBrandsAsync()];
+
+        // A "did you mean" answered under the previous category is about a question nobody is
+        // asking any more.
+        _brandDidYouMean = null;
+
+        await ReloadBrandsAsync();
     }
 
     private async Task OnBrandChangedAsync(Guid? brandId)
     {
         _brandId = brandId;
         _modelId = null;
-        _models = brandId is null || _categoryId is null
-            ? []
-            : [.. await AdminClient.GetEquipmentModelsForBrandAsync(brandId.Value, _categoryId)];
+        _models = [];
+
+        if (brandId is null || _categoryId is null) return;
+
+        _modelsLoading = true;
+        StateHasChanged();
+        try
+        {
+            _models = [.. await AdminClient.GetEquipmentModelsForBrandAsync(brandId.Value, _categoryId)];
+        }
+        finally
+        {
+            _modelsLoading = false;
+        }
     }
+
+    /// <summary>
+    /// Reloads the makes, and works out which of them have a model in the chosen category.
+    /// </summary>
+    /// <remarks>
+    /// One extra call rather than one per make: the category-filtered model search already returns
+    /// every model in the category carrying its make's id, so the coverage set falls out of a list
+    /// the catalog produces in a single query. Both endpoints apply the same visibility rule —
+    /// approved, plus this caller's own pending proposals — so a make somebody proposed a model
+    /// under a moment ago is labelled as having one, and the two lists cannot disagree.
+    /// </remarks>
+    private async Task ReloadBrandsAsync()
+    {
+        if (_categoryId is null)
+        {
+            _brands = []; _brandOptions = []; _brandsWithModelsHere = [];
+            return;
+        }
+
+        _brandsLoading = true;
+        StateHasChanged();
+        try
+        {
+            _brands = [.. await AdminClient.GetEquipmentBrandsAsync()];
+            _brandsWithModelsHere =
+            [
+                .. (await AdminClient.SearchEquipmentModelsAsync(categoryId: _categoryId))
+                    .Select(m => m.EquipmentBrandId)
+            ];
+            RebuildBrandOptions();
+        }
+        finally
+        {
+            _brandsLoading = false;
+        }
+    }
+
+    private void RebuildBrandOptions()
+        => _brandOptions =
+        [
+            .. _brands.Select(b => new BrandOption(
+                b.Id,
+                _brandsWithModelsHere.Contains(b.Id) ? b.Name : $"{b.Name} (no models in this category yet)"))
+        ];
 
     /// <summary>
     /// Proposes a make, handling the "did you mean" the catalog answers a near-miss with.
@@ -352,7 +463,7 @@
         }
         else
         {
-            _brands = [.. await AdminClient.GetEquipmentBrandsAsync()];
+            await ReloadBrandsAsync();
             _newBrandName = string.Empty;
             await OnBrandChangedAsync(proposal.Created.Id);
         }
@@ -388,6 +499,9 @@
             _models = [.. await AdminClient.GetEquipmentModelsForBrandAsync(_brandId.Value, _categoryId)];
             _newModelName = string.Empty;
             _modelId = created.Id;
+
+            // This make now has a model here — drop the label saying it has none.
+            if (_brandsWithModelsHere.Add(_brandId.Value)) RebuildBrandOptions();
         }
         _busy = false;
     }

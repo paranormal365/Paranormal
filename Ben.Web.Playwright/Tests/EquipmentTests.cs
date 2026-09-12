@@ -146,6 +146,72 @@ public class EquipmentTests : BenTestBase
     }
 
     /// <summary>
+    /// A make with nothing in the chosen category has to say so.
+    /// </summary>
+    /// <remarks>
+    /// Makes are not filtered by category — only models are — so "Audio Recorder" then "FLIR" is a
+    /// pair a person can legitimately reach that leads to no models at all. While
+    /// "Generic / Unbranded" was the only make in the dev data this was unreachable, because it has
+    /// a model in every category; the first real makes made it reachable, and reachable in
+    /// production the moment anybody proposes a make. An empty select is the one rendering that
+    /// cannot be read: broken, still loading and genuinely empty all look identical.
+    /// </remarks>
+    [Test]
+    public async Task AMakeWithNoModelsHere_SaysSoRatherThanShowingAnEmptySelect()
+    {
+        await LoginAsync(UserEmail, UserPassword);
+        await Page.GotoAsync($"{BaseUrl}/my-equipment");
+        await Page.WaitForLoadStateAsync(LoadState.NetworkIdle);
+        await WaitUntilLoadedAsync();
+
+        var editor = Main.Locator(".card").Filter(new() { HasTextString = "What kind of gear is it?" }).First;
+        var add = Main.GetByRole(AriaRole.Button, new() { Name = "Add equipment" })
+                      .Or(Main.GetByRole(AriaRole.Button, new() { Name = "Add your first piece" }))
+                      .First;
+        await ClickUntilAsync(add, editor);
+
+        var selects = editor.Locator("select.form-select");
+        await Expect(selects.First).ToBeVisibleAsync(new() { Timeout = 8_000 });
+
+        var categories = await OptionValuesAsync(selects.Nth(0));
+        Assert.That(categories, Is.Not.Empty, "no equipment categories in the taxonomy");
+
+        // Hunt for the dead end rather than hard-coding one: which makes have models where is
+        // seed data, and this should still test something after somebody edits it.
+        string? chosenMake = null;
+        foreach (var category in categories)
+        {
+            await selects.Nth(0).SelectOptionAsync(category);
+
+            foreach (var make in await OptionValuesAsync(selects.Nth(1)))
+            {
+                await selects.Nth(1).SelectOptionAsync(make);
+                if ((await OptionValuesAsync(selects.Nth(2))).Length > 0) continue;
+
+                chosenMake = await selects.Nth(1).Locator("option:checked").InnerTextAsync();
+                break;
+            }
+
+            if (chosenMake is not null) break;
+        }
+
+        if (chosenMake is null)
+            Assert.Ignore("every make leads to a model in every category, so there is no dead end to explain");
+
+        // Said before it was picked…
+        Assert.That(chosenMake!, Does.Contain("no models in this category yet"),
+            "the make list gave no warning that this make leads nowhere");
+
+        // …and again afterwards, next to the input that fixes it.
+        await Expect(editor.GetByText("models are listed under").First)
+            .ToBeVisibleAsync(new() { Timeout = 8_000 });
+        await Expect(selects.Nth(2).Locator("option").First)
+            .ToHaveTextAsync("No models listed yet — add one below");
+        await Expect(editor.GetByPlaceholder("Or add a model that isn't listed"))
+            .ToBeVisibleAsync(new() { Timeout = 8_000 });
+    }
+
+    /// <summary>
     /// Removes gear this fixture created.
     /// </summary>
     /// <remarks>
