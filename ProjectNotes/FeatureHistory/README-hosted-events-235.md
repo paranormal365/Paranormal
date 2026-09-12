@@ -224,6 +224,73 @@ discriminate by removing the lower bound from `DueAWarningAsync` and watching on
   `organization-administration.md`, entries in the website and service changelogs, and
   `ProjectNotes/DailyLogs/2026-09-12.md`. Product PDF rebuilt.
 
+**Phase 2.2c done, 2026-09-12** — the email door, the menus and the kitchen's sheet. 2.2 is closed.
+
+- **The anonymous email path is not a second door.** A stranger reaches a hosted event through the
+  very machinery that already signs people up to a public event — `EventAttendanceInvite` pointed
+  at the umbrella row, one single-use token, a fortnight. Building a second invitation, a second
+  expiry and a second "is this really your address" would have given the site two answers to one
+  question, and the older one would have gone on being the one that was maintained.
+- **What is different is what the click lands as.** On an ordinary public event, confirming means
+  you are coming. On a hosted event nobody comes until the venue says so (DECISION 7), so the click
+  writes a DayPass booking in the Requested pile and an umbrella attendee row in the
+  `Invited`/`Requested` pair — which is the shape a walk's requested seat already has. `isTour`
+  became `asksRatherThanComes` and every branch that read it now reads that instead.
+- **A second click never demotes a place the venue agreed to.** A confirmed booking holds the
+  umbrella row at `Accepted`/`Reserved`, so the confirm path leaves a reserved row alone rather than
+  writing it back to Requested. That one is easy to miss and would have quietly un-booked somebody.
+- **The email door only ever sells a day pass**, and an event selling none refuses and names the
+  page where a room can be asked for. Rooms are chosen night by night and a hyperlink is not a
+  booking form; taking an address there and doing nothing with it would be worse than saying no.
+- **Create-on-behalf by email is its own endpoint, returning its own shape.** No booking comes back
+  from it, deliberately: an invitation holds no room and no day pass until somebody clicks it, and a
+  booking-shaped answer would tell a host they had reserved something they had not. The
+  `on-behalf` refusal for a missing account now names this door. **The known gap, recorded rather
+  than hidden:** a host who took a phone call cannot hold a room for an address, only for an
+  account. Holding one would need an unclaimed-booking model with no user id, and an unclaimed
+  booking cannot write the umbrella attendee row every count on the site reads — so it would hold
+  beds while the public number disagreed with it. The help text says make it against an account.
+- **Mail failure is reported honestly to a host** and swallowed for a stranger. A host is not
+  probing for accounts; they are the person who will stand at a door wondering why nobody came.
+  The invitation is saved either way and the link is in the log.
+- **Menus are one card for the whole weekend** (Ben, 2026-09-12: *"they may have a breakfast and
+  lunch and dinner and snacks I guess. Maybe we just make it part of the Menu overall."*), replace
+  the whole set on save, and each sitting must belong to a night of this event.
+- **His message caught a real ordering defect before it shipped.** I had sittings sorted by serving
+  time within a night, which prints an eight o'clock breakfast *before* the seven o'clock dinner it
+  followed. A night here is the whole stay-period — the evening people arrive through the morning
+  they come down — which is the only way breakfast has a night to belong to at all, and it means
+  the host's own order is the only correct one. Proved by reverting the sort and watching the
+  breakfast test fail.
+- **Position in the list is the order**, for sittings and dishes alike; the `SortOrder` inputs are
+  gone rather than left in to be ignored, because a parameter that lies is worse than none.
+- **The dietary tally groups on the note as typed** and on nothing cleverer. "No nuts" and "nut
+  allergy" are one requirement to a cook and two strings here; a tally clever enough to merge them
+  would eventually merge two that are not, and a cook acting on a wrong merge poisons somebody.
+- **The unnamed count is the number that matters most.** A party of four who listed two names
+  leaves two people the kitchen knows nothing about, and a sheet showing only the notes would read
+  as complete when it was half a weekend's guests. `EventDietary` is pure and separate from the
+  controller for the same reason `EventCapacity` is.
+- **A privacy fix taken in passing, and worth naming.** The booking board handed dietary notes to
+  any org member, because reading the board takes membership. Those are named people's allergies,
+  so they are now withheld from a member who cannot decide a booking, and the tally endpoint takes
+  the deciding permission rather than membership. DECISION 10's door-staff view is phase 5's.
+- **Menus reach a guest whose place is confirmed**, per the model's own rule, and a guest still
+  waiting is told the venue publishes it once their place is agreed. *If Ben would rather a
+  requester saw it too, that is a one-line change and the refusal is the only thing that moves.*
+- **27 new tests**, two of them proved to discriminate by breaking the rule and watching only the
+  right test fail: the breakfast ordering, and one-live-booking-per-person. Suite: .NET 8,374 pass,
+  0 fail, 9 skipped.
+- **Help, changelogs and worklog updated in this commit**: three new sections in
+  `organization-administration.md` (inviting by email, menus, the dietary sheet), website and
+  service changelog entries, `ProjectNotes/DailyLogs/2026-09-12.md`. Product PDF rebuilt.
+
+**Ben's ask, 2026-09-12, taken next:** *"We should probably send a confirmation e-mail or offer it.
+Generate a QR code for the confirmation the event organizer can scan to check them in when they
+arrive so check in is smoother."* That is phase 2.3 (mail) and phase 3 (QR passes) as already
+planned, brought forward to run back to back — 2.3's `EventGuestMailer` first, because a pass with
+no letter to travel in reaches nobody.
+
 **TWO CONFIGURATION FINDINGS, both from phase 0's new enum values and neither yet fixed.** On
 `IsHauntedDb_player`, and almost certainly on production too:
 

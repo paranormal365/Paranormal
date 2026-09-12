@@ -883,6 +883,78 @@ You can set a date when the event stops taking new requests, so you can cater an
 number. It stops *new* ones only — a request already waiting when it closes is still yours to
 decide, because somebody who asked in time shouldn't be refused by a clock while you were asleep.
 
+#### Inviting somebody who has no account
+
+Most guests ask you through the event's page, which needs an account. For the ones who ring up, or
+who you meet at a conference, there is **Invite by email**: you type their address and we send them
+a link. Clicking it proves the address, makes them a passwordless account and puts a **day-pass
+request** on your board, which you then confirm like any other.
+
+Two things about it are worth knowing before you use it.
+
+**Nothing is held until they click.** The invitation reserves no room and no day pass, and we say
+so on the screen rather than showing you something booking-shaped. If you need a room held *now*
+for somebody on the phone, make the booking against an account instead.
+
+**It only ever asks for a day pass.** Sleeping somewhere means choosing rooms night by night and a
+hyperlink is not a booking form — so if they are staying over, move them into a room when you
+confirm, which is where you decide every other room anyway.
+
+The link is good for two weeks and works once. Sending it again to the same address replaces the
+old one rather than stacking a second guest, and if they had already asked you for a place
+themselves, they become one party rather than two. If your site has no mail configured, we tell you
+the letter did not go rather than leaving you waiting at a door.
+
+An event that isn't published yet, has been called off, or sells no day passes refuses the
+invitation and says which — better than thirty people finding out a fortnight later.
+
+### Menus
+
+**Menus** on the event page is one card for the whole weekend. Add a sitting, say which night it
+belongs to, name it and give it a time: *Breakfast*, *Lunch*, *Dinner*, *Snacks*, a late supper —
+as many as you actually serve. Then list the dishes under it, with the course in your own words
+("Starter", "Pudding", "On the table") and what is in each one.
+
+**A night runs from the evening people arrive through the morning they come down.** So Friday
+night's sittings include Saturday's breakfast, and the last night of a weekend still serves the
+breakfast on the day everybody leaves. Sittings read in the order you arrange them, not by the
+clock, because an eight o'clock breakfast comes *after* the seven o'clock dinner it followed.
+
+The tags on a dish describe **the food** — "vegan", "contains nuts" — and everybody who can see the
+menu sees them. A guest's own allergy is a different thing entirely and lives on their booking.
+
+Menus are shown to guests whose place you have **confirmed**, not to the public. A menu is part of
+what somebody has booked, and you may not want the hotel down the road costing your catering before
+you have sold the weekend. A guest still waiting is told you publish it once their place is agreed.
+
+### The dietary sheet
+
+**Dietary tally** turns every guest's note into the sheet the kitchen actually works from.
+
+It counts **confirmed** parties by default, because that is who you are buying food for. There is a
+switch to fold in the requests too, for ordering ahead of a weekend that isn't settled — and the
+sheet says which of the two you are looking at, so nobody reads a provisional number as a final
+one.
+
+Three numbers sit at the top, and the third is the one that matters most:
+
+- how many people you are expecting in total,
+- how many of them told you something,
+- and **how many nobody has named**. A party of four who listed two names leaves two people you
+  know nothing about. A sheet that showed only the notes would look complete when it was half your
+  guests.
+
+Below that, the same note typed by several people is grouped with a count, so "vegan × 6" is one
+line. **We group on the words as typed and never guess.** "No nuts" and "nut allergy" mean the same
+thing to a cook and are two different lines here — a tally clever enough to merge them would
+eventually merge two that aren't the same, and acting on a wrong merge is how somebody gets fed the
+wrong thing. Each line names the guest, their party and which nights they are here, so Saturday's
+cook can see whose meal is theirs.
+
+**Dietary notes are health information about named people.** They are shown to staff who can decide
+bookings, and withheld from members who can't — an ordinary member of your group has no reason to
+read a stranger's allergy list. They never reach a public page.
+
 ## Public events
 
 An event on your calendar can be opened to anybody. Tick **Public** and it appears on your group's

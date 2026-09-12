@@ -20,6 +20,12 @@ belongs there; this is for the part underneath.
 
 ## 2026-09-12
 
+- An event's menus and its dietary sheet can be read and written. Menus reach guests whose place a
+  venue has confirmed; dietary notes are health information and reach only staff who can decide a
+  booking, never a public page or an ordinary member.
+- Somebody with no account here can be invited to an event by email, through the same single-use
+  link that has always signed guests up to a public event. Accepting it asks the venue for a day
+  pass and holds nothing until the venue agrees.
 - Overnight events count places per room per night, and day passes against one number for the
   event, so a venue that sleeps eight can no longer be sold forty beds.
 - Confirming a booking puts the whole party on the event's calendar entry, which is what the

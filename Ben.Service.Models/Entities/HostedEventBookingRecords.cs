@@ -187,3 +187,75 @@ public sealed record HostedEventBookingBoardRecord(
     IReadOnlyList<HostedEventRoomRecord> Rooms,
     IReadOnlyList<HostedEventRoomNightRecord> RoomNights,
     IReadOnlyList<HostedEventBookingRecord> Bookings);
+
+/// <summary>
+/// One person the kitchen has to cook differently for.
+/// </summary>
+/// <param name="Nights">
+/// Which nights that party is here, so a cook planning Saturday knows whether this one is theirs.
+/// Empty for a day pass.
+/// </param>
+public sealed record HostedEventDietaryLineRecord(
+    Guid BookingId,
+    string LeadName,
+    HostedEventBookingStatus Status,
+    string GuestName,
+    string Notes,
+    IReadOnlyList<DateTime> Nights);
+
+/// <summary>
+/// How many people said the same thing, word for word.
+/// </summary>
+/// <remarks>
+/// Grouped on the note as typed, lower-cased and with its spacing tidied, and on nothing cleverer.
+/// "No nuts" and "nut allergy" are the same requirement to a cook and different strings here, and
+/// a tally that guessed they were one thing would eventually merge two that are not.
+/// </remarks>
+public sealed record HostedEventDietaryTallyRecord(string Notes, int People);
+
+/// <summary>
+/// What the kitchen needs to know, for one event.
+/// </summary>
+/// <param name="PeopleExpected">
+/// Everybody in every counted party, whether or not they said anything. The denominator: eight
+/// notes out of twelve people is a very different service from eight out of two hundred.
+/// </param>
+/// <param name="PeopleUnnamed">
+/// People counted in a party size that nobody named. A party of four who listed two names has two,
+/// and the kitchen is cooking for them without knowing anything about them.
+/// </param>
+public sealed record HostedEventDietaryRecord(
+    Guid HostedEventId,
+    bool IncludesRequests,
+    int PeopleExpected,
+    int PeopleWithNotes,
+    int PeopleUnnamed,
+    IReadOnlyList<HostedEventDietaryTallyRecord> Tally,
+    IReadOnlyList<HostedEventDietaryLineRecord> Lines);
+
+/// <summary>
+/// A host asking somebody with no account here to come for the day.
+/// </summary>
+/// <param name="Email">Where the link goes. Nothing is held until they click it.</param>
+/// <param name="PartySize">Carried on the invitation, so the link does not ask them again.</param>
+public sealed record InviteHostedEventGuestRequest(
+    string Email,
+    string? DisplayName = null,
+    int PartySize = 1);
+
+/// <summary>
+/// What came of asking somebody by email.
+/// </summary>
+/// <remarks>
+/// There is deliberately no booking in here. An emailed invitation holds no room and no day pass
+/// until the person clicks it, and returning a booking-shaped answer would tell a host they had
+/// reserved something they had not.
+/// </remarks>
+/// <param name="Sent">
+/// False when this deployment has no mail configured. The invitation still exists and the link is
+/// in the log, so a host is told the truth rather than left waiting for a letter nobody posted.
+/// </param>
+public sealed record HostedEventGuestInviteRecord(
+    string Email,
+    bool Sent,
+    DateTime ExpiresUtc);

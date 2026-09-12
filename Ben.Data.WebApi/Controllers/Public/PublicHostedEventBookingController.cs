@@ -69,6 +69,37 @@ public sealed class PublicHostedEventBookingController : BenControllerBase
         return booking is null ? NotFound() : Ok(ToMine(booking));
     }
 
+    /// <summary>
+    /// What is being served, for a guest whose place the venue has agreed to.
+    /// </summary>
+    /// <remarks>
+    /// <para><b>Confirmed guests, not the world.</b> A menu is part of what somebody has booked,
+    /// and a venue that has not sold the weekend yet may not want its catering costed by the hotel
+    /// down the road. A guest still waiting is told the venue publishes it once the place is
+    /// agreed, which is a sentence they can act on.</para>
+    ///
+    /// <para>Every sitting of every night comes back in one answer — dinner, the late supper, the
+    /// breakfast the next morning — in the order the host arranged them.</para>
+    /// </remarks>
+    [HttpGet("{eventId:guid}/menus")]
+    public async Task<ActionResult<HostedEventMenusRecord>> GetMenus(
+        Guid eventId, CancellationToken ct)
+    {
+        var userId = GetCurrentUserId();
+        if (userId == Guid.Empty) return Unauthorized();
+
+        await using var db = await _db.CreateDbContextAsync(ct);
+
+        var confirmed = await db.HostedEventBookings.AsNoTracking()
+            .AnyAsync(b => b.HostedEventId == eventId && b.LeadAppUserId == userId
+                        && b.Status == HostedEventBookingStatus.Confirmed, ct);
+        if (!confirmed)
+            return StatusCode(StatusCodes.Status403Forbidden,
+                "The venue publishes the menu once your place is agreed.");
+
+        return Ok(await Entities.HostedEventMenuController.MenusAsync(db, eventId, ct));
+    }
+
     // ── asking ───────────────────────────────────────────────────────────────
 
     /// <summary>

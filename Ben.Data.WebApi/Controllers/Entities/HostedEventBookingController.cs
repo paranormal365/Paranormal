@@ -37,17 +37,32 @@ namespace Ben.Data.WebApi.Controllers.Entities;
 public sealed class HostedEventBookingController : OrgCmsControllerBase
 {
     private readonly HostedEventCalendarSync _sync;
+    private readonly Ben.Data.Common.Interfaces.IEmailService _email;
+    private readonly Ben.Data.Common.SiteIdentity _site;
+    private readonly ILogger<HostedEventBookingController> _logger;
+
+    /// <summary>An invitation is good for a fortnight, the same as every other link here.</summary>
+    private static readonly TimeSpan InviteLifetime = TimeSpan.FromDays(14);
 
     public HostedEventBookingController(
         IDbContextFactory<BenDataContext> dbFactory, IMapper mapper,
         IOrganizationSecurityService security,
-        HostedEventCalendarSync sync)
+        HostedEventCalendarSync sync,
+        Ben.Data.Common.Interfaces.IEmailService email,
+        Microsoft.Extensions.Options.IOptions<Ben.Data.Common.SiteIdentity> site,
+        ILogger<HostedEventBookingController> logger)
         : base(dbFactory, mapper, security)
-    { _sync = sync; }
+    { _sync = sync; _email = email; _site = site.Value; _logger = logger; }
 
     // ── reading ──────────────────────────────────────────────────────────────
 
     /// <summary>The whole weekend: rooms offered, how full each is per night, and every booking.</summary>
+    /// <remarks>
+    /// Readable by any member, because knowing how full the house is is not a billing question.
+    /// <b>Dietary notes are not</b>: they are health information about named guests, so they are
+    /// withheld from a member who cannot decide a booking. An ordinary member of a ghost-hunting
+    /// group has no reason to read a stranger's allergy list.
+    /// </remarks>
     [HttpGet]
     public async Task<ActionResult<HostedEventBookingBoardRecord>> GetBoard(
         Guid orgId, Guid eventId, CancellationToken ct)
@@ -61,7 +76,35 @@ public sealed class HostedEventBookingController : OrgCmsControllerBase
         var ev = await LoadEventAsync(db, orgId, eventId, ct);
         if (ev is null) return NotFound();
 
-        return Ok(await BoardAsync(db, ev, ct));
+        return Ok(await BoardAsync(db, ev, await CanDecideAsync(userId.Value, orgId, ct), ct));
+    }
+
+    /// <summary>
+    /// What the kitchen has to cook differently, for the whole event.
+    /// </summary>
+    /// <remarks>
+    /// <para><b>Confirmed parties by default</b>, because that is who the venue is buying food for.
+    /// Requests can be folded in with <c>includeRequests</c> for a host ordering ahead of a
+    /// weekend that has not been decided yet — and the answer says which it is, so a cook cannot
+    /// read a provisional number as a settled one.</para>
+    ///
+    /// <para><b>Takes the deciding permission, not membership.</b> Everything in here is health
+    /// information about named individuals.</para>
+    /// </remarks>
+    [HttpGet("dietary")]
+    public async Task<ActionResult<HostedEventDietaryRecord>> GetDietary(
+        Guid orgId, Guid eventId, [FromQuery] bool includeRequests, CancellationToken ct)
+    {
+        var userId = GetCurrentUserId();
+        if (userId is null) return Unauthorized();
+
+        await using var db = await DbFactory.CreateDbContextAsync(ct);
+        if (!await CanDecideAsync(userId.Value, orgId, ct)) return Forbid();
+
+        var ev = await LoadEventAsync(db, orgId, eventId, ct);
+        if (ev is null) return NotFound();
+
+        return Ok(await DietaryAsync(db, eventId, includeRequests, ct));
     }
 
     // ── deciding ─────────────────────────────────────────────────────────────
@@ -205,9 +248,9 @@ public sealed class HostedEventBookingController : OrgCmsControllerBase
     /// Creates a booking for somebody who asked by phone, by email or at the door.
     /// </summary>
     /// <remarks>
-    /// Takes an existing account, and nothing else for now: creating an account for a person who
-    /// never asked for one goes through the guest-invite door the walk-up sign-up already owns, and
-    /// wiring that in is phase 2.2's email half rather than a second copy of it here.
+    /// Takes an existing account. Somebody with no account goes through <c>on-behalf/invite</c>
+    /// instead, because creating an account for a person who never asked for one is the guest
+    /// door's job and there is exactly one of those.
     /// </remarks>
     [HttpPost("on-behalf")]
     public async Task<ActionResult<HostedEventBookingRecord>> CreateOnBehalf(
@@ -224,7 +267,9 @@ public sealed class HostedEventBookingController : OrgCmsControllerBase
         if (ev is null) return NotFound();
 
         if (request.LeadAppUserId is not { } leadId)
-            return BadRequest("Choose who this booking is for.");
+            return BadRequest(
+                "Choose who this booking is for. If they have no account here, invite them by email "
+              + "instead and the booking appears when they accept.");
         if (!await db.AppUsers.AnyAsync(u => u.Id == leadId, ct))
             return BadRequest("That person no longer has an account here.");
 
@@ -264,7 +309,154 @@ public sealed class HostedEventBookingController : OrgCmsControllerBase
         return Ok(await OneAsync(db, eventId, booking.Id, ct));
     }
 
+    /// <summary>
+    /// Asks somebody with no account here to come for the day.
+    /// </summary>
+    /// <remarks>
+    /// <para><b>The same door a walk-up guest uses</b>, pointed at this event's umbrella row: an
+    /// address, a single-use link, a fortnight to click it. Building a second invitation for
+    /// events would have given the site two answers to "is this really your address", and only
+    /// one of them would have gone on being maintained.</para>
+    ///
+    /// <para><b>Nothing is held until they click.</b> This reserves no room and no day pass, and
+    /// the answer says so rather than looking like a booking — a host who thinks they have held a
+    /// room for a phone caller will sell it twice. To hold something now, make the booking against
+    /// an account.</para>
+    ///
+    /// <para><b>A day pass, not a room.</b> Sleeping somewhere means choosing rooms night by
+    /// night, and a hyperlink is not a booking form. The host can move them into a room when they
+    /// confirm, which is where every other room decision is made anyway.</para>
+    ///
+    /// <para><b>It answers the same way whether or not that address has an account</b>, exactly as
+    /// the walk-up invitation does. "Does this person have an account here" is not a question this
+    /// endpoint exists to answer.</para>
+    /// </remarks>
+    [HttpPost("on-behalf/invite")]
+    public async Task<ActionResult<HostedEventGuestInviteRecord>> InviteByEmail(
+        Guid orgId, Guid eventId,
+        [FromBody] InviteHostedEventGuestRequest request, CancellationToken ct)
+    {
+        var userId = GetCurrentUserId();
+        if (userId is null) return Unauthorized();
+
+        var email = request.Email?.Trim().ToLowerInvariant();
+        if (string.IsNullOrWhiteSpace(email) || !email.Contains('@') || email.Length > 320)
+            return BadRequest("A valid email address is needed.");
+
+        await using var db = await DbFactory.CreateDbContextAsync(ct);
+        if (!await CanDecideAsync(userId.Value, orgId, ct)) return Forbid();
+
+        var ev = await LoadEventAsync(db, orgId, eventId, ct);
+        if (ev is null) return NotFound();
+
+        // Refused here rather than at the link, because a host who sends thirty invitations to a
+        // draft would find out a fortnight later when thirty people were turned away.
+        if (HostedEventGuestDoor.WhyTheEmailDoorIsClosed(ev, DateTime.UtcNow, theHostSentThisLink: true)
+            is { } shut)
+            return BadRequest(shut);
+
+        // The umbrella row is what the invitation points at, and it may not exist yet on an event
+        // nobody has booked into.
+        var umbrella = await _sync.SyncAsync(db, ev, userId.Value, ct);
+
+        // One pending invitation per address, reissued rather than stacked: a host who is not sure
+        // the first one arrived will simply send it again.
+        var invite = await db.EventAttendanceInvites
+            .FirstOrDefaultAsync(i => i.OrgCalendarEventId == umbrella.Id && i.Email == email, ct);
+
+        var expires = DateTime.UtcNow.Add(InviteLifetime);
+
+        if (invite is { DateConfirmed: not null })
+            // Already accepted; their booking is on the board. Saying so distinguishes nothing
+            // that the host cannot already see there.
+            return Ok(new HostedEventGuestInviteRecord(email, Sent: false, invite.DateExpires));
+
+        var token = Convert.ToHexString(
+            System.Security.Cryptography.RandomNumberGenerator.GetBytes(32));
+
+        if (invite is null)
+        {
+            invite = new EventAttendanceInvite
+            {
+                Id = Guid.NewGuid(),
+                OrgCalendarEventId = umbrella.Id,
+                Email = email,
+                DisplayName = Trimmed(request.DisplayName),
+                Seats = EventCapacity.ClampPartySize(request.PartySize),
+                Token = token,
+                DateExpires = expires,
+                InvitedByAppUserId = userId.Value,
+                DateCreated = DateTime.UtcNow,
+                CreatedByAppUserId = userId.Value,
+            };
+            db.EventAttendanceInvites.Add(invite);
+        }
+        else
+        {
+            invite.Token = token;
+            invite.DateExpires = expires;
+            invite.Seats = EventCapacity.ClampPartySize(request.PartySize);
+            // A guest who asked for their own link and is now being invited by the host gets the
+            // host's latitude from here on: same person, better standing.
+            invite.InvitedByAppUserId = userId.Value;
+            if (Trimmed(request.DisplayName) is { } name) invite.DisplayName = name;
+            invite.DateUpdated = DateTime.UtcNow;
+            invite.UpdatedByAppUserId = userId.Value;
+        }
+
+        await db.SaveChangesAsync(ct);
+
+        var sent = await TrySendInviteAsync(email, ev, token, ct);
+        return Ok(new HostedEventGuestInviteRecord(email, sent, expires));
+    }
+
     // ── the work ─────────────────────────────────────────────────────────────
+
+    /// <summary>
+    /// Sends the invitation, and reports honestly whether it went.
+    /// </summary>
+    /// <remarks>
+    /// <para>Unlike the public flow, the truth is told to the caller here. A host is not a
+    /// stranger who might be probing for accounts; they are the person who will stand at a door
+    /// wondering why nobody came, and "we could not send it" is exactly what they need to know.
+    /// The invitation is saved either way, and the link is in the log.</para>
+    ///
+    /// <para>It deliberately says nothing about the room, the price or the programme. Those are
+    /// the confirmation's to say, and this letter goes to an address nobody has proved yet.</para>
+    /// </remarks>
+    private async Task<bool> TrySendInviteAsync(
+        string email, HostedEvent ev, string token, CancellationToken ct)
+    {
+        var link = _site.AbsoluteUrl($"/attending/{token}");
+
+        if (!_email.IsConfigured)
+        {
+            _logger.LogInformation(
+                "Email is not configured; the invitation to hosted event {EventId} was not sent. "
+              + "Link: {Link}", ev.Id, link);
+            return false;
+        }
+
+        var safeName = NotificationText.Safe(ev.Name);
+        try
+        {
+            await _email.SendAsync(email,
+                $"You're invited to {ev.Name}",
+                $"<p>The venue has invited you to <strong>{safeName}</strong>, starting "
+              + $"{ev.StartsOn:dddd, MMMM d}.</p>"
+              + $"<p><a href=\"{link}\">Accept the invitation</a></p>"
+              + "<p>Accepting puts your name in front of the venue, who will confirm your place "
+              + "and tell you what happens next. That link is good for two weeks and only works "
+              + "once.</p>", ct);
+            return true;
+        }
+        catch (Exception ex)
+        {
+            _logger.LogWarning(ex,
+                "Could not send an invitation to hosted event {EventId}.", ev.Id);
+            return false;
+        }
+    }
 
     private async Task<ActionResult<HostedEventBookingRecord>> DecideAsync(
         Guid orgId, Guid eventId, Guid bookingId,
@@ -466,15 +658,19 @@ public sealed class HostedEventBookingController : OrgCmsControllerBase
             .Where(b => b.HostedEventId == eventId)
             .ToListAsync(ct);
 
+    /// <summary>
+    /// One booking, reloaded after a change. Always with the dietary notes, because every caller
+    /// of this is somebody who has just decided a booking.
+    /// </summary>
     private async Task<HostedEventBookingRecord> OneAsync(
         BenDataContext db, Guid eventId, Guid bookingId, CancellationToken ct)
     {
-        var board = await BookingsAsync(db, eventId, ct);
+        var board = await BookingsAsync(db, eventId, canSeeDietary: true, ct);
         return board.First(b => b.Id == bookingId);
     }
 
     private static async Task<IReadOnlyList<HostedEventBookingRecord>> BookingsAsync(
-        BenDataContext db, Guid eventId, CancellationToken ct)
+        BenDataContext db, Guid eventId, bool canSeeDietary, CancellationToken ct)
     {
         var bookings = await db.HostedEventBookings
             .AsNoTracking()
@@ -504,13 +700,14 @@ public sealed class HostedEventBookingController : OrgCmsControllerBase
             b.Guests
                 .OrderBy(g => g.SortOrder)
                 .Select(g => new HostedEventBookingGuestRecord(
-                    g.Id, g.DisplayName, g.AppUserId, g.DietaryNotes, g.SortOrder))
+                    g.Id, g.DisplayName, g.AppUserId,
+                    canSeeDietary ? g.DietaryNotes : null, g.SortOrder))
                 .ToList()))
             .ToList();
     }
 
     private async Task<HostedEventBookingBoardRecord> BoardAsync(
-        BenDataContext db, HostedEvent ev, CancellationToken ct)
+        BenDataContext db, HostedEvent ev, bool canSeeDietary, CancellationToken ct)
     {
         var offered = await db.HostedEventRooms
             .AsNoTracking()
@@ -548,8 +745,22 @@ public sealed class HostedEventBookingController : OrgCmsControllerBase
                 r.Id, r.PlaceRoomId, r.PlaceRoom.Name, r.PlaceRoom.Floor, r.PlaceRoom.BedNote,
                 EventCapacity.CapacityOf(r), r.CapacityOverride, r.Note, r.SortOrder)).ToList(),
             roomNights,
-            await BookingsAsync(db, ev.Id, ct));
+            await BookingsAsync(db, ev.Id, canSeeDietary, ct));
     }
+
+    /// <summary>Loads what the kitchen needs and hands it to <see cref="EventDietary"/> to read.</summary>
+    private static async Task<HostedEventDietaryRecord> DietaryAsync(
+        BenDataContext db, Guid eventId, bool includeRequests, CancellationToken ct)
+        => EventDietary.Summarise(
+            eventId,
+            await db.HostedEventBookings
+                .AsNoTracking()
+                .Include(b => b.Guests)
+                .Include(b => b.Nights).ThenInclude(n => n.HostedEventNight)
+                .Include(b => b.LeadAppUser)
+                .Where(b => b.HostedEventId == eventId)
+                .ToListAsync(ct),
+            includeRequests);
 
     /// <summary>
     /// People who have asked for a room on a night and hold nothing.

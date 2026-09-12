@@ -33,6 +33,15 @@ day-by-day account of building it would say nothing to anyone using it now.
 - Bookings can be changed after they are confirmed, by the venue or by the guest. A guest asks the
   venue to release a confirmed room rather than freeing it themselves, because the venue has
   catered and staffed against it.
+- An event can publish what it is serving. One card holds every sitting of the weekend — breakfast,
+  lunch, dinner, a late supper, snacks — with the dishes under each and what is in them. Guests
+  whose place has been confirmed can read it.
+- A venue can see the dietary sheet its kitchen works from: how many people are expected, how many
+  said something, and how many nobody has named yet. Notes typed the same way are grouped with a
+  count, and two different ways of saying one thing are never merged into one.
+- A venue can invite somebody who has no account here by email. The link proves their address and
+  puts a day-pass request on the venue's board, which the venue then confirms as usual. Nothing is
+  held until they accept, and the screen says so.
 - The Field Kit's video is easier to find. Choosing what a session records — magnetic field, sound, video, location — now happens before the session opens, not part-way down a running session's screen.
 
 ## 2026-09-11
