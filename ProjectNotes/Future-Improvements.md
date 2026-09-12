@@ -12056,7 +12056,42 @@ below are mostly wiring; thread C is the only one that needs anything built from
 
 ---
 
-### A. The defect first: an email set primary and public without ever being verified
+### A. ✅ FIXED 2026-09-12 (`fix/verify-a-new-email`, merged) — and this entry had it partly wrong
+
+> **The correction, first.** This entry was written claiming the verification flow did not exist.
+> It did. `CreateEmail` already refused public, `UpdateEmail` already refused publishing an
+> unvalidated address, re-typing the address already cleared validation and unpublished it, and the
+> whole chain — `send-validation`, the emailed link, the anonymous `/validate-email/{token}` page,
+> the redeem endpoint, the seven-day expiry, the one-minute cooldown — was built, tested and
+> working. All four columns existed and three of them were being written.
+>
+> **Two things were genuinely broken, and the second is what Ben hit.**
+>
+> 1. **`IsPrimary` was governed by nothing**, on create or update. Primary is the address a person
+>    is presented by, so an unproven one taking it is the same mistake as publishing it, only
+>    quieter — the rule public already had. Said honestly: nothing today routes mail by the primary
+>    `UserEmail` (the site writes to the Identity account address, which has its own confirmation),
+>    so this was a wrong label rather than mail redirected. Fixed at the rule level anyway, because
+>    the day something reads it, it becomes the other kind of defect. Changing the address of a
+>    primary row is now refused outright, since re-typing clears validation and a row that stayed
+>    primary through that lands in exactly the state the rule prevents.
+> 2. **No confirmation was ever sent on add.** The row was created with no token, and the link only
+>    went if somebody found a button most people never press — so the address sat unconfirmed for
+>    ever and could never become primary or public. Adding an address IS the request to confirm it,
+>    so create now issues the link immediately through the same helper the resend button uses.
+>    Behaviour change pinned by its own test: asking again inside the minute is throttled.
+>
+> **On the screen:** Primary is disabled until confirmed, with the note Public already had, defined
+> once because it is one rule; and a first address no longer defaults to primary, because a tick
+> the save would refuse is a tick that lied.
+>
+> 32 controller tests, proved to discriminate. `ProfileEmailConfirmationTests` is written and
+> compiles but is **unrun** — the e2e runner refuses while the dev hosts hold port 5252.
+>
+> **Still open from this thread:** the shared verified-tick component for two-factor, phone and
+> linked providers. Email already had a *Confirmed* badge.
+
+### A (original note, kept for the record): an email set primary and public without ever being verified
 
 Ben: *"I just updated my account in the profile by adding a new e-mail. I set it as primary and
 public. Shouldn't we verify that?"*
@@ -12088,7 +12123,7 @@ same treatment wherever a fact about an account is proved rather than asserted: 
 Apple or Microsoft linked, phone verified. One shared component, because four screens inventing four
 ticks is how they end up meaning four different things.
 
-### A2. The profile did not say it had saved
+### A2. ✅ FIXED 2026-09-12 — the profile did not say it had saved
 
 Ben: *"when I returned to my profile page, it didn't say that it was updated."* Adding an email
 succeeded and the screen said nothing. Whatever the enhancements below come to, **a save that

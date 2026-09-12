@@ -18,6 +18,10 @@ day-by-day account of building it would say nothing to anyone using it now.
 
 ## 2026-09-12
 
+- Adding an email address to your profile now confirms it. The link is sent as soon as you save,
+  rather than waiting for you to find a button, and the card tells you what it did.
+- An email address has to be confirmed before it can be made your primary one, which was already
+  true of making it public.
 - Events that run overnight take bookings. A venue ticks which of its rooms an event is using, and
   guests ask for a room on named nights or a day pass for the day. A party is one booking with one
   lead and as many named guests as there are people, each with their own dietary note.
