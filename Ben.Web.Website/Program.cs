@@ -197,6 +197,10 @@ builder.Services.AddSingleton<SiteFeaturesProvider>();
 builder.Services.AddSingleton<HelpContentService>();
 builder.Services.AddScoped<HelpViewerResolver>();
 
+// The public changelog. A singleton for the same reason the help is one: the content is embedded
+// and cannot change without a redeploy, so parsing it per request would buy nothing.
+builder.Services.AddSingleton<Ben.Web.Services.Changelog.ChangelogService>();
+
 // ── Microsoft Entra OIDC ─────────────────────────────────────────────────────
 // EntraTokenHolder is populated by middleware before the Blazor circuit starts
 // so that the access token is available to components after the circuit is up.
