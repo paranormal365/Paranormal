@@ -385,7 +385,7 @@ public sealed class EventGuestMailerTests
             // Said rather than left to the column default: the diary tests above assert Central
             // time, and a default that moved would fail them for a reason nobody could see.
             TimeZoneId = "America/Chicago",
-            StartsOn = Friday, EndsOn = Saturday, IsPublished = true, DayPassCapacity = 10,
+            StartsOn = Friday, EndsOn = Saturday, LifecycleState = HostedEventLifecycleState.Published, DayPassCapacity = 10,
             DateCreated = DateTime.UtcNow, CreatedByAppUserId = HostId,
         });
 

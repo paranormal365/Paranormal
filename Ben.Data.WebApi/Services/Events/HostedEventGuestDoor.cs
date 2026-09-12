@@ -58,9 +58,11 @@ public static class HostedEventGuestDoor
     public static string? WhyTheEmailDoorIsClosed(
         HostedEvent hosted, DateTime utcNow, bool theHostSentThisLink = false)
     {
-        if (hosted.CancelledAtUtc is not null)
+        if (hosted.LifecycleState is HostedEventLifecycleState.Cancelled)
             return "This event has been called off.";
-        if (!hosted.IsPublished || hosted.ArchivedAtUtc is not null)
+        if (hosted.LifecycleState is HostedEventLifecycleState.VenueWithdrawn)
+            return "The venue has withdrawn, so this event is not going ahead.";
+        if (!hosted.IsTakingBookings)
             return "This event isn't taking bookings.";
         if (!theHostSentThisLink && !EventCapacity.IsOpenForRequests(hosted, utcNow))
             return "This event has stopped taking bookings.";

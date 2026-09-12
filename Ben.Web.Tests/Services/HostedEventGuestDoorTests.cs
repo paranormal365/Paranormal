@@ -34,7 +34,7 @@ public sealed class HostedEventGuestDoorTests
         Id = EventId, OrganizationId = OrgId, PlaceId = PlaceId,
         Name = "Halloween Lock-In", UrlName = "halloween-lock-in",
         StartsOn = new DateTime(2026, 10, 30), EndsOn = new DateTime(2026, 10, 31),
-        IsPublished = true, DayPassCapacity = 10,
+        LifecycleState = HostedEventLifecycleState.Published, DayPassCapacity = 10,
         DateCreated = Now, CreatedByAppUserId = HostId,
     };
 
@@ -48,7 +48,7 @@ public sealed class HostedEventGuestDoorTests
     public void A_draft_is_not_a_thing_anybody_can_be_invited_to()
     {
         var draft = Live();
-        draft.IsPublished = false;
+        draft.LifecycleState = HostedEventLifecycleState.Draft;
 
         Assert.Equal("This event isn't taking bookings.",
             HostedEventGuestDoor.WhyTheEmailDoorIsClosed(draft, Now));
@@ -58,6 +58,7 @@ public sealed class HostedEventGuestDoorTests
     public void An_event_that_was_called_off_says_so_rather_than_that_it_is_full()
     {
         var off = Live();
+        off.LifecycleState = HostedEventLifecycleState.Cancelled;
         off.CancelledAtUtc = Now;
 
         Assert.Equal("This event has been called off.",
@@ -118,6 +119,7 @@ public sealed class HostedEventGuestDoorTests
     {
         // The latitude is over the deadline and nothing else.
         var off = Live();
+        off.LifecycleState = HostedEventLifecycleState.Cancelled;
         off.CancelledAtUtc = Now;
         off.BookingsCloseAtUtc = Now.AddDays(-1);
 

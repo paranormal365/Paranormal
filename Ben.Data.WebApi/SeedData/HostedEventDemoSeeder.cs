@@ -167,7 +167,10 @@ internal static class HostedEventDemoSeeder
             DayPassCapacity = 20,
             DayPassPrice = 45m,
             ContactLine = "Call the hotel on (615) 555-0142 to settle up.",
-            IsPublished = false,
+            // Draft on purpose: the point of the seed is a plan to arrange, and publishing it
+            // would spend one of the group's credits every time a database is built.
+            LifecycleState = HostedEventLifecycleState.Draft,
+            VenueArrangement = HostedEventVenueArrangement.Self,
             DateCreated = now,
             CreatedByAppUserId = ownerId,
         });
@@ -240,7 +243,11 @@ internal static class HostedEventDemoSeeder
             LayoutKind = HostedEventLayoutKind.Seats,
             DayPassCapacity = 0,
             ContactLine = "Tickets are settled at the door.",
-            IsPublished = false,
+            LifecycleState = HostedEventLifecycleState.Draft,
+            VenueArrangement = HostedEventVenueArrangement.Self,
+            // A theatre's seats are picked by the guest; the hotel's rooms are asked for and
+            // placed. One seeded event of each, so both booking modes have a screen to show.
+            BookingMode = HostedEventBookingMode.Pick,
             DateCreated = now,
             CreatedByAppUserId = ownerId,
         });

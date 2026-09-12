@@ -142,7 +142,7 @@ public sealed class HostedEventController : OrgCmsControllerBase
             DatesAreSeparate = request.DatesAreSeparate,
             DefaultStartLocal = request.DefaultStartLocal,
             DefaultEndLocal = request.DefaultEndLocal,
-            IsPublished = false,
+            LifecycleState = HostedEventLifecycleState.Draft,
             DayPassCapacity = request.DayPassCapacity,
             ContactLine = Trimmed(request.ContactLine),
             CoverUploadFileId = request.CoverUploadFileId,
@@ -278,23 +278,32 @@ public sealed class HostedEventController : OrgCmsControllerBase
             return Forbid();
 
         await using var db = await DbFactory.CreateDbContextAsync(ct);
+        // Both collections, because the readiness list asks about both and a missing Include
+        // would read as "no rooms on the plan" and refuse a perfectly ready event.
         var hosted = await db.HostedEvents
             .Include(e => e.Nights)
+            .Include(e => e.LayoutUnits)
             .FirstOrDefaultAsync(e => e.Id == eventId && e.OrganizationId == orgId, ct);
         if (hosted is null) return NotFound();
 
-        if (hosted.IsPublished) return Ok((await LoadAsync(db, orgId, eventId, ct))[0]);
+        if (hosted.IsOnThePublicSite) return Ok((await LoadAsync(db, orgId, eventId, ct))[0]);
 
-        if (hosted.CancelledAtUtc is not null)
+        if (hosted.LifecycleState is HostedEventLifecycleState.Cancelled)
             return BadRequest("This event has been called off. Un-cancel it first, "
                             + "or create a new one — the people who had places were told it was off.");
 
-        if (hosted.ArchivedAtUtc is not null)
+        if (hosted.LifecycleState is HostedEventLifecycleState.VenueWithdrawn)
+            return BadRequest("The venue withdrew from this event. It cannot be put back up "
+                            + "without them, so make a new one wherever it is now happening.");
+
+        if (hosted.LifecycleState is HostedEventLifecycleState.Archived)
             return BadRequest("This event has been archived. Restore it first.");
 
-        if (hosted.Nights.Count == 0)
-            return BadRequest($"Give this event at least one {DateNoun(hosted)} before publishing it. "
-                            + "Nobody can come to something with no date on it.");
+        // Every reason it is not ready, as the checklist on the page words them. One list, read by
+        // the button and by the card above it, so the page can never offer a publish the server is
+        // about to refuse — the failure mode a server guard with no UI path always becomes.
+        if (HostedEventReadiness.Describe(hosted).FirstOrDefault(i => !i.Done) is { } blocker)
+            return BadRequest(blocker.Sentence);
 
         var note = (string?)null;
 
@@ -324,7 +333,7 @@ public sealed class HostedEventController : OrgCmsControllerBase
             }
         }
 
-        hosted.IsPublished = true;
+        hosted.LifecycleState = HostedEventLifecycleState.Published;
         hosted.DateUpdated = DateTime.UtcNow;
         hosted.UpdatedByAppUserId = userId.Value;
 
@@ -335,9 +344,13 @@ public sealed class HostedEventController : OrgCmsControllerBase
     }
 
     /// <summary>Takes it off the public site. Nothing is refunded, and nothing is destroyed.</summary>
+    /// <remarks>
+    /// Back to Draft, which is the state it can be edited and published from again. The credit is
+    /// not spent a second time: <c>FirstPublishedUtc</c> remembers that it was paid for.
+    /// </remarks>
     [HttpPost("{eventId:guid}/unpublish")]
     public Task<ActionResult<HostedEventRecord>> Unpublish(Guid orgId, Guid eventId, CancellationToken ct)
-        => SetAsync(orgId, eventId, e => e.IsPublished = false, ct);
+        => SetAsync(orgId, eventId, e => e.LifecycleState = HostedEventLifecycleState.Draft, ct);
 
     /// <summary>Stops it counting and takes it off the list. What happened is untouched.</summary>
     [HttpPost("{eventId:guid}/archive")]
@@ -345,13 +358,26 @@ public sealed class HostedEventController : OrgCmsControllerBase
         => SetAsync(orgId, eventId, e =>
         {
             e.ArchivedAtUtc = DateTime.UtcNow;
-            e.IsPublished = false;
+            e.LifecycleState = HostedEventLifecycleState.Archived;
         }, ct);
 
-    /// <summary>Brings an archived event back. It publishes again for nothing.</summary>
+    /// <summary>
+    /// Brings an archived event back. It publishes again for nothing.
+    /// </summary>
+    /// <remarks>
+    /// To Ended when it has already happened and to Draft when it has not, rather than always to
+    /// Draft: restoring last spring's weekend must not put it back on the public site as something
+    /// people can book.
+    /// </remarks>
     [HttpPost("{eventId:guid}/restore")]
     public Task<ActionResult<HostedEventRecord>> Restore(Guid orgId, Guid eventId, CancellationToken ct)
-        => SetAsync(orgId, eventId, e => e.ArchivedAtUtc = null, ct);
+        => SetAsync(orgId, eventId, e =>
+        {
+            e.ArchivedAtUtc = null;
+            e.LifecycleState = e.EndedAtUtc is not null
+                ? HostedEventLifecycleState.Ended
+                : HostedEventLifecycleState.Draft;
+        }, ct);
 
     /// <summary>
     /// Calls it off, keeping the row so the people who had places can see that it is off.
@@ -366,6 +392,10 @@ public sealed class HostedEventController : OrgCmsControllerBase
         Guid orgId, Guid eventId, [FromBody] CancelHostedEventRequest request, CancellationToken ct)
         => SetAsync(orgId, eventId, e =>
         {
+            // Both, and the state is the one anything reads. The stamp says when; it is not the
+            // answer to "is this off", which is what it used to be and what let the door go on
+            // taking bookings for a cancelled event the day the state column arrived.
+            e.LifecycleState = HostedEventLifecycleState.Cancelled;
             e.CancelledAtUtc = DateTime.UtcNow;
             e.CancelledReason = request.Reason?.Trim() is { Length: > 0 } r ? r : null;
         }, ct);
@@ -954,12 +984,27 @@ public sealed class HostedEventController : OrgCmsControllerBase
             r.Event.TimeZoneId, r.Event.StartsOn, r.Event.EndsOn,
             r.Event.DatesAreSeparate, DateNoun(r.Event),
             r.Event.DefaultStartLocal, r.Event.DefaultEndLocal,
-            r.Event.IsPublished, r.Event.FirstPublishedUtc,
+            r.Event.LifecycleState, r.Event.FirstPublishedUtc,
             r.Event.DayPassCapacity, r.Event.ContactLine, r.Event.CoverUploadFileId,
             r.Event.MailSubjectTemplate, r.Event.MailBodyTemplate, r.Event.CollectsEvidence,
             r.Event.ArchivedAtUtc, r.Event.CancelledAtUtc, r.Event.CancelledReason,
             r.UmbrellaId,
-            [.. r.Nights.Select(n => ToNight(n, r.Event))]))];
+            [.. r.Nights.Select(n => ToNight(n, r.Event))],
+            PlanNote: null,
+            BookingMode: r.Event.BookingMode,
+            HoldMinutes: r.Event.HoldMinutes,
+            DayPassPrice: r.Event.DayPassPrice,
+            BookingsCloseAtUtc: r.Event.BookingsCloseAtUtc,
+            VenueArrangement: r.Event.VenueArrangement,
+            VenueContactName: r.Event.VenueContactName,
+            VenueAgreedOnUtc: r.Event.VenueAgreedOnUtc,
+            VenueReference: r.Event.VenueReference,
+            MinimumGuests: r.Event.MinimumGuests,
+            GoNoGoDeadlineUtc: r.Event.GoNoGoDeadlineUtc,
+            GoNoGoDecision: r.Event.GoNoGoDecision,
+            GoNoGoDecidedUtc: r.Event.GoNoGoDecidedUtc,
+            LiveAtUtc: r.Event.LiveAtUtc,
+            EndedAtUtc: r.Event.EndedAtUtc))];
     }
 
     internal static HostedEventNightRecord ToNight(HostedEventNight night, HostedEvent hosted)

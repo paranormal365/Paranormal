@@ -151,7 +151,12 @@ public sealed class HostedEventControllerTests
                from ?? new DateTime(2026, 10, 30), to ?? new DateTime(2026, 11, 1),
                TimeZoneId: "America/Chicago",
                DefaultStartLocal: new TimeSpan(19, 0, 0),
-               DefaultEndLocal: new TimeSpan(23, 0, 0));
+               DefaultEndLocal: new TimeSpan(23, 0, 0),
+               // Publishable, because most of these tests are about what happens AFTER publishing
+               // and the readiness gate is tested on its own. An event with no way to reach the
+               // venue is genuinely not ready, and every one of these would otherwise be asserting
+               // that fact over and over instead of the thing it is named for.
+               ContactLine: "Call the hotel on (615) 555-0142 to settle up.");
 
     private static HostedEventRecord Created(ActionResult<HostedEventRecord> result)
     {
@@ -201,7 +206,7 @@ public sealed class HostedEventControllerTests
         var f = await SeedAsync();
         var record = Created(await Build(f).Create(OrgId, Weekend(), default));
 
-        Assert.False(record.IsPublished);
+        Assert.Equal(HostedEventLifecycleState.Draft, record.LifecycleState);
         Assert.Null(record.FirstPublishedUtc);
 
         await using var db = await f.CreateDbContextAsync();
@@ -223,7 +228,7 @@ public sealed class HostedEventControllerTests
         var published = Assert.IsType<HostedEventRecord>(
             Assert.IsType<OkObjectResult>((await controller.Publish(OrgId, record.Id, default)).Result).Value);
 
-        Assert.True(published.IsPublished);
+        Assert.Equal(HostedEventLifecycleState.Published, published.LifecycleState);
         Assert.NotNull(published.FirstPublishedUtc);
 
         await using var db = await f.CreateDbContextAsync();
@@ -365,7 +370,7 @@ public sealed class HostedEventControllerTests
 
         await using var db = await f.CreateDbContextAsync();
         var still = await db.HostedEvents.FirstAsync(e => e.Id == record.Id);
-        Assert.False(still.IsPublished);
+        Assert.Equal(HostedEventLifecycleState.Draft, still.LifecycleState);
         Assert.Null(still.FirstPublishedUtc);
         Assert.Equal(3, await db.HostedEventNights.CountAsync(n => n.HostedEventId == record.Id));
     }
@@ -391,7 +396,7 @@ public sealed class HostedEventControllerTests
         var published = Assert.IsType<HostedEventRecord>(
             Assert.IsType<OkObjectResult>((await controller.Publish(OrgId, record.Id, default)).Result).Value);
 
-        Assert.True(published.IsPublished);
+        Assert.Equal(HostedEventLifecycleState.Published, published.LifecycleState);
         Assert.Contains("credit spent", published.PlanNote ?? "");
 
         await using var after = await f.CreateDbContextAsync();

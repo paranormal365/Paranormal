@@ -757,10 +757,24 @@ namespace Ben.Data.Source.Context
                 .Property(e => e.MailSubjectTemplate).HasMaxLength(200);
             modelBuilder.Entity<HostedEvent>()
                 .Property(e => e.CancelledReason).HasMaxLength(500);
-            // What the billing question asks — "which are live right now" — so it is the shape the
-            // index has.
             modelBuilder.Entity<HostedEvent>()
-                .HasIndex(e => new { e.OrganizationId, e.IsPublished, e.ArchivedAtUtc });
+                .Property(e => e.VenueContactName).HasMaxLength(160);
+            modelBuilder.Entity<HostedEvent>()
+                .Property(e => e.VenueReference).HasMaxLength(120);
+            // What the billing question asks — "which are live right now" — so it is the shape the
+            // index has. One state column where there were two flags, which is also why the old
+            // index had to go: it could not answer the question it was built for.
+            modelBuilder.Entity<HostedEvent>()
+                .HasIndex(e => new { e.OrganizationId, e.LifecycleState });
+            // What the lifecycle job asks, every five minutes, across every group on the site.
+            modelBuilder.Entity<HostedEvent>()
+                .HasIndex(e => new { e.LifecycleState, e.StartsOn });
+            // A hold shorter than a quarter of an hour is not long enough to type a party's names
+            // into; one longer than a fortnight is a booking nobody has confirmed. Enforced in the
+            // database because the value reaches it from three places.
+            modelBuilder.Entity<HostedEvent>()
+                .ToTable(t => t.HasCheckConstraint(
+                    "CK_HostedEvents_HoldMinutes", "[HoldMinutes] BETWEEN 15 AND 20160"));
             modelBuilder.Entity<HostedEvent>()
                 .HasOne(e => e.Organization).WithMany()
                 .HasForeignKey(e => e.OrganizationId).OnDelete(DeleteBehavior.NoAction);

@@ -128,7 +128,35 @@ namespace Ben.Data.Source.Entities
         /// confirmations. Publishing is precisely the act that lets other people's answers start
         /// arriving, which is the last moment at which stopping is still free.
         /// </remarks>
-        public bool IsPublished { get; set; }
+        public HostedEventLifecycleState LifecycleState { get; set; } = HostedEventLifecycleState.Draft;
+
+        /// <summary>When it went live, in UTC. Written by the job; never read to decide anything.</summary>
+        public DateTime? LiveAtUtc { get; set; }
+
+        /// <summary>When it ended, in UTC. Written by the job; never read to decide anything.</summary>
+        public DateTime? EndedAtUtc { get; set; }
+
+        /// <summary>Whether the public site should show it at all.</summary>
+        /// <remarks>
+        /// Derived, and the only place the question is answered. Six screens each writing their own
+        /// version of this comparison is six chances for one of them to keep advertising an event
+        /// that was called off — which is the failure this replaced.
+        /// </remarks>
+        public bool IsOnThePublicSite
+            => LifecycleState is HostedEventLifecycleState.Published
+                              or HostedEventLifecycleState.Live
+                              or HostedEventLifecycleState.Ended;
+
+        /// <summary>Whether it may still take a booking.</summary>
+        /// <remarks>
+        /// Ended deliberately does not: the event happened, and a request arriving afterwards is a
+        /// person who has misread the date, not a late booking.
+        /// </remarks>
+        public bool IsTakingBookings
+            => LifecycleState is HostedEventLifecycleState.Published or HostedEventLifecycleState.Live;
+
+        /// <summary>Whether the organizer has been charged for it and should not be again.</summary>
+        public bool HasEverBeenLive => FirstPublishedUtc is not null;
 
         /// <summary>When it was first published, so nothing is ever charged for twice.</summary>
         /// <remarks>
@@ -186,6 +214,73 @@ namespace Ben.Data.Source.Entities
         /// </remarks>
         public string? ContactLine { get; set; }
 
+        /// <summary>
+        /// How a guest gets a place on this event: they pick one, or they ask for one.
+        /// </summary>
+        public HostedEventBookingMode BookingMode { get; set; } = HostedEventBookingMode.Ask;
+
+        /// <summary>
+        /// How long a picked place is held for, in minutes. Default two days.
+        /// </summary>
+        /// <remarks>
+        /// <para><b>Minutes and not a <c>TimeSpan</c></b>, deliberately: EF maps a TimeSpan to SQL
+        /// <c>time</c>, which caps at 24 hours, and a two-day hold would have silently wrapped. A
+        /// column that cannot hold the default value is not a column.</para>
+        ///
+        /// <para>Bounded 15 minutes to 14 days by a check constraint. Below a quarter of an hour a
+        /// guest cannot finish typing their party's names; above a fortnight a hold is not a hold,
+        /// it is a booking nobody has confirmed.</para>
+        /// </remarks>
+        public int HoldMinutes { get; set; } = 2880;
+
+        /// <summary>
+        /// How this event came to be allowed to happen at its venue.
+        /// </summary>
+        public HostedEventVenueArrangement VenueArrangement { get; set; }
+            = HostedEventVenueArrangement.Self;
+
+        /// <summary>Who at the venue agreed to it, for an arrangement made off this site.</summary>
+        public string? VenueContactName { get; set; }
+
+        /// <summary>When they agreed, in UTC.</summary>
+        public DateTime? VenueAgreedOnUtc { get; set; }
+
+        /// <summary>The venue's own reference for the booking — a contract or invoice number.</summary>
+        public string? VenueReference { get; set; }
+
+        /// <summary>
+        /// The fewest people that make this event worth running. Null means it runs regardless.
+        /// </summary>
+        public int? MinimumGuests { get; set; }
+
+        /// <summary>When the organizer has to decide whether it is going ahead, in UTC.</summary>
+        public DateTime? GoNoGoDeadlineUtc { get; set; }
+
+        /// <summary>Whether they have decided, and which way.</summary>
+        public HostedEventGoNoGo GoNoGoDecision { get; set; } = HostedEventGoNoGo.Undecided;
+
+        /// <summary>When that decision was made, in UTC.</summary>
+        public DateTime? GoNoGoDecidedUtc { get; set; }
+
+        /// <summary>Who made it.</summary>
+        public Guid? GoNoGoDecidedByAppUserId { get; set; }
+
+        /// <summary>
+        /// Whether the seven-day and one-day reminders have gone out.
+        /// </summary>
+        /// <remarks>
+        /// Two markers rather than a count, because they are two different letters and the job runs
+        /// every five minutes. Without them a host with an undecided deadline would be reminded
+        /// two hundred and eighty-eight times a day, which is the same as not being reminded.
+        /// </remarks>
+        public bool GoNoGoWeekReminderSent { get; set; }
+
+        /// <inheritdoc cref="GoNoGoWeekReminderSent"/>
+        public bool GoNoGoDayReminderSent { get; set; }
+
+        /// <summary>When the organizers were last sent a summary of this event's bookings.</summary>
+        public DateTime? LastDigestSentUtc { get; set; }
+
         /// <summary>The picture at the top of the page.</summary>
         public Guid? CoverUploadFileId { get; set; }
 
@@ -218,11 +313,15 @@ namespace Ben.Data.Source.Entities
         /// <summary>Why it was called off, shown to anybody who had a place.</summary>
         public string? CancelledReason { get; set; }
 
-        /// <summary>On the books: not archived.</summary>
-        public bool IsActive => ArchivedAtUtc is null;
+        /// <summary>On the books: not filed away.</summary>
+        public bool IsActive => LifecycleState != HostedEventLifecycleState.Archived;
 
-        /// <summary>Live: published, not archived, not called off — the state that costs.</summary>
-        public bool IsLive => IsPublished && ArchivedAtUtc is null && CancelledAtUtc is null;
+        /// <summary>Live: on the public site and not called off — the state that costs.</summary>
+        /// <remarks>
+        /// Reads the one state column rather than combining a flag with two timestamps, which is
+        /// what it used to do and what let a cancelled event go on counting against a band.
+        /// </remarks>
+        public bool IsLive => IsOnThePublicSite;
 
         public DateTime DateCreated { get; set; }
         public DateTime? DateUpdated { get; set; }

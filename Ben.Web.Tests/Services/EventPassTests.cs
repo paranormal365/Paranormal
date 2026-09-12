@@ -475,7 +475,7 @@ public sealed class EventPassTests
             Id = EventId, OrganizationId = OrgId, PlaceId = PlaceId,
             Name = "Halloween Lock-In", UrlName = "halloween-lock-in",
             StartsOn = new DateTime(2026, 10, 30), EndsOn = new DateTime(2026, 10, 31),
-            IsPublished = true, DayPassCapacity = 10,
+            LifecycleState = HostedEventLifecycleState.Published, DayPassCapacity = 10,
             DateCreated = DateTime.UtcNow, CreatedByAppUserId = HostId,
         });
 

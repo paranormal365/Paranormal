@@ -1,0 +1,41 @@
+@namespace Ben.Web.Website.Library.Manage.Events
+@using Ben.Data.Common.Enums
+
+@*
+    What an event is, in a word and a colour (item 235 phase 3).
+
+    ONE COMPONENT BECAUSE THERE WAS ONE STATE TOO LATE. The events list and the event page each
+    carried their own copy of this, each pattern-matching a published flag against two timestamps,
+    and the copies were kept in step by nobody. That is the smaller half of what the lifecycle
+    column fixed; this is the other half, and leaving two copies reading one column would have been
+    the same bug waiting for the day somebody added a state to one of them.
+*@
+
+<span class="badge @Css">@Text</span>
+
+@code {
+    [Parameter, EditorRequired] public HostedEventLifecycleState State { get; set; }
+
+    private string Text => State switch
+    {
+        HostedEventLifecycleState.Published => "Live",
+        // "On now" and not "Live": to a venue, live means it is on the site taking bookings, and
+        // the two states are days apart. The word people use for the night itself is different.
+        HostedEventLifecycleState.Live => "On now",
+        HostedEventLifecycleState.Ended => "Over",
+        HostedEventLifecycleState.Archived => "Archived",
+        HostedEventLifecycleState.Cancelled => "Called off",
+        HostedEventLifecycleState.VenueWithdrawn => "Venue withdrew",
+        _ => "Draft",
+    };
+
+    private string Css => State switch
+    {
+        HostedEventLifecycleState.Published => "bg-success",
+        HostedEventLifecycleState.Live => "bg-primary",
+        HostedEventLifecycleState.Ended => "bg-secondary",
+        HostedEventLifecycleState.Cancelled => "bg-danger",
+        HostedEventLifecycleState.VenueWithdrawn => "bg-danger",
+        _ => "bg-secondary",
+    };
+}

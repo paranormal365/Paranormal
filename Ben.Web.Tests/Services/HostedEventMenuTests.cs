@@ -1,3 +1,4 @@
+using Ben.Data.Common.Enums;
 using Ben.Data.Source.Entities;
 using Ben.Data.WebApi.Controllers.Entities;
 using Microsoft.EntityFrameworkCore;
@@ -197,7 +198,7 @@ public sealed class HostedEventMenuTests
         {
             Id = EventId, OrganizationId = OrgId, PlaceId = PlaceId,
             Name = "Halloween Lock-In", UrlName = "halloween-lock-in",
-            StartsOn = Friday, EndsOn = Saturday, IsPublished = true,
+            StartsOn = Friday, EndsOn = Saturday, LifecycleState = HostedEventLifecycleState.Published,
             DateCreated = DateTime.UtcNow, CreatedByAppUserId = HostId,
         });
 

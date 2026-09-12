@@ -417,7 +417,8 @@ public sealed class PublicHostedEventBookingController : BenControllerBase
     private static Task<HostedEvent?> BookableEventAsync(
         BenDataContext db, Guid eventId, CancellationToken ct)
         => db.HostedEvents
-            .FirstOrDefaultAsync(e => e.Id == eventId && e.IsPublished && e.ArchivedAtUtc == null, ct);
+            .FirstOrDefaultAsync(
+                e => e.Id == eventId && HostedEventStates.TakingBookings.Contains(e.LifecycleState), ct);
 
     /// <summary>
     /// Why these nights are not nights of this event, or null when they are.

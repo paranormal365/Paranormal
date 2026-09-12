@@ -96,9 +96,9 @@ public sealed class HostedEventCalendarSync
         row.TimeZoneId = hostedEvent.TimeZoneId;
         row.UrlName = hostedEvent.UrlName;
 
-        // Only a published event is public. An unpublished one keeps its row so nothing has to be
+        // Only an event on the public site is public. A draft keeps its row so nothing has to be
         // created and destroyed as somebody changes their mind, and the row simply does not show.
-        row.IsPublic = hostedEvent.IsPublished && hostedEvent.ArchivedAtUtc is null;
+        row.IsPublic = hostedEvent.IsOnThePublicSite;
 
         var (startsUtc, endsUtc) = Window(hostedEvent, nights);
         row.StartDateTime = startsUtc;

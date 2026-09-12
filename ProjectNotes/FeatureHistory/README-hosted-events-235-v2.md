@@ -303,6 +303,29 @@ desktop or iPad, and reads and lightly edits it on a phone.
   centre aisle, then the same plan on an iPhone-width window with a price edited through the
   sheet. **Nothing in phase 3 starts until this walk has happened.**
 
+#### Phase 2 as built (2026-09-12) — three departures from the plan above
+
+1. **`BenPopover` is deferred to phase 5.** It was listed here for the Read-mode occupancy overlay,
+   and phase 2 ships no screen that shows occupancy — the board is phase 5 and the public page is
+   phase 6. Building it now would be a component with no consumer, which is the shape of the eight
+   write-only features this codebase has had to go back and fix. It also has a real constraint
+   nothing can settle without a consumer: the grid lives inside `overflow-x: auto`, which clips a
+   bubble drawn above a seat, and where the popover is rendered depends on what the board needs
+   from it. Phase 5 builds it against its actual use. Item 237 is unaffected — it did not have one
+   either.
+2. **Selection accumulates and never replaces.** The plan called for a shift-click rectangle and a
+   *Select many* toggle for touch. The grid reports a gesture as "these squares, added or removed",
+   so every tap already adds and a mode toggle would have been a lie; shift-extend is still there.
+   The cost is that Clear is a button, on the selection bar beside the count.
+3. **Squares are fixed lengths, not a shrink-to-fit clamp.** The clamp was written and did not
+   work: a percentage in a grid ROW track resolves against a height that is auto, so a thirteen-row
+   house collapsed and `overflow-y: hidden` cut six rows off the bottom while every test passed.
+   Found by looking at a screenshot. A source guard and a Playwright measurement now hold it. Rooms
+   get their own, larger square — a room is a name, a seat is a number.
+
+Everything else shipped as written, plus `HostedEventDemoSeeder`, the layout page, 19 Playwright
+tests at three widths, and the three help sections with their shots.
+
 ### Phase 3 — The event's truth: lifecycle, arrangement, go/no-go, modes, credits back
 
 **Goal**: an event has one state, says who agreed it is happening, can depend on numbers, and

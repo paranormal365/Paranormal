@@ -1,6 +1,7 @@
 using Ben.Data.Source.Context;
 using Ben.Data.Source.Entities;
 using Ben.Data.WebApi.Controllers.Entities;
+using Ben.Data.WebApi.Services.Events;
 using Ben.Service.Models.Entities;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
@@ -91,7 +92,7 @@ public sealed class PublicHostedEventController : ControllerBase
 
     private static IQueryable<HostedEvent> Visible(BenDataContext db)
         => db.HostedEvents.AsNoTracking()
-            .Where(e => e.IsPublished && e.ArchivedAtUtc == null);
+            .Where(e => HostedEventStates.OnThePublicSite.Contains(e.LifecycleState));
 
     private static async Task<PublicHostedEventRecord?> LoadAsync(
         BenDataContext db, System.Linq.Expressions.Expression<Func<HostedEvent, bool>> match,

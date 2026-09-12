@@ -56,7 +56,7 @@
                                  Busy="@_busy"
                                  Error="@_error"
                                  Refused="@_refused"
-                                 AllowKindChange="@(_event?.IsPublished == false)"
+                                 AllowKindChange="@(_event?.LifecycleState is HostedEventLifecycleState.Draft)"
                                  OnSave="SaveAsync" />
 
                 @if (!string.IsNullOrWhiteSpace(_note))

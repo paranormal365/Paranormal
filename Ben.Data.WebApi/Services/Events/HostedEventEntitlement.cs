@@ -73,15 +73,13 @@ public sealed class HostedEventEntitlement
 
     /// <summary>Events already live for this organization — the number a cap is measured against.</summary>
     /// <remarks>
-    /// Live, not merely existing: published, not archived, not called off. A draft costs nothing
-    /// and an event that finished last spring costs nothing, so neither belongs in this count.
+    /// Live, not merely existing: on the public site. A draft costs nothing, a called-off event
+    /// costs nothing, and one that was filed away last spring costs nothing.
     /// </remarks>
     public static Task<int> LiveEventsAsync(BenDataContext db, Guid organizationId, CancellationToken ct)
         => db.HostedEvents.CountAsync(
             e => e.OrganizationId == organizationId
-              && e.IsPublished
-              && e.ArchivedAtUtc == null
-              && e.CancelledAtUtc == null, ct);
+              && HostedEventStates.CountingAgainstTheBand.Contains(e.LifecycleState), ct);
 
     /// <summary>
     /// Asks the question for one organization, without changing anything.
@@ -95,9 +93,7 @@ public sealed class HostedEventEntitlement
     {
         var live = await db.HostedEvents.CountAsync(
             e => e.OrganizationId == organizationId
-              && e.IsPublished
-              && e.ArchivedAtUtc == null
-              && e.CancelledAtUtc == null
+              && HostedEventStates.CountingAgainstTheBand.Contains(e.LifecycleState)
               && (excludingEventId == null || e.Id != excludingEventId), ct);
 
         var (onAPlan, _) = await TierAreaResolution.HasCapabilityAsync(
@@ -147,7 +143,7 @@ public sealed class HostedEventEntitlement
         {
             var live = await db.HostedEvents.CountAsync(
                 e => e.OrganizationId == hostedEvent.OrganizationId
-                  && e.IsPublished && e.ArchivedAtUtc == null && e.CancelledAtUtc == null
+                  && HostedEventStates.CountingAgainstTheBand.Contains(e.LifecycleState)
                   && e.Id != hostedEvent.Id, ct);
 
             var refusal = await _limits.WhyNotOneMoreAsync(

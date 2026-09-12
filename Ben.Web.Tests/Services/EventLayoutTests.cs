@@ -302,7 +302,7 @@ public sealed class EventLayoutTests
         {
             Id = EventId, OrganizationId = OrgId, PlaceId = PlaceId,
             Name = "Halloween Lock-In", UrlName = "halloween-lock-in",
-            StartsOn = Friday, EndsOn = Friday.AddDays(2), IsPublished = true,
+            StartsOn = Friday, EndsOn = Friday.AddDays(2), LifecycleState = HostedEventLifecycleState.Published,
             DayPassCapacity = 10, LayoutKind = kind,
             DateCreated = DateTime.UtcNow, CreatedByAppUserId = HostId,
         });

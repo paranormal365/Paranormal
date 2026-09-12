@@ -1,3 +1,5 @@
+using Ben.Data.Common.Enums;
+
 namespace Ben.Service.Models.Entities;
 
 /// <summary>One date of a hosted event, as a screen sees it (item 235).</summary>
@@ -48,6 +50,15 @@ public sealed record HostedEventPlanRecord(
 /// nine of them each deciding.
 /// </param>
 /// <param name="PlanNote">What the last action did to the plan, when it did anything.</param>
+/// <param name="LifecycleState">
+/// The one answer to "what is this event". It replaced a published flag and two timestamps that
+/// six screens each combined differently — one of them kept advertising an event that was off.
+/// </param>
+/// <param name="HoldMinutes">
+/// How long a picked place is held for. Minutes rather than a <c>TimeSpan</c> because EF maps that
+/// to SQL <c>time</c>, which caps at 24 hours and would have silently wrapped the two-day default.
+/// </param>
+/// <param name="DayPassPrice">Shown and never charged. Null is "ask the venue"; zero is free.</param>
 public sealed record HostedEventRecord(
     Guid Id,
     Guid OrganizationId,
@@ -66,7 +77,7 @@ public sealed record HostedEventRecord(
     string DateNoun,
     TimeSpan? DefaultStartLocal,
     TimeSpan? DefaultEndLocal,
-    bool IsPublished,
+    HostedEventLifecycleState LifecycleState,
     DateTime? FirstPublishedUtc,
     int? DayPassCapacity,
     string? ContactLine,
@@ -79,7 +90,21 @@ public sealed record HostedEventRecord(
     string? CancelledReason,
     Guid? UmbrellaEventId,
     IReadOnlyList<HostedEventNightRecord> Nights,
-    string? PlanNote = null);
+    string? PlanNote = null,
+    HostedEventBookingMode BookingMode = HostedEventBookingMode.Ask,
+    int HoldMinutes = 2880,
+    decimal? DayPassPrice = null,
+    DateTime? BookingsCloseAtUtc = null,
+    HostedEventVenueArrangement VenueArrangement = HostedEventVenueArrangement.Self,
+    string? VenueContactName = null,
+    DateTime? VenueAgreedOnUtc = null,
+    string? VenueReference = null,
+    int? MinimumGuests = null,
+    DateTime? GoNoGoDeadlineUtc = null,
+    HostedEventGoNoGo GoNoGoDecision = HostedEventGoNoGo.Undecided,
+    DateTime? GoNoGoDecidedUtc = null,
+    DateTime? LiveAtUtc = null,
+    DateTime? EndedAtUtc = null);
 
 /// <summary>
 /// A venue being entered as part of the event that happens there (item 235).
@@ -203,3 +228,23 @@ public sealed record PublicHostedEventRecord(
     /// </remarks>
     bool CollectsEvidence,
     IReadOnlyList<HostedEventNightRecord> Nights);
+
+/// <summary>
+/// One thing that has to be true before an event can go live (item 235 phase 3).
+/// </summary>
+/// <param name="Sentence">
+/// Why it is not done, in the words the publish button refuses with. The same string in both
+/// places on purpose: a checklist that phrases it one way and a refusal that phrases it another
+/// reads as two different problems.
+/// </param>
+/// <param name="Href">
+/// Where to go and fix it, relative to the event's page — an anchor for a card on that page, or a
+/// path for a screen of its own. The website turns it into a URL; the API has no business knowing
+/// the site's routes.
+/// </param>
+public sealed record HostedEventReadinessItem(
+    string Area,
+    string Label,
+    bool Done,
+    string Sentence,
+    string Href);
