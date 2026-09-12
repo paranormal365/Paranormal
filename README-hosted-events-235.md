@@ -88,6 +88,42 @@ the help-link guards refused the branch until the "Hosted events" chapter existe
 
 Suite: .NET 8,239 pass, 0 fail. Walked on the running site against `IsHauntedDb_player`.
 
+**Venue made editable on the event page, 2026-09-11** (Ben). The same search and the same "enter
+one we haven't listed" as when the event was made, behind a deliberate *Move it somewhere else*
+rather than a dropdown somebody brushes past. The move happens on save.
+
+**Phase 1B in progress, 2026-09-11** — credits: the model, the spend, the purchase and the tests.
+
+- `EventCredit` with migration `20260912003414_EventCredits` (no drops in `Up`), applied to
+  `IsHauntedDb_player` with an explicit `--connection`. Owned by a group **or** a person, never
+  both, said by a check constraint rather than left for every query to remember.
+- `EventCredits` holds every rule in one place, and the one that matters most is **oldest usable
+  first**: spending the newest would let the oldest lapse while its owner was actively using the
+  site, which is somebody's money quietly thrown away.
+- **The year is checked at both ends** — the credit unexpired, and the event's first date inside its
+  year. Ben's "a year to have hosted the event" read literally, and it stops a credit being parked
+  on a placeholder dated years out. The refusal names both dates.
+- The credit is taken **in the same save as the publish**, so two tabs cannot spend one credit twice
+  and a credit can never go missing without an event going live for it.
+- Purchase through Stripe Checkout, metadata `ih_event_credits`, fulfilment idempotent on the
+  payment reference, taxed through the same resolver a subscription uses, ledger Charge and Payment
+  pair with a receipt number. Price and on-sale switch are site settings, grouped under a new
+  **Events** section; the price is frozen on each credit so moving it never reaches one somebody
+  holds.
+- Thirty-one tests. Beside the rules above: a refusal names the $99 and leaves the draft with all
+  three of its nights intact; re-publishing never spends a second credit; and a credit that runs out
+  before the event is refused without being taken.
+
+**Two guards fired and were right.** `OrganizationPurgeCoverageTests` on credits blocking a group's
+deletion, and `LoadResultRenderedGuardTests` on the venue search swallowing a refusal — a search
+that was refused and a search that found nothing look identical to a person, and saying "no venues
+found" when the truth is "we couldn't ask" sends them off to invent one that already exists.
+
+**Not yet done in 1B:** the expiry-warning job, the billing page's credits card, and the Playwright
+walk through test-mode Checkout.
+
+Suite: .NET 8,254 pass, 0 fail.
+
 Each phase records its own "Verified, not assumed" section here as it lands.
 
 ## Hard rules the plan keeps

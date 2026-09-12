@@ -52,6 +52,21 @@ public static class SiteSettingKeys
     /// </remarks>
     public const string AllowTourBusinessSignUps = "org.allow-tour-signups";
 
+    /// <summary>Whether event credits are on sale at all (item 235).</summary>
+    /// <remarks>
+    /// Unset reads as ON, like every other policy switch here: introducing a check must never
+    /// close a door for a site that has not touched the setting.
+    /// </remarks>
+    public const string EventCreditsEnabled = "events.credits-enabled";
+
+    /// <summary>What one event credit costs, in dollars (item 235).</summary>
+    /// <remarks>
+    /// Ben set it at 99 on 2026-09-11. A setting rather than a constant so the price moves without
+    /// a deployment — and because each credit freezes what was paid for it, moving it never
+    /// reaches one somebody already holds.
+    /// </remarks>
+    public const string EventCreditPriceUsd = "events.credit-price-usd";
+
     /// <summary>Short notice shown site-wide — maintenance windows, outages. Empty = nothing shown.</summary>
     public const string SiteAnnouncement = "site.announcement";
 
@@ -167,6 +182,13 @@ public static class SiteSettingKeys
             + "new ones may be started and no existing group may start running tours — but every "
             + "tour business already signed up carries on exactly as it is: its tours, dates, "
             + "sign-ups and billing are untouched. Paranormal events businesses are not affected."),
+        (EventCreditsEnabled, "Sell event credits",
+            "When on, a group whose plan does not include hosting events can buy a credit to publish "
+            + "one. One credit covers one event, and it lapses a year after it is bought. Turning "
+            + "this off stops new purchases; credits already held are unaffected."),
+        (EventCreditPriceUsd, "Event credit price ($)",
+            "What one event credit costs. Leave empty for the standard $99. Changing it never "
+            + "affects a credit somebody already bought — each one remembers what was paid."),
         (SiteAnnouncement, "Site-wide announcement",
             "A short notice shown across the site — planned maintenance, known issues. Leave empty to show nothing."),
         (PublicContactEmail, "Public contact email",
@@ -241,6 +263,10 @@ public static class SiteSettingKeys
         ("Who may sign up",
          "Which doors into the site are open. Closing one never affects anybody already through it.",
          [AllowOrganizationSelfRegistration, AllowTourBusinessSignUps]),
+
+        ("Events",
+         "What it costs a group to put an event on, when their plan does not already include it.",
+         [EventCreditsEnabled, EventCreditPriceUsd]),
 
         ("Default profile pictures",
          "Shown when somebody has no photo the viewer is allowed to see.",
@@ -349,7 +375,8 @@ public static class SiteSettingKeys
         new HashSet<string>(
             FeatureDefaults.Select(f => f.Key)
                 .Append(AllowOrganizationSelfRegistration)
-                .Append(AllowTourBusinessSignUps),
+                .Append(AllowTourBusinessSignUps)
+                .Append(EventCreditsEnabled),
             StringComparer.Ordinal);
 
 }
@@ -407,6 +434,26 @@ public sealed class SiteSettingsService
 
     /// <summary>Instance overload for callers that have no context of their own — a controller
     /// enforcing a policy setting, typically.</summary>
+    /// <summary>
+    /// A setting read as an amount of money, or the fallback when it is unset or nonsense.
+    /// </summary>
+    /// <remarks>
+    /// Falls back rather than throwing, and refuses a negative: a mistyped price must not take a
+    /// purchase page down, and it must certainly not pay somebody to buy something.
+    /// </remarks>
+    public async Task<decimal> GetDecimalAsync(
+        string key, decimal whenUnset, CancellationToken ct = default)
+    {
+        var raw = await GetAsync(key, ct);
+        if (string.IsNullOrWhiteSpace(raw)) return whenUnset;
+
+        return decimal.TryParse(raw, System.Globalization.NumberStyles.Any,
+                                System.Globalization.CultureInfo.InvariantCulture, out var parsed)
+            && parsed > 0m
+            ? parsed
+            : whenUnset;
+    }
+
     public async Task<bool> GetBoolAsync(string key, bool whenUnset, CancellationToken ct = default)
     {
         await using var db = await _dbContextFactory.CreateDbContextAsync(ct);

@@ -1,5 +1,6 @@
 using Ben.Data.Common.Enums;
 using Ben.Data.Source.Context;
+using Ben.Data.Source.Entities;
 using Ben.Data.Source.Services;
 using Ben.Data.WebApi.Services.Billing;
 using Microsoft.EntityFrameworkCore;
@@ -115,9 +116,8 @@ public sealed class HostedEventEntitlement
             return new Verdict(EntitlementKind.Plan, refusal, live, ceiling, 0);
         }
 
-        // Credits are phase 1B; until they exist nothing can be held, and the sentence says what is
-        // true today rather than pretending at a shop that is not open.
-        var credits = 0;
+        var credits = await EventCredits.SpendableCountAsync(
+            db, organizationId, appUserId: null, DateTime.UtcNow, ct);
 
         return new Verdict(
             EntitlementKind.Credit,
@@ -125,6 +125,48 @@ public sealed class HostedEventEntitlement
             live,
             Ceiling: null,
             CreditsAvailable: credits);
+    }
+
+    /// <summary>
+    /// Takes the credit this event should be published against, or says why it cannot be.
+    /// </summary>
+    /// <remarks>
+    /// <para>Called inside the publish, in the same save, so two tabs pressing the button cannot
+    /// spend one credit twice — and so a credit can never go missing without an event going live
+    /// for it.</para>
+    ///
+    /// <para>Returns the credit rather than saving it, because the caller owns the transaction.</para>
+    /// </remarks>
+    public async Task<(EventCredit? Spent, string? Refusal)> TakeForAsync(
+        BenDataContext db, HostedEvent hostedEvent, Guid userId, CancellationToken ct)
+    {
+        var (onAPlan, _) = await TierAreaResolution.HasCapabilityAsync(
+            db, hostedEvent.OrganizationId, TierCapability.HostEvents, ct);
+
+        if (onAPlan)
+        {
+            var live = await db.HostedEvents.CountAsync(
+                e => e.OrganizationId == hostedEvent.OrganizationId
+                  && e.IsPublished && e.ArchivedAtUtc == null && e.CancelledAtUtc == null
+                  && e.Id != hostedEvent.Id, ct);
+
+            var refusal = await _limits.WhyNotOneMoreAsync(
+                hostedEvent.OrganizationId, SubscriptionLimit.ActiveHostedEvents, live, ct);
+
+            return (null, refusal);
+        }
+
+        var now = DateTime.UtcNow;
+        var credit = await EventCredits.NextToSpendAsync(
+            db, hostedEvent.OrganizationId, appUserId: null, now, ct);
+
+        if (credit is null) return (null, NoCreditSentence);
+
+        if (EventCredits.WhyItCannotCover(credit, hostedEvent, now) is { } why)
+            return (null, why);
+
+        EventCredits.Spend(credit, hostedEvent, userId, now);
+        return (credit, null);
     }
 
     /// <summary>

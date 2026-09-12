@@ -113,6 +113,7 @@ namespace Ben.Data.Source.Context
         // ── Hosted events (item 235) ────────────────────────────────────────
         public virtual DbSet<HostedEvent> HostedEvents { get; set; }
         public virtual DbSet<HostedEventNight> HostedEventNights { get; set; }
+        public virtual DbSet<EventCredit> EventCredits { get; set; }
         public virtual DbSet<TourGuide> TourGuides { get; set; }
         public virtual DbSet<TourSocialLink> TourSocialLinks { get; set; }
         public virtual DbSet<MessagePoll> MessagePolls { get; set; }
@@ -780,6 +781,56 @@ namespace Ben.Data.Source.Context
             modelBuilder.Entity<HostedEventNight>()
                 .HasOne(n => n.UpdatedByAppUser).WithMany()
                 .HasForeignKey(n => n.UpdatedByAppUserId).OnDelete(DeleteBehavior.NoAction);
+
+            // ── Event credits (item 235) ────────────────────────────────────
+            // One credit, one event. Owned by a group OR a person — Ben said "the member or group"
+            // — and never both, which the check constraint says rather than leaving it to every
+            // query to remember. A credit owned by nobody is unspendable, and one owned twice is a
+            // question nothing could answer.
+            modelBuilder.Entity<EventCredit>()
+                .ToTable(t => t.HasCheckConstraint(
+                    "CK_EventCredits_OneOwner",
+                    "([OwnerOrganizationId] IS NOT NULL AND [OwnerAppUserId] IS NULL) OR "
+                  + "([OwnerOrganizationId] IS NULL AND [OwnerAppUserId] IS NOT NULL)"));
+            modelBuilder.Entity<EventCredit>()
+                .Property(c => c.PriceAtPurchase).HasPrecision(18, 2);
+            modelBuilder.Entity<EventCredit>()
+                .Property(c => c.Currency).HasMaxLength(3);
+            modelBuilder.Entity<EventCredit>()
+                .Property(c => c.ProviderCheckoutRef).HasMaxLength(200);
+            modelBuilder.Entity<EventCredit>()
+                .Property(c => c.ProviderPaymentRef).HasMaxLength(200);
+            modelBuilder.Entity<EventCredit>()
+                .Property(c => c.ReceiptNumber).HasMaxLength(40);
+            modelBuilder.Entity<EventCredit>()
+                .Property(c => c.RefundedReason).HasMaxLength(500);
+            // Fulfilment is idempotent on the payment: a webhook Stripe sends twice must not hand
+            // somebody two credits. Filtered because everything before a payment has none.
+            modelBuilder.Entity<EventCredit>()
+                .HasIndex(c => c.ProviderPaymentRef)
+                .HasFilter("[ProviderPaymentRef] IS NOT NULL");
+            // The question spending asks: "the oldest one this owner can still use".
+            modelBuilder.Entity<EventCredit>()
+                .HasIndex(c => new { c.OwnerOrganizationId, c.SpentUtc, c.ExpiresUtc });
+            modelBuilder.Entity<EventCredit>()
+                .HasIndex(c => new { c.OwnerAppUserId, c.SpentUtc, c.ExpiresUtc });
+            modelBuilder.Entity<EventCredit>()
+                .HasOne(c => c.OwnerOrganization).WithMany()
+                .HasForeignKey(c => c.OwnerOrganizationId).OnDelete(DeleteBehavior.NoAction);
+            modelBuilder.Entity<EventCredit>()
+                .HasOne(c => c.OwnerAppUser).WithMany()
+                .HasForeignKey(c => c.OwnerAppUserId).OnDelete(DeleteBehavior.NoAction);
+            // The event it was spent on may be archived or purged; the credit stays as the record
+            // that it was spent, because "have we paid for this?" must not become unanswerable.
+            modelBuilder.Entity<EventCredit>()
+                .HasOne(c => c.SpentOnHostedEvent).WithMany()
+                .HasForeignKey(c => c.SpentOnHostedEventId).OnDelete(DeleteBehavior.SetNull);
+            modelBuilder.Entity<EventCredit>()
+                .HasOne(c => c.CreatedByAppUser).WithMany()
+                .HasForeignKey(c => c.CreatedByAppUserId).OnDelete(DeleteBehavior.NoAction);
+            modelBuilder.Entity<EventCredit>()
+                .HasOne(c => c.UpdatedByAppUser).WithMany()
+                .HasForeignKey(c => c.UpdatedByAppUserId).OnDelete(DeleteBehavior.NoAction);
 
             // ONE umbrella row per event, said by the database rather than by a convention
             // somebody has to remember. Filtered so the thousands of ordinary calendar rows, which

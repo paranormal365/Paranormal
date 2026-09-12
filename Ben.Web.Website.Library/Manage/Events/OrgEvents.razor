@@ -363,9 +363,18 @@
     private async Task SearchPlacesAsync()
     {
         _placeSearched = true;
-        _placeCandidates = [.. (await AdminClient.FindPlaceCandidatesAsync(
+
+        // The refusal is shown rather than swallowed. A search that was refused and a search that
+        // found nothing look identical to a person, and telling them "no venues found" when the
+        // truth is "we couldn't ask" sends them off to invent a venue that already exists.
+        var found = await AdminClient.FindPlaceCandidatesAsync(
             street: null, city: null, state: null, zip: null,
-            name: _placeSearch.Trim(), latitude: null, longitude: null)).Items];
+            name: _placeSearch.Trim(), latitude: null, longitude: null);
+
+        if (found.Failed) { _error = found.Reason ?? "Venues couldn't be searched just now."; _placeCandidates = []; return; }
+
+        _error = null;
+        _placeCandidates = [.. found.Items];
     }
 
     private void ChoosePlace(PlaceCandidate place)

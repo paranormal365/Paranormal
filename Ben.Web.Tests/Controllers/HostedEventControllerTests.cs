@@ -76,6 +76,44 @@ public sealed class HostedEventControllerTests
         return f;
     }
 
+    /// <summary>
+    /// Puts a free band on the site that does NOT include hosting events.
+    /// </summary>
+    /// <remarks>
+    /// <para>Without any tiers at all, every capability resolves as included — the fail-open rule
+    /// every limit here follows, so that a half-configured price list never locks anybody out. That
+    /// is right, and it means the credit path is only reached once somebody has actually said which
+    /// plans may host.</para>
+    ///
+    /// <para>So the tests that are about credits configure the site the way a real one is: a free
+    /// band with <c>HostEvents</c> excluded, which is exactly the switch a SuperAdmin unticks.</para>
+    /// </remarks>
+    private static async Task ExcludeHostingAsync(IDbContextFactory<BenDataContext> f)
+    {
+        await using var db = await f.CreateDbContextAsync();
+
+        var free = new SubscriptionTier
+        {
+            Id = Guid.NewGuid(), Name = "Free", MinMembers = 1, MaxMembers = null,
+            SortOrder = 1, IsActive = true, IsBandedByMembers = true,
+            DateCreated = DateTime.UtcNow, CreatedByAppUserId = OwnerId,
+        };
+        db.SubscriptionTiers.Add(free);
+        db.SubscriptionTierPrices.Add(new SubscriptionTierPrice
+        {
+            Id = Guid.NewGuid(), SubscriptionTierId = free.Id,
+            Interval = BillingInterval.Monthly, Price = 0m, IsActive = true,
+            DateCreated = DateTime.UtcNow, CreatedByAppUserId = OwnerId,
+        });
+        db.SubscriptionTierExcludedCapabilities.Add(new SubscriptionTierExcludedCapability
+        {
+            Id = Guid.NewGuid(), SubscriptionTierId = free.Id,
+            Capability = TierCapability.HostEvents,
+            DateCreated = DateTime.UtcNow, CreatedByAppUserId = OwnerId,
+        });
+        await db.SaveChangesAsync();
+    }
+
     private static HostedEventController Build(IDbContextFactory<BenDataContext> f)
     {
         var security = new Mock<IOrganizationSecurityService>();
@@ -306,6 +344,130 @@ public sealed class HostedEventControllerTests
     }
 
     // ── refusals ─────────────────────────────────────────────────────────────
+
+    // ── credits ──────────────────────────────────────────────────────────────
+
+    [Fact]
+    public async Task Without_a_plan_or_a_credit_publishing_is_refused_and_names_the_price()
+    {
+        // A refusal that does not name the price is a refusal somebody has to go and research.
+        // And nothing they built is lost — the event stays a draft with everything on it.
+        var f = await SeedAsync();
+        await ExcludeHostingAsync(f);
+        var controller = Build(f);
+        var record = Created(await controller.Create(OrgId, Weekend(), default));
+
+        var refusal = Assert.IsType<BadRequestObjectResult>(
+            (await controller.Publish(OrgId, record.Id, default)).Result);
+
+        var sentence = Assert.IsType<string>(refusal.Value);
+        Assert.Contains("$99", sentence);
+
+        await using var db = await f.CreateDbContextAsync();
+        var still = await db.HostedEvents.FirstAsync(e => e.Id == record.Id);
+        Assert.False(still.IsPublished);
+        Assert.Null(still.FirstPublishedUtc);
+        Assert.Equal(3, await db.HostedEventNights.CountAsync(n => n.HostedEventId == record.Id));
+    }
+
+    [Fact]
+    public async Task Publishing_spends_the_oldest_credit_and_records_the_event_it_went_on()
+    {
+        var f = await SeedAsync();
+        await ExcludeHostingAsync(f);
+        var controller = Build(f);
+        var record = Created(await controller.Create(OrgId, Weekend(), default));
+
+        Guid oldestId;
+        await using (var db = await f.CreateDbContextAsync())
+        {
+            var oldest = NewCredit(DateTime.UtcNow.AddDays(-300), DateTime.UtcNow.AddDays(65));
+            var newest = NewCredit(DateTime.UtcNow.AddDays(-1), DateTime.UtcNow.AddDays(364));
+            oldestId = oldest.Id;
+            db.EventCredits.AddRange(newest, oldest);
+            await db.SaveChangesAsync();
+        }
+
+        var published = Assert.IsType<HostedEventRecord>(
+            Assert.IsType<OkObjectResult>((await controller.Publish(OrgId, record.Id, default)).Result).Value);
+
+        Assert.True(published.IsPublished);
+        Assert.Contains("credit spent", published.PlanNote ?? "");
+
+        await using var after = await f.CreateDbContextAsync();
+        var spent = await after.EventCredits.FirstAsync(c => c.Id == oldestId);
+        Assert.NotNull(spent.SpentUtc);
+        Assert.Equal(record.Id, spent.SpentOnHostedEventId);
+
+        // And exactly one was taken.
+        Assert.Equal(1, await after.EventCredits.CountAsync(c => c.SpentUtc != null));
+    }
+
+    [Fact]
+    public async Task Putting_it_back_up_never_spends_a_second_credit()
+    {
+        // Ben's rule: one event, one credit, for the life of that event.
+        var f = await SeedAsync();
+        await ExcludeHostingAsync(f);
+        var controller = Build(f);
+        var record = Created(await controller.Create(OrgId, Weekend(), default));
+
+        await using (var db = await f.CreateDbContextAsync())
+        {
+            db.EventCredits.AddRange(
+                NewCredit(DateTime.UtcNow.AddDays(-10), DateTime.UtcNow.AddDays(355)),
+                NewCredit(DateTime.UtcNow.AddDays(-9), DateTime.UtcNow.AddDays(356)));
+            await db.SaveChangesAsync();
+        }
+
+        await controller.Publish(OrgId, record.Id, default);
+        await controller.Unpublish(OrgId, record.Id, default);
+        await controller.Publish(OrgId, record.Id, default);
+
+        await using var after = await f.CreateDbContextAsync();
+        Assert.Equal(1, await after.EventCredits.CountAsync(c => c.SpentUtc != null));
+    }
+
+    [Fact]
+    public async Task A_credit_that_runs_out_before_the_event_is_refused_by_both_dates()
+    {
+        var f = await SeedAsync();
+        await ExcludeHostingAsync(f);
+        var controller = Build(f);
+
+        // The weekend is 30 October 2026; the credit lapses well before it.
+        var record = Created(await controller.Create(OrgId, Weekend(), default));
+
+        await using (var db = await f.CreateDbContextAsync())
+        {
+            db.EventCredits.Add(NewCredit(
+                DateTime.UtcNow.AddDays(-360), new DateTime(2026, 9, 20, 0, 0, 0, DateTimeKind.Utc)));
+            await db.SaveChangesAsync();
+        }
+
+        var refusal = Assert.IsType<BadRequestObjectResult>(
+            (await controller.Publish(OrgId, record.Id, default)).Result);
+
+        var sentence = Assert.IsType<string>(refusal.Value);
+        Assert.Contains("09/20/2026", sentence);
+        Assert.Contains("10/30/2026", sentence);
+
+        // And it was not taken for an event it could not cover.
+        await using var after = await f.CreateDbContextAsync();
+        Assert.Equal(0, await after.EventCredits.CountAsync(c => c.SpentUtc != null));
+    }
+
+    private static EventCredit NewCredit(DateTime purchased, DateTime expires)
+        => new()
+        {
+            Id = Guid.NewGuid(),
+            OwnerOrganizationId = OrgId,
+            PriceAtPurchase = 99m,
+            PurchasedUtc = purchased,
+            ExpiresUtc = expires,
+            DateCreated = purchased,
+            CreatedByAppUserId = OwnerId,
+        };
 
     // ── a venue the site has never listed ────────────────────────────────────
 

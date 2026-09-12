@@ -300,13 +300,28 @@ public sealed class HostedEventController : OrgCmsControllerBase
 
         // Asked only for an event that has never been live. The second publish of the same event is
         // free, for ever, because the first one paid for it.
+        //
+        // The credit is taken in THIS save, not checked and then taken: two tabs pressing the
+        // button would otherwise both see one credit and both spend it, and the loser would have
+        // paid for nothing.
         if (hosted.FirstPublishedUtc is null)
         {
-            var verdict = await _entitlement.DescribeAsync(db, orgId, eventId, ct);
-            if (!verdict.MayPublish) return BadRequest(verdict.Refusal);
+            var (spent, refusal) = await _entitlement.TakeForAsync(db, hosted, userId.Value, ct);
+            if (refusal is not null) return BadRequest(refusal);
 
             hosted.FirstPublishedUtc = DateTime.UtcNow;
-            note = SpentNote(verdict);
+
+            if (spent is not null)
+            {
+                var left = await EventCredits.SpendableCountAsync(
+                    db, orgId, appUserId: null, DateTime.UtcNow, ct);
+                // Minus the one being spent in this same save, which the count above cannot see.
+                note = $"One event credit spent — {Math.Max(0, left - 1)} left.";
+            }
+            else
+            {
+                note = "It's live. Nothing extra was charged.";
+            }
         }
 
         hosted.IsPublished = true;
@@ -682,12 +697,6 @@ public sealed class HostedEventController : OrgCmsControllerBase
              + "It covers this event from the day you publish it, and is not returned if you "
              + "take the event down.";
     }
-
-    /// <summary>What the page says immediately after it went live.</summary>
-    private static string SpentNote(HostedEventEntitlement.Verdict v)
-        => v.SpendsACredit
-            ? $"One event credit spent — {Math.Max(0, v.CreditsAvailable - 1)} left."
-            : "It's live. Nothing extra was charged.";
 
     /// <summary>
     /// Any active member may READ the events; changing them keeps the settings key.

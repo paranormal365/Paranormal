@@ -228,6 +228,117 @@
                                 </div>
                             </div>
 
+                            @* The venue is editable here (Ben, 2026-09-11). Moving an event to
+                               another building is a real decision, so it is shown as what it is —
+                               the current venue, plainly, and a deliberate act to change it —
+                               rather than a dropdown somebody brushes past. The same search and
+                               the same "enter one we haven't listed" as when the event was made. *@
+                            <div class="col-12">
+                                <label class="form-label">Venue</label>
+                                @if (!_changingVenue)
+                                {
+                                    <div class="d-flex align-items-center gap-2 flex-wrap">
+                                        <span class="fw-semibold">@ev.PlaceLabel</span>
+                                        <button type="button" class="btn btn-sm btn-link p-0"
+                                                id="change-venue" @onclick="StartChangingVenue">
+                                            Move it somewhere else
+                                        </button>
+                                    </div>
+                                }
+                                else
+                                {
+                                    <div class="border rounded p-3" id="venue-picker">
+                                        @if (_pickedVenue is { } picked)
+                                        {
+                                            <div class="d-flex align-items-center gap-2 flex-wrap">
+                                                <span>Moving it to</span>
+                                                <span class="fw-semibold">@PlaceLabel(picked)</span>
+                                            </div>
+                                            @if (picked.Kind == Ben.Data.Common.Enums.PlaceKind.PrivateResidence)
+                                            {
+                                                <div class="form-text text-danger">
+                                                    That is a private residence, so an event cannot
+                                                    be held there publicly.
+                                                </div>
+                                            }
+                                        }
+                                        else
+                                        {
+                                            <div class="input-group" style="max-width:32rem;">
+                                                <input class="form-control" placeholder="Search venues by name"
+                                                       value="@_venueSearch"
+                                                       @oninput="e => _venueSearch = e.Value?.ToString() ?? string.Empty" />
+                                                <button type="button" class="btn btn-outline-secondary"
+                                                        id="search-venue"
+                                                        disabled="@string.IsNullOrWhiteSpace(_venueSearch)"
+                                                        @onclick="SearchVenuesAsync">Search</button>
+                                            </div>
+                                            @if (_venueCandidates.Count > 0)
+                                            {
+                                                <div class="list-group mt-2" style="max-width:32rem; max-height:12rem; overflow-y:auto;">
+                                                    @foreach (var candidate in _venueCandidates)
+                                                    {
+                                                        var pick = candidate;
+                                                        <button type="button" class="list-group-item list-group-item-action py-1"
+                                                                @onclick="() => _pickedVenue = pick">
+                                                            @PlaceLabel(pick)
+                                                        </button>
+                                                    }
+                                                </div>
+                                            }
+                                            else if (_venueSearched)
+                                            {
+                                                <div class="form-text">No venues found by that name.</div>
+                                            }
+
+                                            <div class="row g-2 mt-2" style="max-width:40rem;">
+                                                <div class="col-12">
+                                                    <div class="text-secondary small">
+                                                        Or enter one we haven't listed. If we already
+                                                        have it, we'll use the one we have.
+                                                    </div>
+                                                </div>
+                                                <div class="col-12 col-md-6">
+                                                    <input class="form-control form-control-sm" placeholder="Name"
+                                                           id="venue-edit-name" @bind="_newVenue.Name" />
+                                                </div>
+                                                <div class="col-12 col-md-6">
+                                                    <input class="form-control form-control-sm" placeholder="Street"
+                                                           id="venue-edit-street" @bind="_newVenue.StreetAddress1" />
+                                                </div>
+                                                <div class="col-6 col-md-5">
+                                                    <input class="form-control form-control-sm" placeholder="Town or city"
+                                                           id="venue-edit-city" @bind="_newVenue.City" />
+                                                </div>
+                                                <div class="col-3 col-md-3">
+                                                    <input class="form-control form-control-sm" placeholder="State"
+                                                           maxlength="2" @bind="_newVenue.State" />
+                                                </div>
+                                                <div class="col-3 col-md-4">
+                                                    <input class="form-control form-control-sm" placeholder="ZIP"
+                                                           @bind="_newVenue.ZipCode" />
+                                                </div>
+                                            </div>
+                                        }
+
+                                        <div class="d-flex gap-2 mt-2">
+                                            <button type="button" class="btn btn-sm btn-secondary"
+                                                    id="cancel-venue-change" @onclick="StopChangingVenue">
+                                                Leave it where it is
+                                            </button>
+                                            @if (_pickedVenue is not null)
+                                            {
+                                                <button type="button" class="btn btn-sm btn-link p-0 ms-2"
+                                                        @onclick="() => _pickedVenue = null">choose another</button>
+                                            }
+                                        </div>
+                                        <div class="form-text">
+                                            The move happens when you save.
+                                        </div>
+                                    </div>
+                                }
+                            </div>
+
                             <div class="col-12">
                                 <label class="form-label" for="event-contact">Arranging it</label>
                                 <input id="event-contact" class="form-control" @bind="_form.ContactLine"
@@ -411,6 +522,34 @@
     private readonly EventForm _form = new();
     private readonly Dictionary<Guid, NightForm> _nights = [];
 
+    private bool _changingVenue;
+    private string _venueSearch = "";
+    private bool _venueSearched;
+    private List<PlaceCandidate> _venueCandidates = [];
+    private PlaceCandidate? _pickedVenue;
+    private readonly NewVenueForm _newVenue = new();
+
+    /// <summary>A venue being typed in because the site has never listed it.</summary>
+    private sealed class NewVenueForm
+    {
+        public string Name { get; set; } = "";
+        public string StreetAddress1 { get; set; } = "";
+        public string City { get; set; } = "";
+        public string State { get; set; } = "";
+        public string ZipCode { get; set; } = "";
+
+        public bool HasAnything
+            => !string.IsNullOrWhiteSpace(Name) || !string.IsNullOrWhiteSpace(StreetAddress1);
+
+        public NewVenueRequest ToRequest()
+            => new(Name.Trim(), StreetAddress1.Trim(), null, City.Trim(), State.Trim(), ZipCode.Trim());
+
+        public void Clear()
+        {
+            Name = StreetAddress1 = City = State = ZipCode = "";
+        }
+    }
+
     private sealed class EventForm
     {
         public string Name { get; set; } = "";
@@ -497,10 +636,15 @@
 
         _busy = true; _error = null; _note = null;
 
-        // The venue is not changed here: it is chosen when the event is made, and moving an event
-        // to another building is a bigger decision than a field on a save form.
+        // A venue picked from the search, one typed in, or the one it already has. The server
+        // resolves all three the same way, so a venue entered here that already exists finds the
+        // existing row rather than making a second.
+        var movingTo = _changingVenue && _pickedVenue is { } picked ? picked.Id
+                     : _changingVenue && _newVenue.HasAnything ? Guid.Empty
+                     : ev.PlaceId;
+
         var request = new UpsertHostedEventRequest(
-            _form.Name.Trim(), ev.PlaceId, _form.StartsOn.Date, _form.EndsOn.Date,
+            _form.Name.Trim(), movingTo, _form.StartsOn.Date, _form.EndsOn.Date,
             TimeZoneId: _form.TimeZoneId,
             Tagline: _form.Tagline,
             Description: _form.Description,
@@ -512,7 +656,8 @@
             ContactLine: _form.ContactLine,
             CollectsEvidence: _form.CollectsEvidence,
             // A run keeps the dates it already has; they are edited one at a time below.
-            Dates: ev.DatesAreSeparate ? [.. ev.Nights.Select(n => n.Date)] : null);
+            Dates: ev.DatesAreSeparate ? [.. ev.Nights.Select(n => n.Date)] : null,
+            NewVenue: movingTo == Guid.Empty ? _newVenue.ToRequest() : null);
 
         var (saved, error) = await AdminClient.SaveHostedEventAsync(OrgId, EventId, request);
         _busy = false;
@@ -521,6 +666,7 @@
 
         _event = saved;
         Fill(saved);
+        StopChangingVenue();
         _note = "Saved.";
     }
 
@@ -587,6 +733,48 @@
         Fill(saved);
         _cancelReason = "";
     }
+
+    // ── moving it somewhere else ────────────────────────────────────────────
+
+    private void StartChangingVenue()
+    {
+        _changingVenue = true;
+        _venueSearch = "";
+        _venueSearched = false;
+        _venueCandidates = [];
+        _pickedVenue = null;
+        _newVenue.Clear();
+    }
+
+    private void StopChangingVenue()
+    {
+        _changingVenue = false;
+        _pickedVenue = null;
+        _venueCandidates = [];
+        _venueSearched = false;
+        _newVenue.Clear();
+    }
+
+    private async Task SearchVenuesAsync()
+    {
+        _venueSearched = true;
+
+        // The refusal is shown rather than swallowed. A search that was refused and a search that
+        // found nothing look identical to a person, and telling them "no venues found" when the
+        // truth is "we couldn't ask" sends them off to invent a venue that already exists.
+        var found = await AdminClient.FindPlaceCandidatesAsync(
+            street: null, city: null, state: null, zip: null,
+            name: _venueSearch.Trim(), latitude: null, longitude: null);
+
+        if (found.Failed) { _error = found.Reason ?? "Venues couldn't be searched just now."; _venueCandidates = []; return; }
+
+        _error = null;
+        _venueCandidates = [.. found.Items];
+    }
+
+    private static string PlaceLabel(PlaceCandidate place)
+        => string.Join(", ", new[] { place.Name, place.StreetAddress1, place.City, place.State }
+            .Where(p => !string.IsNullOrWhiteSpace(p)));
 
     // ── small things the markup needs ────────────────────────────────────────
 
