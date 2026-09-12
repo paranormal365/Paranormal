@@ -18,6 +18,10 @@ day-by-day account of building it would say nothing to anyone using it now.
 
 ## 2026-09-12
 
+- Site administrators can see every email the site has meant to send: when it was written, whether
+  the mail server took it, how many times it has been tried and what went wrong. A message that
+  failed can be put back in the queue, one at a time or all at once after a problem is fixed.
+
 - A green tick now marks anything the site has actually proved — a confirmed email address,
   two-factor being on — and says what was proved and when if you hover it. An amber one means the
   opposite and always says what to do about it.

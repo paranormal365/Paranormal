@@ -388,6 +388,17 @@ public sealed class OrganizationPurge
                 .Where(x => x.PlaceRoomId != null && x.PlaceRoom!.OrganizationId == organizationId)
                 .ExecuteDeleteAsync(ct);
             await db.HostedEvents.Where(x => x.OrganizationId == organizationId).ExecuteDeleteAsync(ct);
+
+            // The outbox is CLEARED of its link, never emptied (item 239). A queued letter is not
+            // the group's property — it is a letter to a person, and the most important one a
+            // purge can produce is the one telling somebody the group they belonged to is gone.
+            // Deleting the rows would take that letter away at the moment it was most needed, and
+            // would also erase the record of every letter the group ever caused, which is the
+            // thing the outbox exists to keep. Only the pointer goes, because after this it points
+            // at nothing.
+            await db.OutboxEmails
+                .Where(x => x.OrganizationId == organizationId)
+                .ExecuteUpdateAsync(u => u.SetProperty(x => x.OrganizationId, (Guid?)null), ct);
             await db.Cases.Where(x => x.OrganizationId == organizationId).ExecuteDeleteAsync(ct);
 
             await db.BillingLedgerEntries.Where(x => x.OrganizationId == organizationId).ExecuteDeleteAsync(ct);

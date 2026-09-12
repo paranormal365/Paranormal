@@ -6949,6 +6949,113 @@ namespace Ben.Data.Source.Migrations
                     b.ToTable("OrganizationUserMemberships", (string)null);
                 });
 
+            modelBuilder.Entity("Ben.Data.Source.Entities.OutboxEmail", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("uniqueidentifier");
+
+                    b.Property<DateTime?>("AcceptedBySmtpUtc")
+                        .HasColumnType("datetime2");
+
+                    b.Property<Guid?>("AppUserId")
+                        .HasColumnType("uniqueidentifier");
+
+                    b.Property<int>("Attempts")
+                        .HasColumnType("int");
+
+                    b.Property<DateTime?>("BodyScrubbedUtc")
+                        .HasColumnType("datetime2");
+
+                    b.Property<string>("ClaimedBy")
+                        .HasMaxLength(100)
+                        .HasColumnType("nvarchar(100)");
+
+                    b.Property<DateTime?>("ClaimedUtc")
+                        .HasColumnType("datetime2");
+
+                    b.Property<DateTime>("CreatedUtc")
+                        .HasColumnType("datetime2");
+
+                    b.Property<DateTime?>("FailedUtc")
+                        .HasColumnType("datetime2");
+
+                    b.Property<string>("HtmlBody")
+                        .HasColumnType("nvarchar(max)");
+
+                    b.Property<string>("Kind")
+                        .IsRequired()
+                        .HasMaxLength(60)
+                        .HasColumnType("nvarchar(60)");
+
+                    b.Property<string>("LastError")
+                        .HasMaxLength(1000)
+                        .HasColumnType("nvarchar(1000)");
+
+                    b.Property<DateTime>("NextAttemptUtc")
+                        .HasColumnType("datetime2");
+
+                    b.Property<Guid?>("OrganizationId")
+                        .HasColumnType("uniqueidentifier");
+
+                    b.Property<string>("ReplyTo")
+                        .HasMaxLength(320)
+                        .HasColumnType("nvarchar(320)");
+
+                    b.Property<string>("Subject")
+                        .IsRequired()
+                        .HasMaxLength(400)
+                        .HasColumnType("nvarchar(400)");
+
+                    b.Property<string>("To")
+                        .IsRequired()
+                        .HasMaxLength(320)
+                        .HasColumnType("nvarchar(320)");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("CreatedUtc");
+
+                    b.HasIndex("NextAttemptUtc")
+                        .HasFilter("[AcceptedBySmtpUtc] IS NULL AND [FailedUtc] IS NULL");
+
+                    b.HasIndex("Kind", "CreatedUtc");
+
+                    b.ToTable("OutboxEmails");
+                });
+
+            modelBuilder.Entity("Ben.Data.Source.Entities.OutboxEmailAttachment", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("uniqueidentifier");
+
+                    b.Property<int>("ByteCount")
+                        .HasColumnType("int");
+
+                    b.Property<byte[]>("Content")
+                        .HasColumnType("varbinary(max)");
+
+                    b.Property<string>("ContentType")
+                        .IsRequired()
+                        .HasMaxLength(200)
+                        .HasColumnType("nvarchar(200)");
+
+                    b.Property<string>("FileName")
+                        .IsRequired()
+                        .HasMaxLength(260)
+                        .HasColumnType("nvarchar(260)");
+
+                    b.Property<Guid>("OutboxEmailId")
+                        .HasColumnType("uniqueidentifier");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("OutboxEmailId");
+
+                    b.ToTable("OutboxEmailAttachments");
+                });
+
             modelBuilder.Entity("Ben.Data.Source.Entities.PendingClientRequest", b =>
                 {
                     b.Property<Guid>("Id")
@@ -13866,6 +13973,17 @@ namespace Ben.Data.Source.Migrations
                     b.Navigation("MemberLevel");
                 });
 
+            modelBuilder.Entity("Ben.Data.Source.Entities.OutboxEmailAttachment", b =>
+                {
+                    b.HasOne("Ben.Data.Source.Entities.OutboxEmail", "OutboxEmail")
+                        .WithMany("Attachments")
+                        .HasForeignKey("OutboxEmailId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
+
+                    b.Navigation("OutboxEmail");
+                });
+
             modelBuilder.Entity("Ben.Data.Source.Entities.Place", b =>
                 {
                     b.HasOne("Ben.Data.Source.Entities.AppUser", "CreatedByAppUser")
@@ -15604,6 +15722,11 @@ namespace Ben.Data.Source.Migrations
                     b.Navigation("Members");
 
                     b.Navigation("Permissions");
+                });
+
+            modelBuilder.Entity("Ben.Data.Source.Entities.OutboxEmail", b =>
+                {
+                    b.Navigation("Attachments");
                 });
 
             modelBuilder.Entity("Ben.Data.Source.Entities.Place", b =>

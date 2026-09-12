@@ -12322,7 +12322,7 @@ and so a member with no email still sees it.
   question phase 5 asks about non-member staff.
 
 
-## 239. The mail outbox: every letter recorded, retried, and answerable (PLATFORM — open, recommended, doable now)
+## 239. The mail outbox: every letter recorded, retried, and answerable (PLATFORM — 239a SHIPPED 2026-09-12; 239b open)
 
 Ben, 2026-09-12:
 
@@ -12409,6 +12409,30 @@ Extend `AdminMailDiagnosticsController` and its page rather than building a seco
 recent letters with Kind, To, Created, Attempts, state and the last error; filters for Failed and
 Waiting; **Retry now** on one and on all failed; the existing "can this box send" probe stays at
 the top. This is the screen that would have answered the 2026-08-31 question in five seconds.
+
+### 239a SHIPPED, 2026-09-12
+
+Built as designed, with four things worth recording that the design did not predict.
+
+- **`OutboxEmailService` decorates `IEmailService`; `SmtpEmailService` is registered as itself.**
+  All twenty callers were covered without one being edited, as intended.
+- **The diagnostics controller was taking the interface**, so its test-send would have queued
+  instead of proving anything — the one endpoint whose whole purpose is to fail loudly. It now
+  takes the raw sender, and a source guard,
+  `EveryMailerGoesThroughTheOutboxTests`, names the only three files allowed to.
+- **That guard's first run accused `IdentityEmailSender`**, which mentions the sender in a comment
+  and correctly asks for the interface. Guards that read comments cry wolf, and somebody edits the
+  comment to satisfy them, so it strips comments first.
+- **`OrganizationPurgeCoverageTests` fired**, because the outbox carries an `OrganizationId`. The
+  answer was not to purge: a queued letter is not the group's property, and the most important
+  letter a purge can produce is the one telling somebody the group they belonged to is gone.
+  Deleting the rows would take that letter away at the moment it was most needed. The purge clears
+  the link and keeps the letter.
+- **`TierValidationShapeTests` fired** on the retry endpoints answering with a bare string, which
+  MVC serves as text/plain and every client here reads as JSON. They return a record now.
+- Migration `20260912182335_MailOutbox`, two tables, nothing dropped in `Up`, applied to
+  `IsHauntedDb_player`. 17 tests; the backoff table and the wiring were each proved to
+  discriminate. Suite 8,458 pass.
 
 ### Sequencing — DECIDED by Ben, 2026-09-12: *"Yes, do that after merging Phase 1"*
 

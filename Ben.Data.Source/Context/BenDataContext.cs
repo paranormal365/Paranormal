@@ -120,6 +120,8 @@ namespace Ben.Data.Source.Context
         public virtual DbSet<HostedEventMenu> HostedEventMenus { get; set; }
         public virtual DbSet<HostedEventMenuItem> HostedEventMenuItems { get; set; }
         public virtual DbSet<HostedEventPass> HostedEventPasses { get; set; }
+        public virtual DbSet<OutboxEmail> OutboxEmails { get; set; }
+        public virtual DbSet<OutboxEmailAttachment> OutboxEmailAttachments { get; set; }
         public virtual DbSet<EventCredit> EventCredits { get; set; }
         public virtual DbSet<TourGuide> TourGuides { get; set; }
         public virtual DbSet<TourSocialLink> TourSocialLinks { get; set; }
@@ -945,6 +947,44 @@ namespace Ben.Data.Source.Context
 
             // PlaceRoom gains what a booking needs to know about it (item 235 phase 2).
             modelBuilder.Entity<PlaceRoom>().Property(e => e.BedNote).HasMaxLength(200);
+
+            // ── The mail outbox (item 239) ──────────────────────────────────
+            // One index, and it is the only query the sender makes: the next few letters due,
+            // oldest first. Filtered to rows still in play, because an outbox that has been
+            // working for a year is almost entirely rows nobody will look at again and a full
+            // index over them would be paid for on every pass.
+            modelBuilder.Entity<OutboxEmail>()
+                .HasIndex(e => e.NextAttemptUtc)
+                .HasFilter("[AcceptedBySmtpUtc] IS NULL AND [FailedUtc] IS NULL");
+            // The screen's query: newest first, and by kind when somebody is chasing one sort of
+            // letter.
+            modelBuilder.Entity<OutboxEmail>()
+                .HasIndex(e => e.CreatedUtc);
+            modelBuilder.Entity<OutboxEmail>()
+                .HasIndex(e => new { e.Kind, e.CreatedUtc });
+            modelBuilder.Entity<OutboxEmail>()
+                .Property(e => e.To).HasMaxLength(320).IsRequired();
+            modelBuilder.Entity<OutboxEmail>()
+                .Property(e => e.Subject).HasMaxLength(400).IsRequired();
+            modelBuilder.Entity<OutboxEmail>()
+                .Property(e => e.ReplyTo).HasMaxLength(320);
+            modelBuilder.Entity<OutboxEmail>()
+                .Property(e => e.Kind).HasMaxLength(60).IsRequired();
+            modelBuilder.Entity<OutboxEmail>()
+                .Property(e => e.ClaimedBy).HasMaxLength(100);
+            modelBuilder.Entity<OutboxEmail>()
+                .Property(e => e.LastError).HasMaxLength(1000);
+            // No foreign keys to the organization or the person on purpose. They are here so a
+            // screen can link back, not so the database can enforce anything, and a letter must
+            // outlive the thing it was about — telling somebody their group was deleted is exactly
+            // the letter a cascade would take away.
+            modelBuilder.Entity<OutboxEmailAttachment>()
+                .Property(a => a.FileName).HasMaxLength(260).IsRequired();
+            modelBuilder.Entity<OutboxEmailAttachment>()
+                .Property(a => a.ContentType).HasMaxLength(200).IsRequired();
+            modelBuilder.Entity<OutboxEmailAttachment>()
+                .HasOne(a => a.OutboxEmail).WithMany(e => e.Attachments)
+                .HasForeignKey(a => a.OutboxEmailId).OnDelete(DeleteBehavior.Cascade);
 
             // ── Event credits (item 235) ────────────────────────────────────
             // One credit, one event. Owned by a group OR a person — Ben said "the member or group"

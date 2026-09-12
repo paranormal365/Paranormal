@@ -204,7 +204,14 @@ builder.Services.AddSingleton<Ben.Data.WebApi.Services.EditorHandoffCodeStore>()
 builder.Services.Configure<Ben.Data.WebApi.Services.SmtpOptions>(builder.Configuration.GetSection("Smtp"));
 // What the site is called, in one place — see SiteIdentity for why it is not a literal.
 builder.Services.Configure<Ben.Data.Common.SiteIdentity>(builder.Configuration.GetSection("SiteIdentity"));
-builder.Services.AddSingleton<Ben.Data.Common.Interfaces.IEmailService, Ben.Data.WebApi.Services.SmtpEmailService>();
+// Item 239, the mail outbox. SmtpEmailService is registered as ITSELF and is now reached by
+// exactly two things: the sender job, which posts what the outbox holds, and the mail diagnostics
+// screen, which must send immediately and show the raw failure — a diagnostic that queues is not a
+// diagnostic. Everything else asks for IEmailService and gets the outbox, so all twenty callers
+// were covered without one of them being edited.
+builder.Services.AddSingleton<Ben.Data.WebApi.Services.SmtpEmailService>();
+builder.Services.AddSingleton<Ben.Data.Common.Interfaces.IEmailService,
+                              Ben.Data.WebApi.Services.OutboxEmailService>();
 builder.Services.AddHostedService<Ben.Data.WebApi.Services.FileMigrationService>();
 
 // ── @names ───────────────────────────────────────────────────────────────────
@@ -273,6 +280,10 @@ builder.Services.AddScoped<Ben.Data.WebApi.Services.Scheduling.IScheduledJob,
 // the audit log, which item 191 settled is archived rather than deleted.
 builder.Services.AddScoped<Ben.Data.WebApi.Services.Scheduling.IScheduledJob,
                            Ben.Data.WebApi.Services.Scheduling.LogRetentionJob>();
+// Item 239: posts what the outbox holds, retries what did not go, and clears the words out of
+// letters that went a month ago. Nothing else sends mail any more.
+builder.Services.AddScoped<Ben.Data.WebApi.Services.Scheduling.IScheduledJob,
+                           Ben.Data.WebApi.Services.Scheduling.MailSenderJob>();
 builder.Services.AddScoped<Ben.Data.WebApi.Services.PlatformMessageService>();
 builder.Services.AddScoped<Ben.Data.WebApi.Services.RequestReviewNotifier>();
 // Item 206: mails a case's clients when the case changes state or a visit is scheduled.

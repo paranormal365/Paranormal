@@ -20,6 +20,16 @@ belongs there; this is for the part underneath.
 
 ## 2026-09-12
 
+- Every message the service sends is now written down before it is sent, and a task posts them.
+  One that does not go the first time is tried again, with longer waits each time, for about a day
+  and a half; one refused outright — an address that does not exist — stops at once and keeps the
+  reason. Nothing is lost to a temporary fault any more, and whether a message went can be
+  answered afterwards.
+- A deployment with no mail configured still records what it meant to send, so switching mail on
+  posts the backlog rather than starting from empty.
+- The words of a message are kept for thirty days and then cleared; who it went to, when, and
+  whether it was accepted are kept for good.
+
 - A confirmed booking carries a pass: an opaque code that admits one party to one event, revocable
   at any time, replaced automatically whenever the booking changes. It is served as a picture so a
   letter, a printed page and a phone all show the same thing.
