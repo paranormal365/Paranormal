@@ -670,10 +670,16 @@ ticks by hand; the three jobs; the `https` profile for LAN camera testing).
    the phase's "verified by" walked on the running site against `IsHauntedDb_player` as sarah,
    james and daniel.
 2. Phase 2 ends with Ben at the screen before phase 3 begins.
-3. Before any migration reaches production: `SELECT MigrationId FROM __EFMigrationsHistory WHERE
-   MigrationId LIKE '2026091%'` and `SELECT name FROM sys.tables WHERE name LIKE 'HostedEvent%'`;
-   if the tables are absent the chain applies fresh; if present, count
-   `HostedEventBookingNights` rows before migration 4, whose pre-check throws rather than deletes.
+3. **CHECKED 2026-09-12, read-only, and the answer is good: no item-235 migration has ever reached
+   production.** `dotnet ef migrations list --connection "<IsHauntedDb>"` reports all seven —
+   `HostedEvents`, `EventCredits`, `EventCreditGrants`, `HostedEventBookings`,
+   `HostedEventBookingCancellationRequests`, `EventPasses`, `EventLayoutUnits` — as **Pending**;
+   the last one applied there is `20260911171519_TourSeats`. So the whole chain applies fresh on
+   production and **every destructive concern in the migration plan is confined to
+   `IsHauntedDb_player`**: the hand-written `EventLayoutUnits` rename, and migration 4's pre-check
+   that throws when two live parties already share a unit-night, only ever run against test data.
+   Re-check with the same command before the first production deployment, because a hand-run
+   `database update` between now and then would change the answer.
 4. Phase 15 reprints every document and walks the whole thing once more as a guest on an iPhone in
    Safari, an organizer on an iPad, and a venue on a laptop.
 

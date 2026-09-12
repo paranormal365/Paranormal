@@ -108,11 +108,29 @@ Browser → POST /login → WebApi returns opaque bearer token
 
 ## Database
 
-### Connection (dev)
+### Connection
+
+The connection string lives in `Ben.Data.WebApi/appsettings.Development.json`, which is
+**gitignored**, under `ConnectionStrings:BenDbConnectionString`. Its shape:
+
 ```
-Server=192.168.1.71,1433;Database=IsHauntedDb;User Id=IsHaunted;Password=ishaunted;
+Server=<host>,1433;Database=<database>;User Id=<user>;Password=<from the environment>;
 Encrypt=True;TrustServerCertificate=True;
 ```
+
+**No password belongs in this file or any other tracked file.** This repo is public and
+`appsettings.Development.json` points at the same database ishaunted.com serves, so a password
+written down here is a working production credential rather than a test fixture — the finding of
+2026-09-02, which removed eighteen account passwords from sixteen files and left this one behind
+because it is a SQL Server login rather than a site account. It was removed on 2026-09-12; **it is
+still in this file's git history and on GitHub, so removing it protects nothing until the login is
+rotated on the server.**
+
+Which database is which matters as much as the password: **`IsHauntedDb` is what ishaunted.com
+serves**, `IsHauntedDb_player` is the testing copy that dev hosts and migrations should point at,
+and `IsHauntedDb_e2e` is created and used by `scripts/run-e2e.sh`. `dotnet ef` ignores
+`ConnectionStrings__BenDbConnectionString` and silently targets the default, so every migration
+command takes an explicit `--connection`.
 
 ### Migration command
 ```bash
