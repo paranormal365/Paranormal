@@ -432,10 +432,14 @@ public interface IBenOrganizationClient
     /// A published event as a visitor sees it — its dates, its venue, whether it is a stay or a run.
     /// </summary>
     /// <remarks>
-    /// Anonymous. The umbrella calendar row carries the sign-up and the reminder; this carries what
-    /// an umbrella cannot say, which is that there is more than one evening in it.
+    /// <para>Anonymous. The umbrella calendar row carries the sign-up and the reminder; this carries
+    /// what an umbrella cannot say, which is that there is more than one evening in it.</para>
+    ///
+    /// <para>An <see cref="ItemResult{T}"/> since the plan of record (2026-09-12): a visitor refused
+    /// the event's dates and a visitor looking at an event that has no such dates must not see the
+    /// same page, because one of them has a sentence worth reading and the other has nothing.</para>
     /// </remarks>
-    Task<PublicHostedEventRecord?> GetPublicHostedEventAsync(
+    Task<ItemResult<PublicHostedEventRecord>> GetPublicHostedEventAsync(
         Guid hostedEventId, CancellationToken token = default);
 
     /// <summary>One tour.</summary>

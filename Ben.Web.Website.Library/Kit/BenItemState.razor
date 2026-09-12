@@ -1,0 +1,108 @@
+@namespace Ben.Web.Website.Library.Kit
+@using Ben.Web.Services.WebApi
+@inject NavigationManager Nav
+@typeparam TItem
+
+@*
+    The four states one thing actually has: loading, signed out, could not load, and here it is.
+
+    BenListState did this for lists (item 120); nothing did it for a single object, because
+    GetAsync answered a 401, a 403, a 404 and an empty success with the same null and there was
+    nothing to render a difference from. ItemResult carries the difference now, and the hosted
+    events plan of record (2026-09-12) made "a 403 must not read as not-found" a rule for every
+    screen it builds — a member refused the dietary sheet is not looking at an event with no
+    guests. This is the component that keeps that rule without each page re-deriving it.
+
+    The same four branches as BenListState, in the same order, with the same words, on purpose: a
+    person who has learned what the yellow card means on a list should not have to learn it again
+    because the page shows one record. There is no empty branch — a successful fetch that carries
+    nothing (a 204) renders nothing, because "nothing here yet" is a list's sentence and a single
+    object has no such state worth a card.
+
+    ChildContent is typed. The page writes @context.Title, not _record!.Title, and cannot reach the
+    content branch with a null: that is the whole point of a result type, and a component that
+    handed back a nullable would have thrown the type's guarantee away at the last step.
+*@
+
+@if (Loading)
+{
+    <BenLoaderOverlay Visible="true" Text="@(LoadingText ?? "Loading…")" />
+}
+else if (Result.SessionExpired)
+{
+    @* 401 is the one failure that is not about this record at all — see BenListState for the
+       history. The link carries the current page so signing in returns here, and it is an
+       anchor, which works whether or not the circuit that just died is replaced. *@
+    <div class="card border-warning">
+        <div class="card-body text-center py-4">
+            <h6 class="mb-2">You've been signed out</h6>
+            <p class="text-secondary small mb-3">
+                Your session ended, so this couldn't be loaded. Signing in again will bring you
+                straight back to this page.
+            </p>
+            <a href="@SignInUrl" class="btn btn-primary btn-sm">Sign in again</a>
+        </div>
+    </div>
+}
+else if (Result.Failed)
+{
+    @* Says the load failed, not "you do not have permission": a 500 and a dropped connection
+       reach here identically, and guessing at the cause is how a page tells its second untruth.
+       When the server gave a sentence worth reading, that sentence is shown instead. *@
+    <div class="card border-warning">
+        <div class="card-body text-center py-4">
+            <h6 class="mb-2">Couldn't load this</h6>
+            <p class="text-secondary small mb-3">
+                @(Result.Reason ?? "Something went wrong fetching this. It is still there — "
+                                 + "this is a problem reaching the server, not a missing record.")
+            </p>
+            @if (OnRetry.HasDelegate)
+            {
+                <button type="button" class="btn btn-outline-secondary btn-sm" @onclick="OnRetry">
+                    Try again
+                </button>
+            }
+        </div>
+    </div>
+}
+else if (Result.Item is { } item && ChildContent is not null)
+{
+    @ChildContent(item)
+}
+
+@code {
+    /// <summary>The fetch's outcome. Default (not failed, no item) renders nothing.</summary>
+    [Parameter, EditorRequired] public ItemResult<TItem> Result { get; set; }
+
+    /// <summary>True while the fetch is in flight — takes precedence over everything below.</summary>
+    [Parameter] public bool Loading { get; set; }
+
+    /// <summary>Overrides the spinner's caption.</summary>
+    [Parameter] public string? LoadingText { get; set; }
+
+    /// <summary>
+    /// Rendered with the record when there is one. Typed, so the page never dereferences a maybe.
+    /// </summary>
+    [Parameter] public RenderFragment<TItem>? ChildContent { get; set; }
+
+    /// <summary>Wire this and the failure state offers a Try again button.</summary>
+    /// <remarks>
+    /// Not offered for <see cref="ItemResult{T}.SessionExpired"/>: a retry on a dead session is a
+    /// button that cannot work.
+    /// </remarks>
+    [Parameter] public EventCallback OnRetry { get; set; }
+
+    /// <summary>Sign-in, carrying this page as the place to return to.</summary>
+    /// <remarks>
+    /// Relative, because <c>Login.razor</c> refuses a ReturnUrl that does not start with a single
+    /// slash — its open-redirect guard, which an absolute URI would trip.
+    /// </remarks>
+    private string SignInUrl
+    {
+        get
+        {
+            var here = Nav.ToBaseRelativePath(Nav.Uri);
+            return $"/login?returnUrl={Uri.EscapeDataString("/" + here)}";
+        }
+    }
+}

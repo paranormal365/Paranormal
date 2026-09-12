@@ -204,6 +204,55 @@ public sealed class WebApiClient : IWebApiClient
         }
     }
 
+    /// <inheritdoc />
+    public async Task<(TResponse? Result, string? Error, TConflict? Conflict)> SendExpectingConflictAsync<TRequest, TResponse, TConflict>(
+        HttpMethod method, string relativeUrl, TRequest payload, CancellationToken token = default)
+    {
+        using var req = Auth(method, relativeUrl);
+        req.Content = JsonContent.Create(payload);
+        using var response = await _httpClient.SendAsync(req, token);
+
+        if (response.IsSuccessStatusCode)
+        {
+            // Same empty-body trap as SendExpectingReasonAsync above.
+            if (response.StatusCode == System.Net.HttpStatusCode.NoContent
+                || response.Content.Headers.ContentLength == 0)
+                return (default, null, default);
+
+            return (await response.Content.ReadFromJsonAsync<TResponse>(cancellationToken: token), null, default);
+        }
+
+        // Read once, as text. Trying the JSON reader first and the string reader second would read
+        // the same stream twice, and the second read of an unbuffered response is empty.
+        var body = await response.Content.ReadAsStringAsync(token);
+
+        if (response.StatusCode == System.Net.HttpStatusCode.Conflict)
+        {
+            // Our own 409 carries the typed shape. One from a proxy or a framework filter does not,
+            // and must not crash the page — it falls through to the prose test below, where an
+            // HTML page is dropped and a plain sentence is kept.
+            try
+            {
+                var conflict = System.Text.Json.JsonSerializer.Deserialize<TConflict>(body, WebJson);
+                if (conflict is not null) return (default, null, conflict);
+            }
+            catch (System.Text.Json.JsonException) { }
+        }
+
+        // The same prose test as SendExpectingReasonAsync: a refusal we wrote is a sentence, a
+        // framework error is a ProblemDetails blob or an HTML page.
+        var looksLikeProse = !string.IsNullOrWhiteSpace(body)
+                          && body.Length < 400
+                          && !body.TrimStart().StartsWith('{')
+                          && !body.TrimStart().StartsWith('<');
+
+        return (default, looksLikeProse ? body.Trim('"', ' ', '\n') : null, default);
+    }
+
+    /// <summary>What <c>ReadFromJsonAsync</c> uses when nothing is passed: the web defaults.</summary>
+    private static readonly System.Text.Json.JsonSerializerOptions WebJson
+        = new(System.Text.Json.JsonSerializerDefaults.Web);
+
     public async Task<TResponse?> PostAnonymousAsync<TRequest, TResponse>(string relativeUrl, TRequest payload, CancellationToken token = default)
     {
         using var req = new HttpRequestMessage(HttpMethod.Post, relativeUrl) { Content = JsonContent.Create(payload) };

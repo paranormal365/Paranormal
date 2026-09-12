@@ -33,7 +33,8 @@ public interface IBenAdminClient :
     IBenAccountClient,
     IBenFeedClient,
     IBenPublicationClient,
-    IBenBillingClient
+    IBenBillingClient,
+    IBenEventBookingClient
 {
     // Every member now lives in one of the slices above. This interface remains the single name
     // components inject and the single thing BenAdminClientAdapter implements, so nothing that
