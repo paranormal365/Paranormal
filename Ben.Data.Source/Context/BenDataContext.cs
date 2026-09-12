@@ -821,6 +821,8 @@ namespace Ben.Data.Source.Context
             modelBuilder.Entity<HostedEventBooking>()
                 .Property(b => b.DecisionNote).HasMaxLength(1000);
             modelBuilder.Entity<HostedEventBooking>()
+                .Property(b => b.CancellationReason).HasMaxLength(1000);
+            modelBuilder.Entity<HostedEventBooking>()
                 .HasOne(b => b.HostedEvent).WithMany(e => e.Bookings)
                 .HasForeignKey(b => b.HostedEventId).OnDelete(DeleteBehavior.Cascade);
             modelBuilder.Entity<HostedEventBooking>()

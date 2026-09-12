@@ -20,6 +20,10 @@ belongs there; this is for the part underneath.
 
 ## 2026-09-12
 
+- Overnight events count places per room per night, and day passes against one number for the
+  event, so a venue that sleeps eight can no longer be sold forty beds.
+- Confirming a booking puts the whole party on the event's calendar entry, which is what the
+  public count, the reminder and the apps already read.
 - One upload now carries up to 5 minutes of video and 500 MB in total. Recording on the phone is
   not limited in any way — this is only about how much travels at once, and a session can be sent
   in as many goes as it takes.

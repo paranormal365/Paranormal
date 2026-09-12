@@ -427,4 +427,213 @@ public sealed class HostedEventBookingTests
             Assert.Equal(2, await db.PlaceRooms.CountAsync());
         }
     }
+
+    // ── the guest's side (phase 2.2b) ────────────────────────────────────────
+
+    [Fact]
+    public async Task Withdrawing_a_request_removes_it_from_the_hosts_queue()
+    {
+        // Nobody was holding anything, and leaving it there would have the host decide on a party
+        // that is not coming.
+        await using var sqlite = await SqliteTestDb.CreateAsync();
+        var seeded = await SeedAsync(sqlite);
+
+        Guid bookingId;
+        await using (var db = await sqlite.NewContextAsync())
+        {
+            var booking = NewBooking(GuestId, 2, HostedEventBookingStatus.Requested,
+                                     nights: (seeded.FridayId, seeded.BlueRoomId));
+            db.HostedEventBookings.Add(booking);
+            await db.SaveChangesAsync();
+            bookingId = booking.Id;
+        }
+
+        await using (var db = await sqlite.NewContextAsync())
+        {
+            var booking = await db.HostedEventBookings
+                .Include(b => b.Nights).FirstAsync(b => b.Id == bookingId);
+            db.HostedEventBookingNights.RemoveRange(booking.Nights);
+            db.HostedEventBookings.Remove(booking);
+            await db.SaveChangesAsync();
+        }
+
+        await using (var db = await sqlite.NewContextAsync())
+        {
+            Assert.Empty(await db.HostedEventBookings.ToListAsync());
+            Assert.Empty(await db.HostedEventBookingNights.ToListAsync());
+        }
+    }
+
+    [Fact]
+    public async Task A_confirmed_booking_a_guest_wants_out_of_still_holds_its_room()
+    {
+        // The venue has catered, staffed and possibly turned somebody away against it. Freeing the
+        // room the moment a guest clicks would leave a room empty that the host thinks is full —
+        // so the ask is recorded and the host releases it.
+        await using var sqlite = await SqliteTestDb.CreateAsync();
+        var seeded = await SeedAsync(sqlite);
+
+        Guid bookingId;
+        await using (var db = await sqlite.NewContextAsync())
+        {
+            var booking = NewBooking(GuestId, 2, HostedEventBookingStatus.Confirmed,
+                                     nights: (seeded.FridayId, seeded.BlueRoomId));
+            db.HostedEventBookings.Add(booking);
+            await db.SaveChangesAsync();
+            bookingId = booking.Id;
+        }
+
+        await using (var db = await sqlite.NewContextAsync())
+        {
+            var booking = await db.HostedEventBookings.FirstAsync(b => b.Id == bookingId);
+            booking.CancellationRequestedUtc = DateTime.UtcNow;
+            booking.CancellationReason = "My flight was cancelled.";
+            await db.SaveChangesAsync();
+        }
+
+        await using (var db = await sqlite.NewContextAsync())
+        {
+            var all = await AllAsync(db);
+            var booking = all.Single();
+
+            // Still confirmed, still holding the beds, and the host can see the ask.
+            Assert.Equal(HostedEventBookingStatus.Confirmed, booking.Status);
+            Assert.Equal(2, EventCapacity.PeopleIn(all, seeded.FridayId, seeded.BlueRoomId));
+            Assert.NotNull(booking.CancellationRequestedUtc);
+            Assert.Equal("My flight was cancelled.", booking.CancellationReason);
+        }
+    }
+
+    [Fact]
+    public async Task Releasing_a_cancelled_booking_frees_the_room_and_the_umbrella_row()
+    {
+        await using var sqlite = await SqliteTestDb.CreateAsync();
+        var seeded = await SeedAsync(sqlite);
+
+        Guid bookingId, attendeeId;
+        await using (var db = await sqlite.NewContextAsync())
+        {
+            var umbrella = new OrgCalendarEvent
+            {
+                Id = Guid.NewGuid(), OrganizationId = OrgId, HostedEventId = EventId,
+                Title = "Halloween Lock-In",
+                StartDateTime = new DateTime(2026, 10, 30, 19, 0, 0),
+                EndDateTime = new DateTime(2026, 10, 31, 23, 0, 0),
+                DateCreated = DateTime.UtcNow, CreatedByAppUserId = HostId,
+            };
+            db.OrgCalendarEvents.Add(umbrella);
+
+            var attendee = new OrgCalendarEventAttendee
+            {
+                Id = Guid.NewGuid(), OrgCalendarEventId = umbrella.Id, AppUserId = GuestId,
+                RsvpStatus = RsvpStatus.Accepted, SeatStatus = TourSeatStatus.Reserved,
+                Seats = 2, DateCreated = DateTime.UtcNow, CreatedByAppUserId = HostId,
+            };
+            db.OrgCalendarEventAttendees.Add(attendee);
+
+            var booking = NewBooking(GuestId, 2, HostedEventBookingStatus.Confirmed,
+                                     nights: (seeded.FridayId, seeded.BlueRoomId));
+            booking.UmbrellaAttendeeId = attendee.Id;
+            db.HostedEventBookings.Add(booking);
+            await db.SaveChangesAsync();
+            bookingId = booking.Id;
+            attendeeId = attendee.Id;
+        }
+
+        await using (var db = await sqlite.NewContextAsync())
+        {
+            var booking = await db.HostedEventBookings.FirstAsync(b => b.Id == bookingId);
+            booking.Status = HostedEventBookingStatus.Cancelled;
+            db.OrgCalendarEventAttendees.RemoveRange(
+                db.OrgCalendarEventAttendees.Where(a => a.Id == attendeeId));
+            booking.UmbrellaAttendeeId = null;
+            await db.SaveChangesAsync();
+        }
+
+        await using (var db = await sqlite.NewContextAsync())
+        {
+            var all = await AllAsync(db);
+
+            // The beds are free, and every existing count has stopped including them — which is
+            // the whole reason the umbrella row exists.
+            Assert.Equal(0, EventCapacity.PeopleIn(all, seeded.FridayId, seeded.BlueRoomId));
+            Assert.Empty(await db.OrgCalendarEventAttendees.ToListAsync());
+            // The booking itself stays. The venue catered against it.
+            Assert.Single(all);
+            Assert.Equal(HostedEventBookingStatus.Cancelled, all[0].Status);
+        }
+    }
+
+    [Fact]
+    public async Task A_guests_own_record_carries_nobody_elses_party()
+    {
+        // A guest's screen is not a window into the venue's book: two parties at one event, and
+        // the query behind "my booking" must see exactly one of them.
+        await using var sqlite = await SqliteTestDb.CreateAsync();
+        var seeded = await SeedAsync(sqlite);
+
+        await using (var db = await sqlite.NewContextAsync())
+        {
+            var mine = NewBooking(GuestId, 2, HostedEventBookingStatus.Confirmed,
+                                  nights: (seeded.FridayId, seeded.BlueRoomId));
+            mine.Guests.Add(new HostedEventBookingGuest
+            {
+                Id = Guid.NewGuid(), HostedEventBookingId = mine.Id,
+                DisplayName = "My partner", DietaryNotes = "Coeliac",
+                DateCreated = DateTime.UtcNow,
+            });
+
+            var theirs = NewBooking(OtherGuestId, 4, HostedEventBookingStatus.Confirmed,
+                                    nights: (seeded.FridayId, seeded.SuiteId));
+            theirs.Guests.Add(new HostedEventBookingGuest
+            {
+                Id = Guid.NewGuid(), HostedEventBookingId = theirs.Id,
+                DisplayName = "Somebody else", DietaryNotes = "Nut allergy",
+                DateCreated = DateTime.UtcNow,
+            });
+
+            db.HostedEventBookings.AddRange(mine, theirs);
+            await db.SaveChangesAsync();
+        }
+
+        await using (var db = await sqlite.NewContextAsync())
+        {
+            var mine = await db.HostedEventBookings
+                .Include(b => b.Guests)
+                .Where(b => b.LeadAppUserId == GuestId
+                         && b.Status != HostedEventBookingStatus.Cancelled)
+                .ToListAsync();
+
+            Assert.Single(mine);
+            Assert.Equal(2, mine[0].PartySize);
+            // The other party's health information is not in what this guest can read.
+            Assert.DoesNotContain(mine[0].Guests, g => g.DietaryNotes == "Nut allergy");
+        }
+    }
+
+    [Fact]
+    public async Task A_cancelled_booking_does_not_block_asking_again()
+    {
+        // "One booking per person per event" has to mean one LIVE booking, or somebody who
+        // cancelled in March could never come in October.
+        await using var sqlite = await SqliteTestDb.CreateAsync();
+        var seeded = await SeedAsync(sqlite);
+
+        await using (var db = await sqlite.NewContextAsync())
+        {
+            db.HostedEventBookings.Add(
+                NewBooking(GuestId, 2, HostedEventBookingStatus.Cancelled,
+                           nights: (seeded.FridayId, seeded.BlueRoomId)));
+            await db.SaveChangesAsync();
+        }
+
+        await using (var db = await sqlite.NewContextAsync())
+        {
+            var live = await db.HostedEventBookings
+                .AnyAsync(b => b.HostedEventId == EventId && b.LeadAppUserId == GuestId
+                            && b.Status != HostedEventBookingStatus.Cancelled);
+            Assert.False(live);
+        }
+    }
+
 }

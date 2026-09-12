@@ -823,6 +823,66 @@ file and the phone apps all read, which is why it is kept in step with the event
 You can't edit it from the calendar — it tells you so, and points you at the event, where its dates,
 venue and description all come from. That way two screens can never disagree about the same evening.
 
+### Rooms and bookings
+
+Under **Rooms offered** you tick which of your venue's rooms this event is using. The rooms
+themselves are the ones you have described for the place (see *Rooms* on the venue), and each one
+already says what it sleeps — but an event can say otherwise. A double you have put two camp beds
+in for a séance weekend sleeps four for that weekend and goes back to two afterwards.
+
+A room with confirmed bookings in it can't be untick­ed. Move those parties somewhere else first;
+dropping the room would leave them sleeping in one your event says it is not using.
+
+#### How a booking works
+
+A **booking is a party**, not a person: one lead who talks to you, a party size, and as many named
+guests as there are people. Guests don't need accounts — somebody brings a partner who has never
+heard of us — and each guest can carry their own dietary note.
+
+There are two kinds. An **overnight** party takes a room on named nights. A **day pass** is for
+somebody coming without staying, counted against one number for the whole event.
+
+A guest asks; you decide. Until you confirm it, a request **holds nothing** — no room, no day pass —
+which means your event keeps taking requests after it is full and the overflow is a waiting list
+you can work through rather than a closed door. The board shows both numbers: how many are in a
+room on a night, and how many have *asked* for it.
+
+#### Confirming, and moving people about
+
+Confirming is you saying the place is theirs and that you two have settled how money changes hands.
+**This site never takes a guest's money.** When you confirm you say which room they are actually in
+on each night, and that need not be the room they asked for — putting a party of three out of a
+double and into the suite is the ordinary thing, and there is no need to make them start again.
+
+If they don't fit, the refusal tells you what to do about it: which room, which night, and how many
+more it sleeps. "Full" on its own would leave you guessing whether a smaller party would go in.
+
+Confirming also puts them on the event's calendar entry, which is what the reminder email, the
+calendar file, the public count and the phone apps all read.
+
+#### Changing and cancelling
+
+Bookings are editable after they are confirmed, because a real weekend has somebody dropping out on
+the Thursday. Change the party size, the rooms, the nights or the guests; the room is re-checked so
+an edit can never do what a booking couldn't, and a party moving rooms is never blocked by the beds
+it is leaving.
+
+A guest can change their own booking too. If they change what you agreed to — the party size or the
+nights — it comes back to you as a request, because the thing you said yes to is not the thing
+being asked for any more.
+
+**A guest cannot free a confirmed room on their own.** They ask, you release it. You have catered,
+staffed and possibly turned somebody else away against that room, and a room freed without your
+knowing is a room that stays empty. Their reason comes with the ask.
+
+Turning a booking down and cancelling one both tell the guest, and both give the room back.
+
+#### Bookings close
+
+You can set a date when the event stops taking new requests, so you can cater and staff to a known
+number. It stops *new* ones only — a request already waiting when it closes is still yours to
+decide, because somebody who asked in time shouldn't be refused by a clock while you were asleep.
+
 ## Public events
 
 An event on your calendar can be opened to anybody. Tick **Public** and it appears on your group's

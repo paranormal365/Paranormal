@@ -493,7 +493,8 @@ public sealed class HostedEventBookingController : OrgCmsControllerBase
             b.LeadAppUser?.Email,
             b.PartySize, b.Kind, b.Status,
             b.DecidedUtc, b.DecidedByAppUser?.DisplayName, b.DecisionNote,
-            b.GuestAcknowledgedUtc, b.Note, b.DateCreated,
+            b.GuestAcknowledgedUtc, b.Note,
+            b.CancellationRequestedUtc, b.CancellationReason, b.DateCreated,
             b.Nights
                 .OrderBy(n => n.HostedEventNight.Date)
                 .Select(n => new HostedEventBookingNightRecord(

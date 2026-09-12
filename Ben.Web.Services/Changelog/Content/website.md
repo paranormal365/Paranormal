@@ -18,6 +18,14 @@ day-by-day account of building it would say nothing to anyone using it now.
 
 ## 2026-09-12
 
+- Events that run overnight take bookings. A venue ticks which of its rooms an event is using, and
+  guests ask for a room on named nights or a day pass for the day. A party is one booking with one
+  lead and as many named guests as there are people, each with their own dietary note.
+- Asking holds nothing until the venue confirms, so an event keeps taking requests after it is full
+  and the overflow is a waiting list rather than a closed door.
+- Bookings can be changed after they are confirmed, by the venue or by the guest. A guest asks the
+  venue to release a confirmed room rather than freeing it themselves, because the venue has
+  catered and staffed against it.
 - The Field Kit's video is easier to find. Choosing what a session records — magnetic field, sound, video, location — now happens before the session opens, not part-way down a running session's screen.
 
 ## 2026-09-11

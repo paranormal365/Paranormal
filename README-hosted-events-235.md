@@ -196,6 +196,34 @@ discriminate by removing the lower bound from `DueAWarningAsync` and watching on
   anonymous email path, create-on-behalf by email through the guest-invite token, the dietary tally
   and menus endpoints. Create-on-behalf takes an existing account today and says so.
 
+**Phase 2.2b done, 2026-09-12** — the guest's own door.
+
+- **`PublicHostedEventBookingController`**: ask for a place, read what the venue said, change it,
+  acknowledge it, withdraw it, and `GET api/public/hosted-events/mine`.
+- **Asking is deliberately not capacity-checked.** A request holds nothing, so refusing one because
+  a room is full would close the very waiting list the host wants. What IS checked: the event is
+  published, not called off, and inside its deadline.
+- **Withdrawing means two different things**, and this is the rule worth remembering. A REQUEST is
+  simply deleted: nobody was holding anything, and leaving it in the queue would have the host
+  decide on a party that is not coming. A CONFIRMED booking is not — the venue has catered, staffed
+  and possibly turned somebody else away against it — so the guest ASKS and the host releases it. A
+  room freed without the host knowing is a room that stays empty. New columns
+  `CancellationRequestedUtc` and `CancellationReason`; migration
+  `20260912143529_HostedEventBookingCancellationRequests`, two AddColumn and nothing else, applied
+  to `IsHauntedDb_player`.
+- **A guest editing what the venue agreed to sends it back as a request.** Changing the party size
+  or the nights makes what was agreed to no longer the thing being asked for, and a party that
+  quietly grew from two to six would be sleeping in a room nobody checked. Changing only a note or
+  the guest names does not.
+- **"One booking per person per event" means one LIVE booking**, or somebody who cancelled in March
+  could never come in October.
+- The guest's record is deliberately not the host's: no other party's details, no decision-maker's
+  name, no dietary note but their own party's. A test proves the query cannot see another party's.
+- **13 behaviour tests** on `SqliteTestDb`, proved to discriminate. Suite: .NET 5,112 pass, 0 fail.
+- **Help, changelogs and worklog updated in this commit**: a *Rooms and bookings* chapter in
+  `organization-administration.md`, entries in the website and service changelogs, and
+  `ProjectNotes/DailyLogs/2026-09-12.md`. Product PDF rebuilt.
+
 **TWO CONFIGURATION FINDINGS, both from phase 0's new enum values and neither yet fixed.** On
 `IsHauntedDb_player`, and almost certainly on production too:
 

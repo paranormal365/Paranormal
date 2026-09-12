@@ -100,6 +100,20 @@ namespace Ben.Data.Source.Entities
         public string? Note { get; set; }
 
         /// <summary>
+        /// When the guest asked to get out of a booking the venue had already confirmed.
+        /// </summary>
+        /// <remarks>
+        /// A request holds nothing, so withdrawing one simply deletes it. A confirmed booking is
+        /// different: the venue has catered, staffed and possibly turned somebody else away
+        /// against it, so the guest ASKS and the host releases it. A room freed without the host
+        /// knowing is a room that stays empty.
+        /// </remarks>
+        public DateTime? CancellationRequestedUtc { get; set; }
+
+        /// <summary>Why they cannot come, in their own words. Shown to the venue.</summary>
+        public string? CancellationReason { get; set; }
+
+        /// <summary>
         /// The umbrella calendar attendee this booking wrote when it was confirmed.
         /// </summary>
         /// <remarks>

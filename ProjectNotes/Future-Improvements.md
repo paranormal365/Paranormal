@@ -12036,3 +12036,189 @@ drew, with the room named automatically and a second visit lining up with the fi
 no competitor in this space has. The photo-real walk-through is the part people will ask for and
 the part to resist promising until the plain version has proved itself on a real night in a real
 cellar.
+
+
+---
+
+## 237. The user manager: saying at a glance who somebody is, and what they do here (SUPERADMIN — open, mostly doable now)
+
+Ben, 2026-09-12, after item 236: *"more doable than what we have listed as 236 — probably."* He is
+right, and most of it is reading data the site already stores rather than collecting anything new.
+Four threads, deliberately separated because they are worth very different amounts and one of them
+is a **live defect** rather than an enhancement.
+
+**Grounding, checked against the tree the day this was written.** `SignInEvent` already records
+`AppUserId`, `Utc`, `Succeeded` and `Method` (`password`, `apple`, `handoff`, …). `UserEmail`
+already has `IsValidated`, `ValidationToken` and `DateValidated`. `/admin/users` is
+`Ben.Web.Website.Library/User/AdminUsers.razor`, a Telerik grid whose Actions column uses
+`<BenIcon Name="eye" />`. `ApexChart.razor` already themes charts to the site. So threads A, B and D
+below are mostly wiring; thread C is the only one that needs anything built from nothing.
+
+---
+
+### A. The defect first: an email set primary and public without ever being verified
+
+Ben: *"I just updated my account in the profile by adding a new e-mail. I set it as primary and
+public. Shouldn't we verify that?"*
+
+**Yes, and the columns to do it already exist and are not being used.** `UserEmail.IsValidated`,
+`ValidationToken` and `DateValidated` are on the table; the add-an-email flow writes none of them.
+So today somebody can put any address on their public profile, and make it primary, with no proof
+they can read it. That is worse than untidy:
+
+- A **public** address nobody proved they own can be used to impersonate somebody, or to put a
+  stranger's real address on a page they never asked to appear on.
+- A **primary** address is where the site writes. An unverified one silently redirects a person's
+  own mail — including anything the account recovery path ever sends there.
+
+This is the same rule the site already keeps everywhere else: *say-so before it is seen*, and the
+provider-verified-address rule in `ExternalSignInService` exists precisely because an unverified
+claim on an address is not proof of holding it.
+
+**What to build.** Adding an address sends a confirmation to it and the row stays `IsValidated =
+false` until the link is followed. Unverified means: **may not be primary, may not be public**, and
+says so on the form rather than accepting and quietly ignoring the ticks. A resend button beside it,
+because a confirmation that never arrives is the commonest failure and the profile already offers
+resend for the account address. Existing rows are grandfathered as-is rather than mass-invalidated —
+telling everybody their address is suddenly unverified would be a support day for a problem nobody
+has yet — but a row that has never been validated cannot become primary or public from now on.
+
+**Then the tick.** A small check beside a verified address with a *Verified email* tooltip, and the
+same treatment wherever a fact about an account is proved rather than asserted: two-factor on,
+Apple or Microsoft linked, phone verified. One shared component, because four screens inventing four
+ticks is how they end up meaning four different things.
+
+### A2. The profile did not say it had saved
+
+Ben: *"when I returned to my profile page, it didn't say that it was updated."* Adding an email
+succeeded and the screen said nothing. Whatever the enhancements below come to, **a save that
+reports nothing is the bug**: the person cannot tell the difference between "saved" and "silently
+refused", and this codebase has a standing rule that a refusal the UI discards is worse than no
+rule. Fix with the toast the rest of the site uses, naming what changed.
+
+---
+
+### B. Icons that say what somebody is
+
+Ben wants the user manager to show, at a glance: who is paying, who is verified, who is a personal
+account, who owns a ghost tour, who is an employee of one, and so on — with a popover for anybody
+who is several of those at once.
+
+**One correction, and it is small.** The site's icons are `BenIcon`, a sprite of the **Feather** set
+(575 symbols) that replaced `TelerikSvgIcon`; Bootstrap Icons is not loaded and switching sets
+wholesale would restyle every screen. But Ben's actual vocabulary is nearly all there already:
+
+| Ben asked for | Feather has |
+|---|---|
+| `person-fill-add` | `user-plus` |
+| `person-fill-check` | `user-check` |
+| `person-fill-x` | `user-x` |
+| `person-gear` / `person-fill-gear` | **nothing** — the one real gap |
+
+So: use the Feather names for the three that exist, and for `person-gear` add that one Bootstrap
+Icons symbol into our own sprite. The sprite is ours and a symbol is just a `<symbol>` element; one
+borrowed glyph is far cheaper than a second icon set, and it keeps every screen on one component.
+Replacing the eyeball with a person-and-gear on the Actions column is right — *view* is not what
+that button does, it opens the person's management view.
+
+**The badges themselves.** A column of small, consistent marks, each one a fact and not a guess:
+
+| Mark | Means |
+|---|---|
+| Personal account | Not a member of any organization |
+| Group member / manager / owner | Their highest `OrganizationMemberRole` |
+| Ghost tour owner / employee | The above, where the org is `OrganizationKind.GhostWalkingTour` |
+| Event organizer / employee | The same, for `PublicEventProvider` |
+| Venue | `HauntedProperty` |
+| Verified | Account address confirmed, and (per A) that means proved |
+| Paying | An **Active** subscription right now, on their own account or an org they own |
+| Two-factor | On |
+| Apple / Microsoft | An external login is linked |
+
+**Colour carries one meaning only: green is money in.** Ben's instinct — *"when a person is paying
+money currently, maybe we color the icon green vs base"* — is right, and it works precisely because
+nothing else is coloured. The moment a second thing is green the column stops answering the question
+it exists for. Everything else is the base weight.
+
+**The popover is the deliverable, not the badges.** Most people are one thing; some are five, and a
+row cannot show five without becoming unreadable. So a reusable component in the library — Ben asked
+for it in the library and that is right, because the same "who is this person, everywhere" answer is
+wanted on the org member list, on a case's contacts and on a booking's lead guest. It lists every
+position: the organization, the role, whether they own it, whether they are staff, whether they are
+merely an attendee, and since when. One query behind it, one component in front of it.
+
+**Look.** Ben: *"the site should pop and sizzle."* The floor is the tour page; the badges are small,
+quiet and consistent, and the popover is where the richness goes. A grid row that sizzles is a grid
+row nobody can scan.
+
+---
+
+### C. What we can honestly say about where people spend their time
+
+Ben: *"are we able to determine how long they were on the site and where they spent most of their
+time? If they looked at any ads, groups, events, tours, etc and how many times which ones."*
+
+**Partly, and the honest answer differs sharply by question.**
+
+| Question | Can we answer it today? |
+|---|---|
+| How many times somebody signed in, and when they last did | **Yes, now.** `SignInEvent` has every row already. This is a query, not a feature. |
+| Which method they used — password, Apple, Microsoft | **Yes, now.** `Method` is on the same row. |
+| Which pages they opened, and how often | **Not today.** Nothing records a page view. Adding it is ordinary work: one row per view, or a rolled-up counter per person per surface per day. |
+| How long they were on the site | **Only ever an estimate.** A browser does not tell a server when somebody wanders off; the usual trick is the gap between requests with a session cut-off, and it is wrong for anybody who reads one long page. Report it as "active minutes" with the definition written on the screen, or not at all. |
+| Which ads, groups, events and tours they looked at, and how many times | **Not today, and this is the one with a cost.** It means recording, per person, what they read — which is a different kind of data from anything the site currently keeps about members, let alone about signed-out visitors. |
+
+**The privacy line, and it should be drawn before anything is built.** This site's whole posture is
+that it holds less than it could: pseudonyms on public case pages, two keys before a member's photo
+reaches a client, addresses withheld for private residences. A per-person reading history is the
+first thing that would cut against that, and it would sit in the same database as people's home
+addresses.
+
+The recommendation is therefore: **count, do not follow.** Aggregate counters — how many views this
+tour had, what hour of day sign-ins cluster in, how the sections compare — answer every question Ben
+actually named as a reason (*"it is just to determine where to focus development time"*) and none of
+them need a per-person trail. Where a per-person number is genuinely wanted, keep it to the ones
+already kept for another reason: their own bookings, their own sessions, their own sign-ins.
+
+If a per-person trail is later wanted anyway, it needs: a retention window, a line in `/privacy`, an
+exclusion for signed-out visitors, and it must be in what an account deletion removes.
+
+### D. Charts on the manage-user page
+
+Ben wants cards above or below the grid: when people sign in, where they spend time, how the
+sections compare — group, iPhone, iPad, organization event, ghost tour, ads, maps.
+
+**`ApexChart.razor` already exists and already themes to the site**, including re-reading the
+palette when the theme changes, so a chart is a component call rather than a project. And
+`AdminStatsController` already answers the dashboard's numbers, which is where these belong beside.
+
+Buildable **immediately**, from `SignInEvent` alone:
+
+- Sign-ins by hour of day, averaged — the "when do people actually turn up" chart, which is the one
+  Ben named first and the one that tells a deployment window.
+- Sign-ins by day, with failures alongside successes; a spike in failures is an incident.
+- Method split — password against Apple against Microsoft — which is the number that says whether
+  Sign in with Apple was worth the fortnight it cost.
+- New accounts by week, against sign-ins, which is retention in the only form we can currently prove.
+
+Buildable **after C's counters exist**: section comparison, per-surface time, ad and tour view
+counts. Not before, and the cards should not be drawn with placeholder data in the meantime — a
+chart of nothing looks like a chart of zero.
+
+---
+
+### Suggested order
+
+| Slice | Why it goes here |
+|---|---|
+| **1. Verify a new email; refuse primary and public until it is** | It is the defect, and it is small |
+| **2. The saved-toast on the profile** | Same screen, same afternoon |
+| **3. Verified ticks, one shared component** | Reads what slice 1 now writes |
+| **4. The badge column and the positions popover** | The visible half, and the popover is reusable straight away |
+| **5. Sign-in charts on `/admin/users`** | Pure query over data already held |
+| **6. Aggregate view counters** | Needs the privacy decision first |
+| **7. Per-surface time, if still wanted** | Needs 6, and an honest definition of "time" |
+
+Slices 1 to 5 are all reading or writing things the schema already has. Slice 6 is the first one
+that changes what the site knows about people, and it should be a separate decision with its own
+sentence in `/privacy`.

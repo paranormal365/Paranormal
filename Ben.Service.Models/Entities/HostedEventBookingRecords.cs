@@ -61,7 +61,38 @@ public sealed record HostedEventBookingRecord(
     string? DecisionNote,
     DateTime? GuestAcknowledgedUtc,
     string? Note,
+    /// <summary>Set when the guest has asked to get out of a booking the venue confirmed.</summary>
+    DateTime? CancellationRequestedUtc,
+    string? CancellationReason,
     DateTime DateCreated,
+    IReadOnlyList<HostedEventBookingNightRecord> Nights,
+    IReadOnlyList<HostedEventBookingGuestRecord> Guests);
+
+/// <summary>
+/// A guest's own booking, as their own screen and the phone read it.
+/// </summary>
+/// <remarks>
+/// Deliberately not the host's record. It carries no other party's details, no decision-maker's
+/// name and no dietary note but their own party's: a guest's screen is not a window into the
+/// venue's book.
+/// </remarks>
+public sealed record MyHostedEventBookingRecord(
+    Guid Id,
+    Guid HostedEventId,
+    string EventName,
+    string? EventUrlName,
+    string? OrganizationName,
+    string? OrganizationUrlName,
+    string? VenueName,
+    DateTime StartsOn,
+    DateTime EndsOn,
+    int PartySize,
+    HostedEventBookingKind Kind,
+    HostedEventBookingStatus Status,
+    string? DecisionNote,
+    DateTime? GuestAcknowledgedUtc,
+    DateTime? CancellationRequestedUtc,
+    string? Note,
     IReadOnlyList<HostedEventBookingNightRecord> Nights,
     IReadOnlyList<HostedEventBookingGuestRecord> Guests);
 
