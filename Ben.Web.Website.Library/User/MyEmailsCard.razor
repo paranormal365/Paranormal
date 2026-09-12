@@ -63,14 +63,14 @@
                                 {
                                     <span class="badge bg-primary ms-1">Primary</span>
                                 }
-                                @if (row.IsValidated)
-                                {
-                                    <span class="badge bg-success ms-1">Confirmed</span>
-                                }
-                                else
-                                {
-                                    <span class="badge bg-warning text-dark ms-1">Not confirmed</span>
-                                }
+                                @* One mark, shared with the profile hero, the admin grid and the
+                                   two-factor panel — see BenProven for why these stopped being
+                                   four different pills. *@
+                                <BenProven Chip="true" Class="ms-1"
+                                           Label="Confirmed"
+                                           Proved="@row.IsValidated"
+                                           On="@row.DateValidated"
+                                           Unproved="Use Send confirmation link, then open the link we email you." />
                                 @if (row.IsPublic)
                                 {
                                     <span class="badge bg-info text-dark ms-1">Public</span>

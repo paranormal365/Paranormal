@@ -73,7 +73,11 @@
                     @{ var u = (AppUserRecord)context; }
                     @if (u.IsEmailConfirmed)
                     {
-                        <BenIcon Name="check" Class="text-success" />
+                        @* The same mark the person sees on their own profile, so an administrator
+                           and the account holder are never looking at two different vocabularies. *@
+                        <BenProven Label="Confirmed" ShowLabel="false"
+                                   Proved="true"
+                                   On="@u.DateEmailConfirmed" />
                         @if (u.DateEmailConfirmed is { } confirmed)
                         {
                             <span class="text-secondary small ms-1">
