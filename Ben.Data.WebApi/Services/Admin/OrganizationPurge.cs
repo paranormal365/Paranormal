@@ -368,6 +368,11 @@ public sealed class OrganizationPurge
             // first would be refused by these same rows (item 235 phase 2).
             // Dining seats (phase 13) point at a table and a booking with NoAction; they cascade only from their
             // sitting, so they go first and the tables and bookings can follow.
+            // Letters to the guests (phase 17a) point at a night with NoAction and a sender with NoAction; they
+            // cascade only from their event, so they go before the nights and the people.
+            await db.HostedEventAnnouncements
+                .Where(x => x.HostedEvent.OrganizationId == organizationId)
+                .ExecuteDeleteAsync(ct);
             await db.HostedEventDiningSeats
                 .Where(x => x.HostedEventDiningTable.HostedEvent.OrganizationId == organizationId
                          || x.HostedEventBooking.HostedEvent.OrganizationId == organizationId)

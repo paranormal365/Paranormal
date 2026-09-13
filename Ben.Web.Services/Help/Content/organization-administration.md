@@ -848,8 +848,18 @@ dropping the room would leave them sleeping in one your event says it is not usi
 
 The **plan** is where the rooms — or the seats, for an event sold by the seat — are drawn out so
 everybody can see what is where. It has a page of its own, listed as *Plan* down the side of the
-event page. The **board**, where requests wait for your decision, is being built now; the index
-lists it and will link to it the day it arrives.
+event page. The **board**, where requests wait for your decision, is *Bookings* in the same list.
+
+### Getting in and getting around
+
+**Access and what to know** on the event page is where you say what a guest needs to know before they
+come: *no lift — the bedrooms are up one flight*, *the ballroom is step-free from the side door*,
+*some of the hunt is in low light*, *a hearing loop in the bar*, where to park. It shows on the
+public event page under *Getting in and getting around*, in the iPhone app's page for the event, and
+in every confirmation letter, just before the pass.
+
+Say what is true of the building rather than what you think somebody can manage. A guest who uses a
+wheelchair decides for themselves whether a flight of stairs to the bedrooms is a problem.
 
 ### Before you publish
 
@@ -929,6 +939,18 @@ somebody standing at a desk asking whether the Blue Room is free.
 **The house** below shows one night at a time, with the night's own buttons at the top. A square
 that is settled is solid, one somebody is still holding is hatched, and one you have held back is
 marked as not on offer. Under it is how many are coming for the day on that night.
+
+### At a glance
+
+Once an event is published, its page opens with **At a glance**: how many people are coming and in
+how many parties, how many are waiting on you, places left, day passes, who has come through the
+door, and the reviews. Each number opens the screen that explains it.
+
+**Places are counted night by night.** A room on a two-night plan is two places to sell, and a party
+in it for both nights has taken both. A place somebody is holding counts as taken, as it does on the
+plan, and a place you have held back is not counted as for sale.
+
+When the event has a minimum number, the card says how far past it you are or how many short.
 
 ### Deciding about one party
 
@@ -1655,6 +1677,26 @@ gets a row of its own there.
 
 It always says the colour's name as well as showing it, because about one man in twelve cannot tell
 red from green.
+
+### Writing to your guests
+
+**Write to your guests**, at the bottom of the booking board, sends one letter to everybody with a
+place: *the car park is closed, use the church lot*, *doors open at eight, not seven*, *bring a coat*.
+It is for what everybody needs to know. Anything about one party belongs on that party.
+
+- **Who it goes to.** Everybody with a confirmed place, or only the people there on one date. A pass
+  for the whole event counts as being there every date. Turn on **Include people you haven't answered
+  yet** to reach people who have asked or are holding places as well.
+- **The count comes first.** As you choose, the card says how many parties and people the letter will
+  reach. Sending takes a second click that repeats the number, because a letter can't be taken back.
+- **How it arrives.** One letter per party, to the person who booked, by email and in their messages
+  on this site. The subject starts with the event's name, and replies go to your group's email address.
+- **What is kept.** Every letter sent stays listed under the card: when, who sent it, to how many, and
+  how many of those went by email.
+
+Only people who may say yes or no to bookings can write to guests. An unpublished or called-off event
+can't be written to from here, and an event can have **ten letters in a day**. The limit stops a stuck
+button or a bad morning turning into forty emails; put the rest in one letter.
 
 ### After the event: the next one, and the list of who came
 

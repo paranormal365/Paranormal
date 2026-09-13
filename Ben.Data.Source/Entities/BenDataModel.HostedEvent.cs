@@ -215,6 +215,16 @@ namespace Ben.Data.Source.Entities
         public string? ContactLine { get; set; }
 
         /// <summary>
+        /// What somebody needs to know to get in and get around (item 235 phase 17a, audit finding A7).
+        /// </summary>
+        /// <remarks>
+        /// Stairs only to the ballroom, low lighting all night, a hearing loop in the bar, parking behind the hotel. Shown
+        /// on the event's page and in the confirmation letter, because the person it matters to has to know before they
+        /// book, and again before they travel.
+        /// </remarks>
+        public string? AccessNotes { get; set; }
+
+        /// <summary>
         /// How a guest gets a place on this event: they pick one, or they ask for one.
         /// </summary>
         public HostedEventBookingMode BookingMode { get; set; } = HostedEventBookingMode.Ask;

@@ -76,6 +76,10 @@ public sealed class EventBookingClientRouteTests
         "/api/public/hosted-events/{eventId}/my-booking/pass/email\"",
         "/api/me/event-booking-alerts\"",
         "/api/me/event-booking-alerts/{orgId}\"",
+        "/api/organizations/{orgId}/events/{eventId}/summary\"",
+        // writing to the guests (GET + POST share the helper)
+        "/api/organizations/{orgId}/events/{eventId}/announcements\"",
+        "/api/organizations/{orgId}/events/{eventId}/announcements/audience?includeUnconfirmed={flag}\"",
     ];
 
     /// <summary>The names the plan gave the doors. The compiler proves they are implemented; this proves they are spelled as planned.</summary>
@@ -104,6 +108,7 @@ public sealed class EventBookingClientRouteTests
         "GetEventStaffAsync", "SaveEventStaffAsync", "ResendEventStaffInviteAsync",
         "RemoveEventStaffAsync", "GetStaffInviteAsync", "AcceptStaffInviteAsync",
         "GetEventBookingAlertSettingsAsync", "SetEventBookingAlertModeAsync",
+        "GetEventSummaryAsync", "GetEventAnnouncementsAsync", "GetEventAnnouncementAudienceAsync", "SendEventAnnouncementAsync",
     ];
 
     private static string Source(string fileName)

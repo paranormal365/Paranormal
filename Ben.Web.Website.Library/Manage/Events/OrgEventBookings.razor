@@ -229,6 +229,9 @@
                     </ul>
                 }
             </div>
+
+            @* ── Writing to everybody (phase 17a) ──────────────────────────── *@
+            <EventAnnouncementCard OrgId="@OrgId" EventId="@EventId" Nights="@(_event?.Nights ?? [])" />
         </ChildContent>
     </BenItemState>
 </div>

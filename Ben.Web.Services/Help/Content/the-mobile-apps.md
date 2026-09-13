@@ -457,7 +457,8 @@ Choosing seats on a plan stays on the website for now; everything you choose the
 
 **The event** on What I'm going to (or **Programme and room** on a confirmed booking) opens everything
 for that event in one place. A row appears only when there is something behind it: no programme yet,
-or menus the venue hasn't shared with you, simply aren't listed.
+or menus the venue hasn't shared with you, simply aren't listed. When the hosts have said how to get in
+and around — stairs, a step-free door, parking, low light — it is under **Getting in and getting around**.
 
 ![The event's own screen: pass, programme, menus, downloads and the room](/help/media/the-mobile-apps/iphone-event-hub.png)
 

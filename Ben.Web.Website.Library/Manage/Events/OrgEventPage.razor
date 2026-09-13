@@ -178,6 +178,12 @@
             </div>
         }
 
+        @* ── At a glance (phase 17a) — once there is anything to count ─── *@
+        @if (ev.LifecycleState is not HostedEventLifecycleState.Draft)
+        {
+            <EventAtAGlanceCard OrgId="@OrgId" EventId="@EventId" />
+        }
+
         <div class="row g-3">
             <div class="col-12 col-lg-3">
                 <div class="list-group sticky-lg-top" style="top:1rem;" id="event-index">
@@ -424,6 +430,17 @@
                                 <div class="form-text">
                                     How guests reach you and settle up. IsHaunted never takes their
                                     money — that is between you and them.
+                                </div>
+                            </div>
+
+                            <div class="col-12">
+                                <label class="form-label" for="event-access">Getting in and getting around</label>
+                                <textarea id="event-access" class="form-control" rows="3" maxlength="2000"
+                                          @bind="_form.AccessNotes"
+                                          placeholder="Stairs only to the ballroom. Low lighting all night. Parking behind the hotel."></textarea>
+                                <div class="form-text">
+                                    Shown on the event's page and in the letter a guest gets when their place is
+                                    confirmed, so anybody it matters to knows before they book and before they travel.
                                 </div>
                             </div>
                         </div>
@@ -962,6 +979,7 @@
         public decimal? DayPassPrice { get; set; }
         public DateTime? BookingsCloseOn { get; set; }
         public string? ContactLine { get; set; }
+        public string? AccessNotes { get; set; }
         public int HoldMinutes { get; set; } = 2880;
         public HostedEventVenueArrangement VenueArrangement { get; set; }
         public string? VenueContactName { get; set; }
@@ -1152,6 +1170,7 @@
         _form.DayPassPrice = ev.DayPassPrice;
         _form.BookingsCloseOn = DayIn(ev.BookingsCloseAtUtc);
         _form.ContactLine = ev.ContactLine;
+        _form.AccessNotes = ev.AccessNotes;
         _form.HoldMinutes = ev.HoldMinutes;
         _form.VenueArrangement = ev.VenueArrangement;
         _form.VenueContactName = ev.VenueContactName;
@@ -1242,6 +1261,7 @@
             DayPassCapacity: _form.DayPassCapacity,
             DayPassPrice: _form.DayPassPrice,
             ContactLine: _form.ContactLine,
+            AccessNotes: _form.AccessNotes,
             CollectsEvidence: _form.CollectsEvidence,
             // Days typed on a form, stored as instants. A deadline is the END of that day on the
             // venue's own clock; a record of when somebody agreed is the middle of it, so that

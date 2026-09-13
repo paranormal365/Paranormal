@@ -136,6 +136,29 @@ public interface IBenEventBookingClient
     Task<(HostedEventBookingBoardRecord? Result, string? Error)> ReleaseLapsedHoldsAsync(
         Guid orgId, Guid eventId, CancellationToken token = default);
 
+    // ── at a glance (phase 17a) ──────────────────────────────────────────────
+
+    /// <summary>The host's numbers for one event: who asked, who is coming, what is left, who came, the reviews.</summary>
+    Task<ItemResult<HostedEventSummaryRecord>> GetEventSummaryAsync(
+        Guid orgId, Guid eventId, CancellationToken token = default);
+
+    // ── writing to the guests (phase 17a) ────────────────────────────────────
+
+    /// <summary>Everything the hosts have written to this event's guests, newest first.</summary>
+    Task<ItemResult<HostedEventAnnouncementsRecord>> GetEventAnnouncementsAsync(
+        Guid orgId, Guid eventId, CancellationToken token = default);
+
+    /// <summary>How many parties and people a letter with these choices would reach, before it goes.</summary>
+    Task<ItemResult<HostedEventAnnouncementAudienceRecord>> GetEventAnnouncementAudienceAsync(
+        Guid orgId, Guid eventId, Guid? night, bool includeUnconfirmed, CancellationToken token = default);
+
+    /// <summary>
+    /// Writes to everybody with a place — by email where the site has mail, and in their messages here either way.
+    /// </summary>
+    /// <remarks>The refusal comes back in words: an unpublished event, a called-off one, ten letters in a day.</remarks>
+    Task<(HostedEventAnnouncementsRecord? Result, string? Error)> SendEventAnnouncementAsync(
+        Guid orgId, Guid eventId, SendHostedEventAnnouncementRequest request, CancellationToken token = default);
+
     // ── the kitchen ──────────────────────────────────────────────────────────
 
     /// <summary>

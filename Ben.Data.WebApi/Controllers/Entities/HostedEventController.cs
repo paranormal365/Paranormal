@@ -158,6 +158,7 @@ public sealed class HostedEventController : OrgCmsControllerBase
             MinimumGuests = request.MinimumGuests,
             GoNoGoDeadlineUtc = request.GoNoGoDeadlineUtc,
             ContactLine = Trimmed(request.ContactLine),
+            AccessNotes = Trimmed(request.AccessNotes),
             CoverUploadFileId = request.CoverUploadFileId,
             MailSubjectTemplate = Trimmed(request.MailSubjectTemplate),
             MailBodyTemplate = Clean(request.MailBodyTemplate),
@@ -226,6 +227,7 @@ public sealed class HostedEventController : OrgCmsControllerBase
         // holds into nothing, or their asks into places they never picked. It has its own endpoint
         // with its own refusal.
         hosted.ContactLine = Trimmed(request.ContactLine);
+        hosted.AccessNotes = Trimmed(request.AccessNotes);
         hosted.CoverUploadFileId = request.CoverUploadFileId;
         hosted.MailSubjectTemplate = Trimmed(request.MailSubjectTemplate);
         hosted.MailBodyTemplate = Clean(request.MailBodyTemplate);
@@ -1290,6 +1292,9 @@ public sealed class HostedEventController : OrgCmsControllerBase
             return "That venue is a private residence, so an event cannot be held there publicly. "
                  + "Events are for venues, landmarks and businesses.";
 
+        if (request.AccessNotes is { Length: > 2000 })
+            return "Keep what guests need to know about getting in and around under 2,000 characters.";
+
         if (request.DayPassCapacity is < 0)
             return "A number of day passes cannot be negative. Leave it empty for no limit, "
                  + "or zero for none at all.";
@@ -1385,6 +1390,9 @@ public sealed class HostedEventController : OrgCmsControllerBase
 
         foreach (var gone in existing.Where(n => !wanted.Contains(n.Date.Date)))
         {
+            // A letter sent to the people there that night stays in the history, addressed to the whole event now.
+            foreach (var letter in await db.HostedEventAnnouncements.Where(a => a.HostedEventNightId == gone.Id).ToListAsync(ct))
+                letter.HostedEventNightId = null;
             db.HostedEventNights.Remove(gone);
             hosted.Nights.Remove(gone);
         }
@@ -1463,7 +1471,8 @@ public sealed class HostedEventController : OrgCmsControllerBase
             GoNoGoDecision: r.Event.GoNoGoDecision,
             GoNoGoDecidedUtc: r.Event.GoNoGoDecidedUtc,
             LiveAtUtc: r.Event.LiveAtUtc,
-            EndedAtUtc: r.Event.EndedAtUtc))];
+            EndedAtUtc: r.Event.EndedAtUtc,
+            AccessNotes: r.Event.AccessNotes))];
     }
 
     internal static HostedEventNightRecord ToNight(HostedEventNight night, HostedEvent hosted)

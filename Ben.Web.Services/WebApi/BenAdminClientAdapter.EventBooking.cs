@@ -104,6 +104,31 @@ public sealed partial class BenAdminClientAdapter
                $"/api/organizations/{orgId}/events/{eventId}/bookings/holds/release-lapsed",
                new { }, token);
 
+    public Task<ItemResult<HostedEventSummaryRecord>> GetEventSummaryAsync(
+        Guid orgId, Guid eventId, CancellationToken token = default)
+        => _api.GetItemAsync<HostedEventSummaryRecord>($"/api/organizations/{orgId}/events/{eventId}/summary", token);
+
+    public Task<ItemResult<HostedEventAnnouncementsRecord>> GetEventAnnouncementsAsync(
+        Guid orgId, Guid eventId, CancellationToken token = default)
+        => _api.GetItemAsync<HostedEventAnnouncementsRecord>(AnnouncementsUrl(orgId, eventId), token);
+
+    public Task<ItemResult<HostedEventAnnouncementAudienceRecord>> GetEventAnnouncementAudienceAsync(
+        Guid orgId, Guid eventId, Guid? night, bool includeUnconfirmed, CancellationToken token = default)
+    {
+        var flag = includeUnconfirmed ? "true" : "false";
+        var oneNight = night is { } id ? $"&night={id}" : "";
+        return _api.GetItemAsync<HostedEventAnnouncementAudienceRecord>(
+            $"/api/organizations/{orgId}/events/{eventId}/announcements/audience?includeUnconfirmed={flag}" + oneNight, token);
+    }
+
+    public Task<(HostedEventAnnouncementsRecord? Result, string? Error)> SendEventAnnouncementAsync(
+        Guid orgId, Guid eventId, SendHostedEventAnnouncementRequest request, CancellationToken token = default)
+        => _api.SendExpectingReasonAsync<SendHostedEventAnnouncementRequest, HostedEventAnnouncementsRecord>(
+               HttpMethod.Post, AnnouncementsUrl(orgId, eventId), request, token);
+
+    private static string AnnouncementsUrl(Guid orgId, Guid eventId)
+        => $"/api/organizations/{orgId}/events/{eventId}/announcements";
+
     public Task<ItemResult<HostedEventDietaryRecord>> GetEventDietaryAsync(
         Guid orgId, Guid eventId, bool includeUnconfirmed, Guid? night = null,
         CancellationToken token = default)

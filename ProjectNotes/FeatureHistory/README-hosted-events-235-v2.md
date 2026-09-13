@@ -1506,6 +1506,36 @@ Sub-phases, in this order, because each feeds the next:
     event hosts.
 - **17f — Help and changelog sweep**, then the full suites, then merge readiness for Ben.
 
+#### 17a as built (2026-09-13)
+
+The audit and its findings table are in `README-hosted-events-235-audit.md`. Fixed or built in 17a, each with a
+test that failed when the rule was broken:
+
+- **A1:** unit tests for the nine endpoints no test reached.
+- **A2:** the hosted booking rate limit on eight public writes, with a guard.
+- **A3:** audit rows for lifecycle changes, booking decisions, passes and venue withdrawal.
+- **A4:** *Write to your guests*:
+  - migration `HostedEventAnnouncementsAndAccess` adds the `HostedEventAnnouncements` table;
+  - three endpoints, and a card on the booking board;
+  - email plus site message, ten a day per event.
+- **A5:** *At a glance*, from `GET …/summary`.
+- **A6:** social cards with pictures on event and venue pages.
+- **A7:** access notes on the event, public page, confirmation letter and iPhone hub. They are seeded on
+  both demo events.
+- **A8, A9, A14:** tidy-ups.
+
+The migration is applied to `IsHauntedDb_player` and the e2e database. A11 (the first automatic outbox send
+after the app comes forward can stall) and A12 (no hosted iPhone UI test in the normal suite) stay open,
+as recorded in the audit.
+
+Verified by:
+- the full .NET unit suite, 5,658 passed;
+- BenKit, 446 tests;
+- the app build;
+- Playwright `EventBookingBoardTests`, 14 of 14 on the e2e database, including the letter, the at-a-glance
+  card and the public access notes;
+- the iPhone fixtures re-captured from the real API.
+
 ### FUTURE (recorded, not scheduled)
 
 - **Apple Wallet** (decision 14): `eventTicket` pass, serial = pass id, barcode message = the

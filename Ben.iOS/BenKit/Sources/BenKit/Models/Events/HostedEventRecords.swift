@@ -151,6 +151,8 @@ public struct PublicHostedEvent: Sendable, Codable, Equatable, Identifiable {
     public var state: String?
     public var exactAddress: String?
     public var contactLine: String?
+    /// "Stairs only to the ballroom", "hearing loop in the bar" — what to know about getting in and around (phase 17a).
+    public var accessNotes: String?
     public var isCancelled: Bool
     public var bookingMode: HostedEventBookingMode
     public var isTakingBookings: Bool

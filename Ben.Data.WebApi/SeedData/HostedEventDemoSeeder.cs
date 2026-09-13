@@ -87,6 +87,29 @@ internal static class HostedEventDemoSeeder
         await SeedWhatIsServedAsync(db, owner.Id, now);
         await SeedAPartyTheKitchenMustWorkAroundAsync(db, userManager, config, owner.Id, now);
         await SeedTheProgrammeAsync(db, owner.Id, now);
+        await SeedHowToGetInAsync(db);
+    }
+
+    /// <summary>
+    /// What a guest needs to know about getting in and around (phase 17a) — added to events seeded before the field
+    /// existed, and never over what somebody has since written.
+    /// </summary>
+    private static async Task SeedHowToGetInAsync(BenDataContext db)
+    {
+        var notes = new Dictionary<Guid, string>
+        {
+            [RoomsEventId] =
+                "The hotel has no lift: the bedrooms are up one flight of stairs, and the ballroom and bar are on the "
+                + "ground floor.\nSome of the hunt is in low light. Park on the street or in the lot behind the hotel.",
+            [SeatsEventId] =
+                "The ballroom is step-free from the side door on Main Street. Seats in row A have the most leg room; "
+                + "tell us when you book if you need one.",
+        };
+
+        var events = await db.HostedEvents.Where(e => notes.Keys.Contains(e.Id) && e.AccessNotes == null).ToListAsync();
+        if (events.Count == 0) return;
+        foreach (var ev in events) ev.AccessNotes = notes[ev.Id];
+        await db.SaveChangesAsync();
     }
 
     /// <summary>

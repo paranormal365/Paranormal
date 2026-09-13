@@ -61,6 +61,32 @@ public sealed class EventGuestMailerTests
     }
 
     [Fact]
+    public async Task A_confirmation_says_how_to_get_in_and_around_before_the_pass()
+    {
+        // Audit finding A7: stairs, lighting and parking are planned around before somebody travels.
+        await using var sqlite = await SqliteTestDb.CreateAsync();
+        var seeded = await SeedAsync(sqlite);
+        await using (var db = await sqlite.NewContextAsync())
+        {
+            var ev = await db.HostedEvents.SingleAsync(e => e.Id == EventId);
+            ev.AccessNotes = "Stairs only to the ballroom.\nParking <behind> the hotel.";
+            await db.SaveChangesAsync();
+        }
+        var bookingId = await BookAsync(sqlite, HostedEventBookingStatus.Confirmed, seeded);
+        await IssuePassAsync(sqlite, bookingId);
+
+        var (sent, mailer) = Mailer();
+        await using (var db = await sqlite.NewContextAsync())
+            await mailer.SendDecisionAsync(db, bookingId, default);
+
+        var body = Assert.Single(sent).HtmlBody;
+        Assert.Contains("Getting in and getting around", body);
+        Assert.Contains("Stairs only to the ballroom.<br />Parking &lt;behind&gt; the hotel.", body);
+        Assert.True(body.IndexOf("Getting in and getting around", StringComparison.Ordinal)
+                  < body.IndexOf("Show this at the door", StringComparison.Ordinal));
+    }
+
+    [Fact]
     public async Task A_confirmation_says_the_nights_and_the_rooms_in_words()
     {
         // A door with a flat battery, or a camera that will not focus in the dark, still has to be

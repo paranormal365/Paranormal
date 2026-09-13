@@ -355,6 +355,7 @@ public sealed class PublicHostedEventController : BenControllerBase
             r.Event.DayPassPrice,
             r.Event.MinimumGuests,
             r.Event.GoNoGoDeadlineUtc,
-            r.Event.GoNoGoDecision);
+            r.Event.GoNoGoDecision,
+            AccessNotes: r.Event.AccessNotes);
     }
 }

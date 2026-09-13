@@ -1,0 +1,40 @@
+.glance-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(9.5rem, 1fr));
+    gap: .75rem;
+}
+
+.glance-tile {
+    display: block;
+    padding: .75rem;
+    border: 1px solid var(--bs-border-color);
+    border-radius: .5rem;
+    color: inherit;
+    text-decoration: none;
+}
+
+.glance-tile:hover,
+.glance-tile:focus-visible {
+    border-color: var(--bs-primary);
+}
+
+.glance-tile--attention {
+    border-color: var(--bs-warning);
+}
+
+.glance-number {
+    font-size: 1.75rem;
+    font-weight: 600;
+    line-height: 1.1;
+}
+
+.glance-label {
+    font-size: .8125rem;
+    color: var(--bs-secondary-color);
+}
+
+::deep .glance-star {
+    font-size: 1rem;
+    color: var(--bs-warning);
+    vertical-align: middle;
+}

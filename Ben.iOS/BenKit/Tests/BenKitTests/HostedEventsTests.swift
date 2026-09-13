@@ -59,6 +59,7 @@ struct HostedEventsTests {
         #expect(hosted.isTakingBookings)
         #expect(hosted.pagePath == "o/paranormal365/events/thomas-house-seance-weekend")
         #expect(hosted.dayPassPrice == Decimal(45))
+        #expect(hosted.accessNotes?.contains("no lift") == true)
     }
 
     @Test func anOrdinaryDateHasNoHostedEvent() throws {

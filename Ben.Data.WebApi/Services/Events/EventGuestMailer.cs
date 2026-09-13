@@ -150,6 +150,10 @@ public sealed class EventGuestMailer
         if (Trimmed(booking.DecisionNote) is { } note)
             body.Append($"<p>From the venue: {Safe(note)}</p>");
 
+        // Before the pass, because it is what somebody plans the journey around (audit finding A7).
+        if (Trimmed(ev?.AccessNotes) is { } access)
+            body.Append($"<p><strong>Getting in and getting around:</strong> {Safe(access).Replace("\n", "<br />")}</p>");
+
         if (pass is not null)
         {
             var url = _site.AbsoluteUrl(
@@ -909,6 +913,40 @@ public sealed class EventGuestMailer
                 $"<p><strong>{Safe(session.Title)}</strong> at {Safe(session.HostedEvent.Name)} has moved. "
                 + $"It is now {Safe(when)}.</p><p>You still have your place.</p>"),
             ct);
+
+    /// <summary>
+    /// A host's letter to the people coming (phase 17a, audit finding A4). One letter per party's lead; returns how many
+    /// left. The words are the host's, escaped and with their line breaks kept; the footer says why the guest got it.
+    /// </summary>
+    public async Task<int> SendAnnouncementAsync(
+        Source.Entities.HostedEvent ev, string organizationName, string? replyTo, string subject, string text,
+        IReadOnlyList<HostedEventAnnouncements.Recipient> recipients, CancellationToken ct)
+    {
+        if (!_email.IsConfigured) return 0;
+
+        var page = _site.AbsoluteUrl($"/o/{ev.Organization?.UrlName}/events/{ev.UrlName}");
+        var sent = 0;
+        foreach (var recipient in recipients)
+        {
+            if (recipient.Email is not { Length: > 0 } to) continue;
+            var greeting = recipient.Name is { Length: > 0 } name ? $"<p>Hello {Safe(name)},</p>" : "<p>Hello,</p>";
+            var body = greeting
+                     + $"<p>{Safe(text.Trim()).Replace("\n", "<br />")}</p>"
+                     + $"<p>— {Safe(organizationName)}</p>"
+                     + $"<p style=\"color:#666;font-size:13px\">You're getting this because you have a place at "
+                     + $"<a href=\"{page}\">{Safe(ev.Name)}</a>. Reply to write back to {Safe(organizationName)}.</p>";
+            try
+            {
+                await _email.SendAsync(new EmailMessage(to, $"{ev.Name}: {subject.Trim()}", body, ReplyTo: replyTo), ct);
+                sent++;
+            }
+            catch (Exception e) when (e is not OperationCanceledException)
+            {
+                _log.LogWarning(e, "Could not send an announcement for event {EventId} to {LeadId}.", ev.Id, recipient.LeadAppUserId);
+            }
+        }
+        return sent;
+    }
 
     private async Task<int> SendToSignUpsAsync(
         BenDataContext db, System.Linq.Expressions.Expression<Func<HostedEventSessionSignUp, bool>> which,

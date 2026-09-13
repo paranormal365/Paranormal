@@ -96,6 +96,30 @@ Severity: **High** — wrong or unsafe behaviour. **Medium** — a gap a host wi
   cancel, uncancel, archive, restore, go/no-go, confirm, turn down, release, pass withdrawal, pass reissue and the
   venue's withdrawal. `Publishing_and_calling_an_event_off_are_written_to_the_audit_log` failed when cancel went
   back to a plain save.
+- **A4** — *Write to your guests*:
+  - a new table records each letter (subject, body, optional night, whether unconfirmed parties were included,
+    the recipient and emailed counts, who sent it);
+  - `HostedEventAnnouncementController` has the history, the audience count and send, all behind
+    `CanDecideBookingsAsync`;
+  - one letter per party lead, by email through `EventGuestMailer.SendAnnouncementAsync` (event name in the
+    subject, the group's address as reply-to, escaped body) and by site message;
+  - refused in words for an empty or long subject or body, an unpublished or called-off event, a date of
+    another event, nobody to write to, and a tenth letter in a day;
+  - the card sits at the foot of the booking board, shows the count as choices change, and needs a second click.
+
+  `HostedEventAnnouncementTests` (9) failed when the confirmed-only rule was dropped (4 failures) and when the
+  night filter was dropped (4 failures). Playwright: the board test sends a letter through the card, and
+  accepts the day-limit refusal in words when a shared database has already reached it.
+- **A5** — `HostedEventSummary` and `GET …/summary` behind `CanReadBookingsAsync`, with the *At a glance* card
+  on a published event's page. Places are counted night by night, holds count as taken, and a unit blocked
+  every night is not also taken away for a named night. `HostedEventSummaryTests` (2) failed when the block
+  was counted twice and when holds stopped counting. Playwright checks the card and its link to the board.
+- **A7** — `HostedEvent.AccessNotes` (2,000 characters) is on the organizer's event page and the public event
+  page under *Getting in and getting around*. It also goes in the confirmation letter before the pass
+  (`A_confirmation_says_how_to_get_in_and_around_before_the_pass`) and in the iPhone app's event hub. The
+  demo seeder fills it on both seeded events where it is empty, and Playwright reads it on the public page.
+- **Also fixed while writing help:** the *Rooms and bookings* help still said the booking board "is being built
+  now".
 - **A6** — `SocialCard` makes a site path absolute. The event page's card uses the first gallery picture; the venue
   page has a card with its first kept photo and a one-line summary. The Playwright gallery test reads the
   prerendered HTML for `og:image` and `summary_large_image`.

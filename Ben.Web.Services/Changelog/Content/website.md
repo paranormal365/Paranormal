@@ -18,6 +18,15 @@ day-by-day account of building it would say nothing to anyone using it now.
 
 ## 2026-09-13
 
+- Organizers can write to everybody with a place at an event from the booking board: everyone confirmed,
+  only the people there on one date, or people still waiting as well. The card shows how many parties
+  the letter will reach before it goes, and keeps a list of every letter sent.
+- A published event's page opens with its numbers at a glance: people coming, parties waiting for an
+  answer, places left night by night, day passes, arrivals at the door and the reviews.
+- Events can say how to get in and around, such as stairs, step-free doors, low light or parking. It
+  shows on the public event page, in the iPhone app and in the confirmation letter.
+- Sharing an event or a venue page on social media now shows its picture.
+
 - My events lists each event once, however many times you asked for a place at it, showing the booking
   that is live or the most recent one.
 

@@ -126,6 +126,7 @@ namespace Ben.Data.Source.Context
         public virtual DbSet<HostedEventStaff> HostedEventStaff { get; set; }
         public virtual DbSet<HostedEventCheckIn> HostedEventCheckIns { get; set; }
         public virtual DbSet<HostedEventWalkUp> HostedEventWalkUps { get; set; }
+        public virtual DbSet<HostedEventAnnouncement> HostedEventAnnouncements { get; set; }
         public virtual DbSet<HostedEventBand> HostedEventBands { get; set; }
         public virtual DbSet<EventBookingAlertPreference> EventBookingAlertPreferences { get; set; }
         public virtual DbSet<EventBookingAlertState> EventBookingAlertStates { get; set; }
@@ -780,6 +781,8 @@ namespace Ben.Data.Source.Context
             modelBuilder.Entity<HostedEvent>()
                 .Property(e => e.ContactLine).HasMaxLength(500);
             modelBuilder.Entity<HostedEvent>()
+                .Property(e => e.AccessNotes).HasMaxLength(2000);
+            modelBuilder.Entity<HostedEvent>()
                 .Property(e => e.MailSubjectTemplate).HasMaxLength(200);
             modelBuilder.Entity<HostedEvent>()
                 .Property(e => e.CancelledReason).HasMaxLength(500);
@@ -916,6 +919,30 @@ namespace Ben.Data.Source.Context
 
             modelBuilder.Entity<HostedEventWalkUp>()
                 .HasIndex(w => w.HostedEventNightId);
+
+            // ── letters to the guests (phase 17a) ─────────────────────────────
+            //
+            // Cascade from the event only. The night's link is NoAction because nights already cascade from the
+            // same event (one cascade path per table); a night removed from the dates clears its announcements'
+            // link in code, and the event's purge deletes them.
+            modelBuilder.Entity<HostedEventAnnouncement>()
+                .HasOne(a => a.HostedEvent).WithMany()
+                .HasForeignKey(a => a.HostedEventId).OnDelete(DeleteBehavior.Cascade);
+            modelBuilder.Entity<HostedEventAnnouncement>()
+                .HasOne(a => a.HostedEventNight).WithMany()
+                .HasForeignKey(a => a.HostedEventNightId).IsRequired(false).OnDelete(DeleteBehavior.NoAction);
+            modelBuilder.Entity<HostedEventAnnouncement>()
+                .HasOne(a => a.SentByAppUser).WithMany()
+                .HasForeignKey(a => a.SentByAppUserId).OnDelete(DeleteBehavior.NoAction);
+            modelBuilder.Entity<HostedEventAnnouncement>()
+                .HasOne(a => a.CreatedByAppUser).WithMany()
+                .HasForeignKey(a => a.CreatedByAppUserId).OnDelete(DeleteBehavior.NoAction);
+            modelBuilder.Entity<HostedEventAnnouncement>()
+                .HasOne(a => a.UpdatedByAppUser).WithMany()
+                .HasForeignKey(a => a.UpdatedByAppUserId).IsRequired(false).OnDelete(DeleteBehavior.NoAction);
+            modelBuilder.Entity<HostedEventAnnouncement>().Property(a => a.Subject).HasMaxLength(160);
+            modelBuilder.Entity<HostedEventAnnouncement>().Property(a => a.Body).HasMaxLength(4000);
+            modelBuilder.Entity<HostedEventAnnouncement>().HasIndex(a => new { a.HostedEventId, a.SentUtc });
 
             // ── what a party wears (phase 7) ──────────────────────────────────
             //

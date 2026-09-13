@@ -104,7 +104,8 @@ public sealed record HostedEventRecord(
     HostedEventGoNoGo GoNoGoDecision = HostedEventGoNoGo.Undecided,
     DateTime? GoNoGoDecidedUtc = null,
     DateTime? LiveAtUtc = null,
-    DateTime? EndedAtUtc = null);
+    DateTime? EndedAtUtc = null,
+    string? AccessNotes = null);
 
 /// <summary>
 /// A venue being entered as part of the event that happens there (item 235).
@@ -206,7 +207,10 @@ public sealed record UpsertHostedEventRequest(
     int? MinimumGuests = null,
 
     /// <summary>When the organizer has to decide whether it is going ahead.</summary>
-    DateTime? GoNoGoDeadlineUtc = null);
+    DateTime? GoNoGoDeadlineUtc = null,
+
+    /// <summary>Getting in and getting around: stairs, lighting, parking (phase 17a).</summary>
+    string? AccessNotes = null);
 
 /// <summary>Changing one date of an event.</summary>
 public sealed record UpsertHostedEventNightRequest(
@@ -330,7 +334,10 @@ public sealed record PublicHostedEventRecord(
     string? VenueHistory = null,
 
     /// <summary>The host's pictures, in their order (phase 11). Null on a payload from before them.</summary>
-    IReadOnlyList<PublicEventImageRecord>? Gallery = null);
+    IReadOnlyList<PublicEventImageRecord>? Gallery = null,
+
+    /// <summary>Getting in and getting around: stairs, lighting, parking (phase 17a). Additive, so older apps ignore it.</summary>
+    string? AccessNotes = null);
 
 /// <summary>
 /// One thing that has to be true before an event can go live (item 235 phase 3).

@@ -28,6 +28,9 @@ to the part of the page where you choose.
 
 ![An event's page on a phone](/help/media/going-to-an-event/event-page-phone.png)
 
+If the hosts have said how to get in and around — stairs, lifts, parking, low light — it is on the
+page under **Getting in and getting around**, and again in your confirmation letter.
+
 You don't need an account to choose, either — see [Choosing without an account](#choosing-without-an-account).
 
 ## Two ways to get a place
@@ -196,6 +199,9 @@ a copy on the phone so it opens with no signal. See [the mobile apps](/help/the-
   deliberately not the same letter as a refusal.
 - **If the event is called off or reaches its numbers**, everybody with a place or waiting for one
   is written to.
+- **When the hosts need everybody to know something** — the parking has moved, doors open later —
+  they can write to everybody with a place. It comes from the event, in your email and your
+  messages here, and replying reaches the hosts.
 
 If a site has no outgoing mail set up, nothing is sent and everything still works — the pages say
 the same things.

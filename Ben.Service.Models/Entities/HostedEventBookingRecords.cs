@@ -641,3 +641,73 @@ public sealed record EventBookingAlertSettingsRecord(IReadOnlyList<EventBookingA
 
 /// <summary>As it happens, digest only, or nothing — for one group.</summary>
 public sealed record SetEventBookingAlertModeRequest(EventBookingAlertMode Mode);
+
+// ── letters to the guests (item 235 phase 17a, audit finding A4) ──────────────
+
+/// <summary>Writing to the people coming to an event.</summary>
+/// <param name="HostedEventNightId">Only the people there on this date; null for everybody coming.</param>
+/// <param name="IncludeUnconfirmed">Also the people still waiting for an answer.</param>
+public sealed record SendHostedEventAnnouncementRequest(
+    string Subject,
+    string Body,
+    Guid? HostedEventNightId = null,
+    bool IncludeUnconfirmed = false);
+
+/// <summary>Who a letter would reach, before it is sent.</summary>
+public sealed record HostedEventAnnouncementAudienceRecord(int Parties, int People);
+
+/// <summary>One letter the host sent.</summary>
+public sealed record HostedEventAnnouncementRecord(
+    Guid Id,
+    string Subject,
+    string Body,
+    Guid? HostedEventNightId,
+    DateTime? NightDate,
+    bool IncludeUnconfirmed,
+    int Recipients,
+    int Emailed,
+    string SentByName,
+    DateTime SentUtc);
+
+/// <summary>What the host has written to the guests, newest first, and a note about the one just sent.</summary>
+public sealed record HostedEventAnnouncementsRecord(
+    IReadOnlyList<HostedEventAnnouncementRecord> Letters,
+    string? Note = null);
+
+// ── at a glance (item 235 phase 17a, audit finding A5) ─────────────────────────
+
+/// <summary>
+/// The host's numbers for one event on one card: who has asked, who is coming, what is left, who came, and what they
+/// made of it.
+/// </summary>
+/// <param name="Asking">Parties that have asked and have no answer yet.</param>
+/// <param name="Holding">Parties holding places they picked, waiting for the host.</param>
+/// <param name="ConfirmedParties">Parties with a confirmed place.</param>
+/// <param name="ConfirmedPeople">Everybody in those parties.</param>
+/// <param name="NotComing">Turned down, lapsed or cancelled.</param>
+/// <param name="PlacesOffered">Room-nights or seat-nights on the plan, less those held back.</param>
+/// <param name="PlacesTaken">Of those, the ones held or confirmed.</param>
+/// <param name="DayPassCapacity">The day-pass limit, when there is one.</param>
+/// <param name="DayPassPeople">People confirmed on a day pass.</param>
+/// <param name="ArrivedParties">Parties the door has checked in on at least one night.</param>
+/// <param name="WalkUpPeople">People the door let in without a booking.</param>
+/// <param name="ReviewAverage">The visible reviews' average, out of five.</param>
+/// <param name="ReviewCount">How many visible reviews.</param>
+/// <param name="LettersSent">Letters the hosts have written to the guests.</param>
+/// <param name="MinimumGuests">The number the event depends on, when it has one.</param>
+public sealed record HostedEventSummaryRecord(
+    int Asking,
+    int Holding,
+    int ConfirmedParties,
+    int ConfirmedPeople,
+    int NotComing,
+    int PlacesOffered,
+    int PlacesTaken,
+    int? DayPassCapacity,
+    int DayPassPeople,
+    int ArrivedParties,
+    int WalkUpPeople,
+    decimal? ReviewAverage,
+    int ReviewCount,
+    int LettersSent,
+    int? MinimumGuests);

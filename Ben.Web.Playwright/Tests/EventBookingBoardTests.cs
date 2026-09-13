@@ -286,4 +286,66 @@ public class EventBookingBoardTests : BenTestBase
         Assert.That(box!.Height, Is.GreaterThanOrEqualTo(43.5f),
             "the button that decides somebody's weekend is too small to press safely");
     }
+    // ── writing to everybody, and the numbers (phase 17a) ────────────────────
+
+    [Test]
+    public async Task Writing_to_the_guests_says_who_it_reaches_before_it_goes_and_keeps_what_was_sent()
+    {
+        await OpenTheBoardAsync();
+
+        await ClickUntilAsync(Page.Locator("#letter-start"), Page.Locator("#letter-subject"));
+
+        // Only a party holding places so far — none confirmed — so the count moves when the host
+        // says to include the people still waiting.
+        await Expect(Page.Locator("#letter-audience")).ToContainTextAsync("Nobody matches", new() { Timeout = 15_000 });
+        await Page.Locator("#letter-unconfirmed").CheckAsync();
+        await Expect(Page.Locator("#letter-audience")).ToContainTextAsync("1 party", new() { Timeout = 15_000 });
+
+        var subject = $"Doors at eight ({Guid.NewGuid():N})"[..30];
+        await Page.Locator("#letter-subject").FillAsync(subject);
+        await Page.Locator("#letter-body").FillAsync("Come to the side door on Main Street.\nBring a coat.");
+
+        await ClickUntilAsync(Page.Locator("#letter-review"), Page.Locator("#letter-confirm"));
+        await Expect(Page.Locator("#letter-confirm")).ToContainTextAsync("1 party");
+        await Page.Locator("#letter-send").ClickAsync();
+
+        var sent = Page.Locator("#letter-note");
+        var refused = Page.Locator("#letter-error");
+        await Expect(sent.Or(refused).First).ToBeVisibleAsync(new() { Timeout = 20_000 });
+
+        if (await refused.CountAsync() > 0)
+        {
+            // The ten-a-day limit is per event, and this database is shared by every run today.
+            // Reaching it is the rule working, and it must be said in words, not as a dead button.
+            await Expect(refused).ToContainTextAsync("in the last day");
+            return;
+        }
+
+        await Expect(sent).ToContainTextAsync("1 party");
+        await Expect(Page.Locator("#letters-sent")).ToContainTextAsync(subject);
+    }
+
+    [Test]
+    public async Task The_event_page_shows_the_numbers_at_a_glance()
+    {
+        await Page.SetViewportSizeAsync(1280, 800);
+        await Page.GotoAsync($"{BaseUrl}/organizations/{_orgId}/events/{SeatsEventId}");
+        await WaitUntilLoadedAsync();
+
+        var glance = Page.Locator("#event-glance");
+        await Expect(glance).ToBeVisibleAsync(new() { Timeout = 30_000 });
+        await Expect(Page.Locator("#glance-waiting")).ToContainTextAsync("1 is holding places");
+        await Expect(Page.Locator("#glance-places")).ToContainTextAsync("places left of");
+        await Expect(Page.Locator("#glance-waiting")).ToHaveAttributeAsync("href", $"/organizations/{_orgId}/events/{SeatsEventId}/bookings");
+    }
+
+    [Test]
+    public async Task The_public_page_says_how_to_get_in_and_around()
+    {
+        // Seeded on the evening (phase 17a): what a guest in a wheelchair needs before they book.
+        await Page.GotoAsync($"{BaseUrl}/o/paranormal365/events/an-evening-of-evidence");
+        await WaitUntilLoadedAsync();
+
+        await Expect(Page.Locator("#event-access-notes")).ToContainTextAsync("step-free", new() { Timeout = 30_000 });
+    }
 }

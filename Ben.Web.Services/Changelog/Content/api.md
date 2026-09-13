@@ -20,6 +20,17 @@ belongs there; this is for the part underneath.
 
 ## 2026-09-13
 
+- Hosted events have endpoints to write to their guests: one to list the letters sent, one to count who a
+  letter would reach, and one to send it by email and site message. Only people who may decide bookings
+  can use them, and an event can have ten letters a day.
+- A new summary endpoint returns a hosted event's booking counts, places left, arrivals and review
+  average for the people who may read its bookings.
+- Hosted events carry optional access notes, returned on the public event record.
+- Asking for a place, changing a booking, posting to an event's room, reporting, reviewing and signing
+  up for a session now share the stricter hosted booking rate limit.
+- Publishing, calling off and restoring events, booking decisions, pass changes and a venue's
+  withdrawal are now written to the audit log.
+
 - A new endpoint lists the hosted events the signed-in person may run the door at, whether as a member of
   the organizing group, an accepted helper, or one of the venue's people where the venue lent its staff.
 - Letting a party in at the door, by name or by scanning, accepts an optional arrival time, so an arrival

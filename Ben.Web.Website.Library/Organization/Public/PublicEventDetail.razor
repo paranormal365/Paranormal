@@ -154,6 +154,13 @@ else
                         Each date is booked on its own.
                     </p>
                 }
+                @if (hosted.AccessNotes is { Length: > 0 } access)
+                {
+                    <div class="mt-3" id="event-access-notes">
+                        <strong>Getting in and getting around</strong>
+                        <p class="mb-0" style="white-space:pre-line;">@access</p>
+                    </div>
+                }
                 @if (hosted.ContactLine is { Length: > 0 } contact)
                 {
                     <p class="mt-3 mb-0"><strong>Arranging it:</strong> @contact</p>

@@ -77,6 +77,14 @@ struct EventHubView: View {
                     }
                 }
 
+                if let notes = event?.accessNotes?.trimmingCharacters(in: .whitespacesAndNewlines), !notes.isEmpty {
+                    Section("Getting in and getting around") {
+                        Text(notes)
+                            .font(.subheadline)
+                            .accessibilityIdentifier("hub-access-notes")
+                    }
+                }
+
                 if let event {
                     Section {
                         Button {
