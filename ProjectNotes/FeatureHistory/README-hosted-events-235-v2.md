@@ -618,6 +618,64 @@ device in under ten seconds with or without a camera.
   them arrived; the camera is covered and the same party is found by name; a party registered for
   the whole run reads as the band the venue named for that, on the door and on their own pass.
 
+#### Phase 7 as built (2026-09-13) — what changed, and what Ben added mid-phase
+
+**Ben added two things while it was being built, and both went in:**
+
+1. **Walk-ups and the room-left count** (*"availability count for walk ups to event and on-sight
+   sign ups"*). The door says how many more people could come in tonight — everybody expected plus
+   everybody already through, against whichever ceiling the event has, and honestly null where it
+   has none. `HostedEventWalkUp` records somebody who simply turns up: how many, and a name if they
+   gave one. **No account is invented for them** — the site's settled rule for signing up a stranger
+   is to send a link rather than to make an account from an address nobody verified, and a link is
+   no use in a doorway. A walk-up past the last place is refused in words.
+2. **Bands** (decision 16). Built as specified above, with the by-hand picker on the booking
+   board's sheet — the bands page promises it, and a promise with no path is a write-only feature.
+
+**Departures from the plan:**
+
+1. **One staff table, not two.** `HostedEventStaffInvite` was dropped: an unaccepted helper is the
+   same row with no account attached, which is exactly what makes it grant nothing. Two tables
+   carrying the same five flags would be two places for them to disagree.
+2. **An address is always an invitation**, even when it belongs to an existing account. The first
+   version resolved the address and added them at once — a venue granting a stranger other people's
+   names and allergies without asking. Access also reads the ACCEPTANCE, not the attachment, and a
+   test pins that for a row the endpoints do not produce today.
+3. **`HostedEventChecklist` is not built.** It had no screen in this phase, and a table with no
+   screen is how this codebase collected eight write-only features. It waits for the screen that
+   reads it.
+4. **"Staff here now" is not built** for the same reason — nothing yet asks who is on shift.
+5. **`VendoredPluginsAreDocumentedTests` checks the substance, not a format.** The shell guard
+   only ASKED for a licence and a record in its prose; nothing checked. The new guard wants a
+   `LICENSE*` file and a `VENDORED.md` naming a version and an address — its first draft demanded
+   exact labels and wrongly accused ApexCharts, which has always had both. Bootstrap and Waves came
+   inside the purchased theme and are listed as exceptions with that reason. jsQR ships with its
+   licence and a record carrying the SHA-256, fetched once, only where `BarcodeDetector` is missing.
+6. **The booking → band link is NoAction, not SetNull.** SQL Server refuses SetNull ("multiple
+   cascade paths") because bands and bookings both cascade from the event; the endpoint clears the
+   column before it deletes a band. The failed migration rolled back cleanly inside its transaction.
+
+**Two findings worth keeping:**
+
+- **The scan used the DECIDING permission**, so a steward with a phone had to be trusted with the
+  whole board. It asks the door's own permission now, which is the coupling the staff table exists
+  to break.
+- **Per-night arrival (defect 19)** is `HostedEventCheckIn`, unique on (booking, night). The old
+  single stamp on the pass stays: rewriting it into per-night rows would invent nights nobody came
+  to.
+
+Shipped: three migrations (staff, check-ins, walk-ups) plus the bands one, every one additive; the
+staff page and its public acceptance page; the door with the camera (`BenQrScanner`, platform
+decoder first, vendored jsQR on demand), code box, name search, walk-ups, room-left count, dietary
+flags for tonight and a print layout; bands with their page, chip and by-hand picker; 36 new unit
+tests and 22 new Playwright tests; help for staff, the door and bands with four shots.
+
+**Verified by, as walked:** a steward added by email grants nothing until accepted and the list says
+so; the door admits a confirmed party by name at 375 with a 56-pixel button, takes it back, records
+a walk-up and refuses one past the last place; a band set on the page is the chip beside the name
+at the door. **Not walked:** a real phone camera reading a real pass — the harness has no camera, and
+it is the one thing in this phase that needs a person holding a phone.
+
 ### Phase 8 — Alerts and digests (item 238)
 
 **Goal**: a request is answered because somebody was told.

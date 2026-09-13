@@ -66,3 +66,17 @@
         flex: 1 1 auto;
     }
 }
+
+/* PRINTED, IT IS TONIGHT'S LIST AND NOTHING ELSE. A venue expecting no signal prints this before
+   the doors open, and a steward with a clipboard needs names, party sizes, rooms and the dietary
+   flags — not a camera button, a search box and a walk-up form that do nothing on paper. The
+   theme already drops the header, the navigation and every button group. */
+@media print {
+    .door-row {
+        break-inside: avoid;
+    }
+
+    .door-row--in {
+        background: none;
+    }
+}

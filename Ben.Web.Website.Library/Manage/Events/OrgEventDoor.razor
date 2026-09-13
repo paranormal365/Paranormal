@@ -79,11 +79,11 @@
             </div>
 
             @* ── the camera, and everything for when it fails ────────────── *@
-            <BenQrScanner OnScanned="OnScannedAsync" Class="mb-2" />
+            <BenQrScanner OnScanned="OnScannedAsync" Class="mb-2 d-print-none" />
 
             @if (_scan is { } scan)
             {
-                <div class="card mb-2 @(scan.Admitted ? "border-success" : "border-danger")"
+                <div class="card mb-2 d-print-none @(scan.Admitted ? "border-success" : "border-danger")"
                      id="door-scan">
                     <div class="card-body py-2">
                         @if (scan.Admitted)
@@ -125,7 +125,7 @@
                 </div>
             }
 
-            <div class="row g-2 mb-3">
+            <div class="row g-2 mb-3 d-print-none">
                 <div class="col-7 col-sm-8">
                     <label class="form-label small mb-1" for="door-code">
                         Or type the code from their pass
@@ -143,7 +143,7 @@
             </div>
 
             @* ── everybody expected tonight ──────────────────────────────── *@
-            <div class="row g-2 mb-2">
+            <div class="row g-2 mb-2 d-print-none">
                 <div class="col-12">
                     <label class="form-label small mb-1" for="door-search">Find somebody by name</label>
                     <input id="door-search" class="form-control" maxlength="120"
@@ -196,7 +196,7 @@
                             }
                         </div>
 
-                        <div class="door-row__acts">
+                        <div class="door-row__acts d-print-none">
                             @if (them.ArrivedUtc is null)
                             {
                                 <button type="button" class="btn btn-primary door__big"
@@ -230,7 +230,7 @@
             </ul>
 
             @* ── somebody who just turned up ─────────────────────────────── *@
-            <div class="card mb-3" id="door-walk-up">
+            <div class="card mb-3 d-print-none" id="door-walk-up">
                 <div class="card-header fw-semibold d-flex justify-content-between align-items-center">
                     <span>Turned up without a booking</span>
                     @if (door.WalkUps.Count > 0)
