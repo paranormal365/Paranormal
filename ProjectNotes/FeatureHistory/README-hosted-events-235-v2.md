@@ -648,10 +648,37 @@ withdraw with a reason.
   board view for the venue when granted, public `PublicVenuePage.razor`; the organizer's *Ask the
   venue* option becomes live and shows grant state in the readiness list. Bell
   `VenueRequestsToDecide`.
-- Tests: `VenueGrantTests`; Playwright `VenueHostingTests` in two orgs.
+- **Claiming a venue that is already on the site** (Ben, 2026-09-13: *"If someone has created an
+  event at a venue and the venue doesn't have an account, how and can they claim the account and
+  prove they are the right owners later?"*). Most venues arrive as a place typed in by the
+  organizer running an event there, months before the venue itself hears of us. This is the flow
+  that turns that row into theirs.
+  - **A venue claims the PLACE, not the event.** The event belongs to the group that ran it, and a
+    claim never touches it: it changes who must say yes to FUTURE events at that address, and it
+    gives the venue a profile page. Nothing already booked moves, nothing is cancelled, and no past
+    guest list changes hands. A claim that could seize an organizer's weekend would be a way to
+    steal one.
+  - **Proof, cheapest sufficient first.** (1) A code to the contact already ON the place record —
+    the phone or address a stranger can already see, which is exactly the channel the world
+    associates with that venue. (2) An email at the venue's own domain, when the place has a
+    website: controlling `@thomashousehotel.com` is the ordinary proof of being the Thomas House.
+    (3) Failing both, an **adjudicated claim**: the claimant submits what they have — a licence,
+    a listing, a utility bill — and a SuperAdmin decides, through the same queue shape the place
+    duplicate merge and the request review already use.
+  - **The group that created the place is told and may object**, and a contested claim goes to a
+    human. Never an automatic transfer: the commonest false claim is a competitor, and the second
+    commonest is a former manager.
+  - **Where it starts**: "Is this your venue?" on the public place page and on the event's venue
+    card, so the two places somebody notices it are the two places they are looking at it.
+  - **What a claim is not**: it does not make the venue an organizer, does not give them the
+    booking board of somebody else's event (that is a grant, and the venue asks for it), and does
+    not let them see who came to events they had no part in.
+- Tests: `VenueGrantTests`; `VenuePlaceClaimTests` (a claim never moves an event, an objection
+  suspends it, an adjudicated claim needs a human); Playwright `VenueHostingTests` in two orgs.
 - **Verified by**: Nashville Paranormal cannot publish at Thomas House until Thomas House approves
   Oct 30–Nov 1; a revoke turns the badge to *Venue withdrew* in both browsers and the credit comes
-  back.
+  back; the Thomas House claims its own place, is refused until it proves the address, and the
+  weekend already booked there is untouched throughout.
 
 ### Phase 10 — Sessions and classes ("the ghost hunt but not the dinner")
 

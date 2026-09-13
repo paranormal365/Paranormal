@@ -220,6 +220,42 @@ public sealed partial class BenAdminClientAdapter
         => _api.GetItemAsync<HostedEventMenusRecord>(
                $"/api/public/hosted-events/{eventId}/menus", token);
 
+    // ── who is helping (item 235 phase 7) ────────────────────────────────────
+
+    private static string StaffUrl(Guid orgId, Guid eventId)
+        => $"/api/organizations/{orgId}/events/{eventId}/staff";
+
+    public Task<ItemResult<HostedEventStaffListRecord>> GetEventStaffAsync(
+        Guid orgId, Guid eventId, CancellationToken token = default)
+        => _api.GetItemAsync<HostedEventStaffListRecord>(StaffUrl(orgId, eventId), token);
+
+    public Task<(HostedEventStaffListRecord? Result, string? Error)> SaveEventStaffAsync(
+        Guid orgId, Guid eventId, SaveHostedEventStaffRequest request, CancellationToken token = default)
+        => _api.SendExpectingReasonAsync<SaveHostedEventStaffRequest, HostedEventStaffListRecord>(
+               HttpMethod.Put, StaffUrl(orgId, eventId), request, token);
+
+    public Task<(HostedEventStaffListRecord? Result, string? Error)> ResendEventStaffInviteAsync(
+        Guid orgId, Guid eventId, Guid staffId, CancellationToken token = default)
+        => _api.SendExpectingReasonAsync<object, HostedEventStaffListRecord>(
+               HttpMethod.Post, $"{StaffUrl(orgId, eventId)}/{staffId}/resend", new { }, token);
+
+    public Task<(HostedEventStaffListRecord? Result, string? Error)> RemoveEventStaffAsync(
+        Guid orgId, Guid eventId, Guid staffId, CancellationToken token = default)
+        => _api.SendExpectingReasonAsync<object, HostedEventStaffListRecord>(
+               HttpMethod.Delete, $"{StaffUrl(orgId, eventId)}/{staffId}", new { }, token);
+
+    public Task<ItemResult<HostedEventStaffInviteRecord>> GetStaffInviteAsync(
+        string token, CancellationToken cancellationToken = default)
+        => _api.GetItemAsync<HostedEventStaffInviteRecord>(
+               $"/api/public/hosted-event-staff/{Uri.EscapeDataString(token)}", cancellationToken);
+
+    public Task<(HostedEventStaffInviteRecord? Result, string? Error)> AcceptStaffInviteAsync(
+        string token, CancellationToken cancellationToken = default)
+        => _api.SendExpectingReasonAsync<object, HostedEventStaffInviteRecord>(
+               HttpMethod.Post,
+               $"/api/public/hosted-event-staff/{Uri.EscapeDataString(token)}/accept",
+               new { }, cancellationToken);
+
     public Task<(MyHostedEventBookingRecord? Held, HoldRefusedRecord? Refused)> HoldHostedEventPlacesAsync(
         Guid eventId, HoldHostedEventPlacesRequest request, CancellationToken token = default)
         => _api.PostExpectingConflictAsync<HoldHostedEventPlacesRequest, MyHostedEventBookingRecord, HoldRefusedRecord>(

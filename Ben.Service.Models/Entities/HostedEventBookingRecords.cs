@@ -445,3 +445,89 @@ public sealed record HostedEventLayoutRecord(
 public sealed record LayoutRefusalRecord(
     string Sentence,
     IReadOnlyList<Guid> UnitIds);
+
+// ── who is helping, and what they may do (item 235 phase 7) ──────────────────
+
+/// <summary>
+/// Somebody helping at one event.
+/// </summary>
+/// <remarks>
+/// <b>Flags rather than a role</b>, because Ben's own list is not a ladder: a kitchen manager sees
+/// the dietary sheet and never the door, and a steward is the other way round. The role label is
+/// what a rota calls them and grants nothing.
+/// </remarks>
+/// <param name="Name">What to call them — their account's name, or the one the invitation used.</param>
+/// <param name="Email">
+/// Where an invitation went. Null once they have accepted, because the account's own address is
+/// the one that matters then and this screen is not a directory.
+/// </param>
+/// <param name="Accepted">
+/// Whether the row grants anything yet. An invitation nobody has clicked has no account attached
+/// and so allows nothing at all.
+/// </param>
+public sealed record HostedEventStaffRecord(
+    Guid Id,
+    Guid? AppUserId,
+    string Name,
+    string? Email,
+    string? RoleLabel,
+    bool SeesBookings,
+    bool Decides,
+    bool RunsTheDoor,
+    bool SeesMenus,
+    bool SeesFiles,
+    bool Accepted,
+    DateTime? DateExpires,
+    DateTime DateCreated);
+
+/// <summary>Everybody helping at one event.</summary>
+public sealed record HostedEventStaffListRecord(
+    Guid HostedEventId,
+    IReadOnlyList<HostedEventStaffRecord> Staff);
+
+/// <summary>
+/// Adding somebody, or changing what they may do.
+/// </summary>
+/// <param name="AppUserId">A member of the group. One of this and <paramref name="Email"/>.</param>
+/// <param name="Email">
+/// Somebody with no account here, who gets a link. A weekend steward is usually this one.
+/// </param>
+public sealed record SaveHostedEventStaffRequest(
+    Guid? AppUserId = null,
+    string? Email = null,
+    string? DisplayName = null,
+    string? RoleLabel = null,
+    bool SeesBookings = false,
+    bool Decides = false,
+    bool RunsTheDoor = false,
+    bool SeesMenus = false,
+    bool SeesFiles = false);
+
+/// <summary>What somebody accepting a staff invitation is told before they accept it.</summary>
+/// <remarks>
+/// Named plainly, because the person reading it may never have heard of this site: which event,
+/// which venue, which group, and what they are being asked to be able to do.
+/// </remarks>
+public sealed record HostedEventStaffInviteRecord(
+    Guid HostedEventId,
+    string EventName,
+    string OrganizationName,
+    string? VenueName,
+    DateTime StartsOn,
+    DateTime EndsOn,
+    string? RoleLabel,
+    IReadOnlyList<string> WhatTheyCanDo,
+    bool AlreadyAccepted,
+
+    /// <summary>
+    /// Whether the account this was attached to can be signed into.
+    /// </summary>
+    /// <remarks>
+    /// <b>The server's answer, not the page's guess.</b> An account made by clicking this very
+    /// link has no password, and the door screen is behind signing in — a steward who finds that
+    /// out on the night is a steward standing at a door with a phone that will not let them in. It
+    /// is asked of the account rather than inferred from whether the reader happened to be signed
+    /// in, which is a different question with the same answer most of the time and the wrong one
+    /// exactly when it matters.
+    /// </remarks>
+    bool AccountHasNoPassword = false);

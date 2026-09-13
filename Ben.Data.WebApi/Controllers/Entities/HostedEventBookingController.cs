@@ -80,12 +80,12 @@ public sealed class HostedEventBookingController : OrgCmsControllerBase
         await using var db = await DbFactory.CreateDbContextAsync(ct);
         // Membership is not enough. The board carries guests' names, addresses and dietary notes,
         // and every member of a group has no business with any of the three.
-        if (!await CanReadBookingsAsync(userId.Value, orgId, ct)) return Forbid();
+        if (!await CanReadBookingsAsync(userId.Value, orgId, eventId, db, ct)) return Forbid();
 
         var ev = await LoadEventAsync(db, orgId, eventId, ct);
         if (ev is null) return NotFound();
 
-        return Ok(await BoardAsync(db, ev, await CanDecideAsync(userId.Value, orgId, ct), ct));
+        return Ok(await BoardAsync(db, ev, await CanDecideAsync(userId.Value, orgId, eventId, db, ct), ct));
     }
 
     /// <summary>
@@ -113,7 +113,7 @@ public sealed class HostedEventBookingController : OrgCmsControllerBase
         if (userId is null) return Unauthorized();
 
         await using var db = await DbFactory.CreateDbContextAsync(ct);
-        if (!await CanDecideAsync(userId.Value, orgId, ct)) return Forbid();
+        if (!await CanDecideAsync(userId.Value, orgId, eventId, db, ct)) return Forbid();
 
         var ev = await LoadEventAsync(db, orgId, eventId, ct);
         if (ev is null) return NotFound();
@@ -143,7 +143,7 @@ public sealed class HostedEventBookingController : OrgCmsControllerBase
         if (userId is null) return Unauthorized();
 
         await using var db = await DbFactory.CreateDbContextAsync(ct);
-        if (!await CanDecideAsync(userId.Value, orgId, ct)) return Forbid();
+        if (!await CanDecideAsync(userId.Value, orgId, eventId, db, ct)) return Forbid();
 
         var ev = await LoadEventAsync(db, orgId, eventId, ct);
         if (ev is null) return NotFound();
@@ -229,7 +229,7 @@ public sealed class HostedEventBookingController : OrgCmsControllerBase
         if (userId is null) return Unauthorized();
 
         await using var db = await DbFactory.CreateDbContextAsync(ct);
-        if (!await CanDecideAsync(userId.Value, orgId, ct)) return Forbid();
+        if (!await CanDecideAsync(userId.Value, orgId, eventId, db, ct)) return Forbid();
 
         var ev = await LoadEventAsync(db, orgId, eventId, ct);
         if (ev is null) return NotFound();
@@ -314,9 +314,9 @@ public sealed class HostedEventBookingController : OrgCmsControllerBase
     {
         var userId = GetCurrentUserId();
         if (userId is null) return Unauthorized();
-        if (!await CanDecideAsync(userId.Value, orgId, ct)) return Forbid();
 
         await using var db = await DbFactory.CreateDbContextAsync(ct);
+        if (!await CanDecideAsync(userId.Value, orgId, eventId, db, ct)) return Forbid();
         var ev = await LoadEventAsync(db, orgId, eventId, ct);
         if (ev is null) return NotFound();
 
@@ -352,9 +352,9 @@ public sealed class HostedEventBookingController : OrgCmsControllerBase
     {
         var userId = GetCurrentUserId();
         if (userId is null) return Unauthorized();
-        if (!await CanDecideAsync(userId.Value, orgId, ct)) return Forbid();
 
         await using var db = await DbFactory.CreateDbContextAsync(ct);
+        if (!await CanDecideAsync(userId.Value, orgId, eventId, db, ct)) return Forbid();
         var ev = await LoadEventAsync(db, orgId, eventId, ct);
         if (ev is null) return NotFound();
 
@@ -400,7 +400,7 @@ public sealed class HostedEventBookingController : OrgCmsControllerBase
         if (userId is null) return Unauthorized();
 
         await using var db = await DbFactory.CreateDbContextAsync(ct);
-        if (!await CanDecideAsync(userId.Value, orgId, ct)) return Forbid();
+        if (!await CanDecideAsync(userId.Value, orgId, eventId, db, ct)) return Forbid();
 
         var ev = await LoadEventAsync(db, orgId, eventId, ct);
         if (ev is null) return NotFound();
@@ -484,7 +484,7 @@ public sealed class HostedEventBookingController : OrgCmsControllerBase
             return BadRequest("A valid email address is needed.");
 
         await using var db = await DbFactory.CreateDbContextAsync(ct);
-        if (!await CanDecideAsync(userId.Value, orgId, ct)) return Forbid();
+        if (!await CanDecideAsync(userId.Value, orgId, eventId, db, ct)) return Forbid();
 
         var ev = await LoadEventAsync(db, orgId, eventId, ct);
         if (ev is null) return NotFound();
@@ -568,7 +568,7 @@ public sealed class HostedEventBookingController : OrgCmsControllerBase
         if (userId is null) return Unauthorized();
 
         await using var db = await DbFactory.CreateDbContextAsync(ct);
-        if (!await CanDecideAsync(userId.Value, orgId, ct)) return Forbid();
+        if (!await CanDecideAsync(userId.Value, orgId, eventId, db, ct)) return Forbid();
 
         var booking = await LoadBookingForPassAsync(db, orgId, eventId, bookingId, ct);
         if (booking is null) return NotFound();
@@ -595,7 +595,7 @@ public sealed class HostedEventBookingController : OrgCmsControllerBase
             return BadRequest("Say why. The door reads this out to whoever is holding the pass.");
 
         await using var db = await DbFactory.CreateDbContextAsync(ct);
-        if (!await CanDecideAsync(userId.Value, orgId, ct)) return Forbid();
+        if (!await CanDecideAsync(userId.Value, orgId, eventId, db, ct)) return Forbid();
 
         var booking = await LoadBookingForPassAsync(db, orgId, eventId, bookingId, ct);
         if (booking is null) return NotFound();
@@ -624,7 +624,7 @@ public sealed class HostedEventBookingController : OrgCmsControllerBase
         if (userId is null) return Unauthorized();
 
         await using var db = await DbFactory.CreateDbContextAsync(ct);
-        if (!await CanDecideAsync(userId.Value, orgId, ct)) return Forbid();
+        if (!await CanDecideAsync(userId.Value, orgId, eventId, db, ct)) return Forbid();
 
         var booking = await LoadBookingForPassAsync(db, orgId, eventId, bookingId, ct);
         if (booking is null) return NotFound();
@@ -662,7 +662,7 @@ public sealed class HostedEventBookingController : OrgCmsControllerBase
         if (userId is null) return Unauthorized();
 
         await using var db = await DbFactory.CreateDbContextAsync(ct);
-        if (!await CanDecideAsync(userId.Value, orgId, ct)) return Forbid();
+        if (!await CanDecideAsync(userId.Value, orgId, eventId, db, ct)) return Forbid();
 
         var booking = await LoadBookingForPassAsync(db, orgId, eventId, bookingId, ct);
         if (booking is null) return NotFound();
@@ -715,7 +715,10 @@ public sealed class HostedEventBookingController : OrgCmsControllerBase
         if (userId is null) return Unauthorized();
 
         await using var db = await DbFactory.CreateDbContextAsync(ct);
-        if (!await CanDecideAsync(userId.Value, orgId, ct)) return Forbid();
+        // THE DOOR'S OWN PERMISSION, not the deciding one (item 235 phase 7). Scanning a pass used
+        // to require whatever confirming a booking requires, which meant a steward with a phone
+        // had to be trusted with the whole board — guests' addresses, dietary notes and all.
+        if (!await CanRunTheDoorAsync(userId.Value, orgId, eventId, db, ct)) return Forbid();
 
         if (!await db.HostedEvents.AnyAsync(e => e.Id == eventId && e.OrganizationId == orgId, ct))
             return NotFound();
@@ -872,7 +875,7 @@ public sealed class HostedEventBookingController : OrgCmsControllerBase
         if (userId is null) return Unauthorized();
 
         await using var db = await DbFactory.CreateDbContextAsync(ct);
-        if (!await CanDecideAsync(userId.Value, orgId, ct)) return Forbid();
+        if (!await CanDecideAsync(userId.Value, orgId, eventId, db, ct)) return Forbid();
 
         var booking = await LoadBookingAsync(db, eventId, bookingId, ct);
         if (booking is null) return NotFound();
@@ -1248,8 +1251,24 @@ public sealed class HostedEventBookingController : OrgCmsControllerBase
     /// wired up when the feature began — so the person who arranges the rooms had to be somebody
     /// who could also change the billing. Deciding who comes is its own job and now has its own key.
     /// </remarks>
-    private Task<bool> CanDecideAsync(Guid userId, Guid orgId, CancellationToken ct)
-        => _access.CanDecideBookingsAsync(userId, orgId, ct);
+    /// <param name="eventId">
+    /// Which event, because from phase 7 an answer can come from the event's own staff list as
+    /// well as from the group's roles — a weekend helper is nobody in the group and somebody at
+    /// the door.
+    /// </param>
+    private Task<bool> CanDecideAsync(
+        Guid userId, Guid orgId, Guid eventId, BenDataContext db, CancellationToken ct)
+        => _access.CanDecideBookingsAsync(userId, orgId, eventId, db, ct);
+
+    /// <summary>Run the door: scan, admit, mark somebody away again.</summary>
+    /// <remarks>
+    /// <b>Not the deciding permission.</b> The scan used to ask whether somebody could confirm a
+    /// booking, which meant a steward with a phone had to be trusted with the whole board — the
+    /// exact coupling the staff table exists to break.
+    /// </remarks>
+    private Task<bool> CanRunTheDoorAsync(
+        Guid userId, Guid orgId, Guid eventId, BenDataContext db, CancellationToken ct)
+        => _access.CanRunTheDoorAsync(userId, orgId, eventId, db, ct);
 
     /// <summary>
     /// May this person see guests' names, addresses and dietary notes.
@@ -1259,8 +1278,9 @@ public sealed class HostedEventBookingController : OrgCmsControllerBase
     /// board: a dietary note is a health disclosure somebody made to a venue so they would not be
     /// poisoned, and an address is theirs.
     /// </remarks>
-    private Task<bool> CanReadBookingsAsync(Guid userId, Guid orgId, CancellationToken ct)
-        => _access.CanReadBookingsAsync(userId, orgId, ct);
+    private Task<bool> CanReadBookingsAsync(
+        Guid userId, Guid orgId, Guid eventId, BenDataContext db, CancellationToken ct)
+        => _access.CanReadBookingsAsync(userId, orgId, eventId, db, ct);
 
     private async Task<bool> IsMemberAsync(
         BenDataContext db, Guid orgId, Guid userId, CancellationToken ct)

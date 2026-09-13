@@ -121,6 +121,7 @@ namespace Ben.Data.Source.Context
         public virtual DbSet<HostedEventMenu> HostedEventMenus { get; set; }
         public virtual DbSet<HostedEventMenuItem> HostedEventMenuItems { get; set; }
         public virtual DbSet<HostedEventPass> HostedEventPasses { get; set; }
+        public virtual DbSet<HostedEventStaff> HostedEventStaff { get; set; }
         public virtual DbSet<OutboxEmail> OutboxEmails { get; set; }
         public virtual DbSet<OutboxEmailAttachment> OutboxEmailAttachments { get; set; }
         public virtual DbSet<EventCredit> EventCredits { get; set; }
@@ -792,6 +793,49 @@ namespace Ben.Data.Source.Context
                 .HasOne(e => e.GoNoGoDecidedByAppUser).WithMany()
                 .HasForeignKey(e => e.GoNoGoDecidedByAppUserId)
                 .IsRequired(false).OnDelete(DeleteBehavior.NoAction);
+
+            // ── who is helping, and what they may do (phase 7) ────────────────
+            //
+            // Cascade from the event: a helper at an event that no longer exists is nothing at
+            // all, and there is no history worth keeping in a row that says somebody could once
+            // have scanned a pass. The AppUser links are NoAction like every other one here —
+            // deleting a person goes through its own purge, which must SEE these rows rather than
+            // have them vanish underneath it.
+            modelBuilder.Entity<HostedEventStaff>()
+                .HasOne(s => s.HostedEvent).WithMany()
+                .HasForeignKey(s => s.HostedEventId).OnDelete(DeleteBehavior.Cascade);
+            modelBuilder.Entity<HostedEventStaff>()
+                .HasOne(s => s.AppUser).WithMany()
+                .HasForeignKey(s => s.AppUserId).IsRequired(false).OnDelete(DeleteBehavior.NoAction);
+            modelBuilder.Entity<HostedEventStaff>()
+                .HasOne(s => s.CreatedByAppUser).WithMany()
+                .HasForeignKey(s => s.CreatedByAppUserId).OnDelete(DeleteBehavior.NoAction);
+            modelBuilder.Entity<HostedEventStaff>()
+                .HasOne(s => s.UpdatedByAppUser).WithMany()
+                .HasForeignKey(s => s.UpdatedByAppUserId).IsRequired(false).OnDelete(DeleteBehavior.NoAction);
+
+            modelBuilder.Entity<HostedEventStaff>().Property(s => s.Email).HasMaxLength(320);
+            modelBuilder.Entity<HostedEventStaff>().Property(s => s.DisplayName).HasMaxLength(200);
+            modelBuilder.Entity<HostedEventStaff>().Property(s => s.RoleLabel).HasMaxLength(80);
+            modelBuilder.Entity<HostedEventStaff>().Property(s => s.Token).HasMaxLength(200);
+
+            // One row per person per event, and one per invited address per event. Two filtered
+            // indexes because a row has one or the other and never both: without them, inviting
+            // the same helper twice would leave two rows and revoking one would look like it had
+            // worked.
+            modelBuilder.Entity<HostedEventStaff>()
+                .HasIndex(s => new { s.HostedEventId, s.AppUserId })
+                .IsUnique()
+                .HasFilter("[AppUserId] IS NOT NULL");
+            modelBuilder.Entity<HostedEventStaff>()
+                .HasIndex(s => new { s.HostedEventId, s.Email })
+                .IsUnique()
+                .HasFilter("[Email] IS NOT NULL AND [AppUserId] IS NULL");
+
+            // What the acceptance page looks up, once, from a link in somebody's mail.
+            modelBuilder.Entity<HostedEventStaff>()
+                .HasIndex(s => s.Token)
+                .HasFilter("[Token] IS NOT NULL");
 
             // ── what the venue is holding back ────────────────────────────────
             //

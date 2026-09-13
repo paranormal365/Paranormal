@@ -1,0 +1,345 @@
+@page "/organizations/{OrgId:guid}/events/{EventId:guid}/staff"
+@namespace Ben.Web.Website.Library.Manage.Events
+
+@inject IBenAdminClient AdminClient
+@inject IBenUserState UserState
+
+@using Ben.Service.Models.Entities
+@using Ben.Web.Services.WebApi
+@using Ben.Web.Website.Library.Kit
+@using Ben.Web.Website.Library.Manage.Icon
+
+@* Who is helping at this event, and what they may do (item 235 phase 7).
+
+   THE PERSON ON THE DOOR IS NOT A PERSON WITH BILLING RIGHTS. A hotel gives the door to a weekend
+   helper who is not a member of the group and never will be; until this page existed the only way
+   to let them scan a pass was to make them somebody who could change the group's settings.
+
+   FIVE SWITCHES, NOT A LADDER. A kitchen manager reads the dietary sheet and never touches the
+   door; a steward is the other way round. The role is a label for a rota and grants nothing.
+
+   ADDING HELPERS IS NOT DELEGABLE. Editing the event is what it takes, so a helper cannot pass
+   their own key on — which is the whole point of handing somebody the door and nothing else. *@
+
+<PageTitle>@(_event?.Name is { Length: > 0 } n ? $"Staff — {n}" : "Staff")</PageTitle>
+
+<div class="container-fluid py-3" style="max-width:1100px;">
+
+    <div class="text-secondary small">
+        <a href="@($"/organizations/{OrgId}/events")">Events</a>
+        @if (_event is { } crumb)
+        {
+            <text> · </text><a href="@($"/organizations/{OrgId}/events/{EventId}")">@crumb.Name</a>
+        }
+    </div>
+
+    <h1 class="h3 mb-1">
+        Staff
+        <HelpLink Slug="organization-administration" Anchor="hosted-events" />
+    </h1>
+    <p class="text-secondary small mb-3">
+        People helping at this event, and only this event. Anybody here can be somebody with no
+        account and no place in your group — a steward for one weekend is a steward for one
+        weekend.
+    </p>
+
+    @if (_note is { Length: > 0 })
+    {
+        <div class="alert alert-success py-2" id="staff-note">@_note</div>
+    }
+    @if (_error is { Length: > 0 })
+    {
+        <div class="alert alert-danger py-2" id="staff-error" role="alert">@_error</div>
+    }
+
+    <BenItemState TItem="HostedEventStaffListRecord" Result="_staff" Loading="_loading"
+                  LoadingText="Loading who is helping…" OnRetry="LoadAsync">
+        <ChildContent Context="list">
+
+            @* ── adding somebody ─────────────────────────────────────────── *@
+            <div class="card mb-3">
+                <div class="card-header fw-semibold">Ask somebody to help</div>
+                <div class="card-body">
+                    <div class="row g-2 align-items-end">
+                        <div class="col-12 col-md-4">
+                            <label class="form-label small mb-1" for="staff-email">
+                                Their email address
+                            </label>
+                            <input id="staff-email" class="form-control" type="email" maxlength="320"
+                                   placeholder="steward@example.com"
+                                   @bind="_email" @bind:event="oninput" />
+                        </div>
+                        <div class="col-6 col-md-4">
+                            <label class="form-label small mb-1" for="staff-name">
+                                What to call them
+                            </label>
+                            <input id="staff-name" class="form-control" maxlength="200"
+                                   placeholder="Optional" @bind="_name" @bind:event="oninput" />
+                        </div>
+                        <div class="col-6 col-md-4">
+                            <label class="form-label small mb-1" for="staff-role">
+                                What they're doing
+                            </label>
+                            <input id="staff-role" class="form-control" maxlength="80"
+                                   placeholder="Door, Kitchen, Guide"
+                                   @bind="_role" @bind:event="oninput" />
+                        </div>
+                    </div>
+
+                    <div class="fw-semibold small mt-3 mb-1">And they may…</div>
+                    <div class="d-flex flex-wrap gap-3">
+                        @foreach (var flag in Flags)
+                        {
+                            var it = flag;
+                            <div class="form-check">
+                                <input class="form-check-input" type="checkbox" id="@it.Id"
+                                       checked="@it.Get(_adding)"
+                                       @onchange="e => it.Set(_adding, e.Value is true)" />
+                                <label class="form-check-label" for="@it.Id">@it.Words</label>
+                            </div>
+                        }
+                    </div>
+
+                    <p class="text-secondary small mt-2 mb-2">
+                        Seeing who is coming includes their names and anything they cannot eat.
+                        Only give it to somebody who needs it.
+                    </p>
+
+                    <button type="button" class="btn btn-primary" id="staff-add"
+                            disabled="@(_busy || !CanAdd)" @onclick="AddAsync">
+                        @(_busy ? "Sending…" : "Send the invitation")
+                    </button>
+                    @if (!CanAdd && !_busy)
+                    {
+                        <span class="text-secondary small ms-2" id="staff-needs">
+                            An address, and at least one thing they may do.
+                        </span>
+                    }
+                </div>
+            </div>
+
+            @* ── who is already helping ──────────────────────────────────── *@
+            @if (list.Staff.Count == 0)
+            {
+                <div class="alert alert-light" id="staff-empty">
+                    Nobody is helping at this event yet. You can run it on your own — this is for
+                    when you would rather not.
+                </div>
+            }
+            else
+            {
+                <ul class="list-group" id="staff-list">
+                    @foreach (var person in list.Staff)
+                    {
+                        var them = person;
+                        <li class="list-group-item staff-row">
+                            <div class="staff-row__who">
+                                <div class="fw-semibold">
+                                    @them.Name
+                                    @if (them.RoleLabel is { Length: > 0 } role)
+                                    {
+                                        <span class="badge bg-body-secondary text-body-emphasis ms-1">
+                                            @role
+                                        </span>
+                                    }
+                                </div>
+                                <div class="small text-secondary">@WhatTheyCanDo(them)</div>
+                                @if (!them.Accepted)
+                                {
+                                    <div class="small text-warning">
+                                        <BenIcon Name="clock" Class="me-1" />
+                                        Invited@(them.Email is { Length: > 0 } e ? $" — {e}" : "")
+                                        · hasn't accepted yet, so this grants nothing.
+                                    </div>
+                                }
+                            </div>
+
+                            <div class="staff-row__acts">
+                                @if (!them.Accepted)
+                                {
+                                    <button type="button" class="btn btn-sm btn-outline-secondary"
+                                            id="@($"staff-resend-{them.Id}")" disabled="@_busy"
+                                            @onclick="() => ResendAsync(them)">
+                                        Send it again
+                                    </button>
+                                }
+                                <button type="button" class="btn btn-sm btn-outline-danger"
+                                        id="@($"staff-remove-{them.Id}")" disabled="@_busy"
+                                        @onclick="() => RemoveAsync(them)">
+                                    Remove
+                                </button>
+                            </div>
+                        </li>
+                    }
+                </ul>
+            }
+        </ChildContent>
+    </BenItemState>
+</div>
+
+@code {
+    [Parameter] public Guid OrgId { get; set; }
+    [Parameter] public Guid EventId { get; set; }
+
+    private HostedEventRecord? _event;
+    private ItemResult<HostedEventStaffListRecord> _staff;
+    private bool _loading = true;
+    private bool _busy;
+    private string? _note;
+    private string? _error;
+
+    private string _email = "";
+    private string? _name;
+    private string? _role;
+    private readonly Adding _adding = new();
+
+    /// <summary>What is being granted while somebody is being added.</summary>
+    /// <remarks>
+    /// A class rather than five fields so the switches below can be a loop: five nearly identical
+    /// blocks of markup is five places for one of them to be wired to the wrong flag, which is
+    /// exactly the sort of mistake nobody sees in a screenshot.
+    /// </remarks>
+    private sealed class Adding
+    {
+        public bool SeesBookings { get; set; }
+        public bool Decides { get; set; }
+        public bool RunsTheDoor { get; set; } = true;
+        public bool SeesMenus { get; set; }
+        public bool SeesFiles { get; set; }
+    }
+
+    private sealed record Flag(string Id, string Words, Func<Adding, bool> Get, Action<Adding, bool> Set);
+
+    /// <summary>
+    /// The five, in the order a venue thinks of them.
+    /// </summary>
+    /// <remarks>
+    /// The door first, because it is what most helpers are for and what the whole table was built
+    /// to make possible without handing over the group.
+    /// </remarks>
+    private static readonly Flag[] Flags =
+    [
+        new("staff-can-door", "Run the door",
+            a => a.RunsTheDoor, (a, v) => a.RunsTheDoor = v),
+        new("staff-can-see", "See who's coming",
+            a => a.SeesBookings, (a, v) => a.SeesBookings = v),
+        new("staff-can-decide", "Say yes or no to bookings",
+            a => a.Decides, (a, v) => a.Decides = v),
+        new("staff-can-menus", "Menus and the kitchen's sheet",
+            a => a.SeesMenus, (a, v) => a.SeesMenus = v),
+        new("staff-can-files", "The event's files",
+            a => a.SeesFiles, (a, v) => a.SeesFiles = v),
+    ];
+
+    private bool CanAdd
+        => _email.Contains('@')
+        && (_adding.SeesBookings || _adding.Decides || _adding.RunsTheDoor
+            || _adding.SeesMenus || _adding.SeesFiles);
+
+    protected override async Task OnAfterRenderAsync(bool firstRender)
+    {
+        if (!firstRender) return;
+
+        // Auth resolves after the circuit attaches; asking first asks as nobody, and this page
+        // would then say the group's own owner may not manage their own event.
+        if (!await UserState.WaitUntilAuthReadyAsync(RendererInfo.IsInteractive)) return;
+
+        await LoadAsync();
+        StateHasChanged();
+    }
+
+    private async Task LoadAsync()
+    {
+        _loading = true;
+        _event ??= await AdminClient.GetHostedEventAsync(OrgId, EventId);
+        _staff = await AdminClient.GetEventStaffAsync(OrgId, EventId);
+        _loading = false;
+    }
+
+    // ── what a host does here ────────────────────────────────────────────────
+
+    private async Task AddAsync()
+    {
+        _busy = true;
+        _error = null;
+        _note = null;
+
+        var (saved, error) = await AdminClient.SaveEventStaffAsync(OrgId, EventId,
+            new SaveHostedEventStaffRequest(
+                AppUserId: null,
+                Email: _email.Trim(),
+                DisplayName: Trimmed(_name),
+                RoleLabel: Trimmed(_role),
+                SeesBookings: _adding.SeesBookings,
+                Decides: _adding.Decides,
+                RunsTheDoor: _adding.RunsTheDoor,
+                SeesMenus: _adding.SeesMenus,
+                SeesFiles: _adding.SeesFiles));
+
+        _busy = false;
+
+        if (saved is null) { _error = error ?? "That couldn't be saved just now."; return; }
+
+        _staff = ItemResult<HostedEventStaffListRecord>.Ok(saved);
+        _note = $"Invited {_email.Trim()}. They can do nothing until they accept.";
+        _email = "";
+        _name = null;
+        _role = null;
+    }
+
+    private async Task ResendAsync(HostedEventStaffRecord them)
+    {
+        _busy = true;
+        _error = null;
+        _note = null;
+
+        var (saved, error) = await AdminClient.ResendEventStaffInviteAsync(OrgId, EventId, them.Id);
+
+        _busy = false;
+
+        if (saved is null) { _error = error ?? "That couldn't be sent just now."; return; }
+
+        _staff = ItemResult<HostedEventStaffListRecord>.Ok(saved);
+        _note = $"Sent again to {them.Email ?? them.Name}. The earlier link no longer works.";
+    }
+
+    private async Task RemoveAsync(HostedEventStaffRecord them)
+    {
+        _busy = true;
+        _error = null;
+        _note = null;
+
+        var (saved, error) = await AdminClient.RemoveEventStaffAsync(OrgId, EventId, them.Id);
+
+        _busy = false;
+
+        if (saved is null) { _error = error ?? "That couldn't be removed just now."; return; }
+
+        _staff = ItemResult<HostedEventStaffListRecord>.Ok(saved);
+        _note = $"{them.Name} is no longer helping at this event.";
+    }
+
+    /// <summary>
+    /// What somebody may do, in the same words the invitation used.
+    /// </summary>
+    /// <remarks>
+    /// The same words on purpose: a letter that promised one thing and a list that describes it
+    /// differently is two promises, and the person who has to reconcile them is the host trying to
+    /// work out what they gave away.
+    /// </remarks>
+    private static string WhatTheyCanDo(HostedEventStaffRecord them)
+    {
+        var can = new List<string>();
+
+        if (them.RunsTheDoor) can.Add("runs the door");
+        if (them.SeesBookings || them.Decides) can.Add("sees who's coming");
+        if (them.Decides) can.Add("decides bookings");
+        if (them.SeesMenus) can.Add("menus and dietary");
+        if (them.SeesFiles) can.Add("files");
+
+        return can.Count == 0 ? "nothing yet" : string.Join(" · ", can);
+    }
+
+    private static string? Trimmed(string? value)
+        => value?.Trim() is { Length: > 0 } v ? v : null;
+}

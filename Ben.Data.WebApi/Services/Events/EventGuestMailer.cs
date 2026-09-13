@@ -448,6 +448,104 @@ public sealed class EventGuestMailer
         return sent;
     }
 
+    /// <summary>
+    /// Asks somebody to help at an event (item 235 phase 7).
+    /// </summary>
+    /// <remarks>
+    /// <para><b>Written for a person who may never have heard of this site.</b> A hotel's weekend
+    /// steward is invited by a venue they work for, not by us: the letter says which event, which
+    /// venue, which group, what they are being asked to be able to do, and nothing about
+    /// accounts.</para>
+    ///
+    /// <para><b>It lists the permissions in words.</b> Somebody accepting an invitation is
+    /// accepting access to other people's names and, sometimes, their dietary notes — that is a
+    /// thing to be told before clicking rather than after.</para>
+    ///
+    /// <para>Here rather than in a mailer of its own because this class already knows how to write
+    /// a letter about an event: the venue's name, the reply-to, the safe encoding. A second class
+    /// would be a second set of those to keep true.</para>
+    /// </remarks>
+    /// <returns>True when a letter was sent.</returns>
+    public async Task<bool> SendStaffInviteAsync(
+        BenDataContext db, Guid staffId, CancellationToken ct)
+    {
+        if (!_email.IsConfigured) return false;
+
+        var staff = await db.HostedEventStaff.AsNoTracking()
+            .Include(s => s.AppUser)
+            .Include(s => s.HostedEvent).ThenInclude(e => e.Organization)
+            .Include(s => s.HostedEvent).ThenInclude(e => e.Place)
+            .FirstOrDefaultAsync(s => s.Id == staffId, ct);
+
+        if (staff?.Token is not { Length: > 0 } token) return false;
+
+        var to = staff.Email ?? staff.AppUser?.Email;
+        if (string.IsNullOrWhiteSpace(to)) return false;
+
+        var ev = staff.HostedEvent;
+        var name = Safe(ev?.Name ?? "an event");
+        var venue = Safe(ev?.Organization?.Name ?? "A group");
+        var url = _site.AbsoluteUrl($"/helping/{token}");
+
+        var body = new System.Text.StringBuilder();
+        body.Append($"<p>{Safe(staff.DisplayName ?? staff.AppUser?.DisplayName ?? "Hello")},</p>");
+        body.Append($"<p><strong>{venue}</strong> has asked you to help at <strong>{name}</strong>"
+                  + $"{Place(ev)}{When(ev)}.</p>");
+
+        if (staff.RoleLabel is { Length: > 0 } role)
+            body.Append($"<p>They have you down as <strong>{Safe(role)}</strong>.</p>");
+
+        body.Append("<p>Accepting lets you:</p><ul><li>"
+                  + string.Join("</li><li>", WhatTheyCanDo(staff)) + "</li></ul>");
+
+        body.Append($"<p><a href=\"{url}\">Say yes and see what you need</a></p>");
+        body.Append("<p>The link works once and lasts a fortnight. If you were not expecting this, "
+                  + "ignore it — nothing happens until you click.</p>");
+
+        await _email.SendAsync(new EmailMessage(
+            to,
+            $"Can you help at {ev?.Name ?? "an event"}?",
+            body.ToString(),
+            ReplyTo: ev?.Organization?.PublicEmail), ct);
+
+        return true;
+    }
+
+    /// <summary>
+    /// What a staff row lets somebody do, in words a person can weigh before accepting.
+    /// </summary>
+    /// <remarks>
+    /// Public because the acceptance page shows the same list, from the same method: a letter and
+    /// a page that described the same permissions differently would be two promises.
+    /// </remarks>
+    public static IReadOnlyList<string> WhatTheyCanDo(HostedEventStaff staff)
+    {
+        var can = new List<string>();
+
+        if (staff.RunsTheDoor)
+            can.Add("scan passes at the door and mark people in");
+        if (staff.SeesBookings || staff.Decides)
+            can.Add("see who is coming, including their names and anything they cannot eat");
+        if (staff.Decides)
+            can.Add("say yes or no to bookings");
+        if (staff.SeesMenus)
+            can.Add("read and write the menus, and read the kitchen's sheet");
+        if (staff.SeesFiles)
+            can.Add("read the event's files");
+
+        // Never an empty list: the endpoint refuses a helper who may do nothing, and a letter
+        // saying "accepting lets you:" followed by nothing would be worse than not sending it.
+        if (can.Count == 0) can.Add("help with this event");
+
+        return can;
+    }
+
+    private static string Place(Source.Entities.HostedEvent? ev)
+        => ev?.Place?.Name is { Length: > 0 } venue ? $" at {Safe(venue)}" : "";
+
+    private static string When(Source.Entities.HostedEvent? ev)
+        => ev is null ? "" : $", {ev.StartsOn:dddd, MMMM d}";
+
     /// <summary>Everybody with a place or waiting for one — the people an event's news is for.</summary>
     private static async Task<List<HostedEventBooking>> LiveBookingsAsync(
         BenDataContext db, Guid hostedEventId, CancellationToken ct)

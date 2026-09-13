@@ -194,7 +194,7 @@
                     @IndexEntry("What the kitchen needs",
                                 $"/organizations/{OrgId}/events/{EventId}/dietary", MenusPageShipped)
                     <span class="list-group-item text-secondary small">Programme — soon</span>
-                    <span class="list-group-item text-secondary small">Staff and the door — soon</span>
+                    @IndexEntry("Staff", $"/organizations/{OrgId}/events/{EventId}/staff", StaffPageShipped)
                     <span class="list-group-item text-secondary small">Files — soon</span>
                 </div>
             </div>
@@ -835,6 +835,9 @@
     /// page must never carry a link that goes nowhere.
     /// </remarks>
     private const bool MenusPageShipped = true;
+
+    /// <summary>Who is helping at this event, shipped in phase 7 of item 235.</summary>
+    private const bool StaffPageShipped = true;
 
     /// <summary>One index row for a screen of its own: a link once it ships, "soon" until then.</summary>
     private static RenderFragment IndexEntry(string label, string href, bool shipped) => shipped

@@ -304,6 +304,40 @@ public interface IBenEventBookingClient
     Task<ItemResult<PublicHostedEventPlanRecord>> GetPublicHostedEventPlanAsync(
         Guid eventId, CancellationToken token = default);
 
+    // ── who is helping (item 235 phase 7) ────────────────────────────────────
+
+    /// <summary>Everybody helping at this event, and what each of them may do.</summary>
+    Task<ItemResult<HostedEventStaffListRecord>> GetEventStaffAsync(
+        Guid orgId, Guid eventId, CancellationToken token = default);
+
+    /// <summary>
+    /// Adds somebody, or changes what an existing helper may do.
+    /// </summary>
+    /// <remarks>
+    /// One door for both, keyed on the person or the address: adding the same helper twice means
+    /// "these are the flags now", and two rows for one steward is a revocation that half works.
+    /// A member is added at once; an address with no account here is sent a link.
+    /// </remarks>
+    Task<(HostedEventStaffListRecord? Result, string? Error)> SaveEventStaffAsync(
+        Guid orgId, Guid eventId, SaveHostedEventStaffRequest request,
+        CancellationToken token = default);
+
+    /// <summary>Sends an outstanding invitation again, with a fresh link.</summary>
+    Task<(HostedEventStaffListRecord? Result, string? Error)> ResendEventStaffInviteAsync(
+        Guid orgId, Guid eventId, Guid staffId, CancellationToken token = default);
+
+    /// <summary>Takes somebody off this event. It applies to their very next request.</summary>
+    Task<(HostedEventStaffListRecord? Result, string? Error)> RemoveEventStaffAsync(
+        Guid orgId, Guid eventId, Guid staffId, CancellationToken token = default);
+
+    /// <summary>What a staff invitation is, before anybody accepts it.</summary>
+    Task<ItemResult<HostedEventStaffInviteRecord>> GetStaffInviteAsync(
+        string token, CancellationToken cancellationToken = default);
+
+    /// <summary>Says yes to helping, attaching the invitation to an account.</summary>
+    Task<(HostedEventStaffInviteRecord? Result, string? Error)> AcceptStaffInviteAsync(
+        string token, CancellationToken cancellationToken = default);
+
     /// <summary>
     /// Takes the places a guest picked on the plan and holds them until the venue answers.
     /// </summary>
