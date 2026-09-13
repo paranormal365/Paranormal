@@ -49,6 +49,21 @@ public interface IBenVenueClient
     /// <summary>The places this group describes as its venue.</summary>
     Task<LoadResult<VenueProfileRecord>> GetVenueProfilesAsync(Guid orgId, CancellationToken token = default);
 
+    /// <summary>A venue's photo library: its own pictures and organizers' offers (item 235 phase 12).</summary>
+    Task<LoadResult<VenuePhotoRecord>> GetVenuePhotosAsync(Guid orgId, Guid profileId, CancellationToken token = default);
+
+    Task<(List<VenuePhotoRecord>? Result, string? Error)> AddVenuePhotoAsync(
+        Guid orgId, Guid profileId, MultipartFormDataContent content, CancellationToken token = default);
+
+    Task<(List<VenuePhotoRecord>? Result, string? Error)> UpdateVenuePhotoAsync(
+        Guid orgId, Guid profileId, Guid photoId, UpdateVenuePhotoRequest request, CancellationToken token = default);
+
+    Task<(List<VenuePhotoRecord>? Result, string? Error)> AcceptVenuePhotoAsync(
+        Guid orgId, Guid profileId, Guid photoId, CancellationToken token = default);
+
+    Task<(List<VenuePhotoRecord>? Result, string? Error)> DeleteVenuePhotoAsync(
+        Guid orgId, Guid profileId, Guid photoId, CancellationToken token = default);
+
     Task<(List<VenueProfileRecord>? Result, string? Error)> SaveVenueProfileAsync(
         Guid orgId, SaveVenueProfileRequest request, CancellationToken token = default);
 

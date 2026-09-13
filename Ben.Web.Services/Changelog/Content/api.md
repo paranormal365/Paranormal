@@ -20,6 +20,9 @@ belongs there; this is for the part underneath.
 
 ## 2026-09-13
 
+- Hosted event plans can be started from an earlier plan at the same venue, and venues keep a photo
+  library that organizers can offer gallery pictures to.
+
 - A retention rule removes a hosted event's files, gallery and room photo links 90 days after it ends,
   after two warnings to the organizer, who can download chosen files as a zip first. The length is a
   site setting.

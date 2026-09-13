@@ -726,3 +726,23 @@ public sealed record HostedEventKeepRecord(
 public sealed record HostedEventKeepItemRecord(
     Guid UploadFileId, string Kind, string Name, long Size, string? By, DateTime AddedUtc);
 
+/// <summary>A plan used at the same venue before, offered as the starting point of a new one (phase 12).</summary>
+/// <param name="FromTheVenue">Made by the group that runs the venue on this site, so offered first.</param>
+public sealed record EarlierPlanRecord(
+    Guid HostedEventId,
+    string EventName,
+    string OrganizationName,
+    DateTime StartsOn,
+    HostedEventLayoutKind Kind,
+    int Units,
+    bool FromTheVenue,
+    bool Ours);
+
+/// <summary>An earlier plan's units, ready to start from.</summary>
+/// <param name="Units">Prices and notes only when the plan was this group's own.</param>
+/// <param name="RoomsLeftOut">Rooms this event may not offer (another group's description of the building).</param>
+public sealed record EarlierPlanUnitsRecord(
+    HostedEventLayoutKind Kind,
+    IReadOnlyList<HostedEventLayoutUnitRecord> Units,
+    int RoomsLeftOut);
+

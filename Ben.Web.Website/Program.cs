@@ -717,6 +717,16 @@ app.MapGet("/media/event-photo/{fileId:guid}", async (
         accessToken: null, httpFactory, ctx, ct);
 }).AllowAnonymous();
 
+app.MapGet("/media/venue-photo/{fileId:guid}", async (
+    Guid fileId,
+    IHttpClientFactory httpFactory, IConfiguration config,
+    HttpContext ctx, CancellationToken ct) =>
+{
+    return await Ben.Web.Website.Services.MediaProxy.StreamAsync(
+        $"{config["WebApi:BaseUrl"]}/api/public/venue-photo/{fileId}",
+        accessToken: null, httpFactory, ctx, ct);
+}).AllowAnonymous();
+
 app.MapGet("/media/tour-photo/{fileId:guid}", async (
     Guid fileId,
     IHttpClientFactory httpFactory, IConfiguration config,

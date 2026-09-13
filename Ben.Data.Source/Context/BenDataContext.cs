@@ -139,6 +139,7 @@ namespace Ben.Data.Source.Context
         public virtual DbSet<HostedEventFile> HostedEventFiles { get; set; }
         public virtual DbSet<HostedEventGalleryImage> HostedEventGalleryImages { get; set; }
         public virtual DbSet<HostedEventReview> HostedEventReviews { get; set; }
+        public virtual DbSet<VenuePhoto> VenuePhotos { get; set; }
         public virtual DbSet<EventPhotoConsent> EventPhotoConsents { get; set; }
         public virtual DbSet<OutboxEmail> OutboxEmails { get; set; }
         public virtual DbSet<OutboxEmailAttachment> OutboxEmailAttachments { get; set; }
@@ -1324,6 +1325,22 @@ namespace Ben.Data.Source.Context
             modelBuilder.Entity<HostedEventReview>().Property(r => r.Comment).HasMaxLength(1000);
             // One opinion per person per event.
             modelBuilder.Entity<HostedEventReview>().HasIndex(r => new { r.HostedEventId, r.AppUserId }).IsUnique();
+
+            // ── the venue's photo library (phase 12) ──────────────────────────────
+            modelBuilder.Entity<VenuePhoto>()
+                .HasOne(p => p.OrganizationVenueProfile).WithMany()
+                .HasForeignKey(p => p.OrganizationVenueProfileId).OnDelete(DeleteBehavior.Cascade);
+            modelBuilder.Entity<VenuePhoto>()
+                .HasOne(p => p.UploadFile).WithMany()
+                .HasForeignKey(p => p.UploadFileId).OnDelete(DeleteBehavior.NoAction);
+            modelBuilder.Entity<VenuePhoto>()
+                .HasOne(p => p.OfferedByOrganization).WithMany()
+                .HasForeignKey(p => p.OfferedByOrganizationId).IsRequired(false).OnDelete(DeleteBehavior.NoAction);
+            modelBuilder.Entity<VenuePhoto>()
+                .HasOne(p => p.OfferedFromHostedEvent).WithMany()
+                .HasForeignKey(p => p.OfferedFromHostedEventId).IsRequired(false).OnDelete(DeleteBehavior.NoAction);
+            modelBuilder.Entity<VenuePhoto>().Property(p => p.Caption).HasMaxLength(300);
+            modelBuilder.Entity<VenuePhoto>().HasIndex(p => new { p.OrganizationVenueProfileId, p.UploadFileId }).IsUnique();
 
             // ── places picked by somebody not signed in (slice 11d) ────────────────
             modelBuilder.Entity<HostedEventEmailPick>()

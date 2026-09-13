@@ -1080,6 +1080,29 @@ off the list each seen failing with the rule removed), Playwright `EventKeepTest
 inside the downloaded zip); capture `event-keep.png`, `event-after.png` re-shot. Still in phase 12: what the
 venue remembers (last plan, photo library).
 
+#### Phase 12d as built (2026-09-13) — what the venue remembers (phase 12 complete)
+
+1. **The last plan is remembered by reading it, not by storing a copy.** An empty plan page offers up to five
+   earlier plans at the same place: the verified venue's own first, then this group's, then others' published or
+   archived events; among those, plans from events that have happened before ones only drafted for later.
+   *Start from this plan* loads the units into the designer unsaved and undoable. Another group's prices and
+   notes never come across, rooms this event may not offer are left out and counted, and a plan that is not on
+   the offered list cannot be fetched by id.
+2. **The venue's photo library** (`VenuePhoto`): the venue's own uploads are kept at once; an organizer offers a
+   gallery picture with *Offer to venue* (the same file, referenced), which waits for *Keep it* / *No thanks*.
+   When the organizer is itself the venue the offer is kept at once. Kept pictures show on the published,
+   verified venue page through a new anonymous `venue-photo` endpoint. Up to 60 per venue.
+3. **Files survive for as long as something uses them.** A kept picture outlives the event's 90-day tidy-up,
+   because the upload row cannot be deleted while the library points at it; declining never removes the
+   organizer's gallery picture. Picture fitting (1920×1080, re-encoded, no metadata) moved into
+   `PictureFitting`, shared by the gallery and the library.
+4. Not built: adding a venue picture back into a new event's gallery — a gallery picture is one file per event
+   (unique index), so that would need a copy; left until somebody asks.
+
+Tests: `HostedEventEarlierPlanTests` (3; the offered-list rule and the price rule seen failing with the rule
+removed), `VenuePhotoTests` (5; the accepted-only public rule seen failing), Playwright `VenueMemoryTests` and
+`VenuePhotoLibraryTests`; capture `venue-photos.png`.
+
 ### Phase 13 — Dining as a seating assignment
 
 `HostedEventDiningTable` + `HostedEventDiningSeat` per sitting, over Confirmed bookings only;

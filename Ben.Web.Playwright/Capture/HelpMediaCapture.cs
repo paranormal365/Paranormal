@@ -2147,6 +2147,54 @@ public sealed class HelpMediaCapture : BenTestBase
         }
     }
 
+    /// <summary>A venue's photo library (item 235 phase 12).</summary>
+    [Test]
+    [Description("organization-administration: photos of the venue.")]
+    public async Task Capture_VenuePhotos()
+    {
+        var orgId = await OrgIdBySlugAsync("paranormal365");
+        const string caption = "The ballroom set for dinner";
+        var api = await SignedInApiAsync(SuperAdminEmail, SuperAdminPassword);
+        try
+        {
+            await LoginAsync(SuperAdminEmail, SuperAdminPassword);
+            await GoAsync($"/organizations/{orgId}/events/{SeededRoomsEventId}/gallery");
+            await Page.Locator("#gallery-input").SetInputFilesAsync(Path.Combine(AppContext.BaseDirectory, "Fixtures", "room-photo-1.jpg"));
+            await Page.Locator("#gallery-caption").FillAsync(caption);
+            await Page.Locator("#gallery-add").ClickAsync();
+            await Expect(Page.Locator("#gallery-note")).ToContainTextAsync("Added", new() { Timeout = 30_000 });
+            await Page.Locator(".gallery-image").Last.GetByRole(Microsoft.Playwright.AriaRole.Button, new() { Name = "Offer to venue" }).ClickAsync();
+            await Expect(Page.Locator(".gallery-image").Last.GetByText("Offered to")).ToBeVisibleAsync(new() { Timeout = 15_000 });
+
+            await GoAsync($"/organizations/{orgId}/venue");
+            var library = Page.Locator(".venue-photos").First;
+            await Expect(library.Locator(".venue-photo").First).ToBeVisibleAsync(new() { Timeout = 30_000 });
+            await library.ScrollIntoViewIfNeededAsync();
+            await ShootAsync("organization-administration", "venue-photos.png", gated: true,
+                selector: ".venue-photos", proves: "Photos of the venue");
+        }
+        finally
+        {
+            var profiles = await api.GetAsync($"/api/organizations/{orgId}/venue-profiles");
+            if (profiles.Ok)
+                foreach (var profile in (await profiles.JsonAsync())!.Value.EnumerateArray())
+                {
+                    var profileId = profile.GetProperty("id").GetString();
+                    var photos = await api.GetAsync($"/api/organizations/{orgId}/venue-profiles/{profileId}/photos");
+                    if (!photos.Ok) continue;
+                    foreach (var photo in (await photos.JsonAsync())!.Value.EnumerateArray())
+                        if (photo.TryGetProperty("caption", out var c) && c.GetString() == caption)
+                            await api.DeleteAsync($"/api/organizations/{orgId}/venue-profiles/{profileId}/photos/{photo.GetProperty("id").GetString()}");
+                }
+            var list = await api.GetAsync($"/api/organizations/{orgId}/events/{SeededRoomsEventId}/gallery");
+            if (list.Ok)
+                foreach (var image in (await list.JsonAsync())!.Value.EnumerateArray())
+                    if (image.TryGetProperty("caption", out var c) && c.GetString() == caption)
+                        await api.DeleteAsync($"/api/organizations/{orgId}/events/{SeededRoomsEventId}/gallery/{image.GetProperty("id").GetString()}");
+            await api.DisposeAsync();
+        }
+    }
+
     /// <summary>The emailed link's token, as the API logs it when no mail server is set up.</summary>
     private static string? PickTokenFromTheApiLog(string email)
     {

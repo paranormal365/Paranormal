@@ -45,6 +45,30 @@ public sealed partial class BenAdminClientAdapter
         => _api.SendExpectingReasonAsync<VenueReasonRequest, VenueRequestListRecord>(
                HttpMethod.Post, $"/api/organizations/{orgId}/venue-grants/{grantId}/revoke", request, token);
 
+    private static string VenuePhotosUrl(Guid orgId, Guid profileId) => $"{VenueProfilesUrl(orgId)}/{profileId}/photos";
+
+    public Task<LoadResult<VenuePhotoRecord>> GetVenuePhotosAsync(Guid orgId, Guid profileId, CancellationToken token = default)
+        => _api.GetListAsync<VenuePhotoRecord>(VenuePhotosUrl(orgId, profileId), token);
+
+    public Task<(List<VenuePhotoRecord>? Result, string? Error)> AddVenuePhotoAsync(
+        Guid orgId, Guid profileId, MultipartFormDataContent content, CancellationToken token = default)
+        => _api.PostMultipartExpectingReasonAsync<List<VenuePhotoRecord>>(VenuePhotosUrl(orgId, profileId), content, token);
+
+    public Task<(List<VenuePhotoRecord>? Result, string? Error)> UpdateVenuePhotoAsync(
+        Guid orgId, Guid profileId, Guid photoId, UpdateVenuePhotoRequest request, CancellationToken token = default)
+        => _api.SendExpectingReasonAsync<UpdateVenuePhotoRequest, List<VenuePhotoRecord>>(
+               HttpMethod.Put, $"{VenuePhotosUrl(orgId, profileId)}/{photoId}", request, token);
+
+    public Task<(List<VenuePhotoRecord>? Result, string? Error)> AcceptVenuePhotoAsync(
+        Guid orgId, Guid profileId, Guid photoId, CancellationToken token = default)
+        => _api.SendExpectingReasonAsync<object, List<VenuePhotoRecord>>(
+               HttpMethod.Post, $"{VenuePhotosUrl(orgId, profileId)}/{photoId}/accept", new { }, token);
+
+    public Task<(List<VenuePhotoRecord>? Result, string? Error)> DeleteVenuePhotoAsync(
+        Guid orgId, Guid profileId, Guid photoId, CancellationToken token = default)
+        => _api.SendExpectingReasonAsync<object, List<VenuePhotoRecord>>(
+               HttpMethod.Delete, $"{VenuePhotosUrl(orgId, profileId)}/{photoId}", new { }, token);
+
     public Task<LoadResult<VenueProfileRecord>> GetVenueProfilesAsync(Guid orgId, CancellationToken token = default)
         => _api.GetListAsync<VenueProfileRecord>(VenueProfilesUrl(orgId), token);
 

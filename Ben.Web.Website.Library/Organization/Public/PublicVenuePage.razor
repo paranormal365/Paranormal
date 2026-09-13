@@ -6,6 +6,7 @@
 @using Ben.Web.Website.Library.Kit
 @inject IBenAdminClient AdminClient
 @inject IBenUserState UserState
+@inject IMediaUrlBuilder MediaUrls
 
 @* A venue's own page (item 235 phase 9): the building's story, its rooms, and what is on there.
 
@@ -52,6 +53,26 @@
             <div class="card mb-3">
                 <div class="card-header fw-semibold">The building</div>
                 <div class="card-body" id="venue-history" style="white-space:pre-line;">@history</div>
+            </div>
+        }
+
+        @if (v.Photos is { Count: > 0 } photos)
+        {
+            @* The pictures the venue chose to keep (item 235 phase 12). *@
+            <div class="row g-2 mb-3" id="venue-photos">
+                @foreach (var photo in photos)
+                {
+                    <div class="col-6 col-md-4">
+                        <figure class="mb-0">
+                            <img class="img-fluid rounded" style="aspect-ratio:3/2;object-fit:cover;width:100%;" loading="lazy"
+                                 src="@MediaUrls.VenuePhoto(photo.UploadFileId)" alt="@(photo.Caption ?? v.PlaceName)" />
+                            @if (photo.Caption is { Length: > 0 } caption)
+                            {
+                                <figcaption class="small text-secondary mt-1">@caption</figcaption>
+                            }
+                        </figure>
+                    </div>
+                }
             </div>
         }
 

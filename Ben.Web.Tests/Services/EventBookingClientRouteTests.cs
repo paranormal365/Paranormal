@@ -95,7 +95,7 @@ public sealed class EventBookingClientRouteTests
         "GetMyBookingContactAsync", "PickHostedEventPlacesByEmailAsync", "GetEmailPickAsync",
         "ConfirmEmailPickAsync", "LetGoEmailPickAsync", "RequestHostedEventAttendanceAsync",
         "GetHostedEventCopyPreviewAsync", "CopyHostedEventAsync", "DownloadHostedEventBookingsCsvAsync",
-        "GetHostedEventKeepAsync", "GetHostedEventReviewsAsync", "SaveMyHostedEventReviewAsync", "DeleteMyHostedEventReviewAsync",
+        "GetEarlierPlansAsync", "GetEarlierPlanUnitsAsync", "GetHostedEventKeepAsync", "GetHostedEventReviewsAsync", "SaveMyHostedEventReviewAsync", "DeleteMyHostedEventReviewAsync",
         "GetHostedEventAfterAsync", "SetHostedEventAfterAsync", "SetHostedEventReviewHiddenAsync",
         "GetEventBandsAsync", "SetEventBandsAsync", "SetBookingBandAsync",
         "GetEventDoorAsync", "DoorArriveAsync", "DoorLeaveAsync", "DoorUndoAsync",
@@ -175,10 +175,10 @@ public sealed class EventBookingClientRouteTests
         // "absent". Counted rather than named, so a new read added later is held to the same rule.
         var text = Source(Contract);
         var singleObjectReads = Methods.Count(m => m.StartsWith("Get", StringComparison.Ordinal))
-                              - 1;   // GetMyHostedEventBookingsAsync is a list and carries LoadResult
+                              - 2;   // GetMyHostedEventBookingsAsync and GetEarlierPlansAsync are lists and carry LoadResult
 
         Assert.Equal(singleObjectReads, Occurrences(text, "Task<ItemResult<"));
-        Assert.Equal(1, Occurrences(text, "Task<LoadResult<"));
+        Assert.Equal(2, Occurrences(text, "Task<LoadResult<"));
     }
 
     // ── what a source scan cannot see: the wire ──────────────────────────────

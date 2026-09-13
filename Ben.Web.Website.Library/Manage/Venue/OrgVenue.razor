@@ -123,6 +123,10 @@
                         <button type="button" class="btn btn-primary" id="@($"venue-save-{key}")"
                                 disabled="@_busy" @onclick="() => SaveAsync(f)">Save</button>
                     </div>
+                    @if (f.ProfileId is { } profileId)
+                    {
+                        <VenuePhotoLibrary OrgId="OrgId" ProfileId="profileId" />
+                    }
                 </div>
             </div>
         }
@@ -144,6 +148,9 @@
     private sealed class Form
     {
         public Guid PlaceId { get; init; }
+
+        /// <summary>Null for a place listed here that has not been saved as a profile yet.</summary>
+        public Guid? ProfileId { get; init; }
         public string PlaceName { get; init; } = "";
         public string? History { get; set; }
         public string? HouseRules { get; set; }
@@ -184,7 +191,7 @@
         _forms.Clear();
         _forms.AddRange(profiles.Select(p => new Form
         {
-            PlaceId = p.PlaceId, PlaceName = p.PlaceName, History = p.History, HouseRules = p.HouseRules,
+            PlaceId = p.PlaceId, ProfileId = p.Id == Guid.Empty ? null : p.Id, PlaceName = p.PlaceName, History = p.History, HouseRules = p.HouseRules,
             MaxOvernightGuests = p.MaxOvernightGuests, IsPublished = p.IsPublished, VerifiedUtc = p.VerifiedUtc,
         }));
     }

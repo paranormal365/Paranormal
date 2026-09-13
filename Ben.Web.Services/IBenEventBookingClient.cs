@@ -438,6 +438,11 @@ public interface IBenEventBookingClient
     Task<(HostedEventAfterRecord? Result, string? Error)> SetHostedEventReviewHiddenAsync(
         Guid orgId, Guid eventId, Guid reviewId, bool hidden, CancellationToken token = default);
 
+    /// <summary>Plans used at this event's venue before, to start a new plan from (item 235 phase 12).</summary>
+    Task<LoadResult<EarlierPlanRecord>> GetEarlierPlansAsync(Guid orgId, Guid eventId, CancellationToken token = default);
+
+    Task<ItemResult<EarlierPlanUnitsRecord>> GetEarlierPlanUnitsAsync(Guid orgId, Guid eventId, Guid sourceId, CancellationToken token = default);
+
     /// <summary>What an organizer may take away from an event before its files are removed.</summary>
     Task<ItemResult<HostedEventKeepRecord>> GetHostedEventKeepAsync(Guid orgId, Guid eventId, CancellationToken token = default);
 

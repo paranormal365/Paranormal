@@ -366,6 +366,13 @@ public sealed class OrganizationPurge
             // NoAction, so they have to go before the rooms further down. They are taken here
             // rather than there because they also hang off the event, and deleting the event
             // first would be refused by these same rows (item 235 phase 2).
+            // A venue's photo library (phase 12): a row may name the group that offered it, the event it
+            // came from, or a file this group owns — each NoAction. The venue's own profile rows cascade.
+            await db.VenuePhotos
+                .Where(x => x.OfferedByOrganizationId == organizationId
+                         || (x.OfferedFromHostedEventId != null && x.OfferedFromHostedEvent!.OrganizationId == organizationId)
+                         || x.UploadFile.OwnerOrganizationId == organizationId)
+                .ExecuteDeleteAsync(ct);
             // Places picked by email (slice 11d) point at nights and units with NoAction, and a pick
             // points at the booking it became. Taken whole — the pick's places cascade from it — by
             // the event, and by the reference, for the same reason as the nights below.

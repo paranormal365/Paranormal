@@ -51,6 +51,36 @@
         <ChildContent Context="layout">
             @if (_model is { } model)
             {
+                @if (model.Units.Count == 0 && _layout.Item?.Units.Count == 0 && _earlier.Count > 0)
+                {
+                    @* WHAT THE VENUE REMEMBERS (phase 12). An empty plan at a building somebody has laid
+                       out before starts from that, not from nothing. Loaded unsaved, so it is looked at
+                       before it becomes this event's. *@
+                    <div class="card mb-3" id="layout-earlier">
+                        <div class="card-header fw-semibold">Start from a plan used at this venue before</div>
+                        <ul class="list-group list-group-flush">
+                            @foreach (var plan in _earlier)
+                            {
+                                var thisPlan = plan;
+                                <li class="list-group-item d-flex flex-wrap justify-content-between align-items-center gap-2">
+                                    <div>
+                                        <div class="fw-semibold">@thisPlan.EventName</div>
+                                        <div class="small text-secondary">
+                                            @thisPlan.OrganizationName · @thisPlan.StartsOn.ToString("MM/dd/yyyy") ·
+                                            @thisPlan.Units @(thisPlan.Kind == HostedEventLayoutKind.Seats ? "seats" : "rooms")
+                                            @if (thisPlan.FromTheVenue) { <span class="badge text-bg-secondary ms-1">The venue's plan</span> }
+                                            @if (!thisPlan.Ours) { <text> · prices and notes are not copied</text> }
+                                        </div>
+                                    </div>
+                                    <button type="button" class="btn btn-sm btn-outline-primary text-nowrap" disabled="@_busy"
+                                            id="@($"layout-start-from-{thisPlan.HostedEventId:N}")"
+                                            @onclick="() => StartFromAsync(thisPlan)">Start from this plan</button>
+                                </li>
+                            }
+                        </ul>
+                    </div>
+                }
+
                 <BenPlanDesigner Model="@model"
                                  Rooms="@_rooms"
                                  Busy="@_busy"
@@ -108,6 +138,7 @@
     private ItemResult<HostedEventLayoutRecord> _layout;
     private PlanModel? _model;
     private IReadOnlyList<PlanRoomOption> _rooms = [];
+    private IReadOnlyList<EarlierPlanRecord> _earlier = [];
     private bool _roomsRefused;
 
     private bool _loading = true;
@@ -160,6 +191,10 @@
         {
             _model = PlanModel.From(layout.Kind, layout.Units);
             await LoadRoomsAsync(layout.Kind);
+
+            _earlier = layout.Units.Count == 0
+                ? (await AdminClient.GetEarlierPlansAsync(OrgId, EventId)).Items
+                : [];
         }
 
         _loading = false;
@@ -194,6 +229,30 @@
                 .ThenBy(r => r.Name, StringComparer.OrdinalIgnoreCase)
                 .Select(r => new PlanRoomOption(r.Id, r.Name, r.Floor, r.Capacity, r.BedNote))
         ];
+    }
+
+    private async Task StartFromAsync(EarlierPlanRecord plan)
+    {
+        if (_model is not { } model) return;
+        _busy = true;
+        _error = null;
+        _note = null;
+
+        var loaded = await AdminClient.GetEarlierPlanUnitsAsync(OrgId, EventId, plan.HostedEventId);
+        _busy = false;
+        if (loaded.Item is not { } earlier) { _error = "That plan couldn't be read just now."; return; }
+
+        if (!model.StartFrom(earlier.Kind, PlanModel.From(earlier.Kind, earlier.Units).Units))
+        {
+            _error = "This plan already has something on it.";
+            return;
+        }
+
+        await LoadRoomsAsync(earlier.Kind);
+        _note = $"Started from {plan.EventName}. Check it, then save."
+              + (earlier.RoomsLeftOut > 0
+                  ? $" {earlier.RoomsLeftOut} {(earlier.RoomsLeftOut == 1 ? "room was" : "rooms were")} left out because this event can't offer {(earlier.RoomsLeftOut == 1 ? "it" : "them")}."
+                  : "");
     }
 
     private async Task SaveAsync()

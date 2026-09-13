@@ -464,6 +464,21 @@ public sealed class PlanModel
     /// The server refuses a kind change once anything is confirmed into the plan, and refusing an
     /// occupied one here as well means the designer never offers a change it knows will bounce.
     /// </remarks>
+    /// <summary>
+    /// Fills an empty plan from an earlier one at the same venue (item 235 phase 12). Undoable, and unsaved,
+    /// so the organizer looks at it before it becomes theirs.
+    /// </summary>
+    /// <returns>False when the plan already has something on it.</returns>
+    public bool StartFrom(HostedEventLayoutKind kind, IEnumerable<PlanUnit> units)
+    {
+        if (_units.Count > 0) return false;
+
+        Remember();
+        Kind = kind;
+        _units = [.. units.Select(u => u with { Key = Guid.NewGuid(), Id = null })];
+        return true;
+    }
+
     public bool ChangeKind(HostedEventLayoutKind kind)
     {
         if (kind == Kind) return true;

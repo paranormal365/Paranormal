@@ -31,6 +31,14 @@ public sealed partial class BenAdminClientAdapter
 
     private static string GalleryUrl(Guid orgId, Guid eventId) => $"/api/organizations/{orgId}/events/{eventId}/gallery";
 
+    public Task<ItemResult<GalleryVenueRecord>> GetGalleryVenueAsync(Guid orgId, Guid eventId, CancellationToken token = default)
+        => _api.GetItemAsync<GalleryVenueRecord>($"{GalleryUrl(orgId, eventId)}/venue", token);
+
+    public Task<(GalleryVenueRecord? Result, string? Error)> OfferGalleryImageToVenueAsync(
+        Guid orgId, Guid eventId, Guid imageId, CancellationToken token = default)
+        => _api.SendExpectingReasonAsync<object, GalleryVenueRecord>(
+               HttpMethod.Post, $"{GalleryUrl(orgId, eventId)}/{imageId}/offer-to-venue", new { }, token);
+
     public Task<LoadResult<HostedEventImageRecord>> GetEventGalleryAsync(Guid orgId, Guid eventId, CancellationToken token = default)
         => _api.GetListAsync<HostedEventImageRecord>(GalleryUrl(orgId, eventId), token);
 

@@ -25,6 +25,12 @@ public interface IBenEventFileClient
 
     Task<LoadResult<HostedEventImageRecord>> GetEventGalleryAsync(Guid orgId, Guid eventId, CancellationToken token = default);
 
+    /// <summary>The venue this gallery can offer pictures to (item 235 phase 12).</summary>
+    Task<ItemResult<GalleryVenueRecord>> GetGalleryVenueAsync(Guid orgId, Guid eventId, CancellationToken token = default);
+
+    Task<(GalleryVenueRecord? Result, string? Error)> OfferGalleryImageToVenueAsync(
+        Guid orgId, Guid eventId, Guid imageId, CancellationToken token = default);
+
     /// <summary>Adds a picture. The content carries <c>file</c> and <c>caption</c>.</summary>
     Task<(List<HostedEventImageRecord>? Result, string? Error)> AddEventGalleryImageAsync(
         Guid orgId, Guid eventId, MultipartFormDataContent content, CancellationToken token = default);

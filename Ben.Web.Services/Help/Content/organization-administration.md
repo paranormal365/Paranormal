@@ -1092,6 +1092,15 @@ arrows, or take it off the plan.
 **Prices are shown to guests and never charged here.** Blank means "ask us", and zero means the
 seat is included. You and your guests settle up between yourselves.
 
+### Starting from a plan used here before
+
+When an event's plan is empty and the venue has been laid out for an earlier event, the plan page offers
+**Start from a plan used at this venue before**: the venue's own plan first, then your group's, then other
+groups' published events there. Pressing *Start from this plan* fills the page with its rooms or seats,
+sections and positions — not saved until you press Save, so you can change anything first. Your own
+group's prices and notes come across; another group's never do, and a room this event can't offer is
+left out and the page says so.
+
 ### The plan on a phone
 
 ![The same 260-seat house at iPhone width](help-media:organization-administration/event-plan-phone.png)
@@ -1425,6 +1434,15 @@ below — and until it is done the page stays private, because a public page hea
 itself a claim to be the building.
 
 ![Describing a place you run](help-media:organization-administration/venue-profile.png)
+
+**Photos of the venue.** Under each place you run, *Photos of the venue* keeps pictures of the building.
+Pictures you add are kept straight away. Organizers holding events at your venue can offer pictures from
+their event's gallery with **Offer to venue**; an offer waits for you to press *Keep it* or *No thanks*.
+Kept pictures show on your published venue page, fitted and with their location removed. Declining an
+offer never takes the picture away from the organizer's gallery, and a picture you keep stays in your
+library after the organizer's event files are removed.
+
+![A venue's photo library](help-media:organization-administration/venue-photos.png)
 
 ### A place's contact details
 

@@ -55,6 +55,8 @@ public sealed class MediaUrlBuilder : IMediaUrlBuilder
         return url;
     }
 
+    public string VenuePhoto(Guid uploadFileId) => $"/media/venue-photo/{uploadFileId}";
+
     public string EventKeepZip(Guid orgId, Guid eventId, IReadOnlyCollection<Guid> uploadFileIds)
     {
         var token = _tokens.AccessToken;

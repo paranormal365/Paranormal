@@ -104,6 +104,37 @@ public sealed class PublicUserPhotoController : BenControllerBase
     }
 
     /// <summary>
+    /// A picture in a venue's photo library (item 235 phase 12).
+    /// </summary>
+    /// <remarks>
+    /// Anonymous, for the public venue page. Only a picture the venue accepted, on a page it published and was
+    /// verified for: an offer still waiting is the organizer's, not yet the venue's to show.
+    /// </remarks>
+    [HttpGet("venue-photo/{uploadFileId:guid}")]
+    [AllowAnonymous]
+    [Microsoft.AspNetCore.RateLimiting.DisableRateLimiting]
+    public async Task<IActionResult> GetVenuePhoto(Guid uploadFileId, CancellationToken ct)
+    {
+        await using var db = await _db.CreateDbContextAsync(ct);
+
+        // Only a picture the venue kept, on a venue page it published.
+        var picture = await db.VenuePhotos.AsNoTracking()
+            .Where(p => p.UploadFileId == uploadFileId && p.AcceptedUtc != null
+                     && p.OrganizationVenueProfile.IsPublished && p.OrganizationVenueProfile.VerifiedUtc != null)
+            .Select(p => new { p.UploadFile.StoragePath, p.UploadFile.ContentType })
+            .FirstOrDefaultAsync(ct);
+
+        if (picture?.StoragePath is not { Length: > 0 } path) return NotFound();
+
+        var serving = _media.ServingPathFor(path);
+        if (!_storage.Exists(serving)) return NotFound();
+
+        var stream = await _storage.OpenReadAsync(serving, ct);
+        Response.Headers.CacheControl = "public, max-age=3600";
+        return File(stream, picture.ContentType ?? "image/jpeg");
+    }
+
+    /// <summary>
     /// A picture from a hosted event's public gallery (item 235 phase 11).
     /// </summary>
     /// <remarks>

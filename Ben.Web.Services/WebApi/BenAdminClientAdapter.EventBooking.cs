@@ -346,6 +346,12 @@ public sealed partial class BenAdminClientAdapter
                HttpMethod.Post, $"/api/organizations/{orgId}/events/{eventId}/reviews/{reviewId}/{(hidden ? "hide" : "show")}",
                new { }, token);
 
+    public Task<LoadResult<EarlierPlanRecord>> GetEarlierPlansAsync(Guid orgId, Guid eventId, CancellationToken token = default)
+        => _api.GetListAsync<EarlierPlanRecord>($"/api/organizations/{orgId}/events/{eventId}/layout/earlier", token);
+
+    public Task<ItemResult<EarlierPlanUnitsRecord>> GetEarlierPlanUnitsAsync(Guid orgId, Guid eventId, Guid sourceId, CancellationToken token = default)
+        => _api.GetItemAsync<EarlierPlanUnitsRecord>($"/api/organizations/{orgId}/events/{eventId}/layout/earlier/{sourceId}", token);
+
     public Task<ItemResult<HostedEventKeepRecord>> GetHostedEventKeepAsync(Guid orgId, Guid eventId, CancellationToken token = default)
         => _api.GetItemAsync<HostedEventKeepRecord>($"/api/organizations/{orgId}/events/{eventId}/keep", token);
 

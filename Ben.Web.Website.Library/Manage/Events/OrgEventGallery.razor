@@ -82,6 +82,19 @@
                                 <button type="button" class="btn btn-outline-secondary btn-sm" disabled="@(_busy || index == _rows.Count - 1)"
                                         aria-label="Move later" @onclick="() => MoveAsync(index, 1)">↓</button>
                                 @if (index == 0) { <span class="badge bg-secondary align-self-center ms-1">Leads the page</span> }
+                                @if (_venue?.VenueName is { } venueName)
+                                {
+                                    @if (_venue.OfferedUploadFileIds.Contains(image.UploadFileId))
+                                    {
+                                        <span class="badge text-bg-secondary align-self-center ms-1">Offered to @venueName</span>
+                                    }
+                                    else
+                                    {
+                                        <button type="button" class="btn btn-outline-secondary btn-sm text-nowrap" disabled="@_busy"
+                                                title="@($"Offer this picture to {venueName}'s photo library")"
+                                                @onclick="() => OfferAsync(image)">Offer to venue</button>
+                                    }
+                                }
                                 <button type="button" class="btn btn-outline-danger btn-sm ms-auto" disabled="@_busy"
                                         @onclick="() => RemoveAsync(image)">Remove</button>
                             </div>
@@ -120,8 +133,22 @@
         _loading = true;
         _event ??= await AdminClient.GetHostedEventAsync(OrgId, EventId);
         _images = await AdminClient.GetEventGalleryAsync(OrgId, EventId);
+        _venue = (await AdminClient.GetGalleryVenueAsync(OrgId, EventId)).Item;
         _rows = [.. _images.Items];
         _loading = false;
+    }
+
+    /// <summary>The venue that keeps a photo library here, when there is one (phase 12).</summary>
+    private GalleryVenueRecord? _venue;
+
+    private async Task OfferAsync(HostedEventImageRecord image)
+    {
+        _busy = true; _note = null; _error = null;
+        var (venue, error) = await AdminClient.OfferGalleryImageToVenueAsync(OrgId, EventId, image.Id);
+        _busy = false;
+        if (venue is null) { _error = error ?? "That couldn't be offered just now."; return; }
+        _venue = venue;
+        _note = $"Offered to {venue.VenueName}. They decide whether to keep it.";
     }
 
     private void Picked(InputFileChangeEventArgs e) => _picked = e.File;

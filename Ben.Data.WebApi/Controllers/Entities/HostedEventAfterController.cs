@@ -304,6 +304,102 @@ public sealed class HostedEventAfterController : OrgCmsControllerBase
             average, count, reviews);
     }
 
+    // ── what the venue remembers ─────────────────────────────────────────────
+
+    /// <summary>
+    /// Plans used at this event's venue before, most useful first: the venue's own group, then this group's,
+    /// then anybody's published events there.
+    /// </summary>
+    /// <remarks>
+    /// Ben, 2026-09-13: <i>"we should remember the venue from now on and use the room or seating as a starting
+    /// point next time someone reserves the venue."</i> Remembered by reading what is already there rather than
+    /// storing a second copy: the plan an event used is the record. Another group's draft is never offered, and
+    /// another group's prices and notes never come across — the rows and seats of a building are a fact about
+    /// the building; what somebody charged for them is not.
+    /// </remarks>
+    [HttpGet("layout/earlier")]
+    public async Task<ActionResult<IReadOnlyList<EarlierPlanRecord>>> EarlierPlans(Guid orgId, Guid eventId, CancellationToken ct)
+    {
+        var userId = GetCurrentUserId();
+        if (userId is null) return Unauthorized();
+        if (!await _access.CanReadEventAsync(userId.Value, orgId, ct)) return Forbid();
+
+        await using var db = await DbFactory.CreateDbContextAsync(ct);
+        var ev = await db.HostedEvents.AsNoTracking().FirstOrDefaultAsync(e => e.Id == eventId && e.OrganizationId == orgId, ct);
+        if (ev is null) return NotFound();
+
+        return Ok(await EarlierAsync(db, ev, ct));
+    }
+
+    /// <summary>One earlier plan's units, to load into the designer unsaved.</summary>
+    [HttpGet("layout/earlier/{sourceId:guid}")]
+    public async Task<ActionResult<EarlierPlanUnitsRecord>> EarlierPlanUnits(Guid orgId, Guid eventId, Guid sourceId, CancellationToken ct)
+    {
+        var userId = GetCurrentUserId();
+        if (userId is null) return Unauthorized();
+        if (!await _access.CanReadEventAsync(userId.Value, orgId, ct)) return Forbid();
+
+        await using var db = await DbFactory.CreateDbContextAsync(ct);
+        var ev = await db.HostedEvents.AsNoTracking().FirstOrDefaultAsync(e => e.Id == eventId && e.OrganizationId == orgId, ct);
+        if (ev is null) return NotFound();
+
+        // Only one of the plans this event would be offered — never an arbitrary event by id.
+        var offered = await EarlierAsync(db, ev, ct);
+        if (offered.FirstOrDefault(p => p.HostedEventId == sourceId) is not { } plan) return NotFound();
+
+        var ours = plan.Ours;
+        var roomOwners = new List<Guid> { orgId };
+        if (await Services.Venues.VenueGrants.RoomsLentToAsync(db, ev, ct) is Guid venueOrgId) roomOwners.Add(venueOrgId);
+
+        var units = await db.HostedEventLayoutUnits.AsNoTracking()
+            .Include(u => u.PlaceRoom)
+            .Where(u => u.HostedEventId == sourceId)
+            .OrderBy(u => u.SortOrder)
+            .ToListAsync(ct);
+
+        var kept = units.Where(u => u.PlaceRoomId is null || roomOwners.Contains(u.PlaceRoom!.OrganizationId)).ToList();
+
+        return Ok(new EarlierPlanUnitsRecord(
+            plan.Kind,
+            [.. kept.Select(u => new HostedEventLayoutUnitRecord(
+                Guid.Empty, u.PlaceRoomId, EventCapacity.NameOf(u), u.Section, u.PlaceRoom?.Floor, u.PlaceRoom?.BedNote,
+                EventCapacity.CapacityOf(u), u.Capacity,
+                ours ? u.Price : null, ours ? u.Note : null,
+                u.LayoutRow, u.LayoutColumn, u.SortOrder))],
+            units.Count - kept.Count));
+    }
+
+    internal static async Task<IReadOnlyList<EarlierPlanRecord>> EarlierAsync(BenDataContext db, HostedEvent ev, CancellationToken ct)
+    {
+        var venueOrg = await db.OrganizationVenueProfiles.AsNoTracking()
+            .Where(p => p.PlaceId == ev.PlaceId && p.VerifiedUtc != null)
+            .Select(p => (Guid?)p.OrganizationId)
+            .FirstOrDefaultAsync(ct);
+
+        var rows = await db.HostedEvents.AsNoTracking()
+            .Where(e => e.PlaceId == ev.PlaceId && e.Id != ev.Id
+                     && db.HostedEventLayoutUnits.Any(u => u.HostedEventId == e.Id)
+                     && (e.OrganizationId == ev.OrganizationId
+                      || HostedEventStates.OnThePublicSite.Contains(e.LifecycleState)
+                      || e.LifecycleState == HostedEventLifecycleState.Archived))
+            .Select(e => new
+            {
+                e.Id, e.Name, OrgName = e.Organization.Name, e.OrganizationId, e.StartsOn, e.LayoutKind,
+                Units = db.HostedEventLayoutUnits.Count(u => u.HostedEventId == e.Id),
+            })
+            .ToListAsync(ct);
+
+        return [.. rows
+            .Select(r => new EarlierPlanRecord(r.Id, r.Name, r.OrgName, r.StartsOn, r.LayoutKind, r.Units,
+                FromTheVenue: venueOrg == r.OrganizationId, Ours: r.OrganizationId == ev.OrganizationId))
+            .OrderByDescending(r => r.FromTheVenue)
+            .ThenByDescending(r => r.Ours)
+            // A plan that has been used — the event has happened — before one only drafted for the future.
+            .ThenByDescending(r => r.StartsOn <= DateTime.UtcNow.Date)
+            .ThenByDescending(r => r.StartsOn)
+            .Take(5)];
+    }
+
     // ── pick and zip ─────────────────────────────────────────────────────────
 
     /// <summary>The most things one zip may carry, so the address that asks for them stays a reasonable length.</summary>

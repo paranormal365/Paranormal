@@ -113,7 +113,12 @@ public sealed record PublicVenueRecord(
     string? HouseRules,
     int? MaxOvernightGuests,
     IReadOnlyList<PublicVenueRoomRecord> Rooms,
-    IReadOnlyList<PublicVenueEventRecord> Events);
+    IReadOnlyList<PublicVenueEventRecord> Events,
+    /// <summary>The pictures in the venue's library that it chose to keep (item 235 phase 12).</summary>
+    IReadOnlyList<PublicVenuePhotoRecord>? Photos = null);
+
+/// <summary>A picture of the venue, on its public page.</summary>
+public sealed record PublicVenuePhotoRecord(Guid UploadFileId, string? Caption);
 
 /// <summary>A room the venue chose to show.</summary>
 public sealed record PublicVenueRoomRecord(string Name, string? Floor, string? Description, int? Capacity);
@@ -220,3 +225,15 @@ public sealed record AdminVenueClaimListRecord(
     IReadOnlyList<VenueClaimRecord> Settled,
     IReadOnlyList<ConfirmedVenueRecord> Confirmed,
     string? Note = null);
+
+/// <summary>A picture in a venue's library, for the venue's own page (item 235 phase 12).</summary>
+/// <param name="AcceptedUtc">Null while an organizer's offer waits for the venue.</param>
+public sealed record VenuePhotoRecord(
+    Guid Id, Guid UploadFileId, string? Caption, int SortOrder, DateTime? AcceptedUtc,
+    string? OfferedByOrganizationName, string? OfferedFromEventName);
+
+public sealed record UpdateVenuePhotoRequest(string? Caption, int? SortOrder = null);
+
+/// <summary>The venue an event's gallery can offer pictures to, and which pictures it already has.</summary>
+public sealed record GalleryVenueRecord(string? VenueName, IReadOnlyList<Guid> OfferedUploadFileIds);
+

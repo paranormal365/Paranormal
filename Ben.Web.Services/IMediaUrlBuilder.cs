@@ -54,6 +54,9 @@ public interface IMediaUrlBuilder
     /// <summary>A picture from an event's public gallery — anonymous, like a tour's (item 235 phase 11).</summary>
     string EventPhoto(Guid uploadFileId);
 
+    /// <summary>A picture a venue kept in its photo library, for its public page (item 235 phase 12).</summary>
+    string VenuePhoto(Guid uploadFileId);
+
     /// <summary>
     /// The chosen files, pictures and photos of an event as one zip (item 235 phase 12). Not cached: every
     /// choice is a different address.
