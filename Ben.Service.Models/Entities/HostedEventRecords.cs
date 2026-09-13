@@ -415,3 +415,101 @@ public sealed record PublicHostedEventPlanRecord(
     IReadOnlyList<HostedEventNightRecord> Nights,
     IReadOnlyList<PublicHostedEventPlanUnitRecord> Units,
     IReadOnlyList<PublicHostedEventPlanCellRecord> Cells);
+
+// ── the programme (item 235 phase 10) ─────────────────────────────────────────
+
+/// <summary>One session, as the host's editor reads it.</summary>
+/// <param name="Where">The room's name, or the words the host wrote.</param>
+/// <param name="Waiting">How many are queued for a place.</param>
+public sealed record HostedEventSessionRecord(
+    Guid Id,
+    string Title,
+    string? Description,
+    DateTime StartsAtUtc,
+    DateTime EndsAtUtc,
+    Guid? PlaceRoomId,
+    string? LocationText,
+    string? Where,
+    string? LedBy,
+    int? Capacity,
+    bool RequiresSignUp,
+    int PlacesTaken,
+    int Waiting,
+    bool IsCancelled,
+    string? CancelledReason,
+    DateTime? ChangedUtc);
+
+/// <summary>An event's whole programme, for its host.</summary>
+public sealed record HostedEventProgrammeRecord(
+    Guid HostedEventId,
+    string TimeZoneId,
+    DateTime? PublishedUtc,
+    IReadOnlyList<DateTime> Nights,
+    IReadOnlyList<HostedEventSessionRecord> Sessions,
+    string? Note = null);
+
+/// <summary>Creates or changes a session. Times are on the venue's clock; an end before the start is the next day.</summary>
+public sealed record SaveHostedEventSessionRequest(
+    string Title,
+    string? Description,
+    DateTime Date,
+    TimeSpan StartsLocal,
+    TimeSpan EndsLocal,
+    Guid? PlaceRoomId,
+    string? LocationText,
+    string? LedBy,
+    int? Capacity,
+    bool RequiresSignUp);
+
+/// <summary>Calls a session off, with a reason everybody signed up is told.</summary>
+public sealed record CancelHostedEventSessionRequest(string? Reason);
+
+/// <summary>Who has a place in a session, and who is waiting, in order.</summary>
+public sealed record HostedEventSessionRosterRecord(
+    Guid SessionId,
+    string Title,
+    IReadOnlyList<HostedEventSessionRosterLine> In,
+    IReadOnlyList<HostedEventSessionRosterLine> Waiting);
+
+/// <summary>One person on a roster.</summary>
+public sealed record HostedEventSessionRosterLine(Guid SignUpId, string Name, int People, DateTime SignedUpUtc, bool IsHelping);
+
+/// <summary>The published programme, for a guest or a visitor.</summary>
+/// <param name="CanSignUp">Whether this viewer may sign up for anything.</param>
+/// <param name="WhyNotSignUp">Why not, in words, for a signed-in viewer who may not.</param>
+/// <param name="MaxPeople">The most of their party a sign-up may be for.</param>
+/// <param name="ChangedSinceSeen">Whether something moved or was cancelled since this guest last looked.</param>
+public sealed record PublicProgrammeRecord(
+    Guid HostedEventId,
+    string TimeZoneId,
+    IReadOnlyList<DateTime> Nights,
+    IReadOnlyList<PublicSessionRecord> Sessions,
+    bool CanSignUp,
+    string? WhyNotSignUp,
+    int MaxPeople,
+    bool ChangedSinceSeen);
+
+/// <summary>One session on the published programme.</summary>
+/// <param name="Mine">This viewer's place or position in the queue, when they have one.</param>
+public sealed record PublicSessionRecord(
+    Guid Id,
+    string Title,
+    string? Description,
+    DateTime StartsAtUtc,
+    DateTime EndsAtUtc,
+    string? Where,
+    string? LedBy,
+    int? Capacity,
+    bool RequiresSignUp,
+    int PlacesTaken,
+    bool IsCancelled,
+    string? CancelledReason,
+    bool Changed,
+    MySessionPlaceRecord? Mine);
+
+/// <summary>A guest's place in one session.</summary>
+/// <param name="Position">Where they are in the queue when waiting. 1 is next.</param>
+public sealed record MySessionPlaceRecord(Guid SignUpId, int People, bool Waiting, int? Position);
+
+/// <summary>Signs up for a session, for this many of the party.</summary>
+public sealed record SessionSignUpRequest(int People = 1);

@@ -745,6 +745,87 @@ public sealed class EventGuestMailer
             .Select(n => $"{n.HostedEventNight.Date:dddd, MMMM d} — {EventCapacity.NameOf(n) ?? "your room"}")
             .ToList();
 
+    // ── the programme (phase 10) ─────────────────────────────────────────────
+
+    /// <summary>
+    /// Tells guests who were waiting that a place in a session came free and is now theirs.
+    /// </summary>
+    /// <remarks>
+    /// The whole point of a queue. Moving somebody up without telling them leaves an empty chair in
+    /// the Ovilus class and a guest who thinks they are still waiting.
+    /// </remarks>
+    public Task<int> SendSessionPromotedAsync(BenDataContext db, IReadOnlyList<Guid> signUpIds, CancellationToken ct)
+        => SendToSignUpsAsync(db, s => signUpIds.Contains(s.Id),
+            (session, when) => ($"You're in: {session.Title}",
+                $"<p>A place came free in <strong>{Safe(session.Title)}</strong> at "
+                + $"{Safe(session.HostedEvent.Name)}, and it's yours — {Safe(when)}.</p>"
+                + "<p>If you can't come after all, leave it from the programme so the next person gets it.</p>"),
+            ct);
+
+    /// <summary>Tells everybody signed up — or waiting — that a session is off.</summary>
+    public Task<int> SendSessionCancelledAsync(BenDataContext db, Guid sessionId, string? reason, CancellationToken ct)
+        => SendToSignUpsAsync(db, s => s.HostedEventSessionId == sessionId,
+            (session, when) => ($"Cancelled: {session.Title}",
+                $"<p><strong>{Safe(session.Title)}</strong> at {Safe(session.HostedEvent.Name)} ({Safe(when)}) "
+                + "has been cancelled.</p>"
+                + (Trimmed(reason) is { } why ? $"<p>{Safe(session.HostedEvent.Organization?.Name ?? "The organizers")} said: “{Safe(why)}”</p>" : "")
+                + "<p>Your place at the event itself is unchanged.</p>"),
+            ct);
+
+    /// <summary>Tells everybody signed up that a session's time or place has changed.</summary>
+    public Task<int> SendSessionMovedAsync(BenDataContext db, Guid sessionId, CancellationToken ct)
+        => SendToSignUpsAsync(db, s => s.HostedEventSessionId == sessionId && s.WaitlistedUtc == null,
+            (session, when) => ($"Changed: {session.Title}",
+                $"<p><strong>{Safe(session.Title)}</strong> at {Safe(session.HostedEvent.Name)} has moved. "
+                + $"It is now {Safe(when)}.</p><p>You still have your place.</p>"),
+            ct);
+
+    private async Task<int> SendToSignUpsAsync(
+        BenDataContext db, System.Linq.Expressions.Expression<Func<HostedEventSessionSignUp, bool>> which,
+        Func<HostedEventSession, string, (string Subject, string Body)> write, CancellationToken ct)
+    {
+        if (!_email.IsConfigured) return 0;
+
+        var signUps = await db.HostedEventSessionSignUps.AsNoTracking()
+            .Include(s => s.AppUser)
+            .Include(s => s.HostedEventSession).ThenInclude(x => x.HostedEvent).ThenInclude(e => e.Organization)
+            .Include(s => s.HostedEventSession).ThenInclude(x => x.PlaceRoom)
+            .Where(which)
+            .ToListAsync(ct);
+
+        var sent = 0;
+        foreach (var signUp in signUps)
+        {
+            if (signUp.AppUser?.Email is not { Length: > 0 } to) continue;
+            var session = signUp.HostedEventSession;
+            var (subject, body) = write(session, WhenAndWhere(session));
+            var greeting = signUp.AppUser.DisplayName is { Length: > 0 } name ? $"<p>Hello {Safe(name)},</p>" : "<p>Hello,</p>";
+
+            try
+            {
+                await _email.SendAsync(new EmailMessage(to, subject, greeting + body,
+                    ReplyTo: session.HostedEvent.Organization?.PublicEmail), ct);
+                sent++;
+            }
+            catch (Exception e) when (e is not OperationCanceledException)
+            {
+                _log.LogWarning(e, "Could not write to sign-up {SignUpId}.", signUp.Id);
+            }
+        }
+
+        return sent;
+    }
+
+    /// <summary>"Sat 10/31 9:00 PM–10:00 PM, in the Ballroom" — on the venue's clock.</summary>
+    internal static string WhenAndWhere(HostedEventSession session)
+    {
+        var zone = HostedEventCalendarSync.ZoneOf(session.HostedEvent?.TimeZoneId);
+        var start = TimeZoneInfo.ConvertTimeFromUtc(DateTime.SpecifyKind(session.StartsAtUtc, DateTimeKind.Utc), zone);
+        var end = TimeZoneInfo.ConvertTimeFromUtc(DateTime.SpecifyKind(session.EndsAtUtc, DateTimeKind.Utc), zone);
+        var where = session.PlaceRoom?.Name ?? session.LocationText;
+        return $"{start:ddd MM/dd h:mm tt}–{end:h:mm tt}" + (where is { Length: > 0 } w ? $", in {w}" : "");
+    }
+
     private static string Greeting(HostedEventBooking booking)
         => booking.LeadAppUser?.DisplayName is { Length: > 0 } name
             ? $"Hello {Safe(name)},"

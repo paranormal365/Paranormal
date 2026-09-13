@@ -132,6 +132,8 @@ namespace Ben.Data.Source.Context
         public virtual DbSet<OrganizationVenueGrant> OrganizationVenueGrants { get; set; }
         public virtual DbSet<PlaceContact> PlaceContacts { get; set; }
         public virtual DbSet<VenuePlaceClaim> VenuePlaceClaims { get; set; }
+        public virtual DbSet<HostedEventSession> HostedEventSessions { get; set; }
+        public virtual DbSet<HostedEventSessionSignUp> HostedEventSessionSignUps { get; set; }
         public virtual DbSet<OutboxEmail> OutboxEmails { get; set; }
         public virtual DbSet<OutboxEmailAttachment> OutboxEmailAttachments { get; set; }
         public virtual DbSet<EventCredit> EventCredits { get; set; }
@@ -1090,6 +1092,46 @@ namespace Ben.Data.Source.Context
                 .HasDatabaseName("IX_VenuePlaceClaims_PlaceId_OrganizationId_Open")
                 .HasFilter("[State] IN (0, 1, 5)");
             modelBuilder.Entity<VenuePlaceClaim>().HasIndex(c => new { c.State, c.ObjectionsCloseUtc });
+
+            // ── the programme: sessions and who signed up (phase 10) ─────────────────
+            modelBuilder.Entity<HostedEventSession>()
+                .HasOne(x => x.HostedEvent).WithMany()
+                .HasForeignKey(x => x.HostedEventId).OnDelete(DeleteBehavior.Cascade);
+            modelBuilder.Entity<HostedEventSession>()
+                .HasOne(x => x.PlaceRoom).WithMany()
+                .HasForeignKey(x => x.PlaceRoomId).IsRequired(false).OnDelete(DeleteBehavior.NoAction);
+            modelBuilder.Entity<HostedEventSession>()
+                .HasOne(x => x.CreatedByAppUser).WithMany()
+                .HasForeignKey(x => x.CreatedByAppUserId).OnDelete(DeleteBehavior.NoAction);
+            modelBuilder.Entity<HostedEventSession>()
+                .HasOne(x => x.UpdatedByAppUser).WithMany()
+                .HasForeignKey(x => x.UpdatedByAppUserId).IsRequired(false).OnDelete(DeleteBehavior.NoAction);
+            modelBuilder.Entity<HostedEventSession>().Property(x => x.Title).HasMaxLength(200);
+            modelBuilder.Entity<HostedEventSession>().Property(x => x.Description).HasMaxLength(4000);
+            modelBuilder.Entity<HostedEventSession>().Property(x => x.LocationText).HasMaxLength(200);
+            modelBuilder.Entity<HostedEventSession>().Property(x => x.LedBy).HasMaxLength(200);
+            modelBuilder.Entity<HostedEventSession>().Property(x => x.CancelledReason).HasMaxLength(1000);
+            modelBuilder.Entity<HostedEventSession>().Property(x => x.PlacesTaken).IsConcurrencyToken();
+            modelBuilder.Entity<HostedEventSession>().HasIndex(x => new { x.HostedEventId, x.StartsAtUtc });
+
+            modelBuilder.Entity<HostedEventSessionSignUp>()
+                .HasOne(x => x.HostedEventSession).WithMany(s => s.SignUps)
+                .HasForeignKey(x => x.HostedEventSessionId).OnDelete(DeleteBehavior.Cascade);
+            modelBuilder.Entity<HostedEventSessionSignUp>()
+                .HasOne(x => x.AppUser).WithMany()
+                .HasForeignKey(x => x.AppUserId).OnDelete(DeleteBehavior.NoAction);
+            modelBuilder.Entity<HostedEventSessionSignUp>()
+                .HasOne(x => x.HostedEventBooking).WithMany()
+                .HasForeignKey(x => x.HostedEventBookingId).IsRequired(false).OnDelete(DeleteBehavior.NoAction);
+            modelBuilder.Entity<HostedEventSessionSignUp>()
+                .HasOne(x => x.CreatedByAppUser).WithMany()
+                .HasForeignKey(x => x.CreatedByAppUserId).OnDelete(DeleteBehavior.NoAction);
+            modelBuilder.Entity<HostedEventSessionSignUp>()
+                .HasOne(x => x.UpdatedByAppUser).WithMany()
+                .HasForeignKey(x => x.UpdatedByAppUserId).IsRequired(false).OnDelete(DeleteBehavior.NoAction);
+            // One sign-up per person per session. A second press is the first sign-up, not a second place.
+            modelBuilder.Entity<HostedEventSessionSignUp>()
+                .HasIndex(x => new { x.HostedEventSessionId, x.AppUserId }).IsUnique();
 
             modelBuilder.Entity<HostedEvent>()
                 .HasOne(e => e.VenueGrant).WithMany()

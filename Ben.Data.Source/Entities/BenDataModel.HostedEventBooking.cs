@@ -193,6 +193,12 @@ namespace Ben.Data.Source.Entities
         /// <summary>When the guest confirmed they had read the decision. Clears the bell.</summary>
         public DateTime? GuestAcknowledgedUtc { get; set; }
 
+        /// <summary>
+        /// When the lead last looked at the programme (phase 10), so the bell can say when it has
+        /// changed since — a class moved to the morning is exactly what a guest needs to hear.
+        /// </summary>
+        public DateTime? ProgrammeSeenUtc { get; set; }
+
         /// <summary>What the guest said when asking — arrival time, a request, an explanation.</summary>
         public string? Note { get; set; }
 

@@ -151,6 +151,12 @@ public static class NotificationRows
                 $"Your booking has been decided · {NotificationBadge.DescribeAge(myBookings.OldestUnreadUtc)}",
                 "key", "/my-events", myBookings));
 
+        // A class moved or cancelled after the guest planned their evening around it (phase 10).
+        if (s.EventScheduleChanges is { Count: > 0 } changed)
+            rows.Add(new("The programme changed",
+                $"A session at an event you're going to has moved or been cancelled · {NotificationBadge.DescribeAge(changed.OldestUnreadUtc)}",
+                "calendar", "/my-events", changed));
+
         if (s.MyEventHoldLapsing is { Count: > 0 } myHold)
             rows.Add(new("Your hold is running out",
                 $"The venue has not confirmed it yet, and it lapses within a day · {NotificationBadge.DescribeAge(myHold.OldestUnreadUtc)}",

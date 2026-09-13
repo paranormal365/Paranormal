@@ -494,6 +494,11 @@ public sealed class OrganizationPurge
             await db.OrganizationPhones.Where(x => x.OrganizationId == organizationId).ExecuteDeleteAsync(ct);
             await db.OrganizationSubscriptions.Where(x => x.OrganizationId == organizationId).ExecuteDeleteAsync(ct);
             await db.OrganizationUrlNameAliases.Where(x => x.OrganizationId == organizationId).ExecuteDeleteAsync(ct);
+            // A session at another group's event can be in one of this group's rooms, when this group
+            // was the venue and lent them (item 235 phase 10). The session stays; it loses the room.
+            await db.HostedEventSessions
+                .Where(x => x.PlaceRoomId != null && x.PlaceRoom!.OrganizationId == organizationId)
+                .ExecuteUpdateAsync(u => u.SetProperty(x => x.PlaceRoomId, (Guid?)null), ct);
             await db.PlaceRooms.Where(x => x.OrganizationId == organizationId).ExecuteDeleteAsync(ct);
             await db.Publications.Where(x => x.OrganizationId == organizationId).ExecuteDeleteAsync(ct);
             await db.TierChangeNotices.Where(x => x.OrganizationId == organizationId).ExecuteDeleteAsync(ct);

@@ -258,6 +258,12 @@ namespace Ben.Data.Source.Entities
         public Guid? VenueGrantId { get; set; }
 
         /// <summary>
+        /// When the programme of sessions was put in front of guests (phase 10). Null while the host
+        /// is still drafting it, and nobody but the host sees a session until then.
+        /// </summary>
+        public DateTime? ProgrammePublishedUtc { get; set; }
+
+        /// <summary>
         /// The fewest people that make this event worth running. Null means it runs regardless.
         /// </summary>
         public int? MinimumGuests { get; set; }

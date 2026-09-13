@@ -390,6 +390,23 @@ public sealed class NotificationSummaryController : BenControllerBase
                     .Select(r => (DateTime?)r.DateCreated),
                 ct);
 
+        // ── A guest's programme changed since they last looked (phase 10) ────────
+        // Dated by the change, one per booking however many sessions moved: "the programme changed"
+        // is one thing to go and read, not a count of edits.
+        var eventScheduleChanges = await BucketAsync(
+            db.HostedEventBookings.AsNoTracking()
+                .Where(b => b.LeadAppUserId == userId
+                         && b.Status == HostedEventBookingStatus.Confirmed
+                         && b.HostedEvent.ProgrammePublishedUtc != null
+                         && b.HostedEvent.EndsOn >= now.Date
+                         && db.HostedEventSessions.Any(x => x.HostedEventId == b.HostedEventId
+                                && x.ChangedUtc != null
+                                && (b.ProgrammeSeenUtc == null || x.ChangedUtc > b.ProgrammeSeenUtc)))
+                .Select(b => db.HostedEventSessions
+                    .Where(x => x.HostedEventId == b.HostedEventId && x.ChangedUtc != null)
+                    .Max(x => x.ChangedUtc)),
+            ct);
+
         return Ok(new NotificationSummaryResponse(
             orgMessages, caseMessagesAsOrg, caseMessagesAsClient, systemMessages, pendingRequests,
             investigationInvites, equipmentCheckouts, feedMentions,
@@ -402,7 +419,8 @@ public sealed class NotificationSummaryController : BenControllerBase
             MyEventBookings: myEventBookings,
             EventHoldsLapsing: eventHoldsLapsing,
             MyEventHoldLapsing: myEventHoldLapsing,
-            VenueRequestsToDecide: venueRequestsToDecide));
+            VenueRequestsToDecide: venueRequestsToDecide,
+            EventScheduleChanges: eventScheduleChanges));
     }
 
     /// <summary>The aggregate a breakdown folds to — the bell's total stays the sum of its rows.</summary>
