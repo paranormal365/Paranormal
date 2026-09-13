@@ -127,6 +127,9 @@ namespace Ben.Data.Source.Context
         public virtual DbSet<HostedEventBand> HostedEventBands { get; set; }
         public virtual DbSet<EventBookingAlertPreference> EventBookingAlertPreferences { get; set; }
         public virtual DbSet<EventBookingAlertState> EventBookingAlertStates { get; set; }
+        public virtual DbSet<OrganizationVenueProfile> OrganizationVenueProfiles { get; set; }
+        public virtual DbSet<VenueHostingRequest> VenueHostingRequests { get; set; }
+        public virtual DbSet<OrganizationVenueGrant> OrganizationVenueGrants { get; set; }
         public virtual DbSet<OutboxEmail> OutboxEmails { get; set; }
         public virtual DbSet<OutboxEmailAttachment> OutboxEmailAttachments { get; set; }
         public virtual DbSet<EventCredit> EventCredits { get; set; }
@@ -950,6 +953,89 @@ namespace Ben.Data.Source.Context
                 .HasForeignKey(s => s.HostedEventId).OnDelete(DeleteBehavior.Cascade);
             modelBuilder.Entity<EventBookingAlertState>()
                 .HasIndex(s => new { s.AppUserId, s.HostedEventId }).IsUnique();
+
+            // ── venues, their requests and their grants (item 235 phase 9) ─────────────
+            // NoAction everywhere a second path to the same table exists — a request points at two
+            // groups and an event that points at a group, and SQL Server refuses a table that two
+            // cascades can reach. The purges take these rows by hand, in order.
+            modelBuilder.Entity<OrganizationVenueProfile>()
+                .HasOne(v => v.Organization).WithMany()
+                .HasForeignKey(v => v.OrganizationId).OnDelete(DeleteBehavior.NoAction);
+            modelBuilder.Entity<OrganizationVenueProfile>()
+                .HasOne(v => v.Place).WithMany()
+                .HasForeignKey(v => v.PlaceId).OnDelete(DeleteBehavior.NoAction);
+            modelBuilder.Entity<OrganizationVenueProfile>()
+                .HasOne(v => v.CreatedByAppUser).WithMany()
+                .HasForeignKey(v => v.CreatedByAppUserId).OnDelete(DeleteBehavior.NoAction);
+            modelBuilder.Entity<OrganizationVenueProfile>()
+                .HasOne(v => v.UpdatedByAppUser).WithMany()
+                .HasForeignKey(v => v.UpdatedByAppUserId).IsRequired(false).OnDelete(DeleteBehavior.NoAction);
+            modelBuilder.Entity<OrganizationVenueProfile>()
+                .HasIndex(v => new { v.OrganizationId, v.PlaceId }).IsUnique();
+            // One verified venue per place. Two groups each proved to be the Thomas House is a
+            // contradiction the database should refuse rather than a screen should explain.
+            modelBuilder.Entity<OrganizationVenueProfile>()
+                .HasIndex(v => v.PlaceId).IsUnique()
+                .HasDatabaseName("IX_OrganizationVenueProfiles_PlaceId_Verified")
+                .HasFilter("[VerifiedUtc] IS NOT NULL");
+            modelBuilder.Entity<OrganizationVenueProfile>().Property(v => v.History).HasMaxLength(8000);
+            modelBuilder.Entity<OrganizationVenueProfile>().Property(v => v.HouseRules).HasMaxLength(4000);
+
+            modelBuilder.Entity<VenueHostingRequest>()
+                .HasOne(r => r.HostedEvent).WithMany()
+                .HasForeignKey(r => r.HostedEventId).OnDelete(DeleteBehavior.NoAction);
+            modelBuilder.Entity<VenueHostingRequest>()
+                .HasOne(r => r.RequestingOrganization).WithMany()
+                .HasForeignKey(r => r.RequestingOrganizationId).OnDelete(DeleteBehavior.NoAction);
+            modelBuilder.Entity<VenueHostingRequest>()
+                .HasOne(r => r.VenueOrganization).WithMany()
+                .HasForeignKey(r => r.VenueOrganizationId).OnDelete(DeleteBehavior.NoAction);
+            modelBuilder.Entity<VenueHostingRequest>()
+                .HasOne(r => r.OrganizationVenueGrant).WithMany()
+                .HasForeignKey(r => r.OrganizationVenueGrantId).IsRequired(false).OnDelete(DeleteBehavior.NoAction);
+            modelBuilder.Entity<VenueHostingRequest>()
+                .HasOne(r => r.DecidedByAppUser).WithMany()
+                .HasForeignKey(r => r.DecidedByAppUserId).IsRequired(false).OnDelete(DeleteBehavior.NoAction);
+            modelBuilder.Entity<VenueHostingRequest>()
+                .HasOne(r => r.CreatedByAppUser).WithMany()
+                .HasForeignKey(r => r.CreatedByAppUserId).OnDelete(DeleteBehavior.NoAction);
+            modelBuilder.Entity<VenueHostingRequest>()
+                .HasOne(r => r.UpdatedByAppUser).WithMany()
+                .HasForeignKey(r => r.UpdatedByAppUserId).IsRequired(false).OnDelete(DeleteBehavior.NoAction);
+            modelBuilder.Entity<VenueHostingRequest>().Property(r => r.Message).HasMaxLength(2000);
+            modelBuilder.Entity<VenueHostingRequest>().Property(r => r.DecisionNote).HasMaxLength(2000);
+            // One open question per event. Asking twice while the first is unanswered is a second
+            // letter to a venue that has not had time to read the first.
+            modelBuilder.Entity<VenueHostingRequest>()
+                .HasIndex(r => r.HostedEventId).IsUnique()
+                .HasDatabaseName("IX_VenueHostingRequests_HostedEventId_Pending")
+                .HasFilter("[Status] = 0");
+            modelBuilder.Entity<VenueHostingRequest>()
+                .HasIndex(r => new { r.VenueOrganizationId, r.Status });
+
+            modelBuilder.Entity<OrganizationVenueGrant>()
+                .HasOne(g => g.VenueOrganization).WithMany()
+                .HasForeignKey(g => g.VenueOrganizationId).OnDelete(DeleteBehavior.NoAction);
+            modelBuilder.Entity<OrganizationVenueGrant>()
+                .HasOne(g => g.GranteeOrganization).WithMany()
+                .HasForeignKey(g => g.GranteeOrganizationId).OnDelete(DeleteBehavior.NoAction);
+            modelBuilder.Entity<OrganizationVenueGrant>()
+                .HasOne(g => g.Place).WithMany()
+                .HasForeignKey(g => g.PlaceId).OnDelete(DeleteBehavior.NoAction);
+            modelBuilder.Entity<OrganizationVenueGrant>()
+                .HasOne(g => g.RevokedByAppUser).WithMany()
+                .HasForeignKey(g => g.RevokedByAppUserId).IsRequired(false).OnDelete(DeleteBehavior.NoAction);
+            modelBuilder.Entity<OrganizationVenueGrant>()
+                .HasOne(g => g.CreatedByAppUser).WithMany()
+                .HasForeignKey(g => g.CreatedByAppUserId).OnDelete(DeleteBehavior.NoAction);
+            modelBuilder.Entity<OrganizationVenueGrant>()
+                .HasOne(g => g.UpdatedByAppUser).WithMany()
+                .HasForeignKey(g => g.UpdatedByAppUserId).IsRequired(false).OnDelete(DeleteBehavior.NoAction);
+            modelBuilder.Entity<OrganizationVenueGrant>().Property(g => g.RevokedReason).HasMaxLength(2000);
+
+            modelBuilder.Entity<HostedEvent>()
+                .HasOne(e => e.VenueGrant).WithMany()
+                .HasForeignKey(e => e.VenueGrantId).IsRequired(false).OnDelete(DeleteBehavior.NoAction);
 
             // ── what the venue is holding back ────────────────────────────────
             //

@@ -151,17 +151,100 @@ public sealed class HostedEventReadinessTests
     }
 
     [Fact]
-    public void Asking_a_venue_on_this_site_is_refused_in_words_until_it_is_built()
+    public void Choosing_a_venue_on_this_site_where_there_is_none_says_there_is_nobody_to_ask()
     {
-        // Offered and refused, rather than hidden. Somebody whose venue is another group on here
-        // should be told that the answer is "arrange it directly for now", not left wondering why
-        // the option they need is missing.
         var hosted = Ready();
         hosted.VenueArrangement = HostedEventVenueArrangement.PlatformGrant;
 
         Assert.False(HostedEventReadiness.IsReady(hosted));
-        Assert.Contains("not built yet", FirstRefusal(hosted));
-        Assert.Contains("arrange it with them directly", FirstRefusal(hosted));
+        Assert.Contains("nobody here to ask", FirstRefusal(hosted));
+        Assert.Contains("Arrange it with them directly", FirstRefusal(hosted));
+    }
+
+    // ── a verified venue that is another group (phase 9) ────────────────────
+
+    private static readonly Guid VenueOrg = Guid.NewGuid();
+
+    private static OrganizationVenueGrant Yes(HostedEvent hosted, DateTime from, DateTime to) => new()
+    {
+        Id = Guid.NewGuid(), VenueOrganizationId = VenueOrg,
+        GranteeOrganizationId = hosted.OrganizationId, PlaceId = hosted.PlaceId,
+        ValidFrom = from, ValidTo = to,
+    };
+
+    private static string VenueRefusal(HostedEvent hosted, HostedEventReadiness.VenueOnTheSite venue)
+        => HostedEventReadiness.Describe(hosted, venue).First(i => i.Area == "Venue").Sentence;
+
+    [Fact]
+    public void At_a_verified_venue_calling_it_your_own_does_not_make_it_so()
+    {
+        // The whole gate. Whatever the box says, the Thomas House has proved it is the Thomas House,
+        // and only its yes settles whether a weekend may be published there.
+        var hosted = Ready();
+        hosted.VenueArrangement = HostedEventVenueArrangement.Self;
+        var venue = new HostedEventReadiness.VenueOnTheSite(VenueOrg, "The Thomas House", null, null);
+
+        Assert.False(HostedEventReadiness.IsReady(hosted, venue));
+        Assert.Contains("The Thomas House runs this venue", VenueRefusal(hosted, venue));
+    }
+
+    [Fact]
+    public void A_question_the_venue_has_not_answered_says_when_it_was_asked()
+    {
+        var hosted = Ready();
+        var venue = new HostedEventReadiness.VenueOnTheSite(
+            VenueOrg, "The Thomas House", null, new DateTime(2026, 10, 1, 12, 0, 0, DateTimeKind.Utc));
+
+        Assert.Contains("10/01/2026", VenueRefusal(hosted, venue));
+        Assert.Contains("haven't answered yet", VenueRefusal(hosted, venue));
+    }
+
+    [Fact]
+    public void A_yes_covering_every_night_settles_it()
+    {
+        var hosted = Ready();
+        var venue = new HostedEventReadiness.VenueOnTheSite(
+            VenueOrg, "The Thomas House", Yes(hosted, hosted.StartsOn, hosted.EndsOn), null);
+
+        Assert.True(HostedEventReadiness.IsReady(hosted, venue));
+    }
+
+    [Fact]
+    public void A_night_added_after_the_yes_is_not_covered_by_it()
+    {
+        var hosted = Ready();
+        var grant = Yes(hosted, hosted.StartsOn, hosted.StartsOn);
+        hosted.Nights.Add(new HostedEventNight { Id = Guid.NewGuid(), Date = hosted.StartsOn.AddDays(1) });
+        var venue = new HostedEventReadiness.VenueOnTheSite(VenueOrg, "The Thomas House", grant, null);
+
+        Assert.False(HostedEventReadiness.IsReady(hosted, venue));
+        Assert.Contains("10/31/2026", VenueRefusal(hosted, venue));
+        Assert.Contains("Ask them again", VenueRefusal(hosted, venue));
+    }
+
+    [Fact]
+    public void A_yes_taken_back_says_who_took_it_and_why()
+    {
+        var hosted = Ready();
+        var grant = Yes(hosted, hosted.StartsOn, hosted.EndsOn);
+        grant.RevokedUtc = DateTime.UtcNow;
+        grant.RevokedReason = "The roof is being replaced";
+        var venue = new HostedEventReadiness.VenueOnTheSite(VenueOrg, "The Thomas House", grant, null);
+
+        Assert.False(HostedEventReadiness.IsReady(hosted, venue));
+        Assert.Contains("withdrew their yes: “The roof is being replaced”", VenueRefusal(hosted, venue));
+    }
+
+    [Fact]
+    public void A_yes_given_to_another_group_is_no_use_to_this_one()
+    {
+        var hosted = Ready();
+        var grant = Yes(hosted, hosted.StartsOn, hosted.EndsOn);
+        grant.GranteeOrganizationId = Guid.NewGuid();
+        var venue = new HostedEventReadiness.VenueOnTheSite(VenueOrg, "The Thomas House", grant, null);
+
+        Assert.False(HostedEventReadiness.IsReady(hosted, venue));
+        Assert.Contains("different group", VenueRefusal(hosted, venue));
     }
 
     // ── the shape the page relies on ─────────────────────────────────────────

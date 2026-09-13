@@ -249,6 +249,15 @@ namespace Ben.Data.Source.Entities
         public string? VenueReference { get; set; }
 
         /// <summary>
+        /// The verified venue's yes, when the venue is another group on this site (phase 9).
+        /// </summary>
+        /// <remarks>
+        /// Set when the venue approves this event's request, and left pointing at the grant after
+        /// a revoke — the event's page and its guests' letters say who withdrew and why.
+        /// </remarks>
+        public Guid? VenueGrantId { get; set; }
+
+        /// <summary>
         /// The fewest people that make this event worth running. Null means it runs regardless.
         /// </summary>
         public int? MinimumGuests { get; set; }
@@ -338,6 +347,7 @@ namespace Ben.Data.Source.Entities
         public virtual AppUser CreatedByAppUser { get; set; } = null!;
         public virtual AppUser? UpdatedByAppUser { get; set; }
         public virtual AppUser? GoNoGoDecidedByAppUser { get; set; }
+        public virtual OrganizationVenueGrant? VenueGrant { get; set; }
 
         /// <summary>The nights, or the performances — see <see cref="DatesAreSeparate"/>.</summary>
         public virtual ICollection<HostedEventNight> Nights { get; set; } = [];

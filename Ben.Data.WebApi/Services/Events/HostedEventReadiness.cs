@@ -32,7 +32,13 @@ public static class HostedEventReadiness
     /// the card that fixes it. The website turns it into a real URL; the API has no business
     /// knowing the site's routes.
     /// </remarks>
-    public static IReadOnlyList<HostedEventReadinessItem> Describe(HostedEvent hosted)
+    /// <param name="venue">
+    /// The verified venue at the event's place when that is another group on this site, with this
+    /// event's grant and any question still waiting on them (phase 9). Null when the place has no
+    /// verified venue, or the venue is the event's own group.
+    /// </param>
+    public static IReadOnlyList<HostedEventReadinessItem> Describe(
+        HostedEvent hosted, VenueOnTheSite? venue = null)
     {
         var noun = hosted.DatesAreSeparate ? "date" : "night";
 
@@ -45,11 +51,13 @@ public static class HostedEventReadiness
                 + "Nobody can come to something with no date on it.",
                 "#event-dates"),
 
-            new("Venue",
-                VenueLabel(hosted),
-                VenueIsSettled(hosted),
-                VenueRefusal(hosted),
-                "#event-venue"),
+            venue is null
+                ? new("Venue",
+                    VenueLabel(hosted),
+                    VenueIsSettled(hosted),
+                    VenueRefusal(hosted),
+                    "#event-venue")
+                : TheVenueOnTheSite(hosted, venue),
 
             new("Places",
                 hosted.LayoutKind == HostedEventLayoutKind.Seats
@@ -75,7 +83,49 @@ public static class HostedEventReadiness
     }
 
     /// <summary>Whether every item is done, which is what the publish button is gated on.</summary>
-    public static bool IsReady(HostedEvent hosted) => Describe(hosted).All(i => i.Done);
+    public static bool IsReady(HostedEvent hosted, VenueOnTheSite? venue = null)
+        => Describe(hosted, venue).All(i => i.Done);
+
+    // ── a venue that is another group on this site (phase 9) ─────────────────
+
+    /// <summary>
+    /// The verified venue at this event's place, what it has said, and whether a question is waiting.
+    /// </summary>
+    public sealed record VenueOnTheSite(
+        Guid OrganizationId, string Name, OrganizationVenueGrant? Grant, DateTime? AskedUtc);
+
+    /// <summary>
+    /// The one gate the site can actually enforce: the venue has said yes, to these dates.
+    /// </summary>
+    /// <remarks>
+    /// <b>Whatever the organizer chose in the arrangement box.</b> Picking "our own venue" at a
+    /// hotel that has proved it is the hotel does not make it theirs, and "arranged directly" is a
+    /// claim this is the one case the site can check. So once a place has a verified venue, its yes
+    /// is the only answer that settles the item.
+    /// </remarks>
+    private static HostedEventReadinessItem TheVenueOnTheSite(HostedEvent hosted, VenueOnTheSite venue)
+    {
+        string? refusal;
+
+        if (venue.Grant is not null)
+        {
+            refusal = Venues.VenueGrants.WhyItDoesNotCover(
+                venue.Grant, hosted.OrganizationId, hosted.PlaceId,
+                hosted.Nights.Select(n => n.Date), venue.Name);
+        }
+        else if (venue.AskedUtc is { } asked)
+        {
+            refusal = $"You asked {venue.Name} on {asked:MM/dd/yyyy} and they haven't answered yet. "
+                    + "They run this venue on this site, so it can't be published until they say yes.";
+        }
+        else
+        {
+            refusal = $"{venue.Name} runs this venue on this site, so they say yes to events held "
+                    + "there. Ask them from the venue card on this page.";
+        }
+
+        return new("Venue", $"{venue.Name} has said yes", refusal is null, refusal ?? "", "#event-venue");
+    }
 
     // ── the venue, which is the one with three answers ───────────────────────
 
@@ -97,8 +147,8 @@ public static class HostedEventReadiness
         HostedEventVenueArrangement.External =>
             !string.IsNullOrWhiteSpace(hosted.VenueContactName) && hosted.VenueAgreedOnUtc is not null,
 
-        // The only one the site can enforce, and phase 9 is what builds the grant to enforce it
-        // against. Until then it is refused in words rather than quietly allowed.
+        // Chosen at a place with no verified venue: there is nobody on the site to have said yes.
+        // A place WITH one never reaches here — the venue's own item replaces this one.
         _ => false,
     };
 
@@ -109,8 +159,8 @@ public static class HostedEventReadiness
             + "you, but a booking nobody at the venue remembers making is the worst way to find "
             + "out on the night.",
         HostedEventVenueArrangement.PlatformGrant =>
-            "Asking a venue on this site for permission is not built yet. For now, arrange it with "
-            + "them directly and record it as an arrangement made off the site.",
+            "Nobody runs this place as their venue on this site, so there is nobody here to ask. "
+            + "Arrange it with them directly and record who agreed it.",
         _ => "",
     };
 }

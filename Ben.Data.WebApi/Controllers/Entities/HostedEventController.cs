@@ -327,7 +327,8 @@ public sealed class HostedEventController : OrgCmsControllerBase
         // Every reason it is not ready, as the checklist on the page words them. One list, read by
         // the button and by the card above it, so the page can never offer a publish the server is
         // about to refuse — the failure mode a server guard with no UI path always becomes.
-        if (HostedEventReadiness.Describe(hosted).FirstOrDefault(i => !i.Done) is { } blocker)
+        var venue = await Services.Venues.VenueGrants.ForEventAsync(db, hosted, ct);
+        if (HostedEventReadiness.Describe(hosted, venue).FirstOrDefault(i => !i.Done) is { } blocker)
             return BadRequest(blocker.Sentence);
 
         var note = (string?)null;
@@ -752,11 +753,18 @@ public sealed class HostedEventController : OrgCmsControllerBase
             if (wanted.Any(u => u.PlaceRoomId is null))
                 return BadRequest("Every room on the plan has to be one of the venue's own rooms.");
 
+            // The group's own rooms, and the venue's when the venue lent them (phase 9): a society
+            // holding a weekend at the Thomas House books the Thomas House's rooms, not a list it
+            // typed out itself.
+            var roomOwners = new List<Guid> { orgId };
+            if (await Services.Venues.VenueGrants.RoomsLentToAsync(db, ev, ct) is Guid venueOrgId)
+                roomOwners.Add(venueOrgId);
+
             roomNames = await db.PlaceRooms
-                .Where(r => r.OrganizationId == orgId && r.PlaceId == ev.PlaceId && r.IsActive)
+                .Where(r => roomOwners.Contains(r.OrganizationId) && r.PlaceId == ev.PlaceId && r.IsActive)
                 .ToDictionaryAsync(r => r.Id, r => r.Name, ct);
             if (wanted.Select(u => u.PlaceRoomId!.Value).Except(roomNames.Keys).Any())
-                return BadRequest("One of those rooms is not a room this group has defined for the venue.");
+                return BadRequest("One of those rooms is not a room this group, or the venue, has defined for the place.");
 
             if (wanted.GroupBy(u => u.PlaceRoomId).Any(g => g.Count() > 1))
                 return BadRequest("A room can only be on the plan once.");
@@ -1040,7 +1048,8 @@ public sealed class HostedEventController : OrgCmsControllerBase
             .FirstOrDefaultAsync(e => e.Id == eventId && e.OrganizationId == orgId, ct);
         if (hosted is null) return NotFound();
 
-        return Ok(HostedEventReadiness.Describe(hosted));
+        return Ok(HostedEventReadiness.Describe(
+            hosted, await Services.Venues.VenueGrants.ForEventAsync(db, hosted, ct)));
     }
 
     /// <summary>

@@ -387,6 +387,30 @@ public sealed class OrganizationPurge
             await db.HostedEventLayoutUnits
                 .Where(x => x.PlaceRoomId != null && x.PlaceRoom!.OrganizationId == organizationId)
                 .ExecuteDeleteAsync(ct);
+            // Venues (item 235 phase 9). Every key here is NoAction, because a request names two
+            // groups and an event, and a grant is pointed at by events of OTHER groups. So: loosen
+            // what points at this group's grants and requests first — another group's event keeps
+            // existing, it just no longer rests on a yes from a group that is gone, and its
+            // readiness list says so — then take the rows.
+            var goingGrantIds = db.OrganizationVenueGrants
+                .Where(g => g.VenueOrganizationId == organizationId || g.GranteeOrganizationId == organizationId)
+                .Select(g => g.Id);
+            await db.HostedEvents
+                .Where(e => e.VenueGrantId != null && goingGrantIds.Contains(e.VenueGrantId.Value))
+                .ExecuteUpdateAsync(u => u.SetProperty(e => e.VenueGrantId, (Guid?)null), ct);
+            await db.VenueHostingRequests
+                .Where(r => r.VenueOrganizationId == organizationId
+                         || r.RequestingOrganizationId == organizationId
+                         || r.HostedEvent.OrganizationId == organizationId)
+                .ExecuteDeleteAsync(ct);
+            await db.VenueHostingRequests
+                .Where(r => r.OrganizationVenueGrantId != null && goingGrantIds.Contains(r.OrganizationVenueGrantId.Value))
+                .ExecuteUpdateAsync(u => u.SetProperty(r => r.OrganizationVenueGrantId, (Guid?)null), ct);
+            await db.OrganizationVenueGrants
+                .Where(g => g.VenueOrganizationId == organizationId || g.GranteeOrganizationId == organizationId)
+                .ExecuteDeleteAsync(ct);
+            await db.OrganizationVenueProfiles.Where(v => v.OrganizationId == organizationId).ExecuteDeleteAsync(ct);
+
             // How often each person hears about this group's bookings (item 235 phase 8). It would
             // cascade with the group; it is named here so the next reader does not have to know that.
             // The per-event cursors cascade from the events on the line below.

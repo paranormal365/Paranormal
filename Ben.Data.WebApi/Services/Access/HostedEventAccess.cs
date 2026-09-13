@@ -90,8 +90,10 @@ public sealed class HostedEventAccess
     /// <summary>See this event's board, as a member OR as somebody helping at it.</summary>
     public Task<bool> CanReadBookingsAsync(
         Guid userId, Guid orgId, Guid eventId, BenDataContext db, CancellationToken ct)
-        => OrAsStaffAsync(CanReadBookingsAsync(userId, orgId, ct),
-                          userId, eventId, db, s => s.SeesBookings || s.Decides, ct);
+        => OrAsTheVenueAsync(
+               OrAsStaffAsync(CanReadBookingsAsync(userId, orgId, ct),
+                              userId, eventId, db, s => s.SeesBookings || s.Decides, ct),
+               userId, eventId, db, OrganizationSecurityTable.EventBooking, OrganizationSecurityAction.Read, ct);
 
     /// <summary>Decide this event's bookings, as a member OR as somebody helping at it.</summary>
     public Task<bool> CanDecideBookingsAsync(
@@ -108,8 +110,10 @@ public sealed class HostedEventAccess
     /// </remarks>
     public Task<bool> CanRunTheDoorAsync(
         Guid userId, Guid orgId, Guid eventId, BenDataContext db, CancellationToken ct)
-        => OrAsStaffAsync(CanRunTheDoorAsync(userId, orgId, ct),
-                          userId, eventId, db, s => s.RunsTheDoor, ct);
+        => OrAsTheVenueAsync(
+               OrAsStaffAsync(CanRunTheDoorAsync(userId, orgId, ct),
+                              userId, eventId, db, s => s.RunsTheDoor, ct),
+               userId, eventId, db, OrganizationSecurityTable.EventCheckIn, OrganizationSecurityAction.Create, ct);
 
     /// <summary>Read and write this event's menus, as a member OR as somebody helping at it.</summary>
     public Task<bool> CanEditMenusAsync(
@@ -150,6 +154,35 @@ public sealed class HostedEventAccess
             .ToListAsync(ct);
 
         return staff.Any(grants);
+    }
+
+    /// <summary>
+    /// And failing both, the venue's own people, when the venue lent them (phase 9).
+    /// </summary>
+    /// <remarks>
+    /// <para>Only when the venue said <b>our staff may help</b> on the yes this event rests on, only
+    /// while that yes stands, and only as far as the venue's own group trusts them — the hotel's
+    /// night porter sees the list because the hotel lets him see its own bookings, not because he
+    /// works in the building.</para>
+    ///
+    /// <para><b>Reading and the door, never deciding.</b> Whether a party comes to somebody else's
+    /// weekend is the organizer's call; the venue lent a building, not a veto over the guest list.
+    /// There is deliberately no overload of the deciding question here.</para>
+    /// </remarks>
+    private async Task<bool> OrAsTheVenueAsync(
+        Task<bool> soFar, Guid userId, Guid eventId, BenDataContext db,
+        OrganizationSecurityTable table, OrganizationSecurityAction action, CancellationToken ct)
+    {
+        if (await soFar) return true;
+
+        var grant = await db.HostedEvents.AsNoTracking()
+            .Where(e => e.Id == eventId && e.VenueGrantId != null)
+            .Select(e => e.VenueGrant)
+            .FirstOrDefaultAsync(ct);
+
+        if (grant is not { RevokedUtc: null, AllowStaff: true }) return false;
+
+        return await AllowedAsync(userId, grant.VenueOrganizationId, table, action, ct);
     }
 
     private Task<bool> AllowedAsync(

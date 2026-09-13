@@ -211,6 +211,42 @@ public sealed class AdminPlaceMergeController : BenControllerBase
         var rooms = await RepointAsync(db.PlaceRooms.Where(x => x.PlaceId == id),
             x => x.PlaceId = request.IntoPlaceId, ct);
 
+        // Venues (item 235 phase 9). A yes given for one record of the building is a yes for the
+        // building, so grants move. Profiles move too, except where the same group already
+        // describes the surviving record — then the losing one goes, and only a verification is
+        // carried across, and only when the surviving record has no verified venue of its own.
+        // Two groups each proved to be the venue is a contradiction the index refuses; a merge is
+        // not the place to decide which of them is right, so the second verification is dropped
+        // and a SuperAdmin re-decides it as a claim.
+        await RepointAsync(db.OrganizationVenueGrants.Where(x => x.PlaceId == id),
+            x => x.PlaceId = request.IntoPlaceId, ct);
+
+        var survivingProfiles = await db.OrganizationVenueProfiles
+            .Where(v => v.PlaceId == request.IntoPlaceId).ToListAsync(ct);
+        var survivorVerified = survivingProfiles.Any(v => v.VerifiedUtc != null);
+
+        foreach (var profile in await db.OrganizationVenueProfiles.Where(v => v.PlaceId == id).ToListAsync(ct))
+        {
+            var twin = survivingProfiles.FirstOrDefault(v => v.OrganizationId == profile.OrganizationId);
+            if (twin is not null)
+            {
+                if (profile.VerifiedUtc is not null && !survivorVerified)
+                {
+                    twin.VerifiedUtc = profile.VerifiedUtc;
+                    survivorVerified = true;
+                }
+                db.OrganizationVenueProfiles.Remove(profile);
+                continue;
+            }
+
+            profile.PlaceId = request.IntoPlaceId;
+            if (profile.VerifiedUtc is not null)
+            {
+                if (survivorVerified) { profile.VerifiedUtc = null; profile.IsPublished = false; }
+                else survivorVerified = true;
+            }
+        }
+
         db.Places.Remove(losing);
         await db.SaveChangesAsync(ct);
         await transaction.CommitAsync(ct);

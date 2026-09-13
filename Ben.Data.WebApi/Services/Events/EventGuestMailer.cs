@@ -399,6 +399,57 @@ public sealed class EventGuestMailer
     }
 
     /// <summary>
+    /// Tells everybody with a place that the venue has withdrawn, and so the event is off
+    /// (item 235 phase 9).
+    /// </summary>
+    /// <remarks>
+    /// Its own letter rather than the called-off one, because who called it off is the whole of what
+    /// a guest wants to know. "The Nashville Paranormal Society is not going ahead" when the society
+    /// did nothing wrong would send forty cross emails to the wrong people.
+    /// </remarks>
+    /// <returns>How many letters went.</returns>
+    public async Task<int> SendVenueWithdrewAsync(
+        BenDataContext db, Guid hostedEventId, string venueName, string reason, CancellationToken ct)
+    {
+        if (!_email.IsConfigured) return 0;
+
+        var sent = 0;
+
+        foreach (var booking in await LiveBookingsAsync(db, hostedEventId, ct))
+        {
+            if (booking.LeadAppUser?.Email is not { Length: > 0 } to) continue;
+
+            var ev = booking.HostedEvent;
+            var name = Safe(ev?.Name ?? "the event");
+
+            var body = new System.Text.StringBuilder();
+            body.Append($"<p>{Greeting(booking)}</p>");
+            body.Append($"<p><strong>{name} is not going ahead.</strong> {Safe(venueName)}, the venue, "
+                      + "has withdrawn permission for it to be held there. Your places have gone, and "
+                      + "your pass no longer admits anybody.</p>");
+            body.Append($"<p>{Safe(venueName)} said: “{Safe(reason)}”</p>");
+            body.Append($"<p>{Safe(ev?.Organization?.Name ?? "The organizer")} did not call this off, "
+                      + "and may be able to tell you whether it is happening somewhere else. Nothing was "
+                      + "paid through this site, so there is nothing to refund here.</p>");
+
+            try
+            {
+                await _email.SendAsync(new EmailMessage(
+                    to, $"{ev?.Name ?? "An event"} is not going ahead", body.ToString(),
+                    ReplyTo: ev?.Organization?.PublicEmail), ct);
+                sent++;
+            }
+            catch (Exception e) when (e is not OperationCanceledException)
+            {
+                _log.LogWarning(e,
+                    "Could not tell {BookingId} that the venue withdrew.", booking.Id);
+            }
+        }
+
+        return sent;
+    }
+
+    /// <summary>
     /// Tells everybody waiting that the numbers were reached and it is definitely on.
     /// </summary>
     /// <remarks>
