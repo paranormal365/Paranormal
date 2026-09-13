@@ -28,4 +28,23 @@ public sealed partial class BenAdminClientAdapter
         => signedIn
             ? _api.GetListAsync<HostedEventFileRecord>($"/api/public/hosted-events/{eventId}/files", token)
             : _api.GetAnonymousListAsync<HostedEventFileRecord>($"/api/public/hosted-events/{eventId}/files", token);
+
+    private static string GalleryUrl(Guid orgId, Guid eventId) => $"/api/organizations/{orgId}/events/{eventId}/gallery";
+
+    public Task<LoadResult<HostedEventImageRecord>> GetEventGalleryAsync(Guid orgId, Guid eventId, CancellationToken token = default)
+        => _api.GetListAsync<HostedEventImageRecord>(GalleryUrl(orgId, eventId), token);
+
+    public Task<(List<HostedEventImageRecord>? Result, string? Error)> AddEventGalleryImageAsync(
+        Guid orgId, Guid eventId, MultipartFormDataContent content, CancellationToken token = default)
+        => _api.PostMultipartExpectingReasonAsync<List<HostedEventImageRecord>>(GalleryUrl(orgId, eventId), content, token);
+
+    public Task<(List<HostedEventImageRecord>? Result, string? Error)> UpdateEventGalleryImageAsync(
+        Guid orgId, Guid eventId, Guid imageId, UpdateHostedEventImageRequest request, CancellationToken token = default)
+        => _api.SendExpectingReasonAsync<UpdateHostedEventImageRequest, List<HostedEventImageRecord>>(
+               HttpMethod.Put, $"{GalleryUrl(orgId, eventId)}/{imageId}", request, token);
+
+    public Task<(List<HostedEventImageRecord>? Result, string? Error)> DeleteEventGalleryImageAsync(
+        Guid orgId, Guid eventId, Guid imageId, CancellationToken token = default)
+        => _api.SendExpectingReasonAsync<object, List<HostedEventImageRecord>>(
+               HttpMethod.Delete, $"{GalleryUrl(orgId, eventId)}/{imageId}", new { }, token);
 }

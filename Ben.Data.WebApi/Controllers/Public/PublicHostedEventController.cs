@@ -223,7 +223,7 @@ public sealed class PublicHostedEventController : BenControllerBase
     /// afternoon: "called off", "bookings closed on Friday" and "this event has happened" are
     /// three different facts and only one of them is worth waiting for.
     /// </remarks>
-    private static string? WhyNothingCanBeBooked(HostedEvent ev, DateTime utcNow)
+    internal static string? WhyNothingCanBeBooked(HostedEvent ev, DateTime utcNow)
     {
         if (HostedEventStates.CalledOff.Contains(ev.LifecycleState))
             return ev.LifecycleState == HostedEventLifecycleState.VenueWithdrawn

@@ -90,6 +90,12 @@ else
             </div>
         </div>
 
+        @* Item 235 phase 11: the host's pictures, the countdown, and the phone's ask button. *@
+        @if (_hosted is { } showcase)
+        {
+            <HostedEventShowcase Hosted="showcase" />
+        }
+
         @if (_error is not null)
         {
             <div class="alert alert-danger py-2">@_error</div>
@@ -164,7 +170,7 @@ else
            A stranger giving an address is not yet coming — the link we send is what confirms
            anything, because an address typed into a box proves nothing, and an event that hides
            its street until you are coming would be protecting nothing if it did. *@
-        <div class="event-act card mb-4">
+        <div class="event-act card mb-4" id="event-act">
             <div class="card-body">
                 @* ── A place at a hosted event (item 235 phase 6) ──────────
                    FIRST IN THE CHAIN, and the tour branches below never run for one. A hosted

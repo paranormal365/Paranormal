@@ -22,6 +22,12 @@ has kept back.
 *Every square says what it is in words as well as in colour, so the plan reads the same to
 everybody.*
 
+The page opens with the host's own pictures and how long until the first night. On a phone, an
+**Ask for a place** button stays at the bottom of the screen while you read, and takes you straight
+to the part of the page where you choose.
+
+![An event's page on a phone](/help/media/going-to-an-event/event-page-phone.png)
+
 Choosing a seat means holding it, and holding something needs somebody to hold it for — so that
 part needs an account. Signing in takes a moment; if you would rather not, most events also let
 you ask for a place by email and confirm it with a link.

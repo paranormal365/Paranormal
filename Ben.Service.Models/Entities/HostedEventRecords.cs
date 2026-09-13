@@ -596,3 +596,28 @@ public sealed record UpdateHostedEventImageRequest(string? Caption, int? SortOrd
 
 /// <summary>A gallery picture as a visitor's page reads it.</summary>
 public sealed record PublicEventImageRecord(Guid UploadFileId, string? Caption);
+
+// ── an event on a group's own page (item 235 phase 11) ────────────────────────
+
+/// <summary>
+/// What a group's CMS page shows for one of its events, resolved when the page is read so it is never
+/// stale. One shape for all four event sections; each fills the part it is for.
+/// </summary>
+/// <param name="Missing">The chosen event is not on the public site — drafted, called off or gone.</param>
+public sealed record CmsEventSectionRecord(
+    bool Missing,
+    string? Name = null,
+    string? Url = null,
+    string? DateLine = null,
+    string? Tagline = null,
+    string? BookingSentence = null,
+    decimal? DayPassPrice = null,
+    IReadOnlyList<CmsEventSessionRecord>? Programme = null,
+    IReadOnlyList<PublicEventImageRecord>? Gallery = null,
+    CmsEventVenueRecord? Venue = null);
+
+/// <summary>One session in an event section's programme.</summary>
+public sealed record CmsEventSessionRecord(string Title, string When, string? Where, string? LedBy, string? Places, bool IsCancelled);
+
+/// <summary>The venue, in an event's venue section.</summary>
+public sealed record CmsEventVenueRecord(string PlaceName, string? Town, string? RunBy, string? VenuePageUrl, string? History);

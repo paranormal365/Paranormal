@@ -1,0 +1,177 @@
+@page "/organizations/{OrgId:guid}/events/{EventId:guid}/gallery"
+@namespace Ben.Web.Website.Library.Manage.Events
+
+@inject IBenAdminClient AdminClient
+@inject IBenUserState UserState
+@inject IMediaUrlBuilder MediaUrls
+
+@using Ben.Service.Models.Entities
+@using Ben.Web.Services.WebApi
+@using Ben.Web.Website.Library.Kit
+
+@* The pictures on an event's public page (item 235 phase 11).
+
+   THE HOST'S PICTURES. Guests' photos from the room stay in the room, because they are the guests'
+   and some of the people in them did not agree to be on a public page. First picture leads the
+   page; up and down arrows change the order. *@
+
+<PageTitle>@(_event?.Name is { Length: > 0 } n ? $"Gallery — {n}" : "Gallery")</PageTitle>
+
+<div class="container-fluid py-3" style="max-width:1000px;">
+    <div class="text-secondary small">
+        <a href="@($"/organizations/{OrgId}/events")">Events</a>
+        @if (_event is { } crumb)
+        {
+            <text> · </text><a href="@($"/organizations/{OrgId}/events/{EventId}")">@crumb.Name</a>
+        }
+    </div>
+
+    <h1 class="h3 mb-1">Gallery <HelpLink Slug="organization-administration" Anchor="hosted-events" /></h1>
+    <p class="text-secondary small mb-3">
+        Pictures on the event's public page — last year's weekend, the building, the ballroom set for dinner. The
+        first one leads the page. Up to 50; each is resized and has its location removed.
+    </p>
+
+    @if (_note is { Length: > 0 }) { <div class="alert alert-success py-2" id="gallery-note" role="status">@_note</div> }
+    @if (_error is { Length: > 0 }) { <div class="alert alert-danger py-2" id="gallery-error" role="alert">@_error</div> }
+
+    <div class="card mb-4">
+        <div class="card-body">
+            <div class="row g-2 align-items-end">
+                <div class="col-12 col-md-6">
+                    <label class="form-label small mb-1" for="gallery-input">A picture</label>
+                    <InputFile id="gallery-input" class="form-control" accept="image/*" OnChange="Picked" />
+                </div>
+                <div class="col-12 col-md-6">
+                    <label class="form-label small mb-1" for="gallery-caption">Caption</label>
+                    <input class="form-control" id="gallery-caption" maxlength="300" @bind="_caption" />
+                </div>
+            </div>
+            <button type="button" class="btn btn-primary mt-3" id="gallery-add" disabled="@(_busy || _picked is null)" @onclick="AddAsync">
+                @(_busy ? "Adding…" : "Add it")
+            </button>
+        </div>
+    </div>
+
+    @if (_loading || _images.Failed)
+    {
+        <BenListState TItem="HostedEventImageRecord" Result="_images" Loading="_loading" OnRetry="LoadAsync" />
+    }
+    else if (_rows.Count == 0)
+    {
+        <div class="alert alert-light border" id="gallery-empty">No pictures yet.</div>
+    }
+    else
+    {
+        <div class="row g-3" id="gallery-list">
+            @for (var i = 0; i < _rows.Count; i++)
+            {
+                var index = i;
+                var image = _rows[i];
+                <div class="col-12 col-sm-6 col-lg-4 gallery-image" data-image="@image.Id">
+                    <div class="card h-100">
+                        <img class="card-img-top" style="aspect-ratio:3/2;object-fit:cover;" loading="lazy"
+                             src="@MediaUrls.Download(image.UploadFileId)" alt="@(image.Caption ?? "Gallery picture")" />
+                        <div class="card-body p-2">
+                            <label class="visually-hidden" for="@($"caption-{image.Id:N}")">Caption</label>
+                            <input class="form-control form-control-sm mb-2" id="@($"caption-{image.Id:N}")" maxlength="300"
+                                   value="@image.Caption" @onchange="e => CaptionAsync(image, e.Value?.ToString())" />
+                            <div class="d-flex gap-1">
+                                <button type="button" class="btn btn-outline-secondary btn-sm" disabled="@(_busy || index == 0)"
+                                        aria-label="Move earlier" @onclick="() => MoveAsync(index, -1)">↑</button>
+                                <button type="button" class="btn btn-outline-secondary btn-sm" disabled="@(_busy || index == _rows.Count - 1)"
+                                        aria-label="Move later" @onclick="() => MoveAsync(index, 1)">↓</button>
+                                @if (index == 0) { <span class="badge bg-secondary align-self-center ms-1">Leads the page</span> }
+                                <button type="button" class="btn btn-outline-danger btn-sm ms-auto" disabled="@_busy"
+                                        @onclick="() => RemoveAsync(image)">Remove</button>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            }
+        </div>
+    }
+</div>
+
+@code {
+    [Parameter] public Guid OrgId { get; set; }
+    [Parameter] public Guid EventId { get; set; }
+
+    private HostedEventRecord? _event;
+    private LoadResult<HostedEventImageRecord> _images;
+    private List<HostedEventImageRecord> _rows = [];
+    private bool _loading = true;
+    private bool _busy;
+    private string? _note;
+    private string? _error;
+    private IBrowserFile? _picked;
+    private string? _caption;
+
+    protected override async Task OnAfterRenderAsync(bool firstRender)
+    {
+        if (!firstRender) return;
+        if (!await UserState.WaitUntilAuthReadyAsync(RendererInfo.IsInteractive)) return;
+        await LoadAsync();
+        StateHasChanged();
+    }
+
+    private async Task LoadAsync()
+    {
+        _loading = true;
+        _event ??= await AdminClient.GetHostedEventAsync(OrgId, EventId);
+        _images = await AdminClient.GetEventGalleryAsync(OrgId, EventId);
+        _rows = [.. _images.Items];
+        _loading = false;
+    }
+
+    private void Picked(InputFileChangeEventArgs e) => _picked = e.File;
+
+    private async Task AddAsync()
+    {
+        if (_picked is null) return;
+        var file = _picked;
+        await SendAsync(async () =>
+        {
+            using var content = new MultipartFormDataContent();
+            var stream = new StreamContent(file.OpenReadStream(50L * 1024 * 1024));
+            stream.Headers.ContentType = new System.Net.Http.Headers.MediaTypeHeaderValue(
+                string.IsNullOrWhiteSpace(file.ContentType) ? "image/jpeg" : file.ContentType);
+            content.Add(stream, "file", file.Name);
+            content.Add(new StringContent(_caption ?? ""), "caption");
+            return await AdminClient.AddEventGalleryImageAsync(OrgId, EventId, content);
+        }, "Added.");
+        if (_error is null) { _picked = null; _caption = null; }
+    }
+
+    private Task RemoveAsync(HostedEventImageRecord image)
+        => SendAsync(() => AdminClient.DeleteEventGalleryImageAsync(OrgId, EventId, image.Id), "Removed.");
+
+    private Task CaptionAsync(HostedEventImageRecord image, string? caption)
+        => SendAsync(() => AdminClient.UpdateEventGalleryImageAsync(OrgId, EventId, image.Id,
+            new UpdateHostedEventImageRequest(caption, null)), "Caption saved.");
+
+    private async Task MoveAsync(int index, int by)
+    {
+        var other = index + by;
+        if (other < 0 || other >= _rows.Count) return;
+        var a = _rows[index];
+        var b = _rows[other];
+        // Swap the two positions, both saved: renumbering is the simplest order a person can reason about.
+        await SendAsync(() => AdminClient.UpdateEventGalleryImageAsync(OrgId, EventId, a.Id, new UpdateHostedEventImageRequest(a.Caption, b.SortOrder)), null);
+        if (_error is null)
+            await SendAsync(() => AdminClient.UpdateEventGalleryImageAsync(OrgId, EventId, b.Id, new UpdateHostedEventImageRequest(b.Caption, a.SortOrder)), "Order saved.");
+    }
+
+    private async Task SendAsync(Func<Task<(List<HostedEventImageRecord>? Result, string? Error)>> send, string? said)
+    {
+        _busy = true;
+        _note = null;
+        _error = null;
+        var (rows, error) = await send();
+        _busy = false;
+        if (rows is null) { _error = error ?? "That couldn't be saved just now."; return; }
+        _rows = rows;
+        _images = LoadResult<HostedEventImageRecord>.Ok(rows);
+        _note = said;
+    }
+}

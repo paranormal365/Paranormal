@@ -1545,6 +1545,27 @@ scan to **add photos from their phone**.
 
 ![The photo wall](help-media:organization-administration/event-photo-wall.png)
 
+### The event's page, gallery and advert
+
+**Gallery** on the event page puts your own pictures on the event's public page — last year's weekend,
+the building, the ballroom set for dinner. The first picture leads the page; the arrows change the
+order. Each picture is resized and has its location removed. Guests' photos from the room are never
+added by themselves: they are the guests', and some of the people in them did not agree to a public page.
+
+![The event's gallery](help-media:organization-administration/event-gallery.png)
+
+The public event page opens with the pictures, says how long until the first night, and on a phone
+keeps an **Ask for a place** button at the bottom of the screen while people scroll.
+
+**Putting an event on your group's own pages.** When you edit one of your public pages, four sections
+show one of your published events and keep up with it by themselves: *An event: dates and ask for a
+place*, *An event's programme*, *An event's pictures* and *An event's venue*. A section pointing at an
+event that is no longer on the public site says so rather than showing it.
+
+**Advertise this event** on the event page starts your group's ad pointing at the event. It is reviewed
+like any ad, shows the event's name and date on the card, leads straight to the event's page, and stops
+being shown by itself once the event is over.
+
 ### Letters about bookings
 
 **A request is answered because somebody was told.** Everybody who may say yes or no to bookings —

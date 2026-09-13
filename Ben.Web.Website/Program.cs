@@ -691,6 +691,17 @@ app.MapGet("/media/guide-photo/{fileId:guid}", async (
 
 // A picture from a tour's gallery (item 233). Anonymous like the guide photograph above: a tour
 // page is read by people with no account.
+// A picture from a hosted event's public gallery (item 235 phase 11). Anonymous, like a tour's.
+app.MapGet("/media/event-photo/{fileId:guid}", async (
+    Guid fileId,
+    IHttpClientFactory httpFactory, IConfiguration config,
+    HttpContext ctx, CancellationToken ct) =>
+{
+    return await Ben.Web.Website.Services.MediaProxy.StreamAsync(
+        $"{config["WebApi:BaseUrl"]}/api/public/event-photo/{fileId}",
+        accessToken: null, httpFactory, ctx, ct);
+}).AllowAnonymous();
+
 app.MapGet("/media/tour-photo/{fileId:guid}", async (
     Guid fileId,
     IHttpClientFactory httpFactory, IConfiguration config,

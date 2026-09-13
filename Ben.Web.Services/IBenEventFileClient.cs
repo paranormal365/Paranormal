@@ -20,4 +20,18 @@ public interface IBenEventFileClient
 
     /// <summary>The files this viewer may have. Empty for somebody who may have none.</summary>
     Task<LoadResult<HostedEventFileRecord>> GetPublicEventFilesAsync(Guid eventId, bool signedIn, CancellationToken token = default);
+
+    // ── the gallery ──────────────────────────────────────────────────────────
+
+    Task<LoadResult<HostedEventImageRecord>> GetEventGalleryAsync(Guid orgId, Guid eventId, CancellationToken token = default);
+
+    /// <summary>Adds a picture. The content carries <c>file</c> and <c>caption</c>.</summary>
+    Task<(List<HostedEventImageRecord>? Result, string? Error)> AddEventGalleryImageAsync(
+        Guid orgId, Guid eventId, MultipartFormDataContent content, CancellationToken token = default);
+
+    Task<(List<HostedEventImageRecord>? Result, string? Error)> UpdateEventGalleryImageAsync(
+        Guid orgId, Guid eventId, Guid imageId, UpdateHostedEventImageRequest request, CancellationToken token = default);
+
+    Task<(List<HostedEventImageRecord>? Result, string? Error)> DeleteEventGalleryImageAsync(
+        Guid orgId, Guid eventId, Guid imageId, CancellationToken token = default);
 }

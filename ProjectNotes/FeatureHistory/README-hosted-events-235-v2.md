@@ -888,6 +888,52 @@ full" without names) and a sticky *Ask for a place* on phone; the room's moderat
 board's *Room* tab. `OrgMessage.HostedEventId` lands here and phase 8's staff-room delivery
 switches on.
 
+#### Phase 11 as built (2026-09-13) — what changed, and what Ben added mid-phase
+
+Three slices: 11a files, 11b the room and the photo wall, 11c the gallery, the dressed page, event
+sections on a group's pages and event ads.
+
+1. **Files have an audience, not a permission** (11a). Each file is for the team, for confirmed guests
+   or for the public, in folders; the guest's *Downloads* page lists only what reaches them. Files go
+   through the media ingest like every other upload; SVG is refused.
+2. **Uploads during an event belong to the uploader** (Ben: *"Uploads during an event belong to the
+   uploader but can be sent to and shared with event organizer and venue"*). A room photo lives in the
+   poster's library; *Also send to the organizers and venue* shares that file with the hosting group
+   rather than copying it. Deleting their own message is always the poster's.
+3. **The room, not a board tab** (11b). The plan put moderation on the board's *Room* tab; it lives in
+   the room itself (`/events/{id}/room`), where a moderator sees what they are hiding. Hide, unhide,
+   close and reopen are the team's; reports also reach the site's own queue.
+4. **Who may post photos** (Ben): the organizer picks *team only* or *team and guests* per event; the
+   default, and every event that existed before, is team and guests.
+5. **The photo wall is behind an account** (Ben: *"behind the venue or organizer's login account so
+   outsiders cannot see the photos being taken"*). A full-screen slideshow at `/events/{id}/wall` for the
+   event's team and the venue's members holding a standing grant — never for guests or visitors, even
+   though guests may post to it.
+6. **Consent, once** (Ben): the first time a guest adds a photo they agree, in words, that it may be
+   shown in the room and on the wall; the agreement is recorded per person per event and asked again at
+   the next event.
+7. **Guests' photos never reach the public gallery.** The gallery (11c) holds only pictures the hosts add
+   themselves, up to fifty, resized and stripped of location; the people in a guest's photo agreed to
+   nothing public. The venue's photo library is phase 12's, not lent here.
+8. **Storage per event** (Ben: *"a max storage size for an event like 2,000 mb"*): the site setting
+   `events.storage-megabytes`, default 2,000, shared by files, gallery and room media, refused in words
+   before the upload is kept.
+9. **The dressed page** is the event's own page, not a CMS section: gallery slideshow, a countdown to
+   the first night, and on a phone a sticky *Ask for a place* that jumps to `#event-act`.
+10. **Event sections on a group's pages, one shape.** Four CMS sections — booking, programme, pictures,
+    venue — resolved at read time from one server projection; a section pointing at an event that is
+    not the group's own or not on the public site says so. The booking section links to the event's
+    picker rather than embedding `BenPlan` read-only: one live plan, not two to keep in step.
+11. **Event ads.** An ad may lead to one of the group's events; the card carries the event's name and
+    date, the click goes to the event page, and it drops out of rotation once the event ends.
+12. **Not done here:** phase 8's alerts are still bell and email; posting them into a staff thread on
+    `OrgMessage.HostedEventId` waits until somebody asks for it, since the room is for the event, not
+    for the booking queue. The iPhone share-to-event is phase 14's.
+
+Tests: `HostedEventFileTests`, `EventRoomTests` (unit and Playwright), `EventAdTests`,
+`CmsEventSectionTests`, Playwright `EventFilesTests`, `EventGalleryTests`; captures
+`event-gallery.png`, `event-page-phone.png` and the room and wall shots.
+
 ### Phase 12 — After the event
 
 **Added 2026-09-13 (Ben), for after the event:**

@@ -51,6 +51,9 @@ public interface IMediaUrlBuilder
     /// <summary>A photo or video posted in an event's room, for the people in it (item 235 phase 11).</summary>
     string EventRoomMedia(Guid eventId, Guid messageId);
 
+    /// <summary>A picture from an event's public gallery — anonymous, like a tour's (item 235 phase 11).</summary>
+    string EventPhoto(Guid uploadFileId);
+
     /// <summary>
     /// A tour guide's published photograph (item 233).
     /// </summary>

@@ -2548,6 +2548,45 @@ public sealed class HelpMediaCapture : BenTestBase
         }
     }
 
+    /// <summary>The event's gallery and the dressed public page on a phone (item 235 phase 11).</summary>
+    [Test]
+    [Description("organization-administration + going-to-an-event: the gallery and the event page.")]
+    public async Task Capture_EventGallery()
+    {
+        var orgId = await OrgIdBySlugAsync("paranormal365");
+        const string caption = "The corridor outside the Blue Room";
+
+        var api = await SignedInApiAsync(SuperAdminEmail, SuperAdminPassword);
+        var ev = await api.GetAsync($"/api/public/hosted-events/{SeededRoomsEventId}");
+        if (!ev.Ok) Assert.Ignore("The seeded rooms weekend is not published on this database.");
+        var slug = (await ev.JsonAsync())!.Value.GetProperty("urlName").GetString();
+
+        try
+        {
+            await LoginAsync(SuperAdminEmail, SuperAdminPassword);
+            await GoAsync($"/organizations/{orgId}/events/{SeededRoomsEventId}/gallery");
+            await Page.Locator("#gallery-input").SetInputFilesAsync(Path.Combine(AppContext.BaseDirectory, "Fixtures", "room-photo-1.jpg"));
+            await Page.Locator("#gallery-caption").FillAsync(caption);
+            await Page.Locator("#gallery-add").ClickAsync();
+            await Expect(Page.Locator("#gallery-note")).ToContainTextAsync("Added", new() { Timeout = 30_000 });
+            await ShootAsync("organization-administration", "event-gallery.png", gated: true, selector: "#gallery-list", proves: "Leads the page");
+
+            await LogoutAsync();
+            await GoAsync($"/o/paranormal365/events/{slug}");
+            await Expect(Page.Locator("#hosted-gallery")).ToBeVisibleAsync(new() { Timeout = 30_000 });
+            await ShootAsync("going-to-an-event", "event-page-phone.png", width: 375);
+        }
+        finally
+        {
+            var list = await api.GetAsync($"/api/organizations/{orgId}/events/{SeededRoomsEventId}/gallery");
+            if (list.Ok)
+                foreach (var image in (await list.JsonAsync())!.Value.EnumerateArray())
+                    if (image.TryGetProperty("caption", out var c) && c.GetString() == caption)
+                        await api.DeleteAsync($"/api/organizations/{orgId}/events/{SeededRoomsEventId}/gallery/{image.GetProperty("id").GetString()}");
+            await api.DisposeAsync();
+        }
+    }
+
     /// <summary>Letters about bookings, on the notifications page (item 235 phase 8).</summary>
     [Test]
     [Description("organization-administration: how often a group writes to you about bookings.")]

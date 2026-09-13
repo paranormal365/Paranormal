@@ -20,6 +20,12 @@ belongs there; this is for the part underneath.
 
 ## 2026-09-13
 
+- Hosted events can carry a gallery of the host's own pictures, up to fifty, resized with their
+  location removed. Guests' photos from an event's room are never added to it.
+- Each event now has a storage allowance, 2,000 MB unless the site changes it, shared by its files,
+  its gallery and the photos posted in its room.
+- A group's ad can lead to one of its events, and is withdrawn from view once the event is over.
+
 - Sessions on a hosted event, drafted privately and published, with first-come sign-up and a queue.
   Two sign-ups for the last place cannot both succeed. Calendar files are served per session.
 

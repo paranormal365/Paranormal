@@ -18,6 +18,15 @@ day-by-day account of building it would say nothing to anyone using it now.
 
 ## 2026-09-13
 
+- Event pages open with the host's pictures and a countdown to the first night, and on a phone keep an
+  ask-for-a-place button in reach. Hosts manage the pictures from a new gallery page.
+- A group's own public pages can show one of its events — its dates, programme, pictures or venue — and
+  the section keeps up with the event by itself.
+- A group's ad can now lead to one of its events. The card shows the event's date and stops showing once
+  the event is over.
+- Each event has room for 2,000 MB of files and photos, and a guest agrees, the first time, before their
+  photos can be shown in the room and on the photo wall.
+
 - Events have a room: a private space on the event page for confirmed guests, the organizers and
   helpers to post what is happening. A photo stays the person's own, and they choose whether to send
   it to the organizers and the venue.
