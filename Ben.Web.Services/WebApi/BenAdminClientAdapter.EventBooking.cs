@@ -219,4 +219,15 @@ public sealed partial class BenAdminClientAdapter
         Guid eventId, CancellationToken token = default)
         => _api.GetItemAsync<HostedEventMenusRecord>(
                $"/api/public/hosted-events/{eventId}/menus", token);
+
+    public Task<ItemResult<PublicHostedEventPlanRecord>> GetPublicHostedEventPlanAsync(
+        Guid eventId, CancellationToken token = default)
+        => _api.GetItemAsync<PublicHostedEventPlanRecord>(
+               $"/api/public/hosted-events/{eventId}/plan", token);
+
+    public Task<(MyHostedEventBookingRecord? Result, string? Error)> EmailMyHostedEventPassAsync(
+        Guid eventId, CancellationToken token = default)
+        => _api.SendExpectingReasonAsync<object, MyHostedEventBookingRecord>(
+               HttpMethod.Post, $"/api/public/hosted-events/{eventId}/my-booking/pass/email",
+               new { }, token);
 }

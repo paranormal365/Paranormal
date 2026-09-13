@@ -25,10 +25,11 @@ day-by-day account of building it would say nothing to anyone using it now.
 - Sittings read in the order you arrange them and never by the clock, because a night runs from
   the evening people arrive through the morning they come down — so the eight o'clock breakfast
   belongs after the seven o'clock dinner it followed.
-- **What the kitchen needs** turns every guest's note into the sheet a cook works from: how many
-  people you are expecting, how many told you something, and how many nobody has named. The same
-  words typed by several people are counted together; two different wordings of the same thing
-  stay two lines, because guessing they are one would eventually merge two that are not.
+- Every guest's dietary note now becomes the sheet a cook works from — **what the kitchen needs**,
+  from the event page or the booking board. It says how many people you are expecting, how many
+  told you something, and how many nobody has named. The same words typed by several people are
+  counted together; two different wordings of the same thing stay two lines, because guessing they
+  are one would eventually merge two that are not.
 - The kitchen's sheet can be read one night at a time, and built as one sheet for each night so
   every service prints on its own page.
 - Events have a **Bookings** page. It opens on what is waiting on you — every party nobody has

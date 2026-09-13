@@ -67,6 +67,8 @@ public sealed class EventBookingClientRouteTests
         "/api/public/hosted-events/{eventId}/my-booking/acknowledge\"",
         "/api/public/hosted-events/{eventId}/my-booking/pass\"",
         "/api/public/hosted-events/{eventId}/menus\"",
+        "/api/public/hosted-events/{eventId}/plan\"",
+        "/api/public/hosted-events/{eventId}/my-booking/pass/email\"",
     ];
 
     /// <summary>The names the plan gave the doors. The compiler proves they are implemented; this proves they are spelled as planned.</summary>
@@ -81,6 +83,7 @@ public sealed class EventBookingClientRouteTests
         "GetMyHostedEventBookingsAsync", "GetMyHostedEventBookingAsync", "RequestHostedEventBookingAsync",
         "UpdateMyHostedEventBookingAsync", "AcknowledgeMyHostedEventBookingAsync",
         "WithdrawMyHostedEventBookingAsync", "GetMyHostedEventPassAsync", "GetMyHostedEventMenusAsync",
+        "GetPublicHostedEventPlanAsync", "EmailMyHostedEventPassAsync",
     ];
 
     private static string Source(string fileName)

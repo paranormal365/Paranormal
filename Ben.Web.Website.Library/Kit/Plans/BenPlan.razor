@@ -151,7 +151,7 @@
     /// Null while arranging, where occupancy is not the question. A unit missing from the map
     /// reads as free, so a caller that only knows about the taken ones need only send those.
     /// </remarks>
-    [Parameter] public IReadOnlyDictionary<Guid, PlanCellState>? Occupancy { get; set; }
+    [Parameter] public IReadOnlyDictionary<Guid, HostedEventPlanCellState>? Occupancy { get; set; }
 
     /// <summary>The units a refusal named, ringed so the sentence can be acted on.</summary>
     /// <remarks>
@@ -218,11 +218,11 @@
                     TourPlate.HueStyle(name));
             })];
 
-    private PlanCellState StateOf(PlanUnit unit)
-        => Occupancy is not null && Occupancy.TryGetValue(unit.Key, out var s) ? s : PlanCellState.Free;
+    private HostedEventPlanCellState StateOf(PlanUnit unit)
+        => Occupancy is not null && Occupancy.TryGetValue(unit.Key, out var s) ? s : HostedEventPlanCellState.Free;
 
     /// <summary>Whether a square does anything when it is pressed, in this mode.</summary>
-    private bool Answers(PlanCellState state) => Mode switch
+    private bool Answers(HostedEventPlanCellState state) => Mode switch
     {
         PlanMode.Edit => true,
         PlanMode.Pick => PlanCellStates.IsPickable(state),
@@ -247,7 +247,7 @@
     /// <summary>
     /// Everything a screen reader needs in one string, because a square is a square to it.
     /// </summary>
-    private string LabelOf(PlanUnit unit, PlanCellState state)
+    private string LabelOf(PlanUnit unit, HostedEventPlanCellState state)
     {
         var where = $"row {PlanLabels.RowName(unit.Row ?? 0)}, {(unit.Column ?? 0) + 1}";
         var section = unit.Section is { Length: > 0 } s ? $", {s}" : "";

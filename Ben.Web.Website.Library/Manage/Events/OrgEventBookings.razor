@@ -351,10 +351,10 @@
     /// Held is drawn hatched and confirmed solid, because "somebody is deciding about this" and
     /// "this is settled" are different facts to a host looking at their own house.
     /// </remarks>
-    private IReadOnlyDictionary<Guid, PlanCellState> OccupancyFor(HostedEventBookingBoardRecord board)
+    private IReadOnlyDictionary<Guid, HostedEventPlanCellState> OccupancyFor(HostedEventBookingBoardRecord board)
     {
         var tonight = ChosenNight(board);
-        var byUnit = new Dictionary<Guid, PlanCellState>();
+        var byUnit = new Dictionary<Guid, HostedEventPlanCellState>();
         if (_plan is not { } plan || tonight is not { } nightId) return byUnit;
 
         foreach (var cell in board.UnitNights.Where(n => n.HostedEventNightId == nightId))
@@ -364,10 +364,10 @@
 
             byUnit[unit.Key] = cell switch
             {
-                { NotOffered: { Length: > 0 } } => PlanCellState.Blocked,
-                { Pending: true } => PlanCellState.Pending,
-                { Taken: > 0 } => PlanCellState.Taken,
-                _ => PlanCellState.Free,
+                { NotOffered: { Length: > 0 } } => HostedEventPlanCellState.Blocked,
+                { Pending: true } => HostedEventPlanCellState.Pending,
+                { Taken: > 0 } => HostedEventPlanCellState.Taken,
+                _ => HostedEventPlanCellState.Free,
             };
         }
 

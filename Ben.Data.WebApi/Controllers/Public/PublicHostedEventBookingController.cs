@@ -41,7 +41,16 @@ public sealed class PublicHostedEventBookingController : BenControllerBase
 
     // ── what I have asked for ────────────────────────────────────────────────
 
-    /// <summary>Every hosted event this person has a booking at, coming up or recently past.</summary>
+    /// <summary>
+    /// Every hosted event this person has a booking at, coming up or recently past.
+    /// </summary>
+    /// <remarks>
+    /// <b>A released booking for an event that has not happened yet is still shown here</b>, and
+    /// only here. Everywhere else on this door a cancelled booking is gone, because "have I got a
+    /// place" is answered no; but a list of what somebody has coming up that silently drops the
+    /// weekend they were released from is a list that answers a question nobody asked. They kept
+    /// the date free. Once the event is over it goes, like everything else.
+    /// </remarks>
     [HttpGet("mine")]
     public async Task<ActionResult<IReadOnlyList<MyHostedEventBookingRecord>>> GetMine(
         CancellationToken ct)
@@ -51,7 +60,10 @@ public sealed class PublicHostedEventBookingController : BenControllerBase
 
         await using var db = await _db.CreateDbContextAsync(ct);
 
-        var bookings = await MineQuery(db, userId)
+        var today = DateTime.UtcNow.Date;
+        var bookings = await MineQuery(db, userId, includeReleased: true)
+            .Where(b => b.Status != HostedEventBookingStatus.Cancelled
+                     || b.HostedEvent.EndsOn >= today)
             .OrderBy(b => b.HostedEvent.StartsOn)
             .ToListAsync(ct);
 
@@ -181,6 +193,51 @@ public sealed class PublicHostedEventBookingController : BenControllerBase
                 .Select(n => new HostedEventBookingNightRecord(
                     n.HostedEventNightId, n.HostedEventNight.Date, n.HostedEventLayoutUnitId, EventCapacity.NameOf(n)))
                 .ToList()));
+    }
+
+    /// <summary>
+    /// Posts the guest their own pass again (item 235 phase 6).
+    /// </summary>
+    /// <remarks>
+    /// <para><b>Because the commonest thing that goes wrong with a pass is a lost letter</b>, and
+    /// the guest is standing there with a phone. Every other route to a fresh copy goes through
+    /// the venue — a message, somebody at a desk, a reissue — which is a lot of machinery for
+    /// "send it to me again".</para>
+    ///
+    /// <para>It re-posts the decision letter, which is the letter the pass travels in, so the
+    /// guest gets exactly what the venue sent rather than a second kind of mail that could say
+    /// something different. Nothing is issued or replaced: the pass in their pocket is the pass.
+    /// </para>
+    /// </remarks>
+    [HttpPost("{eventId:guid}/my-booking/pass/email")]
+    public async Task<ActionResult<MyHostedEventBookingRecord>> EmailMyPass(
+        Guid eventId, [FromServices] EventGuestMailer mail, CancellationToken ct)
+    {
+        var userId = GetCurrentUserId();
+        if (userId == Guid.Empty) return Unauthorized();
+
+        await using var db = await _db.CreateDbContextAsync(ct);
+
+        var booking = await db.HostedEventBookings
+            .FirstOrDefaultAsync(b => b.HostedEventId == eventId && b.LeadAppUserId == userId, ct);
+        if (booking is null) return NotFound();
+
+        if (booking.Status != HostedEventBookingStatus.Confirmed)
+            return Conflict("Your pass is sent when the venue confirms your place.");
+
+        if (await EventPasses.LiveAsync(db, booking.Id, ct) is null)
+            return Conflict("There is no pass on this booking at the moment. The venue can issue "
+                          + "you one.");
+
+        if (!mail.IsConfigured)
+            return Conflict("This site has no outgoing mail set up, so nothing can be posted. The "
+                          + "pass on this screen is the same one.");
+
+        if (!await mail.SendDecisionAsync(db, booking.Id, ct))
+            return Conflict("The letter could not be sent just now and nothing was posted. Try "
+                          + "again in a minute — the pass on this screen works either way.");
+
+        return Ok(await ReloadAsync(db, userId, booking.Id, ct));
     }
 
     // ── asking ───────────────────────────────────────────────────────────────
@@ -744,7 +801,14 @@ public sealed class PublicHostedEventBookingController : BenControllerBase
         }
     }
 
-    private static IQueryable<HostedEventBooking> MineQuery(BenDataContext db, Guid userId)
+    /// <param name="includeReleased">
+    /// Whether a cancelled booking counts as one of this person's. False everywhere that asks
+    /// "have I got a place here" — a released booking is not a place, and treating it as one would
+    /// stop the guest ever asking again. True only for the list of what they have coming up, where
+    /// leaving it out silently drops a weekend they are still keeping free.
+    /// </param>
+    private static IQueryable<HostedEventBooking> MineQuery(
+        BenDataContext db, Guid userId, bool includeReleased = false)
         => db.HostedEventBookings
             .AsNoTracking()
             .Include(b => b.HostedEvent).ThenInclude(e => e.Organization)
@@ -753,7 +817,7 @@ public sealed class PublicHostedEventBookingController : BenControllerBase
             .Include(b => b.Nights).ThenInclude(n => n.HostedEventLayoutUnit).ThenInclude(u => u!.PlaceRoom)
             .Include(b => b.Guests)
             .Where(b => b.LeadAppUserId == userId
-                     && b.Status != HostedEventBookingStatus.Cancelled);
+                     && (includeReleased || b.Status != HostedEventBookingStatus.Cancelled));
 
     private async Task<MyHostedEventBookingRecord> ReloadAsync(
         BenDataContext db, Guid userId, Guid bookingId, CancellationToken ct)

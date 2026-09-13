@@ -292,4 +292,24 @@ public interface IBenEventBookingClient
     /// </remarks>
     Task<ItemResult<HostedEventMenusRecord>> GetMyHostedEventMenusAsync(
         Guid eventId, CancellationToken token = default);
+
+    /// <summary>
+    /// The plan of a published event, and what every square is on every night (phase 6).
+    /// </summary>
+    /// <remarks>
+    /// Readable signed out, because somebody deciding whether to come is exactly the person with
+    /// no account. It carries states and never names: who is in row C is the venue's business.
+    /// Squares that are free are simply absent, which is most of a plan on the day it opens.
+    /// </remarks>
+    Task<ItemResult<PublicHostedEventPlanRecord>> GetPublicHostedEventPlanAsync(
+        Guid eventId, CancellationToken token = default);
+
+    /// <summary>Posts the guest their own pass again, because letters get lost.</summary>
+    /// <remarks>
+    /// Re-sends the venue's own decision letter, which is what the pass travels in, so the guest
+    /// gets exactly what was sent rather than a second kind of mail that could say something
+    /// else. Nothing is issued or replaced.
+    /// </remarks>
+    Task<(MyHostedEventBookingRecord? Result, string? Error)> EmailMyHostedEventPassAsync(
+        Guid eventId, CancellationToken token = default);
 }

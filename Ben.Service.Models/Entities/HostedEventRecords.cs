@@ -274,7 +274,49 @@ public sealed record PublicHostedEventRecord(
     /// not want an evidence queue on its public page, and a lock-in does.
     /// </remarks>
     bool CollectsEvidence,
-    IReadOnlyList<HostedEventNightRecord> Nights);
+    IReadOnlyList<HostedEventNightRecord> Nights,
+
+    /// <summary>
+    /// How places are had: picked off a plan, or asked for in words (item 235 phase 6).
+    /// </summary>
+    /// <remarks>
+    /// Additive with a default, like everything else added below it, because the app already in
+    /// people's pockets decodes this record and has to keep doing so unchanged. Ask is what every
+    /// event did before the choice existed.
+    /// </remarks>
+    HostedEventBookingMode BookingMode = HostedEventBookingMode.Ask,
+
+    /// <summary>The one state, so a page does not infer it from four booleans.</summary>
+    HostedEventLifecycleState LifecycleState = HostedEventLifecycleState.Published,
+
+    /// <summary>Whether a place can still be had at all.</summary>
+    bool IsTakingBookings = true,
+
+    /// <summary>
+    /// Why not, in words for a person, or null when it is.
+    /// </summary>
+    /// <remarks>
+    /// "Called off", "bookings closed on Friday" and "this event has happened" are three different
+    /// facts, and a page with no button and no sentence leaves a reader refreshing it.
+    /// </remarks>
+    string? NotTakingBookingsSentence = null,
+
+    DateTime? BookingsCloseAtUtc = null,
+
+    /// <summary>Shown and never charged. Null is "ask the venue"; zero is genuinely free.</summary>
+    decimal? DayPassPrice = null,
+
+    /// <summary>
+    /// The number this event needs before it definitely runs, when the host set one.
+    /// </summary>
+    /// <remarks>
+    /// A guest asked to keep a weekend free is owed the fact that it might not happen, and the
+    /// date by which they will know. Hiding it until the decision is made is how somebody books a
+    /// flight for an event that was never going to run.
+    /// </remarks>
+    int? MinimumGuests = null,
+    DateTime? GoNoGoDeadlineUtc = null,
+    HostedEventGoNoGo GoNoGoDecision = HostedEventGoNoGo.Undecided);
 
 /// <summary>
 /// One thing that has to be true before an event can go live (item 235 phase 3).
@@ -295,3 +337,70 @@ public sealed record HostedEventReadinessItem(
     bool Done,
     string Sentence,
     string Href);
+
+/// <summary>
+/// One square of a plan as a visitor sees it (item 235 phase 6).
+/// </summary>
+/// <remarks>
+/// <b>A state and nothing else.</b> No party, no name, no count of who else wanted it: a guest
+/// choosing a seat needs to know whether they may have it, and everything beyond that is somebody
+/// else's business. The organizer's board asks a different endpoint and joins the names on there.
+/// </remarks>
+public sealed record PublicHostedEventPlanCellRecord(
+    Guid HostedEventNightId,
+    Guid HostedEventLayoutUnitId,
+    HostedEventPlanCellState State);
+
+/// <summary>A room or a seat as a visitor sees it (item 235 phase 6).</summary>
+/// <param name="Holds">
+/// How many the room sleeps, or how many the seat seats — which is one. Null when the venue has
+/// not said, and the picker then counts places rather than people.
+/// </param>
+/// <param name="Price">Shown and never charged. Null is "ask the venue"; zero is genuinely free.</param>
+/// <remarks>
+/// Its own record rather than the organizer's <c>HostedEventLayoutUnitRecord</c>, which carries the
+/// venue's private note about the square. A shape where the private thing has to be deliberately
+/// ADDED is one that cannot leak it by being extended.
+/// </remarks>
+public sealed record PublicHostedEventPlanUnitRecord(
+    Guid Id,
+    string Name,
+    string? Section,
+    int? Holds,
+    decimal? Price,
+    int? LayoutRow,
+    int? LayoutColumn,
+    int SortOrder);
+
+/// <summary>
+/// The plan of a published event, with what every square is on every night (item 235 phase 6).
+/// </summary>
+/// <param name="IsPicking">
+/// True when this event sells its places by the square AND is still taking bookings. False draws
+/// the same plan read-only, which is what a stranger and a latecomer both see.
+/// </param>
+/// <param name="ClosedSentence">
+/// Why nothing can be picked, in words for a person, or null when it can. "The event has been
+/// called off" and "bookings closed on Friday" are different facts and a greyed-out grid says
+/// neither.
+/// </param>
+/// <param name="HoldMinutes">
+/// How long a pick is held for, so the page can say "yours for two days" before somebody commits
+/// rather than after.
+/// </param>
+/// <param name="Cells">
+/// <b>Only the squares that are not free.</b> Everything absent is free, which is most of a plan
+/// on the day it opens and is the difference between a few hundred bytes and a few thousand for a
+/// four-hundred-seat house across three nights.
+/// </param>
+public sealed record PublicHostedEventPlanRecord(
+    Guid HostedEventId,
+    HostedEventLayoutKind Kind,
+    HostedEventBookingMode BookingMode,
+    bool IsPicking,
+    string? ClosedSentence,
+    int HoldMinutes,
+    int MaxPartySize,
+    IReadOnlyList<HostedEventNightRecord> Nights,
+    IReadOnlyList<PublicHostedEventPlanUnitRecord> Units,
+    IReadOnlyList<PublicHostedEventPlanCellRecord> Cells);

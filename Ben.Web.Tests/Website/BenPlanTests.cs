@@ -35,7 +35,7 @@ public sealed class BenPlanTests
 
     private static async Task<string> RenderAsync(
         PlanModel model, PlanMode mode = PlanMode.Edit,
-        IReadOnlyDictionary<Guid, PlanCellState>? occupancy = null,
+        IReadOnlyDictionary<Guid, HostedEventPlanCellState>? occupancy = null,
         IReadOnlySet<Guid>? selection = null, bool compact = false)
     {
         var services = new ServiceCollection();
@@ -126,11 +126,11 @@ public sealed class BenPlanTests
         // him nothing is one that sells him somebody else's seat.
         var plan = Stalls(1, 3);
         var keys = plan.Units.Select(u => u.Key).ToList();
-        var html = await RenderAsync(plan, PlanMode.Pick, new Dictionary<Guid, PlanCellState>
+        var html = await RenderAsync(plan, PlanMode.Pick, new Dictionary<Guid, HostedEventPlanCellState>
         {
-            [keys[0]] = PlanCellState.Taken,
-            [keys[1]] = PlanCellState.Pending,
-            [keys[2]] = PlanCellState.Free,
+            [keys[0]] = HostedEventPlanCellState.Taken,
+            [keys[1]] = HostedEventPlanCellState.Pending,
+            [keys[2]] = HostedEventPlanCellState.Free,
         });
 
         Assert.Contains("data-state=\"taken\"", html);
@@ -151,9 +151,9 @@ public sealed class BenPlanTests
         var plan = Stalls(1, 2);
         var keys = plan.Units.Select(u => u.Key).ToList();
 
-        var html = await RenderAsync(plan, PlanMode.Pick, new Dictionary<Guid, PlanCellState>
+        var html = await RenderAsync(plan, PlanMode.Pick, new Dictionary<Guid, HostedEventPlanCellState>
         {
-            [keys[0]] = PlanCellState.Taken,
+            [keys[0]] = HostedEventPlanCellState.Taken,
         });
 
         Assert.Equal(1, Count(html, "disabled"));
