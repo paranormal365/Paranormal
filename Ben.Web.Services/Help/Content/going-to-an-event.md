@@ -81,6 +81,37 @@ Your booking sits on the event's page and says exactly one of these things:
 **A hold that lapses is not a refusal.** It means the clock ran out before anybody looked, the
 places went back on offer, and you are welcome to choose again if they are still there.
 
+## Everything you're going to
+
+**What I'm going to** (`/my-events`) is the list of every event you have asked to come to or been
+given a place at, whichever group is running it. The bell points here when a venue answers you.
+
+![The list of what you are going to](/help/media/going-to-an-event/my-events.png)
+
+Places you have, or are waiting to hear about, come first. Underneath sits anything you asked for
+and did not get — kept on purpose, because a weekend you were released from is a date you may
+still have free.
+
+## Your pass
+
+Once a venue confirms you, your pass is on the event's page and on this list. **One pass admits
+the whole party** — not one each. Three of the four people arriving together may never have had an
+account here, and four people at a door each hunting for their own code is worse than one person
+holding one.
+
+![A pass, with the code and the words](/help/media/going-to-an-event/your-pass.png)
+
+- **It says in words everything the code says**: who it is for, how many it admits, which nights,
+  and which room or seat. A cracked screen, a camera that will not focus in the dark or a phone at
+  four percent is an ordinary evening, and the door can still work from what is written.
+- **The short code underneath** is what somebody at the door types when the camera gives up. Read
+  it out; it is not a secret, and it only means anything at that event.
+- **Email it to me** sends the venue's own letter again, pass and all, to the address on your
+  account.
+- **It prints.** The controls disappear and the pass does not.
+- **A withdrawn pass is shown, not hidden** — faded, with the venue's reason on it. A blank screen
+  reads as a fault and sends somebody to a door anyway; the reason tells them what to do instead.
+
 ## Changing your mind
 
 - **Never mind** takes back a request or lets go of a hold, straight away.

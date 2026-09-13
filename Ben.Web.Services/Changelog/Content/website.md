@@ -35,6 +35,13 @@ day-by-day account of building it would say nothing to anyone using it now.
   the hold ran out — with what it means and what you can do next.
 - An event that only runs if enough people come says so from the first time you look, along with
   the date the venue decides by.
+- There is a page listing every event you have asked to come to, with what you have coming up
+  first and anything you asked for and did not get underneath. The bell now lands there when a
+  venue answers you, instead of on the list of everybody's evenings.
+- Your pass shows the code large, and says in words everything the code says — who it admits, how
+  many, which nights and which room — with a short code to read out when a camera will not focus.
+  It prints, and it can be emailed to you again. A withdrawn pass is shown with the venue's reason
+  rather than going blank.
 - A new help page, **Going to an Event**, covers all of it.
 
 ## 2026-09-12

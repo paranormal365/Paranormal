@@ -162,6 +162,39 @@ public sealed class MyHostedEventsTests
         Assert.IsType<NotFoundResult>(answer.Result);
     }
 
+    [Fact]
+    public async Task A_history_of_refusals_never_hides_the_pass_somebody_actually_holds()
+    {
+        // A guest may ask several times at one event: released, then confirmed. Only one can be
+        // live, because the database says so — but without an order this door took whichever row
+        // came back first, which in practice was the OLDEST. The pass page told a confirmed guest
+        // "this booking was released" while their live pass sat one row below. Found in a browser
+        // by doing what a guest does, which is to try more than once.
+        await using var sqlite = await SqliteTestDb.CreateAsync();
+        var eventId = await SeedAsync(
+            sqlite, DateTime.UtcNow.Date.AddDays(20), HostedEventBookingStatus.Cancelled);
+
+        await using (var db = await sqlite.NewContextAsync())
+        {
+            var confirmed = new HostedEventBooking
+            {
+                Id = Guid.NewGuid(), HostedEventId = eventId, LeadAppUserId = GuestId,
+                PartySize = 2, Kind = HostedEventBookingKind.DayPass,
+                Status = HostedEventBookingStatus.Confirmed,
+                DateCreated = DateTime.UtcNow, CreatedByAppUserId = GuestId,
+            };
+            db.HostedEventBookings.Add(confirmed);
+            await EventPasses.EnsureAsync(db, confirmed, HostId, default);
+            await db.SaveChangesAsync();
+        }
+
+        var answer = await As(sqlite, GuestId).GetMyPass(eventId, default);
+
+        var ok = Assert.IsType<OkObjectResult>(answer.Result);
+        var pass = Assert.IsType<MyHostedEventPassRecord>(ok.Value);
+        Assert.Null(pass.Pass.RevokedUtc);
+    }
+
     // ── send me my pass again ────────────────────────────────────────────────
 
     [Fact]

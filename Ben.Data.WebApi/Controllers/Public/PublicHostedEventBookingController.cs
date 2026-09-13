@@ -79,8 +79,8 @@ public sealed class PublicHostedEventBookingController : BenControllerBase
         if (userId == Guid.Empty) return Unauthorized();
 
         await using var db = await _db.CreateDbContextAsync(ct);
-        var booking = await MineQuery(db, userId)
-            .FirstOrDefaultAsync(b => b.HostedEventId == eventId, ct);
+        var booking = await Newest(MineQuery(db, userId).Where(b => b.HostedEventId == eventId))
+            .FirstOrDefaultAsync(ct);
 
         return booking is null ? NotFound() : Ok(ToMine(booking));
     }
@@ -144,7 +144,7 @@ public sealed class PublicHostedEventBookingController : BenControllerBase
 
         await using var db = await _db.CreateDbContextAsync(ct);
 
-        var booking = await db.HostedEventBookings.AsNoTracking()
+        var booking = await Newest(db.HostedEventBookings.AsNoTracking()
             .Include(b => b.HostedEvent).ThenInclude(e => e.Place)
             .Include(b => b.LeadAppUser)
             .Include(b => b.Nights).ThenInclude(n => n.HostedEventNight)
@@ -152,7 +152,8 @@ public sealed class PublicHostedEventBookingController : BenControllerBase
             // A CANCELLED booking is included here, unlike everywhere else on this door. The
             // venue released it and revoked the pass with a reason; the guest is the one person
             // who needs to be able to show that pass to somebody and be told why it will not work.
-            .FirstOrDefaultAsync(b => b.HostedEventId == eventId && b.LeadAppUserId == userId, ct);
+            .Where(b => b.HostedEventId == eventId && b.LeadAppUserId == userId))
+            .FirstOrDefaultAsync(ct);
         if (booking is null) return NotFound();
 
         var passes = await db.HostedEventPasses.AsNoTracking()
@@ -218,8 +219,9 @@ public sealed class PublicHostedEventBookingController : BenControllerBase
 
         await using var db = await _db.CreateDbContextAsync(ct);
 
-        var booking = await db.HostedEventBookings
-            .FirstOrDefaultAsync(b => b.HostedEventId == eventId && b.LeadAppUserId == userId, ct);
+        var booking = await Newest(db.HostedEventBookings
+            .Where(b => b.HostedEventId == eventId && b.LeadAppUserId == userId))
+            .FirstOrDefaultAsync(ct);
         if (booking is null) return NotFound();
 
         if (booking.Status != HostedEventBookingStatus.Confirmed)
@@ -612,8 +614,9 @@ public sealed class PublicHostedEventBookingController : BenControllerBase
 
         await using var db = await _db.CreateDbContextAsync(ct);
 
-        var booking = await db.HostedEventBookings
-            .FirstOrDefaultAsync(b => b.HostedEventId == eventId && b.LeadAppUserId == userId, ct);
+        var booking = await Newest(db.HostedEventBookings
+            .Where(b => b.HostedEventId == eventId && b.LeadAppUserId == userId))
+            .FirstOrDefaultAsync(ct);
         if (booking is null) return NotFound();
 
         if (booking.Status is not (HostedEventBookingStatus.Confirmed
@@ -818,6 +821,27 @@ public sealed class PublicHostedEventBookingController : BenControllerBase
             .Include(b => b.Guests)
             .Where(b => b.LeadAppUserId == userId
                      && (includeReleased || b.Status != HostedEventBookingStatus.Cancelled));
+
+    /// <summary>
+    /// One guest's bookings at one event, the one that matters first.
+    /// </summary>
+    /// <remarks>
+    /// <para><b>A guest may have several at one event over time</b> — asked and turned down, held
+    /// and lapsed, then confirmed — and only one of them can be live, because the database says
+    /// so. Without an order, <c>First</c> takes whichever the database hands back, which in
+    /// practice is the OLDEST: the pass page showed a guest the words "this booking was released"
+    /// while their confirmed pass sat one row further down. Found by a browser test doing what a
+    /// guest does, which is to try more than once.</para>
+    ///
+    /// <para>Live first, then the most recent, so a history of refusals never hides the booking
+    /// somebody actually holds.</para>
+    /// </remarks>
+    private static IQueryable<HostedEventBooking> Newest(IQueryable<HostedEventBooking> bookings)
+        => bookings
+            .OrderByDescending(b => b.Status == HostedEventBookingStatus.Confirmed
+                                 || b.Status == HostedEventBookingStatus.Held
+                                 || b.Status == HostedEventBookingStatus.Requested)
+            .ThenByDescending(b => b.DateCreated);
 
     private async Task<MyHostedEventBookingRecord> ReloadAsync(
         BenDataContext db, Guid userId, Guid bookingId, CancellationToken ct)

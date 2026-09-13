@@ -2055,6 +2055,117 @@ public sealed class HelpMediaCapture : BenTestBase
             gated: false, proves: "Hold these places", width: 375);
     }
 
+    /// <summary>
+    /// What a guest holds up at the door, and the list it hangs off (item 235 phase 6).
+    /// </summary>
+    /// <remarks>
+    /// It confirms a party through the venue's own door first, because a pass exists only once
+    /// somebody has been told yes — photographing the "no pass yet" state would be photographing
+    /// the wrong half. The house is put back afterwards.
+    /// </remarks>
+    [Test]
+    [Description("going-to-an-event: your pass, and everything you are going to.")]
+    public async Task Capture_HostedEventPass()
+    {
+        var orgId = await OrgIdBySlugAsync("paranormal365");
+        var bookingId = await ConfirmAPartyAsync(orgId);
+
+        await LoginAsync(ClientEmail, ClientPassword);
+
+        await GoAsync("/my-events");
+        // The viewport rather than the list: a test database has years of asking in it, and a
+        // photograph of a hundred rows teaches nothing about a page whose point is the top of it.
+        await ShootAsync("going-to-an-event", "my-events.png",
+            gated: false, proves: "You're coming");
+
+        await GoAsync($"/my-events/{SeededSeatsEventId}/pass");
+        await ShootAsync("going-to-an-event", "your-pass.png",
+            gated: false, selector: "#pass-card", proves: "Admits");
+
+        await ReleaseAsync(orgId, bookingId);
+    }
+
+    /// <summary>Puts a party in a seat and confirms it, which is what issues a pass.</summary>
+    private async Task<string> ConfirmAPartyAsync(string orgId)
+    {
+        var admin = await SignedInApiAsync(SuperAdminEmail, SuperAdminPassword);
+        var guest = await SignedInApiAsync(ClientEmail, ClientPassword);
+
+        await ReleaseEverythingAsync(admin, orgId);
+        await LetGoOfEverythingAsync();
+
+        await admin.PostAsync($"/api/organizations/{orgId}/events/{SeededSeatsEventId}/booking-mode",
+            new() { DataObject = new { mode = 1 } });
+        await admin.PostAsync($"/api/organizations/{orgId}/events/{SeededSeatsEventId}/publish",
+            new() { DataObject = new { } });
+
+        var layout = await admin.GetAsync(
+            $"/api/organizations/{orgId}/events/{SeededSeatsEventId}/layout");
+        var seat = (await layout.JsonAsync())!.Value.GetProperty("units").EnumerateArray()
+            .First().GetProperty("id").GetString();
+
+        var ev = await admin.GetAsync($"/api/organizations/{orgId}/events/{SeededSeatsEventId}");
+        var night = (await ev.JsonAsync())!.Value.GetProperty("nights").EnumerateArray()
+            .First().GetProperty("id").GetString();
+
+        var body = new
+        {
+            nights = new[] { new { hostedEventNightId = night, hostedEventLayoutUnitId = seat } },
+            partySize = 2,
+        };
+
+        var held = await guest.PostAsync(
+            $"/api/public/hosted-events/{SeededSeatsEventId}/holds", new() { DataObject = body });
+        Assert.That(held.Status, Is.EqualTo(200), await held.TextAsync());
+
+        var bookingId = (await held.JsonAsync())!.Value.GetProperty("id").GetString()!;
+
+        var confirmed = await admin.PostAsync(
+            $"/api/organizations/{orgId}/events/{SeededSeatsEventId}/bookings/{bookingId}/confirm",
+            new()
+            {
+                DataObject = new
+                {
+                    nights = body.nights,
+                    decisionNote = "See you on the night — doors at seven.",
+                },
+            });
+        Assert.That(confirmed.Ok, Is.True, await confirmed.TextAsync());
+
+        await admin.DisposeAsync();
+        await guest.DisposeAsync();
+
+        return bookingId;
+    }
+
+    private async Task ReleaseAsync(string orgId, string bookingId)
+    {
+        var admin = await SignedInApiAsync(SuperAdminEmail, SuperAdminPassword);
+        await admin.PostAsync(
+            $"/api/organizations/{orgId}/events/{SeededSeatsEventId}/bookings/{bookingId}/cancel",
+            new() { DataObject = new { decisionNote = "Clearing up after the pictures." } });
+        await admin.DisposeAsync();
+    }
+
+    private async Task ReleaseEverythingAsync(
+        Microsoft.Playwright.IAPIRequestContext admin, string orgId)
+    {
+        var board = await admin.GetAsync(
+            $"/api/organizations/{orgId}/events/{SeededSeatsEventId}/bookings");
+        if (!board.Ok) return;
+
+        foreach (var booking in (await board.JsonAsync())!.Value
+                     .GetProperty("bookings").EnumerateArray())
+        {
+            if (booking.GetProperty("status").GetInt32() is not (0 or 1 or 4)) continue;
+
+            var id = booking.GetProperty("id").GetString();
+            await admin.PostAsync(
+                $"/api/organizations/{orgId}/events/{SeededSeatsEventId}/bookings/{id}/cancel",
+                new() { DataObject = new { decisionNote = "Clearing up before the pictures." } });
+        }
+    }
+
     /// <summary>The seeded evening's slug, which is the address on the poster.</summary>
     private async Task<string> SeatsEventSlugAsync(string orgId)
     {

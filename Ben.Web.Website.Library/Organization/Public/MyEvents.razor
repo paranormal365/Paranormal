@@ -1,0 +1,213 @@
+@page "/my-events"
+@namespace Ben.Web.Website.Library.Organization.Public
+
+@inject IBenAdminClient AdminClient
+@inject IBenUserState UserState
+
+@using Ben.Data.Common.Enums
+@using Ben.Service.Models.Entities
+@using Ben.Web.Services.WebApi
+@using Ben.Web.Website.Library.Kit
+@using Ben.Web.Website.Library.Manage.Icon
+
+@* What a guest has coming up (item 235 phase 6).
+
+   THE PAGE THE BELL POINTS AT. "A venue answered you" used to land on /events, which is what is
+   ON — everybody's evenings — and left somebody hunting through it for their own booking.
+
+   A RELEASED BOOKING STAYS HERE UNTIL THE EVENT IS OVER, and nowhere else. Everywhere else on the
+   guest's side a cancelled booking is gone, because "have I got a place" is answered no; but a
+   list of what somebody has coming up that silently drops the weekend they were released from is
+   answering a question nobody asked. They kept the date free. *@
+
+<PageTitle>What I'm going to</PageTitle>
+
+<div class="container py-3" style="max-width:960px;">
+
+    <h1 class="h3 mb-1">What I'm going to</h1>
+    <p class="text-secondary small mb-3">
+        Events you've asked to come to, or been given a place at. Nothing here is paid through
+        this site.
+    </p>
+
+    <BenListState TItem="MyHostedEventBookingRecord" Result="_bookings" Loading="_loading"
+                  LoadingText="Loading your bookings…" OnRetry="LoadAsync">
+        <Empty>
+            <div class="alert alert-light" id="my-events-empty">
+                You haven't asked for a place at anything yet. Groups list what they are running on
+                their own pages, and on <a href="/events">What's On</a>.
+            </div>
+        </Empty>
+
+        <ChildContent>
+            @* TWO LISTS, BECAUSE THEY ANSWER DIFFERENT QUESTIONS. "What am I going to" is the
+               first one; the second exists because a weekend somebody was released from is a date
+               they may still have free, and dropping it silently answers a question nobody asked.
+               Mixed together, one refusal from three years of asking buries the thing they came
+               here to check. *@
+            <ul class="list-group" id="my-events">
+                @foreach (var booking in Coming)
+                {
+                    var mine = booking;
+                    <li class="list-group-item my-event">
+                        <div class="my-event__what">
+                            <div class="fw-semibold">
+                                <a href="@Where(mine)">@mine.EventName</a>
+                            </div>
+                            <div class="small text-secondary">
+                                @mine.OrganizationName
+                                @if (mine.VenueName is { Length: > 0 } venue)
+                                {
+                                    <text> · @venue</text>
+                                }
+                                · @When(mine)
+                            </div>
+                            <div class="small text-secondary">@What(mine)</div>
+                        </div>
+
+                        <div class="my-event__state">
+                            <span class="badge @Badge(mine.Status).Class">
+                                <BenIcon Name="@Badge(mine.Status).Icon" Class="me-1" />
+                                @Badge(mine.Status).Words
+                            </span>
+                            @if (mine.Status == HostedEventBookingStatus.Confirmed)
+                            {
+                                <a class="btn btn-sm btn-primary"
+                                   href="@($"/my-events/{mine.HostedEventId}/pass")">
+                                    <BenIcon Name="key" Class="me-1" />Pass
+                                </a>
+                            }
+                        </div>
+                    </li>
+                }
+            </ul>
+
+            @if (Coming.Count == 0)
+            {
+                <div class="alert alert-light" id="my-events-none-coming">
+                    Nothing coming up. What you have asked for before is below.
+                </div>
+            }
+
+            @if (Over.Count > 0)
+            {
+                <h2 class="h6 text-secondary mt-4">Not coming to these</h2>
+                <ul class="list-group" id="my-events-over">
+                    @foreach (var booking in Over)
+                    {
+                        var past = booking;
+                        <li class="list-group-item my-event">
+                            <div class="my-event__what">
+                                <div class="fw-semibold">
+                                    <a href="@Where(past)">@past.EventName</a>
+                                </div>
+                                <div class="small text-secondary">
+                                    @past.OrganizationName · @When(past)
+                                </div>
+                            </div>
+                            <div class="my-event__state">
+                                <span class="badge @Badge(past.Status).Class">
+                                    <BenIcon Name="@Badge(past.Status).Icon" Class="me-1" />
+                                    @Badge(past.Status).Words
+                                </span>
+                            </div>
+                        </li>
+                    }
+                </ul>
+            }
+        </ChildContent>
+    </BenListState>
+</div>
+
+@code {
+    private LoadResult<MyHostedEventBookingRecord> _bookings = LoadResult<MyHostedEventBookingRecord>.Ok([]);
+    private bool _loading = true;
+
+    /// <summary>Places they have, or are waiting to hear about.</summary>
+    private IReadOnlyList<MyHostedEventBookingRecord> Coming
+        => [.. _bookings.Items.Where(b => b.Status is HostedEventBookingStatus.Requested
+                                                   or HostedEventBookingStatus.Held
+                                                   or HostedEventBookingStatus.Confirmed)];
+
+    /// <summary>Asked for and not had — kept, because the date may still be free.</summary>
+    private IReadOnlyList<MyHostedEventBookingRecord> Over
+        => [.. _bookings.Items.Where(b => b.Status is not (HostedEventBookingStatus.Requested
+                                                        or HostedEventBookingStatus.Held
+                                                        or HostedEventBookingStatus.Confirmed))];
+
+    protected override async Task OnAfterRenderAsync(bool firstRender)
+    {
+        if (!firstRender) return;
+
+        // Auth resolves after the circuit attaches. Asking first asks as nobody, and this page
+        // would then say somebody has no bookings when it means it never looked.
+        if (!await UserState.WaitUntilAuthReadyAsync(RendererInfo.IsInteractive)) return;
+
+        await LoadAsync();
+        StateHasChanged();
+    }
+
+    private async Task LoadAsync()
+    {
+        _loading = true;
+        _bookings = await AdminClient.GetMyHostedEventBookingsAsync();
+        _loading = false;
+    }
+
+    /// <summary>The event's own page, which is where everything about it is done.</summary>
+    /// <remarks>
+    /// Deliberately not a screen of its own here: the booking, the plan, the menu and the venue's
+    /// answer all live on the event's page already, and a second half-copy of them would be a
+    /// second thing to keep true.
+    /// </remarks>
+    private static string Where(MyHostedEventBookingRecord booking)
+        => booking.OrganizationUrlName is { Length: > 0 } org
+        && booking.EventUrlName is { Length: > 0 } slug
+            ? $"/o/{org}/events/{slug}"
+            : $"/my-events/{booking.HostedEventId}/pass";
+
+    private static string When(MyHostedEventBookingRecord booking)
+        => booking.StartsOn.Date == booking.EndsOn.Date
+            ? booking.StartsOn.ToString("dddd MM/dd/yyyy")
+            : $"{booking.StartsOn:MM/dd/yyyy} – {booking.EndsOn:MM/dd/yyyy}";
+
+    private static string What(MyHostedEventBookingRecord booking)
+    {
+        var people = $"{booking.PartySize} {(booking.PartySize == 1 ? "person" : "people")}";
+
+        return booking.Kind == HostedEventBookingKind.DayPass
+            ? $"{people} · for the day"
+            : booking.Nights.Count == 0
+                ? people
+                : $"{people} · " + string.Join(", ", booking.Nights.Select(
+                    n => n.UnitName is { Length: > 0 } name
+                        ? $"{n.Date:MM/dd} in {name}"
+                        : $"{n.Date:MM/dd}"));
+    }
+
+    /// <summary>
+    /// The same words the event's own page uses.
+    /// </summary>
+    /// <remarks>
+    /// The same words on purpose: a list that says "Held" where the page says "Held for you" is
+    /// two vocabularies for one fact, and the reader has to work out whether they mean the same
+    /// thing.
+    /// </remarks>
+    private static (string Class, string Icon, string Words) Badge(HostedEventBookingStatus status)
+        => status switch
+        {
+            HostedEventBookingStatus.Requested =>
+                ("text-bg-warning", "clock", "Asked for"),
+            HostedEventBookingStatus.Held =>
+                ("text-bg-warning", "clock", "Held for you"),
+            HostedEventBookingStatus.Confirmed =>
+                ("text-bg-success", "check", "You're coming"),
+            HostedEventBookingStatus.TurnedDown =>
+                ("bg-body-secondary text-body-emphasis", "x", "Not this time"),
+            HostedEventBookingStatus.Expired =>
+                ("bg-body-secondary text-body-emphasis", "clock", "Hold ran out"),
+            HostedEventBookingStatus.Cancelled =>
+                ("bg-body-secondary text-body-emphasis", "x", "Released"),
+            _ => ("bg-body-secondary text-body-emphasis", "help-circle", "Booking"),
+        };
+}

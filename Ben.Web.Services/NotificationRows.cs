@@ -130,10 +130,13 @@ public static class NotificationRows
                 $"People asking for a place at your events · oldest {NotificationBadge.DescribeAge(bookings.OldestUnreadUtc)}",
                 "home", "/organizations", bookings));
 
+        // /my-events and not /events: the second is what is ON, a list of everybody's evenings,
+        // and a row saying a venue answered YOU that lands there leaves somebody hunting for
+        // their own booking in it (item 235 phase 6, defect 16).
         if (s.MyEventBookings is { Count: > 0 } myBookings)
             rows.Add(new("A venue answered you",
                 $"Your booking has been decided · {NotificationBadge.DescribeAge(myBookings.OldestUnreadUtc)}",
-                "key", "/events", myBookings));
+                "key", "/my-events", myBookings));
 
         // Last: being named on a public post waits on nothing. It still gets a row, because the
         // total counts it and a number that explains everything except one item reads as wrong.

@@ -52,9 +52,11 @@ public sealed class FixedLightUtilityGuardTests
     /// </summary>
     private static readonly Dictionary<string, string> Allowed = new()
     {
-        ["TwoFactorPanel.razor"] =
-            "The QR code container. A QR code is read by a camera, not a person, and scanners "
-          + "need the light modules light in either theme.",
+        ["BenQrPlate.razor"] =
+            "The QR code container, and the only one. A QR code is read by a camera, not a "
+          + "person, and scanners need the light modules light in either theme. It was the "
+          + "authenticator panel's own div until the guest's pass needed a code as well; one "
+          + "component means one place decides what a camera needs.",
     };
 
     private static DirectoryInfo RepoRoot()
