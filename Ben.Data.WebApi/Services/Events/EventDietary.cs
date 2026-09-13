@@ -94,6 +94,26 @@ public static class EventDietary
             eventId, includeUnconfirmed, expected, lines.Count, unnamed, tally, lines);
     }
 
+    /// <summary>
+    /// Narrows a set of bookings to the parties who are there on one night.
+    /// </summary>
+    /// <remarks>
+    /// <para><b>Because a cook works one service at a time.</b> A host catering Saturday needs
+    /// Saturday's people; handing them the weekend's total over-caters Friday and under-caters
+    /// nothing, which sounds harmless until it is two hundred dinners.</para>
+    ///
+    /// <para><b>A party with no live night of its own counts on every night.</b> That is a pass
+    /// for the whole event rather than for a day, so those people are there on Saturday as much as
+    /// on Friday, and dropping them would quietly under-cater every night of the run. A party
+    /// whose nights have all been released is not one of those — it has been let go, and
+    /// <see cref="Summarise"/> drops it by status anyway.</para>
+    /// </remarks>
+    public static IReadOnlyList<HostedEventBooking> OnNight(
+        IEnumerable<HostedEventBooking> bookings, Guid nightId)
+        => [.. bookings.Where(b =>
+                b.Nights.Count == 0
+             || b.Nights.Any(n => n.HostedEventNightId == nightId && n.ReleasedUtc is null))];
+
     /// <summary>The same words written the same way, so two people saying one thing count as two.</summary>
     private static string Tidied(string notes)
         => string.Join(' ', notes.Split((char[]?)null, StringSplitOptions.RemoveEmptyEntries));

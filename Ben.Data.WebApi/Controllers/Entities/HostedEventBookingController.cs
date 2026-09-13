@@ -99,10 +99,15 @@ public sealed class HostedEventBookingController : OrgCmsControllerBase
     ///
     /// <para><b>Takes the deciding permission, not membership.</b> Everything in here is health
     /// information about named individuals.</para>
+    ///
+    /// <para><b>One night at a time with <c>night</c></b>, because a cook working Saturday is
+    /// cooking for the people who are there on Saturday and the weekend's total is the wrong
+    /// number to hand them. Omitted, it is the whole event.</para>
     /// </remarks>
     [HttpGet("dietary")]
     public async Task<ActionResult<HostedEventDietaryRecord>> GetDietary(
-        Guid orgId, Guid eventId, [FromQuery] bool includeUnconfirmed, CancellationToken ct)
+        Guid orgId, Guid eventId, [FromQuery] bool includeUnconfirmed,
+        [FromQuery] Guid? night, CancellationToken ct)
     {
         var userId = GetCurrentUserId();
         if (userId is null) return Unauthorized();
@@ -113,7 +118,10 @@ public sealed class HostedEventBookingController : OrgCmsControllerBase
         var ev = await LoadEventAsync(db, orgId, eventId, ct);
         if (ev is null) return NotFound();
 
-        return Ok(await DietaryAsync(db, eventId, includeUnconfirmed, ct));
+        if (night is { } asked && ev.Nights.All(n => n.Id != asked))
+            return BadRequest("That isn't a night of this event.");
+
+        return Ok(await DietaryAsync(db, eventId, includeUnconfirmed, night, ct));
     }
 
     // ── deciding ─────────────────────────────────────────────────────────────
@@ -1185,18 +1193,25 @@ public sealed class HostedEventBookingController : OrgCmsControllerBase
     }
 
     /// <summary>Loads what the kitchen needs and hands it to <see cref="EventDietary"/> to read.</summary>
+    /// <param name="night">
+    /// One night of the event, or null for all of it. The rule for which parties are there on a
+    /// night lives in <see cref="EventDietary.OnNight"/>, with the reasoning.
+    /// </param>
     private static async Task<HostedEventDietaryRecord> DietaryAsync(
-        BenDataContext db, Guid eventId, bool includeUnconfirmed, CancellationToken ct)
-        => EventDietary.Summarise(
-            eventId,
-            await db.HostedEventBookings
-                .AsNoTracking()
-                .Include(b => b.Guests)
-                .Include(b => b.Nights).ThenInclude(n => n.HostedEventNight)
-                .Include(b => b.LeadAppUser)
-                .Where(b => b.HostedEventId == eventId)
-                .ToListAsync(ct),
-            includeUnconfirmed);
+        BenDataContext db, Guid eventId, bool includeUnconfirmed, Guid? night, CancellationToken ct)
+    {
+        IReadOnlyList<HostedEventBooking> bookings = await db.HostedEventBookings
+            .AsNoTracking()
+            .Include(b => b.Guests)
+            .Include(b => b.Nights).ThenInclude(n => n.HostedEventNight)
+            .Include(b => b.LeadAppUser)
+            .Where(b => b.HostedEventId == eventId)
+            .ToListAsync(ct);
+
+        if (night is { } only) bookings = EventDietary.OnNight(bookings, only);
+
+        return EventDietary.Summarise(eventId, bookings, includeUnconfirmed);
+    }
 
     /// <summary>
     /// Day passes per night, for a run where one night is the busy one.

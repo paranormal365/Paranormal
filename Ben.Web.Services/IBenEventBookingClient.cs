@@ -149,8 +149,13 @@ public interface IBenEventBookingClient
     /// membership: everything in it is health information about named individuals, which is why
     /// this is an <see cref="ItemResult{T}"/> and a refusal must not look like an empty sheet.
     /// </remarks>
+    /// <param name="night">
+    /// One night of the event, for a cook working that night; null is the whole run. A party with
+    /// no nights of its own — a pass for the whole event — counts on every night of it.
+    /// </param>
     Task<ItemResult<HostedEventDietaryRecord>> GetEventDietaryAsync(
-        Guid orgId, Guid eventId, bool includeUnconfirmed, CancellationToken token = default);
+        Guid orgId, Guid eventId, bool includeUnconfirmed, Guid? night = null,
+        CancellationToken token = default);
 
     /// <summary>Every sitting of this event, in the order they are served.</summary>
     Task<ItemResult<HostedEventMenusRecord>> GetEventMenusAsync(

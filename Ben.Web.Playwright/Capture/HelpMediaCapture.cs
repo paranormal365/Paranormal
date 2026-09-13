@@ -1964,6 +1964,50 @@ public sealed class HelpMediaCapture : BenTestBase
             gated: true, proves: "easier on a computer or an iPad", width: 375);
     }
 
+    /// <summary>
+    /// What is served, and what the kitchen has to cook around (item 235 phase 5).
+    /// </summary>
+    /// <remarks>
+    /// <para>Two pictures because they are the two halves of one afternoon's work: the menus page
+    /// is what the venue is cooking and the kitchen's sheet is who cannot eat it. Both come from
+    /// <c>HostedEventDemoSeeder</c>, whose weekend deliberately serves breakfast under the night
+    /// before it — the picture is the argument for the ordering rule.</para>
+    ///
+    /// <para>Each names something it must be able to see, so a capture of an empty page fails here
+    /// rather than reaching the help as a screenshot of nothing.</para>
+    /// </remarks>
+    [Test]
+    [Description("organization-administration: the menus, and the sheet the kitchen cooks from.")]
+    public async Task Capture_HostedEventMenusAndKitchen()
+    {
+        await LoginAsync(SuperAdminEmail, SuperAdminPassword);
+
+        var orgId = await OrgIdBySlugAsync("paranormal365");
+
+        await GoAsync($"/organizations/{orgId}/events/{SeededRoomsEventId}/menus");
+        // A sitting's name is an INPUT's value, so it is not page text and ShootAsync's `proves`
+        // cannot see it — the same trap the publications shot hit. Assert the value directly;
+        // either way the point is that this is not a picture of an empty weekend.
+        await Expect(Page.Locator("input[id^='sitting-title-']").Nth(1))
+            .ToHaveValueAsync("Late supper", new() { Timeout = 20_000 });
+        await ShootAsync("organization-administration", "event-menus.png",
+            gated: true, proves: "Friday");
+
+        // And at iPhone width, because every hosted screen has a declared behaviour at three
+        // widths and a picture is the only place a reader can check it.
+        await ShootAsync("organization-administration", "event-menus-phone.png",
+            gated: true, proves: "Friday", width: 375);
+
+        await GoAsync($"/organizations/{orgId}/events/{SeededRoomsEventId}/dietary");
+        await ShootAsync("organization-administration", "event-dietary.png",
+            gated: true, proves: "How many of each");
+
+        // The same sheet at iPhone width: a host standing in the kitchen with it is the case, and
+        // a help page illustrating that with a 1440-wide picture teaches the opposite.
+        await ShootAsync("organization-administration", "event-dietary-phone.png",
+            gated: true, proves: "people expected", width: 375);
+    }
+
     /// <summary>The seeded Thomas House weekend and the seeded 260-seat evening.</summary>
     /// <remarks>
     /// Written out rather than referenced: this project drives the running site over HTTP and has

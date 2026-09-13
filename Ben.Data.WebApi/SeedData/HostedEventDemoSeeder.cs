@@ -36,6 +36,7 @@ internal static class HostedEventDemoSeeder
     private static readonly Guid VenueId = new("40000002-0000-0000-0000-000000000001");
     private static readonly Guid RoomsEventId = new("40000002-0000-0000-0000-000000000002");
     private static readonly Guid SeatsEventId = new("40000002-0000-0000-0000-000000000003");
+    private static readonly Guid KitchenBookingId = new("40000002-0000-0000-0000-000000000004");
 
     /// <summary>The rooms a small hotel offers, as a venue would describe them.</summary>
     /// <remarks>
@@ -82,6 +83,8 @@ internal static class HostedEventDemoSeeder
         await SeedRoomsEventAsync(db, host, owner.Id, now);
         await SeedSeatsEventAsync(db, host, owner.Id, now);
         await SeedWhatTheVenueKeepsAsync(db, owner.Id, now);
+        await SeedWhatIsServedAsync(db, owner.Id, now);
+        await SeedAPartyTheKitchenMustWorkAroundAsync(db, userManager, config, owner.Id, now);
     }
 
     /// <summary>
@@ -150,6 +153,195 @@ internal static class HostedEventDemoSeeder
         Console.WriteLine(
             "[HostedEventDemoSeeder] Held back the Suite on the Friday and blocked two seats "
             + "behind the pillar.");
+    }
+
+    /// <summary>
+    /// Four sittings across the weekend, in the order they are served (item 235 phase 5).
+    /// </summary>
+    /// <remarks>
+    /// <para><b>Friday runs dinner, then a late supper, then Saturday's breakfast</b> — three
+    /// sittings on one night, and the last of them at eight in the morning. That is the case the
+    /// ordering rule exists for: a screen that sorted a night by the clock would print breakfast
+    /// first and read the weekend backwards, and a seed without it would never show that.</para>
+    ///
+    /// <para><b>The dishes carry courses and tags the way a kitchen writes them</b>, because the
+    /// tag on a dish and a guest's own allergy are two different things with two different
+    /// audiences, and a demo where only one of them exists cannot show the difference.</para>
+    /// </remarks>
+    private static async Task SeedWhatIsServedAsync(BenDataContext db, Guid ownerId, DateTime now)
+    {
+        if (await db.HostedEventMenus.AnyAsync(m => m.HostedEventNight.HostedEventId == RoomsEventId))
+            return;
+
+        var nights = await db.HostedEventNights
+            .Where(n => n.HostedEventId == RoomsEventId)
+            .OrderBy(n => n.Date)
+            .ToListAsync();
+        if (nights.Count < 2) return;
+
+        (string Title, TimeSpan At, string? Note, (string? Course, string Name, string? Tags)[] Dishes)[]
+            friday =
+        [
+            ("Dinner", new TimeSpan(19, 0, 0), "In the dining room, before we start.",
+             [
+                 ("Starter", "Tomato soup", "vegan"),
+                 ("Main", "Roast chicken, greens and potatoes", null),
+                 ("Main", "Mushroom pie", "vegetarian"),
+                 ("Pudding", "Apple crumble", "contains nuts"),
+             ]),
+            ("Late supper", new TimeSpan(23, 30, 0), "Between the two hunts.",
+             [
+                 (null, "Sandwiches", null),
+                 (null, "Tea and coffee", null),
+             ]),
+            ("Breakfast", new TimeSpan(8, 0, 0), "The morning after — yes, this is still Friday's night.",
+             [
+                 (null, "Eggs, bacon and toast", null),
+                 (null, "Fruit and yoghurt", "vegetarian"),
+             ]),
+        ];
+
+        (string Title, TimeSpan At, string? Note, (string? Course, string Name, string? Tags)[] Dishes)[]
+            saturday =
+        [
+            ("Dinner", new TimeSpan(18, 30, 0), "Early, because the séance is at nine.",
+             [
+                 ("Starter", "Cornbread and honey butter", "vegetarian"),
+                 ("Main", "Beef stew", null),
+                 ("Main", "Butternut squash risotto", "vegan"),
+                 ("Pudding", "Pecan pie", "contains nuts"),
+             ]),
+        ];
+
+        var order = 0;
+        foreach (var (night, sittings) in new[] { (nights[0], friday), (nights[1], saturday) })
+        {
+            foreach (var (title, at, note, dishes) in sittings)
+            {
+                var menu = new HostedEventMenu
+                {
+                    Id = Guid.NewGuid(),
+                    HostedEventNightId = night.Id,
+                    Title = title,
+                    ServedAtLocal = at,
+                    Notes = note,
+                    SortOrder = order++,
+                    DateCreated = now,
+                    CreatedByAppUserId = ownerId,
+                };
+                db.HostedEventMenus.Add(menu);
+
+                var dish = 0;
+                foreach (var (course, name, tags) in dishes)
+                {
+                    db.HostedEventMenuItems.Add(new HostedEventMenuItem
+                    {
+                        Id = Guid.NewGuid(),
+                        HostedEventMenuId = menu.Id,
+                        Course = course,
+                        Name = name,
+                        DietaryTags = tags,
+                        SortOrder = dish++,
+                        DateCreated = now,
+                    });
+                }
+            }
+        }
+
+        await db.SaveChangesAsync();
+        Console.WriteLine(
+            $"[HostedEventDemoSeeder] Wrote {order} sittings across the séance weekend.");
+    }
+
+    /// <summary>
+    /// One confirmed party with allergies, so the kitchen's sheet opens on something (phase 5).
+    /// </summary>
+    /// <remarks>
+    /// <para><b>Four people, three notes, and two of them the same words.</b> That is what makes
+    /// the sheet worth looking at: two vegans are one line saying two, "no nuts" and "nut allergy"
+    /// stay two lines on purpose, and the fourth person was never named — so the sheet says one
+    /// person is unaccounted for, which is the number a kitchen gets caught by.</para>
+    ///
+    /// <para><b>Confirmed through <c>BookingTransitions</c></b> and not by setting the column,
+    /// because that is the rule the whole of phase 4 is built on and a seeder that quietly broke
+    /// it would be the first place the next inconsistency came from. The umbrella row is left to
+    /// the calendar sync, which needs a request behind it; a demo booking without one is a
+    /// booking, not a calendar entry.</para>
+    /// </remarks>
+    private static async Task SeedAPartyTheKitchenMustWorkAroundAsync(
+        BenDataContext db, UserManager<AppUser> userManager, IConfiguration config,
+        Guid ownerId, DateTime now)
+    {
+        if (await db.HostedEventBookings.AnyAsync(b => b.Id == KitchenBookingId)) return;
+
+        // Daniel is the seeded guest with no group of his own — the person this feature is for.
+        var leadEmail = config["SeedData:SeedOrganization:GuestEmail"] ?? "daniel.park@benco.dev";
+        var lead = await userManager.FindByEmailAsync(leadEmail);
+        if (lead is null) return;
+
+        var nights = await db.HostedEventNights
+            .Where(n => n.HostedEventId == RoomsEventId)
+            .OrderBy(n => n.Date)
+            .ToListAsync();
+        var room = await db.HostedEventLayoutUnits
+            .Where(u => u.HostedEventId == RoomsEventId)
+            .OrderBy(u => u.SortOrder)
+            .FirstOrDefaultAsync();
+        if (nights.Count == 0 || room is null) return;
+
+        var booking = new HostedEventBooking
+        {
+            Id = KitchenBookingId,
+            HostedEventId = RoomsEventId,
+            LeadAppUserId = lead.Id,
+            Kind = HostedEventBookingKind.Overnight,
+            PartySize = 4,
+            Note = "Two of us are vegan and one cannot go near nuts.",
+            DateCreated = now,
+            CreatedByAppUserId = ownerId,
+        };
+
+        foreach (var night in nights)
+        {
+            booking.Nights.Add(new HostedEventBookingNight
+            {
+                Id = Guid.NewGuid(),
+                HostedEventBookingId = booking.Id,
+                HostedEventNightId = night.Id,
+                HostedEventLayoutUnitId = room.Id,
+                DateCreated = now,
+            });
+        }
+
+        var guests = new (string Name, string? Notes)[]
+        {
+            ("Ada Fielding", "no nuts"),
+            ("Bertie Fielding", "vegan"),
+            ("Clara Fielding", "vegan"),
+        };
+
+        var order = 0;
+        foreach (var (name, notes) in guests)
+        {
+            booking.Guests.Add(new HostedEventBookingGuest
+            {
+                Id = Guid.NewGuid(),
+                HostedEventBookingId = booking.Id,
+                DisplayName = name,
+                DietaryNotes = notes,
+                SortOrder = order++,
+                DateCreated = now,
+            });
+        }
+
+        db.HostedEventBookings.Add(booking);
+        Services.Events.BookingTransitions.Confirm(
+            booking, ownerId, "See you Friday — the Blue Room is yours.", now);
+
+        await db.SaveChangesAsync();
+        Console.WriteLine(
+            "[HostedEventDemoSeeder] Confirmed a party of 4 with three dietary notes and one "
+            + "person nobody named.");
     }
 
     // ── the venue, and the rooms it has described ────────────────────────────

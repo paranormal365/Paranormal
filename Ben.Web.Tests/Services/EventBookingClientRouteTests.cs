@@ -243,6 +243,22 @@ public sealed class EventBookingClientRouteTests
     }
 
     [Fact]
+    public async Task One_night_of_the_dietary_sheet_is_asked_for_by_id()
+    {
+        // A cook working Saturday is cooking for Saturday's people, and the weekend's total is the
+        // wrong number to hand them. Omitting the night asks for the whole run, which the test
+        // above pins; this one pins that asking for one does not silently ask for all of them.
+        var (client, handler) = Build(body: "null");
+        var night = Guid.Parse("aaaaaaaa-bbbb-cccc-dddd-eeeeeeeeeeee");
+
+        await client.GetEventDietaryAsync(Org, Event, includeUnconfirmed: false, night: night);
+
+        Assert.EndsWith(
+            $"/bookings/dietary?includeUnconfirmed=false&night={night}",
+            handler.LastRequest!.RequestUri!.PathAndQuery);
+    }
+
+    [Fact]
     public async Task A_refused_read_is_Failed_and_not_an_absent_item()
     {
         // The rule itself, on the wire: a 403 on the board is a refusal, not an empty weekend.

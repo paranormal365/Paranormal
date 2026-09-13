@@ -105,14 +105,17 @@ public sealed partial class BenAdminClientAdapter
                new { }, token);
 
     public Task<ItemResult<HostedEventDietaryRecord>> GetEventDietaryAsync(
-        Guid orgId, Guid eventId, bool includeUnconfirmed, CancellationToken token = default)
+        Guid orgId, Guid eventId, bool includeUnconfirmed, Guid? night = null,
+        CancellationToken token = default)
     {
         // Spelled out rather than interpolating the bool: C# prints "True", and while the model
         // binder happens to accept that, the address a person reads in a log should be the one
         // the API documents.
         var flag = includeUnconfirmed ? "true" : "false";
+        var oneNight = night is { } id ? $"&night={id}" : "";
         return _api.GetItemAsync<HostedEventDietaryRecord>(
-            $"/api/organizations/{orgId}/events/{eventId}/bookings/dietary?includeUnconfirmed={flag}", token);
+            $"/api/organizations/{orgId}/events/{eventId}/bookings/dietary?includeUnconfirmed={flag}"
+            + oneNight, token);
     }
 
     public Task<ItemResult<HostedEventMenusRecord>> GetEventMenusAsync(

@@ -20,6 +20,9 @@ belongs there; this is for the part underneath.
 
 ## 2026-09-12
 
+- What the kitchen needs for a hosted event can now be asked for one night at a time. A party with
+  no night of its own — somebody who has the whole run — counts on every night of it, so no
+  service is quietly under-catered.
 - Every message the service sends is now written down before it is sent, and a task posts them.
   One that does not go the first time is tried again, with longer waits each time, for about a day
   and a half; one refused outright — an address that does not exist — stops at once and keeps the

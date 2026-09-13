@@ -433,6 +433,33 @@ plan on a desktop.
 - **Verified by**: two browsers and a phone — the guest holds seats, the board shows them hatched
   within a refresh, the organizer confirms from the phone, the guest's bell rings.
 
+#### Phase 5 as built (2026-09-12) — five departures from the plan above
+
+1. **A sitting's dishes are a block of typed lines, not a row each.** The plan implied an editor
+   with an Add per dish. Typing a menu *is* typing lines, and a form standing between a host and
+   something they can write out in ten seconds is a form they will not use; the course comes before
+   a colon (`Starter: Tomato soup`) because that is already how people write a menu down. Nothing
+   is required and nothing is refused.
+2. **The kitchen's per-night sheets are built by asking the server once per night**, not by
+   splitting the lines client-side. The numbers a cook acts on are counted against party sizes the
+   line does not carry, so a client-side split would print Saturday's allergies beside the whole
+   weekend's head count — the one mistake the page exists to prevent.
+3. **The night rule lives in `EventDietary.OnNight`**, pure and beside the counting, rather than in
+   the controller: a party with no live night of its own is a pass for the whole run and counts on
+   every night of it, and that claim needed a test that could see it break. Three tests hold it and
+   each was watched failing with the rule broken.
+4. **The seeder gained the menus and the party with allergies** — planned for phase 4, written
+   here, because a screen that opens on nothing cannot be judged. Four sittings across the weekend
+   including Saturday's breakfast under the Friday, and a confirmed party of four with three notes
+   (two of them the same words) and one person nobody named. It confirms through
+   `BookingTransitions`, like everything else that moves a booking.
+5. **`BenPopover` is deferred again, to phase 6.** The board's plan is read-only and names nobody,
+   so there is still no consumer; the guest's picker is the first screen that wants one.
+
+Everything else in the menus and dietary slice shipped as written: the presets and the arrows, one
+Save, the three numbers, the tally that never guesses, the night pills, `GET dietary?night=`, the
+`break-after: page` print rule, and both help sections rewritten with four new shots.
+
 ### Phase 6 — The guest, end to end
 
 **Goal**: a signed-in guest asks or picks, sees the answer, holds a pass; a stranger can ask for a

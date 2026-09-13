@@ -1,0 +1,11 @@
+/* Menus (item 235 phase 5).
+
+   A SITTING IS A BLOCK, NOT A ROW. Four sittings under one night with nothing between them read
+   as one long form; the rule and the spacing are what say "this is dinner and that is breakfast"
+   before anybody reads a word. */
+
+.menu-sitting + .menu-sitting {
+    margin-top: 1rem;
+    padding-top: 1rem;
+    border-top: 1px solid var(--bs-border-color);
+}

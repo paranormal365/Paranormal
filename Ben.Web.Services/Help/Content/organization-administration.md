@@ -1205,10 +1205,21 @@ invitation and says which — better than thirty people finding out a fortnight 
 
 ### Menus
 
-**Menus** on the event page is one card for the whole weekend. Add a sitting, say which night it
-belongs to, name it and give it a time: *Breakfast*, *Lunch*, *Dinner*, *Snacks*, a late supper —
-as many as you actually serve. Then list the dishes under it, with the course in your own words
-("Starter", "Pudding", "On the table") and what is in each one.
+**Menus** on the event page is one page for the whole weekend: every night, and under each one
+every sitting you serve.
+
+![Menus for a weekend, with three sittings under the Friday](help-media:organization-administration/event-menus.png)
+
+Each night's heading carries four buttons — **+ Breakfast**, **+ Lunch**, **+ Dinner**,
+**+ Snacks** — and pressing one adds a sitting under that night. They are a starting point and not
+a list to choose from: the name is an ordinary box afterwards, so a midnight vigil supper can be
+called whatever you actually call it. Give it a time if it has one, a note if it needs one, and
+then type the dishes into the box below, **one to a line**. Put the course before a colon if you
+use courses — `Starter: Tomato soup` — and a line without one is simply a dish.
+
+The arrows beside a sitting move it **within its night**, and where it sits in the list is the
+order it is served in. The bin removes it. Nothing is saved until you press **Save the menus**,
+which writes the whole weekend at once.
 
 **A night runs from the evening people arrive through the morning they come down.** So Friday
 night's sittings include Saturday's breakfast, and the last night of a weekend still serves the
@@ -1221,6 +1232,11 @@ menu sees them. A guest's own allergy is a different thing entirely and lives on
 Menus are shown to guests whose place you have **confirmed**, not to the public. A menu is part of
 what somebody has booked, and you may not want the hotel down the road costing your catering before
 you have sold the weekend. A guest still waiting is told you publish it once their place is agreed.
+
+Typing a whole weekend's food is a job for a keyboard, but the page works on a phone if you need to
+add a sitting between two other things.
+
+![The menus page on a phone](help-media:organization-administration/event-menus-phone.png)
 
 ### The confirmation email and the pass
 
@@ -1277,12 +1293,15 @@ which is a different sentence from being told it was never real.
 
 ### The dietary sheet
 
-**Dietary tally** turns every guest's note into the sheet the kitchen actually works from.
+**What the kitchen needs**, from the event page or from the booking board, turns every guest's note
+into the sheet the kitchen actually works from.
 
-It counts **confirmed** parties by default, because that is who you are buying food for. There is a
-switch to fold in the requests too, for ordering ahead of a weekend that isn't settled — and the
-sheet says which of the two you are looking at, so nobody reads a provisional number as a final
-one.
+![The kitchen's sheet: three numbers, a tally and the people](help-media:organization-administration/event-dietary.png)
+
+It counts **confirmed** parties by default, because that is who you are buying food for.
+**Count parties you haven't decided on** folds in everybody still waiting — the ones who asked and
+the ones holding places they picked — for ordering ahead of a weekend that isn't settled. The sheet
+says which of the two you are looking at, so nobody reads a provisional number as a final one.
 
 Three numbers sit at the top, and the third is the one that matters most:
 
@@ -1299,9 +1318,20 @@ eventually merge two that aren't the same, and acting on a wrong merge is how so
 wrong thing. Each line names the guest, their party and which nights they are here, so Saturday's
 cook can see whose meal is theirs.
 
+**One night at a time.** The pills at the top narrow the sheet to a single night, because a cook
+working Saturday is cooking for the people who are there on Saturday and the weekend's total is the
+wrong number to hand them. A party with no night of its own — a pass for the whole event — counts
+on every night of it. **A sheet for every night** builds the lot in one go, and each one prints on
+its own page, which is what a kitchen pins up.
+
+The page is readable standing in the kitchen with it, not only at a desk.
+
+![The kitchen's sheet on a phone](help-media:organization-administration/event-dietary-phone.png)
+
 **Dietary notes are health information about named people.** They are shown to staff who can decide
 bookings, and withheld from members who can't — an ordinary member of your group has no reason to
-read a stranger's allergy list. They never reach a public page.
+read a stranger's allergy list. They never reach a public page, and the printed sheet is for the
+kitchen rather than the notice board.
 
 ## Public events
 

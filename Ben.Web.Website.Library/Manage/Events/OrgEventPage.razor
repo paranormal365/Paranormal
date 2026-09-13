@@ -191,6 +191,8 @@
                     @IndexEntry("Plan", $"/organizations/{OrgId}/events/{EventId}/layout", PlanPageShipped)
                     @IndexEntry("Bookings", $"/organizations/{OrgId}/events/{EventId}/bookings", BoardPagesShipped)
                     @IndexEntry("Menus", $"/organizations/{OrgId}/events/{EventId}/menus", MenusPageShipped)
+                    @IndexEntry("What the kitchen needs",
+                                $"/organizations/{OrgId}/events/{EventId}/dietary", MenusPageShipped)
                     <span class="list-group-item text-secondary small">Programme — soon</span>
                     <span class="list-group-item text-secondary small">Staff and the door — soon</span>
                     <span class="list-group-item text-secondary small">Files — soon</span>
@@ -825,14 +827,14 @@
     private const bool BoardPagesShipped = true;
 
     /// <summary>
-    /// The menus page, which the rest of phase 5 builds.
+    /// The menus page and the kitchen's sheet, shipped in phase 5 of item 235.
     /// </summary>
     /// <remarks>
     /// One flag per page rather than one for all of them: they ship in different slices, and a
     /// single flag meant shipping the first one lit three links, two of which answer 404. A live
     /// page must never carry a link that goes nowhere.
     /// </remarks>
-    private const bool MenusPageShipped = false;
+    private const bool MenusPageShipped = true;
 
     /// <summary>One index row for a screen of its own: a link once it ships, "soon" until then.</summary>
     private static RenderFragment IndexEntry(string label, string href, bool shipped) => shipped

@@ -59,12 +59,27 @@ public sealed class EventDietaryTests
             booking.Nights.Add(new HostedEventBookingNight
             {
                 Id = Guid.NewGuid(), HostedEventBookingId = booking.Id,
-                HostedEventNight = new HostedEventNight { Id = Guid.NewGuid(), Date = night },
+                HostedEventNightId = NightIds[night],
+                HostedEventNight = new HostedEventNight { Id = NightIds[night], Date = night },
             });
         }
 
         return booking;
     }
+
+    /// <summary>
+    /// One id per date, so two bookings on Friday are on the SAME Friday.
+    /// </summary>
+    /// <remarks>
+    /// They were separate ids before, which nothing had noticed because nothing looked at them.
+    /// A night filter does, and two parties whose Fridays are different rows is a filter that can
+    /// only ever return one of them.
+    /// </remarks>
+    private static readonly Dictionary<DateTime, Guid> NightIds = new()
+    {
+        [Friday] = Guid.Parse("11111111-1111-1111-1111-111111111111"),
+        [Saturday] = Guid.Parse("22222222-2222-2222-2222-222222222222"),
+    };
 
     // ── who is counted ───────────────────────────────────────────────────────
 
@@ -215,6 +230,59 @@ public sealed class EventDietaryTests
         // A day pass sleeps nowhere, and an empty list says that without inventing a night.
         var dayTrip = Assert.Single(sheet.Lines, l => l.GuestName == "Bertie");
         Assert.Empty(dayTrip.Nights);
+    }
+
+    [Fact]
+    public void Saturdays_cook_is_given_saturdays_people_and_not_the_weekends()
+    {
+        var friday = Booking("Friday Only", 1, HostedEventBookingStatus.Confirmed,
+                             [("Ada", "coeliac")], Friday);
+        var both = Booking("Weekenders", 2, HostedEventBookingStatus.Confirmed,
+                           [("Bertie", "vegan"), ("Clara", null)], Friday, Saturday);
+
+        var saturday = EventDietary.Summarise(
+            EventId, EventDietary.OnNight([friday, both], NightIds[Saturday]),
+            includeUnconfirmed: false);
+
+        Assert.Equal(2, saturday.PeopleExpected);
+        var line = Assert.Single(saturday.Lines);
+        Assert.Equal("Bertie", line.GuestName);
+    }
+
+    [Fact]
+    public void A_pass_for_the_whole_event_is_counted_on_every_night_of_it()
+    {
+        // No nights of its own is a pass for the run, not an absence: those people eat on Saturday
+        // as much as on Friday, and dropping them would under-cater every service.
+        var allWeekend = Booking("Day Trippers", 1, HostedEventBookingStatus.Confirmed,
+                                 [("Bertie", "vegan")]);
+
+        foreach (var night in new[] { Friday, Saturday })
+        {
+            var sheet = EventDietary.Summarise(
+                EventId, EventDietary.OnNight([allWeekend], NightIds[night]),
+                includeUnconfirmed: false);
+
+            Assert.Equal(1, sheet.PeopleExpected);
+            Assert.Single(sheet.Lines);
+        }
+    }
+
+    [Fact]
+    public void A_party_that_gave_a_night_back_is_not_cooked_for_on_it()
+    {
+        // A released night is history — the seat went back on offer — and the kitchen must not go
+        // on counting somebody who let it go.
+        var gaveItBack = Booking("Changed Their Mind", 2, HostedEventBookingStatus.Confirmed,
+                                 [("Ada", "coeliac")], Friday, Saturday);
+        foreach (var night in gaveItBack.Nights.Where(n => n.HostedEventNightId == NightIds[Saturday]))
+            night.ReleasedUtc = DateTime.UtcNow;
+
+        var saturday = EventDietary.OnNight([gaveItBack], NightIds[Saturday]);
+        var friday = EventDietary.OnNight([gaveItBack], NightIds[Friday]);
+
+        Assert.Empty(saturday);
+        Assert.Single(friday);
     }
 
     [Fact]
