@@ -453,6 +453,37 @@ or seats. The screen turns itself up to full brightness while it is open and goe
 
 Choosing seats on a plan stays on the website for now; everything you choose there shows here.
 
+### During the event
+
+**The event** on What I'm going to (or **Programme and room** on a confirmed booking) opens everything
+for that event in one place. A row appears only when there is something behind it: no programme yet,
+or menus the venue hasn't shared with you, simply aren't listed.
+
+![The event's own screen: pass, programme, menus, downloads and the room](/help/media/the-mobile-apps/iphone-event-hub.png)
+
+- **Programme** — night by night, **on the venue's clock** with the zone named, so 9:00 PM CDT is the
+  same wherever you read it. **Sign up** asks how many of your party are coming. A full session puts you
+  on its waiting list and says where you are in line, and when there aren't enough places left for your
+  whole party it says that too. **Give up** or **Leave** hands your place to the next person. The
+  calendar button at the top adds the whole programme to your calendar.
+- **Menus** — each meal with its time, course by course, with the venue's dietary labels.
+- **Downloads** — the files the organizers share with guests. Tap one to open it, and share it on from
+  there.
+- **The room** — what the people at the event are posting. Press the pencil to write, or to add photos
+  and video from your library or the camera. Several at once go in as one post each, with your words on
+  the first. The first photo you add at an event asks you to agree, in the organizers' words, to it being
+  shown in the room and on their photo wall. **Also send to…** gives the organizers a copy. Press and hold
+  your own post to send it on later or take it down; press and hold somebody else's to report it. Your
+  photos stay yours whichever you choose.
+
+![The programme, with a place signed up for and a party waiting](/help/media/the-mobile-apps/iphone-event-programme.png)
+
+![A menu, course by course](/help/media/the-mobile-apps/iphone-event-menus.png)
+
+![The room, with a photo posted from the phone](/help/media/the-mobile-apps/iphone-event-room.png)
+
+Hiding posts and closing the room stay on the website, where an organizer can see the whole room.
+
 ## What you photographed on somebody else's event
 
 If you go on a ghost walk or a paid event, you can offer what you caught to the group running it

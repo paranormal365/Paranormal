@@ -32,11 +32,16 @@
       "ledBy": "Ben",
       "capacity": 15,
       "requiresSignUp": true,
-      "placesTaken": 0,
+      "placesTaken": 1,
       "isCancelled": false,
       "cancelledReason": null,
       "changed": false,
-      "mine": null
+      "mine": {
+        "signUpId": "eb132ffe-2922-472a-82f2-cd2078e7dde3",
+        "people": 1,
+        "waiting": false,
+        "position": null
+      }
     },
     {
       "id": "d374f808-1f84-4db8-8b94-3f519314e484",

@@ -5,7 +5,22 @@
   "hostNames": [
     "Paranormal365"
   ],
-  "messages": [],
+  "messages": [
+    {
+      "id": "42487fd0-7bcb-4304-abf4-0cd352762d27",
+      "authorId": "60327bd2-2d42-4d77-c60d-08df10411452",
+      "authorName": "Daniel Park",
+      "body": "The stairs, just after ten.",
+      "postedUtc": "2026-09-13T20:36:15.034954",
+      "hasMedia": true,
+      "mediaContentType": "image/jpeg",
+      "mediaWaiting": false,
+      "isMine": true,
+      "isHidden": false,
+      "sentToHosts": false,
+      "reports": 0
+    }
+  ],
   "note": null,
   "photoPosting": 0,
   "canAddPhotos": true,

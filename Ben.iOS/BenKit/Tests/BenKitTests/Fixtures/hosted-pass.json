@@ -1,10 +1,10 @@
 {
   "pass": {
-    "id": "fc56fbe1-dbc2-4c2e-bd14-970798a2d8a9",
-    "hostedEventBookingId": "62350f42-c236-4d40-8f6c-67a9cfc5c299",
+    "id": "c81b1747-a780-4398-b1e1-0434ee78d610",
+    "hostedEventBookingId": "04e86d50-4bff-43ff-93f4-605421e50621",
     "token": "fixture-pass-token",
     "imageUrl": "/api/public/event-passes/fixture-pass-token.png",
-    "issuedUtc": "2026-09-13T20:03:54.794409",
+    "issuedUtc": "2026-09-13T20:36:14.379415",
     "revokedUtc": null,
     "revokedReason": null,
     "emailedUtc": null,

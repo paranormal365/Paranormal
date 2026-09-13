@@ -26,6 +26,13 @@ read.
   screen up to full brightness, and it still opens with no signal.
 - Opening the app with no signal no longer signs you out, and neither does a moment when the server
   cannot be reached.
+- Each hosted event has its own screen with the pass, programme, menus, downloads and the event's room,
+  showing only the parts that event has.
+- You can sign up for programme sessions for as many of your party as are coming, join a waiting list
+  when a session is full, and give a place back. Times are shown on the venue's clock.
+- In the event's room you can write, add photos and video from your library or the camera, agree to the
+  photo notice the first time, send a photo to the organizers, take your own posts down and report
+  somebody else's.
 
 ## 2026-09-12
 

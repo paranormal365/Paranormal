@@ -2,7 +2,7 @@
   "hostedEventId": "40000002-0000-0000-0000-000000000002",
   "menus": [
     {
-      "id": "07daa4a4-1e9d-46c9-a904-4a3552366848",
+      "id": "b6762e68-53b2-4620-be11-feb43ddb86bc",
       "hostedEventNightId": "3f691dd0-2fb0-4dcc-baf6-38d90b2d52ab",
       "nightDate": "2026-10-16T00:00:00",
       "nightTitle": "Friday \u2014 arrival and first hunt",
@@ -12,7 +12,7 @@
       "sortOrder": 0,
       "items": [
         {
-          "id": "9d851879-6e52-4440-8604-d8d7112d48cd",
+          "id": "f1601e25-a14d-41f2-9e95-c244de606f71",
           "course": "Starter",
           "name": "Tomato soup",
           "description": null,
@@ -20,7 +20,7 @@
           "sortOrder": 0
         },
         {
-          "id": "ef8b9e0a-d522-4a3d-b5ad-517a6d95dfc9",
+          "id": "12e61237-d219-45e7-af75-6f88e9abe6dd",
           "course": "Main",
           "name": "Roast chicken, greens and potatoes",
           "description": null,
@@ -28,7 +28,7 @@
           "sortOrder": 1
         },
         {
-          "id": "b8e3c8f2-566d-40f2-92ec-b0ad3fd98acf",
+          "id": "80c7be45-5168-43d9-a74f-5dae3e294f97",
           "course": "Main",
           "name": "Mushroom pie",
           "description": null,
@@ -36,7 +36,7 @@
           "sortOrder": 2
         },
         {
-          "id": "ad021f72-5649-4128-b27c-66afda027d8b",
+          "id": "93a108ac-f1a6-43ac-b64f-d1d413539283",
           "course": "Pudding",
           "name": "Apple crumble",
           "description": null,
@@ -46,7 +46,7 @@
       ]
     },
     {
-      "id": "e29d212a-f8bc-4528-b456-7620d136d3fe",
+      "id": "9f9163d4-2554-4b41-95cc-a397353e1c25",
       "hostedEventNightId": "3f691dd0-2fb0-4dcc-baf6-38d90b2d52ab",
       "nightDate": "2026-10-16T00:00:00",
       "nightTitle": "Friday \u2014 arrival and first hunt",
@@ -56,7 +56,7 @@
       "sortOrder": 1,
       "items": [
         {
-          "id": "afbb44d9-5050-44da-9309-794a653c024c",
+          "id": "cf245b2b-84a2-44e8-8c1d-8a33f3eb6c4c",
           "course": null,
           "name": "Sandwiches",
           "description": null,
@@ -64,7 +64,7 @@
           "sortOrder": 0
         },
         {
-          "id": "ba3264f9-fab1-47d1-8a7c-ff17e0c98ee6",
+          "id": "e7bf9ccf-28a9-420e-8611-5c7b8d125e95",
           "course": null,
           "name": "Tea and coffee",
           "description": null,
@@ -74,7 +74,7 @@
       ]
     },
     {
-      "id": "69ea018e-9dcd-4277-86f8-044aa70ab4a8",
+      "id": "cdd67a22-631e-4b8c-a544-f5efefdebff8",
       "hostedEventNightId": "3f691dd0-2fb0-4dcc-baf6-38d90b2d52ab",
       "nightDate": "2026-10-16T00:00:00",
       "nightTitle": "Friday \u2014 arrival and first hunt",
@@ -84,7 +84,7 @@
       "sortOrder": 2,
       "items": [
         {
-          "id": "fb02454e-7403-439f-9933-5634f2bae960",
+          "id": "7b8d4e5b-5650-4c46-b690-1a3f2ecaf4de",
           "course": null,
           "name": "Eggs, bacon and toast",
           "description": null,
@@ -92,7 +92,7 @@
           "sortOrder": 0
         },
         {
-          "id": "932a4d9a-a2ec-4134-94ee-b1778e6f294b",
+          "id": "d7da46bf-55b0-4685-80bc-28b590467d51",
           "course": null,
           "name": "Fruit and yoghurt",
           "description": null,
@@ -102,7 +102,7 @@
       ]
     },
     {
-      "id": "56bad593-b5d7-4052-b43f-027176a8d3b8",
+      "id": "df30111e-14c4-440e-986e-608f64b81758",
       "hostedEventNightId": "caf39eeb-83e9-4f50-8818-287d31a8a9b2",
       "nightDate": "2026-10-17T00:00:00",
       "nightTitle": "Saturday \u2014 dinner and the s\u00E9ance",
@@ -112,7 +112,7 @@
       "sortOrder": 3,
       "items": [
         {
-          "id": "526f4257-bb46-41ac-8abb-aa330878768a",
+          "id": "b60bd9a5-6f8e-44ca-ad06-2f8db7356609",
           "course": "Starter",
           "name": "Cornbread and honey butter",
           "description": null,
@@ -120,7 +120,7 @@
           "sortOrder": 0
         },
         {
-          "id": "bd95bf98-0e76-40a4-bbca-631fa7b75b68",
+          "id": "3edba1da-eeaf-471f-8f4b-148f083283b8",
           "course": "Main",
           "name": "Beef stew",
           "description": null,
@@ -128,7 +128,7 @@
           "sortOrder": 1
         },
         {
-          "id": "85422f56-86e6-4a01-aaca-dc7a4888366f",
+          "id": "3e02a2ce-351a-4353-b738-31d461ffba93",
           "course": "Main",
           "name": "Butternut squash risotto",
           "description": null,
@@ -136,7 +136,7 @@
           "sortOrder": 2
         },
         {
-          "id": "cc5c9c43-87d4-4022-b4dd-786b22e91b79",
+          "id": "76cf782d-902c-4dea-a4f8-a83a1f5df60c",
           "course": "Pudding",
           "name": "Pecan pie",
           "description": null,

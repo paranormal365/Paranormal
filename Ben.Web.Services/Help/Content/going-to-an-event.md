@@ -122,6 +122,9 @@ says **The programme changed**, and the session is marked **Changed** until you 
 
 ![The programme on a phone](/help/media/going-to-an-event/programme-phone.png)
 
+The iPhone and iPad app has the same programme, menus, downloads and room under **Profile → What I'm going
+to → The event**. See [the mobile apps](/help/the-mobile-apps#during-the-event).
+
 ## Downloads
 
 An event can share files — a poster anybody may have, and a guest pack with the practical details for

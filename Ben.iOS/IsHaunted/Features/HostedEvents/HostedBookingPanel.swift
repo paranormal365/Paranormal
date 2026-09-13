@@ -90,6 +90,11 @@ struct HostedBookingPanel: View {
                 }
                 .buttonStyle(.borderedProminent)
                 .accessibilityIdentifier("hosted-booking-pass")
+                NavigationLink(value: AppRoute.eventHub(hostedEventId)) {
+                    Label("Programme and room", systemImage: "sparkles")
+                }
+                .buttonStyle(.bordered)
+                .accessibilityIdentifier("hosted-booking-hub")
             }
             if booking.status == .requested || booking.status == .held {
                 Button("Let them go", role: .destructive) { confirmLetGo = true }

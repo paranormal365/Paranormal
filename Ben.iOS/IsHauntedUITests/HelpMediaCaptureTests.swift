@@ -108,4 +108,63 @@ final class HelpMediaCaptureTests: XCTestCase {
         }
         XCTFail("None of the confirmed bookings has an issued pass — nothing to capture.")
     }
+
+    /// During the event: the event's own screen, its programme, a menu and the room (item 235 phase 14b).
+    ///
+    /// Walks each booking's event screen until one has a programme to show, and photographs what that event has; a
+    /// row that isn't there is reported rather than photographed blank.
+    func testCaptureDuringTheEvent() {
+        settle(6)
+        app.terminate()
+        app.launchArguments = []
+        app.launch()
+        settle(5)
+
+        XCTAssertTrue(AppNavigator.openSection("Profile", in: app), "Could not reach Profile.")
+        settle()
+        let row = app.buttons["settings-my-events"].firstMatch
+        guard row.waitForExistence(timeout: 10) else { return XCTFail("The What I'm going to row is missing from Profile.") }
+        row.tap()
+        settle(4)
+
+        let hubs = app.buttons.matching(NSPredicate(format: "identifier BEGINSWITH 'my-events-hub-'"))
+        for index in 0..<hubs.count {
+            hubs.element(boundBy: index).tap()
+            let programme = app.buttons["hub-programme"].firstMatch
+            if programme.waitForExistence(timeout: 8) {
+                settle(2)
+                snap("iphone-event-hub")
+
+                programme.tap()
+                settle(3)
+                snap("iphone-event-programme")
+                app.navigationBars.buttons.element(boundBy: 0).tap()
+                settle(2)
+
+                let menus = app.buttons["hub-menus"].firstMatch
+                if menus.waitForExistence(timeout: 3) {
+                    menus.tap()
+                    settle(3)
+                    snap("iphone-event-menus")
+                    app.navigationBars.buttons.element(boundBy: 0).tap()
+                    settle(2)
+                } else {
+                    XCTFail("This event has no menus to photograph.")
+                }
+
+                let room = app.buttons["hub-room"].firstMatch
+                if room.waitForExistence(timeout: 3) {
+                    room.tap()
+                    settle(4)
+                    snap("iphone-event-room")
+                } else {
+                    XCTFail("This event's room isn't open to the guest.")
+                }
+                return
+            }
+            app.navigationBars.buttons.element(boundBy: 0).tap()
+            settle(2)
+        }
+        XCTFail("None of the guest's events has a published programme — nothing to capture.")
+    }
 }

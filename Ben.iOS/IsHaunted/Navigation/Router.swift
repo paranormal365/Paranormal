@@ -126,6 +126,12 @@ enum AppRoute: Hashable {
     case myEvents
     /// The pass for one hosted event, by the hosted event's id.
     case eventPass(UUID)
+    /// Everything for one hosted event, and its parts (item 235 phase 14b). All by the hosted event's id.
+    case eventHub(UUID)
+    case eventProgramme(UUID)
+    case eventMenus(UUID)
+    case eventDownloads(UUID)
+    case eventRoom(UUID, addPhotos: Bool = false)
     /// One tour, by the addresses its public page uses (item 234).
     ///
     /// Carried as SLUGS rather than as an id because that is what the public endpoint takes, and
@@ -215,6 +221,15 @@ final class Router {
             paths[.profile] = NavigationPath()
             push(.myEvents, in: .profile)
             push(.eventPass(id), in: .profile)
+        case .eventHub(let id):
+            paths[.profile] = NavigationPath()
+            push(.myEvents, in: .profile)
+            push(.eventHub(id), in: .profile)
+        case .eventRoom(let id, let addPhotos):
+            paths[.profile] = NavigationPath()
+            push(.myEvents, in: .profile)
+            push(.eventHub(id), in: .profile)
+            push(.eventRoom(id, addPhotos: addPhotos), in: .profile)
         case .myCases:
             selection = .cases
             paths[.cases] = NavigationPath()

@@ -20,14 +20,19 @@ public actor AuthenticatedImageLoader {
     }
 
     public func data(for fileId: UUID) async -> Data? {
-        if let cached = cache[fileId] { return cached }
+        await data(for: fileId, from: CaseDetailStore.fileEndpoint(fileId))
+    }
 
-        guard case .ok(let data) = await api.loadData(CaseDetailStore.fileEndpoint(fileId)) else {
+    /// The same bounded cache for any authenticated media route — an event room's photos, keyed by the post.
+    public func data(for key: UUID, from endpoint: Endpoint) async -> Data? {
+        if let cached = cache[key] { return cached }
+
+        guard case .ok(let data) = await api.loadData(endpoint) else {
             return nil
         }
 
-        cache[fileId] = data
-        order.append(fileId)
+        cache[key] = data
+        order.append(key)
         if order.count > limit, let evicted = order.first {
             order.removeFirst()
             cache[evicted] = nil

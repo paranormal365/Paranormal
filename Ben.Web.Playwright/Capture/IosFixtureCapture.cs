@@ -35,7 +35,7 @@ public sealed class IosFixtureCapture : BenTestBase
         await using var admin = await SignedInAsync(SuperAdminEmail, SuperAdminPassword);
         await using var guest = await SignedInAsync(ClientEmail, ClientPassword);
 
-        string? madeBookingId = null;
+        string? madeBookingId = null, signedUpSession = null, addedFileId = null, postedMessageId = null;
         var mine = await guest.GetAsync($"/api/public/hosted-events/{RoomsEventId}/my-booking");
         var confirmed = mine.Ok && (await mine.TextAsync()).Length > 2 && (await mine.JsonAsync())!.Value.GetProperty("status").GetInt32() == 1;
         if (!confirmed)
@@ -65,13 +65,55 @@ public sealed class IosFixtureCapture : BenTestBase
             await SaveAsync(guest, "/api/public/hosted-events/mine", "hosted-mine", onePerStatus: true);
             await SaveAsync(guest, $"/api/public/hosted-events/{RoomsEventId}/my-booking/pass", "hosted-pass");
             await SaveAsync(guest, $"/api/public/events/{umbrellaId}", "hosted-umbrella-event");
+            // Phase 14b: the screens during the event need something in them — an empty list decodes whatever
+            // shape the elements have. So the guest takes a place in a session, the organizer adds a file for
+            // guests, and the guest posts a photo to the room. All three are undone below.
+            var programme = JsonDocument.Parse(await (await guest.GetAsync($"/api/public/hosted-events/{RoomsEventId}/programme")).TextAsync()).RootElement;
+            signedUpSession = programme.GetProperty("sessions").EnumerateArray()
+                .First(s => s.GetProperty("requiresSignUp").GetBoolean() && !s.GetProperty("isCancelled").GetBoolean())
+                .GetProperty("id").GetString();
+            if (programme.GetProperty("sessions").EnumerateArray().First(s => s.GetProperty("id").GetString() == signedUpSession)
+                    .GetProperty("mine").ValueKind == JsonValueKind.Null)
+            {
+                var signUp = await guest.PostAsync($"/api/public/hosted-events/{RoomsEventId}/sessions/{signedUpSession}/sign-up",
+                    new() { DataObject = new { people = 1 } });
+                Assert.That(signUp.Ok, Is.True, await signUp.TextAsync());
+            }
+            else signedUpSession = null;
+
+            var fileForm = admin.CreateFormData();
+            fileForm.Append("file", new FilePayload { Name = "Guest pack.txt", MimeType = "text/plain", Buffer = "Doors open at seven."u8.ToArray() });
+            fileForm.Append("folder", "Before you come");
+            fileForm.Append("description", "Parking, doors and what to bring.");
+            fileForm.Append("audience", "1");
+            var added = await admin.PostAsync($"/api/organizations/{orgId}/events/{RoomsEventId}/files", new() { Multipart = fileForm });
+            Assert.That(added.Ok, Is.True, await added.TextAsync());
+            addedFileId = JsonDocument.Parse(await added.TextAsync()).RootElement.EnumerateArray()
+                .Last(f => f.GetProperty("fileName").GetString() == "Guest pack.txt").GetProperty("id").GetString();
+
+            var postForm = guest.CreateFormData();
+            postForm.Append("body", "The stairs, just after ten.");
+            postForm.Append("media", new FilePayload { Name = "stairs.png", MimeType = "image/png", Buffer = TinyPng() });
+            postForm.Append("sendToHosts", "false");
+            postForm.Append("agreeToShow", "true");
+            var posted = await guest.PostAsync($"/api/public/hosted-events/{RoomsEventId}/room", new() { Multipart = postForm });
+            Assert.That(posted.Ok, Is.True, await posted.TextAsync());
+            postedMessageId = JsonDocument.Parse(await posted.TextAsync()).RootElement.GetProperty("messages").EnumerateArray()
+                .First(m => m.GetProperty("isMine").GetBoolean() && m.GetProperty("hasMedia").GetBoolean()).GetProperty("id").GetString();
+
             await SaveAsync(guest, $"/api/public/hosted-events/{RoomsEventId}/programme", "hosted-programme");
             await SaveAsync(guest, $"/api/public/hosted-events/{RoomsEventId}/menus", "hosted-menus");
             await SaveAsync(guest, $"/api/public/hosted-events/{RoomsEventId}/files", "hosted-files");
-            await SaveAsync(guest, $"/api/public/hosted-events/{RoomsEventId}/room", "hosted-room");
+            await SaveAsync(guest, $"/api/public/hosted-events/{RoomsEventId}/room", "hosted-room", onlyMessage: postedMessageId);
         }
         finally
         {
+            if (postedMessageId is not null)
+                await guest.DeleteAsync($"/api/public/hosted-events/{RoomsEventId}/room/messages/{postedMessageId}");
+            if (addedFileId is not null)
+                await admin.DeleteAsync($"/api/organizations/{orgId}/events/{RoomsEventId}/files/{addedFileId}");
+            if (signedUpSession is not null)
+                await guest.DeleteAsync($"/api/public/hosted-events/{RoomsEventId}/sessions/{signedUpSession}/sign-up");
             if (madeBookingId is not null)
                 await admin.PostAsync($"/api/organizations/{orgId}/events/{RoomsEventId}/bookings/{madeBookingId}/cancel",
                     new() { DataObject = new { decisionNote = "Clearing up after the fixtures." } });
@@ -79,11 +121,21 @@ public sealed class IosFixtureCapture : BenTestBase
     }
 
     /// <summary>Reads one endpoint and writes its body, scrubbed of pass tokens, into the app's fixtures.</summary>
-    private static async Task<string> SaveAsync(IAPIRequestContext api, string path, string name, bool onePerStatus = false)
+    private static async Task<string> SaveAsync(IAPIRequestContext api, string path, string name, bool onePerStatus = false,
+        string? onlyMessage = null)
     {
         var response = await api.GetAsync(path);
         var body = await response.TextAsync();
         Assert.That(response.Ok, Is.True, $"{path}: {response.Status} {body}");
+
+        // A room on a harness database holds every earlier run's posts, by other test accounts; keep the one made here.
+        if (onlyMessage is not null)
+        {
+            var room = System.Text.Json.Nodes.JsonNode.Parse(body)!.AsObject();
+            var kept = room["messages"]!.AsArray().Where(m => m!["id"]!.GetValue<string>() == onlyMessage).Select(m => m!.DeepClone());
+            room["messages"] = new System.Text.Json.Nodes.JsonArray([.. kept]);
+            body = room.ToJsonString();
+        }
 
         if (onePerStatus)
         {
@@ -117,4 +169,7 @@ public sealed class IosFixtureCapture : BenTestBase
             ExtraHTTPHeaders = new Dictionary<string, string> { ["Authorization"] = $"Bearer {token}" },
         });
     }
+
+    private static byte[] TinyPng() => Convert.FromBase64String(
+        "iVBORw0KGgoAAAANSUhEUgAAAAIAAAACCAIAAAD91JpzAAAAFklEQVR4nGP8z8DAwMDAxMDAwMDAAAANHQEDasKb6QAAAABJRU5ErkJggg==");
 }

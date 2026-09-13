@@ -203,6 +203,16 @@ struct RootShell: View {
             MyEventsView()
         case .eventPass(let id):
             EventPassView(hostedEventId: id)
+        case .eventHub(let id):
+            EventHubView(hostedEventId: id)
+        case .eventProgramme(let id):
+            ProgrammeView(hostedEventId: id)
+        case .eventMenus(let id):
+            MenusView(hostedEventId: id)
+        case .eventDownloads(let id):
+            DownloadsView(hostedEventId: id)
+        case .eventRoom(let id, let addPhotos):
+            EventRoomView(hostedEventId: id, startWithComposer: addPhotos)
         case .myEvidence:
             MyEvidenceView()
         case .developerSettings:

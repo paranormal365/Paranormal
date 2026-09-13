@@ -12,7 +12,6 @@ struct MyEventsView: View {
     @State private var store: HostedEventsStore?
     @State private var bookings: [MyHostedEventBooking] = []
     @State private var state: LoadState = .loading
-    @State private var openOnWebsite: URL?
 
     enum LoadState: Equatable { case loading, loaded, failed(String?) }
 
@@ -61,7 +60,6 @@ struct MyEventsView: View {
             if store == nil { store = HostedEventsStore(api: dependencies.api) }
             await load()
         }
-        .sheet(item: $openOnWebsite) { url in SafariSheet(url: url).ignoresSafeArea() }
     }
 
     @ViewBuilder
@@ -101,14 +99,12 @@ struct MyEventsView: View {
                     .buttonStyle(.borderedProminent)
                     .accessibilityIdentifier("my-events-pass-\(booking.hostedEventId.uuidString.lowercased())")
                 }
-                if let org = booking.organizationUrlName, let slug = booking.eventUrlName {
-                    Button {
-                        openOnWebsite = dependencies.environment.websiteURL(path: "o/\(org)/events/\(slug)")
-                    } label: {
-                        Label("The event", systemImage: "safari")
-                    }
-                    .buttonStyle(.bordered)
+                // Programme, menus, downloads and the room live on the event's own screen, which also links to its page.
+                NavigationLink(value: AppRoute.eventHub(booking.hostedEventId)) {
+                    Label("The event", systemImage: "sparkles")
                 }
+                .buttonStyle(.bordered)
+                .accessibilityIdentifier("my-events-hub-\(booking.hostedEventId.uuidString.lowercased())")
             }
             .padding(.top, 2)
         }

@@ -1196,6 +1196,72 @@ Simulator walk as the guest on iPhone 17 Pro Max: booking panel, My events, pass
 online cold start still signed in. Help: *the mobile apps* gains "An event you've booked" with two captures from
 `HelpMediaCaptureTests.testCaptureMyEventsAndPass`; *going to an event* points to it.
 
+#### Phase 14b as built (2026-09-13) — the event on the phone: programme, menus, downloads, the room
+
+1. **One screen per event** (`EventHubView`, `my-events/{id}`), reached from *The event* on What I'm going to and
+   *Programme and room* on a confirmed booking.
+   - It shows the pass, programme, menus, downloads and room, **each only when there is something behind it**.
+   - The store turns "not for you" (a 404 programme, the 403 on menus before a place is agreed, a 404 room) into
+     `.ok(nil)`, so the row is left out. An unreachable server is still a failure, and the hub says so.
+2. **Programme** (`ProgrammeView`).
+   - Sessions are grouped by day on the venue's clock, with the zone named.
+   - *Sign up* asks how many of the party when more than one may come.
+   - A full session shows *Join the waiting list*. A party waiting while places are still free is told why ("There are
+     2 places left for 3 of you, so you're on the waiting list — number 1"), because "0 of 2 taken" beside
+     "waiting" read as a fault.
+   - *Give up* or *Leave* asks first. Calendar button: the whole programme as `.ics`.
+   - Opening a changed programme marks it seen, which clears the bell's row.
+3. **Menus** (`MenusView`): each meal by night, courses in the order the host typed them, dietary labels. The served
+   time is the venue's own and is never converted.
+4. **Downloads** (`DownloadsView`): by folder. A tap fetches the file into Caches under its own name, made safe as a
+   path component, and opens it in Quick Look, which previews it and offers share.
+5. **The room** (`EventRoomView`, `RoomComposerView`) follows the web room's rules, with the server deciding.
+   - **Posting.** Write, or add photos and video from the library or the camera. Several go in as one post each,
+     with the words on the first. A refusal part-way stops and keeps what hasn't gone, so nothing is lost and
+     nothing is sent twice.
+   - **Agreement and sharing.** The once-per-event photo notice is shown in the organizers' words, and *Post* waits
+     for *I agree*. *Also send to {hosts}* shares the photo with the hosts.
+   - **Post actions** (press and hold): on your own post, send it on later or take it down; on anyone else's,
+     report it with an optional reason.
+   - **Moderation** stays on the website; a moderator is told so.
+   - **Media** loads with the signed-in token, through `AuthenticatedImageLoader`'s new endpoint-keyed overload.
+   - **Paging** fetches older posts `before` the oldest shown.
+6. **Links.** `my-events/{id}` → the hub; `events/{id}/room` → the room; `events/{id}/photos` (the photo wall's
+   code) → the room with the composer open. `events/{id}` alone is still a calendar date.
+   - **Not claimed as universal links yet.** The App Store build parses `/events/{id}/…` as an event detail with no
+     screen. Claiming `/events/*/photos`, `/events/*/room`, `/my-events` and `/my-events/*` in
+     `AppleAppSiteAssociation` waits until a build carrying these screens is live, and the help makes no promise
+     about scanning the wall until then.
+7. **Fixtures:** `IosFixtureCapture` now signs the guest up for a session, adds a file for guests and posts a photo
+   before capturing, then undoes all three. An empty files list and an empty room had proved nothing. The captured
+   photo came back as `image/jpeg` from a PNG, which the test now pins: the app must not assume the type it sent.
+
+Tests: BenKit `HostedEventHubTests` (15 tests, all against the real captures):
+- **Decoding:** programme, menus, files and room.
+- **Absent is not failed:** three cases, plus unreachable-is-failure.
+- **Writes:** the sign-up body and its refusal; the room post's multipart fields; the agreement refusal in the
+  server's words; `before` paging.
+- **Downloads and time:** the safe download name; a venue time that is never shifted.
+- **Links.**
+
+The 403-as-absent rule and the safe-name rule were each broken and seen failing. BenKit 418 green; .NET help and
+changelog tests 78 green. No server code changed.
+
+Simulator walk as the guest, iPhone 17 Pro Max, on the player copy:
+- **Setup:** the BenCo rooms event was given a published programme (three sessions, one for six and one for two),
+  a supper menu and a guest file, as data on the testing copy.
+- **Programme:** signed up for two, then a party of three was waitlisted on the two-place session.
+- **Downloads:** the guest pack opened in Quick Look.
+- **Room:** two library photos posted after agreeing, one sent to BenCo, one taken down.
+- **Link:** the `/events/{id}/photos` address opened the composer on a cold start.
+- **Not walked:** the camera (no simulator camera) and reporting somebody else's post (the guest is the only
+  poster); both are covered by the store tests.
+
+Help: *the mobile apps* gains "During the event" with four captures from
+`HelpMediaCaptureTests.testCaptureDuringTheEvent`, and *going to an event* points to it.
+
+Next: 14c, the door scanner and `GET api/me/hosted-event-duties`.
+
 ### Phase 15 — Seed walk, screenshots, documentation, runbook
 
 The README's 2.8 and 12: extend `HostedEventDemoSeeder` to every table above; walk the running

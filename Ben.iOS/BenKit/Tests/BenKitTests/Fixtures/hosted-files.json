@@ -1,1 +1,14 @@
-[]
+[
+  {
+    "id": "6c2335ec-10a2-40af-8d7e-a32060cf4832",
+    "uploadFileId": "df95ff6b-6f93-4b33-b61a-7650f737f26b",
+    "fileName": "Guest pack.txt",
+    "contentType": "text/plain",
+    "fileSize": 20,
+    "folder": "Before you come",
+    "description": "Parking, doors and what to bring.",
+    "audience": 1,
+    "sortOrder": 0,
+    "dateCreated": "2026-09-13T20:36:14.875991"
+  }
+]
