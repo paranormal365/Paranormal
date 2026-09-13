@@ -1604,13 +1604,25 @@ red from green.
 
 ![After the event](help-media:organization-administration/event-after.png)
 
-- **The thank-you** goes the morning after the last night to every party with a confirmed place, once
-  each. It carries your note, a link to the gallery if you added pictures, a link for guests to say
-  how it was, and up to three of your upcoming events. It is on unless you turn it off, and it is
-  never sent for an event that ended more than a week before.
+- **Thank-you email** is sent automatically the morning after the event ends, once to each confirmed
+  booking. It includes your note, a link to leave a review, a link to the gallery if you added
+  pictures, and up to three of your upcoming events. It is on unless you turn it off, and it is never
+  sent for an event that ended more than a week before.
 - **Reviews** come only from people who had a confirmed place, for two months after the event. You
   can hide one from the page; you can't change its words, and the person who wrote it still sees it,
   marked as hidden. Turning reviews off stops new ones.
+
+**Files are kept for 90 days after the last date.** Then the event's files, its gallery pictures and the
+links to photos in its room are removed. The event itself stays, with its bookings, programme and reviews,
+and guests keep their own photos — a photo a guest sent you stays shared with you. You are written to a
+month and a week before, and nothing is removed within a week of the last letter.
+
+**Keep the files**, from *After the event*, lists everything you can take away: the event's files, its
+gallery, photos your own people posted in the room and photos guests sent to you. Tick what you want and
+**Download as a zip** — up to 100 at a time, in a folder each. A guest's photo that was never sent to you
+isn't on the list, because it is theirs.
+
+![Picking files to keep](help-media:organization-administration/event-keep.png)
 
 **Copy this event**, from the event page, starts the next one from this one. Choose a name and the
 first date; every other date moves with it, keeping its gaps, and a session at 7 PM stays at 7 PM

@@ -355,6 +355,19 @@ namespace Ben.Data.Source.Entities
         /// <summary>When every thank-you went. Null until then, so a pass that failed half way finishes the rest.</summary>
         public DateTime? ThankYouSentUtc { get; set; }
 
+        /// <summary>When the organizer was told the files go in 30 days, and in 7 (phase 12). Once each.</summary>
+        public DateTime? RetentionWarnedMonthUtc { get; set; }
+        public DateTime? RetentionWarnedWeekUtc { get; set; }
+
+        /// <summary>
+        /// When the event's files, gallery and room photo links were removed under the retention rule.
+        /// </summary>
+        /// <remarks>
+        /// The event itself stays — its bookings, reviews and programme are the record of what happened —
+        /// and so do guests' own photos, which were always theirs.
+        /// </remarks>
+        public DateTime? MediaClearedUtc { get; set; }
+
         /// <summary>When it was called off. The row is kept so people can see that it is off.</summary>
         public DateTime? CancelledAtUtc { get; set; }
 

@@ -18,6 +18,10 @@ day-by-day account of building it would say nothing to anyone using it now.
 
 ## 2026-09-13
 
+- An event's files, gallery pictures and room photo links are kept for 90 days after it ends. The
+  organizer is written to a month and a week before, and can pick what to keep and download it as one
+  zip. Guests keep their own photos.
+
 - The morning after an event, everybody who came can be sent a thank-you with the organizer's note,
   the pictures and what is coming up next. Guests who had a place can review the event for two months,
   and organizers can hide a review but never change it.

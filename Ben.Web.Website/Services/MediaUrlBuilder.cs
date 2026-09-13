@@ -55,6 +55,14 @@ public sealed class MediaUrlBuilder : IMediaUrlBuilder
         return url;
     }
 
+    public string EventKeepZip(Guid orgId, Guid eventId, IReadOnlyCollection<Guid> uploadFileIds)
+    {
+        var token = _tokens.AccessToken;
+        var ticket = string.IsNullOrWhiteSpace(token) ? "" : _tickets.Protect(eventId, token);
+        var ids = string.Join(",", uploadFileIds.Select(i => i.ToString("N")));
+        return $"/media/event-keep/{orgId}/{eventId}?ids={ids}&t={Uri.EscapeDataString(ticket)}";
+    }
+
     public string EventFile(Guid eventId, Guid fileId)
     {
         var cacheKey = $"event-file:{eventId}:{fileId}";

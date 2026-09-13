@@ -95,7 +95,7 @@ public sealed class EventBookingClientRouteTests
         "GetMyBookingContactAsync", "PickHostedEventPlacesByEmailAsync", "GetEmailPickAsync",
         "ConfirmEmailPickAsync", "LetGoEmailPickAsync", "RequestHostedEventAttendanceAsync",
         "GetHostedEventCopyPreviewAsync", "CopyHostedEventAsync", "DownloadHostedEventBookingsCsvAsync",
-        "GetHostedEventReviewsAsync", "SaveMyHostedEventReviewAsync", "DeleteMyHostedEventReviewAsync",
+        "GetHostedEventKeepAsync", "GetHostedEventReviewsAsync", "SaveMyHostedEventReviewAsync", "DeleteMyHostedEventReviewAsync",
         "GetHostedEventAfterAsync", "SetHostedEventAfterAsync", "SetHostedEventReviewHiddenAsync",
         "GetEventBandsAsync", "SetEventBandsAsync", "SetBookingBandAsync",
         "GetEventDoorAsync", "DoorArriveAsync", "DoorLeaveAsync", "DoorUndoAsync",

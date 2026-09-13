@@ -438,6 +438,9 @@ public interface IBenEventBookingClient
     Task<(HostedEventAfterRecord? Result, string? Error)> SetHostedEventReviewHiddenAsync(
         Guid orgId, Guid eventId, Guid reviewId, bool hidden, CancellationToken token = default);
 
+    /// <summary>What an organizer may take away from an event before its files are removed.</summary>
+    Task<ItemResult<HostedEventKeepRecord>> GetHostedEventKeepAsync(Guid orgId, Guid eventId, CancellationToken token = default);
+
     /// <summary>What copying an event would bring (item 235 phase 12).</summary>
     Task<ItemResult<HostedEventCopyPreviewRecord>> GetHostedEventCopyPreviewAsync(
         Guid orgId, Guid eventId, CancellationToken token = default);

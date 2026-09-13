@@ -87,6 +87,15 @@ public static class SiteSettingKeys
     /// </remarks>
     public const string EventStorageMegabytes = "events.storage-megabytes";
 
+    /// <summary>
+    /// How many days after an event's last date its files, gallery and room photo links are kept (item 235
+    /// phase 12).
+    /// </summary>
+    /// <remarks>
+    /// Ben, 2026-09-13: "90 days is fine." Unset reads as 90. The organizer is written to 30 and 7 days before.
+    /// </remarks>
+    public const string EventRetentionDays = "events.retention-days";
+
     /// <summary>Short notice shown site-wide — maintenance windows, outages. Empty = nothing shown.</summary>
     public const string SiteAnnouncement = "site.announcement";
 
@@ -233,6 +242,8 @@ public static class SiteSettingKeys
 
         (FreeAccountStorageMegabytes, "Free account storage (MB)",
             "How much somebody with no paid group may store in their own field sessions. Members of a group on a paid plan are not counted against this. Leave empty for the built-in default of 2048 MB."),
+        (EventRetentionDays, "How long an event's files are kept (days)",
+            "Days after an event's last date before its files, gallery pictures and the links to photos in its room are removed. The organizer is written to 30 and 7 days before. Guests' own photos stay in their libraries. Leave empty for the built-in default of 90 days."),
         (EventStorageMegabytes, "Storage for one event (MB)",
             "How much one hosted event may hold: its files, its gallery and the photos posted in its room. An upload past it is refused with how much is left. Leave empty for the built-in default of 2000 MB."),
         (UploadMaxFileBytes, "Upload limit — one file (bytes)",
@@ -297,7 +308,7 @@ public static class SiteSettingKeys
         ("Limits",
          "Ceilings on what one caller or one account may use. Every one of these has a built-in "
          + "default, so leaving a box empty is safe.",
-         [FreeAccountStorageMegabytes, EventStorageMegabytes, UploadMaxFileBytes, UploadChunkMaxBytes,
+         [FreeAccountStorageMegabytes, EventStorageMegabytes, EventRetentionDays, UploadMaxFileBytes, UploadChunkMaxBytes,
           RateLimitGlobalPerMinute, RateLimitAuthPerMinute, RateLimitGeocodingPerMinute,
           RateLimitEventAttendancePerMinute, RateLimitAudioProcessingPerMinute]),
 

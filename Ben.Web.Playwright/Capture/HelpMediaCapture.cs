@@ -2108,7 +2108,43 @@ public sealed class HelpMediaCapture : BenTestBase
             await Page.Locator("#after-thank-you-note").FillAsync(
                 "Thank you for spending the weekend with us at the Thomas House. We'll be back in March.");
         await ShootAsync("organization-administration", "event-after.png", gated: true,
-            selector: ".container-fluid", proves: "The thank-you");
+            selector: ".container-fluid", proves: "Thank-you email");
+    }
+
+    /// <summary>Keeping an event's files before they are removed (item 235 phase 12).</summary>
+    [Test]
+    [Description("organization-administration: pick and zip.")]
+    public async Task Capture_EventKeep()
+    {
+        var orgId = await OrgIdBySlugAsync("paranormal365");
+        const string name = "Guest pack — Séance Weekend.pdf";
+        var api = await SignedInApiAsync(SuperAdminEmail, SuperAdminPassword);
+        try
+        {
+            await LoginAsync(SuperAdminEmail, SuperAdminPassword);
+            await GoAsync($"/organizations/{orgId}/events/{SeededRoomsEventId}/files");
+            await Page.Locator("#file-input").SetInputFilesAsync(new Microsoft.Playwright.FilePayload
+            {
+                Name = name, MimeType = "application/pdf", Buffer = "%PDF-1.4 guest pack"u8.ToArray(),
+            });
+            await Page.Locator("#file-upload").ClickAsync();
+            await Expect(Page.Locator("#files-note")).ToBeVisibleAsync(new() { Timeout = 30_000 });
+
+            await GoAsync($"/organizations/{orgId}/events/{SeededRoomsEventId}/keep");
+            await Expect(Page.Locator("#keep-files")).ToBeVisibleAsync(new() { Timeout = 30_000 });
+            await Page.Locator("#keep-files-all").CheckAsync();
+            await ShootAsync("organization-administration", "event-keep.png", gated: true,
+                selector: ".container-fluid", proves: "Download as a zip");
+        }
+        finally
+        {
+            var list = await api.GetAsync($"/api/organizations/{orgId}/events/{SeededRoomsEventId}/files");
+            if (list.Ok)
+                foreach (var file in (await list.JsonAsync())!.Value.EnumerateArray())
+                    if (file.GetProperty("fileName").GetString() == name)
+                        await api.DeleteAsync($"/api/organizations/{orgId}/events/{SeededRoomsEventId}/files/{file.GetProperty("id").GetString()}");
+            await api.DisposeAsync();
+        }
     }
 
     /// <summary>The emailed link's token, as the API logs it when no mail server is set up.</summary>

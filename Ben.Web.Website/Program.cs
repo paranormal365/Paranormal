@@ -647,6 +647,21 @@ app.MapGet("/media/event-files/{eventId:guid}/{fileId:guid}", async (
         accessToken, httpFactory, ctx, ct);
 }).AllowAnonymous();
 
+// What an organizer takes away from an event before its files are removed, as one zip (item 235 phase 12).
+// The organizer's own permission is checked by the API; the ticket carries who they are.
+app.MapGet("/media/event-keep/{orgId:guid}/{eventId:guid}", async (
+    Guid orgId, Guid eventId, string? ids, string? t,
+    Ben.Web.Website.Services.MediaTicketService tickets,
+    IHttpClientFactory httpFactory, IConfiguration config,
+    HttpContext ctx, CancellationToken ct) =>
+{
+    var accessToken = string.IsNullOrWhiteSpace(t) ? null : tickets.Unprotect(eventId, t);
+    if (accessToken is null) return Results.NotFound();
+    return await Ben.Web.Website.Services.MediaProxy.StreamAsync(
+        $"{config["WebApi:BaseUrl"]}/api/organizations/{orgId}/events/{eventId}/keep.zip?ids={Uri.EscapeDataString(ids ?? "")}",
+        accessToken, httpFactory, ctx, ct);
+}).AllowAnonymous();
+
 // A photo or video in an event's room (item 235 phase 11). Members only, so the ticket is required.
 app.MapGet("/media/event-room/{eventId:guid}/{messageId:guid}", async (
     Guid eventId, Guid messageId, string? t,

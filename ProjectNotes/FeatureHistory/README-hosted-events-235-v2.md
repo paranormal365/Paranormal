@@ -1057,6 +1057,29 @@ Tests: `HostedEventAfterTests` (8; the confirmed-only rule, the hidden-review av
 the one-week limit each seen failing with the rule removed), Playwright `EventAfterTests` (3); capture
 `event-after.png`. Still in phase 12: retention with warnings, pick-and-zip, what the venue remembers.
 
+#### Phase 12c as built (2026-09-13) — retention, pick and zip
+
+1. **90 days** (Ben: *"90 days is fine"*), as the site setting `events.retention-days`. Applies to Ended,
+   Archived, Cancelled and VenueWithdrawn events, never drafts or live ones.
+2. **What goes:** the event's files and gallery pictures (rows, then the upload rows where nothing else points
+   at them, then the bytes) and the room's links to photos. **What stays:** the event, bookings, programme,
+   reviews; guests' own photos in their libraries; shares a guest made to the organizers.
+3. **Warnings** a month and a week before, as a platform message and email to the billing recipients, with the
+   date and a link to *Keep the files*. Nothing is removed within a week of the last warning, so an event the
+   job first sees late is warned, not cleared. An event with nothing to lose is stamped without a letter.
+4. **Pick and zip** (`/organizations/{org}/events/{id}/keep`): the event's files, gallery, photos posted in the
+   room by the organizer's own members, and photos guests sent to the organizers — not a guest's photo that
+   was never sent. Up to 100 per zip, in folders. The zip is written to a temporary file on the API and
+   streamed through a ticketed website relay, so a large download never passes through the Blazor circuit.
+5. Ben's review of the *After the event* page (a screenshot marked "wording makes no sense"): the thank-you
+   switch now reads *Email a thank-you to everyone who attended*, with a plain line saying when it is sent and
+   what it contains; "parties" became "confirmed bookings" and "guests who came" became "attendees".
+
+Tests: `HostedEventRetentionTests` (5; never clearing on a late first warning and leaving unshared guest photos
+off the list each seen failing with the rule removed), Playwright `EventKeepTests` (a picked file comes back
+inside the downloaded zip); capture `event-keep.png`, `event-after.png` re-shot. Still in phase 12: what the
+venue remembers (last plan, photo library).
+
 ### Phase 13 — Dining as a seating assignment
 
 `HostedEventDiningTable` + `HostedEventDiningSeat` per sitting, over Confirmed bookings only;

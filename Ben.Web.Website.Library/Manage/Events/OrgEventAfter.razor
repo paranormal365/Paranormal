@@ -55,16 +55,19 @@
             <button type="button" class="btn btn-outline-secondary btn-sm" id="after-export" disabled="@_busy" @onclick="ExportAsync">
                 Download bookings as a spreadsheet
             </button>
+            <a class="btn btn-outline-secondary btn-sm" id="after-keep" href="@($"/organizations/{OrgId}/events/{EventId}/keep")">
+                Keep the files
+            </a>
         </div>
 
         <div class="card mb-3" id="after-thank-you">
-            <div class="card-header fw-semibold">The thank-you</div>
+            <div class="card-header fw-semibold">Thank-you email</div>
             <div class="card-body">
                 @if (a.ThankYouSentUtc is { } sent)
                 {
                     <p class="mb-2" id="after-thanked">
-                        Sent @sent.ToViewerLocalTime(UserState).ToString("MM/dd/yyyy") to @a.GuestsThanked
-                        @(a.GuestsThanked == 1 ? "party" : "parties").
+                        Sent @sent.ToViewerLocalTime(UserState).ToString("MM/dd/yyyy") to
+                        @(a.GuestsThanked == 1 ? "1 confirmed booking" : $"{a.GuestsThanked} confirmed bookings").
                     </p>
                 }
                 else
@@ -72,15 +75,16 @@
                     <div class="form-check form-switch mb-2">
                         <input class="form-check-input" type="checkbox" id="after-send" @bind="_send" />
                         <label class="form-check-label" for="after-send">
-                            Thank everybody who came, the morning after the last night
+                            Email a thank-you to everyone who attended
                         </label>
                     </div>
-                    <p class="small text-secondary">
-                        @(a.GuestsToThank == 1 ? "1 party has" : $"{a.GuestsToThank} parties have") a confirmed place.
-                        The letter carries your note, @(a.HasGallery ? "a link to the pictures, " : "")
-                        @(_reviews ? "a link to say how it was, " : "")and up to three of your upcoming events.
+                    <p class="small text-secondary" id="after-send-hint">
+                        It is sent automatically the morning after the event ends, to
+                        @(a.GuestsToThank == 1 ? "the 1 confirmed booking" : $"the {a.GuestsToThank} confirmed bookings").
+                        It includes your note below@(_reviews ? ", a link to leave a review" : "")@(a.HasGallery ? ", a link to the gallery" : ""),
+                        and up to three of your upcoming events.
                     </p>
-                    <label class="form-label small mb-1" for="after-thank-you-note">Your note, at the top of the letter</label>
+                    <label class="form-label small mb-1" for="after-thank-you-note">Your note (appears at the top of the email)</label>
                     <textarea class="form-control mb-2" id="after-thank-you-note" rows="4" maxlength="2000"
                               placeholder="Thank you for spending Halloween with us. We'll be back in March."
                               @bind="_thankYouNote" @bind:event="oninput"></textarea>
@@ -88,7 +92,7 @@
 
                 <div class="form-check form-switch mt-2">
                     <input class="form-check-input" type="checkbox" id="after-allow-reviews" @bind="_reviews" />
-                    <label class="form-check-label" for="after-allow-reviews">Let guests who came leave a review</label>
+                    <label class="form-check-label" for="after-allow-reviews">Let attendees leave a review</label>
                 </div>
 
                 <button type="button" class="btn btn-primary btn-sm mt-3" id="after-save" disabled="@_busy" @onclick="SaveAsync">
@@ -99,7 +103,7 @@
 
         <div class="card mb-3" id="after-reviews">
             <div class="card-header fw-semibold d-flex justify-content-between flex-wrap gap-2">
-                <span>What guests said</span>
+                <span>Reviews</span>
                 @if (a.Average is { } avg)
                 {
                     <span class="text-secondary small">@avg.ToString("0.0") ★ from @a.Count</span>
@@ -108,7 +112,7 @@
             @if (a.Reviews.Count == 0)
             {
                 <div class="card-body text-secondary" id="after-no-reviews">
-                    Nobody has left a review yet. Guests who had a confirmed place can, once the event is over.
+                    No reviews yet. Anyone with a confirmed booking can leave one once the event is over.
                 </div>
             }
             else

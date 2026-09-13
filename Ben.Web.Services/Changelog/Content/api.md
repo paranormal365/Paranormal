@@ -20,6 +20,10 @@ belongs there; this is for the part underneath.
 
 ## 2026-09-13
 
+- A retention rule removes a hosted event's files, gallery and room photo links 90 days after it ends,
+  after two warnings to the organizer, who can download chosen files as a zip first. The length is a
+  site setting.
+
 - Hosted events take reviews from guests who had a confirmed place, and a scheduled task sends each
   party one thank-you the morning after the event.
 

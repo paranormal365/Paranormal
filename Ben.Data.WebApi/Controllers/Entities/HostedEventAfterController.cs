@@ -304,6 +304,133 @@ public sealed class HostedEventAfterController : OrgCmsControllerBase
             average, count, reviews);
     }
 
+    // ── pick and zip ─────────────────────────────────────────────────────────
+
+    /// <summary>The most things one zip may carry, so the address that asks for them stays a reasonable length.</summary>
+    internal const int MaxInOneZip = 100;
+
+    /// <summary>
+    /// Everything an organizer may take away: the event's files, its gallery, and the room's photos that are
+    /// theirs to take — posted by their own people, or sent to them by a guest.
+    /// </summary>
+    /// <remarks>
+    /// Ben, 2026-09-13: <i>"allow the organizer the ability to pick from a list to download and just zip up
+    /// whatever they pick into a .zip file for them."</i> A guest's photo that was never sent to the organizers
+    /// is not on the list: it is on the wall for the evening, and it is the guest's.
+    /// </remarks>
+    [HttpGet("keep")]
+    public async Task<ActionResult<HostedEventKeepRecord>> Keep(Guid orgId, Guid eventId, CancellationToken ct)
+    {
+        var userId = GetCurrentUserId();
+        if (userId is null) return Unauthorized();
+
+        await using var db = await DbFactory.CreateDbContextAsync(ct);
+        if (!await _access.CanManageFilesAsync(userId.Value, orgId, eventId, db, ct)) return Forbid();
+        var ev = await db.HostedEvents.AsNoTracking().FirstOrDefaultAsync(e => e.Id == eventId && e.OrganizationId == orgId, ct);
+        if (ev is null) return NotFound();
+
+        var days = await EventRetention.DaysAsync(db, ct);
+        DateTime? clearsOn = EventRetention.Applies.Contains(ev.LifecycleState) ? EventRetention.ClearsOn(ev, days) : null;
+
+        return Ok(new HostedEventKeepRecord(ev.Id, ev.Name, clearsOn, ev.MediaClearedUtc, await KeepItemsAsync(db, ev, ct)));
+    }
+
+    /// <summary>The chosen things as one zip, in a folder each for files, gallery and room photos.</summary>
+    [HttpGet("keep.zip")]
+    public async Task<IActionResult> KeepZip(Guid orgId, Guid eventId, [FromQuery] string? ids, CancellationToken ct)
+    {
+        var userId = GetCurrentUserId();
+        if (userId is null) return Unauthorized();
+
+        await using var db = await DbFactory.CreateDbContextAsync(ct);
+        if (!await _access.CanManageFilesAsync(userId.Value, orgId, eventId, db, ct)) return Forbid();
+        var ev = await db.HostedEvents.AsNoTracking().FirstOrDefaultAsync(e => e.Id == eventId && e.OrganizationId == orgId, ct);
+        if (ev is null) return NotFound();
+
+        var wanted = (ids ?? "").Split(',', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries)
+            .Select(i => Guid.TryParse(i, out var g) ? g : Guid.Empty)
+            .Where(g => g != Guid.Empty)
+            .Distinct()
+            .ToList();
+        if (wanted.Count == 0) return BadRequest("Pick at least one thing to download.");
+        if (wanted.Count > MaxInOneZip) return BadRequest($"Pick up to {MaxInOneZip} at a time.");
+
+        // Only what this event offers this organizer; anything else in the list is ignored, not fetched.
+        var items = (await KeepItemsAsync(db, ev, ct)).Where(i => wanted.Contains(i.UploadFileId)).ToList();
+        if (items.Count == 0) return NotFound();
+
+        var paths = await db.UploadFiles.AsNoTracking()
+            .Where(f => items.Select(i => i.UploadFileId).Contains(f.Id))
+            .Select(f => new { f.Id, f.StoragePath })
+            .ToDictionaryAsync(f => f.Id, f => f.StoragePath, ct);
+
+        // Written to a temporary file and streamed from there: a zip writes synchronously as it closes,
+        // which the server refuses on a response body, and a file on disk never holds 2 GB in memory.
+        var temp = Path.Combine(Path.GetTempPath(), $"event-keep-{Guid.NewGuid():N}.zip");
+        var used = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+
+        await using (var output = new FileStream(temp, FileMode.CreateNew, FileAccess.Write, FileShare.None, 81920, useAsync: true))
+        using (var zip = new System.IO.Compression.ZipArchive(output, System.IO.Compression.ZipArchiveMode.Create, leaveOpen: true))
+        {
+            foreach (var item in items)
+            {
+                if (!paths.TryGetValue(item.UploadFileId, out var stored) || string.IsNullOrEmpty(stored)) continue;
+                var served = _ingest.ServingPathFor(stored);
+                if (!_storage.Exists(served)) continue;
+
+                var folder = item.Kind switch { "file" => "Files", "picture" => "Gallery", _ => "Room photos" };
+                var entry = zip.CreateEntry(UniqueName(used, folder, item.Name), System.IO.Compression.CompressionLevel.Fastest);
+                await using var into = entry.Open();
+                await using var from = await _storage.OpenReadAsync(served, ct);
+                await from.CopyToAsync(into, ct);
+            }
+        }
+
+        var stream = new FileStream(temp, FileMode.Open, FileAccess.Read, FileShare.Read, 81920,
+            FileOptions.Asynchronous | FileOptions.DeleteOnClose);
+        return File(stream, "application/zip", $"{(UrlSlug.From(ev.Name) ?? "event")}.zip");
+    }
+
+    private static string UniqueName(HashSet<string> used, string folder, string name)
+    {
+        var safe = string.Concat((name.Length > 0 ? name : "file").Select(c => Path.GetInvalidFileNameChars().Contains(c) ? '_' : c));
+        var candidate = $"{folder}/{safe}";
+        var stem = Path.GetFileNameWithoutExtension(safe);
+        var extension = Path.GetExtension(safe);
+        for (var n = 2; !used.Add(candidate); n++)
+            candidate = $"{folder}/{stem} ({n}){extension}";
+        return candidate;
+    }
+
+    internal static async Task<IReadOnlyList<HostedEventKeepItemRecord>> KeepItemsAsync(
+        BenDataContext db, HostedEvent ev, CancellationToken ct)
+    {
+        var files = await db.HostedEventFiles.AsNoTracking()
+            .Where(f => f.HostedEventId == ev.Id)
+            .OrderBy(f => f.SortOrder)
+            .Select(f => new HostedEventKeepItemRecord(f.UploadFileId, "file", f.UploadFile.FileName, f.UploadFile.FileSize,
+                f.CreatedByAppUser.DisplayName, f.DateCreated))
+            .ToListAsync(ct);
+
+        var pictures = await db.HostedEventGalleryImages.AsNoTracking()
+            .Where(g => g.HostedEventId == ev.Id)
+            .OrderBy(g => g.SortOrder)
+            .Select(g => new HostedEventKeepItemRecord(g.UploadFileId, "picture", g.UploadFile.FileName, g.UploadFile.FileSize,
+                null, g.DateCreated))
+            .ToListAsync(ct);
+
+        var photos = await db.OrgMessages.AsNoTracking()
+            .Where(m => m.HostedEventId == ev.Id && m.MediaUploadFileId != null && m.HiddenUtc == null
+                     && (db.OrganizationUserMemberships.Any(u => u.OrganizationId == ev.OrganizationId && u.AppUserId == m.AuthorAppUserId && u.IsActive)
+                      || db.UploadFileOrganizationShares.Any(s => s.UploadFileId == m.MediaUploadFileId && s.OrganizationId == ev.OrganizationId && s.IsActive)))
+            .OrderBy(m => m.DateCreated)
+            .Join(db.UploadFiles, m => m.MediaUploadFileId, f => (Guid?)f.Id, (m, f) => new HostedEventKeepItemRecord(
+                f.Id, "photo", f.FileName, f.FileSize, m.AuthorAppUser.DisplayName, m.DateCreated))
+            .ToListAsync(ct);
+
+        return [.. files, .. pictures, .. photos];
+    }
+
     // ── the list of who came ─────────────────────────────────────────────────
 
     /// <summary>

@@ -712,3 +712,17 @@ public sealed record HostedEventAfterRecord(
 /// <summary>Changing the thank-you and whether reviews are taken.</summary>
 public sealed record SetHostedEventAfterRequest(bool AllowReviews, bool SendThankYou, string? ThankYouNote);
 
+/// <summary>What an organizer can take away from an event before its files are removed (phase 12).</summary>
+/// <param name="ClearsOn">The day the files go, or null for an event the rule does not reach yet.</param>
+public sealed record HostedEventKeepRecord(
+    Guid HostedEventId,
+    string Name,
+    DateTime? ClearsOn,
+    DateTime? ClearedUtc,
+    IReadOnlyList<HostedEventKeepItemRecord> Items);
+
+/// <summary>One thing that can go in the zip.</summary>
+/// <param name="Kind"><c>file</c>, <c>picture</c> (the gallery) or <c>photo</c> (from the room).</param>
+public sealed record HostedEventKeepItemRecord(
+    Guid UploadFileId, string Kind, string Name, long Size, string? By, DateTime AddedUtc);
+

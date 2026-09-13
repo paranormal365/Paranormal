@@ -55,6 +55,12 @@ public interface IMediaUrlBuilder
     string EventPhoto(Guid uploadFileId);
 
     /// <summary>
+    /// The chosen files, pictures and photos of an event as one zip (item 235 phase 12). Not cached: every
+    /// choice is a different address.
+    /// </summary>
+    string EventKeepZip(Guid orgId, Guid eventId, IReadOnlyCollection<Guid> uploadFileIds);
+
+    /// <summary>
     /// A tour guide's published photograph (item 233).
     /// </summary>
     /// <remarks>
