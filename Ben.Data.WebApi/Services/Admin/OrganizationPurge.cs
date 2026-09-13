@@ -373,6 +373,10 @@ public sealed class OrganizationPurge
             await db.HostedEventAnnouncements
                 .Where(x => x.HostedEvent.OrganizationId == organizationId)
                 .ExecuteDeleteAsync(ct);
+            // IsHaunted's removals of an event (phase 17b) cascade from it but name people with NoAction.
+            await db.HostedEventRemovals
+                .Where(x => x.HostedEvent.OrganizationId == organizationId)
+                .ExecuteDeleteAsync(ct);
             await db.HostedEventDiningSeats
                 .Where(x => x.HostedEventDiningTable.HostedEvent.OrganizationId == organizationId
                          || x.HostedEventBooking.HostedEvent.OrganizationId == organizationId)

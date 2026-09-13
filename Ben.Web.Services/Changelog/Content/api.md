@@ -20,6 +20,14 @@ belongs there; this is for the part underneath.
 
 ## 2026-09-13
 
+- SuperAdmin endpoints list every hosted event, return the events dashboard figures, show what removing an
+  event would do, remove it, and answer appeals.
+- Hosted events have a new Removed state. It counts as called off, is not shown on the public site, and
+  can't be published, restored or un-cancelled by the organizer.
+- Organizers can read their event's removal and appeal it once.
+- Restoring an event now only acts on an archived event. It no longer turns a called-off event back into
+  a draft.
+
 - Hosted events have endpoints to write to their guests: one to list the letters sent, one to count who a
   letter would reach, and one to send it by email and site message. Only people who may decide bookings
   can use them, and an event can have ten letters a day.

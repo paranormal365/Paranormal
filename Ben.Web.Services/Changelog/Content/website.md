@@ -18,6 +18,15 @@ day-by-day account of building it would say nothing to anyone using it now.
 
 ## 2026-09-13
 
+- SuperAdmins have an Events tab on the dashboard, with charts of events by state, bookings, event credits,
+  the busiest organizers and venues, and where events happen.
+- SuperAdmins have a list of every hosted event, showing the organizer, the dates and the state, with
+  buttons to view or remove each one.
+- Removing an event takes it off the site, returns its event credit, tells everybody with a place that it
+  is not going ahead, and emails the organizer a link to appeal. An upheld appeal brings the event back
+  as a draft.
+- Organizers whose event was removed see why on the event's page, and can appeal from there once.
+
 - Organizers can write to everybody with a place at an event from the booking board: everyone confirmed,
   only the people there on one date, or people still waiting as well. The card shows how many parties
   the letter will reach before it goes, and keeps a list of every letter sent.

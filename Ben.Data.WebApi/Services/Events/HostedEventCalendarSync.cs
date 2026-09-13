@@ -92,6 +92,7 @@ public sealed class HostedEventCalendarSync
         {
             HostedEventLifecycleState.Cancelled => $"CANCELLED — {hostedEvent.Name}",
             HostedEventLifecycleState.VenueWithdrawn => $"CANCELLED (venue withdrew) — {hostedEvent.Name}",
+            HostedEventLifecycleState.Removed => $"CANCELLED — {hostedEvent.Name}",
             _ => hostedEvent.Name,
         };
 

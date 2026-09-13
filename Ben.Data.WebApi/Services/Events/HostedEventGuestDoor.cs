@@ -62,6 +62,8 @@ public static class HostedEventGuestDoor
             return "This event has been called off.";
         if (hosted.LifecycleState is HostedEventLifecycleState.VenueWithdrawn)
             return "The venue has withdrawn, so this event is not going ahead.";
+        if (hosted.LifecycleState is HostedEventLifecycleState.Removed)
+            return "This event is not going ahead.";
         if (!hosted.IsTakingBookings)
             return "This event isn't taking bookings.";
         if (!theHostSentThisLink && !EventCapacity.IsOpenForRequests(hosted, utcNow))

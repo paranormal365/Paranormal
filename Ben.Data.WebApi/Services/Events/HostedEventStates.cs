@@ -54,10 +54,11 @@ public static class HostedEventStates
         HostedEventLifecycleState.Ended,
     ];
 
-    /// <summary>Called off, by whichever side called it.</summary>
+    /// <summary>Called off, by whichever side called it — the organizer, the venue, or IsHaunted.</summary>
     public static readonly HostedEventLifecycleState[] CalledOff =
     [
         HostedEventLifecycleState.Cancelled,
         HostedEventLifecycleState.VenueWithdrawn,
+        HostedEventLifecycleState.Removed,
     ];
 }

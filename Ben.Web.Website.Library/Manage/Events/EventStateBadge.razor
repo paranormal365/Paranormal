@@ -26,6 +26,7 @@
         HostedEventLifecycleState.Archived => "Archived",
         HostedEventLifecycleState.Cancelled => "Called off",
         HostedEventLifecycleState.VenueWithdrawn => "Venue withdrew",
+        HostedEventLifecycleState.Removed => "Removed by IsHaunted",
         _ => "Draft",
     };
 
@@ -36,6 +37,7 @@
         HostedEventLifecycleState.Ended => "bg-secondary",
         HostedEventLifecycleState.Cancelled => "bg-danger",
         HostedEventLifecycleState.VenueWithdrawn => "bg-danger",
+        HostedEventLifecycleState.Removed => "bg-dark",
         _ => "bg-secondary",
     };
 }

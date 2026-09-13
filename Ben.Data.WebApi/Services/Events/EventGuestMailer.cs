@@ -948,6 +948,83 @@ public sealed class EventGuestMailer
         return sent;
     }
 
+    /// <summary>
+    /// Tells the organizer's side that IsHaunted removed their event, with the way to appeal (item 235 phase 17b).
+    /// </summary>
+    /// <remarks>
+    /// Generic on purpose. What the reviewer noted stays on the removal: a letter that argues the case invites an argument
+    /// by reply, and a specific reason can name a person who complained. The appeal is where the organizer makes their
+    /// case, and a person reads it.
+    /// </remarks>
+    public async Task<int> SendRemovedAsync(
+        Source.Entities.HostedEvent ev, string organizationName, bool creditReturned,
+        IReadOnlyList<(Guid Id, string? Email, string? Name)> recipients, CancellationToken ct)
+    {
+        if (!_email.IsConfigured) return 0;
+
+        var appeal = _site.AbsoluteUrl($"/organizations/{ev.OrganizationId}/events/{ev.Id}#event-removed");
+        var sent = 0;
+        foreach (var (id, email, name) in recipients)
+        {
+            if (email is not { Length: > 0 } to) continue;
+            var body = (name is { Length: > 0 } n ? $"<p>Hello {Safe(n)},</p>" : "<p>Hello,</p>")
+                     + $"<p><strong>{Safe(ev.Name)}</strong>, hosted by {Safe(organizationName)}, has been removed from "
+                     + $"{Safe(_site.Name)} because it doesn't meet our guidelines for hosted events.</p>"
+                     + "<p>It is no longer on the site and can't take bookings. Anybody who had a place or had asked for one "
+                     + "has been told it is not going ahead.</p>"
+                     + (creditReturned
+                         ? "<p>The event credit spent on it has been returned, and can be used for another event.</p>"
+                         : "")
+                     + "<p><strong>If you think this was a mistake</strong>, you can appeal. Tell us what the event is and "
+                     + "anything you've changed, and a person will review it. If the appeal is upheld the event comes back "
+                     + "as a draft, ready for you to publish again.</p>"
+                     + $"<p><a href=\"{appeal}\">Appeal this decision</a></p>";
+            try
+            {
+                await _email.SendAsync(new EmailMessage(to, $"{ev.Name} was removed from {_site.Name}", body), ct);
+                sent++;
+            }
+            catch (Exception e) when (e is not OperationCanceledException)
+            {
+                _log.LogWarning(e, "Could not tell {PersonId} that event {EventId} was removed.", id, ev.Id);
+            }
+        }
+        return sent;
+    }
+
+    /// <summary>Tells the organizer's side how their appeal was answered (item 235 phase 17b).</summary>
+    public async Task<int> SendAppealAnsweredAsync(
+        Source.Entities.HostedEvent ev, bool upheld, string? note,
+        IReadOnlyList<(Guid Id, string? Email, string? Name)> recipients, CancellationToken ct)
+    {
+        if (!_email.IsConfigured) return 0;
+
+        var page = _site.AbsoluteUrl($"/organizations/{ev.OrganizationId}/events/{ev.Id}");
+        var sent = 0;
+        foreach (var (id, email, name) in recipients)
+        {
+            if (email is not { Length: > 0 } to) continue;
+            var body = (name is { Length: > 0 } n ? $"<p>Hello {Safe(n)},</p>" : "<p>Hello,</p>")
+                     + (upheld
+                         ? $"<p>Your appeal was upheld. <strong>{Safe(ev.Name)}</strong> is back as a draft. Check it over "
+                           + "and publish it when you're ready; publishing spends an event credit or a slot, as before.</p>"
+                         : $"<p>Your appeal about <strong>{Safe(ev.Name)}</strong> was reviewed, and the event stays removed.</p>")
+                     + (note is { Length: > 0 } said ? $"<p>The reviewer said: “{Safe(said)}”</p>" : "")
+                     + $"<p><a href=\"{page}\">Open the event</a></p>";
+            try
+            {
+                await _email.SendAsync(new EmailMessage(to,
+                    upheld ? $"{ev.Name} is back as a draft" : $"Your appeal about {ev.Name}", body), ct);
+                sent++;
+            }
+            catch (Exception e) when (e is not OperationCanceledException)
+            {
+                _log.LogWarning(e, "Could not tell {PersonId} about the appeal on event {EventId}.", id, ev.Id);
+            }
+        }
+        return sent;
+    }
+
     private async Task<int> SendToSignUpsAsync(
         BenDataContext db, System.Linq.Expressions.Expression<Func<HostedEventSessionSignUp, bool>> which,
         Func<HostedEventSession, string, (string Subject, string Body)> write, CancellationToken ct)

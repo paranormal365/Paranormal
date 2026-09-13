@@ -226,9 +226,12 @@ public sealed class PublicHostedEventController : BenControllerBase
     internal static string? WhyNothingCanBeBooked(HostedEvent ev, DateTime utcNow)
     {
         if (HostedEventStates.CalledOff.Contains(ev.LifecycleState))
-            return ev.LifecycleState == HostedEventLifecycleState.VenueWithdrawn
-                ? "The venue has withdrawn, so nothing can be booked."
-                : "This event has been called off.";
+            return ev.LifecycleState switch
+            {
+                HostedEventLifecycleState.VenueWithdrawn => "The venue has withdrawn, so nothing can be booked.",
+                HostedEventLifecycleState.Removed => "This event is not going ahead.",
+                _ => "This event has been called off.",
+            };
 
         if (!HostedEventStates.TakingBookings.Contains(ev.LifecycleState))
             return "This event has happened.";

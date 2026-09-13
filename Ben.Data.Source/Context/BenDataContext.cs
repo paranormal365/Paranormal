@@ -127,6 +127,7 @@ namespace Ben.Data.Source.Context
         public virtual DbSet<HostedEventCheckIn> HostedEventCheckIns { get; set; }
         public virtual DbSet<HostedEventWalkUp> HostedEventWalkUps { get; set; }
         public virtual DbSet<HostedEventAnnouncement> HostedEventAnnouncements { get; set; }
+        public virtual DbSet<HostedEventRemoval> HostedEventRemovals { get; set; }
         public virtual DbSet<HostedEventBand> HostedEventBands { get; set; }
         public virtual DbSet<EventBookingAlertPreference> EventBookingAlertPreferences { get; set; }
         public virtual DbSet<EventBookingAlertState> EventBookingAlertStates { get; set; }
@@ -943,6 +944,34 @@ namespace Ben.Data.Source.Context
             modelBuilder.Entity<HostedEventAnnouncement>().Property(a => a.Subject).HasMaxLength(160);
             modelBuilder.Entity<HostedEventAnnouncement>().Property(a => a.Body).HasMaxLength(4000);
             modelBuilder.Entity<HostedEventAnnouncement>().HasIndex(a => new { a.HostedEventId, a.SentUtc });
+
+            // ── IsHaunted removing an event, and the appeal (phase 17b) ───────
+            //
+            // Cascade from the event; every person on it is NoAction, so removing an account is refused by the
+            // purge census rather than silently erasing who removed or appealed.
+            modelBuilder.Entity<HostedEventRemoval>()
+                .HasOne(r => r.HostedEvent).WithMany()
+                .HasForeignKey(r => r.HostedEventId).OnDelete(DeleteBehavior.Cascade);
+            modelBuilder.Entity<HostedEventRemoval>()
+                .HasOne(r => r.RemovedByAppUser).WithMany()
+                .HasForeignKey(r => r.RemovedByAppUserId).OnDelete(DeleteBehavior.NoAction);
+            modelBuilder.Entity<HostedEventRemoval>()
+                .HasOne(r => r.AppealedByAppUser).WithMany()
+                .HasForeignKey(r => r.AppealedByAppUserId).IsRequired(false).OnDelete(DeleteBehavior.NoAction);
+            modelBuilder.Entity<HostedEventRemoval>()
+                .HasOne(r => r.DecidedByAppUser).WithMany()
+                .HasForeignKey(r => r.DecidedByAppUserId).IsRequired(false).OnDelete(DeleteBehavior.NoAction);
+            modelBuilder.Entity<HostedEventRemoval>()
+                .HasOne(r => r.CreatedByAppUser).WithMany()
+                .HasForeignKey(r => r.CreatedByAppUserId).OnDelete(DeleteBehavior.NoAction);
+            modelBuilder.Entity<HostedEventRemoval>()
+                .HasOne(r => r.UpdatedByAppUser).WithMany()
+                .HasForeignKey(r => r.UpdatedByAppUserId).IsRequired(false).OnDelete(DeleteBehavior.NoAction);
+            modelBuilder.Entity<HostedEventRemoval>().Property(r => r.Note).HasMaxLength(2000);
+            modelBuilder.Entity<HostedEventRemoval>().Property(r => r.AppealMessage).HasMaxLength(4000);
+            modelBuilder.Entity<HostedEventRemoval>().Property(r => r.DecisionNote).HasMaxLength(2000);
+            modelBuilder.Entity<HostedEventRemoval>().HasIndex(r => new { r.HostedEventId, r.RemovedUtc });
+            modelBuilder.Entity<HostedEventRemoval>().HasIndex(r => r.AppealState);
 
             // ── what a party wears (phase 7) ──────────────────────────────────
             //

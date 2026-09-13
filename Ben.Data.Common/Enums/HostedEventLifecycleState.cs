@@ -74,4 +74,15 @@ public enum HostedEventLifecycleState
     /// the worse week.
     /// </remarks>
     VenueWithdrawn = 6,
+
+    /// <summary>
+    /// Taken off the site by IsHaunted (item 235 phase 17b).
+    /// </summary>
+    /// <remarks>
+    /// Called off, like the two above, so nothing can be booked and everybody with a place is told — but also off the
+    /// public site entirely, because the reason an event is removed is usually what its page says. The credit comes back
+    /// whatever the timing. The organizer is sent a generic letter and may appeal; an upheld appeal brings the event
+    /// back as a draft.
+    /// </remarks>
+    Removed = 7,
 }

@@ -118,6 +118,19 @@ Severity: **High** — wrong or unsafe behaviour. **Medium** — a gap a host wi
   page under *Getting in and getting around*. It also goes in the confirmation letter before the pass
   (`A_confirmation_says_how_to_get_in_and_around_before_the_pass`) and in the iPhone app's event hub. The
   demo seeder fills it on both seeded events where it is empty, and Playwright reads it on the public page.
+- **A13 (17b)** — SuperAdmin oversight:
+  - *Events* tab on the dashboard;
+  - `/admin/events` list and `/admin/events/{id}/remove`;
+  - `HostedEventLifecycleState.Removed` and a `HostedEventRemovals` table carrying the appeal;
+  - the organizer's *Removed by IsHaunted* card with its appeal, and the SuperAdmin's uphold or decline.
+
+  `HostedEventRemovalTests` (8) failed when the credit return was dropped (4 failures) and when the restore
+  guard below was dropped. A strict audit fake failed when the appeal decision's before-picture was not an entity
+  (2 failures); that bug returned 500 after saving and was found by the e2e run, not the unit tests. Playwright
+  `AdminEventOversightTests` (2) cover remove, appeal, uphold and the dashboard tab.
+- **Found while building 17b:** *Restore* turned any event into a draft, including a called-off one. That skipped
+  the credit re-spend un-cancelling applies, and would have let a removed event skip its appeal. Restore now acts
+  only on an archived event, and nothing on the organizer's event page changes a removed one.
 - **Also fixed while writing help:** the *Rooms and bookings* help still said the booking board "is being built
   now".
 - **A6** — `SocialCard` makes a site path absolute. The event page's card uses the first gallery picture; the venue

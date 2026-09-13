@@ -178,8 +178,14 @@
             </div>
         }
 
+        @* ── Removed by IsHaunted, and the appeal (phase 17b) ─────────── *@
+        @if (ev.LifecycleState is HostedEventLifecycleState.Removed)
+        {
+            <EventRemovedCard OrgId="@OrgId" EventId="@EventId" />
+        }
+
         @* ── At a glance (phase 17a) — once there is anything to count ─── *@
-        @if (ev.LifecycleState is not HostedEventLifecycleState.Draft)
+        @if (ev.LifecycleState is not (HostedEventLifecycleState.Draft or HostedEventLifecycleState.Removed))
         {
             <EventAtAGlanceCard OrgId="@OrgId" EventId="@EventId" />
         }
@@ -822,7 +828,14 @@
                 <div class="card mb-3" id="event-state">
                     <div class="card-header fw-semibold">Ending it</div>
                     <div class="card-body">
-                        @if (ev.LifecycleState is HostedEventLifecycleState.VenueWithdrawn)
+                        @if (ev.LifecycleState is HostedEventLifecycleState.Removed)
+                        {
+                            <div class="alert alert-dark mb-0">
+                                <strong>IsHaunted removed this event.</strong> Everybody who had a place has been told
+                                it is not going ahead. <a href="#event-removed">See the removal and appeal</a>.
+                            </div>
+                        }
+                        else if (ev.LifecycleState is HostedEventLifecycleState.VenueWithdrawn)
                         {
                             @* Not the organizer's doing, so it is not theirs to undo. *@
                             <div class="alert alert-danger mb-0">

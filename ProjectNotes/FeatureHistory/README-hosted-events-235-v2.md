@@ -1536,6 +1536,35 @@ Verified by:
   card and the public access notes;
 - the iPhone fixtures re-captured from the real API.
 
+#### 17b as built (2026-09-13)
+
+- **Removed.** `HostedEventLifecycleState.Removed = 7` counts as called off and is kept off the public site.
+  `HostedEventRemoval` records the previous state, a private note, whether the credit came back, how many guests
+  were told, and the appeal: its state, message, answer and who acted. Migration `HostedEventRemovals`.
+- **Removing.** `HostedEventRemovals.RemoveAsync`:
+  - returns the credit whatever the timing, and makes the event unpaid again;
+  - withdraws every pass and syncs the calendar row.
+  After the save, guests get the ordinary not-going-ahead letter with no reason. The organizer's side (the event's
+  creator, the group's creator and its billing contacts) gets a generic removal letter, a site message and the
+  appeal link.
+- **Appeals.** One per removal, from the organizer's event page, by anyone who may edit the group's events.
+  SuperAdmins get a message. An upheld appeal brings the event back as a **draft**; a declined one needs a reason.
+- **Screens:**
+  - `/admin/events` — appeals first, then a grid of organizer, event and venue, dates, state and people coming,
+    with view and remove;
+  - `/admin/events/{id}/remove`, which says what removal will do before the button;
+  - an *Events* tab on `/admin/dashboard` (`?tab=events`) with six cards and nine charts;
+  - `EventRemovedCard` on the organizer's event page;
+  - a SuperAdmin nav entry.
+- **Tightened:** Restore only acts on an archived event.
+- **Help:** *Hosted events* in the site administration guide; *If IsHaunted removes your event* for organizers.
+
+Verified by:
+- `HostedEventRemovalTests` (8), with discrimination checks on the credit, the restore guard and the audit
+  snapshot;
+- the full .NET unit suite, 5,666 passed;
+- Playwright `AdminEventOversightTests`, 2 of 2 on the e2e database, with no unhandled API errors in the run.
+
 ### FUTURE (recorded, not scheduled)
 
 - **Apple Wallet** (decision 14): `eventTicket` pass, serial = pass id, barcode message = the

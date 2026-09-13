@@ -323,6 +323,10 @@ public sealed class HostedEventController : OrgCmsControllerBase
             return BadRequest("The venue withdrew from this event. It cannot be put back up "
                             + "without them, so make a new one wherever it is now happening.");
 
+        if (hosted.LifecycleState is HostedEventLifecycleState.Removed)
+            return BadRequest("IsHaunted removed this event. If you think that was a mistake, appeal "
+                            + "from the event's page; an upheld appeal brings it back as a draft.");
+
         if (hosted.LifecycleState is HostedEventLifecycleState.Archived)
             return BadRequest("This event has been archived. Restore it first.");
 
@@ -439,6 +443,10 @@ public sealed class HostedEventController : OrgCmsControllerBase
     public Task<ActionResult<HostedEventRecord>> Restore(Guid orgId, Guid eventId, CancellationToken ct)
         => SetAsync(orgId, eventId, e =>
         {
+            // Only an archived event comes back. Restoring anything else would be a side door out of a
+            // called-off or removed state that skips the rules on the way out — the credit re-spend on
+            // un-cancelling, and the appeal on a removal (phase 17a audit).
+            if (e.LifecycleState is not HostedEventLifecycleState.Archived) return;
             e.ArchivedAtUtc = null;
             // Ended when it already happened AND was live at the time, so last spring's weekend
             // comes back as the record it is rather than as something bookable. Anything else
@@ -1123,6 +1131,10 @@ public sealed class HostedEventController : OrgCmsControllerBase
             return BadRequest("The venue withdrew from this event, so it is not yours to put back "
                             + "on. Make a new one wherever it is happening now.");
 
+        if (hosted.LifecycleState is HostedEventLifecycleState.Removed)
+            return BadRequest("IsHaunted removed this event, so it can't be un-cancelled. Appeal from "
+                            + "the event's page instead.");
+
         if (hosted.LifecycleState is not HostedEventLifecycleState.Cancelled)
             return Ok((await LoadAsync(db, orgId, eventId, ct))[0]);
 
@@ -1170,6 +1182,10 @@ public sealed class HostedEventController : OrgCmsControllerBase
             .Include(e => e.Nights)
             .FirstOrDefaultAsync(e => e.Id == eventId && e.OrganizationId == orgId, ct);
         if (hosted is null) return NotFound();
+
+        // A removed event is IsHaunted's to bring back, through an appeal, and nothing on this page changes it.
+        if (hosted.LifecycleState is HostedEventLifecycleState.Removed)
+            return BadRequest("IsHaunted removed this event. If you think that was a mistake, appeal from the event's page.");
 
         change(hosted);
         hosted.DateUpdated = DateTime.UtcNow;

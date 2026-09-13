@@ -31,6 +31,7 @@ public static class EventRetention
         HostedEventLifecycleState.Archived,
         HostedEventLifecycleState.Cancelled,
         HostedEventLifecycleState.VenueWithdrawn,
+        HostedEventLifecycleState.Removed,
     ];
 
     public static async Task<int> DaysAsync(BenDataContext db, CancellationToken ct)

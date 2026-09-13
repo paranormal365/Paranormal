@@ -836,6 +836,26 @@ file and the phone apps all read, which is why it is kept in step with the event
 You can't edit it from the calendar — it tells you so, and points you at the event, where its dates,
 venue and description all come from. That way two screens can never disagree about the same evening.
 
+### If IsHaunted removes your event
+
+Hosted events have to meet the site's guidelines. If one doesn't, IsHaunted can remove it:
+
+- it comes off the site and stops taking bookings;
+- everybody with a place is told it is not going ahead;
+- the event credit spent on it comes back to you, whatever the timing.
+
+The people who run the group's billing and whoever created the event are emailed, with a link to appeal.
+
+The event's page then opens with **Removed by IsHaunted**. If you think it was a mistake, write why it
+should come back and anything you've changed, and send the appeal. A person reads every appeal, and you
+hear back by email and in your messages:
+- **Upheld** — the event comes back as a draft. Publishing it again spends a credit or a slot, as the
+  first time did.
+- **Declined** — the event stays removed, and the answer says why.
+
+Each removal can be appealed once. A removed event can't be un-cancelled, restored or published from its
+page, but you can still edit it before you appeal.
+
 ### Rooms and bookings
 
 Under **Rooms offered** you tick which of your venue's rooms this event is using. The rooms

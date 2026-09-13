@@ -1,0 +1,175 @@
+@namespace Ben.Web.Website.Library.SuperAdmin
+
+@inject IBenAdminClient AdminClient
+
+@* The events dashboard (item 235 phase 17b): hosted events across every group, beside the site dashboard.
+
+   Ben, 2026-09-13: "a similar dashboard with graphs and charts to see overall and information about venues and
+   organizers etc and to see information related to events overall." Same idiom as the site dashboard — stat cards
+   over chart panels — and the same rule: every panel answers a question somebody would act on. Each card links to
+   the list behind its number. *@
+
+<BenItemState TItem="AdminHostedEventStats" Result="_stats" Loading="_loading"
+              LoadingText="Loading the events dashboard…" OnRetry="LoadAsync">
+    <ChildContent Context="s">
+        <div class="row g-2 mb-3" id="events-dashboard">
+            <div class="col-sm-6 col-xl-3">
+                <StatCard Label="Events on the site" Icon="calendar" Value="@s.OnTheSite.ToString("N0")"
+                          Href="/admin/events" LinkLabel="Every event"
+                          Caption="@($"{s.Drafts:N0} drafts · {s.Happened:N0} happened · {s.CalledOff:N0} called off")" />
+            </div>
+            <div class="col-sm-6 col-xl-3">
+                <StatCard Label="Organizers" Icon="users" Value="@s.Organizers.ToString("N0")"
+                          Href="/organizations" LinkLabel="Browse all groups"
+                          Caption="Groups with at least one hosted event" />
+            </div>
+            <div class="col-sm-6 col-xl-3">
+                <StatCard Label="Venues" Icon="home" Value="@s.Venues.ToString("N0")"
+                          Href="/admin/venue-claims" LinkLabel="Venue claims"
+                          Caption="@($"{s.VerifiedVenues:N0} confirmed as the venue for their building")" />
+            </div>
+            <div class="col-sm-6 col-xl-3">
+                <StatCard Label="Event credits held" Icon="gift" Value="@s.CreditsHeld.ToString("N0")"
+                          Href="/admin/event-credits" LinkLabel="Event credits"
+                          Caption="@($"{s.CreditsBought:N0} bought and {s.CreditsSpent:N0} spent in this period")" />
+            </div>
+            <div class="col-sm-6 col-xl-3">
+                <StatCard Label="People coming" Icon="user-check" Value="@s.PeopleConfirmedUpcoming.ToString("N0")"
+                          Caption="Confirmed at events still taking bookings" />
+            </div>
+            <div class="col-sm-6 col-xl-3">
+                <StatCard Label="Appeals waiting" Icon="alert-circle" Value="@s.AppealsWaiting.ToString("N0")"
+                          Href="/admin/events#appeals" LinkLabel="Answer them"
+                          Caption="Organizers asking for a removed event back" />
+            </div>
+        </div>
+
+        <div class="row g-3">
+            <div class="col-xl-8">
+                <div class="card h-100"><div class="card-body">
+                    <div class="small text-secondary mb-2">Events created and published</div>
+                    <ApexChart Type="area" Height="280"
+                               Categories="@DayLabels(s.EventsCreatedPerDay)"
+                               Series="@(new List<ApexChart.ChartSeries> { new("Created", Counts(s.EventsCreatedPerDay)), new("Published", Counts(s.EventsPublishedPerDay)) })"
+                               NoDataText="No events were created in this period." />
+                </div></div>
+            </div>
+
+            <div class="col-xl-4">
+                <div class="card h-100"><div class="card-body">
+                    <div class="small text-secondary mb-2">Every event, by state</div>
+                    <ApexChart Type="donut" Height="280"
+                               Categories="@Labels(s.EventsByState)" Values="@Counts(s.EventsByState)"
+                               NoDataText="No hosted events yet." />
+                </div></div>
+            </div>
+
+            <div class="col-xl-8">
+                <div class="card h-100"><div class="card-body">
+                    <div class="small text-secondary mb-2">Bookings made</div>
+                    <p class="text-secondary" style="font-size:.78rem;">Every ask, hold and booking made for somebody, by the day it was made.</p>
+                    <ApexChart Type="bar" Height="260"
+                               Categories="@DayLabels(s.BookingsPerDay)"
+                               Series="@(new List<ApexChart.ChartSeries> { new("Bookings", Counts(s.BookingsPerDay)) })"
+                               NoDataText="No bookings in this period." />
+                </div></div>
+            </div>
+
+            <div class="col-xl-4">
+                <div class="card h-100"><div class="card-body">
+                    <div class="small text-secondary mb-2">Where those bookings stand</div>
+                    <ApexChart Type="donut" Height="260"
+                               Categories="@Labels(s.BookingsByStatus)" Values="@Counts(s.BookingsByStatus)"
+                               NoDataText="No bookings in this period." />
+                </div></div>
+            </div>
+
+            <div class="col-xl-6">
+                <div class="card h-100"><div class="card-body">
+                    <div class="small text-secondary mb-2">Event credits</div>
+                    <p class="text-secondary" style="font-size:.78rem;">Bought (not granted) and spent at publish, by day.</p>
+                    <ApexChart Type="bar" Height="260"
+                               Categories="@DayLabels(s.CreditsBoughtPerDay)"
+                               Series="@(new List<ApexChart.ChartSeries> { new("Bought", Counts(s.CreditsBoughtPerDay)), new("Spent", Counts(s.CreditsSpentPerDay)) })"
+                               NoDataText="No credits were bought or spent in this period." />
+                </div></div>
+            </div>
+
+            <div class="col-xl-6">
+                <div class="card h-100"><div class="card-body">
+                    <div class="small text-secondary mb-2">Biggest events</div>
+                    <p class="text-secondary" style="font-size:.78rem;">People confirmed, for events running in or after this period.</p>
+                    <ApexChart Type="bar" Height="260" Horizontal="true"
+                               Categories="@Labels(s.TopEventsByPeople)"
+                               Series="@(new List<ApexChart.ChartSeries> { new("People", Counts(s.TopEventsByPeople)) })"
+                               NoDataText="Nobody is confirmed at an event in this period." />
+                </div></div>
+            </div>
+
+            <div class="col-xl-4">
+                <div class="card h-100"><div class="card-body">
+                    <div class="small text-secondary mb-2">Busiest organizers</div>
+                    <p class="text-secondary" style="font-size:.78rem;">Events published, all time.</p>
+                    <ApexChart Type="bar" Height="260" Horizontal="true"
+                               Categories="@Labels(s.TopOrganizers)"
+                               Series="@(new List<ApexChart.ChartSeries> { new("Events", Counts(s.TopOrganizers)) })"
+                               NoDataText="No group has published an event yet." />
+                </div></div>
+            </div>
+
+            <div class="col-xl-4">
+                <div class="card h-100"><div class="card-body">
+                    <div class="small text-secondary mb-2">Busiest venues</div>
+                    <p class="text-secondary" style="font-size:.78rem;">Events published at each place, all time.</p>
+                    <ApexChart Type="bar" Height="260" Horizontal="true"
+                               Categories="@Labels(s.TopVenues)"
+                               Series="@(new List<ApexChart.ChartSeries> { new("Events", Counts(s.TopVenues)) })"
+                               NoDataText="No events have been published anywhere yet." />
+                </div></div>
+            </div>
+
+            <div class="col-xl-4">
+                <div class="card h-100"><div class="card-body">
+                    <div class="small text-secondary mb-2">Where events happen</div>
+                    <p class="text-secondary" style="font-size:.78rem;">Published events, by the state of the venue.</p>
+                    <ApexChart Type="bar" Height="260" Horizontal="true"
+                               Categories="@Labels(s.EventsByRegion)"
+                               Series="@(new List<ApexChart.ChartSeries> { new("Events", Counts(s.EventsByRegion)) })"
+                               NoDataText="No published event has a venue with a state yet." />
+                </div></div>
+            </div>
+        </div>
+    </ChildContent>
+</BenItemState>
+
+@code {
+    /// <summary>The window the series and "in this period" numbers cover, from the dashboard's range picker.</summary>
+    [Parameter] public int Days { get; set; } = 30;
+
+    private ItemResult<AdminHostedEventStats> _stats;
+    private bool _loading = true;
+    private int _loadedDays;
+
+    // The dashboard page has already waited for sign-in and checked the SuperAdmin before this renders.
+    protected override async Task OnParametersSetAsync()
+    {
+        if (_loadedDays == Days) return;
+        await LoadAsync();
+    }
+
+    private async Task LoadAsync()
+    {
+        _loading = true;
+        _loadedDays = Days;
+        _stats = await AdminClient.GetAdminHostedEventStatsAsync(Days);
+        _loading = false;
+    }
+
+    private static List<string> Labels(IReadOnlyList<StatSlice> slices) => slices.Select(s => s.Label).ToList();
+
+    private static List<double> Counts(IReadOnlyList<StatSlice> slices) => slices.Select(s => (double)s.Count).ToList();
+
+    private static List<double> Counts(IReadOnlyList<StatPoint> points) => points.Select(p => (double)p.Count).ToList();
+
+    private static List<string> DayLabels(IReadOnlyList<StatPoint> points) => points.Select(p => p.Day.ToChartDay()).ToList();
+}
