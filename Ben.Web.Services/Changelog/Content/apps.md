@@ -16,6 +16,17 @@ known it is worth naming, because that is what somebody can check on their own p
 **Shape:** `## yyyy-MM-dd` headings, newest first, each followed by `- ` lines. Nothing else is
 read.
 
+## 2026-09-13
+
+- Hosted events: the event screen shows where your booking stands, lets you let a request or a hold go,
+  and opens the event's page inside the app to ask for a place.
+- What I'm going to, under Profile, lists every hosted event you have asked for, once each, with its
+  dates, venue and pass.
+- Your pass for a hosted event shows its code, short code, party size, nights and table. It turns the
+  screen up to full brightness, and it still opens with no signal.
+- Opening the app with no signal no longer signs you out, and neither does a moment when the server
+  cannot be reached.
+
 ## 2026-09-12
 
 - Sign in with Apple now works. It was returning to the sign-in screen without explanation when

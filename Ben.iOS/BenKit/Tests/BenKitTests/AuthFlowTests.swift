@@ -157,6 +157,63 @@ struct SessionStoreTests {
         #expect(store.errorMessage == nil)
     }
 
+    @Test func restoreWithNoSignalKeepsTheTokensAndSignsInWhenTheServerAnswers() async {
+        // A cold start at a door with no bars: the pass is saved on the phone, and the session must still be
+        // there when the signal comes back.
+        let storage = InMemoryTokenStorage(tokens: StoredTokens(
+            accessToken: "AT", refreshToken: "RT",
+            expiresAt: Date(timeIntervalSinceNow: 600)))
+        let offline = MockTransport { _ in throw URLError(.notConnectedToInternet) }
+        let (store, tokens) = Self.makeStore(transport: offline, storage: storage)
+        await store.restore()
+        #expect(store.state == .signedOut)
+        #expect(store.errorMessage == nil)
+        #expect(await tokens.isSignedIn)
+        #expect(storage.load() != nil)
+
+        let (again, _) = Self.makeStore(transport: happyAuthTransport(), storage: storage)
+        await again.restore()
+        #expect(again.me?.email == "james.thornton@benco.dev")
+    }
+
+    @Test func aServerErrorOnRestoreIsNotASignOut() async {
+        let storage = InMemoryTokenStorage(tokens: StoredTokens(
+            accessToken: "AT", refreshToken: "RT",
+            expiresAt: Date(timeIntervalSinceNow: 600)))
+        let (store, tokens) = Self.makeStore(transport: MockTransport(status: 503), storage: storage)
+        await store.restore()
+        #expect(store.state == .signedOut)
+        #expect(await tokens.isSignedIn)
+    }
+
+    @Test func aRefreshThatCannotReachTheServerKeepsTheSession() async {
+        let storage = InMemoryTokenStorage(tokens: StoredTokens(
+            accessToken: "AT", refreshToken: "RT",
+            expiresAt: Date(timeIntervalSinceNow: -60))) // expired, so the next request refreshes
+        let offline = MockTransport { _ in throw URLError(.notConnectedToInternet) }
+        let (store, tokens) = Self.makeStore(transport: offline, storage: storage)
+        #expect(await tokens.validAccessToken() == nil)
+        #expect(await tokens.isSignedIn)
+        #expect(storage.load()?.refreshToken == "RT")
+        #expect(store.sessionEndedBanner == false)
+    }
+
+    @Test func aTokenlessRequestRefusedWhileTheRefreshIsUnreachableDoesNotEndTheSession() async {
+        // The refresh answers 502; the request then goes without a token and is refused. That 401 says nothing
+        // about the session.
+        let storage = InMemoryTokenStorage(tokens: StoredTokens(
+            accessToken: "AT", refreshToken: "RT",
+            expiresAt: Date(timeIntervalSinceNow: -60)))
+        let transport = MockTransport { request in
+            let refresh = request.url?.path.hasSuffix("/refresh") == true
+            return (Data(), MockTransport.response(for: request, status: refresh ? 502 : 401))
+        }
+        let (_, tokens) = Self.makeStore(transport: transport, storage: storage)
+        let api = APIClient(environment: { .dev }, transport: transport, tokens: tokens)
+        _ = await api.load(Endpoint(.get, "api/me"), as: MeResponse.self)
+        #expect(await tokens.isSignedIn)
+    }
+
     @Test func deliberateSignOutRaisesNoBanner() async throws {
         let (store, _) = Self.makeStore(transport: happyAuthTransport())
         await store.signIn(email: "a@b.c", password: "pw")

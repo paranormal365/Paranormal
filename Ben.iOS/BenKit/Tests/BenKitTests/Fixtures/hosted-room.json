@@ -1,0 +1,15 @@
+{
+  "canPost": true,
+  "whyNotPost": null,
+  "canModerate": false,
+  "hostNames": [
+    "Paranormal365"
+  ],
+  "messages": [],
+  "note": null,
+  "photoPosting": 0,
+  "canAddPhotos": true,
+  "canSeeWall": false,
+  "needsPhotoConsent": false,
+  "photoNotice": "Photos you add here are shown to the people at this event in its room, and the organizers may show them on a photo wall or slideshow at the venue. Your photos stay yours, and you can take one down at any time. Please only add photos of people who are happy to be shown."
+}

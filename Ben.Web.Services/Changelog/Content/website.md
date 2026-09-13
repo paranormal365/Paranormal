@@ -18,6 +18,9 @@ day-by-day account of building it would say nothing to anyone using it now.
 
 ## 2026-09-13
 
+- My events lists each event once, however many times you asked for a place at it, showing the booking
+  that is live or the most recent one.
+
 - Organizers can seat confirmed parties at dining tables for each meal of an event, copy one meal's
   seating to another, and print a table list with dietary notes. Guests see their table on their pass.
 

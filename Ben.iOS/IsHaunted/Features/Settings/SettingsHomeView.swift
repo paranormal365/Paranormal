@@ -93,6 +93,15 @@ struct SettingsHomeView: View {
             // a refusal — the dead-end click the site made policy against.
             if session.me != nil {
                 Section {
+                    NavigationLink(value: AppRoute.myEvents) {
+                        Label("What I'm going to", systemImage: "ticket")
+                    }
+                    .accessibilityIdentifier("settings-my-events")
+                } footer: {
+                    Text("Events you've booked, and your passes — which work without a signal.")
+                }
+
+                Section {
                     NavigationLink(value: AppRoute.myEvidence) {
                         Label("My evidence", systemImage: "photo.on.rectangle.angled")
                     }

@@ -70,4 +70,42 @@ final class HelpMediaCaptureTests: XCTestCase {
         settle(4)
         snap("iphone-my-evidence")
     }
+
+    /// What I'm going to, and a pass — the help page's "An event you've booked" (item 235 phase 14).
+    ///
+    /// Daniel again: a guest with confirmed bookings and no group. The first booking whose pass has actually been
+    /// issued is the one photographed, because a confirmed booking can still be waiting on the venue for its pass.
+    func testCaptureMyEventsAndPass() {
+        settle(6)
+        app.terminate()
+        app.launchArguments = []
+        app.launch()
+        settle(5)
+
+        XCTAssertTrue(AppNavigator.openSection("Profile", in: app),
+                      "Could not reach Profile, so What I'm going to was never opened.")
+        settle()
+
+        let row = app.buttons["settings-my-events"].firstMatch
+        if !row.waitForExistence(timeout: 10) {
+            XCTFail("The What I'm going to row is missing from Profile — nothing to capture.")
+            return
+        }
+        row.tap()
+        settle(4)
+        snap("iphone-my-events")
+
+        let passes = app.buttons.matching(NSPredicate(format: "identifier BEGINSWITH 'my-events-pass-'"))
+        for index in 0..<passes.count {
+            passes.element(boundBy: index).tap()
+            if app.descendants(matching: .any)["event-pass-code"].firstMatch.waitForExistence(timeout: 8) {
+                settle(2)
+                snap("iphone-event-pass")
+                return
+            }
+            app.navigationBars.buttons.element(boundBy: 0).tap()
+            settle(2)
+        }
+        XCTFail("None of the confirmed bookings has an issued pass — nothing to capture.")
+    }
 }

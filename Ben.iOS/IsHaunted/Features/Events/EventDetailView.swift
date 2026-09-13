@@ -58,7 +58,12 @@ struct EventDetailView: View {
         ScrollView {
             VStack(alignment: .leading, spacing: 16) {
                 header(event)
-                seatPanel(event)
+                if let hostedEventId = event.hostedEventId {
+                    // Item 235: a hosted event's places are booked on its own page, not by RSVP.
+                    HostedBookingPanel(hostedEventId: hostedEventId)
+                } else {
+                    seatPanel(event)
+                }
                 meetingPoint(event)
                 guides(event)
 

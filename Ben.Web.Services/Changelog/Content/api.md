@@ -20,6 +20,9 @@ belongs there; this is for the part underneath.
 
 ## 2026-09-13
 
+- The list of a person's own hosted event bookings now returns one row per event: the live booking if
+  there is one, otherwise the newest.
+
 - Hosted events have dining tables and a seating plan per meal, limited to confirmed parties and to each
   table's chairs. Saving the menus now keeps the meals that were not removed, with their seating.
 

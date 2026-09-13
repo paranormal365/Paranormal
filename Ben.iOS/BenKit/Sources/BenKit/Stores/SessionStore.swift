@@ -101,7 +101,12 @@ public final class SessionStore {
         errorMessage = nil
     }
 
+    /// Called when somebody signs out on purpose — not when a session merely expires — so what the app keeps on the
+    /// phone for them (saved event passes) goes before the next person picks the phone up.
+    public var onDeliberateSignOut: (@MainActor () -> Void)?
+
     public func signOut() async {
+        onDeliberateSignOut?()
         clearPending()
         // Signing out on purpose is not an interrupt — the event this emits
         // must not raise the banner.
@@ -171,6 +176,11 @@ public final class SessionStore {
             // The token died between adoption and /me (or was stale on restore).
             state = .signedOut
             if !quietOnFailure { errorMessage = "The session ended before it began — try again." }
+        case .failed(_, let status) where quietOnFailure && (status == nil || status! >= 500):
+            // A cold start with no signal, or a server having a bad minute, is not a dead session:
+            // keep the tokens, so a saved event pass opened at a door with no bars does not sign
+            // the person out behind it. The next restore (on returning to the app) tries again.
+            state = .signedOut
         case .failed(let reason, _):
             // A sign-in that can't resolve /me is reported on the form, not
             // as the session-ended interrupt.

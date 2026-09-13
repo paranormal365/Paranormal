@@ -123,6 +123,30 @@ public sealed class MyHostedEventsTests
     // ── what I have coming up ────────────────────────────────────────────────
 
     [Fact]
+    public async Task One_weekend_is_one_row_however_many_times_it_was_asked_for()
+    {
+        // Released twice and then confirmed: the list says the weekend once, with the booking that holds.
+        await using var sqlite = await SqliteTestDb.CreateAsync();
+        var eventId = await SeedAsync(sqlite, DateTime.UtcNow.Date.AddDays(20), HostedEventBookingStatus.Cancelled);
+
+        await using (var db = await sqlite.NewContextAsync())
+        {
+            foreach (var status in new[] { HostedEventBookingStatus.Cancelled, HostedEventBookingStatus.Confirmed })
+                db.HostedEventBookings.Add(new HostedEventBooking
+                {
+                    Id = Guid.NewGuid(), HostedEventId = eventId, LeadAppUserId = GuestId, PartySize = 2,
+                    Kind = HostedEventBookingKind.DayPass, Status = status,
+                    DateCreated = DateTime.UtcNow.AddMinutes(status == HostedEventBookingStatus.Confirmed ? -10 : 1),
+                    CreatedByAppUserId = GuestId,
+                });
+            await db.SaveChangesAsync();
+        }
+
+        var row = Assert.Single(await MineAsync(sqlite));
+        Assert.Equal(HostedEventBookingStatus.Confirmed, row.Status);
+    }
+
+    [Fact]
     public async Task A_weekend_the_venue_released_still_shows_until_it_is_over()
     {
         // They kept the date free. Dropping it the moment the venue let go is how somebody finds

@@ -1,0 +1,149 @@
+{
+  "hostedEventId": "40000002-0000-0000-0000-000000000002",
+  "menus": [
+    {
+      "id": "07daa4a4-1e9d-46c9-a904-4a3552366848",
+      "hostedEventNightId": "3f691dd0-2fb0-4dcc-baf6-38d90b2d52ab",
+      "nightDate": "2026-10-16T00:00:00",
+      "nightTitle": "Friday \u2014 arrival and first hunt",
+      "title": "Dinner",
+      "servedAtLocal": "19:00:00",
+      "notes": "In the dining room, before we start.",
+      "sortOrder": 0,
+      "items": [
+        {
+          "id": "9d851879-6e52-4440-8604-d8d7112d48cd",
+          "course": "Starter",
+          "name": "Tomato soup",
+          "description": null,
+          "dietaryTags": "vegan",
+          "sortOrder": 0
+        },
+        {
+          "id": "ef8b9e0a-d522-4a3d-b5ad-517a6d95dfc9",
+          "course": "Main",
+          "name": "Roast chicken, greens and potatoes",
+          "description": null,
+          "dietaryTags": null,
+          "sortOrder": 1
+        },
+        {
+          "id": "b8e3c8f2-566d-40f2-92ec-b0ad3fd98acf",
+          "course": "Main",
+          "name": "Mushroom pie",
+          "description": null,
+          "dietaryTags": "vegetarian",
+          "sortOrder": 2
+        },
+        {
+          "id": "ad021f72-5649-4128-b27c-66afda027d8b",
+          "course": "Pudding",
+          "name": "Apple crumble",
+          "description": null,
+          "dietaryTags": "contains nuts",
+          "sortOrder": 3
+        }
+      ]
+    },
+    {
+      "id": "e29d212a-f8bc-4528-b456-7620d136d3fe",
+      "hostedEventNightId": "3f691dd0-2fb0-4dcc-baf6-38d90b2d52ab",
+      "nightDate": "2026-10-16T00:00:00",
+      "nightTitle": "Friday \u2014 arrival and first hunt",
+      "title": "Late supper",
+      "servedAtLocal": "23:30:00",
+      "notes": "Between the two hunts.",
+      "sortOrder": 1,
+      "items": [
+        {
+          "id": "afbb44d9-5050-44da-9309-794a653c024c",
+          "course": null,
+          "name": "Sandwiches",
+          "description": null,
+          "dietaryTags": null,
+          "sortOrder": 0
+        },
+        {
+          "id": "ba3264f9-fab1-47d1-8a7c-ff17e0c98ee6",
+          "course": null,
+          "name": "Tea and coffee",
+          "description": null,
+          "dietaryTags": null,
+          "sortOrder": 1
+        }
+      ]
+    },
+    {
+      "id": "69ea018e-9dcd-4277-86f8-044aa70ab4a8",
+      "hostedEventNightId": "3f691dd0-2fb0-4dcc-baf6-38d90b2d52ab",
+      "nightDate": "2026-10-16T00:00:00",
+      "nightTitle": "Friday \u2014 arrival and first hunt",
+      "title": "Breakfast",
+      "servedAtLocal": "08:00:00",
+      "notes": "The morning after \u2014 yes, this is still Friday\u0027s night.",
+      "sortOrder": 2,
+      "items": [
+        {
+          "id": "fb02454e-7403-439f-9933-5634f2bae960",
+          "course": null,
+          "name": "Eggs, bacon and toast",
+          "description": null,
+          "dietaryTags": null,
+          "sortOrder": 0
+        },
+        {
+          "id": "932a4d9a-a2ec-4134-94ee-b1778e6f294b",
+          "course": null,
+          "name": "Fruit and yoghurt",
+          "description": null,
+          "dietaryTags": "vegetarian",
+          "sortOrder": 1
+        }
+      ]
+    },
+    {
+      "id": "56bad593-b5d7-4052-b43f-027176a8d3b8",
+      "hostedEventNightId": "caf39eeb-83e9-4f50-8818-287d31a8a9b2",
+      "nightDate": "2026-10-17T00:00:00",
+      "nightTitle": "Saturday \u2014 dinner and the s\u00E9ance",
+      "title": "Dinner",
+      "servedAtLocal": "18:30:00",
+      "notes": "Early, because the s\u00E9ance is at nine.",
+      "sortOrder": 3,
+      "items": [
+        {
+          "id": "526f4257-bb46-41ac-8abb-aa330878768a",
+          "course": "Starter",
+          "name": "Cornbread and honey butter",
+          "description": null,
+          "dietaryTags": "vegetarian",
+          "sortOrder": 0
+        },
+        {
+          "id": "bd95bf98-0e76-40a4-bbca-631fa7b75b68",
+          "course": "Main",
+          "name": "Beef stew",
+          "description": null,
+          "dietaryTags": null,
+          "sortOrder": 1
+        },
+        {
+          "id": "85422f56-86e6-4a01-aaca-dc7a4888366f",
+          "course": "Main",
+          "name": "Butternut squash risotto",
+          "description": null,
+          "dietaryTags": "vegan",
+          "sortOrder": 2
+        },
+        {
+          "id": "cc5c9c43-87d4-4022-b4dd-786b22e91b79",
+          "course": "Pudding",
+          "name": "Pecan pie",
+          "description": null,
+          "dietaryTags": "contains nuts",
+          "sortOrder": 3
+        }
+      ]
+    }
+  ]
+}

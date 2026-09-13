@@ -1157,6 +1157,45 @@ brightness; `EventsView` rows badge "3 nights"; `MyBookingReminders`; the door w
 stream, outbox, Live Activity and widget as written. Picking stays on the web until the web picker
 has been lived with. No build bump on the branch.
 
+#### Phase 14a as built (2026-09-13) — the booking on the phone, and the pass that works offline
+
+1. **Server first, one line of it.** `GET api/public/hosted-events/mine` returned a row per booking ever made, so a guest
+   who had asked, withdrawn and asked again saw the event three times (860 rows for the fixture guest). It now returns
+   one row per event: the live booking (Requested, Held, Confirmed) if there is one, otherwise the newest. The website's
+   My events reads the same list and got the same fix. Test `One_weekend_is_one_row_however_many_times_it_was_asked_for`.
+2. **Fixtures from the real API** (`Ben.Web.Playwright/Capture/IosFixtureCapture.cs`): the event, `mine` with one row per
+   status, a pass, the umbrella event, programme, menus, files and room, with the pass token scrubbed to
+   `fixture-pass-token`.
+3. **BenKit.** `HostedEventRecords.swift` (statuses append-only, as on the server), `HostedEventsStore` (a 404 on
+   my-booking is "none", not a failure), `PublicEventRecord.hostedEventId/hostedEventName` (nullable, additive).
+   `PassCache` keeps the last pass per event in Application Support (protected until first unlock). A 403/404 removes the
+   copy, because the venue withdrew it or the booking is gone. An unreachable server shows the copy with when it was
+   saved. A deliberate sign-out removes every kept pass; a session that merely expires does not.
+4. **The app.** `EventDetailView` shows `HostedBookingPanel` for a hosted night. It shows the status in a word, lets a
+   request or a hold go, and has a pass link. With no booking, it opens the event's website page in an in-app Safari
+   sheet and reads the booking again when that closes.
+   - *What I'm going to* sits under Profile, with deep links `my-events` and `my-events/{id}/pass`.
+   - `EventPassView` draws the QR with `CIFilter`, the short code, what the pass admits, nights and seating, a withdrawn
+     band, and the saved-copy note, and sets the screen to full brightness while open.
+   - Picking stays on the web, as planned.
+5. **Two faults the walk found, fixed.**
+   - The panel read the booking once, before auto sign-in had finished, and a failed read fell through to "Ask for a
+     place". It is now keyed on the session, and a failed read says so rather than inviting a second booking.
+   - **A cold start with no signal signed the person out**, the exact case the offline pass exists for.
+     `SessionStore.restore` treated an unreachable `api/me` as a dead session and wiped the Keychain, and
+     `TokenSession.refresh` did the same on a transport error or a 5xx. Now only a refusal ends a session: an unreachable
+     server or a 5xx keeps the tokens, restore runs again when the app comes back to the foreground, and a 401 ends the
+     session only when the refused request actually carried a token. My events re-reads when the account arrives.
+6. **Simulator note:** `scripts/build.sh` builds unsigned, and an unsigned app's Keychain does not survive a relaunch on
+   the simulator. Any walk that relaunches must build signed for the device id.
+
+Tests: BenKit `HostedEventsTests` (12: fixtures decode, offline pass, cleared pass, withdrawn pass, 404 as none, forget,
+deep links, website URL) and four new `SessionStoreTests`. The restore rule, the refresh rule and the tokenless-401 rule
+were each broken in turn and their tests seen failing. BenKit 403 green; .NET unit suite 5,619 green; Playwright HostedEvents 114/0.
+Simulator walk as the guest on iPhone 17 Pro Max: booking panel, My events, pass, pass with the API unreachable, then an
+online cold start still signed in. Help: *the mobile apps* gains "An event you've booked" with two captures from
+`HelpMediaCaptureTests.testCaptureMyEventsAndPass`; *going to an event* points to it.
+
 ### Phase 15 — Seed walk, screenshots, documentation, runbook
 
 The README's 2.8 and 12: extend `HostedEventDemoSeeder` to every table above; walk the running

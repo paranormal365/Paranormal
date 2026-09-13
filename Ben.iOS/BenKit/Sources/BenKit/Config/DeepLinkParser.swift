@@ -12,6 +12,10 @@ public enum DeepLink: Sendable, Equatable {
     case feedType(UUID)
     case events
     case eventDetail(UUID)
+    /// `/my-events` — a guest's hosted-event bookings (item 235 phase 14).
+    case myEvents
+    /// `/my-events/{hostedEventId}/pass` — the pass for one of them.
+    case eventPass(UUID)
     case myCases
     case myCaseDetail(UUID)
     /// `/organizations/{orgId}/cases/{caseId}` — a case from the GROUP's side, which is a
@@ -61,6 +65,10 @@ public enum DeepLinkParser {
         case "events":
             guard components.count > 1, let id = UUID(uuidString: components[1]) else { return .events }
             return .eventDetail(id)
+        case "my-events":
+            guard components.count > 2, components[2].lowercased() == "pass",
+                  let id = UUID(uuidString: components[1]) else { return .myEvents }
+            return .eventPass(id)
         case "my-cases":
             guard components.count > 1, let id = UUID(uuidString: components[1]) else { return .myCases }
             return .myCaseDetail(id)

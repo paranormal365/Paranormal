@@ -179,6 +179,9 @@ holding one.
 
 If the venue has seated you for dinner or another meal, your pass also shows your table for each sitting.
 
+**On an iPhone or iPad** the app carries the same pass under **Profile → What I'm going to**, and keeps
+a copy on the phone so it opens with no signal. See [the mobile apps](/help/the-mobile-apps#an-event-youve-booked).
+
 ## What we write to you
 
 - **When you ask**, a letter says your request arrived and that nothing is held yet.

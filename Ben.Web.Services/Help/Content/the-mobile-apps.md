@@ -44,7 +44,7 @@ show them to you again.
 | **Your cases** | Your cases and their timelines — what happened, what the group has written back, and photos attached to either. **Log something that happened** right from the case, with photos from your library or one you take there and then; say when it happened, or say that you don't know rather than guessing. **Reports** your group has published are there to read in full, and to share or save, and you can **message your group** about the case — what you send and what they send back, in one conversation. Who to contact is a tap away: their email opens Mail, their number dials. |
 | **Investigations** | The ones you're on, split into what's coming and what's been, with your assigned role and any evidence deadline. **Where you've been** draws the places you've investigated on a map. |
 | **Haunted Tours** | Ghost walks near you, or near a place you look up, with how far away they are and when they next run. No account needed. Tapping one opens the walk — where you meet, how long it runs, who leads it and the nights coming up — and a night opens that night. Asking for a place is done there. **Location is asked for, never taken**: the tab opens on a list, and if you would rather not share where you are, type a city instead. |
-| **Events** | Public events, readable without an account, and you can reserve a place. A night that belongs to a **walking tour** carries the tour's name under its title, because a walk is booked by its name and a business with three of them would otherwise show three rows reading "Saturday walk". Times are the **clock of the place the night happens in**, named beside them — a Nashville walk says 3:08 PM CDT whether you read it in Nashville, Tokyo or London — and an event whose organiser never said which zone it is in reads in UTC and says so. **Add to calendar** puts one straight into your own calendar. Tapping a night opens it, with your seat on it, directions to the meeting point and who is guiding. |
+| **Events** | Public events, readable without an account, and you can reserve a place. A night that belongs to a **walking tour** carries the tour's name under its title, because a walk is booked by its name and a business with three of them would otherwise show three rows reading "Saturday walk". Times are the **clock of the place the night happens in**, named beside them — a Nashville walk says 3:08 PM CDT whether you read it in Nashville, Tokyo or London — and an event whose organiser never said which zone it is in reads in UTC and says so. **Add to calendar** puts one straight into your own calendar. Tapping a night opens it, with your seat on it, directions to the meeting point and who is guiding. A night that belongs to a **hosted event** — a weekend at a venue, a dinner and a show — shows where your booking stands and your pass instead; see below. |
 | **Field Kit** | The phone as an instrument during an investigation — see below. |
 | **My evidence** | What you have offered at other people's public events — yours to open whatever they decided, and yours to add to the archive of the place it was taken at. |
 | **Your account** | Sign in and out, create an account, confirm your email, change your password, and turn two-step sign-in on or off. |
@@ -419,6 +419,39 @@ everything else goes on working.
 A seat that is turned down, or a walk you cancel, takes its reminders with it.
 
 **Money is arranged with the business.** Nothing is taken through the app.
+
+## An event you've booked
+
+Some events are run by a venue or a group through this site — a séance weekend at a hotel, a dinner
+and a play over three nights. Places at those are asked for, or chosen on a seating plan, on the
+event's own page, and the app shows you where that stands.
+
+**On the event.** Open the night from Events and the booking panel says it in a word — *Waiting for
+the venue*, *Held for you*, *Confirmed*, *Turned down* — with what you asked for underneath. A request
+or a hold you no longer want can be let go from there. If you have no booking yet, **Ask for a place**
+(or **Choose your places**, where the venue uses a seating plan) opens the event's page inside the
+app; when you close it, the panel reads your booking again.
+
+**What I'm going to.** Under **Profile**, every hosted event you have asked for, one row each, with
+its dates, the venue, what you have and a way to your pass.
+
+![What I'm going to: each event once, with where the booking stands](/help/media/the-mobile-apps/iphone-my-events.png)
+
+**Your pass.** Once the venue confirms you and issues it, **Your pass** shows the code the door scans,
+the short code to read out when a camera will not focus, how many it admits, and the nights and rooms
+or seats. The screen turns itself up to full brightness while it is open and goes back when you leave.
+
+![A pass on the phone: the code, the short code and what it admits](/help/media/the-mobile-apps/iphone-event-pass.png)
+
+- **It works with no signal.** The last pass the app saw is kept on the phone, so a basement bar or a
+  hotel with no reception still gets you in. When it is showing the kept copy it says so, and when.
+- **A withdrawn pass is shown as withdrawn**, faded and banded, never quietly left looking valid.
+  If the venue withdraws it while you are online, the kept copy goes too.
+- **Opening the app with no signal does not sign you out.** It stays signed in and catches up when
+  the phone is back online.
+- **Signing out removes the kept passes**, so the next person to pick up the phone never sees yours.
+
+Choosing seats on a plan stays on the website for now; everything you choose there shows here.
 
 ## What you photographed on somebody else's event
 

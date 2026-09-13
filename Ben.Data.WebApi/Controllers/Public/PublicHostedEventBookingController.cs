@@ -61,11 +61,23 @@ public sealed class PublicHostedEventBookingController : BenControllerBase
         await using var db = await _db.CreateDbContextAsync(ct);
 
         var today = DateTime.UtcNow.Date;
-        var bookings = await MineQuery(db, userId, includeReleased: true)
+        var bookings = (await MineQuery(db, userId, includeReleased: true)
             .Where(b => b.Status != HostedEventBookingStatus.Cancelled
                      || b.HostedEvent.EndsOn >= today)
             .OrderBy(b => b.HostedEvent.StartsOn)
-            .ToListAsync(ct);
+            .ToListAsync(ct))
+            // ONE ROW PER EVENT (phase 14): the booking that matters — live first, then the newest. Somebody who
+            // asked, was released and asked again has one weekend, not three; the phone app's first capture of this
+            // list for a much-tested guest came back as 860 rows for a single event.
+            .GroupBy(b => b.HostedEventId)
+            .Select(g => g
+                .OrderByDescending(b => b.Status is HostedEventBookingStatus.Confirmed
+                                               or HostedEventBookingStatus.Held
+                                               or HostedEventBookingStatus.Requested)
+                .ThenByDescending(b => b.DateCreated)
+                .First())
+            .OrderBy(b => b.HostedEvent.StartsOn)
+            .ToList();
 
         // The programme places and whether a review is open, for the list only (phase 12): "what am I
         // going to" includes the ghost hunt at eleven, and "how was it" belongs beside the weekend it
