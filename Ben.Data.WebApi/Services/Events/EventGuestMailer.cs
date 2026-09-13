@@ -250,6 +250,232 @@ public sealed class EventGuestMailer
         return true;
     }
 
+    /// <summary>
+    /// Tells a guest their ask arrived, and what it does not mean (item 235 phase 6).
+    /// </summary>
+    /// <remarks>
+    /// <para><b>Because silence reads as a booking.</b> Somebody who filled in a form and heard
+    /// nothing assumes it worked; a guest who assumed that about a request arrives at a hotel with
+    /// a suitcase and no room. So the letter exists to say the opposite in as many words: this is
+    /// a request, nothing is held, and the venue will answer.</para>
+    ///
+    /// <para>No calendar file, deliberately. A diary entry for a place nobody has agreed to is the
+    /// same lie in a different form.</para>
+    /// </remarks>
+    /// <returns>True when a letter was sent.</returns>
+    public async Task<bool> SendAskedAsync(BenDataContext db, Guid bookingId, CancellationToken ct)
+    {
+        if (!_email.IsConfigured) return false;
+
+        var booking = await LoadAsync(db, bookingId, ct);
+        if (booking?.LeadAppUser?.Email is not { Length: > 0 } to) return false;
+
+        var ev = booking.HostedEvent;
+        var name = Safe(ev?.Name ?? "the event");
+        var venue = Safe(ev?.Organization?.Name ?? "the venue");
+
+        var body = new System.Text.StringBuilder();
+        body.Append($"<p>{Greeting(booking)}</p>");
+        body.Append($"<p>We've passed your request for a place at <strong>{name}</strong> to "
+                  + $"{venue}. They'll answer you, and you'll hear from us either way.</p>");
+        body.Append(WhatTheyAskedFor(booking));
+        body.Append("<p><strong>Nothing is held yet.</strong> A request joins the venue's list — "
+                  + "they may put you somewhere other than you asked for, and they'll say so when "
+                  + "they answer.</p>");
+        body.Append("<p>Nothing is paid through this site.</p>");
+
+        await _email.SendAsync(new EmailMessage(
+            to,
+            $"We've passed your request for {ev?.Name ?? "the event"} on",
+            body.ToString(),
+            ReplyTo: ev?.Organization?.PublicEmail), ct);
+
+        return true;
+    }
+
+    /// <summary>
+    /// Tells a guest the places they chose are being held, and until when (item 235 phase 6).
+    /// </summary>
+    /// <remarks>
+    /// <para><b>The deadline is the letter.</b> A hold that runs out is a decision the clock takes
+    /// instead of the venue, and a guest who was never told the time cannot act before it. It is
+    /// written in the venue's own zone, because "six o'clock" means the clock on the wall where
+    /// the seats are.</para>
+    ///
+    /// <para>Still no calendar file: held is not confirmed, and a diary entry would say it was.
+    /// The confirmation letter carries the diary, and the pass.</para>
+    /// </remarks>
+    /// <returns>True when a letter was sent.</returns>
+    public async Task<bool> SendHoldPlacedAsync(
+        BenDataContext db, Guid bookingId, CancellationToken ct)
+    {
+        if (!_email.IsConfigured) return false;
+
+        var booking = await LoadAsync(db, bookingId, ct);
+        if (booking?.LeadAppUser?.Email is not { Length: > 0 } to) return false;
+
+        var ev = booking.HostedEvent;
+        var name = Safe(ev?.Name ?? "the event");
+        var venue = Safe(ev?.Organization?.Name ?? "the venue");
+
+        var body = new System.Text.StringBuilder();
+        body.Append($"<p>{Greeting(booking)}</p>");
+        body.Append($"<p>The places you chose at <strong>{name}</strong> are being held for you "
+                  + $"until <strong>{WhenItLapsed(booking, ev)}</strong>, while {venue} answers "
+                  + "you. Nobody else can take them in the meantime.</p>");
+        body.Append(WhatTheyAskedFor(booking));
+        body.Append("<p>If the venue hasn't answered by then, the places go back and you're "
+                  + "welcome to choose again — you stay on their list either way.</p>");
+        body.Append("<p>Nothing is paid through this site.</p>");
+
+        await _email.SendAsync(new EmailMessage(
+            to,
+            $"Your places at {ev?.Name ?? "the event"} are held",
+            body.ToString(),
+            ReplyTo: ev?.Organization?.PublicEmail), ct);
+
+        return true;
+    }
+
+    /// <summary>
+    /// Tells everybody with a place that the event is off (item 235 phase 6).
+    /// </summary>
+    /// <remarks>
+    /// <para><b>Because the organizer's screen has been claiming this for three phases.</b>
+    /// Calling an event off answered "everybody with a place has been told", and nothing sent
+    /// anything: the guests found out by opening the page, or by turning up. The sentence was
+    /// written in phase 3 and this is the letter it was promising.</para>
+    ///
+    /// <para><b>Everybody still waiting counts</b>, not only the confirmed: somebody holding
+    /// places or waiting on an answer has kept the date free just as hard, and is owed the same
+    /// letter. A party the venue already turned down is not written to — they were told once and
+    /// telling them again about an event they are not coming to is noise.</para>
+    ///
+    /// <para>Best effort, one letter at a time: a single address that bounces must not stop the
+    /// rest of a weekend's guests being told.</para>
+    /// </remarks>
+    /// <returns>How many letters went.</returns>
+    public async Task<int> SendCalledOffAsync(
+        BenDataContext db, Guid hostedEventId, string? reason, CancellationToken ct)
+    {
+        if (!_email.IsConfigured) return 0;
+
+        var sent = 0;
+
+        foreach (var booking in await LiveBookingsAsync(db, hostedEventId, ct))
+        {
+            if (booking.LeadAppUser?.Email is not { Length: > 0 } to) continue;
+
+            var ev = booking.HostedEvent;
+            var name = Safe(ev?.Name ?? "the event");
+
+            var body = new System.Text.StringBuilder();
+            body.Append($"<p>{Greeting(booking)}</p>");
+            body.Append($"<p><strong>{name} is not going ahead.</strong> Your places have gone "
+                      + "back, and there is nothing left for you to do.</p>");
+
+            if (Trimmed(reason) is { } why)
+                body.Append($"<p>{Safe(ev?.Organization?.Name ?? "The venue")} said: “{Safe(why)}”</p>");
+
+            body.Append("<p>Nothing was paid through this site, so there is nothing to refund "
+                      + "here. Anything you arranged directly with the venue is between you and "
+                      + "them.</p>");
+
+            try
+            {
+                await _email.SendAsync(new EmailMessage(
+                    to, $"{ev?.Name ?? "An event"} is not going ahead", body.ToString(),
+                    ReplyTo: ev?.Organization?.PublicEmail), ct);
+                sent++;
+            }
+            catch (Exception e) when (e is not OperationCanceledException)
+            {
+                _log.LogWarning(e,
+                    "Could not tell {BookingId} that its event was called off.", booking.Id);
+            }
+        }
+
+        return sent;
+    }
+
+    /// <summary>
+    /// Tells everybody waiting that the numbers were reached and it is definitely on.
+    /// </summary>
+    /// <remarks>
+    /// The other half of a minimum number. A guest asked to keep a weekend free while a venue
+    /// counts heads has been holding a date on a maybe; the decision is the moment that stops
+    /// being true, and hearing it is what turns a maybe into a booked train.
+    /// </remarks>
+    /// <returns>How many letters went.</returns>
+    public async Task<int> SendGoingAheadAsync(
+        BenDataContext db, Guid hostedEventId, CancellationToken ct)
+    {
+        if (!_email.IsConfigured) return 0;
+
+        var sent = 0;
+
+        foreach (var booking in await LiveBookingsAsync(db, hostedEventId, ct))
+        {
+            if (booking.LeadAppUser?.Email is not { Length: > 0 } to) continue;
+
+            var ev = booking.HostedEvent;
+            var name = Safe(ev?.Name ?? "the event");
+
+            var body = new System.Text.StringBuilder();
+            body.Append($"<p>{Greeting(booking)}</p>");
+            body.Append($"<p><strong>{name} has the numbers it needed and is going ahead.</strong>"
+                      + "</p>");
+            body.Append(WhatTheyAskedFor(booking));
+            body.Append(booking.Status == HostedEventBookingStatus.Confirmed
+                ? "<p>Your place is already confirmed — nothing more to do.</p>"
+                : "<p>The venue will answer your booking as usual; this only says the event "
+                + "itself is definitely happening.</p>");
+
+            try
+            {
+                await _email.SendAsync(new EmailMessage(
+                    to, $"{ev?.Name ?? "An event"} is going ahead", body.ToString(),
+                    ReplyTo: ev?.Organization?.PublicEmail), ct);
+                sent++;
+            }
+            catch (Exception e) when (e is not OperationCanceledException)
+            {
+                _log.LogWarning(e,
+                    "Could not tell {BookingId} that its event is going ahead.", booking.Id);
+            }
+        }
+
+        return sent;
+    }
+
+    /// <summary>Everybody with a place or waiting for one — the people an event's news is for.</summary>
+    private static async Task<List<HostedEventBooking>> LiveBookingsAsync(
+        BenDataContext db, Guid hostedEventId, CancellationToken ct)
+        => await db.HostedEventBookings.AsNoTracking()
+            .Include(b => b.LeadAppUser)
+            .Include(b => b.HostedEvent).ThenInclude(e => e.Organization)
+            .Include(b => b.Nights).ThenInclude(n => n.HostedEventNight)
+            .Include(b => b.Nights).ThenInclude(n => n.HostedEventLayoutUnit).ThenInclude(u => u!.PlaceRoom)
+            .Where(b => b.HostedEventId == hostedEventId
+                     && (b.Status == HostedEventBookingStatus.Requested
+                      || b.Status == HostedEventBookingStatus.Held
+                      || b.Status == HostedEventBookingStatus.Confirmed))
+            .ToListAsync(ct);
+
+    /// <summary>The nights and rooms, or the day, in the words the guest used.</summary>
+    private static string WhatTheyAskedFor(HostedEventBooking booking)
+    {
+        var people = $"{booking.PartySize} {(booking.PartySize == 1 ? "person" : "people")}";
+
+        if (booking.Kind == HostedEventBookingKind.DayPass && booking.Nights.Count == 0)
+            return $"<p>For the day · {people}.</p>";
+
+        var where = Where(booking);
+        if (where.Count == 0) return $"<p>{people}.</p>";
+
+        return $"<p>{people}:</p><ul><li>{string.Join("</li><li>", where.Select(Safe))}</li></ul>";
+    }
+
     /// <summary>When the hold ran out, on the venue's clock rather than the server's.</summary>
     private static string WhenItLapsed(HostedEventBooking booking, HostedEvent? ev)
     {

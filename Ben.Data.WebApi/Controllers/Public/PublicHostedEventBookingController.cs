@@ -279,7 +279,8 @@ public sealed class PublicHostedEventBookingController : BenControllerBase
     [HttpPost("{eventId:guid}/holds")]
     [Microsoft.AspNetCore.RateLimiting.EnableRateLimiting(Services.RateLimiting.HostedBookingPolicy)]
     public async Task<ActionResult<MyHostedEventBookingRecord>> HoldPlaces(
-        Guid eventId, [FromBody] HoldHostedEventPlacesRequest request, CancellationToken ct)
+        Guid eventId, [FromBody] HoldHostedEventPlacesRequest request,
+        [FromServices] EventGuestMailer mail, CancellationToken ct)
     {
         var userId = GetCurrentUserId();
         if (userId == Guid.Empty) return Unauthorized();
@@ -347,6 +348,10 @@ public sealed class PublicHostedEventBookingController : BenControllerBase
             // went, so the picker can repaint and the guest keeps the rest of their choice.
             return Conflict(await WhoGotThereFirstAsync(db, eventId, chosen, ct));
         }
+
+        // After the save, and best effort. A guest whose places are held but whose letter bounced
+        // still holds the places; a letter about a hold that then failed to save is a lie.
+        await mail.SendHoldPlacedAsync(db, booking.Id, ct);
 
         return Ok(await ReloadAsync(db, userId, booking.Id, ct));
     }
@@ -469,7 +474,8 @@ public sealed class PublicHostedEventBookingController : BenControllerBase
 
     [HttpPost("{eventId:guid}/bookings")]
     public async Task<ActionResult<MyHostedEventBookingRecord>> RequestAPlace(
-        Guid eventId, [FromBody] RequestHostedEventBookingRequest request, CancellationToken ct)
+        Guid eventId, [FromBody] RequestHostedEventBookingRequest request,
+        [FromServices] EventGuestMailer mail, CancellationToken ct)
     {
         var userId = GetCurrentUserId();
         if (userId == Guid.Empty) return Unauthorized();
@@ -517,6 +523,11 @@ public sealed class PublicHostedEventBookingController : BenControllerBase
         WriteGuests(booking, request.Guests ?? []);
 
         await db.SaveChangesAsync(ct);
+
+        // Silence reads as a booking: somebody who filled in a form and heard nothing assumes it
+        // worked, and turns up with a suitcase. The letter says the opposite in as many words.
+        await mail.SendAskedAsync(db, booking.Id, ct);
+
         return Ok(await ReloadAsync(db, userId, booking.Id, ct));
     }
 

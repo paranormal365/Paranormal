@@ -42,6 +42,15 @@ day-by-day account of building it would say nothing to anyone using it now.
   many, which nights and which room — with a short code to read out when a camera will not focus.
   It prints, and it can be emailed to you again. A withdrawn pass is shown with the venue's reason
   rather than going blank.
+- Asking for a place now sends you a letter that says your request arrived and that nothing is
+  held yet, and holding places sends one saying until when — on the venue's clock, not ours.
+- Calling an event off now actually tells the people who had places, including everybody still
+  waiting on an answer. The organizer's screen has been saying so for a while; the letters are new,
+  and it now counts them rather than claiming them.
+- Reaching a minimum number tells everybody who was waiting to hear whether it was going ahead.
+- Clicking an emailed link for a hosted event now says **you've asked for a place** rather than
+  "you're coming", because the venue has not answered yet — and offers you a way to sign in
+  properly on the account it just made you, so you can choose your own seats next time.
 - A new help page, **Going to an Event**, covers all of it.
 
 ## 2026-09-12

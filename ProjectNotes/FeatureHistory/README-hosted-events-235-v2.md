@@ -513,6 +513,54 @@ day pass and is told the truth on the confirmation page.
   taken; A's pass scans from the venue's laptop; incognito email → link → "asked for a place" →
   set a password → the booking on `/my-events`.
 
+#### Phase 6 as built (2026-09-13) — six departures from the plan above
+
+1. **`PlanCellState` moved to `Ben.Data.Common`** as `HostedEventPlanCellState`. The plan had the
+   states living in the website's component library, which was right until the server had to
+   answer the same question for the guest's picker. Two lists of the same six words in two
+   assemblies is two chances to disagree about what "held" means in front of somebody buying a
+   seat. How a square is DRAWN stayed with the component.
+2. **The public plan sends only the squares that are not free.** Four hundred seats across three
+   nights is twelve hundred rows of "nothing here" otherwise, and free is the default the picker
+   already assumes.
+3. **The summary bar is FIXED on a phone, not sticky.** Sticky was written and never stuck: the
+   site's own `.content-wrapper` sets `overflow-x: hidden`, which makes it a scroll box on both
+   axes, so a sticky child pins to the bottom of the whole page rather than the window — off
+   screen from the first tap. The grid also takes a ceiling and scrolls inside it. Worth
+   remembering: **page-level `position: sticky` does not work anywhere inside this layout.**
+4. **`BenQrPlate` is the one component allowed a fixed-light background**, and the authenticator
+   panel was refactored onto it. The guard now names the component rather than a growing list of
+   pages.
+5. **`AttendingTokenTests` is not written.** The plan wanted the token read from mail diagnostics;
+   the outbox record deliberately carries no body, so the token is not reachable from the harness.
+   The controller path has unit tests and the page's branch has none — the honest gap, recorded
+   rather than papered over.
+6. **`BenPopover` is deferred again**, now to phase 11. The picker turned out not to want one: a
+   square's state is drawn on the square, and a bubble over a grid inside a scroller was solving a
+   problem nobody had. The CMS's read-only plan (phase 11) is the first screen that wants names on
+   hover.
+
+Four defects the browser found that no unit test could:
+
+- The pass door picked an **arbitrary booking** among a guest's history at one event, so a guest
+  released once and confirmed later was shown "this booking was released" while their live pass
+  sat one row below. `First` with no `OrderBy`.
+- A **missing sprite symbol** (`qrcode`, which is a Bootstrap name) renders as an empty `<svg>`
+  with no intrinsic size, which the spec says is 300×150 — a list came out twenty-two thousand
+  pixels tall. `IconNameGuardTests` now reads every literal icon name against the sprite and found
+  two more that were already wrong on live pages.
+- **Letting a request go deletes it**, so the card raising "that's let go" was removed from the
+  page along with its own sentence.
+- **Calling an event off told nobody.** The organizer's screen has answered "everybody with a
+  place has been told" since phase 3 and no letter existed; the note now counts what was actually
+  sent.
+
+Everything else shipped as written: the anonymous plan, the picker with its refusal ringing the
+square that went, the ask form, the booking card's six states, `/my-events`, the pass with its
+short code, the bell retargeted, the ask/hold/called-off/going-ahead letters, the token page's
+hosted branch, 18 new Playwright tests at three widths, five render tests, and the new
+`going-to-an-event` help page with five shots.
+
 ### Phase 7 — Staff and the door
 
 **Goal**: the person on the door is not a person with billing rights, and admits a party from any

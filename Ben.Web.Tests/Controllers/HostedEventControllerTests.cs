@@ -33,6 +33,23 @@ namespace Ben.Web.Tests.Controllers;
 /// </remarks>
 public sealed class HostedEventControllerTests
 {
+    /// <summary>A mailer with nothing behind it — what every environment has by default.</summary>
+    /// <remarks>
+    /// Injected per-action from phase 6, because the guest's own doors send letters now. Not
+    /// configured, so nothing is sent and every one of these tests still tests the decision rather
+    /// than the post.
+    /// </remarks>
+    private static EventGuestMailer NoMail()
+    {
+        var email = new Moq.Mock<Ben.Data.Common.Interfaces.IEmailService>();
+        email.SetupGet(e => e.IsConfigured).Returns(false);
+
+        return new EventGuestMailer(
+            email.Object,
+            Microsoft.Extensions.Options.Options.Create(new Ben.Data.Common.SiteIdentity()),
+            Microsoft.Extensions.Logging.Abstractions.NullLogger<EventGuestMailer>.Instance);
+    }
+
     private static readonly Guid OwnerId = Guid.NewGuid();
     private static readonly Guid OrgId = Guid.NewGuid();
     private static readonly Guid VenueId = Guid.NewGuid();
@@ -267,7 +284,7 @@ public sealed class HostedEventControllerTests
         var record = Created(await controller.Create(OrgId, Weekend(), default));
         await controller.Publish(OrgId, record.Id, default);
 
-        await controller.Cancel(OrgId, record.Id, new CancelHostedEventRequest("Burst pipe"), default);
+        await controller.Cancel(OrgId, record.Id, new CancelHostedEventRequest("Burst pipe"), NoMail(), default);
 
         await using var db = await f.CreateDbContextAsync();
         var umbrella = await db.OrgCalendarEvents.FirstAsync(e => e.HostedEventId == record.Id);
@@ -1081,7 +1098,7 @@ public sealed class HostedEventControllerTests
 
         var off = Assert.IsType<HostedEventRecord>(
             Assert.IsType<OkObjectResult>((await controller.Cancel(
-                OrgId, record.Id, new CancelHostedEventRequest("Nobody could come"), default)).Result).Value);
+                OrgId, record.Id, new CancelHostedEventRequest("Nobody could come"), NoMail(), default)).Result).Value);
 
         Assert.Contains("comes back", off.PlanNote ?? "");
 
@@ -1123,7 +1140,7 @@ public sealed class HostedEventControllerTests
 
         var off = Assert.IsType<HostedEventRecord>(
             Assert.IsType<OkObjectResult>((await controller.Cancel(
-                OrgId, record.Id, new CancelHostedEventRequest("Called off"), default)).Result).Value);
+                OrgId, record.Id, new CancelHostedEventRequest("Called off"), NoMail(), default)).Result).Value);
 
         Assert.Contains("does not come back", off.PlanNote ?? "");
 
@@ -1187,7 +1204,7 @@ public sealed class HostedEventControllerTests
         var record = Created(await controller.Create(OrgId, Weekend(), default));
 
         var refusal = Assert.IsType<BadRequestObjectResult>(
-            (await controller.Go(OrgId, record.Id, default)).Result);
+            (await controller.Go(OrgId, record.Id, NoMail(), default)).Result);
 
         Assert.Contains("nothing to decide", Assert.IsType<string>(refusal.Value));
     }
@@ -1204,11 +1221,13 @@ public sealed class HostedEventControllerTests
             from: starts, to: starts.AddDays(1)) with { MinimumGuests = 20 }, default));
 
         var off = Assert.IsType<HostedEventRecord>(
-            Assert.IsType<OkObjectResult>((await controller.NoGo(OrgId, record.Id, default)).Result).Value);
+            Assert.IsType<OkObjectResult>((await controller.NoGo(OrgId, record.Id, NoMail(), default)).Result).Value);
 
         Assert.Equal(HostedEventLifecycleState.Cancelled, off.LifecycleState);
         Assert.Equal(HostedEventGoNoGo.NoGo, off.GoNoGoDecision);
-        Assert.Contains("Everybody with a place has been told", off.PlanNote ?? "");
+        // Counted rather than claimed: nobody had a place at this one, and the note says so
+        // rather than announcing letters that were never sent (item 235 phase 6).
+        Assert.Contains("Nobody had a place to lose", off.PlanNote ?? "");
     }
 
     [Fact]
@@ -1222,7 +1241,7 @@ public sealed class HostedEventControllerTests
         var record = Created(await controller.Create(OrgId, Weekend(
             from: starts, to: starts.AddDays(1)) with { MinimumGuests = 20 }, default));
 
-        Assert.IsType<OkObjectResult>((await controller.NoGo(OrgId, record.Id, default)).Result);
+        Assert.IsType<OkObjectResult>((await controller.NoGo(OrgId, record.Id, NoMail(), default)).Result);
 
         var back = Assert.IsType<HostedEventRecord>(
             Assert.IsType<OkObjectResult>((await controller.Uncancel(OrgId, record.Id, default)).Result).Value);

@@ -27,6 +27,23 @@ namespace Ben.Web.Tests.Services;
 /// </remarks>
 public sealed class HostedEventHoldTests
 {
+    /// <summary>A mailer with nothing behind it — what every environment has by default.</summary>
+    /// <remarks>
+    /// Injected per-action from phase 6, because the guest's own doors send letters now. Not
+    /// configured, so nothing is sent and every one of these tests still tests the decision rather
+    /// than the post.
+    /// </remarks>
+    private static EventGuestMailer NoMail()
+    {
+        var email = new Moq.Mock<Ben.Data.Common.Interfaces.IEmailService>();
+        email.SetupGet(e => e.IsConfigured).Returns(false);
+
+        return new EventGuestMailer(
+            email.Object,
+            Microsoft.Extensions.Options.Options.Create(new Ben.Data.Common.SiteIdentity()),
+            Microsoft.Extensions.Logging.Abstractions.NullLogger<EventGuestMailer>.Instance);
+    }
+
     private static readonly Guid OrgId = Guid.NewGuid();
     private static readonly Guid PlaceId = Guid.NewGuid();
     private static readonly Guid EventId = Guid.NewGuid();
@@ -161,7 +178,7 @@ public sealed class HostedEventHoldTests
     {
         await using var sqlite = await SeedAsync();
 
-        var result = await As(sqlite, GuestId).HoldPlaces(EventId, Picking(SeatA1Id), default);
+        var result = await As(sqlite, GuestId).HoldPlaces(EventId, Picking(SeatA1Id), NoMail(), default);
         Assert.IsType<OkObjectResult>(result.Result);
 
         await using var db = await sqlite.NewContextAsync();
@@ -188,7 +205,7 @@ public sealed class HostedEventHoldTests
         // them in every count and every reminder for a place the venue has not agreed to.
         await using var sqlite = await SeedAsync();
 
-        await As(sqlite, GuestId).HoldPlaces(EventId, Picking(SeatA1Id), default);
+        await As(sqlite, GuestId).HoldPlaces(EventId, Picking(SeatA1Id), NoMail(), default);
 
         await using var db = await sqlite.NewContextAsync();
         var attendee = await db.OrgCalendarEventAttendees.SingleAsync();
@@ -206,10 +223,10 @@ public sealed class HostedEventHoldTests
         await using var sqlite = await SeedAsync();
 
         Assert.IsType<OkObjectResult>(
-            (await As(sqlite, GuestId).HoldPlaces(EventId, Picking(SeatA1Id), default)).Result);
+            (await As(sqlite, GuestId).HoldPlaces(EventId, Picking(SeatA1Id), NoMail(), default)).Result);
 
         var refused = Assert.IsType<ConflictObjectResult>(
-            (await As(sqlite, RivalId).HoldPlaces(EventId, Picking(SeatA1Id), default)).Result);
+            (await As(sqlite, RivalId).HoldPlaces(EventId, Picking(SeatA1Id), NoMail(), default)).Result);
 
         var body = Assert.IsType<HoldRefusedRecord>(refused.Value);
 
@@ -226,10 +243,10 @@ public sealed class HostedEventHoldTests
         await using var sqlite = await SeedAsync();
 
         Assert.IsType<OkObjectResult>(
-            (await As(sqlite, GuestId).HoldPlaces(EventId, Picking(SeatA1Id), default)).Result);
+            (await As(sqlite, GuestId).HoldPlaces(EventId, Picking(SeatA1Id), NoMail(), default)).Result);
 
         var refused = Assert.IsType<ConflictObjectResult>(
-            (await As(sqlite, RivalId).HoldPlaces(EventId, Picking(SeatA1Id, SeatA2Id), default)).Result);
+            (await As(sqlite, RivalId).HoldPlaces(EventId, Picking(SeatA1Id, SeatA2Id), NoMail(), default)).Result);
 
         var body = Assert.IsType<HoldRefusedRecord>(refused.Value);
 
@@ -244,8 +261,8 @@ public sealed class HostedEventHoldTests
         // unpick by hand, and the guest would not know which half they had.
         await using var sqlite = await SeedAsync();
 
-        await As(sqlite, GuestId).HoldPlaces(EventId, Picking(SeatA1Id), default);
-        await As(sqlite, RivalId).HoldPlaces(EventId, Picking(SeatA1Id, SeatA2Id), default);
+        await As(sqlite, GuestId).HoldPlaces(EventId, Picking(SeatA1Id), NoMail(), default);
+        await As(sqlite, RivalId).HoldPlaces(EventId, Picking(SeatA1Id, SeatA2Id), NoMail(), default);
 
         await using var db = await sqlite.NewContextAsync();
         Assert.Equal(1, await db.HostedEventBookings.CountAsync());
@@ -261,7 +278,7 @@ public sealed class HostedEventHoldTests
         await using var sqlite = await SeedAsync(HostedEventBookingMode.Ask);
 
         var refused = Assert.IsType<ConflictObjectResult>(
-            (await As(sqlite, GuestId).HoldPlaces(EventId, Picking(SeatA1Id), default)).Result);
+            (await As(sqlite, GuestId).HoldPlaces(EventId, Picking(SeatA1Id), NoMail(), default)).Result);
 
         Assert.Contains("asked for", Assert.IsType<string>(refused.Value));
     }
@@ -272,7 +289,7 @@ public sealed class HostedEventHoldTests
         await using var sqlite = await SeedAsync();
 
         var refused = Assert.IsType<BadRequestObjectResult>(
-            (await As(sqlite, GuestId).HoldPlaces(EventId, new([], 2), default)).Result);
+            (await As(sqlite, GuestId).HoldPlaces(EventId, new([], 2), NoMail(), default)).Result);
 
         Assert.Contains("Pick at least one", Assert.IsType<string>(refused.Value));
     }
@@ -284,10 +301,10 @@ public sealed class HostedEventHoldTests
         // decide the same people's evening separately.
         await using var sqlite = await SeedAsync();
 
-        await As(sqlite, GuestId).HoldPlaces(EventId, Picking(SeatA1Id), default);
+        await As(sqlite, GuestId).HoldPlaces(EventId, Picking(SeatA1Id), NoMail(), default);
 
         var refused = Assert.IsType<ConflictObjectResult>(
-            (await As(sqlite, GuestId).HoldPlaces(EventId, Picking(SeatA2Id), default)).Result);
+            (await As(sqlite, GuestId).HoldPlaces(EventId, Picking(SeatA2Id), NoMail(), default)).Result);
 
         Assert.Contains("already have places", Assert.IsType<string>(refused.Value));
     }
@@ -310,7 +327,7 @@ public sealed class HostedEventHoldTests
         }
 
         var refused = Assert.IsType<ConflictObjectResult>(
-            (await As(sqlite, GuestId).HoldPlaces(EventId, Picking(SeatA1Id), default)).Result);
+            (await As(sqlite, GuestId).HoldPlaces(EventId, Picking(SeatA1Id), NoMail(), default)).Result);
 
         var said = Assert.IsType<string>(refused.Value);
         Assert.Contains("being used by the venue", said);
@@ -330,14 +347,14 @@ public sealed class HostedEventHoldTests
         await using var sqlite = await SeedAsync();
 
         Assert.IsType<OkObjectResult>(
-            (await As(sqlite, GuestId).HoldPlaces(EventId, Picking(SeatA1Id), default)).Result);
+            (await As(sqlite, GuestId).HoldPlaces(EventId, Picking(SeatA1Id), NoMail(), default)).Result);
 
         Assert.IsType<NoContentResult>(
             (await As(sqlite, GuestId).Withdraw(EventId, reason: null, default)).Result);
 
         // And somebody else can have it at once.
         Assert.IsType<OkObjectResult>(
-            (await As(sqlite, RivalId).HoldPlaces(EventId, Picking(SeatA1Id), default)).Result);
+            (await As(sqlite, RivalId).HoldPlaces(EventId, Picking(SeatA1Id), NoMail(), default)).Result);
 
         await using var db = await sqlite.NewContextAsync();
         var letGo = await db.HostedEventBookings
@@ -362,7 +379,7 @@ public sealed class HostedEventHoldTests
             [new HostedEventBookingNightChoice(FridayId, SeatA1Id)], PartySize: 4);
 
         Assert.IsType<OkObjectResult>(
-            (await As(sqlite, GuestId).HoldPlaces(EventId, greedy, default)).Result);
+            (await As(sqlite, GuestId).HoldPlaces(EventId, greedy, NoMail(), default)).Result);
 
         await using var db = await sqlite.NewContextAsync();
         var booking = await db.HostedEventBookings.SingleAsync();
@@ -377,7 +394,7 @@ public sealed class HostedEventHoldTests
 
         Assert.IsType<OkObjectResult>(
             (await As(sqlite, GuestId).HoldPlaces(
-                EventId, Picking(SeatA1Id, SeatA2Id), default)).Result);
+                EventId, Picking(SeatA1Id, SeatA2Id), NoMail(), default)).Result);
 
         await using var db = await sqlite.NewContextAsync();
         Assert.Equal(2, (await db.HostedEventBookings.SingleAsync()).PartySize);
@@ -393,7 +410,7 @@ public sealed class HostedEventHoldTests
         await using var sqlite = await SeedAsync();
 
         Assert.IsType<OkObjectResult>(
-            (await As(sqlite, GuestId).HoldPlaces(EventId, Picking(SeatA1Id), default)).Result);
+            (await As(sqlite, GuestId).HoldPlaces(EventId, Picking(SeatA1Id), NoMail(), default)).Result);
 
         Guid bookingId;
         await using (var db = await sqlite.NewContextAsync())

@@ -456,7 +456,8 @@ public sealed class HostedEventController : OrgCmsControllerBase
     /// </remarks>
     [HttpPost("{eventId:guid}/cancel")]
     public async Task<ActionResult<HostedEventRecord>> Cancel(
-        Guid orgId, Guid eventId, [FromBody] CancelHostedEventRequest request, CancellationToken ct)
+        Guid orgId, Guid eventId, [FromBody] CancelHostedEventRequest request,
+        [FromServices] Services.Events.EventGuestMailer mail, CancellationToken ct)
     {
         var userId = GetCurrentUserId();
         if (userId is null) return Unauthorized();
@@ -489,8 +490,22 @@ public sealed class HostedEventController : OrgCmsControllerBase
         await _sync.SyncAsync(db, hosted, userId.Value, ct);
         await db.SaveChangesAsync(ct);
 
-        return Ok((await LoadAsync(db, orgId, eventId, ct))[0] with { PlanNote = note });
+        // AFTER the save, and best effort. Until phase 6 this endpoint told the organizer that
+        // everybody with a place had been told, and nothing had been sent to anybody: the guests
+        // found out by opening the page, or by turning up.
+        var told = await mail.SendCalledOffAsync(db, hosted.Id, hosted.CancelledReason, ct);
+
+        return Ok((await LoadAsync(db, orgId, eventId, ct))[0]
+            with { PlanNote = $"{note} {Told(told)}" });
     }
+
+    /// <summary>What to say about the letters, without claiming any that did not go.</summary>
+    private static string Told(int sent) => sent switch
+    {
+        0 => "Nobody had a place to lose.",
+        1 => "The one person with a place has been told.",
+        _ => $"All {sent} people with places have been told.",
+    };
 
     /// <summary>
     /// What calling this event off would do to its credit, without doing anything.
@@ -564,8 +579,10 @@ public sealed class HostedEventController : OrgCmsControllerBase
     /// Says the event is going ahead, whatever the numbers came to.
     /// </summary>
     [HttpPost("{eventId:guid}/go")]
-    public Task<ActionResult<HostedEventRecord>> Go(Guid orgId, Guid eventId, CancellationToken ct)
-        => DecideAsync(orgId, eventId, HostedEventGoNoGo.Go, ct);
+    public Task<ActionResult<HostedEventRecord>> Go(
+        Guid orgId, Guid eventId,
+        [FromServices] Services.Events.EventGuestMailer mail, CancellationToken ct)
+        => DecideAsync(orgId, eventId, HostedEventGoNoGo.Go, mail, ct);
 
     /// <summary>
     /// Says it is not, which calls it off under exactly the same rules as any other cancellation.
@@ -577,11 +594,14 @@ public sealed class HostedEventController : OrgCmsControllerBase
     /// and would eventually have got one of them wrong.
     /// </remarks>
     [HttpPost("{eventId:guid}/no-go")]
-    public Task<ActionResult<HostedEventRecord>> NoGo(Guid orgId, Guid eventId, CancellationToken ct)
-        => DecideAsync(orgId, eventId, HostedEventGoNoGo.NoGo, ct);
+    public Task<ActionResult<HostedEventRecord>> NoGo(
+        Guid orgId, Guid eventId,
+        [FromServices] Services.Events.EventGuestMailer mail, CancellationToken ct)
+        => DecideAsync(orgId, eventId, HostedEventGoNoGo.NoGo, mail, ct);
 
     private async Task<ActionResult<HostedEventRecord>> DecideAsync(
-        Guid orgId, Guid eventId, HostedEventGoNoGo decision, CancellationToken ct)
+        Guid orgId, Guid eventId, HostedEventGoNoGo decision,
+        Services.Events.EventGuestMailer mail, CancellationToken ct)
     {
         var userId = GetCurrentUserId();
         if (userId is null) return Unauthorized();
@@ -612,7 +632,7 @@ public sealed class HostedEventController : OrgCmsControllerBase
             hosted.LifecycleState = HostedEventLifecycleState.Cancelled;
             hosted.CancelledAtUtc = now;
             hosted.CancelledReason ??= "Not enough people to run it.";
-            note = "Called off. Everybody with a place has been told. "
+            note = "Called off. "
                  + (await CreditBackAsync(db, hosted, userId.Value, now, ct)).Sentence;
         }
         else
@@ -623,7 +643,15 @@ public sealed class HostedEventController : OrgCmsControllerBase
         await _sync.SyncAsync(db, hosted, userId.Value, ct);
         await db.SaveChangesAsync(ct);
 
-        return Ok((await LoadAsync(db, orgId, eventId, ct))[0] with { PlanNote = note });
+        // The letters go after the save, and what the note claims is counted rather than assumed.
+        // "Everybody with a place has been told" was written here in phase 3 and was not true of
+        // anybody until phase 6 wrote the letters.
+        var told = decision == HostedEventGoNoGo.NoGo
+            ? await mail.SendCalledOffAsync(db, hosted.Id, hosted.CancelledReason, ct)
+            : await mail.SendGoingAheadAsync(db, hosted.Id, ct);
+
+        return Ok((await LoadAsync(db, orgId, eventId, ct))[0]
+            with { PlanNote = $"{note} {Told(told)}" });
     }
 
     // ── the layout: what this event allocates (phase 2.4) ────────────────────

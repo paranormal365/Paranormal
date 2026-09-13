@@ -183,7 +183,30 @@ public sealed record EventAttendanceConfirmation(
     string OrganizationName,
     string OrganizationUrlName,
     string? EventUrlName,
-    DateTime StartDateTime);
+    DateTime StartDateTime,
+
+    /// <summary>
+    /// The hosted event this link led to, when it is one (item 235 phase 6).
+    /// </summary>
+    /// <remarks>
+    /// A click on a hosted event's link is a REQUEST for a day pass, not an arrival: the venue
+    /// has not looked at it yet. The page said "You're coming" to everybody, which is true of an
+    /// ordinary evening and a promise nobody made about a weekend at a hotel.
+    /// </remarks>
+    Guid? HostedEventId = null,
+
+    /// <summary>How many places the link carried, so the page can repeat it back.</summary>
+    int PartySize = 1,
+
+    /// <summary>
+    /// Whether the account this link just made or matched can sign in with a password.
+    /// </summary>
+    /// <remarks>
+    /// An email-link guest has none, which is fine until they want to pick their own seats — and
+    /// picking needs signing in. Rather than leave them to discover that, the page offers to set
+    /// one, through the ordinary forgotten-password route.
+    /// </remarks>
+    bool AccountHasNoPassword = false);
 
 
 // ── Published investigations (backlog item #89) ──────────────────────────────

@@ -245,7 +245,10 @@ public sealed class PublicEventAttendanceController : BenControllerBase
     /// </remarks>
     [HttpPost("{token}/confirm")]
     [AllowAnonymous]
-    public async Task<ActionResult<EventAttendanceConfirmation>> Confirm(string token, CancellationToken ct)
+    public async Task<ActionResult<EventAttendanceConfirmation>> Confirm(
+        string token,
+        [FromServices] Services.Events.EventGuestMailer hostedMail,
+        CancellationToken ct)
     {
         await using var db = await _db.CreateDbContextAsync(ct);
 
@@ -377,8 +380,9 @@ public sealed class PublicEventAttendanceController : BenControllerBase
         // Item 235: the click is the ask. One live booking per person per event, so a second link
         // adds nothing — and the host decides this from their own board, which is the only place
         // a day pass starts counting.
+        HostedEventBooking? asked = null;
         if (hosted is not null)
-            await HostedEventGuestDoor.AddDayPassRequestAsync(
+            asked = await HostedEventGuestDoor.AddDayPassRequestAsync(
                 db, hosted, user.Id, invite.Seats, note: null, ct);
 
         invite.DateConfirmed        = DateTime.UtcNow;
@@ -403,8 +407,21 @@ public sealed class PublicEventAttendanceController : BenControllerBase
         if (!asksRatherThanComes)
             await _tourMail.SendSignUpAsync(db, ev.Id, invite.Email, invite.DisplayName ?? user.DisplayName, ct);
 
+        // A hosted event's own acknowledgement (item 235 phase 6). The page they land on says the
+        // same thing, but a link clicked on a phone in a car park is a page nobody reads twice,
+        // and "nothing is held yet" is the part that must survive being half-read.
+        if (asked is not null)
+            await hostedMail.SendAskedAsync(db, asked.Id, ct);
+
         return Ok(new EventAttendanceConfirmation(
-            ev.Id, ev.Title, ev.Organization.Name, ev.Organization.UrlName, ev.UrlName, ev.StartDateTime));
+            ev.Id, ev.Title, ev.Organization.Name, ev.Organization.UrlName, ev.UrlName,
+            ev.StartDateTime,
+            HostedEventId: hosted?.Id,
+            PartySize: wantedSeats,
+            // Asked rather than assumed: an email-link account has no password, but this link may
+            // equally have been clicked by somebody who has had one for years, and offering to set
+            // a password to them reads as a warning that something is wrong with their account.
+            AccountHasNoPassword: !await _users.HasPasswordAsync(user)));
     }
 
     // ── Plumbing ─────────────────────────────────────────────────────────────

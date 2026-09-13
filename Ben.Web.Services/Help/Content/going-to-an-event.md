@@ -112,6 +112,30 @@ holding one.
 - **A withdrawn pass is shown, not hidden** — faded, with the venue's reason on it. A blank screen
   reads as a fault and sends somebody to a door anyway; the reason tells them what to do instead.
 
+## What we write to you
+
+- **When you ask**, a letter says your request arrived and that nothing is held yet.
+- **When you hold places**, a letter says until when — in the venue's own time, because that is the
+  clock the deadline runs on.
+- **When the venue answers**, a letter carries the decision, and your pass when the answer is yes,
+  with a calendar entry for each night.
+- **If your hold runs out**, a letter says so and that you are still on the venue's list. It is
+  deliberately not the same letter as a refusal.
+- **If the event is called off or reaches its numbers**, everybody with a place or waiting for one
+  is written to.
+
+If a site has no outgoing mail set up, nothing is sent and everything still works — the pages say
+the same things.
+
+## Coming without an account
+
+You can ask for a day pass with nothing but an email address. We send a link, and clicking it says
+**you've asked for a place** — not that you are coming, because the venue has not answered yet.
+
+That link also makes you an account with no password on it. Everything beyond a day pass —
+choosing your own seats, your pass, changing your mind — means signing in, so the page offers to
+set a password there and then rather than leaving you to find out later.
+
 ## Changing your mind
 
 - **Never mind** takes back a request or lets go of a hold, straight away.

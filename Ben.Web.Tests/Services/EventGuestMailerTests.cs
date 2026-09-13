@@ -205,6 +205,111 @@ public sealed class EventGuestMailerTests
         Assert.Contains("no longer works", letter.HtmlBody);
     }
 
+    // ── before the venue has said anything (phase 6) ─────────────────────────
+
+    [Fact]
+    public async Task The_letter_that_answers_an_ask_says_nothing_is_held()
+    {
+        // Silence reads as a booking. Somebody who filled in a form and heard nothing assumes it
+        // worked, and a guest who assumed that about a REQUEST arrives at a hotel with a suitcase.
+        await using var sqlite = await SqliteTestDb.CreateAsync();
+        var seeded = await SeedAsync(sqlite);
+        var bookingId = await BookAsync(
+            sqlite, HostedEventBookingStatus.Requested, seeded, overnight: true);
+
+        var (sent, mailer) = Mailer();
+        await using (var db = await sqlite.NewContextAsync())
+            Assert.True(await mailer.SendAskedAsync(db, bookingId, default));
+
+        var letter = Assert.Single(sent);
+        Assert.Contains("Nothing is held", letter.HtmlBody);
+        Assert.Contains("Blue Room", letter.HtmlBody);
+
+        // And NO diary entry: an appointment for a place nobody has agreed to is the same lie in
+        // another form.
+        Assert.Empty(letter.Attachments ?? []);
+    }
+
+    [Fact]
+    public async Task The_letter_for_a_hold_says_when_it_runs_out_on_the_venues_clock()
+    {
+        // A hold that lapses is a decision the clock takes instead of the venue. A guest who was
+        // never told the time cannot act before it — and "six o'clock" means the clock on the wall
+        // where the seats are, not the server's.
+        await using var sqlite = await SqliteTestDb.CreateAsync();
+        var seeded = await SeedAsync(sqlite);
+        var bookingId = await BookAsync(
+            sqlite, HostedEventBookingStatus.Held, seeded, overnight: true);
+
+        await using (var db = await sqlite.NewContextAsync())
+        {
+            var booking = await db.HostedEventBookings.FirstAsync(b => b.Id == bookingId);
+            // Midnight UTC, which in Nashville is the evening before — so a letter that printed
+            // the server's clock would name the wrong day as well as the wrong hour.
+            booking.HoldExpiresUtc = new DateTime(2026, 10, 20, 0, 0, 0, DateTimeKind.Utc);
+            await db.SaveChangesAsync();
+        }
+
+        var (sent, mailer) = Mailer();
+        await using (var db = await sqlite.NewContextAsync())
+            Assert.True(await mailer.SendHoldPlacedAsync(db, bookingId, default));
+
+        var letter = Assert.Single(sent);
+        Assert.Contains("held for you", letter.HtmlBody, StringComparison.OrdinalIgnoreCase);
+        Assert.Contains("10/19/2026", letter.HtmlBody);
+        Assert.Empty(letter.Attachments ?? []);
+    }
+
+    // ── news about the whole event (phase 6) ─────────────────────────────────
+
+    [Fact]
+    public async Task Calling_an_event_off_writes_to_everybody_who_kept_the_date_free()
+    {
+        // The organizer's screen has claimed "everybody with a place has been told" since phase 3,
+        // and until this letter existed nothing was sent to anybody. Waiting counts as keeping the
+        // date free: a party still holding places has arranged their weekend just as hard as a
+        // confirmed one.
+        await using var sqlite = await SqliteTestDb.CreateAsync();
+        var seeded = await SeedAsync(sqlite);
+        await BookAsync(sqlite, HostedEventBookingStatus.Confirmed, seeded);
+        // A different person, because only one live booking per lead per event is allowed and the
+        // database enforces it — which is itself worth knowing while writing a fixture.
+        await BookAsync(sqlite, HostedEventBookingStatus.Held, seeded, lead: HostId);
+        await BookAsync(sqlite, HostedEventBookingStatus.TurnedDown, seeded);
+
+        var (sent, mailer) = Mailer();
+        await using (var db = await sqlite.NewContextAsync())
+            Assert.Equal(2, await mailer.SendCalledOffAsync(
+                db, EventId, "The venue flooded.", default));
+
+        Assert.All(sent, letter =>
+        {
+            Assert.Contains("not going ahead", letter.Subject);
+            Assert.Contains("The venue flooded.", letter.HtmlBody);
+            // Nothing was ever paid here, and a cancellation letter must not imply otherwise.
+            Assert.Contains("nothing to refund", letter.HtmlBody);
+        });
+    }
+
+    [Fact]
+    public async Task Reaching_the_numbers_is_told_to_the_people_who_were_waiting_on_it()
+    {
+        // The other half of a minimum number: somebody asked to keep a weekend free while a venue
+        // counts heads has been holding a date on a maybe.
+        await using var sqlite = await SqliteTestDb.CreateAsync();
+        var seeded = await SeedAsync(sqlite);
+        await BookAsync(sqlite, HostedEventBookingStatus.Requested, seeded);
+
+        var (sent, mailer) = Mailer();
+        await using (var db = await sqlite.NewContextAsync())
+            Assert.Equal(1, await mailer.SendGoingAheadAsync(db, EventId, default));
+
+        var letter = Assert.Single(sent);
+        Assert.Contains("going ahead", letter.Subject);
+        Assert.Contains("the venue will answer your booking", letter.HtmlBody,
+                        StringComparison.OrdinalIgnoreCase);
+    }
+
     // ── what must never break a decision ─────────────────────────────────────
 
     [Fact]
@@ -312,18 +417,22 @@ public sealed class EventGuestMailerTests
         await db.SaveChangesAsync();
     }
 
+    /// <param name="lead">
+    /// Whose booking it is. Only one LIVE booking per person per event is allowed — the database
+    /// says so — so a test that wants two parties waiting has to use two people.
+    /// </param>
     private static async Task<Guid> BookAsync(
         SqliteTestDb sqlite, HostedEventBookingStatus status, Seeded seeded,
-        bool overnight = false, string? decisionNote = null)
+        bool overnight = false, string? decisionNote = null, Guid? lead = null)
     {
         await using var db = await sqlite.NewContextAsync();
 
         var booking = new HostedEventBooking
         {
-            Id = Guid.NewGuid(), HostedEventId = EventId, LeadAppUserId = GuestId,
+            Id = Guid.NewGuid(), HostedEventId = EventId, LeadAppUserId = lead ?? GuestId,
             PartySize = 2, Status = status, DecisionNote = decisionNote,
             Kind = overnight ? HostedEventBookingKind.Overnight : HostedEventBookingKind.DayPass,
-            DateCreated = DateTime.UtcNow, CreatedByAppUserId = GuestId,
+            DateCreated = DateTime.UtcNow, CreatedByAppUserId = lead ?? GuestId,
         };
 
         if (overnight)
