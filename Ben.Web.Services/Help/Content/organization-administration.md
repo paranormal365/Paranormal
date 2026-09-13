@@ -1598,6 +1598,36 @@ gets a row of its own there.
 It always says the colour's name as well as showing it, because about one man in twelve cannot tell
 red from green.
 
+### After the event: the next one, and the list of who came
+
+**Copy this event**, from the event page, starts the next one from this one. Choose a name and the
+first date; every other date moves with it, keeping its gaps, and a session at 7 PM stays at 7 PM
+even when the clocks have changed in between.
+
+![Copying an event](help-media:organization-administration/event-copy.png)
+
+Each part you made is offered with its size, ticked:
+
+- **the plan** — rooms or seats, sections, prices, and what the venue held back on which night,
+- **menus**, on the same night of the run,
+- **the programme**, at the same times, not yet published,
+- **bands**, and **helpers** with what they may do (an invitation nobody answered stays behind),
+- **the advert**, as a draft that is reviewed again before it shows,
+- **files**, copied into the new event's own space (unticked to start with, because they count
+  against its allowance).
+
+**What happened stays behind:** bookings, passes, arrivals, the room, its photos and the gallery. The
+copy is a **draft**, so nothing is spent and nothing is published until you say. **The venue's
+agreement does not come across** either — a yes for October is not a yes for March — so a venue
+you recorded by hand keeps its contact and asks you when they agreed, and one on this site has to
+be asked again. The *Ready to publish* list says so.
+
+**Download as a spreadsheet**, on the booking board, hands you every booking: status, name, email,
+the phone number the guest gave, how many, which nights and places, the guests and their dietary
+notes, their note, when they asked, when you decided and which nights they came through the door.
+It opens in Excel, Numbers or Google Sheets. Anything a guest typed that starts like a formula is
+written as plain text, so a note cannot run in your spreadsheet.
+
 ### The dietary sheet
 
 **What the kitchen needs**, from the event page or from the booking board, turns every guest's note

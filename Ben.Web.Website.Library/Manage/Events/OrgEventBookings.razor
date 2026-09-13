@@ -3,6 +3,7 @@
 
 @inject IBenAdminClient AdminClient
 @inject IBenUserState UserState
+@inject IJSRuntime JS
 
 @using Ben.Data.Common.Enums
 @using Ben.Service.Models.Entities
@@ -181,10 +182,18 @@
             <div class="card mb-3" id="board-everyone">
                 <div class="card-header fw-semibold d-flex justify-content-between align-items-center gap-2 flex-wrap">
                     <span>Everybody (@board.Bookings.Count)</span>
-                    <a class="btn btn-sm btn-outline-secondary"
-                       href="@($"/organizations/{OrgId}/events/{EventId}/dietary")">
-                        <BenIcon Name="clipboard" Class="me-1" />What the kitchen needs
-                    </a>
+                    <div class="d-flex gap-2 flex-wrap">
+                        @* Everybody as a spreadsheet (phase 12): who, how to reach them, which nights,
+                           and whether they came. *@
+                        <button type="button" class="btn btn-sm btn-outline-secondary" id="board-export"
+                                disabled="@_exporting" @onclick="ExportAsync">
+                            <BenIcon Name="download" Class="me-1" />@(_exporting ? "Preparing…" : "Download as a spreadsheet")
+                        </button>
+                        <a class="btn btn-sm btn-outline-secondary"
+                           href="@($"/organizations/{OrgId}/events/{EventId}/dietary")">
+                            <BenIcon Name="clipboard" Class="me-1" />What the kitchen needs
+                        </a>
+                    </div>
                 </div>
 
                 @if (board.Bookings.Count == 0)
@@ -232,6 +241,20 @@
                       OnDecided="OnDecidedAsync" />
 
 @code {
+    private bool _exporting;
+
+    /// <summary>Hands the organizer the bookings as a spreadsheet file.</summary>
+    private async Task ExportAsync()
+    {
+        _exporting = true;
+        var file = await AdminClient.DownloadHostedEventBookingsCsvAsync(OrgId, EventId);
+        _exporting = false;
+        if (file is null) return;
+
+        await JS.InvokeVoidAsync("downloadFileFromBase64",
+            Convert.ToBase64String(file.Value.Data), "text/csv", file.Value.FileName);
+    }
+
     [Parameter] public Guid OrgId { get; set; }
     [Parameter] public Guid EventId { get; set; }
 

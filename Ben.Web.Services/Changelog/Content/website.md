@@ -18,6 +18,11 @@ day-by-day account of building it would say nothing to anyone using it now.
 
 ## 2026-09-13
 
+- An event can be copied to start the next one: the plan, menus, programme, bands, helpers, advert
+  and files come across as a draft on the new dates, and bookings and photos stay behind.
+- The booking board can hand over every booking as a spreadsheet, including the phone number each
+  guest gave and which nights they arrived.
+
 - You can choose seats or rooms at a hosted event without an account. Give your name, email address
   and phone number, and press the button in the letter within fifteen minutes to hold them; the same
   link shows whether the venue has answered and lets you let them go.

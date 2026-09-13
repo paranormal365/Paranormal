@@ -84,6 +84,10 @@
             </div>
         </div>
 
+        @if (_note is null && CopiedNote() is { } copied)
+        {
+            <div class="alert alert-info py-2" id="event-copied">@copied</div>
+        }
         @if (_note is not null)
         {
             <div class="alert alert-success py-2" id="event-note">@_note</div>
@@ -201,6 +205,7 @@
                     @IndexEntry("Photo wall", $"/events/{EventId}/wall", true)
                     @IndexEntry("Gallery", $"/organizations/{OrgId}/events/{EventId}/gallery", true)
                     @IndexEntry("Advertise this event", $"/organizations/{OrgId}/promote?event={EventId}", true)
+                    @IndexEntry("Copy this event", $"/organizations/{OrgId}/events/{EventId}/copy", true)
                 </div>
             </div>
 
@@ -873,6 +878,12 @@
     [Parameter] public Guid OrgId { get; set; }
     [Parameter] public Guid EventId { get; set; }
 
+    /// <summary>Set when this draft was just made by copying another event (phase 12).</summary>
+    [SupplyParameterFromQuery(Name = "copied")] public int? Copied { get; set; }
+
+    /// <summary>What the copy could not bring, when it could not bring everything.</summary>
+    [SupplyParameterFromQuery(Name = "note")] public string? CopyNote { get; set; }
+
     private HostedEventRecord? _event;
     private HostedEventPlanRecord? _plan;
     private string? _orgUrlName;
@@ -881,6 +892,13 @@
     private bool _confirmingPublish;
     private string? _error;
     private string? _note;
+
+    /// <summary>What a fresh copy says on arrival, once.</summary>
+    private string? CopiedNote()
+        => Copied == 1
+            ? "Copied as a draft. Check the dates, the venue's agreement and the programme, then publish when it's ready."
+              + (CopyNote is { Length: > 0 } more ? " " + more : "")
+            : null;
     private string _cancelReason = "";
     private readonly EventForm _form = new();
     private IReadOnlyList<HostedEventReadinessItem> _readiness = [];

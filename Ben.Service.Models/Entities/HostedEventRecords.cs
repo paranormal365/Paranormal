@@ -621,3 +621,56 @@ public sealed record CmsEventSessionRecord(string Title, string When, string? Wh
 
 /// <summary>The venue, in an event's venue section.</summary>
 public sealed record CmsEventVenueRecord(string PlaceName, string? Town, string? RunBy, string? VenuePageUrl, string? History);
+
+// ── after the event: starting the next one from it (item 235 phase 12) ─────────
+
+/// <summary>What copying an event would bring, before anybody presses anything.</summary>
+/// <param name="PendingInvitations">Helpers who were invited and never answered; they do not come across.</param>
+/// <param name="FileBytes">What the files add up to, against the new event's allowance.</param>
+/// <param name="VenueSentence">What happens to the agreement with the venue, in words.</param>
+public sealed record HostedEventCopyPreviewRecord(
+    Guid HostedEventId,
+    string Name,
+    DateTime StartsOn,
+    DateTime EndsOn,
+    int Nights,
+    HostedEventLayoutKind LayoutKind,
+    int Units,
+    int Menus,
+    int Sessions,
+    int Bands,
+    int Helpers,
+    int PendingInvitations,
+    int Adverts,
+    int Files,
+    long FileBytes,
+    string VenueSentence);
+
+/// <summary>Starts a new draft from an existing event, bringing what is ticked.</summary>
+public sealed record CopyHostedEventRequest(
+    string Name,
+    DateTime StartsOn,
+    bool Plan = true,
+    bool Menus = true,
+    bool Programme = true,
+    bool Bands = true,
+    bool Helpers = true,
+    bool Adverts = true,
+    bool Files = false);
+
+/// <summary>The draft a copy made, and what came with it.</summary>
+/// <param name="FilesSentence">Said when some files could not be brought, and why.</param>
+public sealed record HostedEventCopyResultRecord(
+    Guid HostedEventId,
+    string Name,
+    int Nights,
+    int Units,
+    int Blocks,
+    int Menus,
+    int Sessions,
+    int Bands,
+    int Helpers,
+    int Adverts,
+    int Files,
+    string? FilesSentence);
+

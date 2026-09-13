@@ -2081,6 +2081,19 @@ public sealed class HelpMediaCapture : BenTestBase
             gated: false, proves: "Hold these places", width: 375);
     }
 
+    /// <summary>Copying an event (item 235 phase 12).</summary>
+    [Test]
+    [Description("organization-administration: starting the next event from this one.")]
+    public async Task Capture_EventCopy()
+    {
+        var orgId = await OrgIdBySlugAsync("paranormal365");
+        await LoginAsync(SuperAdminEmail, SuperAdminPassword);
+        await GoAsync($"/organizations/{orgId}/events/{SeededRoomsEventId}/copy");
+        await Expect(Page.Locator("#copy-parts")).ToBeVisibleAsync(new() { Timeout = 30_000 });
+        await ShootAsync("organization-administration", "event-copy.png", gated: true,
+            selector: ".container-fluid", proves: "What to bring");
+    }
+
     /// <summary>The emailed link's token, as the API logs it when no mail server is set up.</summary>
     private static string? PickTokenFromTheApiLog(string email)
     {

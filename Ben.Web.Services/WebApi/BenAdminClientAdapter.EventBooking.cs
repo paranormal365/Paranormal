@@ -321,6 +321,23 @@ public sealed partial class BenAdminClientAdapter
         return (held, refused, error);
     }
 
+    public Task<ItemResult<HostedEventCopyPreviewRecord>> GetHostedEventCopyPreviewAsync(
+        Guid orgId, Guid eventId, CancellationToken token = default)
+        => _api.GetItemAsync<HostedEventCopyPreviewRecord>($"/api/organizations/{orgId}/events/{eventId}/copy", token);
+
+    public Task<(HostedEventCopyResultRecord? Result, string? Error)> CopyHostedEventAsync(
+        Guid orgId, Guid eventId, CopyHostedEventRequest request, CancellationToken token = default)
+        => _api.SendExpectingReasonAsync<CopyHostedEventRequest, HostedEventCopyResultRecord>(
+               HttpMethod.Post, $"/api/organizations/{orgId}/events/{eventId}/copy", request, token);
+
+    public async Task<(byte[] Data, string FileName)?> DownloadHostedEventBookingsCsvAsync(
+        Guid orgId, Guid eventId, CancellationToken token = default)
+    {
+        var result = await _api.GetBytesAsync(
+            $"/api/organizations/{orgId}/events/{eventId}/bookings/export.csv", "bookings.csv", token);
+        return result is { } r ? (r.Data, r.FileName) : null;
+    }
+
     public Task<ItemResult<BookingContactRecord>> GetMyBookingContactAsync(CancellationToken token = default)
         => _api.GetItemAsync<BookingContactRecord>("/api/public/hosted-events/my-contact", token);
 

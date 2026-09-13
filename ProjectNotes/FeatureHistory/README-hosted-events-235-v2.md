@@ -1006,6 +1006,30 @@ that closes one weekend opens the next.
 night index, staff copied, arrangement reset); `GET bookings/export.csv`; reviews via `TourReview`
 on the umbrella; a once-only thank-you letter with the gallery link.
 
+#### Phase 12a as built (2026-09-13) — copy this event, and the spreadsheet
+
+1. **Copy this event** is a page (`/organizations/{org}/events/{id}/copy`), not a button: every part the
+   organizer made is offered with its size and ticked — plan with blocks, menus by night position,
+   programme (unpublished, nobody signed up, called-off sessions left out), bands, helpers who accepted
+   (unanswered invitations stay behind), the advert as a Draft with its counters at zero, and files
+   (unticked by default: copied through the ingest into the new event's own storage, since a file row
+   belongs to one event and retention will later tidy the old one's away).
+2. **Dates move by whole days on the venue's clock**, so a 7 PM séance stays at 7 PM across a clock
+   change; the bookings deadline and the go/no-go date move the same way. Go/no-go is reset.
+3. **The venue's yes does not come across:** External keeps the contact and loses the date and reference;
+   PlatformGrant loses the grant. The page and the readiness list say so.
+4. Names are unique per group, so the page suggests the old name with the new year; the server refuses a
+   clash in the same sentence the create form uses. Copying needs the event-edit permission, not billing:
+   it spends nothing.
+5. **Download as a spreadsheet** on the board: every booking with the guest-given phone, nights and places,
+   guests and dietary notes, and the nights they arrived. Formula-looking cells are written as text.
+6. Still to come in phase 12: the thank-you letter with the gallery link and upcoming events, reviews,
+   retention with its warnings, pick-and-zip, what the venue remembers, and sessions on *My events*.
+
+Tests: `HostedEventCopyTests` (11; the clock-change shift and the formula escape seen failing with the
+rule removed), Playwright `EventCopyTests` (copy at 1280 and 375, the spreadsheet download); capture
+`event-copy.png`.
+
 ### Phase 13 — Dining as a seating assignment
 
 `HostedEventDiningTable` + `HostedEventDiningSeat` per sitting, over Confirmed bookings only;
@@ -1045,6 +1069,39 @@ screen at 1440 and 375; rebuild the product PDF, the six persona PDFs, both iOS 
 overview and the tour-and-event business offer; `the-mobile-apps.md`; the production runbook
 (verify no 235 table exists on production before the first migration; the two band settings Ben
 ticks by hand; the three jobs; the `https` profile for LAN camera testing).
+
+### Phase 16 — Who is on, and when: a simple rota for the team
+
+**Added 2026-09-13 (Ben), at the end of the plan:** *"let an organizer construct 'work schedules' for
+employees and volunteers in order to be sure every position needed is covered … generalized positions
+like Greeters, Food, Tour Guide, Presenter, Session, Speaker … without this becoming some kinda tracking
+system for employees … an employee logs in and could see what they are supposed to be doing at different
+times and if they are at the door, they would have the ability to log people's arrival."*
+
+**Recommendation: worth building, kept deliberately small.** The question a venue actually has on the
+Friday is "is breakfast covered, and who is on the door at seven" — a coverage question, not a
+timesheet. So:
+
+- **Positions are a short list the organizer edits**, seeded with Door and greeting, Food, Room service,
+  Guide, Presenter, Set-up and clear-down. A word and a colour, nothing more — no job titles, no pay
+  grades.
+- **A shift is a position, a time on a night (venue clock), how many are needed, and who.** "Saturday
+  7:00–10:00 AM · Food · needs 2 · Sam, Priya". Anyone on the event's staff list may be put on one;
+  somebody not yet on it is invited the way staff already are.
+- **The coverage view is the point:** each night as a strip of time with every position's shifts, a
+  shift short of people in amber with "needs 1 more", and a line at the top counting the gaps. On a
+  phone, a list by time.
+- **Sessions feed it, not duplicate it.** A programme session with a leader shows on the rota as a
+  Presenter shift automatically, so a talk is never listed twice or forgotten.
+- **Each person sees "My shifts"** on the event (and in a letter with a calendar file when they are put
+  on one or it changes). The phone app shows the same list in phase 14's staff view.
+- **Permissions stay separate and explicit.** Being on the door shift does not by itself grant the door;
+  putting somebody on a Door shift offers "also let them check people in", which ticks the existing
+  Run-the-door flag. A shift never widens what a person can see.
+- **What it will not do:** no clocking in or out, no hours, no attendance record of staff, no
+  performance anything. The door log stays about guests. That line is what keeps it from becoming an
+  employee-tracking system.
+- Copying an event (phase 12) brings the positions and the shift pattern, without the names.
 
 ### FUTURE (recorded, not scheduled)
 

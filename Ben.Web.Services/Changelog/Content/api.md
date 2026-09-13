@@ -20,6 +20,9 @@ belongs there; this is for the part underneath.
 
 ## 2026-09-13
 
+- Hosted events can be copied into a new draft on new dates, with the organizer choosing which parts
+  come across, and their bookings can be exported as a spreadsheet.
+
 - Seats on a hosted event can be picked without an account. They wait fifteen minutes for the person
   to confirm by a link sent to their email address, then become an ordinary hold. Unconfirmed picks are
   limited per address and per event, and deleted a day later.

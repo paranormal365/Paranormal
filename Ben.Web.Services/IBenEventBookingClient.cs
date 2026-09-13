@@ -421,6 +421,18 @@ public interface IBenEventBookingClient
     Task<(MyHostedEventBookingRecord? Held, HoldRefusedRecord? Refused, string? Error)> HoldHostedEventPlacesAsync(
         Guid eventId, HoldHostedEventPlacesRequest request, CancellationToken token = default);
 
+    /// <summary>What copying an event would bring (item 235 phase 12).</summary>
+    Task<ItemResult<HostedEventCopyPreviewRecord>> GetHostedEventCopyPreviewAsync(
+        Guid orgId, Guid eventId, CancellationToken token = default);
+
+    /// <summary>Starts a new draft from an event, bringing what is ticked.</summary>
+    Task<(HostedEventCopyResultRecord? Result, string? Error)> CopyHostedEventAsync(
+        Guid orgId, Guid eventId, CopyHostedEventRequest request, CancellationToken token = default);
+
+    /// <summary>Every booking at an event as a spreadsheet.</summary>
+    Task<(byte[] Data, string FileName)?> DownloadHostedEventBookingsCsvAsync(
+        Guid orgId, Guid eventId, CancellationToken token = default);
+
     /// <summary>
     /// The name and phone the signed-in guest's account already has, to fill the booking form
     /// (slice 11d). Nothing is sent to anybody by reading it.
