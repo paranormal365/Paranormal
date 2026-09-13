@@ -96,7 +96,17 @@ public sealed record NotificationSummaryResponse(
     /// <summary>
     /// This person's own bookings that have been decided and not yet acknowledged.
     /// </summary>
-    NotificationBucket? MyEventBookings = null)
+    NotificationBucket? MyEventBookings = null,
+    /// <summary>
+    /// Holds at events this person decides for that run out within a day (item 235 phase 8).
+    /// </summary>
+    /// <remarks>
+    /// Not counted again in <see cref="EventBookingsToDecide"/>: a booking is one number on the
+    /// bell, and the urgent ones get a row of their own rather than hiding among the rest.
+    /// </remarks>
+    NotificationBucket? EventHoldsLapsing = null,
+    /// <summary>This person's own hold, not yet confirmed, running out within a day.</summary>
+    NotificationBucket? MyEventHoldLapsing = null)
 {
     public static readonly NotificationSummaryResponse Empty = new(
         NotificationBucket.Empty, NotificationBucket.Empty, NotificationBucket.Empty,
@@ -115,7 +125,9 @@ public sealed record NotificationSummaryResponse(
          // Null on a payload written before item 235, read through the same fallback and for the
          // same reason: an older client and an older server both survive.
          EventBookingsToDecide ?? NotificationBucket.Empty,
-         MyEventBookings ?? NotificationBucket.Empty];
+         MyEventBookings ?? NotificationBucket.Empty,
+         EventHoldsLapsing ?? NotificationBucket.Empty,
+         MyEventHoldLapsing ?? NotificationBucket.Empty];
 
     /// <summary>Total across every bucket — the number on the bell.</summary>
     [JsonIgnore]

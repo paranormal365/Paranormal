@@ -2227,6 +2227,17 @@ public sealed class HelpMediaCapture : BenTestBase
         await tidy.DisposeAsync();
     }
 
+    /// <summary>Letters about bookings, on the notifications page (item 235 phase 8).</summary>
+    [Test]
+    [Description("organization-administration: how often a group writes to you about bookings.")]
+    public async Task Capture_BookingLetters()
+    {
+        await LoginAsync(SuperAdminEmail, SuperAdminPassword);
+        await GoAsync("/notifications");
+        await ShootAsync("organization-administration", "event-booking-letters.png",
+            gated: true, selector: "#booking-letters + .card", proves: "A daily letter");
+    }
+
     /// <summary>The seeded evening's slug, which is the address on the poster.</summary>
     private async Task<string> SeatsEventSlugAsync(string orgId)
     {

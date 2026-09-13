@@ -74,6 +74,8 @@ public sealed class EventBookingClientRouteTests
         "/api/organizations/{orgId}/events/{eventId}/bands\"",
         "/api/public/hosted-event-staff/{Uri.EscapeDataString(token)}\"",
         "/api/public/hosted-events/{eventId}/my-booking/pass/email\"",
+        "/api/me/event-booking-alerts\"",
+        "/api/me/event-booking-alerts/{orgId}\"",
     ];
 
     /// <summary>The names the plan gave the doors. The compiler proves they are implemented; this proves they are spelled as planned.</summary>
@@ -95,6 +97,7 @@ public sealed class EventBookingClientRouteTests
         "DoorWalkUpAsync", "DoorUndoWalkUpAsync",
         "GetEventStaffAsync", "SaveEventStaffAsync", "ResendEventStaffInviteAsync",
         "RemoveEventStaffAsync", "GetStaffInviteAsync", "AcceptStaffInviteAsync",
+        "GetEventBookingAlertSettingsAsync", "SetEventBookingAlertModeAsync",
     ];
 
     private static string Source(string fileName)

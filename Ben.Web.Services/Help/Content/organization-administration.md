@@ -1378,6 +1378,35 @@ pass — so somebody who already knows they are blue does not have to be told.
 
 ![A band beside a name at the door](help-media:organization-administration/event-door-bands.png)
 
+### Letters about bookings
+
+**A request is answered because somebody was told.** Everybody who may say yes or no to bookings —
+you, anybody your roles let decide, and a helper you handed **Say yes or no to bookings** — is
+written to when they arrive.
+
+- **The first request in a while** is written about within about five minutes.
+- **A rush becomes one letter.** When forty people ask in an hour, you get the first straight away
+  and one more saying *40 more bookings* once it quietens down — never later than an hour.
+- **A daily letter** says where each event stands: who has waited longest for an answer, holds that
+  run out in the next day, what is left on the next night, and — while the event is on — how many
+  came through the door last night. It is weekly once bookings have closed, and **it is never sent
+  when there is nothing waiting**, because an empty letter every morning trains people to stop
+  opening the one that matters.
+
+**A letter never names a guest** or carries their email address or what they cannot eat. It says *a
+party of 4 has asked for the Blue Room on Fri 10/30* and links to the booking board, where the rest
+is, behind the permission the board checks. Letters get forwarded and left open on shared desks in
+a way a screen does not.
+
+Your own booking is never news to you.
+
+![Choosing how often a group writes to you](help-media:organization-administration/event-booking-letters.png)
+
+**How often** is yours to choose, group by group, on the **Notifications** page under *Letters about
+bookings*: **As they arrive** (the default, with the daily letter too), **A daily letter** only, or
+**Nothing**. The bell still counts what is waiting whichever you pick, and a hold about to run out
+gets a row of its own there.
+
 It always says the colour's name as well as showing it, because about one man in twelve cannot tell
 red from green.
 

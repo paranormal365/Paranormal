@@ -425,4 +425,14 @@ public interface IBenEventBookingClient
     /// </remarks>
     Task<(MyHostedEventBookingRecord? Result, string? Error)> EmailMyHostedEventPassAsync(
         Guid eventId, CancellationToken token = default);
+
+    // ── how often somebody hears about bookings (phase 8) ────────────────────
+
+    /// <summary>The groups whose booking letters reach the signed-in person, and how often.</summary>
+    Task<ItemResult<EventBookingAlertSettingsRecord>> GetEventBookingAlertSettingsAsync(
+        CancellationToken token = default);
+
+    /// <summary>As it happens, digest only, or nothing, for one group.</summary>
+    Task<(EventBookingAlertSettingsRecord? Result, string? Error)> SetEventBookingAlertModeAsync(
+        Guid orgId, SetEventBookingAlertModeRequest request, CancellationToken token = default);
 }

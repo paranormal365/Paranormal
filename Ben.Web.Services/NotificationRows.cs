@@ -125,6 +125,12 @@ public static class NotificationRows
         // Their own rows rather than folded into the tour ones. A row reading "sign-ups waiting"
         // that lands on a walk's screen when what is waiting is a hotel weekend sends somebody to
         // the wrong page, and the two are decided from different screens.
+        // Holds about to run out come first: the clock decides those if nobody does (phase 8).
+        if (s.EventHoldsLapsing is { Count: > 0 } lapsing)
+            rows.Add(new("Holds running out",
+                $"Seats held at your events lapse within a day unless somebody confirms them · oldest {NotificationBadge.DescribeAge(lapsing.OldestUnreadUtc)}",
+                "clock", "/organizations", lapsing));
+
         if (s.EventBookingsToDecide is { Count: > 0 } bookings)
             rows.Add(new("Bookings waiting on you",
                 $"People asking for a place at your events · oldest {NotificationBadge.DescribeAge(bookings.OldestUnreadUtc)}",
@@ -137,6 +143,11 @@ public static class NotificationRows
             rows.Add(new("A venue answered you",
                 $"Your booking has been decided · {NotificationBadge.DescribeAge(myBookings.OldestUnreadUtc)}",
                 "key", "/my-events", myBookings));
+
+        if (s.MyEventHoldLapsing is { Count: > 0 } myHold)
+            rows.Add(new("Your hold is running out",
+                $"The venue has not confirmed it yet, and it lapses within a day · {NotificationBadge.DescribeAge(myHold.OldestUnreadUtc)}",
+                "clock", "/my-events", myHold));
 
         // Last: being named on a public post waits on nothing. It still gets a row, because the
         // total counts it and a number that explains everything except one item reads as wrong.

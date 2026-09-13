@@ -550,3 +550,19 @@ public sealed record HostedEventStaffInviteRecord(
     /// exactly when it matters.
     /// </remarks>
     bool AccountHasNoPassword = false);
+
+// ── how often somebody hears about bookings (item 235 phase 8) ─────────────────
+
+/// <summary>One group whose bookings this person is written to about, and how often.</summary>
+/// <param name="Why">
+/// "You decide bookings for this group" or "You're helping at Halloween Lock-In" — so somebody who
+/// never joined a hotel's group knows why its letters reach them.
+/// </param>
+public sealed record EventBookingAlertGroupRecord(
+    Guid OrganizationId, string OrganizationName, EventBookingAlertMode Mode, string Why);
+
+/// <summary>Every group this person decides bookings for. Empty for almost everybody.</summary>
+public sealed record EventBookingAlertSettingsRecord(IReadOnlyList<EventBookingAlertGroupRecord> Groups);
+
+/// <summary>As it happens, digest only, or nothing — for one group.</summary>
+public sealed record SetEventBookingAlertModeRequest(EventBookingAlertMode Mode);

@@ -18,6 +18,19 @@ day-by-day account of building it would say nothing to anyone using it now.
 
 ## 2026-09-13
 
+- Whoever decides bookings for an event is now written to when they arrive. The first request in a
+  while arrives within minutes; a busy hour becomes one letter saying how many more came, never
+  more than an hour late. A letter says what was asked for and when, and never the guest's name or
+  address — those stay on the booking board.
+- A daily letter says where each event stands: who has waited longest for an answer, holds about to
+  run out, what is left on the next night and, while the event is on, how many came through the
+  door. It is weekly once bookings close, and it is never sent when nothing is waiting.
+- The notifications page has a new section, letters about bookings, for choosing group by group
+  whether those letters come as bookings arrive, once a day, or not at all.
+- The bell now counts places a guest has picked and is waiting to have confirmed, and gives holds
+  about to run out a row of their own — for the venue and for the guest. A hold you placed yourself
+  is no longer announced to you as an answer.
+
 - Events can have **bands** — the wristbands, lanyards or stamps you hand out so a steward knows by
   glance what somebody is here for. Each is your own colour and what it means, and most parties'
   bands are worked out from what they booked rather than tagged one by one.

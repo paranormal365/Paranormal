@@ -328,4 +328,13 @@ public sealed partial class BenAdminClientAdapter
         => _api.SendExpectingReasonAsync<object, MyHostedEventBookingRecord>(
                HttpMethod.Post, $"/api/public/hosted-events/{eventId}/my-booking/pass/email",
                new { }, token);
+
+    public Task<ItemResult<EventBookingAlertSettingsRecord>> GetEventBookingAlertSettingsAsync(
+        CancellationToken token = default)
+        => _api.GetItemAsync<EventBookingAlertSettingsRecord>("/api/me/event-booking-alerts", token);
+
+    public Task<(EventBookingAlertSettingsRecord? Result, string? Error)> SetEventBookingAlertModeAsync(
+        Guid orgId, SetEventBookingAlertModeRequest request, CancellationToken token = default)
+        => _api.SendExpectingReasonAsync<SetEventBookingAlertModeRequest, EventBookingAlertSettingsRecord>(
+               HttpMethod.Put, $"/api/me/event-booking-alerts/{orgId}", request, token);
 }

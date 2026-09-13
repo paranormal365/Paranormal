@@ -18,6 +18,17 @@ read.
 This stream deliberately does not repeat the website's list. A change people meet as a page
 belongs there; this is for the part underneath.
 
+## 2026-09-13
+
+- Two scheduled tasks now tell the people who decide an event's bookings about them: one as
+  bookings arrive, collecting a rush into a single summary, and one daily or weekly overview. Each
+  remembers how far it has told each person, so a letter that fails to go is tried again on the next
+  pass rather than recorded as sent.
+- A signed-in person can read and change, per group, how often those letters reach them. Only groups
+  they actually decide bookings for are listed or accepted.
+- The notification summary counts held places as waiting on a decision, includes event helpers who
+  may decide, and has two new counts for holds that run out within a day.
+
 ## 2026-09-12
 
 - What the kitchen needs for a hosted event can now be asked for one night at a time. A party with

@@ -692,6 +692,50 @@ it is the one thing in this phase that needs a person holding a phone.
   digest skips a quiet event, opt-out honoured; `NotificationBellCoversEveryBucketTests`.
 - **Verified by**: mail diagnostics show one alert after two quick requests.
 
+#### Phase 8 as built (2026-09-13) — what changed from the plan above
+
+1. **Nothing is written when a booking arrives.** The alert is a five-minute job that finds new
+   bookings by when they were made and keeps a cursor per person per event
+   (`EventBookingAlertState`: `LastAlertUtc`, `AlertsCoverUpToUtc`, `LastDigestUtc`). So there is no
+   hook in the request door or the hold door to forget, a letter that fails to send leaves the
+   cursor where it was and is tried on the next pass, and an outage costs a late letter rather than
+   a lost one. The digest marker lives on the same row, not on `HostedEvent.LastDigestSentUtc` as
+   the model table said: the digest is per recipient, because each person's own bookings are
+   filtered out and each person may be due at a different moment.
+2. **The rule is pure and tested without a clock** (`EventBookingAlerts.Decide`): the first new
+   booking after 15 quiet minutes is sent on the next pass; anything inside a rush waits until 15
+   minutes pass with nothing new **or an hour has passed since the oldest of it**, whichever comes
+   first. The ceiling was not in the plan and is the difference between a summary and a
+   request nobody hears about during a steady trickle. Forty in an hour → the first letter, then one
+   summary covering the other thirty-nine. Nothing older than an hour before a person's first pass
+   is sent to them, so turning the feature on does not post a back-catalogue.
+3. **Three modes, not a cadence setting**: *As they arrive* (default, with the digest too), *A daily
+   letter*, *Nothing*. The digest's cadence is not a choice — daily while `IsOpenForRequests`,
+   weekly otherwise — because nobody needed to pick it and a setting nobody needs is a setting
+   somebody gets wrong. It is per person **per group**, on `/notifications`, and lists only groups
+   the person decides for, including a group they are only helping at (with "You're helping at
+   Phantom Nights" so they know why).
+4. **Recipients are asked the way the board asks**: active members plus accepted staff with
+   *Decides*, each confirmed by `HostedEventAccess.CanDecideBookingsAsync(..., eventId, db)`. A
+   steward handed only the door is never written to. Their own booking is never news to them.
+5. **The bell** found three defects rather than two buckets: deciders were owners and administrators
+   only (now role grants and staff *Decides* too); Held was never counted as waiting on the venue;
+   and a guest's own hold was announced to them as "A venue answered you". A hold lapsing within a
+   day moves from the queue's count to `EventHoldsLapsing`, so a booking is one number on the bell.
+   `MyEventHoldLapsing` is the guest's row.
+6. **The staff-room thread** waits for phase 11 as planned; the letters and the bell carry it until
+   then.
+7. **Verified by, honestly**: the harness has no outgoing mail, so "one alert after two quick
+   requests" is proved against a real SQLite database and the real job with a recording mailer
+   (`EventBookingAlertJobTests.Two_quick_requests_are_one_letter_to_the_person_who_decides`), not by
+   reading mail diagnostics on the running site. Discrimination was proved for the rush window, the
+   hour ceiling, the retry-after-failure cursor, the daily cadence, staff *Decides* in the bell,
+   Held excluded from the guest's answered row, and the settings endpoint's refusal. The settings
+   card is walked by Playwright at 1280/768/375 (`EventBookingLettersTests`).
+8. **Both purges** name the new tables: the group purge takes the preferences, the person purge
+   sweeps both (settings about a person are of use to nobody once the person is gone). Migration
+   `EventBookingAlerts`, two `CreateTable`s, applied to `IsHauntedDb_player`.
+
 ### Phase 9 — Venue profiles and grants (the third arrangement)
 
 **Goal**: publishing at another group's venue is gated on that venue saying yes, and the venue can
