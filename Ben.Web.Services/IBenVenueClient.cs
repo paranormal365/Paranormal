@@ -58,4 +58,55 @@ public interface IBenVenueClient
 
     /// <summary>Who runs a place as its venue. Empty when nobody has proved it.</summary>
     Task<ItemResult<PlaceVenueRecord>> GetPlaceVenueAsync(Guid placeId, CancellationToken token = default);
+
+    // ── a place's contact details ────────────────────────────────────────────
+
+    /// <summary>The public details, plus the viewer's own groups' private ones when signed in.</summary>
+    Task<ItemResult<PlaceContactListRecord>> GetPlaceContactsAsync(Guid placeId, bool signedIn, CancellationToken token = default);
+
+    Task<(PlaceContactListRecord? Result, string? Error)> AddPlaceContactAsync(
+        Guid placeId, AddPlaceContactRequest request, CancellationToken token = default);
+
+    Task<(PlaceContactListRecord? Result, string? Error)> RemovePlaceContactAsync(
+        Guid placeId, Guid contactId, CancellationToken token = default);
+
+    /// <summary>The confirmed venue vouches for a public detail somebody else added.</summary>
+    Task<(PlaceContactListRecord? Result, string? Error)> ConfirmPlaceContactAsync(
+        Guid placeId, Guid contactId, CancellationToken token = default);
+
+    // ── claiming a place ─────────────────────────────────────────────────────
+
+    Task<ItemResult<VenueClaimStartRecord>> GetVenueClaimStartAsync(Guid orgId, Guid placeId, CancellationToken token = default);
+
+    Task<(VenueClaimRecord? Result, string? Error)> StartVenueClaimAsync(
+        Guid orgId, StartVenueClaimRequest request, CancellationToken token = default);
+
+    Task<(VenueClaimRecord? Result, string? Error)> SubmitVenueClaimCodeAsync(
+        Guid orgId, Guid claimId, VenueClaimCodeRequest request, CancellationToken token = default);
+
+    Task<(VenueClaimRecord? Result, string? Error)> ResendVenueClaimCodeAsync(
+        Guid orgId, Guid claimId, CancellationToken token = default);
+
+    Task<(VenueClaimRecord? Result, string? Error)> WithdrawVenueClaimAsync(
+        Guid orgId, Guid claimId, CancellationToken token = default);
+
+    /// <summary>A claim, for the claimant, a group that may object to it, or a reviewer.</summary>
+    Task<ItemResult<VenueClaimRecord>> GetVenueClaimAsync(Guid claimId, CancellationToken token = default);
+
+    Task<(VenueClaimRecord? Result, string? Error)> ObjectToVenueClaimAsync(
+        Guid claimId, ObjectToVenueClaimRequest request, CancellationToken token = default);
+
+    // ── the reviewer ─────────────────────────────────────────────────────────
+
+    Task<ItemResult<AdminVenueClaimListRecord>> GetAdminVenueClaimsAsync(CancellationToken token = default);
+
+    Task<(AdminVenueClaimListRecord? Result, string? Error)> ApproveVenueClaimAsync(
+        Guid claimId, DecideVenueClaimRequest request, CancellationToken token = default);
+
+    Task<(AdminVenueClaimListRecord? Result, string? Error)> RefuseVenueClaimAsync(
+        Guid claimId, DecideVenueClaimRequest request, CancellationToken token = default);
+
+    /// <summary>Undoes a confirmation that turned out to be wrong.</summary>
+    Task<(AdminVenueClaimListRecord? Result, string? Error)> UnconfirmVenueAsync(
+        Guid profileId, DecideVenueClaimRequest request, CancellationToken token = default);
 }

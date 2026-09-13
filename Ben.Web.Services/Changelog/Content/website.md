@@ -18,6 +18,14 @@ day-by-day account of building it would say nothing to anyone using it now.
 
 ## 2026-09-13
 
+- Places now have contact details — websites, phone numbers and email addresses — each public or
+  private to the group that recorded it, for things like a coordinator's number for scheduling.
+  Once a venue is confirmed, it keeps its own public details.
+- A group can claim a place it runs. It proves the claim with a code sent to the venue's own public
+  email address, one somebody outside the group recorded, or by asking a person to review what it
+  sends. A proved claim waits a week, during which the groups that know the place can object.
+  Nothing already booked at the place changes.
+
 - A group can now be confirmed as the venue at a place, and other groups then ask that venue before
   publishing an event there. The organizer asks from the event page; the venue answers from a new
   hosting requests page, and a yes can also lend its rooms, the building's story and its own people

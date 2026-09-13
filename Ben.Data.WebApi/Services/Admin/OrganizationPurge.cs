@@ -410,6 +410,20 @@ public sealed class OrganizationPurge
                 .Where(g => g.VenueOrganizationId == organizationId || g.GranteeOrganizationId == organizationId)
                 .ExecuteDeleteAsync(ct);
             await db.OrganizationVenueProfiles.Where(v => v.OrganizationId == organizationId).ExecuteDeleteAsync(ct);
+            // Claims this group made go; an objection it made to somebody else's claim stays as a
+            // record of the dispute, with the objector's name cleared.
+            await db.VenuePlaceClaims.Where(c => c.OrganizationId == organizationId).ExecuteDeleteAsync(ct);
+            await db.VenuePlaceClaims.Where(c => c.ObjectingOrganizationId == organizationId)
+                .ExecuteUpdateAsync(u => u.SetProperty(c => c.ObjectingOrganizationId, (Guid?)null), ct);
+            // Contact details this group recorded: its private notes go with it. Its PUBLIC ones are
+            // the place's front door, recorded for everybody, so they stay — unless a claim still
+            // names one as where its code went, which the line above has just removed.
+            await db.VenuePlaceClaims
+                .Where(c => c.PlaceContactId != null && c.PlaceContact!.OrganizationId == organizationId && !c.PlaceContact.IsPublic)
+                .ExecuteUpdateAsync(u => u.SetProperty(c => c.PlaceContactId, (Guid?)null), ct);
+            await db.PlaceContacts.Where(c => c.OrganizationId == organizationId && !c.IsPublic).ExecuteDeleteAsync(ct);
+            await db.PlaceContacts.Where(c => c.OrganizationId == organizationId && c.IsPublic)
+                .ExecuteUpdateAsync(u => u.SetProperty(c => c.OrganizationId, (Guid?)null), ct);
 
             // How often each person hears about this group's bookings (item 235 phase 8). It would
             // cascade with the group; it is named here so the next reader does not have to know that.

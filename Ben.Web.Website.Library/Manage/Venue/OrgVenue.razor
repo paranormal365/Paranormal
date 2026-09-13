@@ -73,6 +73,7 @@
                     else
                     {
                         <span class="badge bg-secondary">Not confirmed as the venue</span>
+                        <a class="small" id="@($"venue-claim-{key}")" href="@($"/organizations/{OrgId}/venue/claim?place={f.PlaceId}")">Claim it</a>
                     }
                 </div>
                 <div class="card-body">

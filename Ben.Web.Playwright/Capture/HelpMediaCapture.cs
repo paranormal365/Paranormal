@@ -2302,6 +2302,85 @@ public sealed class HelpMediaCapture : BenTestBase
         }
     }
 
+    /// <summary>A place's contact details, claiming it, and the reviewer's queue (item 235 phase 9).</summary>
+    [Test]
+    [Description("organization-administration: contact details, claiming a venue, reviewing a claim.")]
+    public async Task Capture_VenueClaim()
+    {
+        const string orgName = "Franklin Theatre Company";
+        var organizer = await SignedInApiAsync(UserEmail, UserPassword);
+        var register = await organizer.PostAsync("/api/security/organizations/register", new()
+        {
+            DataObject = new { name = orgName, urlName = $"ftc-{Guid.NewGuid():N}"[..16], kind = 0 },
+        });
+        Assert.That(register.Ok, Is.True, await register.TextAsync());
+        var orgId = (await register.JsonAsync())!.Value.GetProperty("organizationId").GetString()!;
+
+        try
+        {
+            var start = DateTime.UtcNow.Date.AddDays(70);
+            var ev = await organizer.PostAsync($"/api/organizations/{orgId}/events", new()
+            {
+                DataObject = new
+                {
+                    name = "Ghost Light Evening", placeId = Guid.Empty, startsOn = start, endsOn = start,
+                    timeZoneId = "America/Chicago",
+                    newVenue = new
+                    {
+                        name = "The Old Franklin Opera House", streetAddress1 = "419 Main St",
+                        city = "Franklin", state = "TN", zipCode = "37064", country = "US",
+                        latitude = 35.9254m, longitude = -86.8695m,
+                    },
+                },
+            });
+            Assert.That(ev.Ok, Is.True, await ev.TextAsync());
+            var placeId = (await ev.JsonAsync())!.Value.GetProperty("placeId").GetString()!;
+
+            var suffix = Guid.NewGuid().ToString("N")[..6];
+            foreach (var (kind, value, label, isPublic) in new[]
+                     {
+                         (0, $"https://oldfranklinopera-{suffix}.example.com", "Their website", true),
+                         (1, "(615) 555-0170", "Box office", true),
+                         (1, "(615) 555-0188", "Dana, for scheduling rehearsals", false),
+                     })
+            {
+                await organizer.PostAsync($"/api/places/{placeId}/contacts",
+                    new() { DataObject = new { organizationId = orgId, kind, value, label, isPublic } });
+            }
+
+            await LoginAsync(UserEmail, UserPassword);
+            await GoAsync($"/places/{placeId}");
+            await ShootAsync("organization-administration", "place-contacts.png",
+                gated: true, selector: "#place-contacts", proves: "Box office");
+
+            await GoAsync($"/organizations/{orgId}/venue/claim?place={placeId}");
+            await ShootAsync("organization-administration", "venue-claim.png",
+                gated: true, selector: ".container-fluid", proves: "How to prove it");
+
+            await organizer.PostAsync($"/api/organizations/{orgId}/venue-claims", new()
+            {
+                DataObject = new
+                {
+                    placeId, role = 1, placeContactId = (Guid?)null,
+                    evidence = "I'm the general manager. We have leased the building since 2019 and our name is on the city's venue licence.",
+                },
+            });
+
+            await LoginAsync(SuperAdminEmail, SuperAdminPassword);
+            await GoAsync("/admin/venue-claims");
+            await ShootAsync("organization-administration", "venue-claim-review.png",
+                gated: true, selector: ".admin-venue-claim", proves: "venue licence");
+        }
+        finally
+        {
+            var admin = await SignedInApiAsync(SuperAdminEmail, SuperAdminPassword);
+            await admin.DeleteAsync($"/api/admin/organizations/{orgId}/purge",
+                new() { DataObject = new { confirmName = orgName } });
+            await admin.DisposeAsync();
+            await organizer.DisposeAsync();
+        }
+    }
+
     /// <summary>Letters about bookings, on the notifications page (item 235 phase 8).</summary>
     [Test]
     [Description("organization-administration: how often a group writes to you about bookings.")]

@@ -782,6 +782,59 @@ withdraw with a reason.
   back; the Thomas House claims its own place, is refused until it proves the address, and the
   weekend already booked there is untouched throughout.
 
+#### Phase 9 as built (2026-09-13) — what changed, and what Ben added mid-phase
+
+**Ben added contact details while it was being built** (*"Maybe we track venues and contact
+information public / private?"*, *"Links to website. Phone public and private maybe for
+scheduling..."*, *"This will be completed by validation or verification of who is in charge of venue"*,
+*"Or a rep of the venue"*, *"Code validation is okay as long as we verify we have the right people"*).
+`PlaceContact` (Website / Phone / Email, public or private to the recording group) went in, and it is
+what made the plan's first proof possible: the exploration found that `Place` has **no phone, email or
+website at all**, so "a code to the contact already on the place record" had nothing to send to.
+
+**Departures from the plan:**
+
+1. **Only a verified venue gates anything.** The plan said the publish gate detects "another org's
+   published venue profile". That would let a competitor write a profile for the Thomas House and stop
+   every organizer there with one form. So a profile gates nothing and cannot be published until the
+   group is confirmed (`VerifiedUtc`), and one place has at most one confirmed venue (filtered unique
+   index). The claim flow is therefore not a separate afterthought but the only way a venue gains
+   power.
+2. **At a confirmed venue, its yes is the only answer**, whatever the organizer picked in the
+   arrangement box. The venue card replaces the box there.
+3. **A request is always about one event**, from that event's page, with its nights copied at the
+   moment of asking. The public venue page has no "ask to host here" form: a yes to something
+   unspecified is the yes that gets disputed. A night added after the yes is not covered, and the
+   readiness list says so.
+4. **Photos are not lent in this phase.** The grant lends rooms (the plan editor offers the venue's
+   rooms), the building's story (on the public event page) and the venue's own people (read the board
+   and run the door through `HostedEventAccess`, never decide). Photos belong with the flashy page in
+   phase 11, where the event page's media lives.
+5. **Proof, as built.** A code (six digits, hashed, 24 h, five tries) goes only to a **public email
+   address recorded by somebody outside the claiming group at least seven days before the claim** —
+   so the claimant cannot supply it, nor have a friend's group type it in that afternoon. A proved
+   claim then stands for **seven days** while every group that knows the place (events, rooms,
+   contacts, investigations, cases there) is messaged and may object; `VenueClaimJob` confirms it if
+   nobody does. No proving address → the claimant sends evidence and a SuperAdmin reviews at
+   `/admin/venue-claims`. An objection always goes to a person. Phone codes are not offered: the site
+   cannot send texts, and phone numbers are for scheduling and for the reviewer to call.
+6. **The claimant's role is recorded** (Owner / Manager / Representative), per Ben's "or a rep of the
+   venue".
+7. **Once confirmed, the venue keeps the public contact details.** Others' public details show as
+   "Added by …" until the venue presses *That's right* or removes them; other groups add private notes
+   only, and the card says why.
+8. **Undoing a confirmation** (SuperAdmin) takes the page down and stops the gate but leaves grants
+   already given standing — they were given in good faith by whoever answered for the building then.
+9. **Verified by, honestly.** The ask, the yes and the withdrawal — with the venue's reason arriving on
+   the organizer's card — were walked in Playwright across two groups (`VenueHostingTests`, a fresh
+   group purged afterwards on SQL Server); that the event cannot publish until the yes, and that the
+   credit comes back on a withdrawal, are proved against real rows in `VenueGrantTests` rather than by
+   pressing Publish, which would spend a credit in the shared e2e database; and the adjudicated claim through to "Run as a venue by" (`VenueClaimTests`). The code
+   path and the objection week cannot be walked without mail and a clock, so they are proved on SQLite
+   with the real controllers and job (`VenuePlaceClaimTests`), each rule broken once to watch its test
+   fail. "The weekend already booked there is untouched throughout" is both a behaviour test and a
+   source guard over every file that handles a claim.
+
 ### Phase 10 — Sessions and classes ("the ghost hunt but not the dinner")
 
 As the README's phase 4, unchanged in substance: `HostedEventSession*`, first-come sign-up with a

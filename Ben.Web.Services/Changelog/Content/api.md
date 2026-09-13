@@ -20,6 +20,10 @@ belongs there; this is for the part underneath.
 
 ## 2026-09-13
 
+- Contact details for places, public or private to a group, and claims to run a place: a code to a
+  public address recorded by somebody else, a week for objections, a scheduled task that confirms
+  unchallenged claims, and a review queue for everything else.
+
 - Venues on the site: a group's profile of a place it runs, requests from other groups to hold an
   event there, and the permission a yes grants. Publishing at a place with a confirmed venue now
   needs that permission covering every night, and withdrawing it stops the events that rest on it.

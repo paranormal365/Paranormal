@@ -130,6 +130,8 @@ namespace Ben.Data.Source.Context
         public virtual DbSet<OrganizationVenueProfile> OrganizationVenueProfiles { get; set; }
         public virtual DbSet<VenueHostingRequest> VenueHostingRequests { get; set; }
         public virtual DbSet<OrganizationVenueGrant> OrganizationVenueGrants { get; set; }
+        public virtual DbSet<PlaceContact> PlaceContacts { get; set; }
+        public virtual DbSet<VenuePlaceClaim> VenuePlaceClaims { get; set; }
         public virtual DbSet<OutboxEmail> OutboxEmails { get; set; }
         public virtual DbSet<OutboxEmailAttachment> OutboxEmailAttachments { get; set; }
         public virtual DbSet<EventCredit> EventCredits { get; set; }
@@ -1032,6 +1034,62 @@ namespace Ben.Data.Source.Context
                 .HasOne(g => g.UpdatedByAppUser).WithMany()
                 .HasForeignKey(g => g.UpdatedByAppUserId).IsRequired(false).OnDelete(DeleteBehavior.NoAction);
             modelBuilder.Entity<OrganizationVenueGrant>().Property(g => g.RevokedReason).HasMaxLength(2000);
+
+            // ── a place's contact details and claims to run it (phase 9) ─────────────
+            modelBuilder.Entity<PlaceContact>()
+                .HasOne(c => c.Place).WithMany()
+                .HasForeignKey(c => c.PlaceId).OnDelete(DeleteBehavior.NoAction);
+            modelBuilder.Entity<PlaceContact>()
+                .HasOne(c => c.Organization).WithMany()
+                .HasForeignKey(c => c.OrganizationId).IsRequired(false).OnDelete(DeleteBehavior.NoAction);
+            modelBuilder.Entity<PlaceContact>()
+                .HasOne(c => c.CreatedByAppUser).WithMany()
+                .HasForeignKey(c => c.CreatedByAppUserId).OnDelete(DeleteBehavior.NoAction);
+            modelBuilder.Entity<PlaceContact>()
+                .HasOne(c => c.UpdatedByAppUser).WithMany()
+                .HasForeignKey(c => c.UpdatedByAppUserId).IsRequired(false).OnDelete(DeleteBehavior.NoAction);
+            modelBuilder.Entity<PlaceContact>().Property(c => c.Value).HasMaxLength(320);
+            modelBuilder.Entity<PlaceContact>().Property(c => c.Label).HasMaxLength(120);
+            modelBuilder.Entity<PlaceContact>().HasIndex(c => new { c.PlaceId, c.IsPublic });
+
+            modelBuilder.Entity<VenuePlaceClaim>()
+                .HasOne(c => c.Place).WithMany()
+                .HasForeignKey(c => c.PlaceId).OnDelete(DeleteBehavior.NoAction);
+            modelBuilder.Entity<VenuePlaceClaim>()
+                .HasOne(c => c.Organization).WithMany()
+                .HasForeignKey(c => c.OrganizationId).OnDelete(DeleteBehavior.NoAction);
+            modelBuilder.Entity<VenuePlaceClaim>()
+                .HasOne(c => c.ClaimantAppUser).WithMany()
+                .HasForeignKey(c => c.ClaimantAppUserId).OnDelete(DeleteBehavior.NoAction);
+            modelBuilder.Entity<VenuePlaceClaim>()
+                .HasOne(c => c.PlaceContact).WithMany()
+                .HasForeignKey(c => c.PlaceContactId).IsRequired(false).OnDelete(DeleteBehavior.NoAction);
+            modelBuilder.Entity<VenuePlaceClaim>()
+                .HasOne(c => c.ObjectedByAppUser).WithMany()
+                .HasForeignKey(c => c.ObjectedByAppUserId).IsRequired(false).OnDelete(DeleteBehavior.NoAction);
+            modelBuilder.Entity<VenuePlaceClaim>()
+                .HasOne(c => c.ObjectingOrganization).WithMany()
+                .HasForeignKey(c => c.ObjectingOrganizationId).IsRequired(false).OnDelete(DeleteBehavior.NoAction);
+            modelBuilder.Entity<VenuePlaceClaim>()
+                .HasOne(c => c.DecidedByAppUser).WithMany()
+                .HasForeignKey(c => c.DecidedByAppUserId).IsRequired(false).OnDelete(DeleteBehavior.NoAction);
+            modelBuilder.Entity<VenuePlaceClaim>()
+                .HasOne(c => c.CreatedByAppUser).WithMany()
+                .HasForeignKey(c => c.CreatedByAppUserId).OnDelete(DeleteBehavior.NoAction);
+            modelBuilder.Entity<VenuePlaceClaim>()
+                .HasOne(c => c.UpdatedByAppUser).WithMany()
+                .HasForeignKey(c => c.UpdatedByAppUserId).IsRequired(false).OnDelete(DeleteBehavior.NoAction);
+            modelBuilder.Entity<VenuePlaceClaim>().Property(c => c.Evidence).HasMaxLength(4000);
+            modelBuilder.Entity<VenuePlaceClaim>().Property(c => c.ObjectionText).HasMaxLength(4000);
+            modelBuilder.Entity<VenuePlaceClaim>().Property(c => c.DecisionNote).HasMaxLength(2000);
+            modelBuilder.Entity<VenuePlaceClaim>().Property(c => c.CodeHash).HasMaxLength(64);
+            // One open claim per group per place. A second while the first is standing is a second
+            // code to the venue's inbox and a second letter to every group that knows the place.
+            modelBuilder.Entity<VenuePlaceClaim>()
+                .HasIndex(c => new { c.PlaceId, c.OrganizationId }).IsUnique()
+                .HasDatabaseName("IX_VenuePlaceClaims_PlaceId_OrganizationId_Open")
+                .HasFilter("[State] IN (0, 1, 5)");
+            modelBuilder.Entity<VenuePlaceClaim>().HasIndex(c => new { c.State, c.ObjectionsCloseUtc });
 
             modelBuilder.Entity<HostedEvent>()
                 .HasOne(e => e.VenueGrant).WithMany()

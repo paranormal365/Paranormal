@@ -59,4 +59,77 @@ public sealed partial class BenAdminClientAdapter
 
     public Task<ItemResult<PlaceVenueRecord>> GetPlaceVenueAsync(Guid placeId, CancellationToken token = default)
         => _api.GetItemAsync<PlaceVenueRecord>($"/api/public/places/{placeId}/venue", token);
+
+    private static string ContactsUrl(Guid placeId) => $"/api/places/{placeId}/contacts";
+
+    private static string ClaimsUrl(Guid orgId) => $"/api/organizations/{orgId}/venue-claims";
+
+    public Task<ItemResult<PlaceContactListRecord>> GetPlaceContactsAsync(Guid placeId, bool signedIn, CancellationToken token = default)
+        => signedIn
+            ? _api.GetItemAsync<PlaceContactListRecord>(ContactsUrl(placeId), token)
+            : _api.GetAnonymousItemAsync<PlaceContactListRecord>($"/api/public/places/{placeId}/contacts", token);
+
+    public Task<(PlaceContactListRecord? Result, string? Error)> AddPlaceContactAsync(
+        Guid placeId, AddPlaceContactRequest request, CancellationToken token = default)
+        => _api.SendExpectingReasonAsync<AddPlaceContactRequest, PlaceContactListRecord>(
+               HttpMethod.Post, ContactsUrl(placeId), request, token);
+
+    public Task<(PlaceContactListRecord? Result, string? Error)> RemovePlaceContactAsync(
+        Guid placeId, Guid contactId, CancellationToken token = default)
+        => _api.SendExpectingReasonAsync<object, PlaceContactListRecord>(
+               HttpMethod.Delete, $"{ContactsUrl(placeId)}/{contactId}", new { }, token);
+
+    public Task<(PlaceContactListRecord? Result, string? Error)> ConfirmPlaceContactAsync(
+        Guid placeId, Guid contactId, CancellationToken token = default)
+        => _api.SendExpectingReasonAsync<object, PlaceContactListRecord>(
+               HttpMethod.Post, $"{ContactsUrl(placeId)}/{contactId}/confirm", new { }, token);
+
+    public Task<ItemResult<VenueClaimStartRecord>> GetVenueClaimStartAsync(Guid orgId, Guid placeId, CancellationToken token = default)
+        => _api.GetItemAsync<VenueClaimStartRecord>($"{ClaimsUrl(orgId)}/start?place={placeId}", token);
+
+    public Task<(VenueClaimRecord? Result, string? Error)> StartVenueClaimAsync(
+        Guid orgId, StartVenueClaimRequest request, CancellationToken token = default)
+        => _api.SendExpectingReasonAsync<StartVenueClaimRequest, VenueClaimRecord>(
+               HttpMethod.Post, ClaimsUrl(orgId), request, token);
+
+    public Task<(VenueClaimRecord? Result, string? Error)> SubmitVenueClaimCodeAsync(
+        Guid orgId, Guid claimId, VenueClaimCodeRequest request, CancellationToken token = default)
+        => _api.SendExpectingReasonAsync<VenueClaimCodeRequest, VenueClaimRecord>(
+               HttpMethod.Post, $"{ClaimsUrl(orgId)}/{claimId}/code", request, token);
+
+    public Task<(VenueClaimRecord? Result, string? Error)> ResendVenueClaimCodeAsync(
+        Guid orgId, Guid claimId, CancellationToken token = default)
+        => _api.SendExpectingReasonAsync<object, VenueClaimRecord>(
+               HttpMethod.Post, $"{ClaimsUrl(orgId)}/{claimId}/resend", new { }, token);
+
+    public Task<(VenueClaimRecord? Result, string? Error)> WithdrawVenueClaimAsync(
+        Guid orgId, Guid claimId, CancellationToken token = default)
+        => _api.SendExpectingReasonAsync<object, VenueClaimRecord>(
+               HttpMethod.Post, $"{ClaimsUrl(orgId)}/{claimId}/withdraw", new { }, token);
+
+    public Task<ItemResult<VenueClaimRecord>> GetVenueClaimAsync(Guid claimId, CancellationToken token = default)
+        => _api.GetItemAsync<VenueClaimRecord>($"/api/venue-claims/{claimId}", token);
+
+    public Task<(VenueClaimRecord? Result, string? Error)> ObjectToVenueClaimAsync(
+        Guid claimId, ObjectToVenueClaimRequest request, CancellationToken token = default)
+        => _api.SendExpectingReasonAsync<ObjectToVenueClaimRequest, VenueClaimRecord>(
+               HttpMethod.Post, $"/api/venue-claims/{claimId}/object", request, token);
+
+    public Task<ItemResult<AdminVenueClaimListRecord>> GetAdminVenueClaimsAsync(CancellationToken token = default)
+        => _api.GetItemAsync<AdminVenueClaimListRecord>("/api/admin/venue-claims", token);
+
+    public Task<(AdminVenueClaimListRecord? Result, string? Error)> ApproveVenueClaimAsync(
+        Guid claimId, DecideVenueClaimRequest request, CancellationToken token = default)
+        => _api.SendExpectingReasonAsync<DecideVenueClaimRequest, AdminVenueClaimListRecord>(
+               HttpMethod.Post, $"/api/admin/venue-claims/{claimId}/approve", request, token);
+
+    public Task<(AdminVenueClaimListRecord? Result, string? Error)> RefuseVenueClaimAsync(
+        Guid claimId, DecideVenueClaimRequest request, CancellationToken token = default)
+        => _api.SendExpectingReasonAsync<DecideVenueClaimRequest, AdminVenueClaimListRecord>(
+               HttpMethod.Post, $"/api/admin/venue-claims/{claimId}/refuse", request, token);
+
+    public Task<(AdminVenueClaimListRecord? Result, string? Error)> UnconfirmVenueAsync(
+        Guid profileId, DecideVenueClaimRequest request, CancellationToken token = default)
+        => _api.SendExpectingReasonAsync<DecideVenueClaimRequest, AdminVenueClaimListRecord>(
+               HttpMethod.Post, $"/api/admin/venue-profiles/{profileId}/unconfirm", request, token);
 }

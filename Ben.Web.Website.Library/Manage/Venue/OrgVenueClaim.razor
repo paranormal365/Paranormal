@@ -1,0 +1,261 @@
+@page "/organizations/{OrgId:guid}/venue/claim"
+@namespace Ben.Web.Website.Library.Manage.Venue
+
+@inject IBenAdminClient AdminClient
+@inject IBenUserState UserState
+
+@using Ben.Data.Common.Enums
+@using Ben.Service.Models.Entities
+@using Ben.Web.Services.WebApi
+@using Ben.Web.Website.Library.Kit
+@using Ben.Web.Website.Library.Manage.Icon
+
+@* Claiming to run a place, and proving it (item 235 phase 9).
+
+   WHAT A CLAIM DOES, SAID BEFORE IT IS MADE: other groups will ask you before publishing events
+   there, and you can show a venue page. What it does NOT do is said just as plainly — nothing
+   already booked moves — because the person most likely to misunderstand a claim is the one
+   hoping it hands them somebody else's weekend.
+
+   TWO WAYS TO PROVE IT, the quick one first when it is available: a code to the venue's own public
+   address that somebody else recorded; otherwise a person reviews what you send. The addresses are
+   shown masked — enough to recognise your own front desk, not enough to harvest. *@
+
+<PageTitle>Claim a venue</PageTitle>
+
+<div class="container-fluid py-3" style="max-width:800px;">
+
+    <div class="text-secondary small">
+        <a href="@($"/organizations/{OrgId}/venue")">Your venue</a>
+        @if (_start.Item is { } crumb)
+        {
+            <text> · </text><a href="@($"/places/{crumb.PlaceId}")">@crumb.PlaceName</a>
+        }
+    </div>
+
+    <h1 class="h3 mb-1">
+        Claim a venue
+        <HelpLink Slug="organization-administration" Anchor="hosted-events" />
+    </h1>
+
+    @if (_error is { Length: > 0 })
+    {
+        <div class="alert alert-danger py-2" id="claim-error" role="alert">@_error</div>
+    }
+
+    @if (Place is null)
+    {
+        <div class="alert alert-light border">Open the place's own page and choose <strong>Claim it</strong> to start.</div>
+    }
+    else
+    {
+        <BenItemState TItem="VenueClaimStartRecord" Result="_start" Loading="_loading"
+                      LoadingText="Loading…" OnRetry="LoadAsync">
+            <ChildContent Context="start">
+
+                @if ((_claim ?? start.OpenClaim) is { } claim)
+                {
+                    <div class="card mb-3" id="claim-state">
+                        <div class="card-body">
+                            @switch (claim.State)
+                            {
+                                case VenueClaimState.Pending when claim.CodeSentTo is { } sentTo:
+                                    <p>We sent a code to <strong>@sentTo</strong>. Whoever reads that inbox gives it to you.</p>
+                                    <label class="form-label" for="claim-code">The code</label>
+                                    <div class="d-flex flex-column flex-sm-row gap-2" style="max-width:420px;">
+                                        <input class="form-control" id="claim-code" inputmode="numeric" maxlength="6"
+                                               autocomplete="one-time-code" @bind="_code" @bind:event="oninput" />
+                                        <button type="button" class="btn btn-primary text-nowrap" id="claim-code-submit"
+                                                disabled="@_busy" @onclick="() => CodeAsync(claim)">Confirm</button>
+                                    </div>
+                                    <div class="d-flex gap-3 mt-2 small">
+                                        <button type="button" class="btn btn-link btn-sm p-0" disabled="@_busy"
+                                                @onclick="() => ResendAsync(claim)">Send a new code</button>
+                                        <button type="button" class="btn btn-link btn-sm p-0 text-danger" disabled="@_busy"
+                                                @onclick="() => WithdrawAsync(claim)">Take the claim back</button>
+                                    </div>
+                                    break;
+
+                                case VenueClaimState.Pending:
+                                    <p class="mb-2" id="claim-under-review">
+                                        A person is reviewing your claim. You'll get a message when they decide, and they may contact you.
+                                    </p>
+                                    <button type="button" class="btn btn-link btn-sm p-0 text-danger" disabled="@_busy"
+                                            @onclick="() => WithdrawAsync(claim)">Take the claim back</button>
+                                    break;
+
+                                case VenueClaimState.Proved:
+                                    <p class="mb-0" id="claim-proved">
+                                        Proved. The groups that know @claim.PlaceName have been told, and unless one objects you
+                                        become the venue there on @claim.ObjectionsCloseUtc?.ToViewerLocalTime(UserState).ToDisplayDate().
+                                    </p>
+                                    break;
+
+                                case VenueClaimState.Contested:
+                                    <p class="mb-0" id="claim-contested">
+                                        @(claim.ObjectingOrganizationName ?? "Somebody") says your group doesn't run @claim.PlaceName.
+                                        A person will look at both sides and decide.
+                                    </p>
+                                    break;
+
+                                case VenueClaimState.Approved:
+                                    <p class="mb-0" id="claim-approved">
+                                        Your group is confirmed as the venue at @claim.PlaceName.
+                                        <a href="@($"/organizations/{OrgId}/venue")">Open your venue</a>
+                                    </p>
+                                    break;
+
+                                case VenueClaimState.Refused:
+                                    <p class="mb-0" id="claim-refused">Not accepted. The reviewer said: “@claim.DecisionNote”</p>
+                                    break;
+
+                                default:
+                                    <p class="mb-0">You took this claim back.</p>
+                                    break;
+                            }
+                        </div>
+                    </div>
+                }
+                else if (start.AlreadyVenue is { Length: > 0 } venue)
+                {
+                    <div class="alert alert-warning" id="claim-already">
+                        @venue is already confirmed as the venue at @start.PlaceName. If that is wrong, contact support rather than claiming it again.
+                    </div>
+                }
+                else
+                {
+                    <p class="text-secondary">
+                        Claiming <strong>@start.PlaceName</strong> means other groups ask you before they publish events
+                        there, and you can show a venue page. <strong>Nothing already booked there changes</strong> —
+                        no event moves, is cancelled, or changes hands.
+                    </p>
+
+                    <div class="card mb-3">
+                        <div class="card-body">
+                            <fieldset class="mb-3">
+                                <legend class="form-label fs-6">You are its</legend>
+                                @foreach (var (role, words) in Roles)
+                                {
+                                    var r = role;
+                                    <div class="form-check">
+                                        <input class="form-check-input" type="radio" name="claim-role" id="@($"claim-role-{(int)r}")"
+                                               checked="@(_role == r)" @onchange="() => _role = r" />
+                                        <label class="form-check-label" for="@($"claim-role-{(int)r}")">@words</label>
+                                    </div>
+                                }
+                            </fieldset>
+
+                            <fieldset class="mb-3">
+                                <legend class="form-label fs-6">How to prove it</legend>
+                                @foreach (var contact in start.ProvingContacts)
+                                {
+                                    var c = contact;
+                                    <div class="form-check">
+                                        <input class="form-check-input" type="radio" name="claim-proof" id="@($"claim-proof-{c.Id:N}")"
+                                               checked="@(_proof == c.Id)" @onchange="() => _proof = c.Id" />
+                                        <label class="form-check-label" for="@($"claim-proof-{c.Id:N}")">
+                                            Send a code to <strong>@c.Masked</strong>
+                                            @if (c.Label is { Length: > 0 } label)
+                                            {
+                                                <span class="text-secondary">· @label</span>
+                                            }
+                                        </label>
+                                    </div>
+                                }
+                                <div class="form-check">
+                                    <input class="form-check-input" type="radio" name="claim-proof" id="claim-proof-review"
+                                           checked="@(_proof is null)" @onchange="() => _proof = null" />
+                                    <label class="form-check-label" for="claim-proof-review">Ask a person to review what I send</label>
+                                </div>
+                                @if (start.ProvingContacts.Count == 0)
+                                {
+                                    <div class="form-text" id="claim-no-proving">
+                                        A code can only go to a public email address for this place that somebody outside your group
+                                        recorded at least a week ago — an address you added yourselves proves nothing.
+                                    </div>
+                                }
+                            </fieldset>
+
+                            <label class="form-label" for="claim-evidence">
+                                @(_proof is null ? "What shows you run it" : "Anything the other groups should know (optional)")
+                            </label>
+                            <textarea class="form-control mb-3" id="claim-evidence" rows="4" maxlength="4000"
+                                      placeholder="I'm the general manager. Our business licence and listing are under this name."
+                                      @bind="_evidence" @bind:event="oninput"></textarea>
+
+                            <button type="button" class="btn btn-primary" id="claim-submit" disabled="@_busy" @onclick="ClaimAsync">
+                                @(_proof is null ? "Send for review" : "Send the code")
+                            </button>
+                        </div>
+                    </div>
+                }
+
+            </ChildContent>
+        </BenItemState>
+    }
+</div>
+
+@code {
+    [Parameter] public Guid OrgId { get; set; }
+    [SupplyParameterFromQuery(Name = "place")] public Guid? Place { get; set; }
+
+    private static readonly (VenueClaimantRole Role, string Words)[] Roles =
+    [
+        (VenueClaimantRole.Owner, "Owner"),
+        (VenueClaimantRole.Manager, "Manager"),
+        (VenueClaimantRole.Representative, "Representative — I act for the owners or managers"),
+    ];
+
+    private ItemResult<VenueClaimStartRecord> _start;
+    private VenueClaimRecord? _claim;
+    private bool _loading = true;
+    private bool _busy;
+    private string? _error;
+
+    private VenueClaimantRole _role = VenueClaimantRole.Manager;
+    private Guid? _proof;
+    private string? _evidence;
+    private string? _code;
+
+    protected override async Task OnAfterRenderAsync(bool firstRender)
+    {
+        if (!firstRender) return;
+        if (!await UserState.WaitUntilAuthReadyAsync(RendererInfo.IsInteractive)) return;
+
+        await LoadAsync();
+        StateHasChanged();
+    }
+
+    private async Task LoadAsync()
+    {
+        if (Place is not Guid place) { _loading = false; return; }
+        _loading = true;
+        _start = await AdminClient.GetVenueClaimStartAsync(OrgId, place);
+        _proof = _start.Item?.ProvingContacts.FirstOrDefault()?.Id;
+        _loading = false;
+    }
+
+    private Task ClaimAsync()
+        => SendAsync(() => AdminClient.StartVenueClaimAsync(OrgId,
+            new StartVenueClaimRequest(Place!.Value, _role, _evidence, _proof)));
+
+    private Task CodeAsync(VenueClaimRecord claim)
+        => SendAsync(() => AdminClient.SubmitVenueClaimCodeAsync(OrgId, claim.Id, new VenueClaimCodeRequest(_code)));
+
+    private Task ResendAsync(VenueClaimRecord claim)
+        => SendAsync(() => AdminClient.ResendVenueClaimCodeAsync(OrgId, claim.Id));
+
+    private Task WithdrawAsync(VenueClaimRecord claim)
+        => SendAsync(() => AdminClient.WithdrawVenueClaimAsync(OrgId, claim.Id));
+
+    private async Task SendAsync(Func<Task<(VenueClaimRecord? Result, string? Error)>> send)
+    {
+        _busy = true;
+        _error = null;
+        var (claim, error) = await send();
+        _busy = false;
+        if (claim is null) { _error = error ?? "That couldn't be sent just now."; return; }
+        _claim = claim;
+        _code = null;
+    }
+}

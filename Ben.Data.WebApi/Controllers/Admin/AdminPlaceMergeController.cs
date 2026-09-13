@@ -220,6 +220,10 @@ public sealed class AdminPlaceMergeController : BenControllerBase
         // and a SuperAdmin re-decides it as a claim.
         await RepointAsync(db.OrganizationVenueGrants.Where(x => x.PlaceId == id),
             x => x.PlaceId = request.IntoPlaceId, ct);
+        await RepointAsync(db.PlaceContacts.Where(x => x.PlaceId == id),
+            x => x.PlaceId = request.IntoPlaceId, ct);
+        await RepointAsync(db.VenuePlaceClaims.Where(x => x.PlaceId == id),
+            x => x.PlaceId = request.IntoPlaceId, ct);
 
         var survivingProfiles = await db.OrganizationVenueProfiles
             .Where(v => v.PlaceId == request.IntoPlaceId).ToListAsync(ct);

@@ -93,6 +93,25 @@
             </p>
         }
 
+        @* How to reach the place, and — for a signed-in member of a group, when nobody runs it as a
+           venue yet — the question that starts a claim (item 235 phase 9). Asked here because this
+           is where somebody notices "this is ours". *@
+        @if (_venue is null && _myOrgs.Count > 0)
+        {
+            <p class="small mb-2" id="place-claim-line">
+                Is this your venue?
+                @foreach (var org in _myOrgs)
+                {
+                    <a class="ms-1 place-claim-link" href="@($"/organizations/{org.OrganizationId}/venue/claim?place={PlaceId}")">
+                        Claim it for @org.Name
+                    </a>
+                }
+            </p>
+        }
+        <Ben.Web.Website.Library.Manage.Venue.PlaceContactsCard PlaceId="PlaceId"
+                                                               SignedIn="UserState.IsAuthenticated"
+                                                               MyOrgs="_myOrgs" />
+
         @* The line that turns a list into a history. Counted over what this viewer may see, so it
            never advertises how much is being withheld. *@
         @if (_summary is { InvestigationCount: > 0 } s)

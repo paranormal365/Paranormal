@@ -1420,11 +1420,60 @@ to it.
 ![A venue's page](help-media:organization-administration/venue-page.png)
 
 **Describing a place does not make you its venue.** Any group may write about a hall it rents every
-October, and it changes nothing for anybody else. Being confirmed as the venue is a separate step,
-and until it is done the page stays private, because a public page headed "the venue" is itself a
-claim to be the building.
+October, and it changes nothing for anybody else. Being confirmed as the venue is a separate step —
+below — and until it is done the page stays private, because a public page headed "the venue" is
+itself a claim to be the building.
 
 ![Describing a place you run](help-media:organization-administration/venue-profile.png)
+
+### A place's contact details
+
+Every place's page has a **Contact** card: its website, phone numbers and email addresses.
+
+- **Public** details are for anybody — the website, the box office, the front desk.
+- **Private** details are your group's own notes — the events coordinator's mobile you were given for
+  scheduling. Nobody outside your group sees them.
+
+Before anybody has been confirmed as running a place, any group may record its public details, and
+each one says who added it. **Once a venue is confirmed, its public details are the venue's.** It
+presses **That's right** on what others added, or removes it, and other groups can add private notes
+only — the card says why, rather than offering a switch that does nothing.
+
+![A place's contact details, public and private](help-media:organization-administration/place-contacts.png)
+
+### Claiming a venue that is already on the site
+
+Most venues arrive on the site as a place somebody else typed in — the organizer of an event held
+there, months before the venue heard of us. When your group runs a place, open its page and choose
+**Is this your venue? Claim it**, or **Claim it** beside a place on **Your venue**. Say whether you
+are its owner, its manager, or a representative acting for them.
+
+**A claim is on the place, never on an event.** It decides who future organizers must ask. Nothing
+already booked there moves, is cancelled or changes hands, and you do not see who came to events you
+had no part in.
+
+There are two ways to prove it:
+
+- **A code to the venue's own email.** If a public email address for the place was recorded by
+  somebody **outside** your group at least a week ago, we can send a code there — shown masked, so you
+  can recognise your front desk. Whoever reads that inbox gives you the code. An address your own
+  group added proves only that you read your own mail, so it is never offered.
+- **A review by a person**, when there is no such address. Tell them what shows you run the place —
+  a licence, a listing, your role — and they may contact you.
+
+![Claiming a venue](help-media:organization-administration/venue-claim.png)
+
+**A proved claim waits a week.** Every group that knows the place — that has held events, named rooms,
+recorded details, or investigated there — is told, and any of them can say **This claim is wrong**
+with a reason. An objection sends the claim to a person instead. With no objection, you are confirmed
+as the venue when the week is up.
+
+**Reviewing claims** (site staff) happens at **Venue Claims** in the admin menu: claims with nothing to
+prove them by and claims somebody objected to come first, and a confirmed venue that turns out to be
+wrong can be undone — which takes its page down and stops it gating new events, but leaves any yes it
+already gave standing.
+
+![Reviewing a claim](help-media:organization-administration/venue-claim-review.png)
 
 ### Letters about bookings
 
