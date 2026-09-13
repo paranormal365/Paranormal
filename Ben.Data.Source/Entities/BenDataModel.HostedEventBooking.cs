@@ -210,6 +210,9 @@ namespace Ben.Data.Source.Entities
         /// </remarks>
         public string? ContactPhone { get; set; }
 
+        /// <summary>When this party was sent the thank-you (phase 12). One letter per party, however often the job runs.</summary>
+        public DateTime? ThankedUtc { get; set; }
+
         /// <summary>What the guest said when asking — arrival time, a request, an explanation.</summary>
         public string? Note { get; set; }
 

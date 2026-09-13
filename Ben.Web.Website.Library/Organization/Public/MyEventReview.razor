@@ -1,0 +1,42 @@
+@page "/my-events/{EventId:guid}/review"
+@namespace Ben.Web.Website.Library.Organization.Public
+
+@inject IBenUserState UserState
+
+@using Ben.Service.Models.Entities
+
+@* Where the thank-you's "Say how it was" lands (item 235 phase 12).
+
+   ITS OWN PAGE, because the event's public page leaves the lists a fortnight after it ends and the
+   letter's link has to keep working for as long as reviews are open. *@
+
+<PageTitle>@(_record?.EventName is { Length: > 0 } n ? $"How was {n}?" : "Leave a review")</PageTitle>
+
+<div class="container py-3" style="max-width:760px;">
+    <div class="text-secondary small"><a href="/my-events">What I'm going to</a></div>
+    <h1 class="h3 mb-1">@(_record?.EventName ?? "Leave a review")</h1>
+    @if (_record is { } r)
+    {
+        <p class="text-secondary small mb-3">
+            @r.OrganizationName · ended @r.EndsOn.ToString("MM/dd/yyyy")
+            @if (r.EventUrlName is { } slug)
+            {
+                <text> · </text><a href="@($"/o/{r.OrganizationUrlName}/events/{slug}")">The event's page</a>
+            }
+        </p>
+        @if (!r.IsOver)
+        {
+            <div class="alert alert-light border" id="review-not-yet">Reviews open once the event is over.</div>
+        }
+    }
+
+    <HostedEventReviews HostedEventId="EventId" Loaded="OnLoaded" />
+</div>
+
+@code {
+    [Parameter] public Guid EventId { get; set; }
+
+    private PublicHostedEventReviewsRecord? _record;
+
+    private void OnLoaded(PublicHostedEventReviewsRecord? record) => _record = record;
+}

@@ -321,6 +321,31 @@ public sealed partial class BenAdminClientAdapter
         return (held, refused, error);
     }
 
+    public Task<ItemResult<PublicHostedEventReviewsRecord>> GetHostedEventReviewsAsync(Guid eventId, CancellationToken token = default)
+        => _api.GetItemAsync<PublicHostedEventReviewsRecord>($"/api/public/hosted-events/{eventId}/reviews", token);
+
+    public Task<(PublicHostedEventReviewsRecord? Result, string? Error)> SaveMyHostedEventReviewAsync(
+        Guid eventId, int stars, string? comment, CancellationToken token = default)
+        => _api.SendExpectingReasonAsync<UpsertTourReviewRequest, PublicHostedEventReviewsRecord>(
+               HttpMethod.Put, $"/api/public/hosted-events/{eventId}/my-review", new UpsertTourReviewRequest(stars, comment), token);
+
+    public Task<(bool Deleted, string? Error)> DeleteMyHostedEventReviewAsync(Guid eventId, CancellationToken token = default)
+        => _api.DeleteExpectingReasonAsync($"/api/public/hosted-events/{eventId}/my-review", token);
+
+    public Task<ItemResult<HostedEventAfterRecord>> GetHostedEventAfterAsync(Guid orgId, Guid eventId, CancellationToken token = default)
+        => _api.GetItemAsync<HostedEventAfterRecord>($"/api/organizations/{orgId}/events/{eventId}/after", token);
+
+    public Task<(HostedEventAfterRecord? Result, string? Error)> SetHostedEventAfterAsync(
+        Guid orgId, Guid eventId, SetHostedEventAfterRequest request, CancellationToken token = default)
+        => _api.SendExpectingReasonAsync<SetHostedEventAfterRequest, HostedEventAfterRecord>(
+               HttpMethod.Put, $"/api/organizations/{orgId}/events/{eventId}/after", request, token);
+
+    public Task<(HostedEventAfterRecord? Result, string? Error)> SetHostedEventReviewHiddenAsync(
+        Guid orgId, Guid eventId, Guid reviewId, bool hidden, CancellationToken token = default)
+        => _api.SendExpectingReasonAsync<object, HostedEventAfterRecord>(
+               HttpMethod.Post, $"/api/organizations/{orgId}/events/{eventId}/reviews/{reviewId}/{(hidden ? "hide" : "show")}",
+               new { }, token);
+
     public Task<ItemResult<HostedEventCopyPreviewRecord>> GetHostedEventCopyPreviewAsync(
         Guid orgId, Guid eventId, CancellationToken token = default)
         => _api.GetItemAsync<HostedEventCopyPreviewRecord>($"/api/organizations/{orgId}/events/{eventId}/copy", token);

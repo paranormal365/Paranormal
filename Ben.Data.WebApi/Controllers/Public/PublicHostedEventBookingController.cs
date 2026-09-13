@@ -67,10 +67,47 @@ public sealed class PublicHostedEventBookingController : BenControllerBase
             .OrderBy(b => b.HostedEvent.StartsOn)
             .ToListAsync(ct);
 
-        return Ok(bookings.Select(ToMine).ToList());
+        // The programme places and whether a review is open, for the list only (phase 12): "what am I
+        // going to" includes the ghost hunt at eleven, and "how was it" belongs beside the weekend it
+        // is about.
+        var eventIds = bookings.Select(b => b.HostedEventId).Distinct().ToList();
+        var signUps = await db.HostedEventSessionSignUps.AsNoTracking()
+            .Where(s => s.AppUserId == userId && eventIds.Contains(s.HostedEventSession.HostedEventId))
+            .Select(s => new
+            {
+                s.HostedEventSession.HostedEventId,
+                Line = new MySessionLineRecord(
+                    s.HostedEventSessionId, s.HostedEventSession.Title, s.HostedEventSession.StartsAtUtc,
+                    s.HostedEventSession.EndsAtUtc,
+                    s.HostedEventSession.PlaceRoom != null ? s.HostedEventSession.PlaceRoom.Name : s.HostedEventSession.LocationText,
+                    s.WaitlistedUtc != null && s.PromotedUtc == null,
+                    s.HostedEventSession.CalledOffUtc != null),
+            })
+            .ToListAsync(ct);
+        var reviewed = await db.HostedEventReviews.AsNoTracking()
+            .Where(r => r.AppUserId == userId && eventIds.Contains(r.HostedEventId))
+            .Select(r => r.HostedEventId)
+            .ToListAsync(ct);
+
+        var now = DateTime.UtcNow;
+        var list = new List<MyHostedEventBookingRecord>();
+        foreach (var booking in bookings)
+        {
+            var mayReview = booking.Status == HostedEventBookingStatus.Confirmed
+                         && await HostedEventReviews.WhyNotAsync(db, booking.HostedEvent, userId, now, ct) is null;
+
+            list.Add(ToMine(booking) with
+            {
+                Sessions = [.. signUps.Where(s => s.HostedEventId == booking.HostedEventId)
+                                      .Select(s => s.Line).OrderBy(l => l.StartsAtUtc)],
+                MayReview = mayReview,
+                HasReviewed = reviewed.Contains(booking.HostedEventId),
+            });
+        }
+
+        return Ok(list);
     }
 
-    /// <summary>This person's booking at one event, or 404 when they have none.</summary>
     /// <summary>
     /// What the booking form can fill in for this guest: the name and phone their account already
     /// has (slice 11d).
@@ -99,6 +136,7 @@ public sealed class PublicHostedEventBookingController : BenControllerBase
         return Ok(new BookingContactRecord(me.FirstName, me.LastName, me.Listed ?? me.PhoneNumber, me.Email));
     }
 
+    /// <summary>This person's booking at one event, or 404 when they have none.</summary>
     [HttpGet("{eventId:guid}/my-booking")]
     public async Task<ActionResult<MyHostedEventBookingRecord>> GetMyBooking(
         Guid eventId, CancellationToken ct)

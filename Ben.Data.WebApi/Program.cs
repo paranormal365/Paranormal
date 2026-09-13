@@ -333,6 +333,9 @@ builder.Services.AddScoped<Ben.Data.WebApi.Services.Scheduling.IScheduledJob,
 // picked three seats and forgot would keep them out of everybody's reach for ever.
 builder.Services.AddScoped<Ben.Data.WebApi.Services.Scheduling.IScheduledJob,
                            Ben.Data.WebApi.Services.Scheduling.HoldExpiryJob>();
+// Item 235 phase 12: the thank-you the morning after the last night, with the pictures and what is next.
+builder.Services.AddScoped<Ben.Data.WebApi.Services.Scheduling.IScheduledJob,
+                           Ben.Data.WebApi.Services.Scheduling.HostedEventThankYouJob>();
 // Item 233: the mail a tour guest gets, with the walk attached as a calendar file.
 builder.Services.AddScoped<Ben.Data.WebApi.Services.Tours.TourGuestMailer>();
 builder.Services.AddScoped<Ben.Data.WebApi.Services.Events.EventGuestMailer>();

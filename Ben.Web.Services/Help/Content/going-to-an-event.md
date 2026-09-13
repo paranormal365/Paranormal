@@ -96,6 +96,9 @@ Places you have, or are waiting to hear about, come first. Underneath sits anyth
 and did not get — kept on purpose, because a weekend you were released from is a date you may
 still have free.
 
+The sessions you signed up for sit under each event with their times, marked when you are on the
+waiting list or a session has been called off.
+
 ## The programme
 
 Some events have a programme: a class, a talk, a séance, dinner. It is on the event's page, night by
@@ -240,3 +243,19 @@ set a password there and then rather than leaving you to find out later.
 - **Called off.** You are told, and anything you were holding goes back.
 - **The venue withdraws.** Rare, and handled the same way: everything is released and everybody is
   told.
+
+## After the event
+
+The morning after the last night, the organizer may send a **thank-you** to everybody who had a
+confirmed place: their own note, a link to the pictures if they added some, a link to say how it was,
+and what they have coming up next.
+
+**Saying how it was** is open to anybody who had a confirmed place — the person who booked, and any
+guest they named with an account — from the end of the event for two months. It is one to five stars
+and a few words if you like, and you can change it or take it down. Find it from the thank-you, from
+the event's page while it is still up, or from **Say how it was** on *What I'm going to*.
+
+The organizer can hide a review from the event's page, but never change its words; if yours is
+hidden you still see it, marked as hidden. On the page of a group's next event, a line says what
+guests made of its earlier ones.
+

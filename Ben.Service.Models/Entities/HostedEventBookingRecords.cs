@@ -189,7 +189,21 @@ public sealed record MyHostedEventBookingRecord(
     /// the venue, and somebody who was never shown the deadline lost their seats without being
     /// asked. Kept after it lapses, so an expired booking can say when.
     /// </remarks>
-    DateTime? HoldExpiresUtc = null);
+    DateTime? HoldExpiresUtc = null,
+
+    /// <summary>
+    /// The sessions of the programme this person has a place in or is waiting for (phase 12), filled
+    /// on the list of what they are going to. Null elsewhere.
+    /// </summary>
+    IReadOnlyList<MySessionLineRecord>? Sessions = null,
+
+    /// <summary>Whether they may review the event now, and whether they already have.</summary>
+    bool MayReview = false,
+    bool HasReviewed = false);
+
+/// <summary>One session on a guest's own list.</summary>
+public sealed record MySessionLineRecord(
+    Guid SessionId, string Title, DateTime StartsAtUtc, DateTime EndsAtUtc, string? Where, bool Waiting, bool CalledOff);
 
 /// <summary>What a guest, or a host on their behalf, is asking for.</summary>
 /// <param name="Nights">

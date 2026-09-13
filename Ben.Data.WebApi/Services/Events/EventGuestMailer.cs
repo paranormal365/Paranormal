@@ -391,6 +391,67 @@ public sealed class EventGuestMailer
         return true;
     }
 
+    /// <summary>
+    /// Thanks a party for coming, the morning after the last night (item 235 phase 12).
+    /// </summary>
+    /// <remarks>
+    /// <para>Ben, 2026-09-13: <i>"If we generate a gallery, we can send that link in a thank you link
+    /// including any upcoming events hosted by the organizer."</i></para>
+    ///
+    /// <para>The organizer's own words first, then the pictures if there are any, then where to say how
+    /// it was, then what the group has coming — the letter that closes one weekend is the one most
+    /// likely to fill the next.</para>
+    /// </remarks>
+    public async Task<bool> SendThankYouAsync(
+        HostedEventBooking booking, bool hasGallery, IReadOnlyList<HostedEvent> upcoming, CancellationToken ct)
+    {
+        if (!_email.IsConfigured) return false;
+        if (booking.LeadAppUser?.Email is not { Length: > 0 } to) return false;
+
+        var (subject, body) = ThankYouLetter(booking, hasGallery, upcoming, _site.AbsoluteUrl);
+        await _email.SendAsync(new EmailMessage(to, subject, body,
+            ReplyTo: booking.HostedEvent?.Organization?.PublicEmail), ct);
+        return true;
+    }
+
+    /// <summary>The thank-you's words, separate so they can be read in a test without a mail server.</summary>
+    internal static (string Subject, string Body) ThankYouLetter(
+        HostedEventBooking booking, bool hasGallery, IReadOnlyList<HostedEvent> upcoming, Func<string, string> absolute)
+    {
+        var ev = booking.HostedEvent;
+        var org = ev.Organization;
+        var page = absolute($"/o/{org?.UrlName}/events/{ev.UrlName}");
+
+        var body = new System.Text.StringBuilder();
+        body.Append($"<p>{Greeting(booking)}</p>");
+        body.Append($"<p>Thank you for coming to <strong>{Safe(ev.Name)}</strong>.</p>");
+
+        if (ev.ThankYouNote is { Length: > 0 } note)
+        {
+            foreach (var paragraph in note.Split(["\r\n\r\n", "\n\n"], StringSplitOptions.RemoveEmptyEntries))
+                body.Append($"<p>{Safe(paragraph).Replace("\n", "<br>")}</p>");
+            body.Append($"<p>— {Safe(org?.Name)}</p>");
+        }
+
+        if (hasGallery)
+            body.Append($"<p><a href=\"{page}#hosted-gallery\">See the pictures</a></p>");
+
+        if (ev.AllowReviews)
+            body.Append($"<p><a href=\"{absolute($"/my-events/{ev.Id}/review")}\">Say how it was</a> — "
+                      + "a few words help the next people deciding whether to come.</p>");
+
+        if (upcoming.Count > 0)
+        {
+            body.Append($"<p><strong>Coming up with {Safe(org?.Name)}</strong></p><ul>");
+            foreach (var next in upcoming)
+                body.Append($"<li><a href=\"{absolute($"/o/{org?.UrlName}/events/{next.UrlName}")}\">{Safe(next.Name)}</a>"
+                          + $" · {next.StartsOn:ddd MM/dd/yyyy}</li>");
+            body.Append("</ul>");
+        }
+
+        return ($"Thank you for coming to {ev.Name}", body.ToString());
+    }
+
     /// <summary>A moment on the venue's clock, as the letters write it.</summary>
     internal static string AtTheVenue(DateTime utc, HostedEvent? ev)
     {

@@ -18,6 +18,11 @@ day-by-day account of building it would say nothing to anyone using it now.
 
 ## 2026-09-13
 
+- The morning after an event, everybody who came can be sent a thank-you with the organizer's note,
+  the pictures and what is coming up next. Guests who had a place can review the event for two months,
+  and organizers can hide a review but never change it.
+- What I'm going to now lists the sessions you signed up for under each event.
+
 - An event can be copied to start the next one: the plan, menus, programme, bands, helpers, advert
   and files come across as a draft on the new dates, and bookings and photos stay behind.
 - The booking board can hand over every booking as a spreadsheet, including the phone number each

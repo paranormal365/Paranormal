@@ -212,6 +212,98 @@ public sealed class HostedEventAfterController : OrgCmsControllerBase
         _ => "The venue is yours, so nothing needs agreeing again.",
     };
 
+    // ── the thank-you and the reviews ────────────────────────────────────────
+
+    /// <summary>The thank-you, whether reviews are taken, and every review including hidden ones.</summary>
+    [HttpGet("after")]
+    public async Task<ActionResult<HostedEventAfterRecord>> GetAfter(Guid orgId, Guid eventId, CancellationToken ct)
+    {
+        var userId = GetCurrentUserId();
+        if (userId is null) return Unauthorized();
+        if (!await _access.CanEditEventAsync(userId.Value, orgId, ct)) return Forbid();
+
+        await using var db = await DbFactory.CreateDbContextAsync(ct);
+        var ev = await db.HostedEvents.AsNoTracking()
+            .FirstOrDefaultAsync(e => e.Id == eventId && e.OrganizationId == orgId, ct);
+        if (ev is null) return NotFound();
+
+        return Ok(await AfterAsync(db, ev, ct));
+    }
+
+    [HttpPut("after")]
+    public async Task<ActionResult<HostedEventAfterRecord>> SetAfter(
+        Guid orgId, Guid eventId, [FromBody] SetHostedEventAfterRequest request, CancellationToken ct)
+    {
+        var userId = GetCurrentUserId();
+        if (userId is null) return Unauthorized();
+        if (!await _access.CanEditEventAsync(userId.Value, orgId, ct)) return Forbid();
+
+        var note = string.IsNullOrWhiteSpace(request.ThankYouNote) ? null : request.ThankYouNote.Trim();
+        if (note is { Length: > 2000 }) return BadRequest("The note is longer than 2,000 characters.");
+
+        await using var db = await DbFactory.CreateDbContextAsync(ct);
+        var ev = await db.HostedEvents.FirstOrDefaultAsync(e => e.Id == eventId && e.OrganizationId == orgId, ct);
+        if (ev is null) return NotFound();
+
+        ev.AllowReviews = request.AllowReviews;
+        ev.SendThankYou = request.SendThankYou;
+        ev.ThankYouNote = note;
+        ev.DateUpdated = DateTime.UtcNow;
+        ev.UpdatedByAppUserId = userId;
+        await db.SaveChangesAsync(ct);
+
+        return Ok(await AfterAsync(db, ev, ct));
+    }
+
+    /// <summary>
+    /// Hides or restores a review. Hide, never edit: the words stay where the person who wrote them can
+    /// see them.
+    /// </summary>
+    [HttpPost("reviews/{reviewId:guid}/{action}")]
+    public async Task<ActionResult<HostedEventAfterRecord>> SetReviewHidden(
+        Guid orgId, Guid eventId, Guid reviewId, string action, CancellationToken ct)
+    {
+        if (action is not ("hide" or "show")) return NotFound();
+
+        var userId = GetCurrentUserId();
+        if (userId is null) return Unauthorized();
+        if (!await _access.CanEditEventAsync(userId.Value, orgId, ct)) return Forbid();
+
+        await using var db = await DbFactory.CreateDbContextAsync(ct);
+        var review = await db.HostedEventReviews.Include(r => r.HostedEvent)
+            .FirstOrDefaultAsync(r => r.Id == reviewId && r.HostedEventId == eventId
+                                   && r.HostedEvent.OrganizationId == orgId, ct);
+        if (review is null) return NotFound();
+
+        var hiding = action == "hide";
+        review.HiddenAtUtc = hiding ? DateTime.UtcNow : null;
+        review.HiddenByAppUserId = hiding ? userId : null;
+        review.DateUpdated = DateTime.UtcNow;
+        review.UpdatedByAppUserId = userId;
+        await db.SaveChangesAsync(ct);
+
+        return Ok(await AfterAsync(db, review.HostedEvent, ct));
+    }
+
+    private static async Task<HostedEventAfterRecord> AfterAsync(BenDataContext db, HostedEvent ev, CancellationToken ct)
+    {
+        var reviews = await db.HostedEventReviews.AsNoTracking()
+            .Where(r => r.HostedEventId == ev.Id)
+            .OrderByDescending(r => r.DateCreated)
+            .Select(r => new TourReviewRecord(
+                r.Id, r.AppUser.DisplayName ?? r.AppUser.UserName ?? "A guest", r.AppUser.Handle,
+                r.Stars, r.Comment, r.DateCreated, false, r.HiddenAtUtc != null))
+            .ToListAsync(ct);
+        var (average, count) = await HostedEventReviews.RatingAsync(db, ev.Id, ct);
+
+        return new HostedEventAfterRecord(
+            ev.Id, ev.Name, ev.LifecycleState, ev.AllowReviews, ev.SendThankYou, ev.ThankYouNote, ev.ThankYouSentUtc,
+            await db.HostedEventBookings.CountAsync(b => b.HostedEventId == ev.Id && b.ThankedUtc != null, ct),
+            await db.HostedEventBookings.CountAsync(b => b.HostedEventId == ev.Id && b.Status == HostedEventBookingStatus.Confirmed, ct),
+            await db.HostedEventGalleryImages.AnyAsync(g => g.HostedEventId == ev.Id, ct),
+            average, count, reviews);
+    }
+
     // ── the list of who came ─────────────────────────────────────────────────
 
     /// <summary>

@@ -1600,6 +1600,18 @@ red from green.
 
 ### After the event: the next one, and the list of who came
 
+**After the event**, from the event page, gathers what happens once it is over.
+
+![After the event](help-media:organization-administration/event-after.png)
+
+- **The thank-you** goes the morning after the last night to every party with a confirmed place, once
+  each. It carries your note, a link to the gallery if you added pictures, a link for guests to say
+  how it was, and up to three of your upcoming events. It is on unless you turn it off, and it is
+  never sent for an event that ended more than a week before.
+- **Reviews** come only from people who had a confirmed place, for two months after the event. You
+  can hide one from the page; you can't change its words, and the person who wrote it still sees it,
+  marked as hidden. Turning reviews off stops new ones.
+
 **Copy this event**, from the event page, starts the next one from this one. Choose a name and the
 first date; every other date moves with it, keeping its gaps, and a session at 7 PM stays at 7 PM
 even when the clocks have changed in between.

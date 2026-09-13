@@ -2094,6 +2094,23 @@ public sealed class HelpMediaCapture : BenTestBase
             selector: ".container-fluid", proves: "What to bring");
     }
 
+    /// <summary>After the event: the thank-you and the reviews (item 235 phase 12).</summary>
+    [Test]
+    [Description("organization-administration: after the event.")]
+    public async Task Capture_EventAfter()
+    {
+        var orgId = await OrgIdBySlugAsync("paranormal365");
+        await LoginAsync(SuperAdminEmail, SuperAdminPassword);
+        await GoAsync($"/organizations/{orgId}/events/{SeededRoomsEventId}/after");
+        await Expect(Page.Locator("#after-thank-you")).ToBeVisibleAsync(new() { Timeout = 30_000 });
+        // Typed, not saved: the picture shows the kind of note that belongs there.
+        if (await Page.Locator("#after-thank-you-note").CountAsync() > 0)
+            await Page.Locator("#after-thank-you-note").FillAsync(
+                "Thank you for spending the weekend with us at the Thomas House. We'll be back in March.");
+        await ShootAsync("organization-administration", "event-after.png", gated: true,
+            selector: ".container-fluid", proves: "The thank-you");
+    }
+
     /// <summary>The emailed link's token, as the API logs it when no mail server is set up.</summary>
     private static string? PickTokenFromTheApiLog(string email)
     {

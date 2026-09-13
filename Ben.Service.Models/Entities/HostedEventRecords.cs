@@ -674,3 +674,41 @@ public sealed record HostedEventCopyResultRecord(
     int Files,
     string? FilesSentence);
 
+// ── reviews and the thank-you (item 235 phase 12) ─────────────────────────────
+
+/// <summary>An event's reviews, with what the page around them needs.</summary>
+/// <param name="Reviews">The same shape as a tour's, so both pages read reviews alike.</param>
+/// <param name="IsOver">Whether the event has happened; before then only the group's past rating is worth showing.</param>
+/// <param name="PastAverage">What guests made of this group's other events, for the page of an upcoming one.</param>
+public sealed record PublicHostedEventReviewsRecord(
+    TourReviewsRecord Reviews,
+    string EventName,
+    string? EventUrlName,
+    string? OrganizationName,
+    string? OrganizationUrlName,
+    DateTime EndsOn,
+    bool IsOver,
+    decimal? PastAverage,
+    int PastCount);
+
+/// <summary>The organizer's side of what happens after the event.</summary>
+/// <param name="GuestsThanked">Parties the thank-you has gone to.</param>
+/// <param name="GuestsToThank">Parties with a confirmed place, who will get it.</param>
+public sealed record HostedEventAfterRecord(
+    Guid HostedEventId,
+    string Name,
+    HostedEventLifecycleState LifecycleState,
+    bool AllowReviews,
+    bool SendThankYou,
+    string? ThankYouNote,
+    DateTime? ThankYouSentUtc,
+    int GuestsThanked,
+    int GuestsToThank,
+    bool HasGallery,
+    decimal? Average,
+    int Count,
+    IReadOnlyList<TourReviewRecord> Reviews);
+
+/// <summary>Changing the thank-you and whether reviews are taken.</summary>
+public sealed record SetHostedEventAfterRequest(bool AllowReviews, bool SendThankYou, string? ThankYouNote);
+

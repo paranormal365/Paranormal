@@ -421,6 +421,23 @@ public interface IBenEventBookingClient
     Task<(MyHostedEventBookingRecord? Held, HoldRefusedRecord? Refused, string? Error)> HoldHostedEventPlacesAsync(
         Guid eventId, HoldHostedEventPlacesRequest request, CancellationToken token = default);
 
+    /// <summary>An event's reviews and whether the reader may add one (item 235 phase 12).</summary>
+    Task<ItemResult<PublicHostedEventReviewsRecord>> GetHostedEventReviewsAsync(Guid eventId, CancellationToken token = default);
+
+    Task<(PublicHostedEventReviewsRecord? Result, string? Error)> SaveMyHostedEventReviewAsync(
+        Guid eventId, int stars, string? comment, CancellationToken token = default);
+
+    Task<(bool Deleted, string? Error)> DeleteMyHostedEventReviewAsync(Guid eventId, CancellationToken token = default);
+
+    /// <summary>The organizer's thank-you settings and every review, hidden ones included.</summary>
+    Task<ItemResult<HostedEventAfterRecord>> GetHostedEventAfterAsync(Guid orgId, Guid eventId, CancellationToken token = default);
+
+    Task<(HostedEventAfterRecord? Result, string? Error)> SetHostedEventAfterAsync(
+        Guid orgId, Guid eventId, SetHostedEventAfterRequest request, CancellationToken token = default);
+
+    Task<(HostedEventAfterRecord? Result, string? Error)> SetHostedEventReviewHiddenAsync(
+        Guid orgId, Guid eventId, Guid reviewId, bool hidden, CancellationToken token = default);
+
     /// <summary>What copying an event would bring (item 235 phase 12).</summary>
     Task<ItemResult<HostedEventCopyPreviewRecord>> GetHostedEventCopyPreviewAsync(
         Guid orgId, Guid eventId, CancellationToken token = default);

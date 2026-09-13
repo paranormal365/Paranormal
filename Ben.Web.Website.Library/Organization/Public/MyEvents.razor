@@ -63,6 +63,22 @@
                                 · @When(mine)
                             </div>
                             <div class="small text-secondary">@What(mine)</div>
+                            @if (mine.Sessions is { Count: > 0 } sessions)
+                            {
+                                @* The ghost hunt at eleven is part of what they are going to (phase 12). *@
+                                <ul class="my-event__sessions small mb-0 mt-1">
+                                    @foreach (var session in sessions)
+                                    {
+                                        <li class="@(session.CalledOff ? "text-decoration-line-through text-secondary" : "")">
+                                            @session.StartsAtUtc.ToViewerLocalTime(UserState).ToString("ddd h:mm tt")
+                                            · @session.Title
+                                            @if (session.Where is { Length: > 0 } where) { <text> · @where</text> }
+                                            @if (session.Waiting) { <span class="badge text-bg-warning ms-1">Waiting list</span> }
+                                            @if (session.CalledOff) { <span class="ms-1">called off</span> }
+                                        </li>
+                                    }
+                                </ul>
+                            }
                         </div>
 
                         <div class="my-event__state">
@@ -70,6 +86,12 @@
                                 <BenIcon Name="@Badge(mine.Status).Icon" Class="me-1" />
                                 @Badge(mine.Status).Words
                             </span>
+                            @if (mine.MayReview)
+                            {
+                                <a class="btn btn-sm btn-outline-primary" href="@($"/my-events/{mine.HostedEventId}/review")">
+                                    @(mine.HasReviewed ? "Your review" : "Say how it was")
+                                </a>
+                            }
                             @if (mine.Status == HostedEventBookingStatus.Confirmed)
                             {
                                 <a class="btn btn-sm btn-primary"

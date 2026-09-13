@@ -138,6 +138,7 @@ namespace Ben.Data.Source.Context
         public virtual DbSet<HostedEventSessionSignUp> HostedEventSessionSignUps { get; set; }
         public virtual DbSet<HostedEventFile> HostedEventFiles { get; set; }
         public virtual DbSet<HostedEventGalleryImage> HostedEventGalleryImages { get; set; }
+        public virtual DbSet<HostedEventReview> HostedEventReviews { get; set; }
         public virtual DbSet<EventPhotoConsent> EventPhotoConsents { get; set; }
         public virtual DbSet<OutboxEmail> OutboxEmails { get; set; }
         public virtual DbSet<OutboxEmailAttachment> OutboxEmailAttachments { get; set; }
@@ -1308,6 +1309,21 @@ namespace Ben.Data.Source.Context
                 .Property(b => b.CancellationReason).HasMaxLength(1000);
             modelBuilder.Entity<HostedEventBooking>()
                 .Property(b => b.ContactPhone).HasMaxLength(40);
+
+            // ── reviews and the thank-you (phase 12) ──────────────────────────────
+            // No HasDefaultValue(true) on the two switches: EF would then omit a false on insert and the
+            // database would store true. The migration gives existing rows true by hand instead.
+            modelBuilder.Entity<HostedEvent>().Property(e => e.ThankYouNote).HasMaxLength(2000);
+            modelBuilder.Entity<HostedEventReview>()
+                .HasOne(r => r.HostedEvent).WithMany()
+                .HasForeignKey(r => r.HostedEventId).OnDelete(DeleteBehavior.Cascade);
+            // NoAction: deleting a person goes through its own purge, which must see these rows.
+            modelBuilder.Entity<HostedEventReview>()
+                .HasOne(r => r.AppUser).WithMany()
+                .HasForeignKey(r => r.AppUserId).OnDelete(DeleteBehavior.NoAction);
+            modelBuilder.Entity<HostedEventReview>().Property(r => r.Comment).HasMaxLength(1000);
+            // One opinion per person per event.
+            modelBuilder.Entity<HostedEventReview>().HasIndex(r => new { r.HostedEventId, r.AppUserId }).IsUnique();
 
             // ── places picked by somebody not signed in (slice 11d) ────────────────
             modelBuilder.Entity<HostedEventEmailPick>()

@@ -336,6 +336,25 @@ namespace Ben.Data.Source.Entities
         /// </remarks>
         public DateTime? ArchivedAtUtc { get; set; }
 
+        /// <summary>Whether guests who came may leave a review (phase 12). On unless the organizer turns it off.</summary>
+        public bool AllowReviews { get; set; } = true;
+
+        /// <summary>
+        /// Whether a thank-you goes to everybody who had a place, the morning after the last night (phase 12).
+        /// </summary>
+        /// <remarks>
+        /// Ben, 2026-09-13: "If we generate a gallery, we can send that link in a thank you link including
+        /// any upcoming events hosted by the organizer." On by default, because the letter that closes one
+        /// weekend is the one most likely to fill the next.
+        /// </remarks>
+        public bool SendThankYou { get; set; } = true;
+
+        /// <summary>The organizer's own words at the top of the thank-you. Plain text.</summary>
+        public string? ThankYouNote { get; set; }
+
+        /// <summary>When every thank-you went. Null until then, so a pass that failed half way finishes the rest.</summary>
+        public DateTime? ThankYouSentUtc { get; set; }
+
         /// <summary>When it was called off. The row is kept so people can see that it is off.</summary>
         public DateTime? CancelledAtUtc { get; set; }
 

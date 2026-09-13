@@ -1030,6 +1030,33 @@ Tests: `HostedEventCopyTests` (11; the clock-change shift and the formula escape
 rule removed), Playwright `EventCopyTests` (copy at 1280 and 375, the spreadsheet download); capture
 `event-copy.png`.
 
+#### Phase 12b as built (2026-09-13) — the thank-you, reviews, sessions on My events
+
+1. **Reviews are their own table** (`HostedEventReview`), not `TourReview` with an optional tour: every tour
+   query would otherwise guard against a review with no tour. Same record shapes as tour reviews, so pages
+   read both alike. Eligible: the lead or a guest named with an account on a **confirmed** booking, once the
+   event is Ended or Archived, for 60 days after the last date; the organizer can turn reviews off. Hide,
+   never edit; editing clears a hiding; hidden reviews leave the average and stay visible to their author.
+2. **Where:** the event page while it is up, and `/my-events/{id}/review` (the thank-you's link, which keeps
+   working after the event is archived). Before an event, its page shows what guests made of the group's
+   *earlier* events when there are any.
+3. **The thank-you** (`HostedEventThankYouJob`): 12 hours after the last night ends on the venue's clock,
+   once per confirmed party (`ThankedUtc`), the event stamped when all are done. Carries the organizer's
+   note, the gallery link only if there are pictures, the review link when reviews are on, and up to three
+   upcoming published events. On by default; never sent for an event that ended more than a week before, so
+   shipping it does not write to guests of old events. Nothing is stamped while mail is off.
+4. **After the event** page for the organizer: the thank-you switch and note (shows who it went to once
+   sent), the reviews switch, every review with hide/show, and links to copy the event and download the
+   spreadsheet.
+5. The two switches default to true in the database for existing events, written into the migration by
+   hand: an EF `HasDefaultValue(true)` on a bool would silently store true when an organizer saves false.
+6. **My events** lists the sessions a guest signed up for under each event, with waiting-list and
+   called-off marks, and a *Say how it was* button when a review is open.
+
+Tests: `HostedEventAfterTests` (8; the confirmed-only rule, the hidden-review average, once-per-party and
+the one-week limit each seen failing with the rule removed), Playwright `EventAfterTests` (3); capture
+`event-after.png`. Still in phase 12: retention with warnings, pick-and-zip, what the venue remembers.
+
 ### Phase 13 — Dining as a seating assignment
 
 `HostedEventDiningTable` + `HostedEventDiningSeat` per sitting, over Confirmed bookings only;
