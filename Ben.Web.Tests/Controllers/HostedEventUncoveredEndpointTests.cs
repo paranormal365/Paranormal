@@ -182,6 +182,60 @@ public sealed class HostedEventUncoveredEndpointTests
     }
 
     [Fact]
+    public async Task Confirming_a_request_puts_the_party_where_the_host_chose_and_issues_the_pass()
+    {
+        // The commonest decision a host makes: somebody asked with no preference, and the host places them. The new
+        // night row once went in as an update of a row that did not exist, and every such confirmation failed.
+        await using var sqlite = await SeedAsync();
+        Guid bookingId;
+        await using (var db = await sqlite.NewContextAsync())
+        {
+            var booking = new HostedEventBooking
+            {
+                Id = Guid.NewGuid(), HostedEventId = EventId, LeadAppUserId = GuestId, PartySize = 1, Kind = HostedEventBookingKind.Overnight,
+                Status = HostedEventBookingStatus.Requested, DateCreated = DateTime.UtcNow, CreatedByAppUserId = GuestId,
+            };
+            booking.Nights.Add(new HostedEventBookingNight
+            {
+                Id = Guid.NewGuid(), HostedEventBookingId = booking.Id, HostedEventNightId = NightId, DateCreated = DateTime.UtcNow,
+            });
+            db.HostedEventBookings.Add(booking);
+            await db.SaveChangesAsync();
+            bookingId = booking.Id;
+        }
+
+        var confirmed = await Board(sqlite, HostId).Confirm(OrgId, EventId, bookingId,
+            new ConfirmHostedEventBookingRequest([new HostedEventBookingNightChoice(NightId, SeatId)], "See you at seven."), default);
+
+        Assert.IsType<OkObjectResult>(confirmed.Result);
+        await using var check = await sqlite.NewContextAsync();
+        var saved = await check.HostedEventBookings.Include(b => b.Nights).SingleAsync(b => b.Id == bookingId);
+        Assert.Equal(HostedEventBookingStatus.Confirmed, saved.Status);
+        Assert.Equal(SeatId, Assert.Single(saved.Nights).HostedEventLayoutUnitId);
+        Assert.True(await check.HostedEventPasses.AnyAsync(p => p.HostedEventBookingId == bookingId && p.RevokedUtc == null));
+    }
+
+    [Fact]
+    public async Task A_guest_changing_their_nights_and_guests_keeps_the_new_ones()
+    {
+        // The same trap as confirming, from the guest's side: the booking already exists, so the rows written for it
+        // must be added, not taken for existing rows.
+        await using var sqlite = await SeedAsync();
+        await BookAsync(sqlite, GuestId, HostedEventBookingStatus.Requested, EventId, dietary: "No nuts");
+        var guest = new PublicHostedEventBookingController(sqlite.Factory, new HostedEventCalendarSync()) { ControllerContext = As(GuestId) };
+
+        var changed = await guest.UpdateMyBooking(EventId, new EditHostedEventBookingRequest(
+            Nights: [new HostedEventBookingNightChoice(NightId)],
+            Guests: [new HostedEventBookingGuestInput("Grace", null, "Vegetarian"), new HostedEventBookingGuestInput("Sam", null, null)]), default);
+
+        Assert.IsType<OkObjectResult>(changed.Result);
+        await using var db = await sqlite.NewContextAsync();
+        var saved = await db.HostedEventBookings.Include(b => b.Nights).Include(b => b.Guests).SingleAsync(b => b.LeadAppUserId == GuestId && b.HostedEventId == EventId);
+        Assert.Null(Assert.Single(saved.Nights).HostedEventLayoutUnitId);
+        Assert.Equal(["Grace", "Sam"], saved.Guests.OrderBy(g => g.SortOrder).Select(g => g.DisplayName));
+    }
+
+    [Fact]
     public async Task Releasing_lapsed_holds_releases_only_the_ones_that_lapsed()
     {
         await using var sqlite = await SeedAsync();

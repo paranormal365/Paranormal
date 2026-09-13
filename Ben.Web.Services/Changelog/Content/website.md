@@ -18,6 +18,10 @@ day-by-day account of building it would say nothing to anyone using it now.
 
 ## 2026-09-13
 
+- Confirming a booking and moving the party into a different room no longer fails with an unexpected
+  error, and guests can change their nights or the names in their party again.
+- The events dashboard loads when it is opened directly from a link, not only from its tab.
+
 - SuperAdmins have an Events tab on the dashboard, with charts of events by state, bookings, event credits,
   the busiest organizers and venues, and where events happen.
 - SuperAdmins have a list of every hosted event, showing the organizer, the dates and the state, with

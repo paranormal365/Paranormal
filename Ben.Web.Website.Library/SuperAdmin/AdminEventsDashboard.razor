@@ -1,6 +1,7 @@
 @namespace Ben.Web.Website.Library.SuperAdmin
 
 @inject IBenAdminClient AdminClient
+@inject IBenUserState UserState
 
 @* The events dashboard (item 235 phase 17b): hosted events across every group, beside the site dashboard.
 
@@ -44,7 +45,7 @@
             </div>
         </div>
 
-        <div class="row g-3">
+        <div class="row g-3" id="events-charts">
             <div class="col-xl-8">
                 <div class="card h-100"><div class="card-body">
                     <div class="small text-secondary mb-2">Events created and published</div>
@@ -150,10 +151,12 @@
     private bool _loading = true;
     private int _loadedDays;
 
-    // The dashboard page has already waited for sign-in and checked the SuperAdmin before this renders.
+    // The tab can be the first thing on the page (?tab=events), so this renders before sign-in has resolved. Asking
+    // then asks as nobody and is refused, and a refusal must not be remembered as this range's answer.
     protected override async Task OnParametersSetAsync()
     {
         if (_loadedDays == Days) return;
+        if (!await UserState.WaitUntilAuthReadyAsync(RendererInfo.IsInteractive)) return;
         await LoadAsync();
     }
 

@@ -244,7 +244,7 @@ public sealed class PublicHostedEventEmailPickController : BenControllerBase
             CreatedByAppUserId = user.Id,
         };
         db.HostedEventBookings.Add(booking);
-        PublicHostedEventBookingController.WriteNights(booking, chosen);
+        PublicHostedEventBookingController.WriteNights(db, booking, chosen);
 
         BookingTransitions.Hold(booking, ev, now);
         await BookingTransitions.ApplyUmbrellaAsync(db, _sync, ev, booking, user.Id, now, ct);

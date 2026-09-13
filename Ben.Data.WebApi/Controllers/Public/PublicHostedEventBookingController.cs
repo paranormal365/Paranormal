@@ -454,8 +454,8 @@ public sealed class PublicHostedEventBookingController : BenControllerBase
         };
         db.HostedEventBookings.Add(booking);
 
-        WriteNights(booking, chosen);
-        WriteGuests(booking, request.Guests ?? []);
+        WriteNights(db, booking, chosen);
+        WriteGuests(db, booking, request.Guests ?? []);
 
         BookingTransitions.Hold(booking, ev, now);
         await BookingTransitions.ApplyUmbrellaAsync(db, _sync, ev, booking, userId, now, ct);
@@ -653,8 +653,8 @@ public sealed class PublicHostedEventBookingController : BenControllerBase
         if (await WhyTheseNightsAreNotRealAsync(db, eventId, request.Nights ?? [], ct) is { } bad)
             return BadRequest(bad);
 
-        WriteNights(booking, request.Nights ?? []);
-        WriteGuests(booking, request.Guests ?? []);
+        WriteNights(db, booking, request.Nights ?? []);
+        WriteGuests(db, booking, request.Guests ?? []);
         await BookingContact.FillEmptyNamesAsync(db, userId, contact, ct);
 
         await db.SaveChangesAsync(ct);
@@ -709,14 +709,14 @@ public sealed class PublicHostedEventBookingController : BenControllerBase
                 return BadRequest(bad);
             db.HostedEventBookingNights.RemoveRange(booking.Nights);
             booking.Nights.Clear();
-            WriteNights(booking, request.Nights);
+            WriteNights(db, booking, request.Nights);
         }
 
         if (request.Guests is not null)
         {
             db.HostedEventBookingGuests.RemoveRange(booking.Guests);
             booking.Guests.Clear();
-            WriteGuests(booking, request.Guests);
+            WriteGuests(db, booking, request.Guests);
         }
 
         // Back to the queue, and the room-nights it held are released with the umbrella row: what
@@ -914,13 +914,13 @@ public sealed class PublicHostedEventBookingController : BenControllerBase
     /// somebody already had, because the seat that clashed had been discarded before the insert.
     /// </remarks>
     internal static void WriteNights(
-        HostedEventBooking booking, IReadOnlyList<HostedEventBookingNightChoice> nights)
+        BenDataContext db, HostedEventBooking booking, IReadOnlyList<HostedEventBookingNightChoice> nights)
     {
         foreach (var choice in nights
                      .GroupBy(n => (n.HostedEventNightId, n.HostedEventLayoutUnitId))
                      .Select(g => g.Last()))
         {
-            booking.Nights.Add(new HostedEventBookingNight
+            var row = new HostedEventBookingNight
             {
                 Id = Guid.NewGuid(),
                 HostedEventBookingId = booking.Id,
@@ -928,12 +928,17 @@ public sealed class PublicHostedEventBookingController : BenControllerBase
                 HostedEventLayoutUnitId = choice.HostedEventLayoutUnitId,
                 People = choice.People,
                 DateCreated = DateTime.UtcNow,
-            });
+            };
+            // Added through the set, not only the collection. On a booking already in the database (a guest
+            // changing their nights), a row found through the navigation with its key set is taken for an existing
+            // row and saved as an UPDATE of nothing.
+            db.HostedEventBookingNights.Add(row);
+            booking.Nights.Add(row);
         }
     }
 
     internal static void WriteGuests(
-        HostedEventBooking booking, IReadOnlyList<HostedEventBookingGuestInput> guests)
+        BenDataContext db, HostedEventBooking booking, IReadOnlyList<HostedEventBookingGuestInput> guests)
     {
         var order = 0;
         foreach (var guest in guests)
@@ -941,7 +946,7 @@ public sealed class PublicHostedEventBookingController : BenControllerBase
             var name = Trimmed(guest.DisplayName);
             if (name is null) continue;
 
-            booking.Guests.Add(new HostedEventBookingGuest
+            var row = new HostedEventBookingGuest
             {
                 Id = Guid.NewGuid(),
                 HostedEventBookingId = booking.Id,
@@ -950,7 +955,9 @@ public sealed class PublicHostedEventBookingController : BenControllerBase
                 DietaryNotes = Trimmed(guest.DietaryNotes),
                 SortOrder = order++,
                 DateCreated = DateTime.UtcNow,
-            });
+            };
+            db.HostedEventBookingGuests.Add(row);   // through the set, for the reason WriteNights gives
+            booking.Guests.Add(row);
         }
     }
 

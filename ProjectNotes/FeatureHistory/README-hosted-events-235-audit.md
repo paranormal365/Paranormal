@@ -128,6 +128,18 @@ Severity: **High** — wrong or unsafe behaviour. **Medium** — a gap a host wi
   guard below was dropped. A strict audit fake failed when the appeal decision's before-picture was not an entity
   (2 failures); that bug returned 500 after saving and was found by the e2e run, not the unit tests. Playwright
   `AdminEventOversightTests` (2) cover remove, appeal, uphold and the dashboard tab.
+- **Found by the persona walk (17d), on SQL Server:**
+  - **Confirming a request that placed the party in a room returned 500**, and so did a host editing a booking's
+    nights or guests, or a guest changing theirs. The row writers added new rows only through the booking's
+    collection, with keys already set, so on a booking already in the database EF saved them as updates of rows
+    that did not exist.
+  - Only confirming a hold whose seats were unchanged worked, and that was all the e2e suite did. No unit test
+    called the confirm endpoint.
+  - Every writer now adds through the set. `Confirming_a_request_puts_the_party_where_the_host_chose_and_issues_the_pass`
+    and `A_guest_changing_their_nights_and_guests_keeps_the_new_ones` each failed with the concurrency exception
+    before the fix, as did the guest's with its fix removed.
+- **Found by the persona walk:** the events dashboard, opened directly at `?tab=events`, asked for its numbers
+  before sign-in resolved and kept the refusal. It now waits for sign-in; the e2e test opens it directly first.
 - **Found while building 17b:** *Restore* turned any event into a draft, including a called-off one. That skipped
   the credit re-spend un-cancelling applies, and would have let a removed event skip its appeal. Restore now acts
   only on an archived event, and nothing on the organizer's event page changes a removed one.

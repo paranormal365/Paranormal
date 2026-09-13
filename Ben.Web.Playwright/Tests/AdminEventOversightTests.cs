@@ -114,6 +114,11 @@ public class AdminEventOversightTests : BenTestBase
     [Test]
     public async Task The_dashboard_has_an_events_tab_with_its_numbers()
     {
+        // Straight to the tab first: it renders before sign-in has resolved, and once remembered a refusal as its answer.
+        await Page.GotoAsync($"{BaseUrl}/admin/dashboard?tab=events");
+        await WaitUntilLoadedAsync();
+        await Expect(Page.Locator("#events-dashboard")).ToBeVisibleAsync(new() { Timeout = 30_000 });
+
         await Page.GotoAsync($"{BaseUrl}/admin/dashboard");
         await WaitUntilLoadedAsync();
 

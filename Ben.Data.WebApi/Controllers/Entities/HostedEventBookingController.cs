@@ -1087,7 +1087,7 @@ public sealed class HostedEventBookingController : OrgCmsControllerBase
             if (already.Contains((choice.HostedEventNightId, choice.HostedEventLayoutUnitId)))
                 continue;
 
-            booking.Nights.Add(new HostedEventBookingNight
+            var row = new HostedEventBookingNight
             {
                 Id = Guid.NewGuid(),
                 HostedEventBookingId = booking.Id,
@@ -1095,7 +1095,12 @@ public sealed class HostedEventBookingController : OrgCmsControllerBase
                 HostedEventLayoutUnitId = choice.HostedEventLayoutUnitId,
                 People = choice.People,
                 DateCreated = DateTime.UtcNow,
-            });
+            };
+            // Added through the set, not only the collection: on a booking already in the database, a row found
+            // through the navigation with its key already set is taken for an existing row, saved as an UPDATE of
+            // nothing, and the whole confirmation fails.
+            db.HostedEventBookingNights.Add(row);
+            booking.Nights.Add(row);
         }
 
     }
@@ -1113,7 +1118,7 @@ public sealed class HostedEventBookingController : OrgCmsControllerBase
             var name = Trimmed(guest.DisplayName);
             if (name is null) continue;   // a nameless guest is a blank row somebody left behind
 
-            booking.Guests.Add(new HostedEventBookingGuest
+            var row = new HostedEventBookingGuest
             {
                 Id = Guid.NewGuid(),
                 HostedEventBookingId = booking.Id,
@@ -1122,7 +1127,9 @@ public sealed class HostedEventBookingController : OrgCmsControllerBase
                 DietaryNotes = Trimmed(guest.DietaryNotes),
                 SortOrder = order++,
                 DateCreated = DateTime.UtcNow,
-            });
+            };
+            db.HostedEventBookingGuests.Add(row);   // through the set, for the reason ReplaceNights gives
+            booking.Guests.Add(row);
         }
     }
 
