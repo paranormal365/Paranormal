@@ -134,6 +134,7 @@ namespace Ben.Data.Source.Context
         public virtual DbSet<VenuePlaceClaim> VenuePlaceClaims { get; set; }
         public virtual DbSet<HostedEventSession> HostedEventSessions { get; set; }
         public virtual DbSet<HostedEventSessionSignUp> HostedEventSessionSignUps { get; set; }
+        public virtual DbSet<HostedEventFile> HostedEventFiles { get; set; }
         public virtual DbSet<OutboxEmail> OutboxEmails { get; set; }
         public virtual DbSet<OutboxEmailAttachment> OutboxEmailAttachments { get; set; }
         public virtual DbSet<EventCredit> EventCredits { get; set; }
@@ -1132,6 +1133,24 @@ namespace Ben.Data.Source.Context
             // One sign-up per person per session. A second press is the first sign-up, not a second place.
             modelBuilder.Entity<HostedEventSessionSignUp>()
                 .HasIndex(x => new { x.HostedEventSessionId, x.AppUserId }).IsUnique();
+
+            // ── an event's files (phase 11) ─────────────────────────────────────────
+            modelBuilder.Entity<HostedEventFile>()
+                .HasOne(x => x.HostedEvent).WithMany()
+                .HasForeignKey(x => x.HostedEventId).OnDelete(DeleteBehavior.Cascade);
+            modelBuilder.Entity<HostedEventFile>()
+                .HasOne(x => x.UploadFile).WithMany()
+                .HasForeignKey(x => x.UploadFileId).OnDelete(DeleteBehavior.NoAction);
+            modelBuilder.Entity<HostedEventFile>()
+                .HasOne(x => x.CreatedByAppUser).WithMany()
+                .HasForeignKey(x => x.CreatedByAppUserId).OnDelete(DeleteBehavior.NoAction);
+            modelBuilder.Entity<HostedEventFile>()
+                .HasOne(x => x.UpdatedByAppUser).WithMany()
+                .HasForeignKey(x => x.UpdatedByAppUserId).IsRequired(false).OnDelete(DeleteBehavior.NoAction);
+            modelBuilder.Entity<HostedEventFile>().Property(x => x.Folder).HasMaxLength(80);
+            modelBuilder.Entity<HostedEventFile>().Property(x => x.Description).HasMaxLength(500);
+            modelBuilder.Entity<HostedEventFile>().HasIndex(x => new { x.HostedEventId, x.Audience });
+            modelBuilder.Entity<HostedEventFile>().HasIndex(x => x.UploadFileId).IsUnique();
 
             modelBuilder.Entity<HostedEvent>()
                 .HasOne(e => e.VenueGrant).WithMany()

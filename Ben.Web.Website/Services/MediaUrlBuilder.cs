@@ -55,6 +55,21 @@ public sealed class MediaUrlBuilder : IMediaUrlBuilder
         return url;
     }
 
+    public string EventFile(Guid eventId, Guid fileId)
+    {
+        var cacheKey = $"event-file:{eventId}:{fileId}";
+        if (_urls.TryGetValue(cacheKey, out var cached)) return cached;
+
+        var token = _tokens.AccessToken;
+        var ticket = string.IsNullOrWhiteSpace(token) ? null : _tickets.Protect(fileId, token);
+        var url = ticket is null
+            ? $"/media/event-files/{eventId}/{fileId}"
+            : $"/media/event-files/{eventId}/{fileId}?t={Uri.EscapeDataString(ticket)}";
+
+        _urls[cacheKey] = url;
+        return url;
+    }
+
     public string SharedFieldSessionFile(string shareToken, Guid fileId) =>
         $"/media/shared/{Uri.EscapeDataString(shareToken)}/files/{fileId}";
 

@@ -629,6 +629,20 @@ app.MapGet("/media/field-sessions/{sessionId:guid}/files/{fileId:guid}", async (
         accessToken, httpFactory, ctx, ct);
 });
 
+// One of a hosted event's files (item 235 phase 11). The ticket carries the viewer's token when
+// they are signed in; without one the API serves only what the event has made public.
+app.MapGet("/media/event-files/{eventId:guid}/{fileId:guid}", async (
+    Guid eventId, Guid fileId, string? t,
+    Ben.Web.Website.Services.MediaTicketService tickets,
+    IHttpClientFactory httpFactory, IConfiguration config,
+    HttpContext ctx, CancellationToken ct) =>
+{
+    var accessToken = string.IsNullOrWhiteSpace(t) ? null : tickets.Unprotect(fileId, t);
+    return await Ben.Web.Website.Services.MediaProxy.StreamAsync(
+        $"{config["WebApi:BaseUrl"]}/api/public/hosted-events/{eventId}/files/{fileId}/download",
+        accessToken, httpFactory, ctx, ct);
+}).AllowAnonymous();
+
 // A recording reached through a share link (item 207). No ticket and no bearer token: the share
 // token IS the authority, and the API re-checks its expiry, its revocation and which file it
 // covers on every request. This endpoint asserts nothing — it forwards a path and streams the

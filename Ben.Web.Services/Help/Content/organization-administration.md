@@ -1497,6 +1497,24 @@ what it will do: **moving** a session writes to everybody with a place and rings
 **cancelling** writes to everybody signed up or queued, with your reason; a session somebody signed
 up for cannot simply be removed — cancel it, so they hear.
 
+### Files for the event
+
+**Files** on the event page holds the documents that go with a weekend: the guest pack, the stewards'
+briefing, the poster. Each file has a **folder** — just a word, like *Guest pack* — and says **who it
+is for**:
+
+- **The event's people only** — your group, and anybody helping at the event. New files start here.
+- **Confirmed guests** — people the venue has said yes to. Somebody still waiting on an answer does
+  not see these: the guest pack is where the key safe code lives.
+- **Anybody** — shown under *Downloads* on the public event page.
+
+The site checks every time a file is downloaded, so a link copied into a group chat downloads nothing
+for somebody the file is not for. Changing who a file is for takes effect straight away. A helper can
+add and change files when you tick **The event's files** on the staff list. Photos have their location
+removed when they are added, like every upload on the site.
+
+![An event's files, each with who it is for](help-media:organization-administration/event-files.png)
+
 ### Letters about bookings
 
 **A request is answered because somebody was told.** Everybody who may say yes or no to bookings —

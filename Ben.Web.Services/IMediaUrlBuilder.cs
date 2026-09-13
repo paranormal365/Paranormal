@@ -40,6 +40,15 @@ public interface IMediaUrlBuilder
     string SharedFieldSessionFile(string shareToken, Guid fileId);
 
     /// <summary>
+    /// One of a hosted event's files (item 235 phase 11).
+    /// </summary>
+    /// <remarks>
+    /// Its own route because the event decides who may have it — staff, confirmed guests, or anybody
+    /// — and a signed-in guest's ticket has to reach that check with their token inside it.
+    /// </remarks>
+    string EventFile(Guid eventId, Guid fileId);
+
+    /// <summary>
     /// A tour guide's published photograph (item 233).
     /// </summary>
     /// <remarks>

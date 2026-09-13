@@ -121,6 +121,12 @@ public sealed class HostedEventAccess
         => OrAsStaffAsync(CanEditEventAsync(userId, orgId, ct),
                           userId, eventId, db, s => s.SeesMenus, ct);
 
+    /// <summary>Add, change and remove this event's files, as a member OR as somebody helping with its files (phase 11).</summary>
+    public Task<bool> CanManageFilesAsync(
+        Guid userId, Guid orgId, Guid eventId, BenDataContext db, CancellationToken ct)
+        => OrAsStaffAsync(CanEditEventAsync(userId, orgId, ct),
+                          userId, eventId, db, s => s.SeesFiles, ct);
+
     /// <summary>Say who is helping at this event: the group's own people only, never staff.</summary>
     /// <remarks>
     /// Deliberately not delegable. A helper who could add helpers could hand the door to anybody,

@@ -1,0 +1,58 @@
+@namespace Ben.Web.Website.Library.Organization.Public
+@using Ben.Data.Common.Enums
+@using Ben.Service.Models.Entities
+@using Ben.Web.Services
+@using Ben.Web.Services.WebApi
+@using Ben.Web.Website.Library.Kit
+@using Ben.Web.Website.Library.Manage.Events
+@inject IBenAdminClient AdminClient
+@inject IMediaUrlBuilder MediaUrls
+
+@* An event's files, for whoever is reading the page (item 235 phase 11). The list is the server's
+   answer for this viewer — a stranger sees the poster, a confirmed guest the guest pack too — so the
+   page never decides, and says nothing at all when there is nothing for them. *@
+
+@if (_files.Items.Count > 0)
+{
+    <section class="mb-4" id="hosted-downloads">
+        <BenSectionHeading Text="Downloads" />
+        @foreach (var pile in _files.Items.GroupBy(f => f.Folder))
+        {
+            @if (pile.Key is { Length: > 0 } folder)
+            {
+                <h3 class="h6 text-secondary small mt-2 mb-1">@folder</h3>
+            }
+            <div class="list-group mb-2">
+                @foreach (var file in pile)
+                {
+                    <a class="list-group-item list-group-item-action d-flex gap-2 align-items-center public-event-file"
+                       href="@MediaUrls.EventFile(HostedEventId, file.Id)" download>
+                        <BenIcon Name="download" />
+                        <span class="flex-grow-1 text-break">
+                            @file.FileName
+                            @if (file.Description is { Length: > 0 } d)
+                            {
+                                <span class="d-block small text-secondary">@d</span>
+                            }
+                        </span>
+                        @if (file.Audience == EventFileAudience.Attendees)
+                        {
+                            <span class="badge bg-secondary-subtle text-secondary-emphasis">For guests</span>
+                        }
+                        <span class="small text-secondary text-nowrap">@OrgEventFiles.Size(file.FileSize)</span>
+                    </a>
+                }
+            </div>
+        }
+    </section>
+}
+
+@code {
+    [Parameter, EditorRequired] public Guid HostedEventId { get; set; }
+    [Parameter] public bool IsAuthenticated { get; set; }
+
+    private LoadResult<HostedEventFileRecord> _files;
+
+    protected override async Task OnParametersSetAsync()
+        => _files = await AdminClient.GetPublicEventFilesAsync(HostedEventId, IsAuthenticated);
+}

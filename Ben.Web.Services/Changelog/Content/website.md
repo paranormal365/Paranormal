@@ -18,6 +18,10 @@ day-by-day account of building it would say nothing to anyone using it now.
 
 ## 2026-09-13
 
+- Events can have files — a guest pack, a stewards' briefing, a poster — each marked for the event's
+  own people, confirmed guests, or anybody. The event page lists what each visitor may download, and
+  downloads are checked every time.
+
 - Events can have a programme: classes, talks and meals night by night, on the venue's clock. Guests
   with a confirmed place sign up for sessions that have a limit, join a queue when one is full, and
   are written to when a place comes free, a session moves, or one is cancelled.

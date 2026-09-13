@@ -513,3 +513,21 @@ public sealed record MySessionPlaceRecord(Guid SignUpId, int People, bool Waitin
 
 /// <summary>Signs up for a session, for this many of the party.</summary>
 public sealed record SessionSignUpRequest(int People = 1);
+
+// ── an event's files (item 235 phase 11) ──────────────────────────────────────
+
+/// <summary>One of an event's files, as the host's page or a guest's list reads it.</summary>
+public sealed record HostedEventFileRecord(
+    Guid Id,
+    Guid UploadFileId,
+    string FileName,
+    string ContentType,
+    long FileSize,
+    string? Folder,
+    string? Description,
+    EventFileAudience Audience,
+    int SortOrder,
+    DateTime DateCreated);
+
+/// <summary>Changes a file's pile, words, audience or place in the list.</summary>
+public sealed record UpdateHostedEventFileRequest(string? Folder, string? Description, EventFileAudience Audience, int SortOrder);

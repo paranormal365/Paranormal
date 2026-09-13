@@ -115,6 +115,12 @@ says **The programme changed**, and the session is marked **Changed** until you 
 
 ![The programme on a phone](/help/media/going-to-an-event/programme-phone.png)
 
+## Downloads
+
+An event can share files — a poster anybody may have, and a guest pack with the practical details for
+people who are coming. The event's page lists the ones you may download under **Downloads**. Files
+marked **For guests** appear once the venue has confirmed your place.
+
 ## Your pass
 
 Once a venue confirms you, your pass is on the event's page and on this list. **One pass admits

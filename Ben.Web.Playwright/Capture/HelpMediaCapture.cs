@@ -2433,6 +2433,56 @@ public sealed class HelpMediaCapture : BenTestBase
         }
     }
 
+    /// <summary>An event's files, each with who it is for (item 235 phase 11).</summary>
+    [Test]
+    [Description("organization-administration: an event's files.")]
+    public async Task Capture_EventFiles()
+    {
+        var orgId = await OrgIdBySlugAsync("paranormal365");
+        var added = new List<string>();
+
+        await LoginAsync(SuperAdminEmail, SuperAdminPassword);
+        await GoAsync($"/organizations/{orgId}/events/{SeededRoomsEventId}/files");
+        await Expect(Page.Locator("#file-input")).ToBeVisibleAsync(new() { Timeout = 30_000 });
+
+        try
+        {
+            foreach (var (name, folder, audience, about) in new[]
+                     {
+                         ("guest-pack.pdf", "Guest pack", "Confirmed guests", "Parking, the key safe and what to bring"),
+                         ("stewards-briefing.pdf", "Stewards", "The event's people only", "Fire exits and who to call"),
+                         ("poster.pdf", "", "Anybody", ""),
+                     })
+            {
+                await Page.Locator("#file-input").SetInputFilesAsync(new FilePayload
+                {
+                    Name = name, MimeType = "application/pdf", Buffer = "%PDF-1.4\n%capture\n"u8.ToArray(),
+                });
+                await Page.Locator("#file-folder").FillAsync(folder);
+                await Page.Locator("#file-audience").SelectOptionAsync(new SelectOptionValue { Label = audience });
+                await Page.Locator("#file-description").FillAsync(about);
+                await Page.Locator("#file-upload").ClickAsync();
+                await Expect(Page.Locator(".event-file", new() { HasTextString = name })).ToBeVisibleAsync(new() { Timeout = 15_000 });
+                added.Add(name);
+            }
+
+            await ShootAsync("organization-administration", "event-files.png",
+                gated: true, selector: ".container-fluid", proves: "stewards-briefing.pdf");
+        }
+        finally
+        {
+            foreach (var name in added)
+            {
+                var remove = Page.Locator(".event-file", new() { HasTextString = name }).GetByRole(AriaRole.Button, new() { Name = "Remove" });
+                if (await remove.CountAsync() > 0)
+                {
+                    await remove.ClickAsync();
+                    await Expect(Page.Locator(".event-file", new() { HasTextString = name })).ToHaveCountAsync(0, new() { Timeout = 15_000 });
+                }
+            }
+        }
+    }
+
     /// <summary>Letters about bookings, on the notifications page (item 235 phase 8).</summary>
     [Test]
     [Description("organization-administration: how often a group writes to you about bookings.")]
