@@ -555,11 +555,23 @@ Four defects the browser found that no unit test could:
   place has been told" since phase 3 and no letter existed; the note now counts what was actually
   sent.
 
+Two things the plan asked for that are deliberately not there:
+
+- **`SeatMapHasCompactFallbackTests`** is not written. The rule it was to enforce — "a grid must
+  come with a compact list" — is not what the picker does: the grid takes a ceiling and scrolls
+  inside it with the summary fixed to the window, which was photographed at 375 and works. A guard
+  enforcing a rule the code does not follow is a guard somebody deletes. **The three-width
+  Playwright fixture is the guarantee**, and every hosted screen now has one.
+- **"Ask the venue to move you"** on a confirmed booking. *I can't make it* asks them to release
+  it, which is the same conversation with a blunter name; a second button asking to be moved
+  somewhere unspecified is a message, and messages are phase 11.
+
 Everything else shipped as written: the anonymous plan, the picker with its refusal ringing the
 square that went, the ask form, the booking card's six states, `/my-events`, the pass with its
 short code, the bell retargeted, the ask/hold/called-off/going-ahead letters, the token page's
-hosted branch, 18 new Playwright tests at three widths, five render tests, and the new
-`going-to-an-event` help page with five shots.
+hosted branch, the thirty-second poll (which re-reads a hold only once its clock has run out),
+18 new Playwright tests at three widths, five render tests, and the new `going-to-an-event` help
+page with five shots.
 
 ### Phase 7 — Staff and the door
 

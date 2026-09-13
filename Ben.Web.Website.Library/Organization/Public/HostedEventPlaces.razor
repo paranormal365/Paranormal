@@ -183,6 +183,19 @@
         _plan = plan.Item;
         _readOnly = null;
 
+        // A HOLD THAT HAS RUN OUT IS READ AGAIN, and only then. The expiry job releases the places
+        // within five minutes and the card is otherwise a photograph of a promise that has already
+        // lapsed — a guest sitting on this page would watch a countdown reach zero and stay there.
+        // Every other state is left alone: re-reading the booking every thirty seconds would be a
+        // request per guest per half-minute to learn nothing.
+        if (_booking is { Status: HostedEventBookingStatus.Held, HoldExpiresUtc: { } ran }
+            && ran <= DateTime.UtcNow)
+        {
+            var mine = await AdminClient.GetMyHostedEventBookingAsync(Hosted.Id);
+            if (_disposed) return;
+            if (!mine.Failed) _booking = mine.Item;
+        }
+
         await InvokeAsync(StateHasChanged);
     }
 
