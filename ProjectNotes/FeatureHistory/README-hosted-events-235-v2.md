@@ -1460,6 +1460,52 @@ timesheet. So:
   employee-tracking system.
 - Copying an event (phase 12) brings the positions and the shift pattern, without the names.
 
+### Phase 17 — Before merging: audit, SuperAdmin oversight, demo content, walks and advertising
+
+**Asked for by Ben on 2026-09-13, in the middle of phase 14d:** *"Before we merge this enormous branch and new
+functionality, complete a code audit and review on the new hosted event process and find any poorly written
+code, gaps in code or missing functionality or missing tests. Double-check that we have everything needed, and
+offered, by someone providing the hosting software experience."*
+
+He also asked for:
+- free images (Unsplash) for tickets, ads, menus, events and venues, *"aligned with the topic, fitting the area"*;
+  he will review them once the documents exist;
+- help, changelogs, a new Hosted Events advertising PDF including the iPhone app, and updates to the existing PDFs
+  including the investor overview;
+- *"visually run end to end each type of person for the event and just simulate the sending of emails"* on
+  `IsHauntedDb_player`, with screenshots and video for the help and PDFs;
+- a printable one-page, front-and-back advertisement for the whole product, and one for each part we can charge
+  for (individuals, groups, ghost walk tours, venues, and event hosts);
+- in the SuperAdmin home dashboard, a tab for an events dashboard with charts about venues, organizers and
+  events;
+- a SuperAdmin list of every event (organizer, event, dates, view, delete). Delete removes the event, credits the
+  event credit back to the organizer, and emails a generic rejection with the ability to appeal to create the
+  event again.
+
+Sub-phases, in this order, because each feeds the next:
+
+- **17a — Audit and fixes.** Server, website and iPhone app, read against the plan of record and against what a
+  hosting product is expected to offer. Findings go in a table with severity, the fix or the reason it waits, and
+  the test that pins it. Fixes are made in the phase with a discriminating test.
+- **17b — SuperAdmin oversight.**
+  - An *Events* tab on the SuperAdmin home with charts: events by state over time, credits bought and spent,
+    bookings and people, venues and organizers.
+  - An events list (organizer, event, dates, state; view; remove).
+  - Removal as a recorded state, not a purge: the credit goes back to the organizer, the organizer and any
+    confirmed guests are told, and the email carries an appeal link. The appeal is a short form; SuperAdmin
+    answers it; upholding it restores the event as a draft.
+- **17c — Demo content and imagery** on `IsHauntedDb_player`: free-licensed photographs for the event pages,
+  galleries, venue libraries, ads, menus and passes, recorded with source and licence.
+- **17d — Walks, as every person.** Organizer, venue, door helper, guest with an account, guest without one, and
+  SuperAdmin. Emails are written to a local folder and photographed rather than sent. Screenshots and short
+  recordings are kept for the help and the documents.
+- **17e — Documents.**
+  - A Hosted Events advertising PDF, including the iPhone app.
+  - Updates to the product PDF, the persona PDFs, the iOS PDFs and the investor overview.
+  - One-page front-and-back advertisements: the whole product, individuals, groups, ghost walk tours, venues and
+    event hosts.
+- **17f — Help and changelog sweep**, then the full suites, then merge readiness for Ben.
+
 ### FUTURE (recorded, not scheduled)
 
 - **Apple Wallet** (decision 14): `eventTicket` pass, serial = pass id, barcode message = the
