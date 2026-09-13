@@ -596,6 +596,10 @@ app.MapGet("/go/{adId:guid}", async (
             if (target is not null && target.TargetKind == "org"
                 && !string.IsNullOrWhiteSpace(target.OrganizationUrlName))
                 return Results.Redirect($"/o/{Uri.EscapeDataString(target.OrganizationUrlName)}");
+            // An event on this site (item 235 phase 11) — built from the two slugs, still never a free URL.
+            if (target is not null && target.TargetKind == "event"
+                && !string.IsNullOrWhiteSpace(target.OrganizationUrlName) && !string.IsNullOrWhiteSpace(target.EventUrlName))
+                return Results.Redirect($"/o/{Uri.EscapeDataString(target.OrganizationUrlName)}/events/{Uri.EscapeDataString(target.EventUrlName)}");
         }
     }
     catch (Exception)

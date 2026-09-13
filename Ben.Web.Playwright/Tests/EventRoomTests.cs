@@ -85,6 +85,16 @@ public class EventRoomTests : BenTestBase
             Name = "stairs.png", MimeType = "image/png", Buffer = TinyPng(),
         });
         await Page.Locator("#add-photos-caption").FillAsync(_marker);
+
+        // The first photo a guest adds at an event waits for them to agree to it being shown (Ben,
+        // 2026-09-13). The seeded guest may already have agreed on an earlier run.
+        var agree = Page.Locator("#add-photos-agree");
+        if (await agree.CountAsync() > 0)
+        {
+            await Expect(Page.Locator("#add-photos-send-button")).ToBeDisabledAsync();
+            await Expect(Page.Locator("#add-photos-notice")).ToContainTextAsync("photo wall or slideshow");
+            await agree.CheckAsync();
+        }
         await ClickUntilAsync(Page.Locator("#add-photos-send-button"), Page.Locator("#add-photos-done"));
 
         // The guest is not shown the wall: it is behind the organizer's and venue's accounts.

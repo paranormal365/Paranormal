@@ -327,7 +327,10 @@ public sealed record PublicHostedEventRecord(
     string? VenuePageUrl = null,
 
     /// <summary>The building's story, from the venue's profile, when the venue lent it.</summary>
-    string? VenueHistory = null);
+    string? VenueHistory = null,
+
+    /// <summary>The host's pictures, in their order (phase 11). Null on a payload from before them.</summary>
+    IReadOnlyList<PublicEventImageRecord>? Gallery = null);
 
 /// <summary>
 /// One thing that has to be true before an event can go live (item 235 phase 3).
@@ -547,7 +550,11 @@ public sealed record EventRoomRecord(
     EventPhotoPosting PhotoPosting = EventPhotoPosting.TeamAndGuests,
     bool CanAddPhotos = false,
     /// <summary>Whether this viewer may open the photo wall: the organizers, helpers and venue — not guests.</summary>
-    bool CanSeeWall = false);
+    bool CanSeeWall = false,
+    /// <summary>Whether this guest still has to agree to <see cref="PhotoNotice"/> before their first photo.</summary>
+    bool NeedsPhotoConsent = false,
+    /// <summary>What they agree to.</summary>
+    string? PhotoNotice = null);
 
 /// <summary>One photo or video on the photo wall.</summary>
 public sealed record EventWallPhotoRecord(Guid MessageId, string ContentType, string AuthorName, string? Caption, DateTime PostedUtc);
@@ -578,3 +585,14 @@ public sealed record EventRoomMessageRecord(
 
 /// <summary>Why a post is being reported.</summary>
 public sealed record ReportEventRoomMessageRequest(string? Reason);
+
+// ── the event's gallery (item 235 phase 11) ───────────────────────────────────
+
+/// <summary>One picture in an event's public gallery.</summary>
+public sealed record HostedEventImageRecord(Guid Id, Guid UploadFileId, int SortOrder, string? Caption);
+
+/// <summary>A caption, or a new place in the order.</summary>
+public sealed record UpdateHostedEventImageRequest(string? Caption, int? SortOrder);
+
+/// <summary>A gallery picture as a visitor's page reads it.</summary>
+public sealed record PublicEventImageRecord(Guid UploadFileId, string? Caption);

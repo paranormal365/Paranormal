@@ -890,7 +890,28 @@ switches on.
 
 ### Phase 12 — After the event
 
-**Added 2026-09-13 (Ben):** "If we generate a gallery, we can send that link in a thank you link
+**Added 2026-09-13 (Ben), for after the event:**
+
+- **Retention.** *"a data retention policy. I am not sure how long after an event we should retain
+  links to collected files like images or media."* Proposed, Ben to confirm the length: a site setting
+  defaulting to **90 days after the last night**, letters to the organizer 30 and 7 days before; then
+  the event's own files and gallery go, and the room's links to guests' photos go — the guests' files
+  themselves stay in their libraries, because they are theirs.
+- **Pick and zip.** *"allow the organizer the ability to pick from a list to download and just zip up
+  whatever they pick into a .zip file."* A list of the event's files, gallery pictures and photos guests
+  sent to the organizers; tick, download one zip.
+- **Save for next time.** *"ask if they want to save the ads, menu whatever they have created for the
+  event — so they can use it again."* Folded into *Copy this event*: the ad, menus, programme, plan and
+  files offered as the starting point of the next one, and kept on the group even when the event is
+  archived.
+- **What the venue keeps.** *"remember the venue from now on and use the room or seating as a starting
+  point next time someone reserves the venue. Images of the venue should also be saved, either ones taken
+  by the venue owner / employee, or ones shared with the venue by an organizer."* The last plan used at a
+  place becomes the default plan for the next event there (the venue's own when it has one, otherwise the
+  last organizer's); and the venue profile gains a photo library holding its staff's pictures and any an
+  organizer chooses to share with the venue.
+
+**Also added 2026-09-13 (Ben):** "If we generate a gallery, we can send that link in a thank you link
 including any upcoming events hosted by the organizer." The once-only thank-you letter carries the
 event's public gallery link (phase 11c) and the organizer's upcoming published events, so the letter
 that closes one weekend opens the next.

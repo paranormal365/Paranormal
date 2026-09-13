@@ -429,6 +429,10 @@ public sealed class OrganizationPurge
             // cascade with the group; it is named here so the next reader does not have to know that.
             // The per-event cursors cascade from the events on the line below.
             await db.EventBookingAlertPreferences.Where(x => x.OrganizationId == organizationId).ExecuteDeleteAsync(ct);
+            // An ad leads to one of this group's events (phase 11). Ads are the group's own and go
+            // further down; the link is cleared here so the events below can go first.
+            await db.OrganizationAds.Where(x => x.HostedEventId != null && x.HostedEvent!.OrganizationId == organizationId)
+                .ExecuteUpdateAsync(u => u.SetProperty(x => x.HostedEventId, (Guid?)null), ct);
             // The rooms of this group's events go with the events (phase 11). The posts were guests'
             // writing in a space the event provided; the files on them are the guests' own and stay in
             // their libraries — only the posts and the reports about them go.

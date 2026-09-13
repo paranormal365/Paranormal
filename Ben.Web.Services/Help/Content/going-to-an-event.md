@@ -141,6 +141,11 @@ venue can open the wall, so it is never somewhere a stranger can browse the phot
 
 ![Adding photos from a phone](/help/media/going-to-an-event/add-photos-phone.png)
 
+**The first time you add a photo at an event you are asked to agree** that your photos may be shown
+to the people at the event in its room, and on a photo wall or slideshow the organizers show at the
+venue. You are asked once per event, and the photos still stay yours. Please only add photos of people
+who are happy to be shown.
+
 The organizers can keep photos to the event's own team; you can still write in the room when they
 do. The room closes to new posts a week after the last night, and stays there to look back through.
 

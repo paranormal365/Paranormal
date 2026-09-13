@@ -63,7 +63,8 @@ public sealed class PublicHostedEventRoomController : BenControllerBase
     [HttpPost]
     [RequestSizeLimit(200L * 1024 * 1024)]
     public async Task<ActionResult<EventRoomRecord>> Post(
-        Guid eventId, [FromForm] string? body, IFormFile? media, [FromForm] bool sendToHosts, CancellationToken ct)
+        Guid eventId, [FromForm] string? body, IFormFile? media, [FromForm] bool sendToHosts, CancellationToken ct,
+        [FromForm] bool agreeToShow = false)
     {
         var userId = GetCurrentUserId();
         await using var db = await _dbFactory.CreateDbContextAsync(ct);
@@ -91,7 +92,20 @@ public sealed class PublicHostedEventRoomController : BenControllerBase
             if (!EventRoom.MayAddPhotos(hosted, standing))
                 return Conflict("The organizers have kept photos to the event's own team. You can still write in the room.");
 
+            // The first photo a guest adds at this event waits for their agreement to it being shown
+            // (Ben, 2026-09-13). The notice is the refusal, so a client that skipped it still says it.
+            if (await EventRoom.NeedsPhotoConsentAsync(db, eventId, standing, userId, ct))
+            {
+                if (!agreeToShow) return Conflict(EventRoom.PhotoNotice + " Tick that you agree to add your photo.");
+                db.EventPhotoConsents.Add(new EventPhotoConsent
+                {
+                    Id = Guid.NewGuid(), HostedEventId = eventId, AppUserId = userId, Wording = EventRoom.PhotoNotice,
+                    DateCreated = now, CreatedByAppUserId = userId,
+                });
+            }
+
             if (media.Length == 0) return BadRequest("That file is empty.");
+            if (await EventStorage.WhyItDoesNotFitAsync(db, eventId, media.Length, ct) is { } full) return Conflict(full);
             var type = media.ContentType ?? "";
             if (!(type.StartsWith("image/") || type.StartsWith("video/")) || type.Contains("svg", StringComparison.OrdinalIgnoreCase))
                 return BadRequest("The room takes photos and videos. Other files go to the organizers directly.");
@@ -400,6 +414,8 @@ public sealed class PublicHostedEventRoomController : BenControllerBase
             note,
             hosted.PhotoPosting,
             whyClosed is null && EventRoom.MayAddPhotos(hosted, standing),
-            await EventRoom.MaySeeTheWallAsync(db, hosted, standing, viewerId, ct));
+            await EventRoom.MaySeeTheWallAsync(db, hosted, standing, viewerId, ct),
+            await EventRoom.NeedsPhotoConsentAsync(db, hosted.Id, standing, viewerId, ct),
+            EventRoom.PhotoNotice);
     }
 }

@@ -64,6 +64,17 @@
             <label class="form-label small" for="add-photos-caption">Say something about them (optional)</label>
             <input class="form-control mb-2" id="add-photos-caption" maxlength="1000" @bind="_caption" />
 
+            @if (room.NeedsPhotoConsent)
+            {
+                <div class="border rounded p-3 mb-3" id="add-photos-notice">
+                    <p class="mb-2">@room.PhotoNotice</p>
+                    <div class="form-check mb-0">
+                        <input class="form-check-input" type="checkbox" id="add-photos-agree" @bind="_agree" />
+                        <label class="form-check-label" for="add-photos-agree">I agree</label>
+                    </div>
+                </div>
+            }
+
             @if (room.HostNames.Count > 0)
             {
                 <div class="form-check mb-3">
@@ -75,7 +86,7 @@
             }
 
             <button type="button" class="btn btn-success btn-lg w-100" id="add-photos-send-button"
-                    disabled="@_busy" @onclick="SendAsync" style="min-height:3.5rem;">
+                    disabled="@(_busy || (room.NeedsPhotoConsent && !_agree))" @onclick="SendAsync" style="min-height:3.5rem;">
                 @(_busy ? $"Adding {_done + 1} of {_picked.Count}…" : "Add them")
             </button>
         }
@@ -110,6 +121,7 @@
     private List<IBrowserFile> _picked = [];
     private string? _caption;
     private bool _sendToHosts;
+    private bool _agree;
     private int _done;
     private string? _result;
     private readonly List<string> _problems = [];
@@ -145,6 +157,7 @@
             // The words go on the first only, so a batch reads as one caption and not twenty copies of it.
             content.Add(new StringContent(added == 0 ? _caption ?? "" : ""), "body");
             content.Add(new StringContent(_sendToHosts ? "true" : "false"), "sendToHosts");
+            content.Add(new StringContent(_agree ? "true" : "false"), "agreeToShow");
             var stream = new StreamContent(file.OpenReadStream(200L * 1024 * 1024));
             stream.Headers.ContentType = new System.Net.Http.Headers.MediaTypeHeaderValue(
                 string.IsNullOrWhiteSpace(file.ContentType) ? "application/octet-stream" : file.ContentType);
@@ -160,6 +173,7 @@
 
         _busy = false;
         _picked = [];
+        if (added > 0) _room = await AdminClient.GetEventRoomAsync(EventId);
         _caption = null;
         _result = added switch
         {

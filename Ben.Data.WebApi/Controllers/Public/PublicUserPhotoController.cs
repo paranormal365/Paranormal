@@ -102,4 +102,35 @@ public sealed class PublicUserPhotoController : BenControllerBase
         Response.Headers.CacheControl = "public, max-age=86400";
         return File(stream, picture.ContentType ?? "image/jpeg");
     }
+
+    /// <summary>
+    /// A picture from a hosted event's public gallery (item 235 phase 11).
+    /// </summary>
+    /// <remarks>
+    /// Anonymous like a tour's, because the event page is read by people with no account. Served only
+    /// while the gallery row exists AND the event is on the public site: a draft's pictures are the
+    /// host's work in progress, and a called-off event's page stops showing them.
+    /// </remarks>
+    [HttpGet("event-photo/{uploadFileId:guid}")]
+    [AllowAnonymous]
+    [Microsoft.AspNetCore.RateLimiting.DisableRateLimiting]
+    public async Task<IActionResult> GetEventPhoto(Guid uploadFileId, CancellationToken ct)
+    {
+        await using var db = await _db.CreateDbContextAsync(ct);
+
+        var picture = await db.HostedEventGalleryImages.AsNoTracking()
+            .Where(g => g.UploadFileId == uploadFileId
+                     && Services.Events.HostedEventStates.OnThePublicSite.Contains(g.HostedEvent.LifecycleState))
+            .Select(g => new { g.UploadFile.StoragePath, g.UploadFile.ContentType })
+            .FirstOrDefaultAsync(ct);
+
+        if (picture?.StoragePath is not { Length: > 0 } path) return NotFound();
+
+        var serving = _media.ServingPathFor(path);
+        if (!_storage.Exists(serving)) return NotFound();
+
+        var stream = await _storage.OpenReadAsync(serving, ct);
+        Response.Headers.CacheControl = "public, max-age=3600";
+        return File(stream, picture.ContentType ?? "image/jpeg");
+    }
 }

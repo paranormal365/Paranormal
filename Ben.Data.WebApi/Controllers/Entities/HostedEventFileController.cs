@@ -75,6 +75,8 @@ public sealed class HostedEventFileController : OrgCmsControllerBase
         if (file.Length > limits.MaxFileBytes)
             return BadRequest($"That file is larger than the {limits.MaxFileBytes / (1024 * 1024):N0} MB this site accepts.");
 
+        if (await EventStorage.WhyItDoesNotFitAsync(db, eventId, file.Length, ct) is { } full) return BadRequest(full);
+
         // An SVG is a document that can carry script, and a guest opening one from a venue's page
         // would run whatever it says. Everything else is served as a download, never inline.
         var extension = Path.GetExtension(file.FileName).ToLowerInvariant();

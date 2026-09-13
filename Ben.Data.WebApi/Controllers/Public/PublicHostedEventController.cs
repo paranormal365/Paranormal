@@ -254,7 +254,14 @@ public sealed class PublicHostedEventController : BenControllerBase
             .FirstOrDefaultAsync(ct);
 
         if (row is null) return null;
-        var record = ToRecord(row);
+        var record = ToRecord(row) with
+        {
+            Gallery = await db.HostedEventGalleryImages.AsNoTracking()
+                .Where(g => g.HostedEventId == row.Event.Id)
+                .OrderBy(g => g.SortOrder)
+                .Select(g => new PublicEventImageRecord(g.UploadFileId, g.Caption))
+                .ToListAsync(ct),
+        };
 
         // The venue, when a verified venue that is another group said yes (phase 9). Its name and
         // page always, because who agreed the event may happen there is part of what the event is;

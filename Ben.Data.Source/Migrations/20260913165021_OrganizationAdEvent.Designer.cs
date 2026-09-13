@@ -4,6 +4,7 @@ using Ben.Data.Source.Context;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore.Infrastructure;
 using Microsoft.EntityFrameworkCore.Metadata;
+using Microsoft.EntityFrameworkCore.Migrations;
 using Microsoft.EntityFrameworkCore.Storage.ValueConversion;
 
 #nullable disable
@@ -11,9 +12,11 @@ using Microsoft.EntityFrameworkCore.Storage.ValueConversion;
 namespace Ben.Data.Source.Migrations
 {
     [DbContext(typeof(BenDataContext))]
-    partial class BenDataContextModelSnapshot : ModelSnapshot
+    [Migration("20260913165021_OrganizationAdEvent")]
+    partial class OrganizationAdEvent
     {
-        protected override void BuildModel(ModelBuilder modelBuilder)
+        /// <inheritdoc />
+        protected override void BuildTargetModel(ModelBuilder modelBuilder)
         {
 #pragma warning disable 612, 618
             modelBuilder
@@ -2857,45 +2860,6 @@ namespace Ben.Data.Source.Migrations
                     b.HasIndex("OrgCalendarEventId", "Status");
 
                     b.ToTable("EventEvidenceSubmissions");
-                });
-
-            modelBuilder.Entity("Ben.Data.Source.Entities.EventPhotoConsent", b =>
-                {
-                    b.Property<Guid>("Id")
-                        .ValueGeneratedOnAdd()
-                        .HasColumnType("uniqueidentifier");
-
-                    b.Property<Guid>("AppUserId")
-                        .HasColumnType("uniqueidentifier");
-
-                    b.Property<Guid>("CreatedByAppUserId")
-                        .HasColumnType("uniqueidentifier");
-
-                    b.Property<DateTime>("DateCreated")
-                        .HasColumnType("datetime2");
-
-                    b.Property<DateTime?>("DateUpdated")
-                        .HasColumnType("datetime2");
-
-                    b.Property<Guid>("HostedEventId")
-                        .HasColumnType("uniqueidentifier");
-
-                    b.Property<Guid?>("UpdatedByAppUserId")
-                        .HasColumnType("uniqueidentifier");
-
-                    b.Property<string>("Wording")
-                        .IsRequired()
-                        .HasMaxLength(1000)
-                        .HasColumnType("nvarchar(1000)");
-
-                    b.HasKey("Id");
-
-                    b.HasIndex("AppUserId");
-
-                    b.HasIndex("HostedEventId", "AppUserId")
-                        .IsUnique();
-
-                    b.ToTable("EventPhotoConsents");
                 });
 
             modelBuilder.Entity("Ben.Data.Source.Entities.EventReminderSent", b =>
@@ -12864,25 +12828,6 @@ namespace Ben.Data.Source.Migrations
                     b.Navigation("UpdatedByAppUser");
 
                     b.Navigation("UploadFile");
-                });
-
-            modelBuilder.Entity("Ben.Data.Source.Entities.EventPhotoConsent", b =>
-                {
-                    b.HasOne("Ben.Data.Source.Entities.AppUser", "AppUser")
-                        .WithMany()
-                        .HasForeignKey("AppUserId")
-                        .OnDelete(DeleteBehavior.NoAction)
-                        .IsRequired();
-
-                    b.HasOne("Ben.Data.Source.Entities.HostedEvent", "HostedEvent")
-                        .WithMany()
-                        .HasForeignKey("HostedEventId")
-                        .OnDelete(DeleteBehavior.Cascade)
-                        .IsRequired();
-
-                    b.Navigation("AppUser");
-
-                    b.Navigation("HostedEvent");
                 });
 
             modelBuilder.Entity("Ben.Data.Source.Entities.EventReminderSent", b =>

@@ -135,6 +135,8 @@ namespace Ben.Data.Source.Context
         public virtual DbSet<HostedEventSession> HostedEventSessions { get; set; }
         public virtual DbSet<HostedEventSessionSignUp> HostedEventSessionSignUps { get; set; }
         public virtual DbSet<HostedEventFile> HostedEventFiles { get; set; }
+        public virtual DbSet<HostedEventGalleryImage> HostedEventGalleryImages { get; set; }
+        public virtual DbSet<EventPhotoConsent> EventPhotoConsents { get; set; }
         public virtual DbSet<OutboxEmail> OutboxEmails { get; set; }
         public virtual DbSet<OutboxEmailAttachment> OutboxEmailAttachments { get; set; }
         public virtual DbSet<EventCredit> EventCredits { get; set; }
@@ -1159,6 +1161,38 @@ namespace Ben.Data.Source.Context
             modelBuilder.Entity<OrgMessage>()
                 .HasIndex(m => new { m.HostedEventId, m.DateCreated })
                 .HasFilter("[HostedEventId] IS NOT NULL");
+
+            // ── the event's public gallery (phase 11) ──────────────────────────────
+            modelBuilder.Entity<HostedEventGalleryImage>()
+                .HasOne(x => x.HostedEvent).WithMany()
+                .HasForeignKey(x => x.HostedEventId).OnDelete(DeleteBehavior.Cascade);
+            modelBuilder.Entity<HostedEventGalleryImage>()
+                .HasOne(x => x.UploadFile).WithMany()
+                .HasForeignKey(x => x.UploadFileId).OnDelete(DeleteBehavior.NoAction);
+            modelBuilder.Entity<HostedEventGalleryImage>()
+                .HasOne(x => x.CreatedByAppUser).WithMany()
+                .HasForeignKey(x => x.CreatedByAppUserId).OnDelete(DeleteBehavior.NoAction);
+            modelBuilder.Entity<HostedEventGalleryImage>()
+                .HasOne(x => x.UpdatedByAppUser).WithMany()
+                .HasForeignKey(x => x.UpdatedByAppUserId).IsRequired(false).OnDelete(DeleteBehavior.NoAction);
+            modelBuilder.Entity<HostedEventGalleryImage>().Property(x => x.Caption).HasMaxLength(300);
+            modelBuilder.Entity<HostedEventGalleryImage>().HasIndex(x => new { x.HostedEventId, x.SortOrder });
+            modelBuilder.Entity<HostedEventGalleryImage>().HasIndex(x => x.UploadFileId).IsUnique();
+
+            // ── an ad that leads to an event (phase 11) ─────────────────────────────
+            modelBuilder.Entity<OrganizationAd>()
+                .HasOne(a => a.HostedEvent).WithMany()
+                .HasForeignKey(a => a.HostedEventId).IsRequired(false).OnDelete(DeleteBehavior.NoAction);
+
+            // ── a guest's agreement to their photos being shown (phase 11) ─────────
+            modelBuilder.Entity<EventPhotoConsent>()
+                .HasOne(x => x.HostedEvent).WithMany()
+                .HasForeignKey(x => x.HostedEventId).OnDelete(DeleteBehavior.Cascade);
+            modelBuilder.Entity<EventPhotoConsent>()
+                .HasOne(x => x.AppUser).WithMany()
+                .HasForeignKey(x => x.AppUserId).OnDelete(DeleteBehavior.NoAction);
+            modelBuilder.Entity<EventPhotoConsent>().Property(x => x.Wording).HasMaxLength(1000);
+            modelBuilder.Entity<EventPhotoConsent>().HasIndex(x => new { x.HostedEventId, x.AppUserId }).IsUnique();
 
             modelBuilder.Entity<HostedEvent>()
                 .HasOne(e => e.VenueGrant).WithMany()

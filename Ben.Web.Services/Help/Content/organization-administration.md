@@ -1524,6 +1524,12 @@ on the public feed.
 - **Photos stay the guest's.** A guest's photo is their own file. They choose whether to send it to
   your group and, when there is one on the site, the venue — which shares it with you rather than
   giving it away.
+- **A guest agrees before their first photo.** The first time a guest adds a photo at your event they
+  are told it may be shown in the room and on a photo wall or slideshow at the venue, and they tick that
+  they agree; the site keeps that agreement and the words they were shown. Your group and your helpers
+  are not asked.
+- **Each event has 2,000 MB** for its files, gallery and room photos together. An upload past that is
+  refused with how much is left; remove files you no longer need to make room.
 - **Who can add photos** is yours to set, from the room: *the team and confirmed guests*, or *the
   event's team only* for an event with a no-cameras rule. Guests can still write either way.
 - **Hide** takes a post out of the room for everybody but you; members can **Report** a post, and

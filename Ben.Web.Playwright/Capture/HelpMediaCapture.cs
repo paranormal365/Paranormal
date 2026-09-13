@@ -2519,6 +2519,7 @@ public sealed class HelpMediaCapture : BenTestBase
             await Page.Locator("#add-photos-input").SetInputFilesAsync(
                 Path.Combine(AppContext.BaseDirectory, "Fixtures", "room-photo-1.jpg"));
             await Page.Locator("#add-photos-caption").FillAsync("The corridor outside the Blue Room, just after midnight");
+            if (await Page.Locator("#add-photos-agree").CountAsync() > 0) await Page.Locator("#add-photos-agree").CheckAsync();
             await ShootAsync("going-to-an-event", "add-photos-phone.png", selector: ".container", proves: "1 chosen", width: 375);
             await Page.Locator("#add-photos-send-button").ClickAsync();
             await Expect(Page.Locator("#add-photos-done")).ToBeVisibleAsync(new() { Timeout = 60_000 });

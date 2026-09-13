@@ -28,7 +28,7 @@ namespace Ben.Data.WebApi.Controllers.Entities;
 [Route("api/organizations/{orgId:guid}/ads")]
 public sealed class OrganizationAdController : BenControllerBase
 {
-    private static readonly string[] TargetKinds = ["org", "find"];
+    private static readonly string[] TargetKinds = ["org", "find", "event"];
 
     private readonly IDbContextFactory<BenDataContext> _dbFactory;
     private readonly IOrganizationSecurityService _security;
@@ -56,7 +56,7 @@ public sealed class OrganizationAdController : BenControllerBase
     private static OrganizationAdRecord ToRecord(OrganizationAd ad) => new(
         ad.Id, ad.OrganizationId, ad.Headline, ad.Body, ad.ImageUploadFileId, ad.TargetKind,
         ad.Status, ad.RejectionReason, ad.DateSubmitted, ad.DateReviewed, ad.DateCreated,
-        ad.Impressions, ad.Clicks);
+        ad.Impressions, ad.Clicks, ad.HostedEventId);
 
     private static string? Validate(SaveOrganizationAdRequest request)
     {
@@ -65,7 +65,28 @@ public sealed class OrganizationAdController : BenControllerBase
         if (string.IsNullOrWhiteSpace(request.Body)) return "Say something about the group — the body is empty.";
         if (request.Body.Trim().Length > 300) return "The body can be at most 300 characters.";
         if (!TargetKinds.Contains(request.TargetKind))
-            return "The ad can lead to your public page or the group finder — nowhere else.";
+            return "The ad can lead to your public page, the group finder or one of your events — nowhere else.";
+        if (request.TargetKind == "event" && request.HostedEventId is null)
+            return "Choose which event the ad leads to.";
+        return null;
+    }
+
+    /// <summary>
+    /// Why this group's ad cannot lead to that event (item 235 phase 11), or null when it can: the event
+    /// has to be the group's own, on the public site, and not over.
+    /// </summary>
+    private static async Task<string?> WhyNotTheEventAsync(
+        BenDataContext db, Guid orgId, SaveOrganizationAdRequest request, CancellationToken ct)
+    {
+        if (request.TargetKind != "event") return null;
+
+        var ev = await db.HostedEvents.AsNoTracking()
+            .FirstOrDefaultAsync(e => e.Id == request.HostedEventId && e.OrganizationId == orgId, ct);
+        if (ev is null) return "That isn't one of your group's events.";
+        if (!Services.Events.HostedEventStates.OnThePublicSite.Contains(ev.LifecycleState)
+            || ev.LifecycleState == HostedEventLifecycleState.Ended)
+            return "Only an event that is published and still to come can be advertised.";
+        if (ev.EndsOn.Date < DateTime.UtcNow.Date) return "That event is over.";
         return null;
     }
 
@@ -94,6 +115,7 @@ public sealed class OrganizationAdController : BenControllerBase
         await using var db = await _dbFactory.CreateDbContextAsync(ct);
 
         if (!await db.Organizations.AnyAsync(o => o.Id == orgId, ct)) return NotFound();
+        if (await WhyNotTheEventAsync(db, orgId, request, ct) is { } eventProblem) return BadRequest(eventProblem);
 
         // One card per group. Rejected ads are history and don't block a fresh start.
         if (await db.OrganizationAds.AnyAsync(a =>
@@ -105,6 +127,7 @@ public sealed class OrganizationAdController : BenControllerBase
             Id = Guid.NewGuid(), OrganizationId = orgId,
             Headline = request.Headline.Trim(), Body = request.Body.Trim(),
             ImageUploadFileId = request.ImageUploadFileId, TargetKind = request.TargetKind,
+            HostedEventId = request.TargetKind == "event" ? request.HostedEventId : null,
             Status = OrganizationAdStatus.Draft,
             DateCreated = DateTime.UtcNow, CreatedByAppUserId = userId,
         };
@@ -129,11 +152,13 @@ public sealed class OrganizationAdController : BenControllerBase
         var ad = await db.OrganizationAds
             .FirstOrDefaultAsync(a => a.Id == adId && a.OrganizationId == orgId, ct);
         if (ad is null) return NotFound();
+        if (await WhyNotTheEventAsync(db, orgId, request, ct) is { } eventProblem) return BadRequest(eventProblem);
 
         ad.Headline = request.Headline.Trim();
         ad.Body = request.Body.Trim();
         ad.ImageUploadFileId = request.ImageUploadFileId;
         ad.TargetKind = request.TargetKind;
+        ad.HostedEventId = request.TargetKind == "event" ? request.HostedEventId : null;
         ad.Status = OrganizationAdStatus.Draft;
         ad.RejectionReason = null;
         ad.DateSubmitted = null;

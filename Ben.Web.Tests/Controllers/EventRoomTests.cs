@@ -135,7 +135,7 @@ public sealed class EventRoomTests
     {
         await using var sqlite = await SeedAsync();
 
-        Ok(await Room(sqlite, Guest).Post(EventId, "The stairs at midnight", Photo(), sendToHosts: false, default));
+        Ok(await Room(sqlite, Guest).Post(EventId, "The stairs at midnight", Photo(), sendToHosts: false, default, agreeToShow: true));
 
         await using var db = await sqlite.NewContextAsync();
         var message = await db.OrgMessages.SingleAsync(m => m.HostedEventId == EventId);
@@ -151,7 +151,7 @@ public sealed class EventRoomTests
     public async Task Sending_it_on_shares_it_with_the_organizer_and_the_venue_and_it_stays_theirs()
     {
         await using var sqlite = await SeedAsync();
-        var room = Ok(await Room(sqlite, Guest).Post(EventId, null, Photo(), sendToHosts: true, default));
+        var room = Ok(await Room(sqlite, Guest).Post(EventId, null, Photo(), sendToHosts: true, default, agreeToShow: true));
         Assert.Contains("still yours", room.Note);
 
         await using var db = await sqlite.NewContextAsync();
@@ -167,7 +167,7 @@ public sealed class EventRoomTests
     public async Task Only_the_poster_can_send_their_photo_on()
     {
         await using var sqlite = await SeedAsync();
-        var posted = Ok(await Room(sqlite, Guest).Post(EventId, null, Photo(), sendToHosts: false, default));
+        var posted = Ok(await Room(sqlite, Guest).Post(EventId, null, Photo(), sendToHosts: false, default, agreeToShow: true));
         var messageId = posted.Messages.Single().Id;
 
         Assert.IsType<ConflictObjectResult>((await Room(sqlite, OtherGuest).SendToHosts(EventId, messageId, default)).Result);
@@ -181,7 +181,7 @@ public sealed class EventRoomTests
     public async Task Taking_a_post_down_leaves_the_file_in_the_posters_library()
     {
         await using var sqlite = await SeedAsync();
-        var posted = Ok(await Room(sqlite, Guest).Post(EventId, "oops", Photo(), sendToHosts: false, default));
+        var posted = Ok(await Room(sqlite, Guest).Post(EventId, "oops", Photo(), sendToHosts: false, default, agreeToShow: true));
 
         Ok(await Room(sqlite, Guest).Remove(EventId, posted.Messages.Single().Id, default));
 
@@ -220,7 +220,7 @@ public sealed class EventRoomTests
     public async Task Nothing_said_in_a_room_ever_reaches_the_public_feed()
     {
         await using var sqlite = await SeedAsync();
-        Ok(await Room(sqlite, Guest).Post(EventId, "Room only", Photo(), sendToHosts: false, default));
+        Ok(await Room(sqlite, Guest).Post(EventId, "Room only", Photo(), sendToHosts: false, default, agreeToShow: true));
 
         var feed = new FeedController(sqlite.Factory, TestMedia.StorageOnDisk(MediaRoot), TestMedia.IngestToDisk(MediaRoot),
             new ManualReviewScreener(), new FeedLearningService(TestMedia.StorageOnDisk(MediaRoot), NullLogger<FeedLearningService>.Instance),
@@ -242,11 +242,11 @@ public sealed class EventRoomTests
         var room = Ok(await Room(sqlite, Host).Settings(EventId, new(EventPhotoPosting.TeamOnly), default));
         Assert.Equal(EventPhotoPosting.TeamOnly, room.PhotoPosting);
 
-        var photo = await Room(sqlite, Guest).Post(EventId, "Look!", Photo(), false, default);
+        var photo = await Room(sqlite, Guest).Post(EventId, "Look!", Photo(), false, default, agreeToShow: true);
         Assert.Contains("kept photos to the event's own team", Assert.IsType<string>(Assert.IsType<ConflictObjectResult>(photo.Result).Value));
 
         Assert.IsType<OkObjectResult>((await Room(sqlite, Guest).Post(EventId, "Words are fine", null, false, default)).Result);
-        Assert.IsType<OkObjectResult>((await Room(sqlite, Host).Post(EventId, "The team's photo", Photo(), false, default)).Result);
+        Assert.IsType<OkObjectResult>((await Room(sqlite, Host).Post(EventId, "The team's photo", Photo(), false, default, agreeToShow: true)).Result);
         Assert.False(Ok(await Room(sqlite, Guest).Get(EventId, null, default)).CanAddPhotos);
     }
 
@@ -254,8 +254,8 @@ public sealed class EventRoomTests
     public async Task The_wall_shows_the_rooms_photos_and_not_a_hidden_one()
     {
         await using var sqlite = await SeedAsync();
-        Ok(await Room(sqlite, Guest).Post(EventId, "Keep", Photo(), false, default));
-        var hideMe = Ok(await Room(sqlite, OtherGuest).Post(EventId, "Hide", Photo(), false, default)).Messages.First(m => m.Body == "Hide").Id;
+        Ok(await Room(sqlite, Guest).Post(EventId, "Keep", Photo(), false, default, agreeToShow: true));
+        var hideMe = Ok(await Room(sqlite, OtherGuest).Post(EventId, "Hide", Photo(), false, default, agreeToShow: true)).Messages.First(m => m.Body == "Hide").Id;
         Ok(await Room(sqlite, Guest).Post(EventId, "No photo here", null, false, default));
         Ok(await Room(sqlite, Host).Hide(EventId, hideMe, default));
 
@@ -280,7 +280,7 @@ public sealed class EventRoomTests
             });
             await db.SaveChangesAsync();
         }
-        Ok(await Room(sqlite, Guest).Post(EventId, "Seen by the right people", Photo(), false, default));
+        Ok(await Room(sqlite, Guest).Post(EventId, "Seen by the right people", Photo(), false, default, agreeToShow: true));
 
         Assert.IsType<OkObjectResult>((await Room(sqlite, Host).Photos(EventId, default)).Result);
         Assert.IsType<OkObjectResult>((await Room(sqlite, venueStaff).Photos(EventId, default)).Result);
@@ -291,5 +291,58 @@ public sealed class EventRoomTests
 
         Assert.False(Ok(await Room(sqlite, Guest).Get(EventId, null, default)).CanSeeWall);
         Assert.True(Ok(await Room(sqlite, Host).Get(EventId, null, default)).CanSeeWall);
+    }
+
+    [Fact]
+    public async Task A_photo_that_would_take_the_event_past_its_space_is_refused_in_words()
+    {
+        // Ben, 2026-09-13: a maximum storage size for an event. Set tiny here so one photo fills it.
+        await using var sqlite = await SeedAsync();
+        await using (var db = await sqlite.NewContextAsync())
+        {
+            db.SiteSettings.Add(new SiteSetting { Id = Guid.NewGuid(), Key = SiteSettingKeys.EventStorageMegabytes, Value = "1", DateCreated = DateTime.UtcNow, CreatedByAppUserId = Host });
+            db.UploadFiles.Add(new UploadFile
+            {
+                Id = Guid.NewGuid(), UploadFileTypeId = Ben.Data.WebApi.SeedData.UploadFileTypeSeeder.FeedMediaFileTypeId, AppUserId = Host,
+                FileName = "big.jpg", StoredFileName = "big.jpg", ContentType = "image/jpeg", FileSize = 1024 * 1024,
+                DateCreated = DateTime.UtcNow, CreatedByAppUserId = Host,
+            });
+            await db.SaveChangesAsync();
+            var bigId = await db.UploadFiles.Where(f => f.FileName == "big.jpg").Select(f => f.Id).SingleAsync();
+            db.OrgMessages.Add(new OrgMessage
+            {
+                Id = Guid.NewGuid(), HostedEventId = EventId, AuthorAppUserId = Host, ChannelType = OrgMessageChannel.EventRoom,
+                Body = "", MediaUploadFileId = bigId, DateCreated = DateTime.UtcNow, CreatedByAppUserId = Host,
+            });
+            await db.SaveChangesAsync();
+        }
+
+        var refused = await Room(sqlite, Guest).Post(EventId, "One more", Photo(), false, default, agreeToShow: true);
+        Assert.Contains("used its 1 MB", Assert.IsType<string>(Assert.IsType<ConflictObjectResult>(refused.Result).Value));
+
+        // Words still fit: text takes no space.
+        Assert.IsType<OkObjectResult>((await Room(sqlite, Guest).Post(EventId, "Words only", null, false, default)).Result);
+    }
+
+    [Fact]
+    public async Task A_guests_first_photo_waits_for_their_agreement_to_it_being_shown_and_the_team_is_not_asked()
+    {
+        await using var sqlite = await SeedAsync();
+
+        Assert.True(Ok(await Room(sqlite, Guest).Get(EventId, null, default)).NeedsPhotoConsent);
+        Assert.False(Ok(await Room(sqlite, Host).Get(EventId, null, default)).NeedsPhotoConsent);
+
+        var refused = await Room(sqlite, Guest).Post(EventId, "First", Photo(), false, default);
+        Assert.Contains("photo wall or slideshow", Assert.IsType<string>(Assert.IsType<ConflictObjectResult>(refused.Result).Value));
+
+        Ok(await Room(sqlite, Guest).Post(EventId, "First", Photo(), false, default, agreeToShow: true));
+        // Asked once: the second photo goes without the tick.
+        Ok(await Room(sqlite, Guest).Post(EventId, "Second", Photo(), false, default));
+        Ok(await Room(sqlite, Host).Post(EventId, "The team's", Photo(), false, default));
+
+        await using var db = await sqlite.NewContextAsync();
+        var consent = await db.EventPhotoConsents.SingleAsync();
+        Assert.Equal(Guest, consent.AppUserId);
+        Assert.Contains("photo wall", consent.Wording);
     }
 }

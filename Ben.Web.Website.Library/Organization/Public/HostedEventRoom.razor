@@ -75,6 +75,16 @@
                     {
                         <label class="form-label small mb-1" for="room-media">A photo or video</label>
                         <InputFile id="room-media" class="form-control form-control-sm mb-2" accept="image/*,video/*" OnChange="Picked" />
+                        @if (_media is not null && room.NeedsPhotoConsent)
+                        {
+                            <div class="border rounded p-2 mb-2 small" id="room-photo-notice">
+                                <p class="mb-2">@room.PhotoNotice</p>
+                                <div class="form-check mb-0">
+                                    <input class="form-check-input" type="checkbox" id="room-agree" @bind="_agree" />
+                                    <label class="form-check-label" for="room-agree">I agree</label>
+                                </div>
+                            </div>
+                        }
                         @if (_media is not null && room.HostNames.Count > 0)
                         {
                             <div class="form-check small mb-2">
@@ -89,7 +99,8 @@
                     {
                         <p class="small text-secondary mb-2" id="room-photos-team-only">The organizers have kept photos to the event's team.</p>
                     }
-                    <button type="button" class="btn btn-primary btn-sm" id="room-post" disabled="@_busy" @onclick="PostAsync">Post</button>
+                    <button type="button" class="btn btn-primary btn-sm" id="room-post"
+                            disabled="@(_busy || (_media is not null && room.NeedsPhotoConsent && !_agree))" @onclick="PostAsync">Post</button>
                 </div>
             </div>
         }
@@ -177,6 +188,7 @@
     private string? _body;
     private IBrowserFile? _media;
     private bool _sendToHosts;
+    private bool _agree;
     private System.Threading.Timer? _poll;
 
     protected override async Task OnParametersSetAsync()
@@ -204,6 +216,7 @@
             using var content = new MultipartFormDataContent();
             content.Add(new StringContent(_body ?? ""), "body");
             content.Add(new StringContent(_sendToHosts ? "true" : "false"), "sendToHosts");
+            content.Add(new StringContent(_agree ? "true" : "false"), "agreeToShow");
             if (_media is not null)
             {
                 var stream = new StreamContent(_media.OpenReadStream(200L * 1024 * 1024));

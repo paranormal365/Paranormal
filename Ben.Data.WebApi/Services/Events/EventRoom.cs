@@ -27,6 +27,20 @@ public static class EventRoom
     /// <summary>How long after the last night a room stays open for posting.</summary>
     public static readonly TimeSpan OpenAfterTheLastNight = TimeSpan.FromDays(7);
 
+    /// <summary>
+    /// What a guest agrees to the first time they add a photo at an event (Ben, 2026-09-13), stored with
+    /// their agreement so what they were told is on the record.
+    /// </summary>
+    public const string PhotoNotice =
+        "Photos you add here are shown to the people at this event in its room, and the organizers may show them "
+        + "on a photo wall or slideshow at the venue. Your photos stay yours, and you can take one down at any time. "
+        + "Please only add photos of people who are happy to be shown.";
+
+    /// <summary>Whether this person still has to agree to the notice before adding a photo. Never the event's team.</summary>
+    public static async Task<bool> NeedsPhotoConsentAsync(BenDataContext db, Guid hostedEventId, Standing standing, Guid userId, CancellationToken ct)
+        => standing.IsMember && !standing.IsTeam
+        && !await db.EventPhotoConsents.AnyAsync(c => c.HostedEventId == hostedEventId && c.AppUserId == userId, ct);
+
     /// <summary>The longest body a room message may have.</summary>
     public const int MaxBody = 1000;
 

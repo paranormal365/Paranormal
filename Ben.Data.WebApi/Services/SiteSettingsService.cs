@@ -77,6 +77,16 @@ public static class SiteSettingKeys
     /// </remarks>
     public const string EventCancellationCreditWindowHours = "events.cancellation-credit-window-hours";
 
+    /// <summary>
+    /// How much one hosted event may hold, in megabytes: its files, its gallery and the photos posted in
+    /// its room (item 235 phase 11).
+    /// </summary>
+    /// <remarks>
+    /// Ben, 2026-09-13: "We should set up a max storage size for an event like 2,000 mb." Unset reads as
+    /// 2000. A setting, because the right number depends on what storage costs and how events use it.
+    /// </remarks>
+    public const string EventStorageMegabytes = "events.storage-megabytes";
+
     /// <summary>Short notice shown site-wide — maintenance windows, outages. Empty = nothing shown.</summary>
     public const string SiteAnnouncement = "site.announcement";
 
@@ -223,6 +233,8 @@ public static class SiteSettingKeys
 
         (FreeAccountStorageMegabytes, "Free account storage (MB)",
             "How much somebody with no paid group may store in their own field sessions. Members of a group on a paid plan are not counted against this. Leave empty for the built-in default of 2048 MB."),
+        (EventStorageMegabytes, "Storage for one event (MB)",
+            "How much one hosted event may hold: its files, its gallery and the photos posted in its room. An upload past it is refused with how much is left. Leave empty for the built-in default of 2000 MB."),
         (UploadMaxFileBytes, "Upload limit — one file (bytes)",
             "The largest file anyone may upload, in bytes. Applies to every upload path — the classic form and the chunked uploader alike. Leave empty for the built-in default of 2 GiB (2147483648)."),
         (UploadChunkMaxBytes, "Upload limit — one chunk (bytes)",
@@ -285,7 +297,7 @@ public static class SiteSettingKeys
         ("Limits",
          "Ceilings on what one caller or one account may use. Every one of these has a built-in "
          + "default, so leaving a box empty is safe.",
-         [FreeAccountStorageMegabytes, UploadMaxFileBytes, UploadChunkMaxBytes,
+         [FreeAccountStorageMegabytes, EventStorageMegabytes, UploadMaxFileBytes, UploadChunkMaxBytes,
           RateLimitGlobalPerMinute, RateLimitAuthPerMinute, RateLimitGeocodingPerMinute,
           RateLimitEventAttendancePerMinute, RateLimitAudioProcessingPerMinute]),
 
