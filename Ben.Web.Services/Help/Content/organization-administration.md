@@ -1348,6 +1348,39 @@ the top is only worth anything if it is enforced.
 Print the page before the doors open if you expect no signal: a browser cannot scan a code with
 nothing to talk to.
 
+### Bands
+
+Wristbands, lanyards, a stamp on the hand — whatever your people give out so a steward knows **by
+glance** what somebody is here for. *Blue is the whole weekend with dinner, purple is the whole
+weekend, red is Saturday only.*
+
+![Setting up the bands](help-media:organization-administration/event-bands.png)
+
+**Bands** on the event page lists them. Each has a colour — **your** word for it, because the box of
+wristbands in your drawer says orange and the screen should too — an optional swatch, what it means,
+and who gets it:
+
+- **Here every night** — the whole run.
+- **Here some nights** — the Saturday-only guest, who is exactly the one a steward gets wrong.
+- **Day pass** — here for the day, not staying.
+- **Given out by hand** — you choose, party by party.
+
+**Most parties never need tagging.** Their band is worked out from what they booked, so two hundred
+guests do not mean two hundred decisions. **The first rule that matches wins**, in the order on the
+page, so put *every night* above *some nights* if that is what you mean.
+
+**Anything about food is given out by hand.** Nothing on a booking says a party is eating, so we
+cannot work that one out. Open the party on the booking board and choose it under **What they
+wear**; *Worked out from the rules* puts them back.
+
+The band then shows **beside their name at the door**, on the booking board, and on the guest's own
+pass — so somebody who already knows they are blue does not have to be told.
+
+![A band beside a name at the door](help-media:organization-administration/event-door-bands.png)
+
+It always says the colour's name as well as showing it, because about one man in twelve cannot tell
+red from green.
+
 ### The dietary sheet
 
 **What the kitchen needs**, from the event page or from the booking board, turns every guest's note

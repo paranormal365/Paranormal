@@ -163,6 +163,10 @@
                                 <span class="text-secondary fw-normal">
                                     · @them.PartySize @(them.PartySize == 1 ? "person" : "people")
                                 </span>
+                                @* Beside the name, which is where Ben asked for it: a steward
+                                   handing out wristbands should not have to work out which one
+                                   from a list of nights. *@
+                                <BenBandChip Band="@them.Band" Class="ms-1" />
                             </div>
                             <div class="small text-secondary">
                                 @(them.Where ?? "Here tonight")

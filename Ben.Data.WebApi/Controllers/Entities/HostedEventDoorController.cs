@@ -332,6 +332,15 @@ public sealed class HostedEventDoorController : OrgCmsControllerBase
             .Where(c => c.HostedEventNightId == night.Id)
             .ToListAsync(ct);
 
+        // The colours this venue uses, if any. One read for the whole list rather than one per
+        // party — a door with two hundred names on it is the case that matters.
+        var bands = await db.HostedEventBands.AsNoTracking()
+            .Where(b => b.HostedEventId == ev.Id)
+            .OrderBy(b => b.SortOrder)
+            .ToListAsync(ct);
+
+        var nightsOnTheEvent = ev.Nights.Count;
+
         var passes = await db.HostedEventPasses.AsNoTracking()
             .Where(p => p.HostedEventBooking.HostedEventId == ev.Id && p.RevokedUtc == null)
             .Select(p => new { p.HostedEventBookingId, p.Token })
@@ -360,7 +369,11 @@ public sealed class HostedEventDoorController : OrgCmsControllerBase
                         .Select(g => g.DietaryNotes?.Trim())
                         .Where(n => !string.IsNullOrWhiteSpace(n))
                         .Select(n => n!)
-                        .Distinct(StringComparer.OrdinalIgnoreCase)]);
+                        .Distinct(StringComparer.OrdinalIgnoreCase)],
+                    Band: EventBands.For(b, bands, nightsOnTheEvent) is { } band
+                        ? new HostedEventBandRecord(
+                            band.Id, band.Colour, band.Meaning, band.Hex, band.Rule, band.SortOrder)
+                        : null);
             })
             .OrderBy(p => p.LeadName, StringComparer.OrdinalIgnoreCase)
             .ToList();

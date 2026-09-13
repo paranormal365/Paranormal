@@ -182,6 +182,16 @@ public sealed class PublicHostedEventBookingController : BenControllerBase
                 _ => "Your pass is issued when the venue confirms your place.",
             });
 
+        // The colour to collect at the desk, when the venue uses bands. Read here rather than
+        // guessed by the page, so the pass and the door can never disagree about it.
+        var bands = await db.HostedEventBands.AsNoTracking()
+            .Where(b => b.HostedEventId == eventId)
+            .OrderBy(b => b.SortOrder)
+            .ToListAsync(ct);
+
+        var nights = await db.HostedEventNights.AsNoTracking()
+            .CountAsync(n => n.HostedEventId == eventId, ct);
+
         return Ok(new MyHostedEventPassRecord(
             Entities.HostedEventBookingController.ToRecord(pass),
             booking.HostedEvent?.Name ?? "An event",
@@ -193,7 +203,11 @@ public sealed class PublicHostedEventBookingController : BenControllerBase
                 .OrderBy(n => n.HostedEventNight.Date)
                 .Select(n => new HostedEventBookingNightRecord(
                     n.HostedEventNightId, n.HostedEventNight.Date, n.HostedEventLayoutUnitId, EventCapacity.NameOf(n)))
-                .ToList()));
+                .ToList(),
+            Band: EventBands.For(booking, bands, nights) is { } band
+                ? new HostedEventBandRecord(
+                    band.Id, band.Colour, band.Meaning, band.Hex, band.Rule, band.SortOrder)
+                : null));
     }
 
     /// <summary>

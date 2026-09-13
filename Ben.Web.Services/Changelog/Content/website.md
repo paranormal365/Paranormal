@@ -18,6 +18,13 @@ day-by-day account of building it would say nothing to anyone using it now.
 
 ## 2026-09-13
 
+- Events can have **bands** — the wristbands, lanyards or stamps you hand out so a steward knows by
+  glance what somebody is here for. Each is your own colour and what it means, and most parties'
+  bands are worked out from what they booked rather than tagged one by one.
+- A band shows beside the guest's name at the door, on the booking board, and on the guest's own
+  pass, always with its name as well as its colour. Anything the site cannot work out, like who is
+  having dinner, is given out by hand from the booking board.
+
 - An event can now have its own **staff**: people who help at that event and nowhere else. Invite somebody
   by email — they need no account and no place in your group — and say what they may do: run the
   door, see who's coming, decide bookings, menus and dietary, files. An invitation grants nothing

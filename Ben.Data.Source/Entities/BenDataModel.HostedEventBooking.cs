@@ -155,6 +155,17 @@ namespace Ben.Data.Source.Entities
         public HostedEventBookingKind Kind { get; set; }
         public HostedEventBookingStatus Status { get; set; } = HostedEventBookingStatus.Requested;
 
+        /// <summary>
+        /// The band this party wears, when somebody chose it by hand (item 235 phase 7).
+        /// </summary>
+        /// <remarks>
+        /// <b>Null is the normal case</b>, and means "work it out from the rules" — a venue that
+        /// had to tag two hundred parties by hand would tag none of them. Set only where the
+        /// derivation cannot know: today that is anything about food, because nothing on a booking
+        /// says a party is eating.
+        /// </remarks>
+        public Guid? HostedEventBandId { get; set; }
+
         /// <summary>When the venue decided, and who decided. Null while it is still a request.</summary>
         /// <summary>
         /// When a picked place stops being theirs. Null on anything that was never held.
@@ -215,6 +226,7 @@ namespace Ben.Data.Source.Entities
         public Guid? UpdatedByAppUserId { get; set; }
 
         public virtual HostedEvent HostedEvent { get; set; } = null!;
+        public virtual HostedEventBand? HostedEventBand { get; set; }
         public virtual AppUser LeadAppUser { get; set; } = null!;
         public virtual AppUser? DecidedByAppUser { get; set; }
         public virtual AppUser CreatedByAppUser { get; set; } = null!;

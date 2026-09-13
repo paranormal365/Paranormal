@@ -39,7 +39,16 @@ public sealed record MyHostedEventPassRecord(
     string LeadName,
     int PartySize,
     HostedEventBookingKind Kind,
-    IReadOnlyList<HostedEventBookingNightRecord> Nights);
+    IReadOnlyList<HostedEventBookingNightRecord> Nights,
+
+    /// <summary>
+    /// The colour to collect at the desk, when the venue uses bands (item 235 phase 7).
+    /// </summary>
+    /// <remarks>
+    /// On the guest's own pass as well as the door's screen, so the queue moves: somebody who
+    /// already knows they are blue does not have to be told.
+    /// </remarks>
+    HostedEventBandRecord? Band = null);
 
 /// <summary>Withdrawing a pass. The reason is required and is read out at the door.</summary>
 public sealed record RevokeHostedEventPassRequest(string Reason);
@@ -115,7 +124,16 @@ public sealed record HostedEventDoorPartyRecord(
     DateTime? ArrivedUtc,
     DateTime? LeftUtc,
     int? PeopleIn,
-    IReadOnlyList<string> Dietary);
+    IReadOnlyList<string> Dietary,
+
+    /// <summary>
+    /// The colour this party wears, when the venue uses bands (item 235 phase 7).
+    /// </summary>
+    /// <remarks>
+    /// Beside the name on the scanner, which is where Ben asked for it: a steward handing out
+    /// wristbands should not have to work out which one from a list of nights.
+    /// </remarks>
+    HostedEventBandRecord? Band = null);
 
 /// <summary>Somebody who turned up tonight without a booking.</summary>
 /// <param name="Name">What they said their name was, if they said. A doorway is not an office.</param>
@@ -172,3 +190,45 @@ public sealed record HostedEventDoorMoveRequest(
     Guid HostedEventBookingId,
     Guid HostedEventNightId,
     int? People = null);
+
+// ── what a party wears (item 235 phase 7) ────────────────────────────────────
+
+/// <summary>
+/// A colour a party wears, and what it means.
+/// </summary>
+/// <remarks>
+/// <b>Both, always.</b> A chip that is only a colour is useless to the one steward in twelve who
+/// cannot separate red from green, which is the same reason every square on a plan carries a word
+/// as well as a hue. The swatch is optional and the name is not.
+/// </remarks>
+public sealed record HostedEventBandRecord(
+    Guid Id,
+    string Colour,
+    string Meaning,
+    string? Hex,
+    HostedEventBandRule Rule,
+    int SortOrder);
+
+/// <summary>Every band an event has, in the venue's own order.</summary>
+/// <remarks>
+/// The order matters and is not decoration: the first rule that matches a party is the band they
+/// wear, so a venue puts "the whole weekend" above "some of it" and the derivation follows.
+/// </remarks>
+public sealed record HostedEventBandsRecord(
+    Guid HostedEventId,
+    IReadOnlyList<HostedEventBandRecord> Bands);
+
+/// <summary>Replacing the whole set, the way the menus and the plan are replaced.</summary>
+public sealed record SetHostedEventBandsRequest(IReadOnlyList<HostedEventBandInput> Bands);
+
+/// <summary>One band to write.</summary>
+public sealed record HostedEventBandInput(
+    string Colour,
+    string Meaning,
+    string? Hex = null,
+    HostedEventBandRule Rule = HostedEventBandRule.ByHand,
+    Guid? Id = null);
+
+/// <summary>Giving one party a band by hand, or taking theirs away.</summary>
+/// <param name="HostedEventBandId">Null puts them back on the rules.</param>
+public sealed record SetHostedEventBookingBandRequest(Guid? HostedEventBandId);

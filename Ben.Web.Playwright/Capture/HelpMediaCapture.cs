@@ -2184,15 +2184,47 @@ public sealed class HelpMediaCapture : BenTestBase
 
         await LoginAsync(SuperAdminEmail, SuperAdminPassword);
 
+        // Bands first, so the door photographs with a colour beside the name — which is the
+        // picture Ben described, and the one the help page is explaining.
+        var admin = await SignedInApiAsync(SuperAdminEmail, SuperAdminPassword);
+        await admin.PutAsync($"/api/organizations/{orgId}/events/{SeededSeatsEventId}/bands",
+            new()
+            {
+                DataObject = new
+                {
+                    bands = new object[]
+                    {
+                        new { colour = "Purple", meaning = "The whole evening", hex = "#7c3aed", rule = 0 },
+                        new { colour = "Red", meaning = "Day one only", hex = "#dc2626", rule = 1 },
+                        new { colour = "Blue", meaning = "With dinner — given at the desk", hex = "#2563eb", rule = 3 },
+                    },
+                },
+            });
+        await admin.DisposeAsync();
+
+        await GoAsync($"/organizations/{orgId}/events/{SeededSeatsEventId}/bands");
+        await ShootAsync("organization-administration", "event-bands.png",
+            gated: true, proves: "Save the bands");
+
         await GoAsync($"/organizations/{orgId}/events/{SeededSeatsEventId}/door");
         await ShootAsync("organization-administration", "event-door-phone.png",
             gated: true, proves: "expected", width: 375);
+
+        // The list, cropped, at a width where the chip sits beside the name — the picture Ben
+        // described: "color displayed on the qr code reader next to name of guest".
+        await ShootAsync("organization-administration", "event-door-bands.png",
+            gated: true, selector: "#door-expected", proves: "Purple");
 
         await GoAsync($"/organizations/{orgId}/events/{SeededRoomsEventId}/staff");
         await ShootAsync("organization-administration", "event-staff.png",
             gated: true, proves: "Ask somebody to help");
 
         await ReleaseAsync(orgId, bookingId);
+
+        var tidy = await SignedInApiAsync(SuperAdminEmail, SuperAdminPassword);
+        await tidy.PutAsync($"/api/organizations/{orgId}/events/{SeededSeatsEventId}/bands",
+            new() { DataObject = new { bands = Array.Empty<object>() } });
+        await tidy.DisposeAsync();
     }
 
     /// <summary>The seeded evening's slug, which is the address on the poster.</summary>

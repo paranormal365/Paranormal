@@ -221,6 +221,27 @@ public sealed partial class BenAdminClientAdapter
         => _api.GetItemAsync<HostedEventMenusRecord>(
                $"/api/public/hosted-events/{eventId}/menus", token);
 
+    // ── what a party wears (item 235 phase 7) ────────────────────────────────
+
+    private static string BandsUrl(Guid orgId, Guid eventId)
+        => $"/api/organizations/{orgId}/events/{eventId}/bands";
+
+    public Task<ItemResult<HostedEventBandsRecord>> GetEventBandsAsync(
+        Guid orgId, Guid eventId, CancellationToken token = default)
+        => _api.GetItemAsync<HostedEventBandsRecord>(BandsUrl(orgId, eventId), token);
+
+    public Task<(HostedEventBandsRecord? Result, string? Error)> SetEventBandsAsync(
+        Guid orgId, Guid eventId, SetHostedEventBandsRequest request, CancellationToken token = default)
+        => _api.SendExpectingReasonAsync<SetHostedEventBandsRequest, HostedEventBandsRecord>(
+               HttpMethod.Put, BandsUrl(orgId, eventId), request, token);
+
+    public Task<(HostedEventBandsRecord? Result, string? Error)> SetBookingBandAsync(
+        Guid orgId, Guid eventId, Guid bookingId, Guid? bandId, CancellationToken token = default)
+        => _api.SendExpectingReasonAsync<SetHostedEventBookingBandRequest, HostedEventBandsRecord>(
+               HttpMethod.Post,
+               $"/api/organizations/{orgId}/events/{eventId}/bookings/{bookingId}/band",
+               new SetHostedEventBookingBandRequest(bandId), token);
+
     // ── the door, on the night (item 235 phase 7) ────────────────────────────
 
     private static string DoorUrl(Guid orgId, Guid eventId)

@@ -309,6 +309,23 @@ public interface IBenEventBookingClient
     Task<ItemResult<PublicHostedEventPlanRecord>> GetPublicHostedEventPlanAsync(
         Guid eventId, CancellationToken token = default);
 
+    // ── what a party wears (item 235 phase 7) ────────────────────────────────
+
+    /// <summary>Every band this event has, in the venue's own order.</summary>
+    /// <remarks>
+    /// The order is not decoration: the first rule that matches a party is the band they wear.
+    /// </remarks>
+    Task<ItemResult<HostedEventBandsRecord>> GetEventBandsAsync(
+        Guid orgId, Guid eventId, CancellationToken token = default);
+
+    /// <summary>Replaces the whole set, keeping the ids of the rows that stay.</summary>
+    Task<(HostedEventBandsRecord? Result, string? Error)> SetEventBandsAsync(
+        Guid orgId, Guid eventId, SetHostedEventBandsRequest request, CancellationToken token = default);
+
+    /// <summary>Gives one party a band by hand, or puts them back on the rules.</summary>
+    Task<(HostedEventBandsRecord? Result, string? Error)> SetBookingBandAsync(
+        Guid orgId, Guid eventId, Guid bookingId, Guid? bandId, CancellationToken token = default);
+
     // ── the door, on the night (item 235 phase 7) ────────────────────────────
 
     /// <summary>

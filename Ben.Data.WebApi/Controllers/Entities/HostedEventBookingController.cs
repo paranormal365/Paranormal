@@ -1158,6 +1158,15 @@ public sealed class HostedEventBookingController : OrgCmsControllerBase
             .OrderBy(b => b.DateCreated)
             .ToListAsync(ct);
 
+        // The event's bands, once, for the whole board — and how many nights it runs, which is
+        // what "here every night" is measured against.
+        var bands = await db.HostedEventBands.AsNoTracking()
+            .Where(b => b.HostedEventId == eventId)
+            .OrderBy(b => b.SortOrder)
+            .ToListAsync(ct);
+        var nightsOnTheEvent = await db.HostedEventNights.AsNoTracking()
+            .CountAsync(n => n.HostedEventId == eventId, ct);
+
         return bookings.Select(b => new HostedEventBookingRecord(
             b.Id, b.HostedEventId, b.LeadAppUserId,
             b.LeadAppUser?.DisplayName ?? "Somebody",
@@ -1178,7 +1187,12 @@ public sealed class HostedEventBookingController : OrgCmsControllerBase
                     g.Id, g.DisplayName, g.AppUserId,
                     canSeeDietary ? g.DietaryNotes : null, g.SortOrder))
                 .ToList(),
-            b.HoldExpiresUtc))
+            b.HoldExpiresUtc,
+            Band: EventBands.For(b, bands, nightsOnTheEvent) is { } band
+                ? new HostedEventBandRecord(
+                    band.Id, band.Colour, band.Meaning, band.Hex, band.Rule, band.SortOrder)
+                : null,
+            HandPickedBandId: b.HostedEventBandId))
             .ToList();
     }
 

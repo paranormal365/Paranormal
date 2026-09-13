@@ -71,6 +71,7 @@ public sealed class EventBookingClientRouteTests
         "/api/public/hosted-events/{eventId}/holds\"",
         "/api/organizations/{orgId}/events/{eventId}/staff\"",
         "/api/organizations/{orgId}/events/{eventId}/door\"",
+        "/api/organizations/{orgId}/events/{eventId}/bands\"",
         "/api/public/hosted-event-staff/{Uri.EscapeDataString(token)}\"",
         "/api/public/hosted-events/{eventId}/my-booking/pass/email\"",
     ];
@@ -89,6 +90,7 @@ public sealed class EventBookingClientRouteTests
         "WithdrawMyHostedEventBookingAsync", "GetMyHostedEventPassAsync", "GetMyHostedEventMenusAsync",
         "GetPublicHostedEventPlanAsync", "EmailMyHostedEventPassAsync",
         "HoldHostedEventPlacesAsync",
+        "GetEventBandsAsync", "SetEventBandsAsync", "SetBookingBandAsync",
         "GetEventDoorAsync", "DoorArriveAsync", "DoorLeaveAsync", "DoorUndoAsync",
         "DoorWalkUpAsync", "DoorUndoWalkUpAsync",
         "GetEventStaffAsync", "SaveEventStaffAsync", "ResendEventStaffInviteAsync",

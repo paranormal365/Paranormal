@@ -124,6 +124,7 @@ namespace Ben.Data.Source.Context
         public virtual DbSet<HostedEventStaff> HostedEventStaff { get; set; }
         public virtual DbSet<HostedEventCheckIn> HostedEventCheckIns { get; set; }
         public virtual DbSet<HostedEventWalkUp> HostedEventWalkUps { get; set; }
+        public virtual DbSet<HostedEventBand> HostedEventBands { get; set; }
         public virtual DbSet<OutboxEmail> OutboxEmails { get; set; }
         public virtual DbSet<OutboxEmailAttachment> OutboxEmailAttachments { get; set; }
         public virtual DbSet<EventCredit> EventCredits { get; set; }
@@ -894,6 +895,36 @@ namespace Ben.Data.Source.Context
 
             modelBuilder.Entity<HostedEventWalkUp>()
                 .HasIndex(w => w.HostedEventNightId);
+
+            // ── what a party wears (phase 7) ──────────────────────────────────
+            //
+            // Cascade from the event, because a band belongs to one weekend's box of wristbands.
+            // The booking's own link is SetNull: deleting a band the venue has stopped using must
+            // not take a booking with it, and a party whose hand-picked band has gone simply falls
+            // back to the rules like everybody else.
+            modelBuilder.Entity<HostedEventBand>()
+                .HasOne(b => b.HostedEvent).WithMany()
+                .HasForeignKey(b => b.HostedEventId).OnDelete(DeleteBehavior.Cascade);
+            modelBuilder.Entity<HostedEventBand>()
+                .HasOne(b => b.CreatedByAppUser).WithMany()
+                .HasForeignKey(b => b.CreatedByAppUserId).OnDelete(DeleteBehavior.NoAction);
+            modelBuilder.Entity<HostedEventBand>()
+                .HasOne(b => b.UpdatedByAppUser).WithMany()
+                .HasForeignKey(b => b.UpdatedByAppUserId).IsRequired(false).OnDelete(DeleteBehavior.NoAction);
+
+            modelBuilder.Entity<HostedEventBand>().Property(b => b.Colour).HasMaxLength(60);
+            modelBuilder.Entity<HostedEventBand>().Property(b => b.Meaning).HasMaxLength(160);
+            modelBuilder.Entity<HostedEventBand>().Property(b => b.Hex).HasMaxLength(9);
+
+            // NoAction, and not SetNull, because SQL Server will not have it: bands cascade from
+            // the event and so do bookings, so a SetNull here is a second path to the same rows
+            // and the server refuses the constraint outright ("may cause cycles or multiple
+            // cascade paths"). The endpoint clears the column off every booking before it deletes
+            // a band, which is the same shape every other NoAction reference here is handled with.
+            modelBuilder.Entity<HostedEventBooking>()
+                .HasOne(b => b.HostedEventBand).WithMany()
+                .HasForeignKey(b => b.HostedEventBandId)
+                .IsRequired(false).OnDelete(DeleteBehavior.NoAction);
 
             // ── what the venue is holding back ────────────────────────────────
             //

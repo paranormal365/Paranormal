@@ -91,6 +91,30 @@
                 }
             }
 
+            @if (Bands is { Count: > 0 } bands)
+            {
+                @* THE ONLY WAY TO SAY ANYTHING ABOUT FOOD, until dining exists. Nothing on a booking
+                   records that a party is eating, so a colour meaning dinner cannot be worked out
+                   and has to be given here. The bands page says so, and this is the path it
+                   promises. *@
+                <div class="mt-3" id="sheet-band">
+                    <label class="form-label" for="sheet-band-pick">What they wear</label>
+                    <div class="d-flex flex-wrap align-items-center gap-2">
+                        <select id="sheet-band-pick" class="form-select" style="max-width:22rem;"
+                                value="@(party.HandPickedBandId?.ToString() ?? "")"
+                                disabled="@_busy"
+                                @onchange="e => SetBandAsync(e.Value?.ToString())">
+                            <option value="">Worked out from the rules</option>
+                            @foreach (var band in bands)
+                            {
+                                <option value="@band.Id">@band.Colour — @band.Meaning</option>
+                            }
+                        </select>
+                        <BenBandChip Band="@party.Band" />
+                    </div>
+                </div>
+            }
+
             <div class="mt-3">
                 <label class="form-label" for="sheet-note">A line for the guest</label>
                 <input id="sheet-note" class="form-control" maxlength="500"
@@ -144,6 +168,9 @@
 
     /// <summary>Told what happened, in words the board shows above the queue.</summary>
     [Parameter] public EventCallback<string> OnDecided { get; set; }
+
+    /// <summary>The event's bands, for giving one out by hand. Empty hides the picker.</summary>
+    [Parameter] public IReadOnlyList<HostedEventBandRecord>? Bands { get; set; }
 
     private readonly Dictionary<Guid, Guid?> _where = [];
     private string? _note;
@@ -279,6 +306,35 @@
 
         await OnDecided.InvokeAsync(
             $"{saved.LeadName}'s places are back, and their pass no longer works.");
+    }
+
+    /// <summary>
+    /// Gives this party a band by hand, or puts them back on the rules.
+    /// </summary>
+    /// <remarks>
+    /// Saved at once rather than with the decision, because it is not part of one: a host tagging
+    /// the diners at a confirmed weekend is not confirming anything, and making them press
+    /// "Save where they are" to change a wristband would be a button lying about what it does.
+    /// </remarks>
+    private async Task SetBandAsync(string? value)
+    {
+        if (Booking is not { } party) return;
+
+        _busy = true;
+        _error = null;
+
+        var bandId = Guid.TryParse(value, out var id) ? id : (Guid?)null;
+        var (saved, error) = await AdminClient.SetBookingBandAsync(OrgId, EventId, party.Id, bandId);
+
+        _busy = false;
+
+        if (saved is null) { _error = error ?? "That couldn't be saved just now."; return; }
+
+        var named = bandId is { } chosen ? saved.Bands.FirstOrDefault(b => b.Id == chosen) : null;
+
+        await OnDecided.InvokeAsync(named is null
+            ? $"{party.LeadName} is back on the rules for what they wear."
+            : $"{party.LeadName} wears {named.Colour}.");
     }
 
     private Task CloseAsync() => VisibleChanged.InvokeAsync(false);

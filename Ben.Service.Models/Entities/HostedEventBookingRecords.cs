@@ -125,7 +125,26 @@ public sealed record HostedEventBookingRecord(
     /// looking at their queue needs to know which of these decisions is about to be made for them.
     /// Kept after the hold lapses, so an Expired booking can say when.
     /// </remarks>
-    DateTime? HoldExpiresUtc = null);
+    DateTime? HoldExpiresUtc = null,
+
+    /// <summary>
+    /// The colour this party wears, worked out on the server (item 235 phase 7).
+    /// </summary>
+    /// <remarks>
+    /// Worked out here and not on the board, so the board, the door and the guest's pass cannot
+    /// disagree about a colour — three copies of the rule would be three chances to.
+    /// </remarks>
+    HostedEventBandRecord? Band = null,
+
+    /// <summary>
+    /// The band a venue gave this party by hand, or null when the rules decide.
+    /// </summary>
+    /// <remarks>
+    /// Separate from <see cref="Band"/> because they answer different questions: what they are
+    /// wearing, and whether somebody chose it. A picker that showed the worked-out colour as the
+    /// chosen one would make "back to the rules" impossible to see.
+    /// </remarks>
+    Guid? HandPickedBandId = null);
 
 /// <summary>
 /// A guest's own booking, as their own screen and the phone read it.

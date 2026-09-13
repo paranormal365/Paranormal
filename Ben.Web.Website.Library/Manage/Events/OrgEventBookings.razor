@@ -204,6 +204,7 @@
                                     <div class="fw-semibold">
                                         @party.LeadName
                                         <BookingStatusBadge Status="@party.Status" Class="ms-1" />
+                                        <BenBandChip Band="@party.Band" Class="ms-1" />
                                     </div>
                                     <div class="small text-secondary">@WhatTheyWant(party)</div>
                                 </div>
@@ -227,6 +228,7 @@
                       OrgId="@OrgId" EventId="@EventId"
                       Booking="@_chosen"
                       Board="@_board.Item"
+                      Bands="@_bands"
                       OnDecided="OnDecidedAsync" />
 
 @code {
@@ -235,6 +237,7 @@
 
     private HostedEventRecord? _event;
     private ItemResult<HostedEventBookingBoardRecord> _board;
+    private IReadOnlyList<HostedEventBandRecord> _bands = [];
     private PlanModel? _plan;
     private Guid? _night;
     private bool _loading = true;
@@ -262,6 +265,12 @@
         _loading = true;
         _event ??= await AdminClient.GetHostedEventAsync(OrgId, EventId);
         _board = await AdminClient.GetEventBookingBoardAsync(OrgId, EventId);
+
+        // The venue's bands, for giving one out by hand from the sheet. A refusal here hides the
+        // picker rather than failing the board: somebody who may decide bookings but not see the
+        // bands has nothing to choose from, and the rest of the board is still theirs.
+        var bands = await AdminClient.GetEventBandsAsync(OrgId, EventId);
+        _bands = bands.Item?.Bands ?? [];
 
         if (_board.Item is { } board)
         {

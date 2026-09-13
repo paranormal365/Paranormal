@@ -84,6 +84,16 @@
                         </div>
                     }
 
+                    @if (pass.Band is { } band)
+                    {
+                        @* What to collect at the desk. On the guest's own pass as well as the
+                           door's screen, so the queue moves: somebody who already knows they are
+                           blue does not have to be told. *@
+                        <div class="mb-2" id="pass-band">
+                            <BenBandChip Band="band" WithMeaning="true" />
+                        </div>
+                    }
+
                     <div class="fw-semibold" id="pass-admits">
                         Admits @pass.PartySize @(pass.PartySize == 1 ? "person" : "people")
                     </div>
