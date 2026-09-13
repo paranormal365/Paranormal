@@ -121,6 +121,28 @@ An event can share files — a poster anybody may have, and a guest pack with th
 people who are coming. The event's page lists the ones you may download under **Downloads**. Files
 marked **For guests** appear once the venue has confirmed your place.
 
+## The room and the photo wall
+
+Once the venue has confirmed your place, the event's page has **The room**: a space for the people at
+the event — guests, the organizers, and anybody helping — to post what is happening. Nobody else
+sees it, and nothing in it appears on the public feed.
+
+![The room on the event's page](/help/media/going-to-an-event/the-room.png)
+
+**What you post stays yours.** A photo you add is kept as your own file. You can choose to send it
+to the organizers, and to the venue when it is a venue on the site — tick the box as you post, or
+press **Send to…** under the post later. Sending it shares it with them; it does not hand it over.
+**Take down** removes your post from the room and leaves the photo in your own files.
+
+**Add photos from your phone** opens a page made for a phone: choose pictures from your camera roll
+or take new ones, add a line about them, and send. They go into the room and onto the **photo wall** —
+a full-screen slideshow the organizers can put on a screen at the venue.
+
+![Adding photos from a phone](/help/media/going-to-an-event/add-photos-phone.png)
+
+The organizers can keep photos to the event's own team; you can still write in the room when they
+do. The room closes to new posts a week after the last night, and stays there to look back through.
+
 ## Your pass
 
 Once a venue confirms you, your pass is on the event's page and on this list. **One pass admits

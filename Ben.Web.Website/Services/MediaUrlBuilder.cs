@@ -70,6 +70,20 @@ public sealed class MediaUrlBuilder : IMediaUrlBuilder
         return url;
     }
 
+    public string EventRoomMedia(Guid eventId, Guid messageId)
+    {
+        var cacheKey = $"event-room:{eventId}:{messageId}";
+        if (_urls.TryGetValue(cacheKey, out var cached)) return cached;
+
+        // The room is only for signed-in members, so without a token there is nothing to fetch.
+        var token = _tokens.AccessToken;
+        var ticket = string.IsNullOrWhiteSpace(token) ? "" : _tickets.Protect(messageId, token);
+        var url = $"/media/event-room/{eventId}/{messageId}?t={Uri.EscapeDataString(ticket)}";
+
+        _urls[cacheKey] = url;
+        return url;
+    }
+
     public string SharedFieldSessionFile(string shareToken, Guid fileId) =>
         $"/media/shared/{Uri.EscapeDataString(shareToken)}/files/{fileId}";
 

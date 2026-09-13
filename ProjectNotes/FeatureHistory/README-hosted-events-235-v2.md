@@ -906,6 +906,15 @@ kitchen print. No "who sits with whom" input in v1 — the booking note is the i
 
 ### Phase 14 — The phone
 
+**Added 2026-09-13 (Ben): sharing photos to an event from the app.** "If someone is using our iPhone
+or iPad app, they should be able to share photos to that link during their event — either while taken
+in app or shared from library." Built on phase 11's room: a Share Extension (and an in-app camera
+button on the event hub) posting to `POST api/public/hosted-events/{id}/room` with the same rules —
+the event's team, or confirmed guests when the organizers allow guests' photos — through the outbox
+so a photo taken in a basement with no signal sends when it can. The photo stays the uploader's; the
+"also send to the organizers and venue" choice is offered as on the web.
+
+
 As the README's phase 10 with the guest planner's order: server first (already done in phase 4);
 `PublicEventRecords.swift` gains `hostedEventId`/`hostedEventName`/`hostedBookingMode`/
 `hostedBookingUrl`; `EventDetailView` swaps the seat panel for a `HostedBookingPanel` (404 →

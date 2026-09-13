@@ -264,6 +264,15 @@ namespace Ben.Data.Source.Entities
         public DateTime? ProgrammePublishedUtc { get; set; }
 
         /// <summary>
+        /// When the host closed the event's room early (phase 11). The room also closes by itself a
+        /// week after the last night; this is for closing it sooner.
+        /// </summary>
+        public DateTime? RoomClosedUtc { get; set; }
+
+        /// <summary>Who may add photos and videos to the room and the photo wall (phase 11).</summary>
+        public EventPhotoPosting PhotoPosting { get; set; } = EventPhotoPosting.TeamAndGuests;
+
+        /// <summary>
         /// The fewest people that make this event worth running. Null means it runs regardless.
         /// </summary>
         public int? MinimumGuests { get; set; }

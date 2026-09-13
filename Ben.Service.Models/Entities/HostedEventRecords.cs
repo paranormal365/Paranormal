@@ -531,3 +531,48 @@ public sealed record HostedEventFileRecord(
 
 /// <summary>Changes a file's pile, words, audience or place in the list.</summary>
 public sealed record UpdateHostedEventFileRequest(string? Folder, string? Description, EventFileAudience Audience, int SortOrder);
+
+// ── the event's room (item 235 phase 11) ──────────────────────────────────────
+
+/// <summary>The room, as a member reads it.</summary>
+/// <param name="WhyNotPost">Why posting is closed, when it is.</param>
+/// <param name="HostNames">Who a post's file can be sent to: the organizer, and the venue when there is one.</param>
+public sealed record EventRoomRecord(
+    bool CanPost,
+    string? WhyNotPost,
+    bool CanModerate,
+    IReadOnlyList<string> HostNames,
+    IReadOnlyList<EventRoomMessageRecord> Messages,
+    string? Note = null,
+    EventPhotoPosting PhotoPosting = EventPhotoPosting.TeamAndGuests,
+    bool CanAddPhotos = false);
+
+/// <summary>One photo or video on the photo wall.</summary>
+public sealed record EventWallPhotoRecord(Guid MessageId, string ContentType, string AuthorName, string? Caption, DateTime PostedUtc);
+
+/// <summary>The photo wall: what to cycle through, newest first.</summary>
+public sealed record EventWallRecord(string EventName, IReadOnlyList<EventWallPhotoRecord> Photos);
+
+/// <summary>Changes who may add photos.</summary>
+public sealed record EventRoomSettingsRequest(EventPhotoPosting PhotoPosting);
+
+/// <summary>One post in the room.</summary>
+/// <param name="MediaWaiting">A file still being checked, seen only by its author and the people who look after the room.</param>
+/// <param name="SentToHosts">Whether the author has sent its file to the organizer and venue.</param>
+/// <param name="Reports">How many members reported it — for the people who look after the room only.</param>
+public sealed record EventRoomMessageRecord(
+    Guid Id,
+    Guid AuthorId,
+    string AuthorName,
+    string Body,
+    DateTime PostedUtc,
+    bool HasMedia,
+    string? MediaContentType,
+    bool MediaWaiting,
+    bool IsMine,
+    bool IsHidden,
+    bool SentToHosts,
+    int Reports);
+
+/// <summary>Why a post is being reported.</summary>
+public sealed record ReportEventRoomMessageRequest(string? Reason);

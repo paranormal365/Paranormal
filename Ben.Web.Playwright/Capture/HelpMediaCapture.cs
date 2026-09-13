@@ -2483,6 +2483,69 @@ public sealed class HelpMediaCapture : BenTestBase
         }
     }
 
+    /// <summary>The event's room, the add-photos page and the photo wall (item 235 phase 11).</summary>
+    [Test]
+    [Description("organization-administration + going-to-an-event: the room and the photo wall.")]
+    public async Task Capture_EventRoomAndWall()
+    {
+        var orgId = await OrgIdBySlugAsync("paranormal365");
+        var admin = await SignedInApiAsync(SuperAdminEmail, SuperAdminPassword);
+        var guest = await SignedInApiAsync(ClientEmail, ClientPassword);
+
+        var ev = await admin.GetAsync($"/api/public/hosted-events/{SeededRoomsEventId}");
+        if (!ev.Ok) Assert.Ignore("The seeded rooms weekend is not published on this database.");
+        var slug = (await ev.JsonAsync())!.Value.GetProperty("urlName").GetString();
+
+        // The guest with a confirmed place for the capture, taken away again afterwards.
+        string? madeBookingId = null;
+        var mine = await guest.GetAsync($"/api/public/hosted-events/{SeededRoomsEventId}/my-booking");
+        var confirmed = mine.Ok && (await mine.TextAsync()).Length > 2 && (await mine.JsonAsync())!.Value.GetProperty("status").GetInt32() == 1;
+        if (!confirmed)
+        {
+            if (mine.Ok && (await mine.TextAsync()).Length > 2)
+                await guest.DeleteAsync($"/api/public/hosted-events/{SeededRoomsEventId}/my-booking");
+            var me = (await (await guest.GetAsync("/api/me")).JsonAsync())!.Value;
+            var guestId = me.TryGetProperty("userId", out var uid) ? uid.GetString() : me.GetProperty("id").GetString();
+            var made = await admin.PostAsync($"/api/organizations/{orgId}/events/{SeededRoomsEventId}/bookings/on-behalf",
+                new() { DataObject = new { leadAppUserId = guestId, kind = 1, partySize = 2, confirmImmediately = true } });
+            if (made.Ok) madeBookingId = (await made.JsonAsync())!.Value.GetProperty("id").GetString();
+        }
+
+        try
+        {
+            await LoginAsync(ClientEmail, ClientPassword);
+            await GoAsync($"/events/{SeededRoomsEventId}/photos");
+            // One photo, so the room's picture fits the screen and the wall shows it with its caption.
+            await Page.Locator("#add-photos-input").SetInputFilesAsync(
+                Path.Combine(AppContext.BaseDirectory, "Fixtures", "room-photo-1.jpg"));
+            await Page.Locator("#add-photos-caption").FillAsync("The corridor outside the Blue Room, just after midnight");
+            await ShootAsync("going-to-an-event", "add-photos-phone.png", selector: ".container", proves: "1 chosen", width: 375);
+            await Page.Locator("#add-photos-send-button").ClickAsync();
+            await Expect(Page.Locator("#add-photos-done")).ToBeVisibleAsync(new() { Timeout = 60_000 });
+
+            await GoAsync($"/o/paranormal365/events/{slug}");
+            await ShootAsync("going-to-an-event", "the-room.png", selector: "#hosted-room", proves: "just after midnight");
+
+            await GoAsync($"/events/{SeededRoomsEventId}/wall");
+            await Expect(Page.Locator("#photo-wall img")).ToBeVisibleAsync(new() { Timeout = 30_000 });
+            await Page.WaitForTimeoutAsync(1500);
+            await ShootAsync("organization-administration", "event-photo-wall.png", gated: true, selector: "#photo-wall");
+        }
+        finally
+        {
+            var room = await guest.GetAsync($"/api/public/hosted-events/{SeededRoomsEventId}/room");
+            if (room.Ok)
+                foreach (var m in (await room.JsonAsync())!.Value.GetProperty("messages").EnumerateArray())
+                    if (m.GetProperty("isMine").GetBoolean())
+                        await guest.DeleteAsync($"/api/public/hosted-events/{SeededRoomsEventId}/room/messages/{m.GetProperty("id").GetString()}");
+            if (madeBookingId is not null)
+                await admin.PostAsync($"/api/organizations/{orgId}/events/{SeededRoomsEventId}/bookings/{madeBookingId}/cancel",
+                    new() { DataObject = new { decisionNote = "Capture finished." } });
+            await guest.DisposeAsync();
+            await admin.DisposeAsync();
+        }
+    }
+
     /// <summary>Letters about bookings, on the notifications page (item 235 phase 8).</summary>
     [Test]
     [Description("organization-administration: how often a group writes to you about bookings.")]

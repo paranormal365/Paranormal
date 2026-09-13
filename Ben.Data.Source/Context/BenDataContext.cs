@@ -1152,6 +1152,14 @@ namespace Ben.Data.Source.Context
             modelBuilder.Entity<HostedEventFile>().HasIndex(x => new { x.HostedEventId, x.Audience });
             modelBuilder.Entity<HostedEventFile>().HasIndex(x => x.UploadFileId).IsUnique();
 
+            // ── the event's room (phase 11) ─────────────────────────────────────────
+            modelBuilder.Entity<OrgMessage>()
+                .HasOne(m => m.HostedEvent).WithMany()
+                .HasForeignKey(m => m.HostedEventId).IsRequired(false).OnDelete(DeleteBehavior.NoAction);
+            modelBuilder.Entity<OrgMessage>()
+                .HasIndex(m => new { m.HostedEventId, m.DateCreated })
+                .HasFilter("[HostedEventId] IS NOT NULL");
+
             modelBuilder.Entity<HostedEvent>()
                 .HasOne(e => e.VenueGrant).WithMany()
                 .HasForeignKey(e => e.VenueGrantId).IsRequired(false).OnDelete(DeleteBehavior.NoAction);

@@ -18,6 +18,13 @@ day-by-day account of building it would say nothing to anyone using it now.
 
 ## 2026-09-13
 
+- Events have a room: a private space on the event page for confirmed guests, the organizers and
+  helpers to post what is happening. A photo stays the person's own, and they choose whether to send
+  it to the organizers and the venue.
+- A full-screen photo wall shows the room's photos one at a time for a screen at the venue, and a
+  phone-friendly page lets guests add photos during the event. Organizers can keep photos to their
+  own team.
+
 - Events can have files — a guest pack, a stewards' briefing, a poster — each marked for the event's
   own people, confirmed guests, or anybody. The event page lists what each visitor may download, and
   downloads are checked every time.

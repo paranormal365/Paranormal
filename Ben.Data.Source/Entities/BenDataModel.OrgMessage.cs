@@ -35,6 +35,16 @@ namespace Ben.Data.Source.Entities
         /// <summary>Scopes the message to a specific case team. Null = not case-scoped.</summary>
         public Guid? CaseId { get; set; }
 
+        /// <summary>
+        /// The event whose room this was posted in, for <c>ChannelType = EventRoom</c> (item 235 phase 11).
+        /// </summary>
+        /// <remarks>
+        /// <b>No <see cref="OrganizationId"/> on a room message.</b> A room belongs to an event, not to
+        /// the group's inbox, and giving it the group's id would put a guest's photo of the stairs in the
+        /// group's internal mail.
+        /// </remarks>
+        public Guid? HostedEventId { get; set; }
+
         /// <summary>Total view count — incremented each time a recipient opens the message.</summary>
         public int ViewCount { get; set; }
 
@@ -93,6 +103,7 @@ namespace Ben.Data.Source.Entities
         public virtual AppUser AuthorAppUser { get; set; } = null!;
         public virtual OrgMessage? ParentMessage { get; set; }
         public virtual Case? Case { get; set; }
+        public virtual HostedEvent? HostedEvent { get; set; }
         public virtual AppUser CreatedByAppUser { get; set; } = null!;
         public virtual AppUser? UpdatedByAppUser { get; set; }
         public virtual AppUser? HiddenByAppUser { get; set; }

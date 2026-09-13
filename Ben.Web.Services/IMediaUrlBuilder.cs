@@ -48,6 +48,9 @@ public interface IMediaUrlBuilder
     /// </remarks>
     string EventFile(Guid eventId, Guid fileId);
 
+    /// <summary>A photo or video posted in an event's room, for the people in it (item 235 phase 11).</summary>
+    string EventRoomMedia(Guid eventId, Guid messageId);
+
     /// <summary>
     /// A tour guide's published photograph (item 233).
     /// </summary>

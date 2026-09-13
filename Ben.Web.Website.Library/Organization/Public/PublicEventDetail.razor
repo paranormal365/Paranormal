@@ -382,6 +382,10 @@ else
         {
             <HostedEventProgramme HostedEventId="withProgramme.Id" IsAuthenticated="_isAuthenticated" />
             <HostedEventDownloads HostedEventId="withProgramme.Id" IsAuthenticated="_isAuthenticated" />
+            @if (_isAuthenticated)
+            {
+                <HostedEventRoom HostedEventId="withProgramme.Id" />
+            }
         }
 
         @if (!string.IsNullOrWhiteSpace(_event.Description))

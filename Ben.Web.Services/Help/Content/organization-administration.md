@@ -1515,6 +1515,28 @@ removed when they are added, like every upload on the site.
 
 ![An event's files, each with who it is for](help-media:organization-administration/event-files.png)
 
+### The room and the photo wall
+
+Every published event has a **room** on its public page, for the people at it: confirmed guests,
+your group, anybody helping, and the venue's own people when the venue lent them. It never appears
+on the public feed.
+
+- **Photos stay the guest's.** A guest's photo is their own file. They choose whether to send it to
+  your group and, when there is one on the site, the venue — which shares it with you rather than
+  giving it away.
+- **Who can add photos** is yours to set, from the room: *the team and confirmed guests*, or *the
+  event's team only* for an event with a no-cameras rule. Guests can still write either way.
+- **Hide** takes a post out of the room for everybody but you; members can **Report** a post, and
+  you see how many have. **Close the room** stops new posts early; otherwise it closes a week after
+  the last night.
+
+**The photo wall** (*Photo wall* on the event page) shows the room's photos full screen, one at a
+time, newest first, picking up new ones every half-minute — put it on a TV at the venue from a
+computer signed in as somebody running the event. When there are none yet it shows a code guests can
+scan to **add photos from their phone**.
+
+![The photo wall](help-media:organization-administration/event-photo-wall.png)
+
 ### Letters about bookings
 
 **A request is answered because somebody was told.** Everybody who may say yes or no to bookings —

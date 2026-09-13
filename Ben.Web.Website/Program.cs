@@ -643,6 +643,20 @@ app.MapGet("/media/event-files/{eventId:guid}/{fileId:guid}", async (
         accessToken, httpFactory, ctx, ct);
 }).AllowAnonymous();
 
+// A photo or video in an event's room (item 235 phase 11). Members only, so the ticket is required.
+app.MapGet("/media/event-room/{eventId:guid}/{messageId:guid}", async (
+    Guid eventId, Guid messageId, string? t,
+    Ben.Web.Website.Services.MediaTicketService tickets,
+    IHttpClientFactory httpFactory, IConfiguration config,
+    HttpContext ctx, CancellationToken ct) =>
+{
+    var accessToken = string.IsNullOrWhiteSpace(t) ? null : tickets.Unprotect(messageId, t);
+    if (accessToken is null) return Results.NotFound();
+    return await Ben.Web.Website.Services.MediaProxy.StreamAsync(
+        $"{config["WebApi:BaseUrl"]}/api/public/hosted-events/{eventId}/room/messages/{messageId}/media",
+        accessToken, httpFactory, ctx, ct);
+}).AllowAnonymous();
+
 // A recording reached through a share link (item 207). No ticket and no bearer token: the share
 // token IS the authority, and the API re-checks its expiry, its revocation and which file it
 // covers on every request. This endpoint asserts nothing — it forwards a path and streams the
