@@ -335,6 +335,14 @@ builder.Services.AddScoped<Ben.Data.WebApi.Services.Scheduling.IScheduledJob,
 // Item 233: the mail a tour guest gets, with the walk attached as a calendar file.
 builder.Services.AddScoped<Ben.Data.WebApi.Services.Tours.TourGuestMailer>();
 builder.Services.AddScoped<Ben.Data.WebApi.Services.Events.EventGuestMailer>();
+// Item 235 phase 8: a request is answered because somebody was told. The first of a rush is written
+// about on the next pass and the rest collapse into one summary; the digest is the daily (or weekly)
+// letter for everybody who would rather not hear as it happens, and the safety net for those who do.
+builder.Services.AddScoped<Ben.Data.WebApi.Services.Events.EventOrganizerMailer>();
+builder.Services.AddScoped<Ben.Data.WebApi.Services.Scheduling.IScheduledJob,
+                           Ben.Data.WebApi.Services.Scheduling.EventBookingAlertJob>();
+builder.Services.AddScoped<Ben.Data.WebApi.Services.Scheduling.IScheduledJob,
+                           Ben.Data.WebApi.Services.Scheduling.EventBookingDigestJob>();
 // Item 233: how long a file stays, for the plan it arrived under.
 builder.Services.AddScoped<Ben.Data.WebApi.Services.Media.MediaRetentionPolicy>();
 // Item 233: warns people what is about to go, then takes it.

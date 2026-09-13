@@ -125,6 +125,8 @@ namespace Ben.Data.Source.Context
         public virtual DbSet<HostedEventCheckIn> HostedEventCheckIns { get; set; }
         public virtual DbSet<HostedEventWalkUp> HostedEventWalkUps { get; set; }
         public virtual DbSet<HostedEventBand> HostedEventBands { get; set; }
+        public virtual DbSet<EventBookingAlertPreference> EventBookingAlertPreferences { get; set; }
+        public virtual DbSet<EventBookingAlertState> EventBookingAlertStates { get; set; }
         public virtual DbSet<OutboxEmail> OutboxEmails { get; set; }
         public virtual DbSet<OutboxEmailAttachment> OutboxEmailAttachments { get; set; }
         public virtual DbSet<EventCredit> EventCredits { get; set; }
@@ -925,6 +927,29 @@ namespace Ben.Data.Source.Context
                 .HasOne(b => b.HostedEventBand).WithMany()
                 .HasForeignKey(b => b.HostedEventBandId)
                 .IsRequired(false).OnDelete(DeleteBehavior.NoAction);
+
+            // ── who is told about bookings, and how far they have been told (phase 8) ──
+            //
+            // Both hang off a person, NoAction, because deleting a person goes through its own
+            // purge and must see these rows. The preference cascades from the group — a preference
+            // about a group that no longer exists is about nothing — and the state from the event.
+            modelBuilder.Entity<EventBookingAlertPreference>()
+                .HasOne(p => p.AppUser).WithMany()
+                .HasForeignKey(p => p.AppUserId).OnDelete(DeleteBehavior.NoAction);
+            modelBuilder.Entity<EventBookingAlertPreference>()
+                .HasOne(p => p.Organization).WithMany()
+                .HasForeignKey(p => p.OrganizationId).OnDelete(DeleteBehavior.Cascade);
+            modelBuilder.Entity<EventBookingAlertPreference>()
+                .HasIndex(p => new { p.AppUserId, p.OrganizationId }).IsUnique();
+
+            modelBuilder.Entity<EventBookingAlertState>()
+                .HasOne(s => s.AppUser).WithMany()
+                .HasForeignKey(s => s.AppUserId).OnDelete(DeleteBehavior.NoAction);
+            modelBuilder.Entity<EventBookingAlertState>()
+                .HasOne(s => s.HostedEvent).WithMany()
+                .HasForeignKey(s => s.HostedEventId).OnDelete(DeleteBehavior.Cascade);
+            modelBuilder.Entity<EventBookingAlertState>()
+                .HasIndex(s => new { s.AppUserId, s.HostedEventId }).IsUnique();
 
             // ── what the venue is holding back ────────────────────────────────
             //

@@ -387,6 +387,10 @@ public sealed class OrganizationPurge
             await db.HostedEventLayoutUnits
                 .Where(x => x.PlaceRoomId != null && x.PlaceRoom!.OrganizationId == organizationId)
                 .ExecuteDeleteAsync(ct);
+            // How often each person hears about this group's bookings (item 235 phase 8). It would
+            // cascade with the group; it is named here so the next reader does not have to know that.
+            // The per-event cursors cascade from the events on the line below.
+            await db.EventBookingAlertPreferences.Where(x => x.OrganizationId == organizationId).ExecuteDeleteAsync(ct);
             await db.HostedEvents.Where(x => x.OrganizationId == organizationId).ExecuteDeleteAsync(ct);
 
             // The outbox is CLEARED of its link, never emptied (item 239). A queued letter is not
