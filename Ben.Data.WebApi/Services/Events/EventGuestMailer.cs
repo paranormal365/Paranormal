@@ -826,7 +826,7 @@ public sealed class EventGuestMailer
                 // showed a night as a single point in time would tell a guest nothing.
                 StartUtc: AtVenueUtc(n.HostedEventNight.Date, NightBegins, zone),
                 EndUtc: AtVenueUtc(n.HostedEventNight.Date.AddDays(1), NightEnds, zone),
-                Summary: $"{ev.Name} — {EventCapacity.NameOf(n) ?? "your room"}",
+                Summary: $"{ev.Name} — {EventCapacity.NameOf(n, booking.Kind)}",
                 Description: null,
                 Location: venue,
                 Url: absolute,
@@ -876,7 +876,7 @@ public sealed class EventGuestMailer
     private static List<string> Where(HostedEventBooking booking)
         => booking.Nights
             .OrderBy(n => n.HostedEventNight.Date)
-            .Select(n => $"{n.HostedEventNight.Date:dddd, MMMM d} — {EventCapacity.NameOf(n) ?? "your room"}")
+            .Select(n => $"{n.HostedEventNight.Date:dddd, MMMM d} — {EventCapacity.NameOf(n, booking.Kind)}")
             .ToList();
 
     // ── the programme (phase 10) ─────────────────────────────────────────────

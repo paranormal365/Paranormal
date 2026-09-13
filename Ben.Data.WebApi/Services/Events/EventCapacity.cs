@@ -76,13 +76,19 @@ public static class EventCapacity
     /// What to call what a party holds on one night.
     /// </summary>
     /// <remarks>
-    /// A night with no unit is somebody here for the day and going home again, and it says so —
-    /// an empty cell there reads as missing data rather than as a fact about the booking.
+    /// <para>A night with no unit on a day pass is somebody here for the day and going home again, and it says so — an
+    /// empty cell there reads as missing data rather than as a fact about the booking.</para>
+    ///
+    /// <para>A night with no unit on a stay is a party that asked with no preference and has not been placed yet. It
+    /// once said "Just for the day" too, which told a guest who had asked for two nights in a room that they had a day
+    /// pass (found by the phase 17d walk).</para>
     /// </remarks>
-    public static string NameOf(HostedEventBookingNight night)
-        => night.HostedEventLayoutUnit is { } unit ? NameOf(unit) : "Just for the day";
+    public static string NameOf(HostedEventBookingNight night, HostedEventBookingKind kind)
+        => night.HostedEventLayoutUnit is { } unit ? NameOf(unit)
+         : kind == HostedEventBookingKind.DayPass ? "Just for the day"
+         : "Waiting to be placed";
 
-    /// <inheritdoc cref="NameOf(HostedEventBookingNight)"/>
+    /// <inheritdoc cref="NameOf(HostedEventBookingNight, HostedEventBookingKind)"/>
     public static string NameOf(HostedEventLayoutUnit unit)
         => unit.Label?.Trim() is { Length: > 0 } label ? label
          : unit.PlaceRoom?.Name is { Length: > 0 } room ? room

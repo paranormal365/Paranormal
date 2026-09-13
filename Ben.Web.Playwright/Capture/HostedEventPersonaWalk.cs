@@ -206,6 +206,19 @@ public sealed class HostedEventPersonaWalk : BenTestBase
         await GoAsync("/admin/events");
         await ShotAsync("superadmin-every-event", Content, subject: Page.Locator(".admin-events-grid"));
 
+    }
+
+    /// <summary>
+    /// IsHaunted removing an event, the organizer's appeal, and the answer. Its own story, on its own draft, so it can
+    /// be walked without the booking story before it.
+    /// </summary>
+    [Test]
+    public async Task Walk_removing_an_event_and_the_appeal()
+    {
+        _orgId = await OrgIdBySlugAsync("paranormal365");
+        _shot = 27;
+        await LoginAsync(SuperAdminEmail, SuperAdminPassword);
+
         var throwaway = await ADraftToRemoveAsync();
         try
         {
@@ -296,22 +309,47 @@ public sealed class HostedEventPersonaWalk : BenTestBase
         await admin.DisposeAsync();
     }
 
+    /// <summary>
+    /// The Old Mill draft the removal story is told about: made the first time, and restored from the archive, where
+    /// the story leaves it, every time after — event names are unique within a group.
+    /// </summary>
     private async Task<string> ADraftToRemoveAsync()
     {
+        const string name = "Old Mill Lock-In";
         var admin = await ApiAsync(SuperAdminEmail, SuperAdminPassword);
-        var starts = DateTime.UtcNow.Date.AddDays(45);
-        var made = await admin.PostAsync($"/api/organizations/{_orgId}/events", new()
+        try
         {
-            DataObject = new
+            var list = await admin.GetAsync("/api/admin/hosted-events");
+            Assert.That(list.Ok, Is.True, await list.TextAsync());
+            var existing = (await list.JsonAsync())!.Value.GetProperty("events").EnumerateArray()
+                .FirstOrDefault(e => e.GetProperty("organizationId").GetString() == _orgId && e.GetProperty("eventName").GetString() == name);
+
+            if (existing.ValueKind == System.Text.Json.JsonValueKind.Object)
             {
-                name = "Old Mill Lock-In", placeId = VenuePlaceId, timeZoneId = "America/Chicago",
-                startsOn = starts.ToString("yyyy-MM-dd"), endsOn = starts.ToString("yyyy-MM-dd"), contactLine = "Call us.",
-            },
-        });
-        Assert.That(made.Ok, Is.True, await made.TextAsync());
-        var id = (await made.JsonAsync())!.Value.GetProperty("id").GetString()!;
-        await admin.DisposeAsync();
-        return id;
+                var id = existing.GetProperty("id").GetString()!;
+                var restored = await admin.PostAsync($"/api/organizations/{_orgId}/events/{id}/restore", new() { DataObject = new { } });
+                Assert.That(restored.Ok, Is.True, await restored.TextAsync());
+                Assert.That((await restored.JsonAsync())!.Value.GetProperty("lifecycleState").GetInt32(), Is.EqualTo(0),
+                    $"{name} is not a draft after restoring, so it cannot be removed for the story.");
+                return id;
+            }
+
+            var starts = DateTime.UtcNow.Date.AddDays(45);
+            var made = await admin.PostAsync($"/api/organizations/{_orgId}/events", new()
+            {
+                DataObject = new
+                {
+                    name, placeId = VenuePlaceId, timeZoneId = "America/Chicago",
+                    startsOn = starts.ToString("yyyy-MM-dd"), endsOn = starts.ToString("yyyy-MM-dd"), contactLine = "Call us.",
+                },
+            });
+            Assert.That(made.Ok, Is.True, await made.TextAsync());
+            return (await made.JsonAsync())!.Value.GetProperty("id").GetString()!;
+        }
+        finally
+        {
+            await admin.DisposeAsync();
+        }
     }
 
     // ── photographing ────────────────────────────────────────────────────────

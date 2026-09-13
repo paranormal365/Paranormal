@@ -460,6 +460,6 @@ public sealed class HostedEventDoorController : OrgCmsControllerBase
 
         return tonight is null
             ? booking.Kind == HostedEventBookingKind.DayPass ? "For the day" : null
-            : EventCapacity.NameOf(tonight);
+            : EventCapacity.NameOf(tonight, booking.Kind);
     }
 }

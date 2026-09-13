@@ -148,7 +148,9 @@ public sealed class EventLayoutTests
                 .SingleAsync();
 
             Assert.Null(night.HostedEventLayoutUnitId);
-            Assert.Equal("Just for the day", EventCapacity.NameOf(night));
+            Assert.Equal("Just for the day", EventCapacity.NameOf(night, HostedEventBookingKind.DayPass));
+            // The same row on a stay is a party not placed yet, not a day visitor.
+            Assert.Equal("Waiting to be placed", EventCapacity.NameOf(night, HostedEventBookingKind.Overnight));
 
             // They hold a day pass and no bed, which is exactly what was asked for.
             var all = await db.HostedEventBookings.Include(b => b.Nights).ToListAsync();

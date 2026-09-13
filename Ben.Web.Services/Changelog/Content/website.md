@@ -18,6 +18,9 @@ day-by-day account of building it would say nothing to anyone using it now.
 
 ## 2026-09-13
 
+- A guest who asks to stay with no room preference now sees "Waiting to be placed" for each night until the
+  venue chooses a room, instead of "Just for the day". The booking board, door list, calendar file and
+  spreadsheet say the same.
 - Confirming a booking and moving the party into a different room no longer fails with an unexpected
   error, and guests can change their nights or the names in their party again.
 - The events dashboard loads when it is opened directly from a link, not only from its tab.

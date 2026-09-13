@@ -293,7 +293,7 @@ public sealed class PublicHostedEventBookingController : BenControllerBase
             booking.Nights
                 .OrderBy(n => n.HostedEventNight.Date)
                 .Select(n => new HostedEventBookingNightRecord(
-                    n.HostedEventNightId, n.HostedEventNight.Date, n.HostedEventLayoutUnitId, EventCapacity.NameOf(n)))
+                    n.HostedEventNightId, n.HostedEventNight.Date, n.HostedEventLayoutUnitId, EventCapacity.NameOf(n, booking.Kind)))
                 .ToList(),
             Band: EventBands.For(booking, bands, nights) is { } band
                 ? new HostedEventBandRecord(
@@ -1034,7 +1034,7 @@ public sealed class PublicHostedEventBookingController : BenControllerBase
                 .OrderBy(n => n.HostedEventNight.Date)
                 .Select(n => new HostedEventBookingNightRecord(
                     n.HostedEventNightId, n.HostedEventNight.Date,
-                    n.HostedEventLayoutUnitId, EventCapacity.NameOf(n)))
+                    n.HostedEventLayoutUnitId, EventCapacity.NameOf(n, b.Kind)))
                 .ToList(),
             b.Guests
                 .OrderBy(g => g.SortOrder)

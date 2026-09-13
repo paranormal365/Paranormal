@@ -829,7 +829,7 @@ public sealed class HostedEventBookingController : OrgCmsControllerBase
             Nights: booking.Nights
                 .OrderBy(n => n.HostedEventNight.Date)
                 .Select(n => new HostedEventBookingNightRecord(
-                    n.HostedEventNightId, n.HostedEventNight.Date, n.HostedEventLayoutUnitId, EventCapacity.NameOf(n)))
+                    n.HostedEventNightId, n.HostedEventNight.Date, n.HostedEventLayoutUnitId, EventCapacity.NameOf(n, booking.Kind)))
                 .ToList(),
             GuestNames: booking.Guests.OrderBy(g => g.SortOrder).Select(g => g.DisplayName).ToList(),
             AlreadyCheckedInUtc: alreadyIn));
@@ -1201,7 +1201,7 @@ public sealed class HostedEventBookingController : OrgCmsControllerBase
                 .OrderBy(n => n.HostedEventNight.Date)
                 .Select(n => new HostedEventBookingNightRecord(
                     n.HostedEventNightId, n.HostedEventNight.Date,
-                    n.HostedEventLayoutUnitId, EventCapacity.NameOf(n)))
+                    n.HostedEventLayoutUnitId, EventCapacity.NameOf(n, b.Kind)))
                 .ToList(),
             b.Guests
                 .OrderBy(g => g.SortOrder)

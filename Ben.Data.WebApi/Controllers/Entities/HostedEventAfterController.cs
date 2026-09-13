@@ -598,7 +598,7 @@ public static class BookingsCsv
             var nights = string.Join("; ", b.Nights
                 .Where(n => n.ReleasedUtc is null || b.Status is not (HostedEventBookingStatus.Held or HostedEventBookingStatus.Confirmed))
                 .OrderBy(n => n.HostedEventNight.Date)
-                .Select(n => $"{n.HostedEventNight.Date:MM/dd/yyyy} {EventCapacity.NameOf(n)}"));
+                .Select(n => $"{n.HostedEventNight.Date:MM/dd/yyyy} {EventCapacity.NameOf(n, b.Kind)}"));
 
             var guests = string.Join("; ", b.Guests.OrderBy(g => g.SortOrder).Select(g => g.DisplayName));
             var dietary = includeDietary

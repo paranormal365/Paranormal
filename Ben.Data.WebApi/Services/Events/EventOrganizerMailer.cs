@@ -167,7 +167,7 @@ public sealed class EventOrganizerMailer
             return $"{party} {verb} a day pass";
 
         var units = live
-            .Select(EventCapacity.NameOf)
+            .Select(n => EventCapacity.NameOf(n, booking.Kind))
             .Where(n => !string.IsNullOrWhiteSpace(n))
             .Distinct()
             .ToList();
