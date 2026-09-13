@@ -34,6 +34,10 @@ struct EventRoomView: View {
     @State private var reportReason = ""
     @State private var preview: URL?
     @State private var busy = false
+    @State private var eventName = "the event"
+    @State private var roomSavedAt: Date?
+    @State private var waitingPosts: [QueuedRoomPost] = []
+    @State private var refusedPosts: [QueuedRoomPost] = []
 
     private static let page = 50
 
@@ -76,9 +80,13 @@ struct EventRoomView: View {
         }
         .sheet(isPresented: $composing) {
             if let room, let store {
-                RoomComposerView(hostedEventId: hostedEventId, room: room, store: store) { updated in
+                RoomComposerView(hostedEventId: hostedEventId, room: room, store: store, eventName: eventName, onPosted: { updated in
                     apply(updated)
-                }
+                }, onKept: { count in
+                    note = count == 1 ? "No signal — kept on this phone, and sent as soon as there's signal."
+                                      : "No signal — \(count) posts kept on this phone, and sent as soon as there's signal."
+                    refreshOutbox()
+                })
             }
         }
         .confirmationDialog("Take this post down?", isPresented: Binding(get: { takingDown != nil }, set: { if !$0 { takingDown = nil } }),
@@ -105,11 +113,46 @@ struct EventRoomView: View {
     @ViewBuilder
     private func list(_ room: EventRoom) -> some View {
         List {
+            if let roomSavedAt {
+                Section {
+                    Label("No signal — this is the room as it was at \(roomSavedAt.formatted(date: .omitted, time: .shortened)). Anything you post is kept on this phone and sent when there's signal.",
+                          systemImage: "wifi.slash")
+                        .font(.footnote).foregroundStyle(Theme.warning)
+                }
+            }
             if let note {
                 Section { Label(note, systemImage: "checkmark.circle").font(.footnote).foregroundStyle(Theme.success) }
             }
             if !room.canPost, let why = room.whyNotPost {
                 Section { Text(why).font(.footnote).foregroundStyle(Theme.fog) }
+            }
+            if !waitingPosts.isEmpty {
+                Section {
+                    ForEach(waitingPosts) { post in outboxRow(post) }
+                    Button("Send now") { Task { await load() } }
+                        .accessibilityIdentifier("room-send-waiting")
+                } header: {
+                    Text("Waiting to send (\(waitingPosts.count))")
+                } footer: {
+                    Text("Kept on this phone. They're sent as soon as there's signal, in the order you took them.")
+                }
+            }
+            if !refusedPosts.isEmpty {
+                Section {
+                    ForEach(refusedPosts) { post in
+                        VStack(alignment: .leading, spacing: 4) {
+                            outboxRow(post)
+                            Text(post.refusal ?? "").font(.footnote).foregroundStyle(Theme.danger)
+                        }
+                        .swipeActions {
+                            Button("Remove", role: .destructive) { RoomOutbox.shared().remove(post.id); refreshOutbox() }
+                        }
+                    }
+                } header: {
+                    Text("Couldn't be sent")
+                } footer: {
+                    Text("Swipe one to remove it from this phone.")
+                }
             }
             if messages.isEmpty {
                 Section {
@@ -188,15 +231,63 @@ struct EventRoomView: View {
         .accessibilityIdentifier("room-message-\(message.id.uuidString.lowercased())")
     }
 
+    private func outboxRow(_ post: QueuedRoomPost) -> some View {
+        HStack(spacing: 10) {
+            Image(systemName: post.storedFileName == nil ? "text.bubble" : post.isVideo ? "video" : "photo")
+                .foregroundStyle(Theme.ecto)
+            VStack(alignment: .leading, spacing: 2) {
+                Text(post.body.isEmpty ? (post.isVideo ? "A video" : "A photo") : post.body).lineLimit(2)
+                Text(post.createdUtc.formatted(date: .omitted, time: .shortened)
+                     + (post.byteCount > 0 ? " · \(ByteCountFormatter.string(fromByteCount: post.byteCount, countStyle: .file))" : ""))
+                    .font(.caption).foregroundStyle(Theme.fog)
+            }
+        }
+    }
+
+    private func refreshOutbox() {
+        let outbox = RoomOutbox.shared()
+        waitingPosts = outbox.waiting(for: hostedEventId)
+        refusedPosts = outbox.refused(for: hostedEventId)
+    }
+
     // ── reads and writes ─────────────────────────────────────────────────────
 
     private func load() async {
         guard let store else { return }
+        // Whatever was kept for a signal goes first, so the room read afterwards already shows it.
+        if !RoomOutbox.shared().waiting().isEmpty {
+            let report = await RoomOutboxSender(store: store).sendWaiting()
+            if report.sent > 0 { note = report.sent == 1 ? "A kept post was sent." : "\(report.sent) kept posts were sent." }
+        }
+        refreshOutbox()
+        var listed: ShareableEvents.Event?
+        // No signal: the name the app last wrote down for this event, so a kept post still says which event it's for.
+        if let known = ShareableEvents.shared().load().first(where: { $0.hostedEventId == hostedEventId }) { eventName = known.eventName }
+        if case .ok(let hosted) = await store.loadEvent(hostedEventId) {
+            eventName = hosted.name
+            listed = ShareableEvents.Event(hostedEventId: hosted.id, eventName: hosted.name, organizationName: hosted.organizationName,
+                                           startsOn: hosted.startsOn, endsOn: hosted.endsOn)
+        }
         switch await store.loadRoom(hostedEventId) {
         case .ok(let value):
             room = value
             messages = value?.messages ?? []
             olderMayExist = messages.count >= Self.page
+            failure = nil
+            roomSavedAt = nil
+            if let value {
+                ShareableEvents.shared().learn(from: value, for: hostedEventId, event: listed)
+                RoomCache.applicationSupport().save(value, for: hostedEventId)
+            } else {
+                RoomCache.applicationSupport().remove(hostedEventId)
+            }
+        case .failed(_, let status) where (status == nil || status! >= 500) && RoomCache.applicationSupport().load(hostedEventId) != nil:
+            // No signal: the room as it was last read, so a photo can still be added and kept for later.
+            let saved = RoomCache.applicationSupport().load(hostedEventId)!
+            room = saved.room
+            messages = saved.room.messages
+            olderMayExist = false
+            roomSavedAt = saved.savedAt
             failure = nil
         case .failed(let reason, _):
             failure = reason ?? "Check your connection and try again."
@@ -298,7 +389,11 @@ struct RoomComposerView: View {
     let hostedEventId: UUID
     let room: EventRoom
     let store: HostedEventsStore
+    /// For the outbox's list, so a waiting post can say which event it is for.
+    var eventName: String = "the event"
     var onPosted: (EventRoom) -> Void
+    /// No signal: this many posts were kept on the phone to send later.
+    var onKept: (Int) -> Void = { _ in }
 
     @Environment(\.dismiss) private var dismiss
 
@@ -414,6 +509,9 @@ struct RoomComposerView: View {
         .interactiveDismissDisabled(posting)
     }
 
+    /// Copies each picked item to a scratch file. A photo in any other format — an iPhone's HEIC, above all — is
+    /// re-encoded as JPEG, which is what the server reads; a video too big for one post is refused here, in words,
+    /// rather than after a long upload.
     private func stage(_ items: [PhotosPickerItem]) async {
         guard !items.isEmpty else { return }
         for item in items {
@@ -421,12 +519,32 @@ struct RoomComposerView: View {
                 errorMessage = "One of those couldn't be read."
                 continue
             }
+            let type = item.supportedContentTypes.first
             let isVideo = item.supportedContentTypes.contains { $0.conforms(to: .movie) }
-            let url = FileManager.default.temporaryDirectory
-                .appendingPathComponent("room-\(UUID().uuidString).\(isVideo ? "mov" : "jpg")")
-            guard (try? data.write(to: url)) != nil else { continue }
-            media.append(MediaUpload(fileURL: url, filename: url.lastPathComponent,
-                                     contentType: isVideo ? "video/quicktime" : "image/jpeg", byteCount: Int64(data.count)))
+            let ext = type?.preferredFilenameExtension ?? (isVideo ? "mov" : "jpg")
+            let raw = FileManager.default.temporaryDirectory.appendingPathComponent("room-\(UUID().uuidString).\(ext)")
+            guard (try? data.write(to: raw)) != nil else { continue }
+
+            if isVideo {
+                guard Int64(data.count) <= RoomOutbox.largestFile else {
+                    try? FileManager.default.removeItem(at: raw)
+                    errorMessage = "That video is \(data.count / 1_048_576) MB. The most one post can carry is 95 MB — trim it, or choose a shorter clip."
+                    continue
+                }
+                media.append(MediaUpload(fileURL: raw, filename: raw.lastPathComponent,
+                                         contentType: type?.preferredMIMEType ?? "video/quicktime", byteCount: Int64(data.count)))
+            } else if type?.conforms(to: .jpeg) == true {
+                media.append(MediaUpload(fileURL: raw, filename: raw.lastPathComponent, contentType: "image/jpeg", byteCount: Int64(data.count)))
+            } else {
+                let jpeg = raw.deletingPathExtension().appendingPathExtension("jpg")
+                defer { try? FileManager.default.removeItem(at: raw) }
+                guard RoomOutbox.writeJPEG(from: raw, to: jpeg) else {
+                    errorMessage = "One of those photos couldn't be read."
+                    continue
+                }
+                let size = (try? FileManager.default.attributesOfItem(atPath: jpeg.path)[.size] as? Int64) ?? 0
+                media.append(MediaUpload(fileURL: jpeg, filename: jpeg.lastPathComponent, contentType: "image/jpeg", byteCount: size))
+            }
         }
         pickerItems = []
     }
@@ -455,6 +573,8 @@ struct RoomComposerView: View {
             case .ok(let updated):
                 onPosted(updated)
                 dismiss()
+            case .failed(_, let status) where status == nil || status! >= 500:
+                keepForLater(nil)
             case let other:
                 errorMessage = sentence(other)
             }
@@ -473,6 +593,11 @@ struct RoomComposerView: View {
                 media.removeFirst()
                 caption = ""
                 text = ""
+            case .failed(_, let status) where status == nil || status! >= 500:
+                // No signal part-way: what hasn't gone is kept, and sent when there's signal.
+                if let latest { onPosted(latest) }
+                keepForLater(caption)
+                return
             case let other:
                 errorMessage = sentence(other)
                 if let latest { onPosted(latest) }
@@ -480,6 +605,37 @@ struct RoomComposerView: View {
             }
         }
         if let latest { onPosted(latest) }
+        dismiss()
+    }
+
+    /// Puts what is still in the composer into the outbox — words and every photo not yet sent — and closes.
+    private func keepForLater(_ caption: String?) {
+        let outbox = RoomOutbox.shared()
+        var kept = 0
+        do {
+            if media.isEmpty {
+                try outbox.add(hostedEventId: hostedEventId, eventName: eventName, body: trimmed, file: nil, contentType: nil,
+                               originalName: nil, sendToHosts: false, agreeToShow: false, moveFile: false)
+                kept = 1
+            } else {
+                var words = caption ?? trimmed
+                for upload in media {
+                    try outbox.add(hostedEventId: hostedEventId, eventName: eventName, body: words, file: upload.fileURL,
+                                   contentType: upload.contentType, originalName: nil, sendToHosts: sendToHosts,
+                                   agreeToShow: agree, moveFile: true)
+                    words = ""
+                    kept += 1
+                }
+                media = []
+            }
+        } catch let error as RoomOutbox.AddError {
+            errorMessage = error.sentence
+            return
+        } catch {
+            errorMessage = "That couldn't be kept on this phone. Nothing was sent — try again when there's signal."
+            return
+        }
+        onKept(kept)
         dismiss()
     }
 

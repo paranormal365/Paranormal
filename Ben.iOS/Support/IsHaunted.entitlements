@@ -18,6 +18,13 @@
 	     This entitlement changes the provisioning profile, so it needs a fresh signed build.
 	     Nothing about it can be verified in the simulator: iOS only performs the association
 	     check on a real device with a real profile. -->
+	<!-- The outbox shared with the Share Extension, and the list of events the app writes for it (item 235 phase
+	     14d). Like the domains above, this changes the provisioning profile: the group has to exist on the App ID
+	     (Xcode's automatic signing registers it on the next device build) for both the app and the extension. -->
+	<key>com.apple.security.application-groups</key>
+	<array>
+		<string>group.com.ishaunted.ios</string>
+	</array>
 	<key>com.apple.developer.associated-domains</key>
 	<array>
 		<string>applinks:ishaunted.com</string>

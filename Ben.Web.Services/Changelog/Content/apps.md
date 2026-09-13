@@ -38,6 +38,11 @@ read.
   on the kept list, and arrivals are sent with the time they happened as soon as there is signal.
 - Opening the app with no signal now keeps you signed in as yourself, instead of showing the app signed
   out until the server can be reached.
+- Posts and photos for an event's room are kept on the phone when there's no signal and sent when it
+  returns. The room opens with no signal, as it was last seen, so you can still add to it.
+- Photos and videos can be shared to one of your events straight from the Photos app, with a caption,
+  the photo notice and the choice to send the organizers a copy.
+- Photos from the phone are sent as JPEG, so pictures saved in the iPhone's own format are read correctly.
 - In the event's room you can write, add photos and video from your library or the camera, agree to the
   photo notice the first time, send a photo to the organizers, take your own posts down and report
   somebody else's.

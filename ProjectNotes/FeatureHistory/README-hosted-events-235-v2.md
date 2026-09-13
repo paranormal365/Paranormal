@@ -1357,6 +1357,66 @@ Help:
 
 Next: 14d, the Share Extension and the outbox for photos to an event.
 
+#### Phase 14d as built (2026-09-13) — the outbox, and sharing photos to an event from Photos
+
+1. **`RoomOutbox`** (BenKit) keeps room posts that couldn't be sent: words, the photo or video, *send to the
+   hosts*, the agreement to the photo notice, and the time.
+   - **Where:** the App Group container `group.com.ishaunted.ios`, so the Share Extension can add to it. Every index
+     read and write goes through `NSFileCoordinator`; a test adds twenty at once and loses none.
+   - **Files:** moved in when they are the app's own scratch copy, copied when another process owns them, deleted
+     once sent.
+   - **Format:** a photo in any format other than JPEG is re-encoded to JPEG with ImageIO, because the server
+     decodes with SkiaSharp and an iPhone's HEIC may not read there.
+   - **Size:** a video over 95 MB is refused in words when added, because the site's proxy refuses bodies over
+     100 MB.
+2. **`RoomOutboxSender`** sends oldest first and stops at the first post that can't get through.
+   - A 4xx is kept under *Couldn't be sent* with the server's sentence, and the next post is still tried.
+   - One send at a time per outbox.
+   - `RoomOutboxDrain` (app) sends when the app comes forward, when `NWPathMonitor` sees the network return, and
+     when a room opens — never while signed out.
+3. **The room with no signal.** `RoomCache` keeps each room's last read, so the room opens offline with a banner.
+   - When a post can't reach the server, the composer puts it and every unsent photo in the outbox and says so.
+   - The room lists *Waiting to send* with *Send now*, and *Couldn't be sent* with swipe to remove.
+   - The composer now converts library photos to JPEG and refuses an oversized video before uploading. The 14b
+     composer labelled every photo `image/jpeg` whatever its bytes.
+4. **`IsHauntedShare`, a Share Extension target.**
+   - **What it takes:** up to 20 photos and 5 videos.
+   - **What it offers:** events from `ShareableEvents`, a list the app writes to the App Group. It holds the
+     events the person is confirmed at plus the doors they run, and what each room allowed when last opened
+     (photos taken, notice, host names).
+   - **What it asks:** a caption, the notice with *I agree* (asked when needed or unknown), and *Also send to
+     {hosts}*.
+   - **What it does:** saves to the outbox. **It has no sign-in and uploads nothing.** Sharing the Keychain with
+     it would need a new access group, which moves every existing person's tokens and signs them out unless
+     migrated. The app sends on its next open with signal, and the extension says so.
+   - **Provisioning:** the App Group is added to the app's entitlements and to the extension's. Xcode's automatic
+     signing has to register the group on both App IDs (`com.ishaunted.ios`, `com.ishaunted.ios.share`) at the
+     next device or TestFlight build. The simulator needed nothing.
+5. **Sign-out** removes the outbox, the kept rooms and the shareable list along with passes and doors.
+
+Tests: BenKit `RoomOutboxTests` (10). Broken and seen failing: the JPEG conversion, a refusal being kept apart,
+and the rules learned in a room surviving the next list. BenKit total 446. No server code changed.
+
+Simulator walk as Sarah (BenCo organizer), player copy:
+- **Room online:** the room was opened with signal and its rules were recorded.
+- **Offline, in the app:** a cold start pointed at a dead address opened the kept room with its banner. A library
+  photo with a caption was posted and kept.
+- **Share Extension:** from the Photos app, Share → IsHaunted showed the photo, Sarah's events and *Also send to
+  BenCo*. The shared photo was saved to the outbox as JPEG.
+- **Back online:** both kept posts appear in the room. Separately, a post kept while the app was closed was sent by
+  the launch send within three seconds.
+- **Not root-caused:** twice, the first automatic send after the app came forward stalled until its request timed
+  out. The posts stayed kept, and *Send now* sent them in seconds, while the server took the same files by curl in
+  under half a second. Suspects: the API's ONNX photo screener warming up after a restart, and a stale keep-alive
+  connection on the simulator's loopback. Worth watching on a device.
+- **Not walked:** the camera (the simulator has none), and a real device with the App Group provisioned.
+
+Help: *the mobile apps* gains "Photos with no signal" and "Sharing photos from the Photos app", with two captures
+from the walk.
+
+Next: 14e, reminders, the widget and the Live Activity. Ben has asked for a full audit of item 235 before merging,
+plus SuperAdmin event dashboards and removal, and the advertising material; those come first.
+
 ### Phase 15 — Seed walk, screenshots, documentation, runbook
 
 The README's 2.8 and 12: extend `HostedEventDemoSeeder` to every table above; walk the running

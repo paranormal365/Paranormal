@@ -8,6 +8,8 @@
 
 /* Begin PBXBuildFile section */
 		BE00000000000000000000B3 /* BenKit in Frameworks */ = {isa = PBXBuildFile; productRef = BE00000000000000000000B2 /* BenKit */; };
+		BE00000000000000000000E1 /* BenKit in Frameworks */ = {isa = PBXBuildFile; productRef = BE00000000000000000000E2 /* BenKit */; };
+		BE00000000000000000000E3 /* IsHauntedShare.appex in Embed Foundation Extensions */ = {isa = PBXBuildFile; fileRef = BE00000000000000000000E4 /* IsHauntedShare.appex */; settings = {ATTRIBUTES = (RemoveHeadersOnCopy, ); }; };
 /* End PBXBuildFile section */
 
 /* Begin PBXContainerItemProxy section */
@@ -18,11 +20,33 @@
 			remoteGlobalIDString = BE00000000000000000000A2;
 			remoteInfo = IsHaunted;
 		};
+		BE00000000000000000000EB /* PBXContainerItemProxy */ = {
+			isa = PBXContainerItemProxy;
+			containerPortal = BE00000000000000000000A1 /* Project object */;
+			proxyType = 1;
+			remoteGlobalIDString = BE00000000000000000000EA;
+			remoteInfo = IsHauntedShare;
+		};
 /* End PBXContainerItemProxy section */
+
+/* Begin PBXCopyFilesBuildPhase section */
+		BE00000000000000000000E9 /* Embed Foundation Extensions */ = {
+			isa = PBXCopyFilesBuildPhase;
+			buildActionMask = 2147483647;
+			dstPath = "";
+			dstSubfolderSpec = 13;
+			files = (
+				BE00000000000000000000E3 /* IsHauntedShare.appex in Embed Foundation Extensions */,
+			);
+			name = "Embed Foundation Extensions";
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+/* End PBXCopyFilesBuildPhase section */
 
 /* Begin PBXFileReference section */
 		BE00000000000000000000C4 /* IsHaunted.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = IsHaunted.app; sourceTree = BUILT_PRODUCTS_DIR; };
 		BE00000000000000000000D4 /* IsHauntedUITests.xctest */ = {isa = PBXFileReference; explicitFileType = wrapper.cfbundle; includeInIndex = 0; path = IsHauntedUITests.xctest; sourceTree = BUILT_PRODUCTS_DIR; };
+		BE00000000000000000000E4 /* IsHauntedShare.appex */ = {isa = PBXFileReference; explicitFileType = "wrapper.app-extension"; includeInIndex = 0; path = IsHauntedShare.appex; sourceTree = BUILT_PRODUCTS_DIR; };
 /* End PBXFileReference section */
 
 /* Begin PBXFileSystemSynchronizedRootGroup section */
@@ -34,6 +58,11 @@
 		BE00000000000000000000D3 /* IsHauntedUITests */ = {
 			isa = PBXFileSystemSynchronizedRootGroup;
 			path = IsHauntedUITests;
+			sourceTree = "<group>";
+		};
+		BE00000000000000000000E5 /* IsHauntedShare */ = {
+			isa = PBXFileSystemSynchronizedRootGroup;
+			path = IsHauntedShare;
 			sourceTree = "<group>";
 		};
 /* End PBXFileSystemSynchronizedRootGroup section */
@@ -54,6 +83,14 @@
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
+		BE00000000000000000000E6 /* Frameworks */ = {
+			isa = PBXFrameworksBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+				BE00000000000000000000E1 /* BenKit in Frameworks */,
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
 /* End PBXFrameworksBuildPhase section */
 
 /* Begin PBXGroup section */
@@ -62,6 +99,7 @@
 			children = (
 				BE00000000000000000000A3 /* IsHaunted */,
 				BE00000000000000000000D3 /* IsHauntedUITests */,
+				BE00000000000000000000E5 /* IsHauntedShare */,
 				BE00000000000000000000C2 /* Products */,
 			);
 			sourceTree = "<group>";
@@ -71,6 +109,7 @@
 			children = (
 				BE00000000000000000000C4 /* IsHaunted.app */,
 				BE00000000000000000000D4 /* IsHauntedUITests.xctest */,
+				BE00000000000000000000E4 /* IsHauntedShare.appex */,
 			);
 			name = Products;
 			sourceTree = "<group>";
@@ -85,10 +124,12 @@
 				BE00000000000000000000B5 /* Sources */,
 				BE00000000000000000000B4 /* Frameworks */,
 				BE00000000000000000000B6 /* Resources */,
+				BE00000000000000000000E9 /* Embed Foundation Extensions */,
 			);
 			buildRules = (
 			);
 			dependencies = (
+				BE00000000000000000000EC /* PBXTargetDependency */,
 			);
 			fileSystemSynchronizedGroups = (
 				BE00000000000000000000A3 /* IsHaunted */,
@@ -121,6 +162,29 @@
 			productReference = BE00000000000000000000D4 /* IsHauntedUITests.xctest */;
 			productType = "com.apple.product-type.bundle.ui-testing";
 		};
+		BE00000000000000000000EA /* IsHauntedShare */ = {
+			isa = PBXNativeTarget;
+			buildConfigurationList = BE00000000000000000000EF /* Build configuration list for PBXNativeTarget "IsHauntedShare" */;
+			buildPhases = (
+				BE00000000000000000000E7 /* Sources */,
+				BE00000000000000000000E6 /* Frameworks */,
+				BE00000000000000000000E8 /* Resources */,
+			);
+			buildRules = (
+			);
+			dependencies = (
+			);
+			fileSystemSynchronizedGroups = (
+				BE00000000000000000000E5 /* IsHauntedShare */,
+			);
+			name = IsHauntedShare;
+			packageProductDependencies = (
+				BE00000000000000000000E2 /* BenKit */,
+			);
+			productName = IsHauntedShare;
+			productReference = BE00000000000000000000E4 /* IsHauntedShare.appex */;
+			productType = "com.apple.product-type.app-extension";
+		};
 /* End PBXNativeTarget section */
 
 /* Begin PBXProject section */
@@ -137,6 +201,9 @@
 					BE00000000000000000000D2 = {
 						CreatedOnToolsVersion = 16.0;
 						TestTargetID = BE00000000000000000000A2;
+					};
+					BE00000000000000000000EA = {
+						CreatedOnToolsVersion = 16.0;
 					};
 				};
 			};
@@ -158,12 +225,20 @@
 			targets = (
 				BE00000000000000000000A2 /* IsHaunted */,
 				BE00000000000000000000D2 /* IsHauntedUITests */,
+				BE00000000000000000000EA /* IsHauntedShare */,
 			);
 		};
 /* End PBXProject section */
 
 /* Begin PBXResourcesBuildPhase section */
 		BE00000000000000000000B6 /* Resources */ = {
+			isa = PBXResourcesBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+		BE00000000000000000000E8 /* Resources */ = {
 			isa = PBXResourcesBuildPhase;
 			buildActionMask = 2147483647;
 			files = (
@@ -187,6 +262,13 @@
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
+		BE00000000000000000000E7 /* Sources */ = {
+			isa = PBXSourcesBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
 /* End PBXSourcesBuildPhase section */
 
 /* Begin PBXTargetDependency section */
@@ -194,6 +276,11 @@
 			isa = PBXTargetDependency;
 			target = BE00000000000000000000A2 /* IsHaunted */;
 			targetProxy = BE00000000000000000000DC /* PBXContainerItemProxy */;
+		};
+		BE00000000000000000000EC /* PBXTargetDependency */ = {
+			isa = PBXTargetDependency;
+			target = BE00000000000000000000EA /* IsHauntedShare */;
+			targetProxy = BE00000000000000000000EB /* PBXContainerItemProxy */;
 		};
 /* End PBXTargetDependency section */
 
@@ -331,6 +418,54 @@
 			};
 			name = Release;
 		};
+		BE00000000000000000000ED /* Debug */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				CODE_SIGN_ENTITLEMENTS = Support/IsHauntedShare.entitlements;
+				CODE_SIGN_STYLE = Automatic;
+				CURRENT_PROJECT_VERSION = 5;
+				DEVELOPMENT_TEAM = 5778H75249;
+				GENERATE_INFOPLIST_FILE = YES;
+				INFOPLIST_FILE = "Support/IsHauntedShare-Info.plist";
+				INFOPLIST_KEY_CFBundleDisplayName = IsHaunted;
+				LD_RUNPATH_SEARCH_PATHS = (
+					"$(inherited)",
+					"@executable_path/Frameworks",
+					"@executable_path/../../Frameworks",
+				);
+				MARKETING_VERSION = 1.0.2;
+				PRODUCT_BUNDLE_IDENTIFIER = com.ishaunted.ios.share;
+				PRODUCT_NAME = "$(TARGET_NAME)";
+				SKIP_INSTALL = YES;
+				SWIFT_EMIT_LOC_STRINGS = YES;
+				TARGETED_DEVICE_FAMILY = "1,2";
+			};
+			name = Debug;
+		};
+		BE00000000000000000000EE /* Release */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				CODE_SIGN_ENTITLEMENTS = Support/IsHauntedShare.entitlements;
+				CODE_SIGN_STYLE = Automatic;
+				CURRENT_PROJECT_VERSION = 5;
+				DEVELOPMENT_TEAM = 5778H75249;
+				GENERATE_INFOPLIST_FILE = YES;
+				INFOPLIST_FILE = "Support/IsHauntedShare-Info.plist";
+				INFOPLIST_KEY_CFBundleDisplayName = IsHaunted;
+				LD_RUNPATH_SEARCH_PATHS = (
+					"$(inherited)",
+					"@executable_path/Frameworks",
+					"@executable_path/../../Frameworks",
+				);
+				MARKETING_VERSION = 1.0.2;
+				PRODUCT_BUNDLE_IDENTIFIER = com.ishaunted.ios.share;
+				PRODUCT_NAME = "$(TARGET_NAME)";
+				SKIP_INSTALL = YES;
+				SWIFT_EMIT_LOC_STRINGS = YES;
+				TARGETED_DEVICE_FAMILY = "1,2";
+			};
+			name = Release;
+		};
 /* End XCBuildConfiguration section */
 
 /* Begin XCConfigurationList section */
@@ -361,6 +496,15 @@
 			defaultConfigurationIsVisible = 0;
 			defaultConfigurationName = Release;
 		};
+		BE00000000000000000000EF /* Build configuration list for PBXNativeTarget "IsHauntedShare" */ = {
+			isa = XCConfigurationList;
+			buildConfigurations = (
+				BE00000000000000000000ED /* Debug */,
+				BE00000000000000000000EE /* Release */,
+			);
+			defaultConfigurationIsVisible = 0;
+			defaultConfigurationName = Release;
+		};
 /* End XCConfigurationList section */
 
 /* Begin XCLocalSwiftPackageReference section */
@@ -372,6 +516,10 @@
 
 /* Begin XCSwiftPackageProductDependency section */
 		BE00000000000000000000B2 /* BenKit */ = {
+			isa = XCSwiftPackageProductDependency;
+			productName = BenKit;
+		};
+		BE00000000000000000000E2 /* BenKit */ = {
 			isa = XCSwiftPackageProductDependency;
 			productName = BenKit;
 		};

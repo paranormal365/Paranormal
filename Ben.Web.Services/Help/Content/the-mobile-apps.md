@@ -484,6 +484,34 @@ or menus the venue hasn't shared with you, simply aren't listed.
 
 Hiding posts and closing the room stay on the website, where an organizer can see the whole room.
 
+### Photos with no signal
+
+A cellar, a hotel with one bar, a field: post anyway. When the room can't be reached, what you wrote and
+every photo not yet sent are **kept on the phone** and sent as soon as there's signal — when you come
+back to the app, when the network comes back while it's open, or when you open the room. The room opens
+with no signal too, showing it as it was last time, so you can still add to it.
+
+![The room with two posts waiting to send](/help/media/the-mobile-apps/iphone-room-waiting.png)
+
+- **Waiting to send** lists them, in the order you took them. **Send now** tries straight away.
+- If the room won't take one when it gets there — it closed, or the organizers kept photos to their team —
+  it moves to **Couldn't be sent** with the reason. Swipe it to remove it from the phone.
+- Photos are sent as JPEG, whatever the camera saved them as. A video can be up to 95 MB in one post.
+- Signing out removes anything still waiting.
+
+### Sharing photos from the Photos app
+
+Choose photos or videos in the Photos app, press **Share**, and pick **IsHaunted**. Choose which of your
+events they're for, add a caption, agree to the photo notice if that event asks, and choose whether to
+send the organizers a copy. **Add** keeps them on the phone; IsHaunted sends them the next time it's open
+with signal — open it straight away to send them at once.
+
+![Sharing a photo to an event from the Photos app](/help/media/the-mobile-apps/iphone-share-to-event.png)
+
+The events offered are the ones you're confirmed at and the ones you're helping at. Open an event's room in
+the app once and the share sheet also knows that room's rules — whether it takes your photos, and who a
+copy goes to.
+
 ## Running the door
 
 If an event's organizers have asked you to help at the door — or you are one of the group with that

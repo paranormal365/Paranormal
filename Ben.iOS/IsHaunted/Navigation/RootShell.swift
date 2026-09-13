@@ -29,7 +29,19 @@ struct RootShell: View {
         // A cold start with no signal keeps the saved tokens and stays signed out for the moment; coming back
         // to the app tries again, so the person is signed in once there is a signal, without typing anything.
         .onChange(of: scenePhase) { _, phase in
-            if phase == .active { Task { await dependencies.session.restore() } }
+            if phase == .active {
+                Task {
+                    await dependencies.session.restore()
+                    // Photos kept for a signal, including any shared to an event from Photos while the app was away.
+                    await dependencies.roomOutbox.send()
+                    await dependencies.roomOutbox.refreshShareableEvents()
+                }
+            }
+        }
+        .task(id: dependencies.session.me?.userId) {
+            dependencies.roomOutbox.start()
+            await dependencies.roomOutbox.send()
+            await dependencies.roomOutbox.refreshShareableEvents()
         }
         // A session left recording when the app went away is closed as interrupted, its log
         // recovered, before anything can show a stale "recording" row.
