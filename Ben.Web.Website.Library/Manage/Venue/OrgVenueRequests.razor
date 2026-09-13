@@ -1,0 +1,351 @@
+@page "/organizations/{OrgId:guid}/venue-requests"
+@namespace Ben.Web.Website.Library.Manage.Venue
+
+@inject IBenAdminClient AdminClient
+@inject IBenUserState UserState
+
+@using Ben.Data.Common.Enums
+@using Ben.Service.Models.Entities
+@using Ben.Web.Services.WebApi
+@using Ben.Web.Website.Library.Kit
+@using Ben.Web.Website.Library.Manage.Icon
+
+@* Groups asking to hold events at this venue, and the yeses this venue has given (item 235 phase 9).
+
+   WAITING FIRST, OLDEST FIRST. Somebody has a weekend on hold until this page answers them.
+
+   A YES LENDS THINGS, AND SAYS WHICH. Three switches, each in the words the organizer will read,
+   so the venue cannot agree to "the dates" and discover afterwards it also agreed to its porter
+   seeing a stranger's guest list.
+
+   TAKING A YES BACK IS SAID OUT LOUD BEFORE IT HAPPENS: which events stop, that their guests are
+   told and that their passes stop working. It is the one button here that ends somebody else's
+   weekend, so it has a reason box and a second press. *@
+
+<PageTitle>Hosting requests</PageTitle>
+
+<div class="container-fluid py-3" style="max-width:1000px;">
+
+    <div class="text-secondary small">
+        <a href="@($"/organizations/{OrgId}/venue")">Your venue</a>
+    </div>
+
+    <h1 class="h3 mb-1">
+        Hosting requests
+        <HelpLink Slug="organization-administration" Anchor="hosted-events" />
+    </h1>
+    <p class="text-secondary small mb-3">
+        Other groups asking to hold events at a place you run as your venue. Until you say yes, they
+        cannot publish there.
+    </p>
+
+    @if (_note is { Length: > 0 })
+    {
+        <div class="alert alert-success py-2" id="venue-note" role="status">@_note</div>
+    }
+    @if (_error is { Length: > 0 })
+    {
+        <div class="alert alert-danger py-2" id="venue-error" role="alert">@_error</div>
+    }
+
+    <BenItemState TItem="VenueRequestListRecord" Result="_list" Loading="_loading"
+                  LoadingText="Loading requests…" OnRetry="LoadAsync">
+        <ChildContent Context="list">
+
+            @* ── waiting ────────────────────────────────────────────────────── *@
+            <h2 class="h6 text-secondary text-uppercase small mb-2">Waiting on you</h2>
+            @if (list.Waiting.Count == 0)
+            {
+                <div class="alert alert-light border" id="venue-waiting-empty">Nobody is waiting for an answer.</div>
+            }
+            @foreach (var request in list.Waiting)
+            {
+                var r = request;
+                var lend = LendFor(r.Id);
+                <div class="card mb-3 venue-request" data-request="@r.Id">
+                    <div class="card-body">
+                        <div class="d-flex flex-column flex-md-row justify-content-between gap-2">
+                            <div>
+                                <div class="fw-semibold">@r.RequestingOrganizationName</div>
+                                <div>@r.EventName at @r.PlaceName</div>
+                                <div class="text-secondary small">
+                                    @Nights(r) · asked @r.AskedUtc.ToViewerLocalTime(UserState).ToDisplayDateTime()
+                                    @if (r.DayPassCapacity is int cap and > 0)
+                                    {
+                                        <text> · up to @cap for the day</text>
+                                    }
+                                </div>
+                            </div>
+                        </div>
+
+                        @if (r.Message is { Length: > 0 } message)
+                        {
+                            <blockquote class="border-start ps-3 my-2 text-body-secondary">“@message”</blockquote>
+                        }
+
+                        <div class="mt-3">
+                            <div class="small fw-semibold mb-1">If you say yes, they may also</div>
+                            <div class="form-check">
+                                <input class="form-check-input" type="checkbox" id="@($"lend-rooms-{r.Id:N}")"
+                                       @bind="lend.Rooms" />
+                                <label class="form-check-label" for="@($"lend-rooms-{r.Id:N}")">
+                                    Put your rooms on their plan
+                                </label>
+                            </div>
+                            <div class="form-check">
+                                <input class="form-check-input" type="checkbox" id="@($"lend-history-{r.Id:N}")"
+                                       @bind="lend.History" />
+                                <label class="form-check-label" for="@($"lend-history-{r.Id:N}")">
+                                    Tell the building's story on their event page
+                                </label>
+                            </div>
+                            <div class="form-check">
+                                <input class="form-check-input" type="checkbox" id="@($"lend-staff-{r.Id:N}")"
+                                       @bind="lend.Staff" />
+                                <label class="form-check-label" for="@($"lend-staff-{r.Id:N}")">
+                                    Let your own people see who is coming and help on the door
+                                </label>
+                            </div>
+                        </div>
+
+                        <div class="d-flex flex-wrap gap-2 mt-3">
+                            <button type="button" class="btn btn-primary" id="@($"approve-{r.Id:N}")"
+                                    disabled="@_busy" @onclick="() => ApproveAsync(r)">
+                                Say yes to @Nights(r)
+                            </button>
+                        </div>
+
+                        <div class="mt-3">
+                            <label class="form-label small mb-1" for="@($"decline-reason-{r.Id:N}")">Or say no, and why</label>
+                            <div class="d-flex flex-column flex-sm-row gap-2">
+                                <input class="form-control" id="@($"decline-reason-{r.Id:N}")" maxlength="2000"
+                                       placeholder="We're closed that weekend for a wedding."
+                                       @bind="lend.Reason" @bind:event="oninput" />
+                                <button type="button" class="btn btn-outline-danger text-nowrap" id="@($"decline-{r.Id:N}")"
+                                        disabled="@_busy" @onclick="() => DeclineAsync(r)">
+                                    Say no
+                                </button>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            }
+
+            @* ── what this venue has said yes to ──────────────────────────────── *@
+            <h2 class="h6 text-secondary text-uppercase small mb-2 mt-4">What you have said yes to</h2>
+            @if (list.Grants.Count == 0)
+            {
+                <div class="alert alert-light border">You haven't said yes to anybody yet.</div>
+            }
+            @foreach (var grant in list.Grants)
+            {
+                var g = grant;
+                <div class="card mb-3 venue-grant @(g.RevokedUtc is null ? "" : "opacity-75")" data-grant="@g.Id">
+                    <div class="card-body">
+                        <div class="d-flex flex-wrap justify-content-between gap-2">
+                            <div>
+                                <div class="fw-semibold">@g.GranteeOrganizationName</div>
+                                <div class="text-secondary small">
+                                    @g.PlaceName · @Span(g.ValidFrom, g.ValidTo) · @Lent(g)
+                                </div>
+                            </div>
+                            @if (g.RevokedUtc is { } revoked)
+                            {
+                                <span class="badge bg-secondary align-self-start">
+                                    Withdrawn @revoked.ToViewerLocalTime(UserState).ToDisplayDate()
+                                </span>
+                            }
+                        </div>
+
+                        @if (g.Events.Count > 0)
+                        {
+                            <ul class="small mb-0 mt-2">
+                                @foreach (var ev in g.Events)
+                                {
+                                    <li>@ev.Name <span class="text-secondary">· @StateWords(ev.State)</span></li>
+                                }
+                            </ul>
+                        }
+
+                        @if (g.RevokedReason is { Length: > 0 } why)
+                        {
+                            <div class="small text-secondary mt-2">You said: “@why”</div>
+                        }
+
+                        @if (g.RevokedUtc is null)
+                        {
+                            @if (_withdrawing == g.Id)
+                            {
+                                var stopping = g.Events.Count(e => e.State is HostedEventLifecycleState.Published or HostedEventLifecycleState.Live);
+                                <div class="border rounded p-3 mt-3" id="@($"withdraw-panel-{g.Id:N}")">
+                                    <p class="small mb-2">
+                                        @if (stopping == 0)
+                                        {
+                                            <text>Nothing published rests on this yes yet. @g.GranteeOrganizationName will be told, and can't publish here without asking again.</text>
+                                        }
+                                        else
+                                        {
+                                            <text>
+                                                This stops @(stopping == 1 ? "1 published event" : $"{stopping} published events").
+                                                Everybody with a place is written to, their passes stop working, and
+                                                @g.GranteeOrganizationName gets back any credit it spent.
+                                            </text>
+                                        }
+                                    </p>
+                                    <label class="form-label small mb-1" for="@($"withdraw-reason-{g.Id:N}")">Why — they and their guests will read this</label>
+                                    <input class="form-control mb-2" id="@($"withdraw-reason-{g.Id:N}")" maxlength="2000"
+                                           @bind="_withdrawReason" @bind:event="oninput" />
+                                    <div class="d-flex gap-2">
+                                        <button type="button" class="btn btn-danger" id="@($"withdraw-confirm-{g.Id:N}")"
+                                                disabled="@_busy" @onclick="() => WithdrawAsync(g)">
+                                            Withdraw your yes
+                                        </button>
+                                        <button type="button" class="btn btn-outline-secondary"
+                                                @onclick="() => _withdrawing = null">Keep it</button>
+                                    </div>
+                                </div>
+                            }
+                            else
+                            {
+                                <button type="button" class="btn btn-outline-danger btn-sm mt-3" id="@($"withdraw-{g.Id:N}")"
+                                        @onclick="() => { _withdrawing = g.Id; _withdrawReason = null; }">
+                                    Withdraw…
+                                </button>
+                            }
+                        }
+                    </div>
+                </div>
+            }
+
+            @* ── already answered ──────────────────────────────────────────────── *@
+            @if (list.Answered.Count > 0)
+            {
+                <h2 class="h6 text-secondary text-uppercase small mb-2 mt-4">Already answered</h2>
+                <div class="list-group mb-4">
+                    @foreach (var r in list.Answered)
+                    {
+                        <div class="list-group-item">
+                            <div class="d-flex flex-wrap justify-content-between gap-2">
+                                <span>@r.RequestingOrganizationName · @r.EventName</span>
+                                <span class="badge @(r.Status == VenueHostingRequestStatus.Approved ? "bg-success" : "bg-secondary")">
+                                    @(r.Status == VenueHostingRequestStatus.Approved ? "Yes" : "No")
+                                </span>
+                            </div>
+                            <div class="small text-secondary">
+                                @Nights(r)
+                                @if (r.DecisionNote is { Length: > 0 } note)
+                                {
+                                    <text> · “@note”</text>
+                                }
+                            </div>
+                        </div>
+                    }
+                </div>
+            }
+
+        </ChildContent>
+    </BenItemState>
+</div>
+
+@code {
+    [Parameter] public Guid OrgId { get; set; }
+
+    private ItemResult<VenueRequestListRecord> _list;
+    private bool _loading = true;
+    private bool _busy;
+    private string? _note;
+    private string? _error;
+    private Guid? _withdrawing;
+    private string? _withdrawReason;
+
+    /// <summary>The switches and reason for each waiting request, kept per request.</summary>
+    private readonly Dictionary<Guid, Lending> _lending = [];
+
+    private sealed class Lending
+    {
+        public bool Rooms { get; set; } = true;
+        public bool History { get; set; } = true;
+        public bool Staff { get; set; }
+        public string? Reason { get; set; }
+    }
+
+    private Lending LendFor(Guid requestId)
+    {
+        if (!_lending.TryGetValue(requestId, out var lend)) _lending[requestId] = lend = new();
+        return lend;
+    }
+
+    protected override async Task OnAfterRenderAsync(bool firstRender)
+    {
+        if (!firstRender) return;
+        if (!await UserState.WaitUntilAuthReadyAsync(RendererInfo.IsInteractive)) return;
+
+        await LoadAsync();
+        StateHasChanged();
+    }
+
+    private async Task LoadAsync()
+    {
+        _loading = true;
+        _list = await AdminClient.GetVenueRequestsAsync(OrgId);
+        _loading = false;
+    }
+
+    private async Task ApproveAsync(VenueRequestRecord r)
+    {
+        var lend = LendFor(r.Id);
+        await AnswerAsync(() => AdminClient.ApproveVenueRequestAsync(OrgId, r.Id,
+            new ApproveVenueRequestRequest(lend.Rooms, lend.History, lend.Staff)));
+    }
+
+    private async Task DeclineAsync(VenueRequestRecord r)
+        => await AnswerAsync(() => AdminClient.DeclineVenueRequestAsync(OrgId, r.Id,
+            new VenueReasonRequest(LendFor(r.Id).Reason)));
+
+    private async Task WithdrawAsync(VenueGrantRecord g)
+    {
+        await AnswerAsync(() => AdminClient.RevokeVenueGrantAsync(OrgId, g.Id, new VenueReasonRequest(_withdrawReason)));
+        if (_error is null) _withdrawing = null;
+    }
+
+    private async Task AnswerAsync(Func<Task<(VenueRequestListRecord? Result, string? Error)>> send)
+    {
+        _busy = true;
+        _note = null;
+        _error = null;
+
+        var (list, error) = await send();
+        _busy = false;
+
+        if (list is null) { _error = error ?? "That couldn't be saved just now."; return; }
+
+        _list = ItemResult<VenueRequestListRecord>.Ok(list);
+        _note = list.Note;
+    }
+
+    private static string Nights(VenueRequestRecord r) => Span(r.FromDate, r.ToDate);
+
+    private static string Span(DateTime from, DateTime to)
+        => from.Date == to.Date ? from.ToString("ddd MM/dd/yyyy") : $"{from:ddd MM/dd/yyyy} – {to:ddd MM/dd/yyyy}";
+
+    private static string Lent(VenueGrantRecord g)
+    {
+        var lent = new List<string>();
+        if (g.AllowRooms) lent.Add("rooms");
+        if (g.AllowHistory) lent.Add("history");
+        if (g.AllowStaff) lent.Add("your people");
+        return lent.Count == 0 ? "the dates only" : "with " + string.Join(", ", lent);
+    }
+
+    private static string StateWords(HostedEventLifecycleState state) => state switch
+    {
+        HostedEventLifecycleState.Draft => "not published yet",
+        HostedEventLifecycleState.Published => "published",
+        HostedEventLifecycleState.Live => "on now",
+        HostedEventLifecycleState.Ended => "over",
+        HostedEventLifecycleState.Archived => "archived",
+        HostedEventLifecycleState.Cancelled => "called off",
+        HostedEventLifecycleState.VenueWithdrawn => "stopped when you withdrew",
+        _ => state.ToString(),
+    };
+}

@@ -125,6 +125,13 @@ public static class NotificationRows
         // Their own rows rather than folded into the tour ones. A row reading "sign-ups waiting"
         // that lands on a walk's screen when what is waiting is a hotel weekend sends somebody to
         // the wrong page, and the two are decided from different screens.
+        // A group asking to use your building (phase 9). Its own row, because it is answered from
+        // the venue's page and by the people who answer for the building, not from a booking board.
+        if (s.VenueRequestsToDecide is { Count: > 0 } venue)
+            rows.Add(new("Groups asking to use your venue",
+                $"Events waiting for your yes or no · oldest {NotificationBadge.DescribeAge(venue.OldestUnreadUtc)}",
+                "map-pin", "/organizations", venue));
+
         // Holds about to run out come first: the clock decides those if nobody does (phase 8).
         if (s.EventHoldsLapsing is { Count: > 0 } lapsing)
             rows.Add(new("Holds running out",

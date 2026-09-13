@@ -106,7 +106,9 @@ public sealed record NotificationSummaryResponse(
     /// </remarks>
     NotificationBucket? EventHoldsLapsing = null,
     /// <summary>This person's own hold, not yet confirmed, running out within a day.</summary>
-    NotificationBucket? MyEventHoldLapsing = null)
+    NotificationBucket? MyEventHoldLapsing = null,
+    /// <summary>Groups asking to hold an event at a venue this person answers for (item 235 phase 9).</summary>
+    NotificationBucket? VenueRequestsToDecide = null)
 {
     public static readonly NotificationSummaryResponse Empty = new(
         NotificationBucket.Empty, NotificationBucket.Empty, NotificationBucket.Empty,
@@ -127,7 +129,8 @@ public sealed record NotificationSummaryResponse(
          EventBookingsToDecide ?? NotificationBucket.Empty,
          MyEventBookings ?? NotificationBucket.Empty,
          EventHoldsLapsing ?? NotificationBucket.Empty,
-         MyEventHoldLapsing ?? NotificationBucket.Empty];
+         MyEventHoldLapsing ?? NotificationBucket.Empty,
+         VenueRequestsToDecide ?? NotificationBucket.Empty];
 
     /// <summary>Total across every bucket — the number on the bell.</summary>
     [JsonIgnore]

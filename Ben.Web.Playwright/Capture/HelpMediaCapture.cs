@@ -2227,6 +2227,81 @@ public sealed class HelpMediaCapture : BenTestBase
         await tidy.DisposeAsync();
     }
 
+    /// <summary>
+    /// A venue on the site: asking it, its answer, its own page (item 235 phase 9).
+    /// </summary>
+    /// <remarks>
+    /// A group registered for the capture holds a draft weekend at the seeded Thomas House, which the
+    /// host is confirmed as running, and is purged afterwards — so the pictures show the real gate
+    /// against the real seeded venue, and nothing is left behind.
+    /// </remarks>
+    [Test]
+    [Description("organization-administration: asking a venue, the venue's requests, its page.")]
+    public async Task Capture_VenueHosting()
+    {
+        const string guestOrgName = "Nashville Night Society";
+        const string thomasHouse = "40000002-0000-0000-0000-000000000001";
+        var venueOrgId = await OrgIdBySlugAsync("paranormal365");
+
+        var organizer = await SignedInApiAsync(UserEmail, UserPassword);
+        var register = await organizer.PostAsync("/api/security/organizations/register", new()
+        {
+            DataObject = new { name = guestOrgName, urlName = $"nns-{Guid.NewGuid():N}"[..16], kind = 0 },
+        });
+        Assert.That(register.Ok, Is.True, await register.TextAsync());
+        var orgId = (await register.JsonAsync())!.Value.GetProperty("organizationId").GetString()!;
+
+        try
+        {
+            var start = DateTime.UtcNow.Date.AddDays(50);
+            var ev = await organizer.PostAsync($"/api/organizations/{orgId}/events", new()
+            {
+                DataObject = new
+                {
+                    name = "Halloween Lock-In", placeId = thomasHouse,
+                    startsOn = start, endsOn = start.AddDays(1), timeZoneId = "America/Chicago",
+                    contactLine = "Call the society to settle up.", dayPassCapacity = 30,
+                },
+            });
+            Assert.That(ev.Ok, Is.True, await ev.TextAsync());
+            var eventId = (await ev.JsonAsync())!.Value.GetProperty("id").GetString()!;
+
+            await organizer.PostAsync($"/api/organizations/{orgId}/events/{eventId}/venue/ask",
+                new() { DataObject = new { message = "About thirty guests, two nights, a séance in the parlour on the Saturday." } });
+
+            await LoginAsync(SuperAdminEmail, SuperAdminPassword);
+            await GoAsync($"/organizations/{venueOrgId}/venue-requests");
+            await ShootAsync("organization-administration", "venue-requests.png",
+                gated: true, selector: ".venue-request", proves: "a séance in the parlour");
+
+            await Page.Locator(".venue-request", new() { HasTextString = "Halloween Lock-In" })
+                .Locator("button", new() { HasTextString = "Say yes" }).ClickAsync();
+            await Expect(Page.Locator("#venue-note")).ToBeVisibleAsync(new() { Timeout = 15_000 });
+
+            await LoginAsync(UserEmail, UserPassword);
+            await GoAsync($"/organizations/{orgId}/events/{eventId}");
+            await ShootAsync("organization-administration", "event-venue-yes.png",
+                gated: true, selector: "#event-venue", proves: "They said yes to");
+
+            await LoginAsync(SuperAdminEmail, SuperAdminPassword);
+            await GoAsync($"/organizations/{venueOrgId}/venue");
+            await ShootAsync("organization-administration", "venue-profile.png",
+                gated: true, selector: ".venue-profile", proves: "Confirmed as the venue");
+
+            await GoAsync($"/o/paranormal365/venues/{thomasHouse}");
+            await ShootAsync("organization-administration", "venue-page.png",
+                gated: true, selector: "#venue-summary", proves: "The building");
+        }
+        finally
+        {
+            var admin = await SignedInApiAsync(SuperAdminEmail, SuperAdminPassword);
+            await admin.DeleteAsync($"/api/admin/organizations/{orgId}/purge",
+                new() { DataObject = new { confirmName = guestOrgName } });
+            await admin.DisposeAsync();
+            await organizer.DisposeAsync();
+        }
+    }
+
     /// <summary>Letters about bookings, on the notifications page (item 235 phase 8).</summary>
     [Test]
     [Description("organization-administration: how often a group writes to you about bookings.")]

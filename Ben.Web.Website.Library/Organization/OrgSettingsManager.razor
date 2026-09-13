@@ -100,6 +100,24 @@ else
         </div>
     </div>
 
+    @* Item 235 phase 9: the door to running a place as a venue — describing it, and answering the
+       groups that ask to hold events there. *@
+    <div class="card mb-3" id="settings-venue">
+        <div class="card-body d-flex flex-wrap align-items-center gap-3">
+            <BenIcon Name="map-pin" Class="fs-4 text-primary" />
+            <div class="flex-grow-1">
+                <h6 class="card-title mb-0">Your venue</h6>
+                <span class="small text-secondary">
+                    Places your group runs, and other groups asking to hold events there.
+                </span>
+            </div>
+            <a class="btn btn-outline-secondary" id="org-venue-requests-link"
+               href="@($"/organizations/{OrgId}/venue-requests")">Hosting requests</a>
+            <a class="btn btn-outline-primary" id="org-venue-link"
+               href="@($"/organizations/{OrgId}/venue")">Open your venue</a>
+        </div>
+    </div>
+
     @* Item 166 W3: the door to the promotion wizard. *@
     <div class="card mb-3" id="settings-promote">
         <div class="card-body d-flex align-items-center gap-3">

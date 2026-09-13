@@ -404,4 +404,59 @@ public sealed class VenueGrantTests
         Assert.Equal(VenueOrgId, await VenueGrants.RoomsLentToAsync(db, await db.HostedEvents.SingleAsync(e => e.Id == withRooms), default));
         Assert.Null(await VenueGrants.RoomsLentToAsync(db, await db.HostedEvents.SingleAsync(e => e.Id == without), default));
     }
+
+    // ── what anybody sees ────────────────────────────────────────────────────
+
+    [Fact]
+    public async Task A_venue_page_is_shown_only_once_confirmed_and_switched_on()
+    {
+        // A public page headed "the venue" is itself a claim to be the building.
+        await using var sqlite = await SeedAsync(verified: false);
+        var publicVenue = new Ben.Data.WebApi.Controllers.Public.PublicVenueController(sqlite.Factory);
+
+        await using (var db = await sqlite.NewContextAsync())
+        {
+            var profile = await db.OrganizationVenueProfiles.SingleAsync();
+            profile.IsPublished = true;          // switched on, but never proved
+            profile.History = "Built in 1890.";
+            db.PlaceRooms.AddRange(
+                new PlaceRoom { Id = Guid.NewGuid(), OrganizationId = VenueOrgId, PlaceId = PlaceId, Name = "The Blue Room",
+                                IsPublic = true, IsActive = true, DateCreated = DateTime.UtcNow, CreatedByAppUserId = VenueManager },
+                new PlaceRoom { Id = Guid.NewGuid(), OrganizationId = VenueOrgId, PlaceId = PlaceId, Name = "The Staff Room",
+                                IsPublic = false, IsActive = true, DateCreated = DateTime.UtcNow, CreatedByAppUserId = VenueManager });
+            await db.SaveChangesAsync();
+        }
+
+        Assert.IsType<NotFoundResult>((await publicVenue.Get("thomas-house", PlaceId, default)).Result);
+        Assert.IsType<NoContentResult>((await publicVenue.ForPlace(PlaceId, default)).Result);
+
+        await using (var db = await sqlite.NewContextAsync())
+        {
+            (await db.OrganizationVenueProfiles.SingleAsync()).VerifiedUtc = DateTime.UtcNow;
+            await db.SaveChangesAsync();
+        }
+
+        var page = Assert.IsType<PublicVenueRecord>(Assert.IsType<OkObjectResult>(
+            (await publicVenue.Get("thomas-house", PlaceId, default)).Result).Value);
+        Assert.Equal("Built in 1890.", page.History);
+        Assert.Equal(["The Blue Room"], page.Rooms.Select(r => r.Name));
+    }
+
+    [Fact]
+    public async Task The_bell_counts_a_question_for_the_people_who_answer_for_the_venue()
+    {
+        await using var sqlite = await SeedAsync();
+        var eventId = await AnEventAsync(sqlite);
+        await OrganizerSide(sqlite).Ask(OrganizerOrgId, eventId, new(null), default);
+
+        async Task<int> CountFor(Guid userId)
+        {
+            var bell = As(new Ben.Data.WebApi.Controllers.NotificationSummaryController(sqlite.Factory, Security().Object), userId);
+            var summary = Assert.IsType<NotificationSummaryResponse>(Assert.IsType<OkObjectResult>((await bell.GetSummary(default)).Result).Value);
+            return summary.VenueRequestsToDecide?.Count ?? 0;
+        }
+
+        Assert.Equal(1, await CountFor(VenueManager));
+        Assert.Equal(0, await CountFor(Organizer));
+    }
 }

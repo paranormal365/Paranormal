@@ -386,6 +386,27 @@ else
             <div class="event-description mb-4">@((MarkupString)(_event.Description ?? ""))</div>
         }
 
+        @* The venue that said yes, when it is another group on this site (item 235 phase 9): who
+           agreed the event may happen there, their page, and the building's story when they lent
+           it. Plain text, not markup — the venue wrote it in a textarea. *@
+        @if (_hosted is { VenueOrganizationName: { Length: > 0 } venueName } withVenue)
+        {
+            <BenSectionHeading Text="The venue" />
+            <div class="mb-4" id="event-venue-section">
+                <p class="mb-2">
+                    Held at @(withVenue.VenueName ?? "the venue") with the agreement of <strong>@venueName</strong>.
+                    @if (withVenue.VenuePageUrl is { Length: > 0 } url)
+                    {
+                        <a href="@url">The venue's page</a>
+                    }
+                </p>
+                @if (withVenue.VenueHistory is { Length: > 0 } story)
+                {
+                    <div id="event-venue-history" style="white-space:pre-line;">@story</div>
+                }
+            </div>
+        }
+
 
         @* ── Evidence from the night (item 111) ────────────────────────────── *@
         @if (_acceptedEvidence.Items.Count > 0)

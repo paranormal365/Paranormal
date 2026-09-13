@@ -494,6 +494,70 @@
                 <div class="card mb-3" id="event-venue">
                     <div class="card-header fw-semibold">The venue's say-so</div>
                     <div class="card-body">
+                        @* A verified venue that is another group (phase 9): its yes is the only answer
+                           that settles whether this may be published, so it is shown INSTEAD of the
+                           arrangement box — offering "it's our own venue" at a hotel that has proved it
+                           is the hotel would be offering a choice that changes nothing. *@
+                        @if (_venue.Item is { VenueOrganizationId: not null, IsOwnVenue: false } onSite)
+                        {
+                            <div id="event-venue-on-site">
+                                <p>
+                                    <strong>@onSite.VenueName</strong> runs @ev.PlaceLabel as its venue on this
+                                    site, so they say yes to events held there.
+                                </p>
+
+                                @if (onSite.Grant is { RevokedUtc: null } yes && onSite.Problem is null)
+                                {
+                                    <div class="alert alert-success py-2" id="event-venue-yes">
+                                        They said yes to @VenueSpan(yes.ValidFrom, yes.ValidTo).
+                                        @VenueLent(yes)
+                                    </div>
+                                }
+                                else if (onSite.Problem is { Length: > 0 } problem)
+                                {
+                                    <div class="alert alert-warning py-2" id="event-venue-problem">@problem</div>
+                                }
+
+                                @if (onSite.LatestRequest is { Status: VenueHostingRequestStatus.Declined } no)
+                                {
+                                    <p class="small text-secondary" id="event-venue-declined">
+                                        They said no on @no.DecidedUtc?.ToViewerLocalTime(UserState).ToDisplayDate():
+                                        “@no.DecisionNote”
+                                    </p>
+                                }
+
+                                @if (onSite.CanAsk)
+                                {
+                                    <label class="form-label" for="event-venue-message">Anything they should know</label>
+                                    <textarea id="event-venue-message" class="form-control mb-2" rows="3" maxlength="2000"
+                                              placeholder="About forty guests, two nights, a séance in the ballroom on the Saturday."
+                                              @bind="_venueMessage"></textarea>
+                                    <button type="button" class="btn btn-primary" id="event-venue-ask"
+                                            disabled="@_busy" @onclick="AskTheVenueAsync">
+                                        Ask @onSite.VenueName
+                                    </button>
+                                }
+                                else if (onSite.LatestRequest is { Status: VenueHostingRequestStatus.Pending })
+                                {
+                                    <p class="small text-secondary mb-2" id="event-venue-waiting">@onSite.WhyNotAsk</p>
+                                    <button type="button" class="btn btn-outline-secondary btn-sm" id="event-venue-withdraw"
+                                            disabled="@_busy" @onclick="WithdrawVenueQuestionAsync">
+                                        Take the question back
+                                    </button>
+                                }
+                                else if (onSite.WhyNotAsk is { Length: > 0 } whyNot && onSite.Problem is not null)
+                                {
+                                    <p class="small text-secondary mb-0">@whyNot</p>
+                                }
+
+                                @if (_venueNote is { Length: > 0 })
+                                {
+                                    <div class="small mt-2 @(_venueNoteIsError ? "text-danger" : "text-success")" role="status" id="event-venue-note">@_venueNote</div>
+                                }
+                            </div>
+                        }
+                        else
+                        {
                         <p class="text-secondary">
                             Who agreed this event may happen at @ev.PlaceLabel. We cannot check it
                             for you — recording it is so that everybody knows what was arranged, and
@@ -542,14 +606,11 @@
                             }
                             else if (_form.VenueArrangement == HostedEventVenueArrangement.PlatformGrant)
                             {
-                                @* Offered and refused, rather than hidden: somebody whose venue is
-                                   another group on here should be told the answer, not left
-                                   hunting for a missing option. *@
+                                @* Chosen at a place with no confirmed venue: say so, rather than hide the option. *@
                                 <div class="col-12">
                                     <div class="alert alert-warning mb-0" id="event-venue-grant-soon">
-                                        Asking a venue on this site for permission isn't built yet.
-                                        For now, arrange it with them directly and record it above
-                                        as an arrangement made with them.
+                                        @(_venue.Item?.WhyNotAsk ?? "Nobody runs this place as their venue on this site, so there is nobody here to ask.")
+                                        Arrange it with them directly and record it above.
                                     </div>
                                 </div>
                             }
@@ -561,6 +622,7 @@
                                 @(_busy ? "Saving…" : "Save")
                             </button>
                         </div>
+                        }
                     </div>
                 </div>
 
@@ -819,6 +881,12 @@
     private string _cancelReason = "";
     private readonly EventForm _form = new();
     private IReadOnlyList<HostedEventReadinessItem> _readiness = [];
+
+    /// <summary>The venue on this site, when the place has one, and what it has said (phase 9).</summary>
+    private ItemResult<EventVenueRecord> _venue;
+    private string? _venueMessage;
+    private string? _venueNote;
+    private bool _venueNoteIsError;
     private HostedEventCancellationEffect? _cancellationEffect;
     private readonly Dictionary<Guid, NightForm> _nights = [];
 
@@ -946,6 +1014,7 @@
     {
         var result = await AdminClient.GetHostedEventReadinessAsync(OrgId, EventId);
         _readiness = result.Failed ? [] : result.Items;
+        _venue = await AdminClient.GetEventVenueAsync(OrgId, EventId);
 
         // What cancelling would do to the credit, asked now so the card can say it before
         // anybody presses anything.
@@ -1098,6 +1167,50 @@
                 Notes = night.Notes,
             };
         }
+    }
+
+    // ── the venue on this site (phase 9) ─────────────────────────────────────
+
+    private async Task AskTheVenueAsync()
+        => await VenueAsync(() => AdminClient.AskTheVenueAsync(OrgId, EventId, new AskTheVenueRequest(_venueMessage)),
+            asked => $"Asked {asked.VenueName}. They have been told, and you'll hear when they answer.");
+
+    private async Task WithdrawVenueQuestionAsync()
+        => await VenueAsync(() => AdminClient.WithdrawVenueQuestionAsync(OrgId, EventId),
+            _ => "Your question has been taken back.");
+
+    private async Task VenueAsync(
+        Func<Task<(EventVenueRecord? Result, string? Error)>> send, Func<EventVenueRecord, string> said)
+    {
+        _busy = true;
+        _venueNote = null;
+        var (venue, error) = await send();
+        _busy = false;
+
+        if (venue is null)
+        {
+            _venueNote = error ?? "That couldn't be sent just now.";
+            _venueNoteIsError = true;
+            return;
+        }
+
+        _venue = ItemResult<EventVenueRecord>.Ok(venue);
+        _venueNote = said(venue);
+        _venueNoteIsError = false;
+        _venueMessage = null;
+        await LoadReadinessAsync();
+    }
+
+    private static string VenueSpan(DateTime from, DateTime to)
+        => from.Date == to.Date ? from.ToString("MM/dd/yyyy") : $"{from:MM/dd/yyyy}–{to:MM/dd/yyyy}";
+
+    private static string VenueLent(VenueGrantRecord g)
+    {
+        var lent = new List<string>();
+        if (g.AllowRooms) lent.Add("you may put their rooms on your plan");
+        if (g.AllowHistory) lent.Add("your page may tell the building's story");
+        if (g.AllowStaff) lent.Add("their own people may help on the door");
+        return lent.Count == 0 ? "" : "They also said " + string.Join("; ", lent) + ".";
     }
 
     private async Task SaveAsync()

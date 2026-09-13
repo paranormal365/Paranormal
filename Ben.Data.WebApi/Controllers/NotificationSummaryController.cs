@@ -367,6 +367,29 @@ public sealed class NotificationSummaryController : BenControllerBase
                 .Select(b => (DateTime?)b.DateCreated),
             ct);
 
+        // ── Groups asking to use a venue this person answers for (phase 9) ───────
+        // Answered by whoever may change the group's settings, like the page itself: letting
+        // another group publish at your address is a commitment the building makes.
+        var venueOrgIds = new HashSet<Guid>(myAdminOrgIds);
+        var pendingVenueOrgs = await db.VenueHostingRequests.AsNoTracking()
+            .Where(r => r.Status == VenueHostingRequestStatus.Pending && myOrgIds.Contains(r.VenueOrganizationId))
+            .Select(r => r.VenueOrganizationId).Distinct().ToListAsync(ct);
+        foreach (var orgId in pendingVenueOrgs.Where(o => !venueOrgIds.Contains(o)))
+        {
+            if (await _security.HasAccessAsync(userId, orgId, OrganizationSecurityTable.OrganizationSettings,
+                                               OrganizationSecurityAction.Update, ct))
+                venueOrgIds.Add(orgId);
+        }
+
+        var venueRequestsToDecide = venueOrgIds.Count == 0
+            ? NotificationBucket.Empty
+            : await BucketAsync(
+                db.VenueHostingRequests.AsNoTracking()
+                    .Where(r => r.Status == VenueHostingRequestStatus.Pending
+                             && venueOrgIds.Contains(r.VenueOrganizationId))
+                    .Select(r => (DateTime?)r.DateCreated),
+                ct);
+
         return Ok(new NotificationSummaryResponse(
             orgMessages, caseMessagesAsOrg, caseMessagesAsClient, systemMessages, pendingRequests,
             investigationInvites, equipmentCheckouts, feedMentions,
@@ -378,7 +401,8 @@ public sealed class NotificationSummaryController : BenControllerBase
             EventBookingsToDecide: eventBookingsToDecide,
             MyEventBookings: myEventBookings,
             EventHoldsLapsing: eventHoldsLapsing,
-            MyEventHoldLapsing: myEventHoldLapsing));
+            MyEventHoldLapsing: myEventHoldLapsing,
+            VenueRequestsToDecide: venueRequestsToDecide));
     }
 
     /// <summary>The aggregate a breakdown folds to — the bell's total stays the sum of its rows.</summary>

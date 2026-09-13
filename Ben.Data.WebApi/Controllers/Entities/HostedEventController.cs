@@ -680,6 +680,42 @@ public sealed class HostedEventController : OrgCmsControllerBase
     }
 
     /// <summary>
+    /// The rooms this event's plan may place: the group's own at the venue, and the venue's when it
+    /// lent them (phase 9).
+    /// </summary>
+    /// <remarks>
+    /// Its own read, rather than the designer asking for the group's rooms at the place, because
+    /// the group's rooms are the wrong list at somebody else's hotel — the Thomas House's rooms are
+    /// the Thomas House's, and a society holding a weekend there never typed them in.
+    /// </remarks>
+    [HttpGet("{eventId:guid}/layout/rooms")]
+    public async Task<ActionResult<IEnumerable<PlaceRoomRecord>>> GetOfferableRooms(
+        Guid orgId, Guid eventId, CancellationToken ct)
+    {
+        var userId = GetCurrentUserId();
+        if (userId is null) return Unauthorized();
+
+        await using var db = await DbFactory.CreateDbContextAsync(ct);
+        if (!await IsMemberAsync(db, orgId, userId.Value, ct)) return Forbid();
+
+        var ev = await db.HostedEvents.AsNoTracking()
+            .FirstOrDefaultAsync(e => e.Id == eventId && e.OrganizationId == orgId, ct);
+        if (ev is null) return NotFound();
+
+        var owners = new List<Guid> { orgId };
+        if (await Services.Venues.VenueGrants.RoomsLentToAsync(db, ev, ct) is Guid venueOrgId)
+            owners.Add(venueOrgId);
+
+        return Ok(await db.PlaceRooms.AsNoTracking()
+            .Where(r => owners.Contains(r.OrganizationId) && r.PlaceId == ev.PlaceId)
+            .OrderBy(r => r.SortOrder).ThenBy(r => r.Name)
+            .Select(r => new PlaceRoomRecord(
+                r.Id, r.PlaceId, r.Name, r.Floor, r.Description, r.IsPublic, r.SortOrder, r.IsActive,
+                r.Capacity, r.IsBookable, r.BedNote))
+            .ToListAsync(ct));
+    }
+
+    /// <summary>
     /// Sets the whole plan: what kind it is, and every room or seat on it.
     /// </summary>
     /// <remarks>

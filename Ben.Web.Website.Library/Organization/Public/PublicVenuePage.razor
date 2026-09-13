@@ -1,0 +1,137 @@
+@page "/o/{UrlName}/venues/{PlaceId:guid}"
+@namespace Ben.Web.Website.Library.Organization.Public
+@using Ben.Service.Models.Entities
+@using Ben.Web.Services
+@using Ben.Web.Services.WebApi
+@using Ben.Web.Website.Library.Kit
+@inject IBenAdminClient AdminClient
+@inject IBenUserState UserState
+
+@* A venue's own page (item 235 phase 9): the building's story, its rooms, and what is on there.
+
+   ONLY FOR A CONFIRMED VENUE THAT CHOSE TO SHOW IT. A page headed "the venue" is itself a claim to
+   be the building; the API answers nothing until that claim has been proved and the venue has
+   switched the page on, and this page says "not found" rather than guessing why.
+
+   WHAT IS ON IS EVERYBODY'S EVENTS, not only the venue's own. A visitor to a hotel's page is asking
+   what they could come to there, and the society holding a weekend in the ballroom is the answer
+   as much as the hotel's own dinner is. *@
+
+<PageTitle>@(_venue.Item?.PlaceName ?? "Venue") — IsHaunted</PageTitle>
+
+<div class="container py-4" style="max-width:900px;" id="venue-page">
+    @if (_loading)
+    {
+        <div class="d-flex justify-content-center py-5">
+            <BenLoaderOverlay Visible="true" Text="Loading…" />
+        </div>
+    }
+    else if (_venue.Item is not { } v)
+    {
+        <div class="text-center py-5" id="venue-not-found">
+            <h2 class="text-muted">Venue not found</h2>
+            <p class="text-secondary">This venue's page isn't open to the public, or the link is incomplete.</p>
+        </div>
+    }
+    else
+    {
+        <div id="venue-summary">
+        <h1 class="h3 mb-1" id="venue-title">@v.PlaceName</h1>
+        <p class="text-secondary mb-3">
+            @string.Join(", ", new[] { v.City, v.State }.Where(p => !string.IsNullOrWhiteSpace(p)))
+            @if (!string.IsNullOrWhiteSpace(v.City) || !string.IsNullOrWhiteSpace(v.State))
+            {
+                <text> · </text>
+            }
+            Run by <a href="@($"/o/{v.OrganizationUrlName}")">@v.OrganizationName</a>
+            · <a href="@($"/places/{v.PlaceId}")">The place's history on IsHaunted</a>
+        </p>
+
+        @if (v.History is { Length: > 0 } history)
+        {
+            <div class="card mb-3">
+                <div class="card-header fw-semibold">The building</div>
+                <div class="card-body" id="venue-history" style="white-space:pre-line;">@history</div>
+            </div>
+        }
+
+        <div class="card mb-3">
+            <div class="card-header fw-semibold">What's on here</div>
+            @if (v.Events.Count == 0)
+            {
+                <div class="card-body text-secondary" id="venue-events-empty">Nothing is on the calendar here yet.</div>
+            }
+            else
+            {
+                <div class="list-group list-group-flush" id="venue-events">
+                    @foreach (var ev in v.Events)
+                    {
+                        <a class="list-group-item list-group-item-action" href="@ev.Url">
+                            <div class="fw-semibold">@ev.Name</div>
+                            <div class="small text-secondary">
+                                @(ev.StartsOn.Date == ev.EndsOn.Date ? ev.StartsOn.ToString("ddd MM/dd/yyyy") : $"{ev.StartsOn:ddd MM/dd/yyyy} – {ev.EndsOn:ddd MM/dd/yyyy}")
+                                · @ev.OrganizerName
+                            </div>
+                        </a>
+                    }
+                </div>
+            }
+        </div>
+
+        </div>
+
+        @if (v.Rooms.Count > 0)
+        {
+            <div class="card mb-3">
+                <div class="card-header fw-semibold">Rooms</div>
+                <div class="table-responsive">
+                    <table class="table mb-0" id="venue-rooms">
+                        <thead><tr><th>Room</th><th>Floor</th><th>Sleeps</th></tr></thead>
+                        <tbody>
+                            @foreach (var room in v.Rooms)
+                            {
+                                <tr>
+                                    <td>
+                                        @room.Name
+                                        @if (room.Description is { Length: > 0 } d)
+                                        {
+                                            <div class="small text-secondary">@d</div>
+                                        }
+                                    </td>
+                                    <td>@room.Floor</td>
+                                    <td>@(room.Capacity?.ToString() ?? "—")</td>
+                                </tr>
+                            }
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+        }
+
+        @if (v.HouseRules is { Length: > 0 } rules)
+        {
+            <div class="card mb-3">
+                <div class="card-header fw-semibold">House rules</div>
+                <div class="card-body" id="venue-rules" style="white-space:pre-line;">@rules</div>
+            </div>
+        }
+    }
+</div>
+
+@code {
+    [Parameter] public string UrlName { get; set; } = "";
+    [Parameter] public Guid PlaceId { get; set; }
+
+    private ItemResult<PublicVenueRecord> _venue;
+    private bool _loading = true;
+
+    protected override async Task OnAfterRenderAsync(bool firstRender)
+    {
+        if (!firstRender) return;
+        await UserState.WaitUntilAuthReadyAsync(RendererInfo.IsInteractive);
+
+        _venue = await AdminClient.GetPublicVenueAsync(UrlName, PlaceId);
+        _loading = false;
+        StateHasChanged();
+    }
+}

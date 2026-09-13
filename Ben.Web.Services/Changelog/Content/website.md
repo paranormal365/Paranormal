@@ -18,6 +18,16 @@ day-by-day account of building it would say nothing to anyone using it now.
 
 ## 2026-09-13
 
+- A group can now be confirmed as the venue at a place, and other groups then ask that venue before
+  publishing an event there. The organizer asks from the event page; the venue answers from a new
+  hosting requests page, and a yes can also lend its rooms, the building's story and its own people
+  on the door.
+- A venue can take a yes back with a reason. Every published event resting on it stops, its guests
+  are written to with the venue's reason, their passes stop working, and the organizer's credit
+  comes back however close to the date it is.
+- Confirmed venues can show a page of their own with the building's story, their rooms and
+  everything on there, and the place's page names who runs it.
+
 - Whoever decides bookings for an event is now written to when they arrive. The first request in a
   while arrives within minutes; a busy hour becomes one letter saying how many more came, never
   more than an hour late. A letter says what was asked for and when, and never the guest's name or

@@ -80,6 +80,7 @@ internal static class HostedEventDemoSeeder
         var now = DateTime.UtcNow;
 
         await SeedVenueAsync(db, host, owner.Id, now);
+        await SeedTheVenueOnTheSiteAsync(db, host, owner.Id, now);
         await SeedRoomsEventAsync(db, host, owner.Id, now);
         await SeedSeatsEventAsync(db, host, owner.Id, now);
         await SeedWhatTheVenueKeepsAsync(db, owner.Id, now);
@@ -392,6 +393,40 @@ internal static class HostedEventDemoSeeder
         Console.WriteLine(
             $"[HostedEventDemoSeeder] Created The Thomas House Hotel with {Rooms.Length} rooms, "
             + $"{Rooms.Count(r => r.Bookable)} of them bookable.");
+    }
+
+    /// <summary>
+    /// The hotel as a confirmed venue on the site, with its story and its rules (item 235 phase 9).
+    /// </summary>
+    /// <remarks>
+    /// Confirmed and published, so that another group's event at the same address meets the gate
+    /// the moment it is created, and the venue page and the "run as a venue by" line have something
+    /// real to show. The host's own two events are untouched: it is their own venue.
+    /// </remarks>
+    private static async Task SeedTheVenueOnTheSiteAsync(
+        BenDataContext db, Organization host, Guid ownerId, DateTime now)
+    {
+        if (await db.OrganizationVenueProfiles.AnyAsync(v => v.PlaceId == VenueId)) return;
+
+        db.OrganizationVenueProfiles.Add(new OrganizationVenueProfile
+        {
+            Id = Guid.NewGuid(),
+            OrganizationId = host.Id,
+            PlaceId = VenueId,
+            History = "Built in 1890 as the Cloyd Hotel for visitors taking the mineral waters, the "
+                    + "house has been a hotel ever since. Guests have reported footsteps on the second "
+                    + "floor landing and a little girl on the stairs since at least the 1970s.",
+            HouseRules = "No open flames upstairs.\nQuiet on the second floor after midnight.\n"
+                       + "Park behind the building, not on Main Street.",
+            MaxOvernightGuests = 22,
+            IsPublished = true,
+            VerifiedUtc = now,
+            DateCreated = now,
+            CreatedByAppUserId = ownerId,
+        });
+
+        await db.SaveChangesAsync();
+        Console.WriteLine("[HostedEventDemoSeeder] Confirmed the host as the venue at The Thomas House Hotel.");
     }
 
     // ── a weekend in the rooms ───────────────────────────────────────────────

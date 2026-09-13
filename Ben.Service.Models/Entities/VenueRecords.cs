@@ -98,3 +98,30 @@ public sealed record SaveVenueProfileRequest(
     string? HouseRules,
     int? MaxOvernightGuests,
     bool IsPublished);
+
+// ── what anybody sees ───────────────────────────────────────────────────────────
+
+/// <summary>A verified venue's public page.</summary>
+public sealed record PublicVenueRecord(
+    string OrganizationName,
+    string OrganizationUrlName,
+    Guid PlaceId,
+    string PlaceName,
+    string? City,
+    string? State,
+    string? History,
+    string? HouseRules,
+    int? MaxOvernightGuests,
+    IReadOnlyList<PublicVenueRoomRecord> Rooms,
+    IReadOnlyList<PublicVenueEventRecord> Events);
+
+/// <summary>A room the venue chose to show.</summary>
+public sealed record PublicVenueRoomRecord(string Name, string? Floor, string? Description, int? Capacity);
+
+/// <summary>Something on at the venue, whoever runs it.</summary>
+public sealed record PublicVenueEventRecord(
+    string Name, string OrganizerName, string Url, DateTime StartsOn, DateTime EndsOn);
+
+/// <summary>Who runs a place as its venue, for the place page.</summary>
+/// <param name="VenuePageUrl">Null when the venue has not published its page.</param>
+public sealed record PlaceVenueRecord(string OrganizationName, string OrganizationUrlName, string? VenuePageUrl);

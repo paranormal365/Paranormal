@@ -253,7 +253,42 @@ public sealed class PublicHostedEventController : BenControllerBase
                                  e.Nights.OrderBy(n => n.Date).ToList()))
             .FirstOrDefaultAsync(ct);
 
-        return row is null ? null : ToRecord(row);
+        if (row is null) return null;
+        var record = ToRecord(row);
+
+        // The venue, when a verified venue that is another group said yes (phase 9). Its name and
+        // page always, because who agreed the event may happen there is part of what the event is;
+        // the building's story only when the venue lent it, and only while the yes stands.
+        if (row.Event.VenueGrantId is Guid grantId)
+        {
+            var venue = await db.OrganizationVenueGrants.AsNoTracking()
+                .Where(g => g.Id == grantId && g.RevokedUtc == null)
+                .Select(g => new
+                {
+                    g.AllowHistory,
+                    g.PlaceId,
+                    OrgName = g.VenueOrganization.Name,
+                    OrgUrlName = g.VenueOrganization.UrlName,
+                    Profile = db.OrganizationVenueProfiles
+                        .Where(v => v.OrganizationId == g.VenueOrganizationId && v.PlaceId == g.PlaceId)
+                        .Select(v => new { v.History, v.IsPublished, v.VerifiedUtc })
+                        .FirstOrDefault(),
+                })
+                .FirstOrDefaultAsync(ct);
+
+            if (venue is not null)
+            {
+                var published = venue.Profile is { IsPublished: true, VerifiedUtc: not null };
+                record = record with
+                {
+                    VenueOrganizationName = venue.OrgName,
+                    VenuePageUrl = published ? $"/o/{venue.OrgUrlName}/venues/{venue.PlaceId}" : null,
+                    VenueHistory = venue.AllowHistory ? venue.Profile?.History : null,
+                };
+            }
+        }
+
+        return record;
     }
 
     private sealed record Row(

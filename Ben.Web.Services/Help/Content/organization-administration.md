@@ -879,9 +879,10 @@ yes on the phone. Record who agreed and when, and their reference if there is on
 any of it — recording it is so that everybody knows what was arranged, and so that being asked
 reminds you to go and ask.
 
-**Somebody else's, and they're on this site** will one day mean the venue has to approve it here
-before you can publish. That is not built yet, and the page says so rather than pretending. For
-now, arrange it with them directly and record it as the middle option.
+**Somebody else's, and they're on this site** is a place another group has been confirmed as
+running — a hotel on IsHaunted, say. Then the choice is not yours to make: the card says who runs
+the place, and **their yes is what lets you publish**, whichever answer you picked. See
+[Venues on this site](#venues-on-this-site).
 
 ### Pick or ask, and how long a hold lasts
 
@@ -1377,6 +1378,53 @@ The band then shows **beside their name at the door**, on the booking board, and
 pass — so somebody who already knows they are blue does not have to be told.
 
 ![A band beside a name at the door](help-media:organization-administration/event-door-bands.png)
+
+### Venues on this site
+
+**A place is nobody's**, and several groups can hold events or investigate at the same building. But
+a group can be **confirmed as the venue** at a place — the hotel itself, or the people who run it —
+and from then on, other groups ask that venue before they publish an event there.
+
+**Asking.** On your event's page, **The venue's say-so** names who runs the place. Write anything
+they should know and press **Ask**. They are told straight away, and are asked about your event's
+exact nights: add a night afterwards and their yes does not cover it, and the checklist says so.
+While they have not answered, you can take the question back.
+
+![What the organizer sees once the venue has said yes](help-media:organization-administration/event-venue-yes.png)
+
+**Answering, as the venue.** **Hosting requests** — from **Your venue** in your group's settings,
+or the bell — lists every group waiting on you, oldest first, with their event, their nights and
+their message. **Say yes**, or say no with a reason they will read.
+
+![A group asking to hold an event at your venue](help-media:organization-administration/venue-requests.png)
+
+A yes can lend three things, each your choice:
+
+- **Your rooms**, so their plan can place the rooms you have described instead of them typing
+  your building out again.
+- **The building's story**, shown on their public event page.
+- **Your own people**, who may then see who is coming and help on the door. They never decide who
+  comes — that stays with the organizer.
+
+**Taking a yes back.** **Withdraw…** asks for a reason and says exactly what it will do first. Every
+published event resting on that yes stops: its page says the venue withdrew, everybody with a place
+is written to with your reason, their passes stop working, and the organizer gets back any credit
+they spent, however close to the date it is — they did nothing wrong. Events that have already
+happened are left alone.
+
+**Your venue page.** Under **Your venue**, describe each place you run — its story, house rules,
+how many may stay — and, once you are confirmed as the venue, show the page to everybody. It lists
+your public rooms and everything on at the place, whoever runs it, and the place's own page links
+to it.
+
+![A venue's page](help-media:organization-administration/venue-page.png)
+
+**Describing a place does not make you its venue.** Any group may write about a hall it rents every
+October, and it changes nothing for anybody else. Being confirmed as the venue is a separate step,
+and until it is done the page stays private, because a public page headed "the venue" is itself a
+claim to be the building.
+
+![Describing a place you run](help-media:organization-administration/venue-profile.png)
 
 ### Letters about bookings
 

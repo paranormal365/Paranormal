@@ -316,7 +316,18 @@ public sealed record PublicHostedEventRecord(
     /// </remarks>
     int? MinimumGuests = null,
     DateTime? GoNoGoDeadlineUtc = null,
-    HostedEventGoNoGo GoNoGoDecision = HostedEventGoNoGo.Undecided);
+    HostedEventGoNoGo GoNoGoDecision = HostedEventGoNoGo.Undecided,
+
+    /// <summary>
+    /// The group that said yes as the venue, when it is another group on this site (phase 9).
+    /// </summary>
+    string? VenueOrganizationName = null,
+
+    /// <summary>Where the venue's own page is, relative to the site, when it has published one.</summary>
+    string? VenuePageUrl = null,
+
+    /// <summary>The building's story, from the venue's profile, when the venue lent it.</summary>
+    string? VenueHistory = null);
 
 /// <summary>
 /// One thing that has to be true before an event can go live (item 235 phase 3).

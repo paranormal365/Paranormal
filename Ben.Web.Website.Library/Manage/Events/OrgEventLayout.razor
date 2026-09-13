@@ -175,7 +175,10 @@
 
         if (kind != HostedEventLayoutKind.Rooms || _event is not { } ev) return;
 
-        var rooms = await AdminClient.GetPlaceRoomsAsync(OrgId, ev.PlaceId);
+        // The rooms this plan may place — the group's own, and the venue's when a venue on this site
+        // lent them (item 235 phase 9). Not the group's rooms at the place: at somebody else's hotel
+        // those are the wrong list.
+        var rooms = await AdminClient.GetOfferableRoomsAsync(OrgId, EventId);
         if (rooms.Failed)
         {
             // A refusal here is not "this venue has no rooms", and the page says which it is.

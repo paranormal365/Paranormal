@@ -20,6 +20,11 @@ belongs there; this is for the part underneath.
 
 ## 2026-09-13
 
+- Venues on the site: a group's profile of a place it runs, requests from other groups to hold an
+  event there, and the permission a yes grants. Publishing at a place with a confirmed venue now
+  needs that permission covering every night, and withdrawing it stops the events that rest on it.
+- A public read for a confirmed venue's page, and one saying who runs a place as its venue.
+
 - Two scheduled tasks now tell the people who decide an event's bookings about them: one as
   bookings arrive, collecting a rush into a single summary, and one daily or weekly overview. Each
   remembers how far it has told each person, so a letter that fails to go is tried again on the next
