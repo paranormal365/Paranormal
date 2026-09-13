@@ -600,6 +600,7 @@ public sealed class PublicHostedEventBookingController : BenControllerBase
         return null;
     }
 
+    [Microsoft.AspNetCore.RateLimiting.EnableRateLimiting(Services.RateLimiting.HostedBookingPolicy)]
     [HttpPost("{eventId:guid}/bookings")]
     public async Task<ActionResult<MyHostedEventBookingRecord>> RequestAPlace(
         Guid eventId, [FromBody] RequestHostedEventBookingRequest request,
@@ -675,6 +676,7 @@ public sealed class PublicHostedEventBookingController : BenControllerBase
     /// any more, and a party that quietly grew from two to six would be sleeping in a room nobody
     /// checked.
     /// </remarks>
+    [Microsoft.AspNetCore.RateLimiting.EnableRateLimiting(Services.RateLimiting.HostedBookingPolicy)]
     [HttpPut("{eventId:guid}/my-booking")]
     public async Task<ActionResult<MyHostedEventBookingRecord>> UpdateMyBooking(
         Guid eventId, [FromBody] EditHostedEventBookingRequest request, CancellationToken ct)

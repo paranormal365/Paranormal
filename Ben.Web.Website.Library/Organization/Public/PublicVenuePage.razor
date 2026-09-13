@@ -20,6 +20,15 @@
 
 <PageTitle>@(_venue.Item?.PlaceName ?? "Venue") — IsHaunted</PageTitle>
 
+@if (_venue.Item is { } card)
+{
+    @* A shared venue link shows the building and its first kept photo (audit finding A6). *@
+    <Ben.Web.Website.Library.Shared.SocialCard Title="@($"{card.PlaceName} — {card.OrganizationName}")"
+                                               Description="@VenueSummary(card)"
+                                               RelativeUrl="@($"/o/{UrlName}/venues/{PlaceId}")"
+                                               ImageUrl="@(card.Photos is { Count: > 0 } cardPhotos ? MediaUrls.VenuePhoto(cardPhotos[0].UploadFileId) : null)" />
+}
+
 <div class="container py-4" style="max-width:900px;" id="venue-page">
     @if (_loading)
     {
@@ -140,6 +149,14 @@
 </div>
 
 @code {
+    /// <summary>One line for a shared link: where it is, and how many can stay.</summary>
+    private static string VenueSummary(Ben.Service.Models.Entities.PublicVenueRecord v)
+    {
+        var where = string.Join(", ", new[] { v.City, v.State }.Where(x => !string.IsNullOrWhiteSpace(x)));
+        var stay = v.MaxOvernightGuests is { } n ? $" Sleeps up to {n}." : "";
+        return $"{v.PlaceName}{(where.Length > 0 ? $" in {where}" : "")} — hosted events and overnight investigations.{stay}";
+    }
+
     [Parameter] public string UrlName { get; set; } = "";
     [Parameter] public Guid PlaceId { get; set; }
 

@@ -188,26 +188,27 @@
                     <a class="list-group-item list-group-item-action" href="#event-venue">The venue's say-so</a>
                     <a class="list-group-item list-group-item-action" href="#event-guests">Your guests</a>
                     <a class="list-group-item list-group-item-action" href="#event-state">Ending it</a>
-                    @* The screens of their own that hang off this page. Each is a link only once
-                       its page exists — this page is live, and a link that answers 404 is worse
-                       than a plain "soon". The rest are listed but plainly not ready, rather than
-                       absent: somebody setting an event up should be able to see what is coming. *@
-                    @IndexEntry("Plan", $"/organizations/{OrgId}/events/{EventId}/layout", PlanPageShipped)
-                    @IndexEntry("Bookings", $"/organizations/{OrgId}/events/{EventId}/bookings", BoardPagesShipped)
-                    @IndexEntry("Menus", $"/organizations/{OrgId}/events/{EventId}/menus", MenusPageShipped)
-                    @IndexEntry("Dining tables", $"/organizations/{OrgId}/events/{EventId}/dining", true)
-                    @IndexEntry("What the kitchen needs",
-                                $"/organizations/{OrgId}/events/{EventId}/dietary", MenusPageShipped)
-                    @IndexEntry("Programme", $"/organizations/{OrgId}/events/{EventId}/sessions", true)
-                    @IndexEntry("Staff", $"/organizations/{OrgId}/events/{EventId}/staff", StaffPageShipped)
-                    @IndexEntry("The door", $"/organizations/{OrgId}/events/{EventId}/door", StaffPageShipped)
-                    @IndexEntry("Bands", $"/organizations/{OrgId}/events/{EventId}/bands", StaffPageShipped)
-                    @IndexEntry("Files", $"/organizations/{OrgId}/events/{EventId}/files", true)
-                    @IndexEntry("Photo wall", $"/events/{EventId}/wall", true)
-                    @IndexEntry("Gallery", $"/organizations/{OrgId}/events/{EventId}/gallery", true)
-                    @IndexEntry("Advertise this event", $"/organizations/{OrgId}/promote?event={EventId}", true)
-                    @IndexEntry("After the event", $"/organizations/{OrgId}/events/{EventId}/after", true)
-                    @IndexEntry("Copy this event", $"/organizations/{OrgId}/events/{EventId}/copy", true)
+                    @* The screens of their own that hang off this page. *@
+                    @IndexEntry("Plan", $"/organizations/{OrgId}/events/{EventId}/layout")
+                    @IndexEntry("Bookings", $"/organizations/{OrgId}/events/{EventId}/bookings")
+                    @IndexEntry("Menus", $"/organizations/{OrgId}/events/{EventId}/menus")
+                    @IndexEntry("Dining tables", $"/organizations/{OrgId}/events/{EventId}/dining")
+                    @IndexEntry("What the kitchen needs", $"/organizations/{OrgId}/events/{EventId}/dietary")
+                    @IndexEntry("Programme", $"/organizations/{OrgId}/events/{EventId}/sessions")
+                    @IndexEntry("Staff", $"/organizations/{OrgId}/events/{EventId}/staff")
+                    @IndexEntry("The door", $"/organizations/{OrgId}/events/{EventId}/door")
+                    @IndexEntry("Bands", $"/organizations/{OrgId}/events/{EventId}/bands")
+                    @IndexEntry("Files", $"/organizations/{OrgId}/events/{EventId}/files")
+                    @if (_orgUrlName is { } orgUrl && _event is { } forRoom)
+                    {
+                        @* The room lives on the event's own page, where a moderator sees what guests see. *@
+                        @IndexEntry("The room", $"/o/{orgUrl}/events/{forRoom.UrlName}#hosted-room")
+                    }
+                    @IndexEntry("Photo wall", $"/events/{EventId}/wall")
+                    @IndexEntry("Gallery", $"/organizations/{OrgId}/events/{EventId}/gallery")
+                    @IndexEntry("Advertise this event", $"/organizations/{OrgId}/promote?event={EventId}")
+                    @IndexEntry("After the event", $"/organizations/{OrgId}/events/{EventId}/after")
+                    @IndexEntry("Copy this event", $"/organizations/{OrgId}/events/{EventId}/copy")
                 </div>
             </div>
 
@@ -913,29 +914,9 @@
     private HostedEventCancellationEffect? _cancellationEffect;
     private readonly Dictionary<Guid, NightForm> _nights = [];
 
-    /// <summary>The layout designer, shipped in phase 2 of item 235.</summary>
-    private const bool PlanPageShipped = true;
-
-    /// <summary>The booking board, shipped in phase 5 of item 235.</summary>
-    private const bool BoardPagesShipped = true;
-
-    /// <summary>
-    /// The menus page and the kitchen's sheet, shipped in phase 5 of item 235.
-    /// </summary>
-    /// <remarks>
-    /// One flag per page rather than one for all of them: they ship in different slices, and a
-    /// single flag meant shipping the first one lit three links, two of which answer 404. A live
-    /// page must never carry a link that goes nowhere.
-    /// </remarks>
-    private const bool MenusPageShipped = true;
-
-    /// <summary>Who is helping at this event, shipped in phase 7 of item 235.</summary>
-    private const bool StaffPageShipped = true;
-
-    /// <summary>One index row for a screen of its own: a link once it ships, "soon" until then.</summary>
-    private static RenderFragment IndexEntry(string label, string href, bool shipped) => shipped
-        ? @<a class="list-group-item list-group-item-action" href="@href">@label</a>
-        : @<span class="list-group-item text-secondary small">@label — soon</span>;
+    /// <summary>One index row for a screen of its own.</summary>
+    private static RenderFragment IndexEntry(string label, string href) =>
+        @<a class="list-group-item list-group-item-action" href="@href">@label</a>;
 
     private bool _changingVenue;
     private string _venueSearch = "";

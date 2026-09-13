@@ -1,3 +1,4 @@
+using Microsoft.Extensions.DependencyInjection;
 using AutoMapper;
 using Ben.Data.Common.Enums;
 using Ben.Data.Source.Context;
@@ -176,7 +177,7 @@ public sealed class HostedEventBookingController : OrgCmsControllerBase
         // night, which is the queue this whole feature exists to remove.
         await EventPasses.EnsureAsync(db, booking, userId.Value, ct);
 
-        await db.SaveChangesAsync(ct);
+        await SaveAndAuditAsync(db, booking, booking.Id, userId.Value, ct);
 
         // After the save, and best effort. A guest who is confirmed but whose letter bounced is a
         // confirmed guest; a letter sent about a confirmation that then failed to save is a lie.
@@ -604,7 +605,7 @@ public sealed class HostedEventBookingController : OrgCmsControllerBase
         if (pass is null) return BadRequest("This booking has no live pass to withdraw.");
 
         EventPasses.Revoke(pass, userId.Value, reason);
-        await db.SaveChangesAsync(ct);
+        await SaveAndAuditAsync(db, pass, pass.Id, userId.Value, ct);
 
         return Ok(await PassRecordAsync(db, pass.Id, ct));
     }
@@ -634,6 +635,9 @@ public sealed class HostedEventBookingController : OrgCmsControllerBase
         var pass = await EventPasses.ReissueAsync(db, booking, userId.Value,
             Trimmed(request?.Reason) ?? "The venue issued a replacement pass.", ct);
         await db.SaveChangesAsync(ct);
+        // The old pass's withdrawal and the new one's issue, as one entry against the booking they belong to.
+        if (HttpContext?.RequestServices?.GetService<Ben.Service.RepositoryService.GenericInterfaces.IAuditLogService>() is { } audit)
+            await TryAuditAsync(audit.LogCreateAsync(nameof(HostedEventPass), pass.Id, pass, userId.Value, Ben.Data.Common.Constants.AppSources.WebApi));
 
         return Ok(await PassRecordAsync(db, pass.Id, ct));
     }
@@ -962,7 +966,7 @@ public sealed class HostedEventBookingController : OrgCmsControllerBase
                 ? "The venue could not take this booking."
                 : "The venue released this booking.", ct);
 
-        await db.SaveChangesAsync(ct);
+        await SaveAndAuditAsync(db, booking, booking.Id, userId.Value, ct);
 
         // A guest who is not coming must be told exactly as reliably as one who is, which is why
         // this is the same call the confirmation makes rather than a second path that could quietly

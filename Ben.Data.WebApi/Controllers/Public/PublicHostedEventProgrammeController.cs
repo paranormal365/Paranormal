@@ -37,6 +37,7 @@ public sealed class PublicHostedEventProgrammeController : BenControllerBase
         return record is null ? NotFound() : Ok(record);
     }
 
+    [Microsoft.AspNetCore.RateLimiting.EnableRateLimiting(Services.RateLimiting.HostedBookingPolicy)]
     [HttpPost("sessions/{sessionId:guid}/sign-up")]
     public async Task<ActionResult<PublicProgrammeRecord>> SignUp(
         Guid eventId, Guid sessionId, [FromBody] SessionSignUpRequest request, CancellationToken ct)

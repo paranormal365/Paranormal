@@ -362,7 +362,10 @@
             _imageName = d.ImageName; _targetKind = d.TargetKind; _eventId = d.EventId;
             _editing = true;
         }
-        catch { }
+        catch (JsonException)
+        {
+            // A draft saved by an older version of this page, or a hand-edited one: start fresh rather than fail.
+        }
     }
 
     // ── The picker's second consumer: the caller's own images ────────────────

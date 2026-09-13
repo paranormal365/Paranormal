@@ -38,6 +38,7 @@ public sealed class PublicHostedEventReviewController : BenControllerBase
     }
 
     /// <summary>Leaves or changes this person's review. Rewriting it clears a hiding.</summary>
+    [Microsoft.AspNetCore.RateLimiting.EnableRateLimiting(Services.RateLimiting.HostedBookingPolicy)]
     [HttpPut("my-review")]
     [Authorize]
     public async Task<ActionResult<PublicHostedEventReviewsRecord>> Upsert(

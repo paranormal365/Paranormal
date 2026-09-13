@@ -1,3 +1,4 @@
+using Microsoft.Extensions.DependencyInjection;
 using AutoMapper;
 using Ben.Data.Common.Constants;
 using Ben.Data.Common.Enums;
@@ -292,6 +293,31 @@ public sealed class HostedEventControllerTests
         // The title is the one line every list, share card and phone notification shows. A
         // cancelled event that reads like a live one is the worst thing on this screen.
         Assert.StartsWith("CANCELLED", umbrella.Title);
+    }
+
+    [Fact]
+    public async Task Publishing_and_calling_an_event_off_are_written_to_the_audit_log()
+    {
+        // Audit finding A3: a dispute about who called a weekend off had no history.
+        var f = await SeedAsync();
+        var controller = Build(f);
+        var audit = new Mock<Ben.Service.RepositoryService.GenericInterfaces.IAuditLogService>();
+        var services = new Microsoft.Extensions.DependencyInjection.ServiceCollection();
+        services.AddSingleton(audit.Object);
+        controller.ControllerContext.HttpContext.RequestServices = services.BuildServiceProvider();
+
+        var record = Created(await controller.Create(OrgId, Weekend(), default));
+        await controller.Publish(OrgId, record.Id, default);
+        await controller.Cancel(OrgId, record.Id, new CancelHostedEventRequest("Burst pipe"), NoMail(), default);
+
+        audit.Verify(a => a.LogUpdateAsync(nameof(HostedEvent), record.Id,
+            It.Is<object>(before => ((HostedEvent)before).LifecycleState == HostedEventLifecycleState.Draft),
+            It.Is<object>(after => ((HostedEvent)after).LifecycleState == HostedEventLifecycleState.Published),
+            OwnerId, It.IsAny<string>()), Times.Once);
+        audit.Verify(a => a.LogUpdateAsync(nameof(HostedEvent), record.Id,
+            It.Is<object>(before => ((HostedEvent)before).LifecycleState == HostedEventLifecycleState.Published),
+            It.Is<object>(after => ((HostedEvent)after).CancelledReason == "Burst pipe"),
+            OwnerId, It.IsAny<string>()), Times.Once);
     }
 
     // ── a run of separate dates ──────────────────────────────────────────────

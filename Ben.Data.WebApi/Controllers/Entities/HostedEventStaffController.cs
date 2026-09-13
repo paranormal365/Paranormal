@@ -6,7 +6,6 @@ using Ben.Data.WebApi.Controllers.Cms;
 using Ben.Data.WebApi.Services.Events;
 using Ben.Service.Models.Entities;
 using Ben.Service.RepositoryService.GenericInterfaces;
-using Microsoft.AspNetCore.Identity;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.EntityFrameworkCore;
 
@@ -42,16 +41,14 @@ public sealed class HostedEventStaffController : OrgCmsControllerBase
 
     private readonly Services.Access.HostedEventAccess _access;
     private readonly EventGuestMailer _mail;
-    private readonly UserManager<AppUser> _users;
 
     public HostedEventStaffController(
         IDbContextFactory<BenDataContext> dbFactory, IMapper mapper,
         IOrganizationSecurityService security,
         Services.Access.HostedEventAccess access,
-        EventGuestMailer mail,
-        UserManager<AppUser> users)
+        EventGuestMailer mail)
         : base(dbFactory, mapper, security)
-    { _access = access; _mail = mail; _users = users; }
+    { _access = access; _mail = mail; }
 
     // ── reading ──────────────────────────────────────────────────────────────
 

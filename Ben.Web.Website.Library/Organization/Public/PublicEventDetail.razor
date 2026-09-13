@@ -20,6 +20,7 @@
     <Ben.Web.Website.Library.Shared.SocialCard Title="@($"{_event.Title} — {_event.OrganizationName}")"
                                        Description="@SocialSummary"
                                        RelativeUrl="@($"/o/{UrlName}/events/{EventSlug}")"
+                                       ImageUrl="@(_hosted?.Gallery is { Count: > 0 } cardGallery ? MediaUrls.EventPhoto(cardGallery[0].UploadFileId) : null)"
                                        Type="article" />
 }
 

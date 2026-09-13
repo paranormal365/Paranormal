@@ -175,7 +175,7 @@ public sealed class VenueRequestsController : OrgCmsControllerBase
 
         var now = DateTime.UtcNow;
         var stopped = await VenueWithdrawal.WithdrawAsync(db, grant, userId.Value, reason, _sync, now, ct);
-        await db.SaveChangesAsync(ct);
+        await SaveAndAuditAsync(db, grant, grant.Id, userId.Value, ct);
 
         var venueName = await db.Organizations.AsNoTracking().Where(o => o.Id == orgId).Select(o => o.Name).FirstAsync(ct);
 

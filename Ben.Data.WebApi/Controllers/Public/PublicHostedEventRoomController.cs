@@ -60,6 +60,7 @@ public sealed class PublicHostedEventRoomController : BenControllerBase
         return Ok(await RoomAsync(db, hosted, userId, standing, before, null, ct));
     }
 
+    [Microsoft.AspNetCore.RateLimiting.EnableRateLimiting(Services.RateLimiting.HostedBookingPolicy)]
     [HttpPost]
     [RequestSizeLimit(200L * 1024 * 1024)]
     public async Task<ActionResult<EventRoomRecord>> Post(
@@ -165,6 +166,7 @@ public sealed class PublicHostedEventRoomController : BenControllerBase
     }
 
     /// <summary>Sends an earlier post's file to the organizer and venue. The author only.</summary>
+    [Microsoft.AspNetCore.RateLimiting.EnableRateLimiting(Services.RateLimiting.HostedBookingPolicy)]
     [HttpPost("messages/{messageId:guid}/send-to-hosts")]
     public async Task<ActionResult<EventRoomRecord>> SendToHosts(Guid eventId, Guid messageId, CancellationToken ct)
     {
@@ -204,6 +206,7 @@ public sealed class PublicHostedEventRoomController : BenControllerBase
         return Ok(await RoomAsync(db, hosted, userId, standing, null, "Taken down. Any photo is still in your own files.", ct));
     }
 
+    [Microsoft.AspNetCore.RateLimiting.EnableRateLimiting(Services.RateLimiting.HostedBookingPolicy)]
     [HttpPost("messages/{messageId:guid}/report")]
     public async Task<ActionResult<EventRoomRecord>> Report(
         Guid eventId, Guid messageId, [FromBody] ReportEventRoomMessageRequest request, CancellationToken ct)
