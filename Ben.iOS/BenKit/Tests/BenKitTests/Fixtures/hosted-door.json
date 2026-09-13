@@ -1,0 +1,48 @@
+{
+  "hostedEventId": "40000002-0000-0000-0000-000000000002",
+  "eventName": "Thomas House S\u00E9ance Weekend",
+  "nightId": "3f691dd0-2fb0-4dcc-baf6-38d90b2d52ab",
+  "nightDate": "2026-10-16T00:00:00",
+  "nights": [
+    {
+      "id": "3f691dd0-2fb0-4dcc-baf6-38d90b2d52ab",
+      "date": "2026-10-16T00:00:00",
+      "label": "Friday \u2014 arrival and first hunt",
+      "title": "Friday \u2014 arrival and first hunt",
+      "startsLocal": "19:00:00",
+      "endsLocal": "02:00:00",
+      "notes": null,
+      "sortOrder": 0
+    },
+    {
+      "id": "caf39eeb-83e9-4f50-8818-287d31a8a9b2",
+      "date": "2026-10-17T00:00:00",
+      "label": "Saturday \u2014 dinner and the s\u00E9ance",
+      "title": "Saturday \u2014 dinner and the s\u00E9ance",
+      "startsLocal": "19:00:00",
+      "endsLocal": "02:00:00",
+      "notes": null,
+      "sortOrder": 1
+    }
+  ],
+  "expected": [
+    {
+      "hostedEventBookingId": "fb8d257c-09b3-458a-adc8-30bac33e5543",
+      "leadName": "Daniel Park",
+      "partySize": 2,
+      "kind": 1,
+      "where": "For the day",
+      "code": "-TOKEN",
+      "arrivedUtc": null,
+      "leftUtc": null,
+      "peopleIn": null,
+      "dietary": [],
+      "band": null
+    }
+  ],
+  "peopleExpected": 2,
+  "peopleIn": 0,
+  "walkUps": [],
+  "placesLeft": 18,
+  "placesLeftSentence": "Room for 18 more tonight."
+}

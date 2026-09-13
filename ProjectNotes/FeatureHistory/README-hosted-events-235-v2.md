@@ -1262,6 +1262,101 @@ Help: *the mobile apps* gains "During the event" with four captures from
 
 Next: 14c, the door scanner and `GET api/me/hosted-event-duties`.
 
+#### Phase 14c as built (2026-09-13) — the door on the phone, with and without a signal
+
+**How the scanner works came from Ben during the build.** It is for the people working the door, and:
+- *"it looks up and clicking the reservation allows the doorman to check them in as having arrived to event"*;
+- *"The scanner screen is just the camera capturing the QR code to use."*
+
+The first version checked a party in the moment its code was read, and showed the answer over the camera. It was
+rebuilt as three steps:
+- **Scan.** `DoorScannerView` is only the camera. It reads one code and closes.
+- **Look up.** The door screen looks the pass up without recording anything (`checkIn: false`) and shows its
+  reservation under **Scanned pass**. A pass that isn't for this event, was withdrawn, or isn't expected tonight
+  is said in words instead.
+- **Check in.** Tapping the reservation opens `ReservationCheckInView`: the name, party size, nights with room or
+  seat, band, guest names, dietary flags and pass code. **Check in as arrived** records it, for all or some of the
+  party. Tapping a party on tonight's list opens the same screen; the list's **Check in** button is the quick path.
+
+1. **Server.**
+   - **`GET api/me/hosted-event-duties`** lists the doors this person may run. Candidates are narrowed to:
+     - events of the person's groups;
+     - events where they accepted a helper's place;
+     - events at a venue whose people they are, where the venue lent its staff.
+
+     Each candidate is then decided by `HostedEventAccess.CanRunTheDoorAsync`, the same rule the door's
+     endpoints use, so a listed door never refuses. Only published, live or just-ended events within two days of
+     the last night are listed.
+   - **Arrival time.** Door arrive and scan accept an optional `ArrivedUtc` for an arrival kept without a signal.
+     `DoorClock` takes a future time, or one more than a day before the night, as now. When a kept arrival is
+     earlier than one recorded since, the earlier one wins, on both the night's arrival and the pass stamp.
+2. **BenKit `DoorStore`.**
+   - **Kept on the phone** (Application Support, protected until first unlock): the duties list; each night's list,
+     plus the event's last night; and a queue of arrivals made without signal.
+   - **Looking up with no signal** matches a scanned token's last six characters against the kept list's pass codes,
+     the code the door would type.
+   - **Checking in with no signal** keeps the move with its time, its people count and, for a scan, the token, so
+     the server re-checks the pass when it is sent.
+   - **Sending the queue:** oldest first; stops at the first move that can't get through; drops a refused one and
+     reports it by name ("Daniel Park: This pass was withdrawn by the venue."). One send at a time per store on disk.
+   - **Needs a signal, and says so:** walk-ups, because they are counted against the places left; taking back an
+     arrival already recorded. Undoing an arrival still waiting on the phone just drops it.
+   - **Clean-up:** a 403/404 on a door removes that event's kept lists, and a deliberate sign-out removes everything
+     the door kept.
+3. **The app.**
+   - **Profile → Doors I'm running** shows only when there is a door; the duties are kept, so it is still there
+     offline.
+   - **`DoorView`** has:
+     - the count and places left;
+     - Scan a pass;
+     - an always-visible name-or-code search;
+     - Still to come and In, with Check in, a press-and-hold for part of a party, and Undo;
+     - walk-ups with swipe to take back;
+     - a night picker;
+     - banners for the kept list, arrivals waiting to send, and arrivals refused later.
+
+     The screen stays awake while it is open.
+   - **Simulator hook:** `-doorScanCode` (DEBUG only) stands in for the camera on a device without
+     `DataScannerViewController`.
+4. **Found by the walk: an offline cold start was anonymous.** 14a kept the tokens but the app still came up
+   signed out without `api/me`, so the kept door, and anything behind being somebody, could not be reached.
+   `SessionStore` now keeps the last confirmed identity (`FileIdentityStorage`). A cold start that can't reach the
+   server, or is rate-limited, is that person (`identityIsKept`), and the next `restore()` confirms it. A refusal,
+   a session ending or signing out forgets it.
+
+Tests:
+- **.NET `HostedEventDoorDutiesTests` (9).** Duties for a door member, a plain member, an accepted steward, an
+  unanswered invitation, the kitchen helper and the venue's porter (including a revoked grant). A late arrival
+  keeping its time; a wrong clock clamped; earlier-wins; a late scan keeping its time on the arrival and the pass.
+  The access rule, the clamp and earlier-wins were each broken and seen failing.
+- **BenKit `DoorStoreTests` (14)**, on fixtures captured through `IosFixtureCapture` (`hosted-duties`,
+  `hosted-door`, `hosted-scan-admitted`, `hosted-scan-refused`; pass codes replaced, sample trimmed to three
+  parties). Broken and seen failing: keeping offline arrivals, reporting a refused kept scan, code-suffix matching,
+  and look-up recording nothing.
+- **Session:** four tests for the kept identity; using it and forgetting it were each broken and seen failing.
+- **Totals:** BenKit 436, .NET unit 5,628, Playwright HostedEvents 114/0.
+
+Simulator walk as Sarah (BenCo organizer), iPhone 17 Pro Max, player copy:
+- **Who has doors:** Profile shows Doors I'm running with four BenCo doors. James and Daniel get none (checked over
+  the API).
+- **Camera and code:** Scan a pass on a device with no scanner says so. Typing `013ba7` finds Daniel.
+- **Scan online:** the reservation appears; check in 2 of 3; the server records 2; Undo returns it to 0.
+- **Walk-up:** 2 written down, then swiped back.
+- **Offline cold start:** still Sarah. The kept door opens with its banner. A scan finds the reservation on the
+  phone; checking in keeps it with "1 arrival waiting to send". Back online it went through the scan endpoint and
+  the server has the party in.
+- **Not walked:**
+  - a real phone camera reading a real pass (the simulator has no camera);
+  - the kept arrival time surviving on a real night. The walk's event is a month away, so the server rightly
+    recorded the send time; the unit tests cover a night that is today.
+
+Help:
+- *the mobile apps* gains "Running the door" and "With no signal", with three captures from
+  `HelpMediaCaptureTests.testCaptureTheDoor`.
+- *organization administration*'s door section describes the app, scan-then-reservation, and offline arrivals.
+
+Next: 14d, the Share Extension and the outbox for photos to an event.
+
 ### Phase 15 — Seed walk, screenshots, documentation, runbook
 
 The README's 2.8 and 12: extend `HostedEventDemoSeeder` to every table above; walk the running

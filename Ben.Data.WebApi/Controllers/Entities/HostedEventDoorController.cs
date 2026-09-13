@@ -243,7 +243,7 @@ public sealed class HostedEventDoorController : OrgCmsControllerBase
                     Id = Guid.NewGuid(),
                     HostedEventBookingId = booking.Id,
                     HostedEventNightId = night.Id,
-                    ArrivedUtc = now,
+                    ArrivedUtc = DoorClock.ArrivedAt(request.ArrivedUtc, now, night.Date),
                     People = People(request, booking),
                     Method = HostedEventCheckInMethod.ByName,
                     RecordedByAppUserId = userId.Value,
@@ -254,8 +254,11 @@ public sealed class HostedEventDoorController : OrgCmsControllerBase
 
             case Move.Arrive:
                 // Already in. Keep the first arrival — it is the true one — and take the chance to
-                // correct the head count, which is what a second press usually means.
+                // correct the head count, which is what a second press usually means. An arrival the
+                // phone kept offline can be earlier than the one recorded since; the earlier one wins.
                 arrival.People = People(request, booking) ?? arrival.People;
+                if (DoorClock.ArrivedAt(request.ArrivedUtc, now, night.Date) is var told && told < arrival.ArrivedUtc)
+                    arrival.ArrivedUtc = told;
                 arrival.LeftUtc = null;
                 arrival.DateUpdated = now;
                 arrival.UpdatedByAppUserId = userId.Value;

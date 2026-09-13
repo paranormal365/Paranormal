@@ -484,6 +484,49 @@ or menus the venue hasn't shared with you, simply aren't listed.
 
 Hiding posts and closing the room stay on the website, where an organizer can see the whole room.
 
+## Running the door
+
+If an event's organizers have asked you to help at the door — or you are one of the group with that
+job — **Doors I'm running** appears under **Profile**. For everybody else it simply isn't there.
+
+![Tonight's door: the count, the scan button and who is still to come](/help/media/the-mobile-apps/iphone-door.png)
+
+- **The count comes first**: how many are in, how many are expected, and how many more could come in
+  tonight.
+- **Scan a pass** opens the camera. It reads the guest's code and closes, and the door screen shows the
+  **reservation** that pass belongs to. Nobody is checked in by scanning alone.
+- **Tap the reservation** to open it: the name, how many are in the party, the nights and the room or
+  seat, the colour they wear, anybody with them, and anything the kitchen needs to know. **Check in as
+  arrived** records them — set how many are actually here first if the whole party hasn't come.
+- A pass that isn't for this event, was withdrawn, or isn't expected tonight is said in words on the door
+  screen instead.
+- **Name or pass code** at the top finds a reservation by name, or by the six characters under the code
+  when the camera won't focus. Tap it to open it, or press **Check in** beside it.
+- **Undo** takes an arrival back; **Somebody without a booking** writes down a walk-up — how many, and a
+  name if they give one.
+- Nobody's address or phone number is on these screens, and the screen stays awake while the door is open.
+
+![A scanned pass, showing its reservation](/help/media/the-mobile-apps/iphone-door-scanned.png)
+
+![The reservation, ready to check in](/help/media/the-mobile-apps/iphone-door-reservation.png)
+
+### With no signal
+
+Open the door once while you have signal — before the doors open is ideal — and tonight's list is kept
+on the phone.
+
+- The door then opens with **no signal** and says when the list was kept. The camera still reads codes,
+  and a scanned pass finds its reservation on the kept list.
+- Everybody you check in is kept on the phone **with the time they came in**, and **N arrivals waiting
+  to send** goes as soon as there's signal (or press **Send now**). The server checks each pass again
+  when it arrives.
+- If the organizers withdrew a pass in the meantime, the phone tells you who, once it catches up.
+- Writing down a walk-up, and taking back an arrival that has already gone through, wait for a signal —
+  both have to be checked first.
+
+Opening the app with no signal keeps you signed in as you, so your doors and your passes are all there.
+Signing out removes the kept lists from the phone.
+
 ## What you photographed on somebody else's event
 
 If you go on a ghost walk or a paid event, you can offer what you caught to the group running it

@@ -20,6 +20,12 @@ belongs there; this is for the part underneath.
 
 ## 2026-09-13
 
+- A new endpoint lists the hosted events the signed-in person may run the door at, whether as a member of
+  the organizing group, an accepted helper, or one of the venue's people where the venue lent its staff.
+- Letting a party in at the door, by name or by scanning, accepts an optional arrival time, so an arrival
+  recorded without a signal keeps the time it happened. A future time, or one long before the night, is
+  taken as now, and an earlier arrival replaces a later one already recorded.
+
 - The list of a person's own hosted event bookings now returns one row per event: the live booking if
   there is one, otherwise the newest.
 

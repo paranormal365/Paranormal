@@ -1379,7 +1379,24 @@ the kitchen and for the fire officer. Let too many in and the door refuses, beca
 the top is only worth anything if it is enforced.
 
 Print the page before the doors open if you expect no signal: a browser cannot scan a code with
-nothing to talk to.
+nothing to talk to — or run the door from the iPhone or iPad app, which can.
+
+**On the iPhone or iPad app.** Anybody who may run an event's door — somebody in your group with the
+door, a helper who accepted, or the venue's own people where it lent them — finds **Doors I'm running**
+under **Profile**. The door there works the same way, with two differences that matter in a cellar:
+
+- **Scanning finds the reservation; it doesn't check anybody in.** The camera reads the code and the app
+  shows the reservation it belongs to. The person on the door taps it, sees who it is, and checks them in
+  as arrived — all of the party, or as many as are actually there. The camera reads the code on the phone
+  itself, so this works with no signal.
+- **Tonight's list is kept on the phone** once it has been opened. With no signal a scanned pass is
+  matched to its reservation on that list by its code, and whoever is checked in is kept on the phone
+  **with the time they came in** and sent as soon as there is signal. Your list and count on the website then show
+  them arriving when they did, not when the phone found a bar.
+
+A pass you withdrew while the phone was offline is still refused when the phone catches up, and the
+app lists that person by name so somebody can find them. A walk-up, and taking back an arrival that
+has already been recorded, need a signal, because they have to be checked against the count first.
 
 ### Bands
 

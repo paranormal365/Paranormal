@@ -74,7 +74,17 @@ public sealed record ScanHostedEventPassRequest(
     /// weekend can answer "who was here on the Saturday". Omitted, it behaves as it did before:
     /// one stamp on the pass and no idea which night it was.
     /// </remarks>
-    Guid? HostedEventNightId = null);
+    Guid? HostedEventNightId = null,
+
+    /// <summary>
+    /// When they actually came in, for a scan the phone kept while it had no signal (item 235 phase 14c).
+    /// </summary>
+    /// <remarks>
+    /// Omitted means now. A time in the future, or long before the night, is taken as now: the server's
+    /// clock is the one that is trusted, and this only saves the real moment from being replaced by the
+    /// moment the phone found a signal.
+    /// </remarks>
+    DateTime? ArrivedUtc = null);
 
 /// <summary>
 /// What the door is told.
@@ -191,10 +201,32 @@ public sealed record HostedEventWalkUpRequest(
 /// How many actually came, when it is not the whole party. Null means all of them, which is the
 /// common case and keeps the number in step with a booking the host may still edit.
 /// </param>
+/// <param name="ArrivedUtc">
+/// When they came in, for an arrival the phone kept while it had no signal (phase 14c). Omitted means now.
+/// </param>
 public sealed record HostedEventDoorMoveRequest(
     Guid HostedEventBookingId,
     Guid HostedEventNightId,
-    int? People = null);
+    int? People = null,
+    DateTime? ArrivedUtc = null);
+
+/// <summary>
+/// An event this person may run the door at (`GET api/me/hosted-event-duties`, item 235 phase 14c).
+/// </summary>
+/// <param name="OrganizationId">The organizing group — the door's routes are under it.</param>
+/// <param name="RoleLabel">What the organizers called their part, when they were added as a helper.</param>
+/// <param name="Tonight">One of the event's nights is today at the venue.</param>
+public sealed record MyHostedEventDutyRecord(
+    Guid HostedEventId,
+    Guid OrganizationId,
+    string EventName,
+    string OrganizationName,
+    string? VenueName,
+    DateTime StartsOn,
+    DateTime EndsOn,
+    string TimeZoneId,
+    string? RoleLabel,
+    bool Tonight);
 
 // ── what a party wears (item 235 phase 7) ────────────────────────────────────
 

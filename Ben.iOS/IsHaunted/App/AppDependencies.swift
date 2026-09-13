@@ -58,7 +58,8 @@ final class AppDependencies {
         self.session = SessionStore(
             auth: IdentityAuthClient(environment: { box.value }, transport: transport),
             tokens: tokens,
-            api: api)
+            api: api,
+            identity: FileIdentityStorage.applicationSupport())
         self.feedActions = FeedActions(api: api)
         self.notifications = NotificationsStore(api: api)
         self.imageLoader = AuthenticatedImageLoader(api: api)
@@ -67,8 +68,12 @@ final class AppDependencies {
         self.evidenceActions = EvidenceActions(api: api)
         self.surfaces = SurfacesStore(api: api)
         self.appleSignIn = AppleSignInClient(api: api, tokens: tokens)
-        // Saved event passes belong to the person who signed in, not to the phone (item 235 phase 14).
-        self.session.onDeliberateSignOut = { PassCache.applicationSupport().removeAll() }
+        // Saved event passes, and a door's guest lists and kept arrivals, belong to the person who signed in, not to
+        // the phone (item 235 phase 14).
+        self.session.onDeliberateSignOut = {
+            PassCache.applicationSupport().removeAll()
+            DoorCache.applicationSupport().removeAll()
+        }
 // The instruments are built ONCE, here on the main actor, because CoreMotion and UIDevice
         // want it — then handed to the store as a value it can hold. A simulator has no
         // magnetometer, so a debug build with `-fieldKitFakeSensors` gets scripted ones instead;

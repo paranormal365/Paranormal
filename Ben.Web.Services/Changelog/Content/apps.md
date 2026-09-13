@@ -30,6 +30,14 @@ read.
   showing only the parts that event has.
 - You can sign up for programme sessions for as many of your party as are coming, join a waiting list
   when a session is full, and give a place back. Times are shown on the venue's clock.
+- Organizers and their helpers can run an event's door from the app. Scanning a pass with the camera
+  finds its reservation, and tapping the reservation checks the party in as arrived, all of them or some.
+  The door also shows tonight's count, finds a reservation by name or pass code, takes an arrival back,
+  and writes down walk-ups.
+- The door works with no signal once tonight's list has been opened. A scanned pass finds its reservation
+  on the kept list, and arrivals are sent with the time they happened as soon as there is signal.
+- Opening the app with no signal now keeps you signed in as yourself, instead of showing the app signed
+  out until the server can be reached.
 - In the event's room you can write, add photos and video from your library or the camera, agree to the
   photo notice the first time, send a photo to the organizers, take your own posts down and report
   somebody else's.

@@ -213,6 +213,10 @@ struct RootShell: View {
             DownloadsView(hostedEventId: id)
         case .eventRoom(let id, let addPhotos):
             EventRoomView(hostedEventId: id, startWithComposer: addPhotos)
+        case .doorDuties:
+            DoorDutiesView()
+        case .door(let organizationId, let hostedEventId):
+            DoorView(organizationId: organizationId, hostedEventId: hostedEventId)
         case .myEvidence:
             MyEvidenceView()
         case .developerSettings:

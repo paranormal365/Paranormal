@@ -105,6 +105,18 @@ public sealed class IosFixtureCapture : BenTestBase
             await SaveAsync(guest, $"/api/public/hosted-events/{RoomsEventId}/menus", "hosted-menus");
             await SaveAsync(guest, $"/api/public/hosted-events/{RoomsEventId}/files", "hosted-files");
             await SaveAsync(guest, $"/api/public/hosted-events/{RoomsEventId}/room", "hosted-room", onlyMessage: postedMessageId);
+
+            // Phase 14c: the door, as somebody who may run it. The scan LOOKS without admitting (checkIn false), so
+            // capturing it records no arrival; a code nobody issued captures the refusal's shape.
+            await SaveAsync(admin, "/api/me/hosted-event-duties", "hosted-duties");
+            var door = await SaveAsync(admin, $"/api/organizations/{orgId}/events/{RoomsEventId}/door", "hosted-door", scrubCodes: true);
+            var nightId = JsonDocument.Parse(door).RootElement.GetProperty("nightId").GetString();
+            var passToken = (await (await guest.GetAsync($"/api/public/hosted-events/{RoomsEventId}/my-booking/pass")).JsonAsync())!
+                .Value.GetProperty("pass").GetProperty("token").GetString();
+            await SavePostAsync(admin, $"/api/organizations/{orgId}/events/{RoomsEventId}/bookings/door/scan",
+                new { token = passToken, checkIn = false, hostedEventNightId = nightId }, "hosted-scan-admitted");
+            await SavePostAsync(admin, $"/api/organizations/{orgId}/events/{RoomsEventId}/bookings/door/scan",
+                new { token = "not-a-pass-anybody-issued", checkIn = false, hostedEventNightId = nightId }, "hosted-scan-refused");
         }
         finally
         {
@@ -120,13 +132,39 @@ public sealed class IosFixtureCapture : BenTestBase
         }
     }
 
+    /// <summary>Posts to one endpoint and writes its answer, scrubbed of pass tokens, into the app's fixtures.</summary>
+    private static async Task<string> SavePostAsync(IAPIRequestContext api, string path, object payload, string name)
+    {
+        var response = await api.PostAsync(path, new() { DataObject = payload });
+        var body = await response.TextAsync();
+        Assert.That(response.Ok, Is.True, $"{path}: {response.Status} {body}");
+        return await WriteAsync(body, name);
+    }
+
     /// <summary>Reads one endpoint and writes its body, scrubbed of pass tokens, into the app's fixtures.</summary>
     private static async Task<string> SaveAsync(IAPIRequestContext api, string path, string name, bool onePerStatus = false,
-        string? onlyMessage = null)
+        string? onlyMessage = null, bool scrubCodes = false)
     {
         var response = await api.GetAsync(path);
         var body = await response.TextAsync();
         Assert.That(response.Ok, Is.True, $"{path}: {response.Status} {body}");
+
+        // A door lists the last six characters of every party's pass. They are not credentials, but a public
+        // repository is no place for them either: each becomes a made-up code, the guest's matching the scrubbed token.
+        if (scrubCodes)
+        {
+            var door = System.Text.Json.Nodes.JsonNode.Parse(body)!.AsObject();
+            // A sample of the list, not the harness's every test party: the guest and two others.
+            var sample = door["expected"]!.AsArray()
+                .OrderByDescending(p => p!["leadName"]!.GetValue<string>() == "Daniel Park")
+                .Take(3).Select(p => p!.DeepClone()).ToList();
+            door["expected"] = new System.Text.Json.Nodes.JsonArray([.. sample]);
+            var n = 0;
+            foreach (var party in door["expected"]!.AsArray())
+                if (party!["code"] is not null)
+                    party["code"] = party["leadName"]!.GetValue<string>() == "Daniel Park" ? "-TOKEN" : $"CODE{++n:00}";
+            body = door.ToJsonString();
+        }
 
         // A room on a harness database holds every earlier run's posts, by other test accounts; keep the one made here.
         if (onlyMessage is not null)
@@ -145,6 +183,11 @@ public sealed class IosFixtureCapture : BenTestBase
             body = "[" + string.Join(",", kept) + "]";
         }
 
+        return await WriteAsync(body, name);
+    }
+
+    private static async Task<string> WriteAsync(string body, string name)
+    {
         var scrubbed = Regex.Replace(body, "\"token\":\"[^\"]+\"", "\"token\":\"fixture-pass-token\"");
         scrubbed = Regex.Replace(scrubbed, "event-passes/[A-Za-z0-9_\\-]+\\.png", "event-passes/fixture-pass-token.png");
         var pretty = JsonSerializer.Serialize(JsonDocument.Parse(scrubbed).RootElement, new JsonSerializerOptions { WriteIndented = true });

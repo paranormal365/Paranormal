@@ -753,7 +753,12 @@ public sealed class HostedEventBookingController : OrgCmsControllerBase
 
         if (request.CheckIn && pass.CheckedInUtc is null)
         {
-            pass.CheckedInUtc = now;
+            // A scan the phone kept while it had no signal carries when it happened (phase 14c).
+            pass.CheckedInUtc = await db.HostedEventNights.AsNoTracking()
+                .Where(n => n.HostedEventId == eventId)
+                .OrderBy(n => n.Date).Select(n => (DateTime?)n.Date).FirstOrDefaultAsync(ct) is { } firstNight
+                ? DoorClock.ArrivedAt(request.ArrivedUtc, now, firstNight)
+                : now;
             pass.CheckedInByAppUserId = userId.Value;
             pass.DateUpdated = now;
             pass.UpdatedByAppUserId = userId.Value;
@@ -778,6 +783,10 @@ public sealed class HostedEventBookingController : OrgCmsControllerBase
                     c => c.HostedEventBookingId == booking.Id
                       && c.HostedEventNightId == nightId, ct);
 
+                var nightDate = await db.HostedEventNights.AsNoTracking()
+                    .Where(n => n.Id == nightId).Select(n => n.Date).FirstAsync(ct);
+                var arrivedAt = DoorClock.ArrivedAt(request.ArrivedUtc, now, nightDate);
+
                 if (arrival is null)
                 {
                     db.HostedEventCheckIns.Add(new HostedEventCheckIn
@@ -785,7 +794,7 @@ public sealed class HostedEventBookingController : OrgCmsControllerBase
                         Id = Guid.NewGuid(),
                         HostedEventBookingId = booking.Id,
                         HostedEventNightId = nightId,
-                        ArrivedUtc = now,
+                        ArrivedUtc = arrivedAt,
                         Method = HostedEventCheckInMethod.Scanned,
                         RecordedByAppUserId = userId.Value,
                         DateCreated = now,
@@ -794,7 +803,9 @@ public sealed class HostedEventBookingController : OrgCmsControllerBase
                 }
                 else
                 {
-                    // Walked back in from the car park. Keep the first arrival, clear the leaving.
+                    // Walked back in from the car park. Keep the first arrival, clear the leaving — and
+                    // when a scan kept offline is earlier than what was recorded since, the earlier wins.
+                    if (arrivedAt < arrival.ArrivedUtc) arrival.ArrivedUtc = arrivedAt;
                     arrival.LeftUtc = null;
                     arrival.DateUpdated = now;
                     arrival.UpdatedByAppUserId = userId.Value;

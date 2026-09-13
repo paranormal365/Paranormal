@@ -68,17 +68,88 @@ private func happyAuthTransport() -> MockTransport {
     }
 }
 
+private final class Line: @unchecked Sendable { var up = true }
+
 @Suite("SessionStore — the auth state machine")
 @MainActor
 struct SessionStoreTests {
 
     private static func makeStore(
-        transport: MockTransport, storage: TokenStorage = InMemoryTokenStorage()
+        transport: MockTransport, storage: TokenStorage = InMemoryTokenStorage(),
+        identity: IdentityStorage = InMemoryIdentityStorage()
     ) -> (SessionStore, TokenSession) {
         let tokens = TokenSession(storage: storage, transport: transport, environment: { .dev })
         let api = APIClient(environment: { .dev }, transport: transport, tokens: tokens)
         let auth = IdentityAuthClient(environment: { .dev }, transport: transport)
-        return (SessionStore(auth: auth, tokens: tokens, api: api), tokens)
+        return (SessionStore(auth: auth, tokens: tokens, api: api, identity: identity), tokens)
+    }
+
+    private static let steward = MeResponse(userId: UUID(), email: "sarah.mitchell@benco.dev", isSuperAdmin: false, isAdmin: false)
+
+    private static func liveTokens() -> InMemoryTokenStorage {
+        InMemoryTokenStorage(tokens: StoredTokens(accessToken: "AT", refreshToken: "RT", expiresAt: Date(timeIntervalSinceNow: 600)))
+    }
+
+    private static func offline() -> MockTransport { MockTransport { _ in throw URLError(.notConnectedToInternet) } }
+
+    @Test func aColdStartWithNoSignalIsThePersonKeptOnThePhone() async {
+        // Tonight's door, in a cellar: the app must come up as the steward, not as a visitor.
+        let (store, _) = Self.makeStore(transport: Self.offline(), storage: Self.liveTokens(),
+                                        identity: InMemoryIdentityStorage(me: Self.steward))
+        await store.restore()
+        #expect(store.me == Self.steward)
+        #expect(store.identityIsKept)
+        #expect(store.sessionEndedBanner == false)
+    }
+
+    @Test func theKeptIdentityIsConfirmedWhenTheServerAnswers() async {
+        let identity = InMemoryIdentityStorage(me: Self.steward)
+        let storage = Self.liveTokens()
+        let transport = MockTransport(status: 200, body: authMeBody)
+        let line = Line()
+        let switchable = MockTransport { request in
+            guard line.up else { throw URLError(.notConnectedToInternet) }
+            return try await transport.send(request)
+        }
+        let (store, _) = Self.makeStore(transport: switchable, storage: storage, identity: identity)
+
+        line.up = false
+        await store.restore()
+        #expect(store.identityIsKept)
+
+        line.up = true
+        await store.restore()
+        #expect(!store.identityIsKept)
+        #expect(store.me?.email == "james.thornton@benco.dev")
+        #expect(identity.load()?.email == "james.thornton@benco.dev")
+    }
+
+    @Test func aKeptIdentityTheServerNoLongerAcceptsIsForgotten() async {
+        let identity = InMemoryIdentityStorage(me: Self.steward)
+        let line = Line()
+        let switchable = MockTransport { request in
+            guard line.up else { throw URLError(.notConnectedToInternet) }
+            return (Data(), MockTransport.response(for: request, status: 401))
+        }
+        let (store, _) = Self.makeStore(transport: switchable, storage: Self.liveTokens(), identity: identity)
+
+        line.up = false
+        await store.restore()
+        #expect(store.me == Self.steward)
+
+        line.up = true
+        await store.restore()
+        #expect(store.me == nil)
+        #expect(identity.load() == nil)
+    }
+
+    @Test func signingOutForgetsTheKeptIdentity() async {
+        let identity = InMemoryIdentityStorage()
+        let (store, _) = Self.makeStore(transport: happyAuthTransport(), identity: identity)
+        await store.signIn(email: "a@b.c", password: "pw")
+        #expect(identity.load() != nil)
+        await store.signOut()
+        #expect(identity.load() == nil)
     }
 
     @Test func happyPathReachesSignedInWithIdentity() async {

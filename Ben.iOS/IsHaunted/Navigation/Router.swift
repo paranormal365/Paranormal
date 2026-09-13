@@ -132,6 +132,9 @@ enum AppRoute: Hashable {
     case eventMenus(UUID)
     case eventDownloads(UUID)
     case eventRoom(UUID, addPhotos: Bool = false)
+    /// The events this person may run the door at, and one night's door (item 235 phase 14c).
+    case doorDuties
+    case door(organizationId: UUID, hostedEventId: UUID)
     /// One tour, by the addresses its public page uses (item 234).
     ///
     /// Carried as SLUGS rather than as an id because that is what the public endpoint takes, and
