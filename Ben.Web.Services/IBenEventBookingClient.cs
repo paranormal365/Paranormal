@@ -438,6 +438,21 @@ public interface IBenEventBookingClient
     Task<(HostedEventAfterRecord? Result, string? Error)> SetHostedEventReviewHiddenAsync(
         Guid orgId, Guid eventId, Guid reviewId, bool hidden, CancellationToken token = default);
 
+    /// <summary>The dining room for one sitting: tables, confirmed parties and who sits where (item 235 phase 13).</summary>
+    Task<ItemResult<HostedEventDiningRecord>> GetEventDiningAsync(Guid orgId, Guid eventId, Guid? sittingId, CancellationToken token = default);
+
+    Task<(HostedEventDiningRecord? Result, string? Error)> SetEventDiningTablesAsync(
+        Guid orgId, Guid eventId, Guid? sittingId, SetHostedEventDiningTablesRequest request, CancellationToken token = default);
+
+    Task<(HostedEventDiningRecord? Result, string? Error)> SeatEventPartyAsync(
+        Guid orgId, Guid eventId, Guid sittingId, SeatHostedEventPartyRequest request, CancellationToken token = default);
+
+    Task<(HostedEventDiningRecord? Result, string? Error)> UnseatEventPartyAsync(
+        Guid orgId, Guid eventId, Guid sittingId, Guid seatId, CancellationToken token = default);
+
+    Task<(HostedEventDiningRecord? Result, string? Error)> SeatSameAsSittingAsync(
+        Guid orgId, Guid eventId, Guid sittingId, Guid fromSittingId, CancellationToken token = default);
+
     /// <summary>Plans used at this event's venue before, to start a new plan from (item 235 phase 12).</summary>
     Task<LoadResult<EarlierPlanRecord>> GetEarlierPlansAsync(Guid orgId, Guid eventId, CancellationToken token = default);
 

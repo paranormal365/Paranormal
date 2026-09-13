@@ -116,6 +116,17 @@
                         }
                     </ul>
 
+                    @if (pass.Seating is { Count: > 0 } seating)
+                    {
+                        @* Where they sit, once the venue has seated them (phase 13). *@
+                        <ul class="list-unstyled small mt-3 mb-0" id="pass-seating">
+                            @foreach (var line in seating)
+                            {
+                                <li>@line</li>
+                            }
+                        </ul>
+                    }
+
                     @if (pass.Pass.CheckedInUtc is { } arrived)
                     {
                         <div class="small text-secondary mt-3" id="pass-arrived">

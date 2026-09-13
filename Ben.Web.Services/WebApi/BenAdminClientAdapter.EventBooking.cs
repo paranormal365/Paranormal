@@ -346,6 +346,33 @@ public sealed partial class BenAdminClientAdapter
                HttpMethod.Post, $"/api/organizations/{orgId}/events/{eventId}/reviews/{reviewId}/{(hidden ? "hide" : "show")}",
                new { }, token);
 
+    private static string DiningUrl(Guid orgId, Guid eventId) => $"/api/organizations/{orgId}/events/{eventId}/dining";
+
+    public Task<ItemResult<HostedEventDiningRecord>> GetEventDiningAsync(Guid orgId, Guid eventId, Guid? sittingId, CancellationToken token = default)
+        => _api.GetItemAsync<HostedEventDiningRecord>(
+               sittingId is { } s ? $"{DiningUrl(orgId, eventId)}?sitting={s}" : DiningUrl(orgId, eventId), token);
+
+    public Task<(HostedEventDiningRecord? Result, string? Error)> SetEventDiningTablesAsync(
+        Guid orgId, Guid eventId, Guid? sittingId, SetHostedEventDiningTablesRequest request, CancellationToken token = default)
+        => _api.SendExpectingReasonAsync<SetHostedEventDiningTablesRequest, HostedEventDiningRecord>(
+               HttpMethod.Put, sittingId is { } s ? $"{DiningUrl(orgId, eventId)}/tables?sitting={s}" : $"{DiningUrl(orgId, eventId)}/tables",
+               request, token);
+
+    public Task<(HostedEventDiningRecord? Result, string? Error)> SeatEventPartyAsync(
+        Guid orgId, Guid eventId, Guid sittingId, SeatHostedEventPartyRequest request, CancellationToken token = default)
+        => _api.SendExpectingReasonAsync<SeatHostedEventPartyRequest, HostedEventDiningRecord>(
+               HttpMethod.Post, $"{DiningUrl(orgId, eventId)}/sittings/{sittingId}/seats", request, token);
+
+    public Task<(HostedEventDiningRecord? Result, string? Error)> UnseatEventPartyAsync(
+        Guid orgId, Guid eventId, Guid sittingId, Guid seatId, CancellationToken token = default)
+        => _api.SendExpectingReasonAsync<object, HostedEventDiningRecord>(
+               HttpMethod.Delete, $"{DiningUrl(orgId, eventId)}/sittings/{sittingId}/seats/{seatId}", new { }, token);
+
+    public Task<(HostedEventDiningRecord? Result, string? Error)> SeatSameAsSittingAsync(
+        Guid orgId, Guid eventId, Guid sittingId, Guid fromSittingId, CancellationToken token = default)
+        => _api.SendExpectingReasonAsync<object, HostedEventDiningRecord>(
+               HttpMethod.Post, $"{DiningUrl(orgId, eventId)}/sittings/{sittingId}/same-as/{fromSittingId}", new { }, token);
+
     public Task<LoadResult<EarlierPlanRecord>> GetEarlierPlansAsync(Guid orgId, Guid eventId, CancellationToken token = default)
         => _api.GetListAsync<EarlierPlanRecord>($"/api/organizations/{orgId}/events/{eventId}/layout/earlier", token);
 

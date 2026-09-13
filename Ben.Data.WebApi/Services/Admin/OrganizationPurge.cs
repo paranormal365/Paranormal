@@ -366,6 +366,12 @@ public sealed class OrganizationPurge
             // NoAction, so they have to go before the rooms further down. They are taken here
             // rather than there because they also hang off the event, and deleting the event
             // first would be refused by these same rows (item 235 phase 2).
+            // Dining seats (phase 13) point at a table and a booking with NoAction; they cascade only from their
+            // sitting, so they go first and the tables and bookings can follow.
+            await db.HostedEventDiningSeats
+                .Where(x => x.HostedEventDiningTable.HostedEvent.OrganizationId == organizationId
+                         || x.HostedEventBooking.HostedEvent.OrganizationId == organizationId)
+                .ExecuteDeleteAsync(ct);
             // A venue's photo library (phase 12): a row may name the group that offered it, the event it
             // came from, or a file this group owns — each NoAction. The venue's own profile rows cascade.
             await db.VenuePhotos

@@ -140,6 +140,8 @@ namespace Ben.Data.Source.Context
         public virtual DbSet<HostedEventGalleryImage> HostedEventGalleryImages { get; set; }
         public virtual DbSet<HostedEventReview> HostedEventReviews { get; set; }
         public virtual DbSet<VenuePhoto> VenuePhotos { get; set; }
+        public virtual DbSet<HostedEventDiningTable> HostedEventDiningTables { get; set; }
+        public virtual DbSet<HostedEventDiningSeat> HostedEventDiningSeats { get; set; }
         public virtual DbSet<EventPhotoConsent> EventPhotoConsents { get; set; }
         public virtual DbSet<OutboxEmail> OutboxEmails { get; set; }
         public virtual DbSet<OutboxEmailAttachment> OutboxEmailAttachments { get; set; }
@@ -1325,6 +1327,27 @@ namespace Ben.Data.Source.Context
             modelBuilder.Entity<HostedEventReview>().Property(r => r.Comment).HasMaxLength(1000);
             // One opinion per person per event.
             modelBuilder.Entity<HostedEventReview>().HasIndex(r => new { r.HostedEventId, r.AppUserId }).IsUnique();
+
+            // ── dining tables (phase 13) ──────────────────────────────────────────
+            modelBuilder.Entity<HostedEventDiningTable>()
+                .HasOne(t => t.HostedEvent).WithMany()
+                .HasForeignKey(t => t.HostedEventId).OnDelete(DeleteBehavior.Cascade);
+            modelBuilder.Entity<HostedEventDiningTable>().Property(t => t.Name).HasMaxLength(60);
+            modelBuilder.Entity<HostedEventDiningTable>().HasIndex(t => new { t.HostedEventId, t.SortOrder });
+            // One cascade path only (the sitting, through its night, from the event). The table and the booking
+            // also hang off the event, so their links are NoAction and the code that removes a table removes its
+            // seats first.
+            modelBuilder.Entity<HostedEventDiningSeat>()
+                .HasOne(s => s.HostedEventMenu).WithMany()
+                .HasForeignKey(s => s.HostedEventMenuId).OnDelete(DeleteBehavior.Cascade);
+            modelBuilder.Entity<HostedEventDiningSeat>()
+                .HasOne(s => s.HostedEventDiningTable).WithMany()
+                .HasForeignKey(s => s.HostedEventDiningTableId).OnDelete(DeleteBehavior.NoAction);
+            modelBuilder.Entity<HostedEventDiningSeat>()
+                .HasOne(s => s.HostedEventBooking).WithMany()
+                .HasForeignKey(s => s.HostedEventBookingId).OnDelete(DeleteBehavior.NoAction);
+            modelBuilder.Entity<HostedEventDiningSeat>()
+                .HasIndex(s => new { s.HostedEventMenuId, s.HostedEventBookingId, s.HostedEventDiningTableId }).IsUnique();
 
             // ── the venue's photo library (phase 12) ──────────────────────────────
             modelBuilder.Entity<VenuePhoto>()

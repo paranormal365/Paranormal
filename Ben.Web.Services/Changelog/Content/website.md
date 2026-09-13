@@ -18,6 +18,9 @@ day-by-day account of building it would say nothing to anyone using it now.
 
 ## 2026-09-13
 
+- Organizers can seat confirmed parties at dining tables for each meal of an event, copy one meal's
+  seating to another, and print a table list with dietary notes. Guests see their table on their pass.
+
 - An empty seating or room plan can start from the plan used at the same venue before, with another
   group's prices and notes left out.
 - Venues keep a photo library. Organizers can offer pictures from their event's gallery, and the venue

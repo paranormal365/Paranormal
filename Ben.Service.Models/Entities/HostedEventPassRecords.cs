@@ -48,7 +48,12 @@ public sealed record MyHostedEventPassRecord(
     /// On the guest's own pass as well as the door's screen, so the queue moves: somebody who
     /// already knows they are blue does not have to be told.
     /// </remarks>
-    HostedEventBandRecord? Band = null);
+    HostedEventBandRecord? Band = null,
+
+    /// <summary>
+    /// Where the party sits at each sitting it has been seated for (item 235 phase 13): "Sat 10/31 · Dinner · Table 4".
+    /// </summary>
+    IReadOnlyList<string>? Seating = null);
 
 /// <summary>Withdrawing a pass. The reason is required and is read out at the door.</summary>
 public sealed record RevokeHostedEventPassRequest(string Reason);

@@ -1112,6 +1112,30 @@ aggregated dietary badges, click-party-then-table or drag on a pointer, *Same as
 over-seating refused in words; "Table 4" on the guest's pass page; a per-table column on the
 kitchen print. No "who sits with whom" input in v1 — the booking note is the interim.
 
+#### Phase 13 as built (2026-09-13) — dining tables
+
+1. **Tables belong to the event, seating to each sitting** (a sitting is one menu of one night). `HostedEventDiningTable`
+   (name, seats ≤ 40) and `HostedEventDiningSeat` (sitting, table, booking, how many of the party). A party can sit at
+   several tables; together its rows never exceed the party, and a table never exceeds its chairs — refused in words
+   naming the table, the chairs left and the party ("Seat 2 here and the rest at another table").
+2. **Tap a party, then a table**, not the plan canvas the plan named: a dining room is a list of a dozen tables, the
+   same gesture works with a thumb and a mouse, and what the kitchen needs is a list that prints. *Seat the same way*
+   copies another sitting for everybody at both, leaving out and naming anyone who no longer fits. *Print table list*
+   prints each table with its parties and their dietary notes (the per-table column the plan gave the kitchen sheet).
+3. **Confirmed parties present that night only.** Every read filters on the booking's status, so a cancellation leaves
+   nobody's name on a table; a request withdrawn after having been seated removes its seat rows with it.
+4. **Who:** the event's editors or a helper handed *menus and dietary* — the kitchen's job, and the reason that helper
+   sees dietary notes.
+5. **Menus now keep their ids.** Saving the menus used to replace every sitting, which would have wiped the seating on
+   every typo; a sitting sent back with its id stays the same row. Removing a meal or a table removes its seating.
+6. **Guests** see their table for each sitting on their pass ("Sat 10/31 · Dinner · Table 4", with how many when a party
+   is split).
+7. One cascade path only (seat → sitting); the seat's links to table and booking are NoAction, handled by the tables
+   save, the request withdrawal and the organization purge.
+
+Tests: `HostedEventDiningTests` (6; the chairs rule, the confirmed-only read and the kept menu ids each seen failing with
+the rule removed), Playwright `EventDiningTests` at 1280 and 375; capture `event-dining.png`.
+
 ### Phase 14 — The phone
 
 **Added 2026-09-13 (Ben): sharing photos to an event from the app.** "If someone is using our iPhone
@@ -1288,6 +1312,14 @@ timesheet. So:
    Safari, an organizer on an iPad, and a venue on a laptop.
 
 ## Still Ben's, but nothing waits on them
+
+- ~~**One credit, how many performances?**~~ **Decided 2026-09-13 (Ben): no limit.** Asked about a run of the same show
+  on several days (*"dinner and a play at a venue. So Friday, Saturday, Sunday..."*), and whether one $99 credit should
+  cover it indefinitely, Ben concluded: *"I don't think people would try to take advantage of using the site event
+  hosting forever. So my thought about limit number of times may be overthought."* One credit covers one event however
+  many dates it has, within the existing cap of 366 dates per event (`HostedEventController.MaximumDates`), which stays
+  as a guard against a typed year rather than a pricing rule. A span-based rule (one credit per 31 days of a run) was
+  proposed and not adopted; revisit only if usage shows events kept alive for years.
 
 - The exact **hold default**: 48 h is used; per-event editable 15 min – 14 days.
 - ~~Whether **anonymous** email-link guests should ever hold seats (plan says no).~~ **Decided

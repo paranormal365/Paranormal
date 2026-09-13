@@ -1248,6 +1248,29 @@ add a sitting between two other things.
 
 ![The menus page on a phone](help-media:organization-administration/event-menus-phone.png)
 
+### Dining tables
+
+**Dining tables**, from the event page, decides who sits where at each meal.
+
+![Seating parties at tables for Friday dinner](help-media:organization-administration/event-dining.png)
+
+1. **Set up the tables** once for the event — a name and how many it seats, or *Add 6 tables of 8* to start.
+   The same tables are used at every sitting.
+2. **Choose a sitting** from the buttons at the top. Each sitting is a meal from the Menus page.
+3. **Tap a party, then tap a table.** The party is seated there. To split a big party, change how many to
+   seat before you tap the table, then seat the rest at another.
+
+Only confirmed bookings that are here that night are listed, with how many of each party still need a
+seat and a badge when somebody in the party has dietary notes. A table never seats more people than it
+has chairs; if a party doesn't fit, the page says how many chairs are left. A booking that is cancelled
+drops off its table by itself.
+
+**Seat the same way** copies another sitting's seating — everybody who is at both meals goes back to the
+same table. **Print table list** prints each table with who sits there and their dietary notes, for the
+kitchen and the dining room. Guests see their table on their pass.
+
+Changing a meal's name or dishes keeps its seating. Removing a meal, or a table, removes the seating for it.
+
 ### The confirmation email and the pass
 
 **Confirming a booking sends the guest a letter, and the letter carries their pass.** You do not

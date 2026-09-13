@@ -20,6 +20,9 @@ belongs there; this is for the part underneath.
 
 ## 2026-09-13
 
+- Hosted events have dining tables and a seating plan per meal, limited to confirmed parties and to each
+  table's chairs. Saving the menus now keeps the meals that were not removed, with their seating.
+
 - Hosted event plans can be started from an earlier plan at the same venue, and venues keep a photo
   library that organizers can offer gallery pictures to.
 

@@ -176,6 +176,9 @@ holding one.
 - **A withdrawn pass is shown, not hidden** — faded, with the venue's reason on it. A blank screen
   reads as a fault and sends somebody to a door anyway; the reason tells them what to do instead.
 
+
+If the venue has seated you for dinner or another meal, your pass also shows your table for each sitting.
+
 ## What we write to you
 
 - **When you ask**, a letter says your request arrived and that nothing is held yet.

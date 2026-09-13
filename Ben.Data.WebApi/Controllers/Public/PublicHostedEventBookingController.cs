@@ -258,6 +258,19 @@ public sealed class PublicHostedEventBookingController : BenControllerBase
         var nights = await db.HostedEventNights.AsNoTracking()
             .CountAsync(n => n.HostedEventId == eventId, ct);
 
+        // Where they sit, when the venue has seated them (phase 13) — a party split across two tables reads both.
+        var seating = booking.Status != HostedEventBookingStatus.Confirmed ? [] : (await db.HostedEventDiningSeats.AsNoTracking()
+                .Where(s => s.HostedEventBookingId == booking.Id)
+                .Select(s => new
+                {
+                    s.HostedEventMenu.HostedEventNight.Date, s.HostedEventMenu.SortOrder, Sitting = s.HostedEventMenu.Title,
+                    Table = s.HostedEventDiningTable.Name, s.People,
+                })
+                .ToListAsync(ct))
+            .OrderBy(s => s.Date).ThenBy(s => s.SortOrder).ThenBy(s => s.Table)
+            .Select(s => $"{s.Date:ddd MM/dd} · {s.Sitting} · {s.Table}{(s.People < booking.PartySize ? $" ({s.People})" : "")}")
+            .ToList();
+
         return Ok(new MyHostedEventPassRecord(
             Entities.HostedEventBookingController.ToRecord(pass),
             booking.HostedEvent?.Name ?? "An event",
@@ -273,7 +286,8 @@ public sealed class PublicHostedEventBookingController : BenControllerBase
             Band: EventBands.For(booking, bands, nights) is { } band
                 ? new HostedEventBandRecord(
                     band.Id, band.Colour, band.Meaning, band.Hex, band.Rule, band.SortOrder)
-                : null));
+                : null,
+            Seating: seating));
     }
 
     /// <summary>
@@ -787,6 +801,9 @@ public sealed class PublicHostedEventBookingController : BenControllerBase
         {
             db.HostedEventBookingNights.RemoveRange(booking.Nights);
             db.HostedEventBookingGuests.RemoveRange(booking.Guests);
+            // A request holds no table, but one that was confirmed, seated and then changed back into a request
+            // can still have a seat row; it goes with the booking (phase 13).
+            await db.HostedEventDiningSeats.Where(x => x.HostedEventBookingId == booking.Id).ExecuteDeleteAsync(ct);
             db.HostedEventBookings.Remove(booking);
             await db.SaveChangesAsync(ct);
             return NoContent();

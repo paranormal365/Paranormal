@@ -2195,6 +2195,64 @@ public sealed class HelpMediaCapture : BenTestBase
         }
     }
 
+    /// <summary>Dining tables (item 235 phase 13).</summary>
+    [Test]
+    [Description("organization-administration: seating parties at tables.")]
+    public async Task Capture_EventDining()
+    {
+        var orgId = await OrgIdBySlugAsync("paranormal365");
+        var api = await SignedInApiAsync(SuperAdminEmail, SuperAdminPassword);
+        var tables = $"/api/organizations/{orgId}/events/{SeededRoomsEventId}/dining/tables";
+        string? madeBookingId = null;
+        try
+        {
+            // A confirmed party to seat, when the guest has none.
+            var guest = await SignedInApiAsync(ClientEmail, ClientPassword);
+            var mine = await guest.GetAsync($"/api/public/hosted-events/{SeededRoomsEventId}/my-booking");
+            var confirmed = mine.Ok && (await mine.TextAsync()).Length > 2 && (await mine.JsonAsync())!.Value.GetProperty("status").GetInt32() == 1;
+            if (!confirmed)
+            {
+                if (mine.Ok && (await mine.TextAsync()).Length > 2)
+                    await guest.DeleteAsync($"/api/public/hosted-events/{SeededRoomsEventId}/my-booking");
+                var me = (await (await guest.GetAsync("/api/me")).JsonAsync())!.Value;
+                var guestId = me.TryGetProperty("userId", out var uid) ? uid.GetString() : me.GetProperty("id").GetString();
+                var made = await api.PostAsync($"/api/organizations/{orgId}/events/{SeededRoomsEventId}/bookings/on-behalf",
+                    new() { DataObject = new { leadAppUserId = guestId, kind = 1, partySize = 4, confirmImmediately = true } });
+                if (made.Ok) madeBookingId = (await made.JsonAsync())!.Value.GetProperty("id").GetString();
+            }
+            await guest.DisposeAsync();
+
+            await api.PutAsync(tables, new() { DataObject = new { tables = new[]
+            {
+                new { name = "The window table", seats = 8 }, new { name = "Table 2", seats = 8 }, new { name = "Table 3", seats = 6 },
+            } } });
+
+            await LoginAsync(SuperAdminEmail, SuperAdminPassword);
+            await GoAsync($"/organizations/{orgId}/events/{SeededRoomsEventId}/dining");
+            if (await Page.Locator("#dining-no-sittings").CountAsync() > 0) Assert.Ignore("No menus on this database.");
+            await Expect(Page.Locator("#dining-tables")).ToBeVisibleAsync(new() { Timeout = 30_000 });
+
+            var party = Page.Locator(".dining-party:not([disabled])").First;
+            if (await party.CountAsync() > 0)
+            {
+                await party.ClickAsync();
+                await Page.Locator(".dining-table .card-header").First.ClickAsync();
+                await Expect(Page.Locator("#dining-note")).ToBeVisibleAsync(new() { Timeout = 15_000 });
+            }
+
+            await ShootAsync("organization-administration", "event-dining.png", gated: true,
+                selector: ".dining", proves: "Dining tables");
+        }
+        finally
+        {
+            await api.PutAsync(tables, new() { DataObject = new { tables = Array.Empty<object>() } });
+            if (madeBookingId is not null)
+                await api.PostAsync($"/api/organizations/{orgId}/events/{SeededRoomsEventId}/bookings/{madeBookingId}/cancel",
+                    new() { DataObject = new { decisionNote = "Clearing up after the pictures." } });
+            await api.DisposeAsync();
+        }
+    }
+
     /// <summary>The emailed link's token, as the API logs it when no mail server is set up.</summary>
     private static string? PickTokenFromTheApiLog(string email)
     {

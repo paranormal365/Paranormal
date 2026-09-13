@@ -215,6 +215,9 @@
     private sealed class SittingForm
     {
         public Guid Key { get; init; } = Guid.NewGuid();
+
+        /// <summary>The saved sitting this is, so its seating plan survives an edit (phase 13).</summary>
+        public Guid? Id { get; init; }
         public Guid NightId { get; init; }
         public string Title { get; set; } = "";
         public TimeOnly? ServedAt { get; set; }
@@ -252,6 +255,7 @@
         {
             _sittings.Add(new SittingForm
             {
+                Id = menu.Id,
                 NightId = menu.HostedEventNightId,
                 Title = menu.Title,
                 ServedAt = menu.ServedAtLocal is { } at ? TimeOnly.FromTimeSpan(at) : null,
@@ -316,7 +320,8 @@
                 s.Title.Trim(),
                 s.ServedAt is { } at ? at.ToTimeSpan() : null,
                 Trimmed(s.Notes),
-                Dishes(s.Dishes)))
+                Dishes(s.Dishes),
+                s.Id))
             .ToList();
 
         var (saved, error) = await AdminClient.SetEventMenusAsync(

@@ -106,14 +106,17 @@ public sealed class HostedEventMenuController : OrgCmsControllerBase
             return BadRequest(
                 "Every sitting needs a name — \"Breakfast\", \"Lunch\", \"Dinner\", \"Snacks\".");
 
-        // Replace-the-set: the old sittings go, items and all, and the new ones are written fresh.
-        // Held ids are not carried across, because nothing outside this event points at a menu row.
+        // Replace-the-set, keeping the sittings that are still there. A sitting the screen sends back with its
+        // id stays the same row — its dishes are rewritten — so the seating planned for it (phase 13) is not
+        // wiped every time somebody fixes a typo in the pudding. Anything not sent back goes, seating and all.
         var existing = await db.HostedEventMenus
             .Include(m => m.Items)
             .Where(m => m.HostedEventNight.HostedEventId == eventId)
             .ToListAsync(ct);
+        var kept = wanted.Where(m => m.Id is not null).Select(m => m.Id!.Value).ToHashSet();
+        var going = existing.Where(m => !kept.Contains(m.Id)).ToList();
         db.HostedEventMenuItems.RemoveRange(existing.SelectMany(m => m.Items));
-        db.HostedEventMenus.RemoveRange(existing);
+        db.HostedEventMenus.RemoveRange(going);
 
         // Position in the list IS the order, for sittings and for dishes alike. Reading a sent
         // SortOrder as well would let a screen that sends both disagree with itself, and every
@@ -121,18 +124,28 @@ public sealed class HostedEventMenuController : OrgCmsControllerBase
         for (var i = 0; i < wanted.Count; i++)
         {
             var input = wanted[i];
-            var menu = new HostedEventMenu
+            var menu = input.Id is { } id ? existing.FirstOrDefault(m => m.Id == id) : null;
+            if (menu is null)
             {
-                Id = Guid.NewGuid(),
-                HostedEventNightId = input.HostedEventNightId,
-                Title = Trimmed(input.Title)!,
-                ServedAtLocal = WithinADay(input.ServedAtLocal),
-                Notes = Trimmed(input.Notes),
-                SortOrder = i,
-                DateCreated = DateTime.UtcNow,
-                CreatedByAppUserId = userId.Value,
-            };
-            db.HostedEventMenus.Add(menu);
+                menu = new HostedEventMenu
+                {
+                    Id = Guid.NewGuid(),
+                    DateCreated = DateTime.UtcNow,
+                    CreatedByAppUserId = userId.Value,
+                };
+                db.HostedEventMenus.Add(menu);
+            }
+            else
+            {
+                menu.DateUpdated = DateTime.UtcNow;
+                menu.UpdatedByAppUserId = userId.Value;
+            }
+
+            menu.HostedEventNightId = input.HostedEventNightId;
+            menu.Title = Trimmed(input.Title)!;
+            menu.ServedAtLocal = WithinADay(input.ServedAtLocal);
+            menu.Notes = Trimmed(input.Notes);
+            menu.SortOrder = i;
 
             var itemOrder = 0;
             foreach (var item in input.Items ?? [])

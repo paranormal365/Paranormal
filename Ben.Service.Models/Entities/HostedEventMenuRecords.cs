@@ -63,12 +63,17 @@ public sealed record SetHostedEventMenusRequest(IReadOnlyList<HostedEventMenuInp
 
 /// <summary>One sitting to write.</summary>
 /// <param name="Title">"Breakfast", "Lunch", "Dinner", "Snacks" — whatever the venue calls it.</param>
+/// <param name="Id">
+/// The sitting this row already is, when it is one (phase 13). Kept, so who is seated at which table for it
+/// survives a change to the menu; a row without one is a new sitting.
+/// </param>
 public sealed record HostedEventMenuInput(
     Guid HostedEventNightId,
     string Title,
     TimeSpan? ServedAtLocal = null,
     string? Notes = null,
-    IReadOnlyList<HostedEventMenuItemInput>? Items = null);
+    IReadOnlyList<HostedEventMenuItemInput>? Items = null,
+    Guid? Id = null);
 
 public sealed record HostedEventMenuItemInput(
     string Name,
