@@ -749,14 +749,60 @@ public sealed class HostedEventBookingController : OrgCmsControllerBase
         var booking = pass!.HostedEventBooking;
         var alreadyIn = pass.CheckedInUtc;
 
+        var now = DateTime.UtcNow;
+
         if (request.CheckIn && pass.CheckedInUtc is null)
         {
-            pass.CheckedInUtc = DateTime.UtcNow;
+            pass.CheckedInUtc = now;
             pass.CheckedInByAppUserId = userId.Value;
-            pass.DateUpdated = DateTime.UtcNow;
+            pass.DateUpdated = now;
             pass.UpdatedByAppUserId = userId.Value;
-            await db.SaveChangesAsync(ct);
         }
+
+        // AND THE ARRIVAL ITSELF, FOR THIS NIGHT (item 235 phase 7, defect 19).
+        //
+        // The stamp above is one per pass and always was: it records that a party turned up, once,
+        // over a three-night weekend. The row below is what lets the Saturday door know whether
+        // the people in front of it were in on the Friday, and what answers "who was actually here
+        // on the Saturday" afterwards. Both are kept — the stamp is history and rewriting it would
+        // invent nights nobody came to.
+        if (request.CheckIn && request.HostedEventNightId is { } nightId)
+        {
+            var here = booking.Nights.Any(n => n.HostedEventNightId == nightId && n.ReleasedUtc is null)
+                    || booking.Nights.All(n => n.ReleasedUtc is not null);
+
+            if (here && await db.HostedEventNights.AnyAsync(
+                    n => n.Id == nightId && n.HostedEventId == eventId, ct))
+            {
+                var arrival = await db.HostedEventCheckIns.FirstOrDefaultAsync(
+                    c => c.HostedEventBookingId == booking.Id
+                      && c.HostedEventNightId == nightId, ct);
+
+                if (arrival is null)
+                {
+                    db.HostedEventCheckIns.Add(new HostedEventCheckIn
+                    {
+                        Id = Guid.NewGuid(),
+                        HostedEventBookingId = booking.Id,
+                        HostedEventNightId = nightId,
+                        ArrivedUtc = now,
+                        Method = HostedEventCheckInMethod.Scanned,
+                        RecordedByAppUserId = userId.Value,
+                        DateCreated = now,
+                        CreatedByAppUserId = userId.Value,
+                    });
+                }
+                else
+                {
+                    // Walked back in from the car park. Keep the first arrival, clear the leaving.
+                    arrival.LeftUtc = null;
+                    arrival.DateUpdated = now;
+                    arrival.UpdatedByAppUserId = userId.Value;
+                }
+            }
+        }
+
+        await db.SaveChangesAsync(ct);
 
         return Ok(new HostedEventScanResult(
             Admitted: true,

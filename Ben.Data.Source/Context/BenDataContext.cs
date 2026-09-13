@@ -122,6 +122,8 @@ namespace Ben.Data.Source.Context
         public virtual DbSet<HostedEventMenuItem> HostedEventMenuItems { get; set; }
         public virtual DbSet<HostedEventPass> HostedEventPasses { get; set; }
         public virtual DbSet<HostedEventStaff> HostedEventStaff { get; set; }
+        public virtual DbSet<HostedEventCheckIn> HostedEventCheckIns { get; set; }
+        public virtual DbSet<HostedEventWalkUp> HostedEventWalkUps { get; set; }
         public virtual DbSet<OutboxEmail> OutboxEmails { get; set; }
         public virtual DbSet<OutboxEmailAttachment> OutboxEmailAttachments { get; set; }
         public virtual DbSet<EventCredit> EventCredits { get; set; }
@@ -836,6 +838,62 @@ namespace Ben.Data.Source.Context
             modelBuilder.Entity<HostedEventStaff>()
                 .HasIndex(s => s.Token)
                 .HasFilter("[Token] IS NOT NULL");
+
+            // ── who actually walked in, night by night (phase 7) ──────────────
+            //
+            // One row per booking per night, enforced: a second scan of the same party on the same
+            // night is the same arrival, and a door that recorded two would double every count it
+            // fed. The booking cascades — an arrival at a booking that no longer exists is
+            // nothing — and the night does not, because a night is deleted only by editing the
+            // event and doing that silently under a recorded arrival should be refused.
+            modelBuilder.Entity<HostedEventCheckIn>()
+                .HasOne(c => c.HostedEventBooking).WithMany()
+                .HasForeignKey(c => c.HostedEventBookingId).OnDelete(DeleteBehavior.Cascade);
+            modelBuilder.Entity<HostedEventCheckIn>()
+                .HasOne(c => c.HostedEventNight).WithMany()
+                .HasForeignKey(c => c.HostedEventNightId).OnDelete(DeleteBehavior.NoAction);
+            modelBuilder.Entity<HostedEventCheckIn>()
+                .HasOne(c => c.RecordedByAppUser).WithMany()
+                .HasForeignKey(c => c.RecordedByAppUserId).OnDelete(DeleteBehavior.NoAction);
+            modelBuilder.Entity<HostedEventCheckIn>()
+                .HasOne(c => c.CreatedByAppUser).WithMany()
+                .HasForeignKey(c => c.CreatedByAppUserId).OnDelete(DeleteBehavior.NoAction);
+            modelBuilder.Entity<HostedEventCheckIn>()
+                .HasOne(c => c.UpdatedByAppUser).WithMany()
+                .HasForeignKey(c => c.UpdatedByAppUserId).IsRequired(false).OnDelete(DeleteBehavior.NoAction);
+
+            modelBuilder.Entity<HostedEventCheckIn>()
+                .HasIndex(c => new { c.HostedEventBookingId, c.HostedEventNightId })
+                .IsUnique();
+
+            // What the door asks every few seconds all evening: everybody in tonight.
+            modelBuilder.Entity<HostedEventCheckIn>()
+                .HasIndex(c => c.HostedEventNightId);
+
+            // ── and people who simply turned up (phase 7) ─────────────────────
+            //
+            // No booking, no pass, nothing to confirm — a head count with a name on it when
+            // somebody gave one. NoAction on the night for the same reason as an arrival: a night
+            // deleted out from under a recorded walk-up should be refused rather than silently
+            // taking the count with it.
+            modelBuilder.Entity<HostedEventWalkUp>()
+                .HasOne(w => w.HostedEventNight).WithMany()
+                .HasForeignKey(w => w.HostedEventNightId).OnDelete(DeleteBehavior.NoAction);
+            modelBuilder.Entity<HostedEventWalkUp>()
+                .HasOne(w => w.RecordedByAppUser).WithMany()
+                .HasForeignKey(w => w.RecordedByAppUserId).OnDelete(DeleteBehavior.NoAction);
+            modelBuilder.Entity<HostedEventWalkUp>()
+                .HasOne(w => w.CreatedByAppUser).WithMany()
+                .HasForeignKey(w => w.CreatedByAppUserId).OnDelete(DeleteBehavior.NoAction);
+            modelBuilder.Entity<HostedEventWalkUp>()
+                .HasOne(w => w.UpdatedByAppUser).WithMany()
+                .HasForeignKey(w => w.UpdatedByAppUserId).IsRequired(false).OnDelete(DeleteBehavior.NoAction);
+
+            modelBuilder.Entity<HostedEventWalkUp>().Property(w => w.Name).HasMaxLength(200);
+            modelBuilder.Entity<HostedEventWalkUp>().Property(w => w.Note).HasMaxLength(500);
+
+            modelBuilder.Entity<HostedEventWalkUp>()
+                .HasIndex(w => w.HostedEventNightId);
 
             // ── what the venue is holding back ────────────────────────────────
             //

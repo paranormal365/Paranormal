@@ -18,6 +18,19 @@ day-by-day account of building it would say nothing to anyone using it now.
 
 ## 2026-09-13
 
+- An event can now have its own **staff**: people who help at that event and nowhere else. Invite somebody
+  by email — they need no account and no place in your group — and say what they may do: run the
+  door, see who's coming, decide bookings, menus and dietary, files. An invitation grants nothing
+  until it is accepted, and the list says so.
+- The door is a screen of its own now, made for a phone. It scans a pass with the camera, takes the
+  code typed in when the camera is no use, and finds somebody by name when they have lost the email
+  entirely. Every reason a camera will not start comes with what to do instead.
+- Arrivals are recorded **per night**, so a three-night weekend can say who was here on the
+  Saturday. Marking somebody in, out, or not-them-after-all is one big button each.
+- The door says **how many more people could come in tonight** — counting everybody expected and
+  everybody who has already walked in — and somebody who simply turns up can be written down on the
+  spot. Let too many in and it refuses, because a number nobody enforces is not a number.
+
 - You can now get a place at a hosted event from its own page. Where the venue sells by the
   square, you tap the seats or rooms you want and hold them; where it takes requests, you say
   which nights you are coming and what you would like, and they place you.

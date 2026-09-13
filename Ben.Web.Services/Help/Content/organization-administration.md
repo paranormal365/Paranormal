@@ -1291,6 +1291,63 @@ reason is what the door reads out.
 A withdrawn pass is kept rather than deleted. Somebody showing an old code is told it was replaced,
 which is a different sentence from being told it was never real.
 
+### Who is helping, and the door
+
+**The person on the door is not a person with billing rights.** A hotel gives the door to a weekend
+helper who is not in your group and never will be, and until now the only way to let them scan a
+pass was to make them somebody who could change your billing.
+
+![Who is helping at an event](help-media:organization-administration/event-staff.png)
+
+**Staff** on the event page invites somebody by email and says what they may do. Five switches, and
+they are not a ladder:
+
+- **Run the door** — scan passes and mark people in. Most helpers need only this one.
+- **See who's coming** — the board, with guests' names and anything they cannot eat.
+- **Say yes or no to bookings** — deciding, which carries seeing.
+- **Menus and the kitchen's sheet.**
+- **The event's files.**
+
+The role — *Door*, *Kitchen*, *Guide* — is a label for your own rota. It grants nothing.
+
+**An invitation grants nothing until it is accepted**, and the list says so plainly against
+anybody who has not. The letter tells them which event, which venue and exactly what they are
+being trusted with, before the button. Accepting makes them an account if they have none.
+
+**It is this event only.** A steward for Saturday is nobody on Sunday, and nobody in your group.
+**Remove** takes effect on their very next tap.
+
+### On the door
+
+**Phone-first, because that is where it is used** — one thumb, in the dark, with somebody standing
+in front of you.
+
+![The door on a phone](help-media:organization-administration/event-door-phone.png)
+
+- **The count is the first thing**: how many are in, out of how many are expected, and **how many
+  more could come in tonight**. That last one is what somebody at your elbow is asking.
+- **Scan a pass** with the camera. Where the browser cannot read QR codes — Safari, mostly — we
+  fetch a reader the first time and nothing else changes. Every reason a camera will not start has
+  a sentence saying what to do instead, including the one a venue meets testing on its own network
+  over `http`.
+- **Type the code** from the guest's pass when the camera is no use. It is the six characters
+  printed under their QR code.
+- **Find somebody by name** when they have lost the email entirely.
+- **They're here** admits them, **Left** marks them out again, and **Not them** takes it back —
+  because a doorway is exactly where the wrong row gets pressed.
+
+**Arrivals are per night.** Somebody marked in on the Friday is not marked in on the Saturday, so
+the Saturday door tells you the truth and you can answer "who was actually here on the Saturday"
+afterwards.
+
+**Somebody who just turns up** is written down as a walk-up: how many, and a name if they gave one.
+No account is invented for them and they get no pass — the point is that the count is right, for
+the kitchen and for the fire officer. Let too many in and the door refuses, because the number at
+the top is only worth anything if it is enforced.
+
+Print the page before the doors open if you expect no signal: a browser cannot scan a code with
+nothing to talk to.
+
 ### The dietary sheet
 
 **What the kitchen needs**, from the event page or from the booking board, turns every guest's note

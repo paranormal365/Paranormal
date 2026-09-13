@@ -161,11 +161,12 @@ public sealed partial class BenAdminClientAdapter
                new { }, token);
 
     public Task<(HostedEventScanResult? Result, string? Error)> ScanEventPassAsync(
-        Guid orgId, Guid eventId, string code, bool checkIn, CancellationToken token = default)
+        Guid orgId, Guid eventId, string code, bool checkIn, Guid? nightId = null,
+        CancellationToken token = default)
         => _api.SendExpectingReasonAsync<ScanHostedEventPassRequest, HostedEventScanResult>(
                HttpMethod.Post,
                $"/api/organizations/{orgId}/events/{eventId}/bookings/door/scan",
-               new ScanHostedEventPassRequest(code, checkIn), token);
+               new ScanHostedEventPassRequest(code, checkIn, nightId), token);
 
     // ── the guest's own weekend ──────────────────────────────────────────────
 
@@ -219,6 +220,41 @@ public sealed partial class BenAdminClientAdapter
         Guid eventId, CancellationToken token = default)
         => _api.GetItemAsync<HostedEventMenusRecord>(
                $"/api/public/hosted-events/{eventId}/menus", token);
+
+    // ── the door, on the night (item 235 phase 7) ────────────────────────────
+
+    private static string DoorUrl(Guid orgId, Guid eventId)
+        => $"/api/organizations/{orgId}/events/{eventId}/door";
+
+    public Task<ItemResult<HostedEventDoorRecord>> GetEventDoorAsync(
+        Guid orgId, Guid eventId, Guid? night = null, CancellationToken token = default)
+        => _api.GetItemAsync<HostedEventDoorRecord>(
+               DoorUrl(orgId, eventId) + (night is { } id ? $"?night={id}" : ""), token);
+
+    public Task<(HostedEventDoorRecord? Result, string? Error)> DoorArriveAsync(
+        Guid orgId, Guid eventId, HostedEventDoorMoveRequest request, CancellationToken token = default)
+        => _api.SendExpectingReasonAsync<HostedEventDoorMoveRequest, HostedEventDoorRecord>(
+               HttpMethod.Post, $"{DoorUrl(orgId, eventId)}/arrive", request, token);
+
+    public Task<(HostedEventDoorRecord? Result, string? Error)> DoorLeaveAsync(
+        Guid orgId, Guid eventId, HostedEventDoorMoveRequest request, CancellationToken token = default)
+        => _api.SendExpectingReasonAsync<HostedEventDoorMoveRequest, HostedEventDoorRecord>(
+               HttpMethod.Post, $"{DoorUrl(orgId, eventId)}/leave", request, token);
+
+    public Task<(HostedEventDoorRecord? Result, string? Error)> DoorUndoAsync(
+        Guid orgId, Guid eventId, HostedEventDoorMoveRequest request, CancellationToken token = default)
+        => _api.SendExpectingReasonAsync<HostedEventDoorMoveRequest, HostedEventDoorRecord>(
+               HttpMethod.Post, $"{DoorUrl(orgId, eventId)}/undo", request, token);
+
+    public Task<(HostedEventDoorRecord? Result, string? Error)> DoorWalkUpAsync(
+        Guid orgId, Guid eventId, HostedEventWalkUpRequest request, CancellationToken token = default)
+        => _api.SendExpectingReasonAsync<HostedEventWalkUpRequest, HostedEventDoorRecord>(
+               HttpMethod.Post, $"{DoorUrl(orgId, eventId)}/walk-up", request, token);
+
+    public Task<(HostedEventDoorRecord? Result, string? Error)> DoorUndoWalkUpAsync(
+        Guid orgId, Guid eventId, Guid walkUpId, CancellationToken token = default)
+        => _api.SendExpectingReasonAsync<object, HostedEventDoorRecord>(
+               HttpMethod.Delete, $"{DoorUrl(orgId, eventId)}/walk-up/{walkUpId}", new { }, token);
 
     // ── who is helping (item 235 phase 7) ────────────────────────────────────
 

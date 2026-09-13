@@ -50,7 +50,17 @@ public sealed record ScanHostedEventPassRequest(
     /// <summary>
     /// False to look without admitting anybody — for a host checking a code before the doors open.
     /// </summary>
-    bool CheckIn = true);
+    bool CheckIn = true,
+
+    /// <summary>
+    /// Which night they are walking in on (item 235 phase 7).
+    /// </summary>
+    /// <remarks>
+    /// Given, the scan records an arrival for that night, which is the only way a three-night
+    /// weekend can answer "who was here on the Saturday". Omitted, it behaves as it did before:
+    /// one stamp on the pass and no idea which night it was.
+    /// </remarks>
+    Guid? HostedEventNightId = null);
 
 /// <summary>
 /// What the door is told.
@@ -74,3 +84,91 @@ public sealed record HostedEventScanResult(
     IReadOnlyList<HostedEventBookingNightRecord>? Nights,
     IReadOnlyList<string>? GuestNames,
     DateTime? AlreadyCheckedInUtc);
+
+// ── the door, night by night (item 235 phase 7) ──────────────────────────────
+
+/// <summary>
+/// One party as the door sees them tonight.
+/// </summary>
+/// <remarks>
+/// <para><b>What a steward needs and nothing else.</b> A name, how many, where they are staying,
+/// whether they are already in — and dietary <b>flags</b> for tonight, which are the words a guest
+/// wrote about what they cannot eat and no more than that. No address, no phone number, nothing
+/// about last year.</para>
+/// </remarks>
+/// <param name="Code">
+/// The last six of their pass, so the door can find them when somebody reads a code aloud and the
+/// camera has given up.
+/// </param>
+/// <param name="Dietary">
+/// What the party between them cannot eat, for this night. A steward pointing somebody at the
+/// wrong plate is the failure this prevents; the guest's own name against each note is on the
+/// kitchen's sheet, not here.
+/// </param>
+public sealed record HostedEventDoorPartyRecord(
+    Guid HostedEventBookingId,
+    string LeadName,
+    int PartySize,
+    HostedEventBookingKind Kind,
+    string? Where,
+    string? Code,
+    DateTime? ArrivedUtc,
+    DateTime? LeftUtc,
+    int? PeopleIn,
+    IReadOnlyList<string> Dietary);
+
+/// <summary>Somebody who turned up tonight without a booking.</summary>
+/// <param name="Name">What they said their name was, if they said. A doorway is not an office.</param>
+public sealed record HostedEventWalkUpRecord(
+    Guid Id,
+    int People,
+    string? Name,
+    string? Note,
+    DateTime ArrivedUtc);
+
+/// <summary>Everybody expected on one night, and how the evening is going.</summary>
+/// <param name="NightId">The night being run. The door defaults to today in the venue's own zone.</param>
+/// <param name="Expected">Everybody with a place tonight, arrived or not.</param>
+/// <param name="WalkUps">People who turned up without one, in the order they came in.</param>
+/// <param name="PlacesLeft">
+/// <para>How many more people could be let in tonight, or null when the venue has set no ceiling.
+/// </para>
+///
+/// <para>Ben, 2026-09-13, asking for exactly this: a steward with somebody in front of them
+/// offering cash needs one number, now, and "look at the plan and count" is not an answer in a
+/// doorway. It counts everything that takes a place — confirmed parties here tonight and walk-ups
+/// already in — against whichever ceiling this event has.</para>
+/// </param>
+/// <param name="PlacesLeftSentence">
+/// The same fact in words, because "3" beside a heading is a number a tired steward can read as
+/// anything. Null when there is no ceiling to speak of.
+/// </param>
+public sealed record HostedEventDoorRecord(
+    Guid HostedEventId,
+    string EventName,
+    Guid NightId,
+    DateTime NightDate,
+    IReadOnlyList<HostedEventNightRecord> Nights,
+    IReadOnlyList<HostedEventDoorPartyRecord> Expected,
+    int PeopleExpected,
+    int PeopleIn,
+    IReadOnlyList<HostedEventWalkUpRecord> WalkUps,
+    int? PlacesLeft = null,
+    string? PlacesLeftSentence = null);
+
+/// <summary>Writing down somebody who turned up without a booking.</summary>
+public sealed record HostedEventWalkUpRequest(
+    Guid HostedEventNightId,
+    int People = 1,
+    string? Name = null,
+    string? Note = null);
+
+/// <summary>Marking somebody in, out, or not here after all.</summary>
+/// <param name="People">
+/// How many actually came, when it is not the whole party. Null means all of them, which is the
+/// common case and keeps the number in step with a booking the host may still edit.
+/// </param>
+public sealed record HostedEventDoorMoveRequest(
+    Guid HostedEventBookingId,
+    Guid HostedEventNightId,
+    int? People = null);

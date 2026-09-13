@@ -1,0 +1,68 @@
+/* The door, on the night (item 235 phase 7).
+
+   ONE THUMB, IN THE DARK, WITH SOMEBODY WAITING. Every target here is at least 56 pixels tall —
+   bigger than the 44 the rest of the site settles for — because the cost of hitting the wrong row
+   is admitting the wrong party, and the person pressing it is not looking at the screen for long.
+
+   THE COUNT IS THE LARGEST THING ON THE PAGE. It answers the question a steward is asked most. */
+
+.door__count {
+    display: flex;
+    flex-wrap: wrap;
+    gap: .25rem 1rem;
+    align-items: baseline;
+    justify-content: space-between;
+
+    margin-bottom: .75rem;
+    padding: .5rem .75rem;
+
+    border-radius: var(--bs-border-radius);
+    background: var(--bs-body-tertiary-bg, var(--bs-tertiary-bg));
+}
+
+.door__in {
+    font-size: 1.75rem;
+    font-weight: 700;
+    line-height: 1;
+    margin-right: .25rem;
+}
+
+.door__big {
+    min-height: 3.5rem;
+    min-width: 6rem;
+}
+
+.door-row {
+    display: flex;
+    flex-wrap: wrap;
+    gap: .5rem .75rem;
+    align-items: center;
+    justify-content: space-between;
+}
+
+.door-row__who {
+    min-width: 12rem;
+    flex: 1 1 auto;
+}
+
+.door-row__acts {
+    display: flex;
+    gap: .5rem;
+    flex-wrap: wrap;
+}
+
+/* Already in, and still on the list — because a steward looking for somebody needs to find them
+   whether or not they have been through, and the difference has to be visible at a glance. */
+.door-row--in {
+    background: var(--bs-success-bg-subtle);
+}
+
+@media (max-width: 575.98px) {
+    .door-row__acts {
+        width: 100%;
+    }
+
+    .door-row__acts .btn {
+        flex: 1 1 auto;
+    }
+}

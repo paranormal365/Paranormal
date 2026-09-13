@@ -4,6 +4,7 @@ using Ben.Data.Source.Context;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore.Infrastructure;
 using Microsoft.EntityFrameworkCore.Metadata;
+using Microsoft.EntityFrameworkCore.Migrations;
 using Microsoft.EntityFrameworkCore.Storage.ValueConversion;
 
 #nullable disable
@@ -11,9 +12,11 @@ using Microsoft.EntityFrameworkCore.Storage.ValueConversion;
 namespace Ben.Data.Source.Migrations
 {
     [DbContext(typeof(BenDataContext))]
-    partial class BenDataContextModelSnapshot : ModelSnapshot
+    [Migration("20260913125333_HostedEventCheckIn")]
+    partial class HostedEventCheckIn
     {
-        protected override void BuildModel(ModelBuilder modelBuilder)
+        /// <inheritdoc />
+        protected override void BuildTargetModel(ModelBuilder modelBuilder)
         {
 #pragma warning disable 612, 618
             modelBuilder
@@ -4226,57 +4229,6 @@ namespace Ben.Data.Source.Migrations
                         .HasFilter("[HostedEventNightId] IS NOT NULL");
 
                     b.ToTable("HostedEventUnitBlocks");
-                });
-
-            modelBuilder.Entity("Ben.Data.Source.Entities.HostedEventWalkUp", b =>
-                {
-                    b.Property<Guid>("Id")
-                        .ValueGeneratedOnAdd()
-                        .HasColumnType("uniqueidentifier");
-
-                    b.Property<DateTime>("ArrivedUtc")
-                        .HasColumnType("datetime2");
-
-                    b.Property<Guid>("CreatedByAppUserId")
-                        .HasColumnType("uniqueidentifier");
-
-                    b.Property<DateTime>("DateCreated")
-                        .HasColumnType("datetime2");
-
-                    b.Property<DateTime?>("DateUpdated")
-                        .HasColumnType("datetime2");
-
-                    b.Property<Guid>("HostedEventNightId")
-                        .HasColumnType("uniqueidentifier");
-
-                    b.Property<string>("Name")
-                        .HasMaxLength(200)
-                        .HasColumnType("nvarchar(200)");
-
-                    b.Property<string>("Note")
-                        .HasMaxLength(500)
-                        .HasColumnType("nvarchar(500)");
-
-                    b.Property<int>("People")
-                        .HasColumnType("int");
-
-                    b.Property<Guid>("RecordedByAppUserId")
-                        .HasColumnType("uniqueidentifier");
-
-                    b.Property<Guid?>("UpdatedByAppUserId")
-                        .HasColumnType("uniqueidentifier");
-
-                    b.HasKey("Id");
-
-                    b.HasIndex("CreatedByAppUserId");
-
-                    b.HasIndex("HostedEventNightId");
-
-                    b.HasIndex("RecordedByAppUserId");
-
-                    b.HasIndex("UpdatedByAppUserId");
-
-                    b.ToTable("HostedEventWalkUps");
                 });
 
             modelBuilder.Entity("Ben.Data.Source.Entities.Investigation", b =>
@@ -12725,40 +12677,6 @@ namespace Ben.Data.Source.Migrations
                     b.Navigation("HostedEventLayoutUnit");
 
                     b.Navigation("HostedEventNight");
-
-                    b.Navigation("UpdatedByAppUser");
-                });
-
-            modelBuilder.Entity("Ben.Data.Source.Entities.HostedEventWalkUp", b =>
-                {
-                    b.HasOne("Ben.Data.Source.Entities.AppUser", "CreatedByAppUser")
-                        .WithMany()
-                        .HasForeignKey("CreatedByAppUserId")
-                        .OnDelete(DeleteBehavior.NoAction)
-                        .IsRequired();
-
-                    b.HasOne("Ben.Data.Source.Entities.HostedEventNight", "HostedEventNight")
-                        .WithMany()
-                        .HasForeignKey("HostedEventNightId")
-                        .OnDelete(DeleteBehavior.NoAction)
-                        .IsRequired();
-
-                    b.HasOne("Ben.Data.Source.Entities.AppUser", "RecordedByAppUser")
-                        .WithMany()
-                        .HasForeignKey("RecordedByAppUserId")
-                        .OnDelete(DeleteBehavior.NoAction)
-                        .IsRequired();
-
-                    b.HasOne("Ben.Data.Source.Entities.AppUser", "UpdatedByAppUser")
-                        .WithMany()
-                        .HasForeignKey("UpdatedByAppUserId")
-                        .OnDelete(DeleteBehavior.NoAction);
-
-                    b.Navigation("CreatedByAppUser");
-
-                    b.Navigation("HostedEventNight");
-
-                    b.Navigation("RecordedByAppUser");
 
                     b.Navigation("UpdatedByAppUser");
                 });

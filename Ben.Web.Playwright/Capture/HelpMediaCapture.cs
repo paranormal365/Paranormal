@@ -2166,6 +2166,35 @@ public sealed class HelpMediaCapture : BenTestBase
         }
     }
 
+    /// <summary>
+    /// The door on the night, and the people helping run it (item 235 phase 7).
+    /// </summary>
+    /// <remarks>
+    /// The door is photographed at phone width because that is the only width it is ever really
+    /// used at: one thumb, in the dark, with somebody standing in front of it. A confirmed party
+    /// is arranged first so the picture is of a list somebody could work from rather than of an
+    /// empty evening.
+    /// </remarks>
+    [Test]
+    [Description("organization-administration: the staff list, and the door on a phone.")]
+    public async Task Capture_HostedEventDoor()
+    {
+        var orgId = await OrgIdBySlugAsync("paranormal365");
+        var bookingId = await ConfirmAPartyAsync(orgId);
+
+        await LoginAsync(SuperAdminEmail, SuperAdminPassword);
+
+        await GoAsync($"/organizations/{orgId}/events/{SeededSeatsEventId}/door");
+        await ShootAsync("organization-administration", "event-door-phone.png",
+            gated: true, proves: "expected", width: 375);
+
+        await GoAsync($"/organizations/{orgId}/events/{SeededRoomsEventId}/staff");
+        await ShootAsync("organization-administration", "event-staff.png",
+            gated: true, proves: "Ask somebody to help");
+
+        await ReleaseAsync(orgId, bookingId);
+    }
+
     /// <summary>The seeded evening's slug, which is the address on the poster.</summary>
     private async Task<string> SeatsEventSlugAsync(string orgId)
     {

@@ -210,8 +210,13 @@ public interface IBenEventBookingClient
     /// scan is not a refusal. <paramref name="checkIn"/> false looks without admitting anybody,
     /// which is what a host testing a code before the doors open wants.
     /// </remarks>
+    /// <param name="nightId">
+    /// Which night they are walking in on (phase 7). Given, the scan records an arrival for that
+    /// night — the only way a three-night weekend can answer "who was here on the Saturday".
+    /// </param>
     Task<(HostedEventScanResult? Result, string? Error)> ScanEventPassAsync(
-        Guid orgId, Guid eventId, string code, bool checkIn, CancellationToken token = default);
+        Guid orgId, Guid eventId, string code, bool checkIn, Guid? nightId = null,
+        CancellationToken token = default);
 
     // ── the guest's own weekend ──────────────────────────────────────────────
 
@@ -303,6 +308,48 @@ public interface IBenEventBookingClient
     /// </remarks>
     Task<ItemResult<PublicHostedEventPlanRecord>> GetPublicHostedEventPlanAsync(
         Guid eventId, CancellationToken token = default);
+
+    // ── the door, on the night (item 235 phase 7) ────────────────────────────
+
+    /// <summary>
+    /// Everybody expected on one night, who is already in, and how many places are left.
+    /// </summary>
+    /// <remarks>
+    /// The night defaults to today AT THE VENUE when none is given: a door in Nashville opened
+    /// from a laptop in London must not offer yesterday's list.
+    /// </remarks>
+    Task<ItemResult<HostedEventDoorRecord>> GetEventDoorAsync(
+        Guid orgId, Guid eventId, Guid? night = null, CancellationToken token = default);
+
+    /// <summary>Marks a party in. Pressing it twice is not an error.</summary>
+    Task<(HostedEventDoorRecord? Result, string? Error)> DoorArriveAsync(
+        Guid orgId, Guid eventId, HostedEventDoorMoveRequest request,
+        CancellationToken token = default);
+
+    /// <summary>Marks a party as having left.</summary>
+    Task<(HostedEventDoorRecord? Result, string? Error)> DoorLeaveAsync(
+        Guid orgId, Guid eventId, HostedEventDoorMoveRequest request,
+        CancellationToken token = default);
+
+    /// <summary>Takes an arrival back, because the wrong row was pressed in the dark.</summary>
+    Task<(HostedEventDoorRecord? Result, string? Error)> DoorUndoAsync(
+        Guid orgId, Guid eventId, HostedEventDoorMoveRequest request,
+        CancellationToken token = default);
+
+    /// <summary>
+    /// Writes down somebody who turned up without a booking.
+    /// </summary>
+    /// <remarks>
+    /// No account is invented for them: a head count with a name when there is one. Refused when
+    /// the house is full, which is the other half of what the number at the top of the door is for.
+    /// </remarks>
+    Task<(HostedEventDoorRecord? Result, string? Error)> DoorWalkUpAsync(
+        Guid orgId, Guid eventId, HostedEventWalkUpRequest request,
+        CancellationToken token = default);
+
+    /// <summary>Takes a walk-up back.</summary>
+    Task<(HostedEventDoorRecord? Result, string? Error)> DoorUndoWalkUpAsync(
+        Guid orgId, Guid eventId, Guid walkUpId, CancellationToken token = default);
 
     // ── who is helping (item 235 phase 7) ────────────────────────────────────
 
