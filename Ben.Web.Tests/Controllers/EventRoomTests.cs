@@ -259,9 +259,37 @@ public sealed class EventRoomTests
         Ok(await Room(sqlite, Guest).Post(EventId, "No photo here", null, false, default));
         Ok(await Room(sqlite, Host).Hide(EventId, hideMe, default));
 
-        var wall = Assert.IsType<EventWallRecord>(Assert.IsType<OkObjectResult>((await Room(sqlite, Guest).Photos(EventId, default)).Result).Value);
+        var wall = Assert.IsType<EventWallRecord>(Assert.IsType<OkObjectResult>((await Room(sqlite, Host).Photos(EventId, default)).Result).Value);
         Assert.Equal(["Keep"], wall.Photos.Select(p => p.Caption));
+    }
 
+    [Fact]
+    public async Task The_wall_is_behind_the_organizers_and_the_venues_accounts_and_not_a_guests()
+    {
+        // Ben, 2026-09-13: some of the people in the photos do not want their images in public, and the
+        // wall is what gets put on a screen.
+        await using var sqlite = await SeedAsync();
+        var venueStaff = Guid.NewGuid();
+        await using (var db = await sqlite.NewContextAsync())
+        {
+            db.Users.Add(new AppUser { Id = venueStaff, Email = "porter@example.test", UserName = "porter", DateCreated = DateTime.UtcNow });
+            db.OrganizationUserMemberships.Add(new OrganizationUserMembership
+            {
+                Id = Guid.NewGuid(), OrganizationId = VenueOrgId, AppUserId = venueStaff, IsActive = true,
+                Role = OrganizationMemberRole.Member, DateCreated = DateTime.UtcNow, CreatedByAppUserId = Host,
+            });
+            await db.SaveChangesAsync();
+        }
+        Ok(await Room(sqlite, Guest).Post(EventId, "Seen by the right people", Photo(), false, default));
+
+        Assert.IsType<OkObjectResult>((await Room(sqlite, Host).Photos(EventId, default)).Result);
+        Assert.IsType<OkObjectResult>((await Room(sqlite, venueStaff).Photos(EventId, default)).Result);
+
+        Assert.IsType<NotFoundResult>((await Room(sqlite, Guest).Photos(EventId, default)).Result);
         Assert.IsType<NotFoundResult>((await Room(sqlite, Waiting).Photos(EventId, default)).Result);
+        Assert.IsType<NotFoundResult>((await Room(sqlite, Guid.NewGuid()).Photos(EventId, default)).Result);
+
+        Assert.False(Ok(await Room(sqlite, Guest).Get(EventId, null, default)).CanSeeWall);
+        Assert.True(Ok(await Room(sqlite, Host).Get(EventId, null, default)).CanSeeWall);
     }
 }

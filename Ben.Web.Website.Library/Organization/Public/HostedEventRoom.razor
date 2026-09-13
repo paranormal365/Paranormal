@@ -28,10 +28,14 @@
         <BenSectionHeading Text="The room" />
         <p class="small text-secondary mb-2">
             For the people at this event. What you post here stays yours.
-            <a class="ms-1" href="@($"/events/{HostedEventId}/wall")" id="room-wall-link">Photo wall</a>
+            @if (room.CanSeeWall)
+            {
+                <a class="ms-1" href="@($"/events/{HostedEventId}/wall")" id="room-wall-link">Photo wall</a>
+            }
             @if (room.CanAddPhotos)
             {
-                <text> · </text><a href="@($"/events/{HostedEventId}/photos")" id="room-add-photos-link">Add photos from your phone</a>
+                @if (room.CanSeeWall) { <text> · </text> }
+                <a class="ms-1" href="@($"/events/{HostedEventId}/photos")" id="room-add-photos-link">Add photos from your phone</a>
             }
         </p>
 

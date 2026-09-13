@@ -890,6 +890,11 @@ switches on.
 
 ### Phase 12 — After the event
 
+**Added 2026-09-13 (Ben):** "If we generate a gallery, we can send that link in a thank you link
+including any upcoming events hosted by the organizer." The once-only thank-you letter carries the
+event's public gallery link (phase 11c) and the organizer's upcoming published events, so the letter
+that closes one weekend opens the next.
+
 `HostedEventLifecycleJob`'s archive rule with decision 11; **Copy this event** (`POST
 {id}/copy {Name, StartsOn}` → a Draft with nights shifted, units without bookings, menus remapped by
 night index, staff copied, arrangement reset); `GET bookings/export.csv`; reviews via `TourReview`

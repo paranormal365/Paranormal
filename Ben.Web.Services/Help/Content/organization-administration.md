@@ -1531,8 +1531,10 @@ on the public feed.
   the last night.
 
 **The photo wall** (*Photo wall* on the event page) shows the room's photos full screen, one at a
-time, newest first, picking up new ones every half-minute — put it on a TV at the venue from a
-computer signed in as somebody running the event. When there are none yet it shows a code guests can
+time, newest first, picking up new ones every half-minute. **It opens only for your group, the
+event's helpers and the venue's people** — never for guests, and never for anybody outside the event —
+because a slideshow goes on a screen people walk past, and some of the people in the photos do not want
+their faces in public. Put it on a TV at the venue from a computer signed in with one of those accounts. When there are none yet it shows a code guests can
 scan to **add photos from their phone**.
 
 ![The photo wall](help-media:organization-administration/event-photo-wall.png)

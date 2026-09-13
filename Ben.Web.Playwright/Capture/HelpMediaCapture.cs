@@ -2526,6 +2526,7 @@ public sealed class HelpMediaCapture : BenTestBase
             await GoAsync($"/o/paranormal365/events/{slug}");
             await ShootAsync("going-to-an-event", "the-room.png", selector: "#hosted-room", proves: "just after midnight");
 
+            await LoginAsync(SuperAdminEmail, SuperAdminPassword);
             await GoAsync($"/events/{SeededRoomsEventId}/wall");
             await Expect(Page.Locator("#photo-wall img")).ToBeVisibleAsync(new() { Timeout = 30_000 });
             await Page.WaitForTimeoutAsync(1500);

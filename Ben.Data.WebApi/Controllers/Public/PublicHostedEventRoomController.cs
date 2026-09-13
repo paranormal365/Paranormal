@@ -249,9 +249,10 @@ public sealed class PublicHostedEventRoomController : BenControllerBase
     /// The photo wall's pictures: approved, not hidden, newest first, for the people in the room.
     /// </summary>
     /// <remarks>
-    /// The same rules as the room, because it is the room's photos on a bigger screen: nothing held by
-    /// the screener, nothing a moderator hid, and nobody outside the event. Polled by the wall page, so
-    /// a photo taken at 9 PM is on the ballroom's TV by 9:01.
+    /// The room's photos on a bigger screen, under stricter rules: nothing held by the screener, nothing
+    /// a moderator hid, and only for the organizing group, the event's helpers and the venue's people —
+    /// see <see cref="EventRoom.MaySeeTheWallAsync"/>. Polled by the wall page, so a photo taken at 9 PM
+    /// is on the ballroom's TV by 9:01.
     /// </remarks>
     [HttpGet("photos")]
     public async Task<ActionResult<EventWallRecord>> Photos(Guid eventId, CancellationToken ct)
@@ -259,7 +260,8 @@ public sealed class PublicHostedEventRoomController : BenControllerBase
         var userId = GetCurrentUserId();
         await using var db = await _dbFactory.CreateDbContextAsync(ct);
         var (hosted, standing) = await LoadAsync(db, eventId, userId, ct);
-        if (hosted is null || !standing.IsMember) return NotFound();
+        if (hosted is null || !await EventRoom.MaySeeTheWallAsync(db, hosted, standing, userId, ct))
+            return NotFound();
 
         var photos = await db.OrgMessages.AsNoTracking()
             .Where(m => m.HostedEventId == eventId && m.ChannelType == OrgMessageChannel.EventRoom
@@ -288,7 +290,9 @@ public sealed class PublicHostedEventRoomController : BenControllerBase
         var userId = GetCurrentUserId();
         await using var db = await _dbFactory.CreateDbContextAsync(ct);
         var (hosted, standing) = await LoadAsync(db, eventId, userId, ct);
-        if (hosted is null || !standing.IsMember) return NotFound();
+        // The room's members, or somebody from the venue looking at the wall.
+        if (hosted is null || !(standing.IsMember || await EventRoom.MaySeeTheWallAsync(db, hosted, standing, userId, ct)))
+            return NotFound();
 
         var message = await db.OrgMessages.AsNoTracking()
             .Include(m => m.MediaUploadFile)
@@ -395,6 +399,7 @@ public sealed class PublicHostedEventRoomController : BenControllerBase
                 })],
             note,
             hosted.PhotoPosting,
-            whyClosed is null && EventRoom.MayAddPhotos(hosted, standing));
+            whyClosed is null && EventRoom.MayAddPhotos(hosted, standing),
+            await EventRoom.MaySeeTheWallAsync(db, hosted, standing, viewerId, ct));
     }
 }

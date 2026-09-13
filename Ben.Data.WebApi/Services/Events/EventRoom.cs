@@ -57,6 +57,31 @@ public static class EventRoom
         return new(guest, false, false);
     }
 
+    /// <summary>
+    /// Whether this person may open the photo wall: the organizing group, the event's helpers, and the
+    /// venue's own people — never a guest, and never anybody outside the event.
+    /// </summary>
+    /// <remarks>
+    /// Ben, 2026-09-13: the wall "should be behind the venue or organizer's login account so outsiders
+    /// cannot see the photos being taken. Some of the photos may have pictures of people who do not want
+    /// their images out there in the public." A slideshow is made to be put on a screen, and a screen is
+    /// seen by whoever walks past it; so it opens only for the accounts responsible for where it is shown.
+    /// The room itself stays for the guests, who are the people in the photos.
+    /// </remarks>
+    public static async Task<bool> MaySeeTheWallAsync(
+        BenDataContext db, HostedEvent hosted, Standing standing, Guid userId, CancellationToken ct)
+    {
+        if (standing.IsTeam) return true;
+        if (userId == Guid.Empty || hosted.VenueGrantId is not Guid grantId) return false;
+
+        var venueOrg = await db.OrganizationVenueGrants.AsNoTracking()
+            .Where(g => g.Id == grantId && g.RevokedUtc == null)
+            .Select(g => (Guid?)g.VenueOrganizationId).FirstOrDefaultAsync(ct);
+
+        return venueOrg is Guid org && await db.OrganizationUserMemberships
+            .AnyAsync(m => m.OrganizationId == org && m.AppUserId == userId && m.IsActive, ct);
+    }
+
     /// <summary>Why nobody can post in this room now, or null when it is open.</summary>
     public static string? WhyClosed(HostedEvent hosted, IReadOnlyList<DateTime> nightDates, DateTime now)
     {

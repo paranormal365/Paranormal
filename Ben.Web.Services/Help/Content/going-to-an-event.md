@@ -136,7 +136,8 @@ press **Send to…** under the post later. Sending it shares it with them; it do
 
 **Add photos from your phone** opens a page made for a phone: choose pictures from your camera roll
 or take new ones, add a line about them, and send. They go into the room and onto the **photo wall** —
-a full-screen slideshow the organizers can put on a screen at the venue.
+a full-screen slideshow the organizers can put on a screen at the venue. Only the organizers and the
+venue can open the wall, so it is never somewhere a stranger can browse the photos.
 
 ![Adding photos from a phone](/help/media/going-to-an-event/add-photos-phone.png)
 

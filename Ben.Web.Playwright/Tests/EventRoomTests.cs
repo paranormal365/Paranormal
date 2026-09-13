@@ -73,7 +73,7 @@ public class EventRoomTests : BenTestBase
     }
 
     [Test]
-    public async Task A_guest_posts_a_photo_and_it_is_on_the_wall()
+    public async Task A_guest_posts_a_photo_and_the_organizer_sees_it_on_the_wall()
     {
         await LoginAsync(ClientEmail, ClientPassword);
         await Page.GotoAsync($"{BaseUrl}/events/{RoomsEventId}/photos");
@@ -87,6 +87,12 @@ public class EventRoomTests : BenTestBase
         await Page.Locator("#add-photos-caption").FillAsync(_marker);
         await ClickUntilAsync(Page.Locator("#add-photos-send-button"), Page.Locator("#add-photos-done"));
 
+        // The guest is not shown the wall: it is behind the organizer's and venue's accounts.
+        await Page.GotoAsync($"{BaseUrl}/events/{RoomsEventId}/wall");
+        await WaitUntilLoadedAsync();
+        await Expect(Page.Locator("#photo-wall-refused")).ToBeVisibleAsync(new() { Timeout = 30_000 });
+
+        await LoginAsync(SuperAdminEmail, SuperAdminPassword);
         await Page.GotoAsync($"{BaseUrl}/events/{RoomsEventId}/wall");
         await WaitUntilLoadedAsync();
         await Expect(Page.Locator("#photo-wall img")).ToBeVisibleAsync(new() { Timeout = 30_000 });

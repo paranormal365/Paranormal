@@ -545,7 +545,9 @@ public sealed record EventRoomRecord(
     IReadOnlyList<EventRoomMessageRecord> Messages,
     string? Note = null,
     EventPhotoPosting PhotoPosting = EventPhotoPosting.TeamAndGuests,
-    bool CanAddPhotos = false);
+    bool CanAddPhotos = false,
+    /// <summary>Whether this viewer may open the photo wall: the organizers, helpers and venue — not guests.</summary>
+    bool CanSeeWall = false);
 
 /// <summary>One photo or video on the photo wall.</summary>
 public sealed record EventWallPhotoRecord(Guid MessageId, string ContentType, string AuthorName, string? Caption, DateTime PostedUtc);

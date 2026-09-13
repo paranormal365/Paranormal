@@ -14,9 +14,10 @@
 @* The photo wall: the event's photos, one at a time, full screen, for the TV in the ballroom
    (item 235 phase 11 — Ben's idea, 2026-09-13).
 
-   THE ROOM'S PHOTOS ON A BIGGER SCREEN, under the room's rules: nothing the screener held, nothing a
-   moderator hid, nobody outside the event. So the screen is signed in as somebody at the event —
-   usually the organizer's laptop plugged into the TV.
+   BEHIND THE ORGANIZER'S OR THE VENUE'S ACCOUNT, and nobody else's (Ben, 2026-09-13): a slideshow is
+   put on a screen, a screen is seen by whoever walks past, and some of the people in the photos do not
+   want their faces out in public. Guests see the photos in the room; the wall is for the accounts
+   responsible for where it is shown.
 
    NEW PHOTOS ARRIVE ON THEIR OWN. The list is fetched again every half-minute and the newest go to
    the front of the cycle, so a picture taken at 9 PM is up by 9:01.
@@ -34,8 +35,8 @@
     else if (_wall.Failed)
     {
         <div class="photo-wall-stage flex-column gap-3 p-4 text-center" id="photo-wall-refused">
-            <div class="fs-4">This photo wall is for the people at the event.</div>
-            <div class="text-secondary">Sign in as somebody with a place, or somebody running it.</div>
+            <div class="fs-4">This photo wall is for the people running the event.</div>
+            <div class="text-secondary">Sign in with the organizer's or the venue's account. Guests can see the photos in the event's room.</div>
             <a class="btn btn-light" href="@($"/login?returnUrl=/events/{EventId}/wall")">Sign in</a>
         </div>
     }
