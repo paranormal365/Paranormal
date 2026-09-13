@@ -1054,7 +1054,19 @@ ticks by hand; the three jobs; the `https` profile for LAN camera testing).
 ## Still Ben's, but nothing waits on them
 
 - The exact **hold default**: 48 h is used; per-event editable 15 min – 14 days.
-- Whether **anonymous** email-link guests should ever hold seats (plan says no).
+- ~~Whether **anonymous** email-link guests should ever hold seats (plan says no).~~ **Decided
+  2026-09-13 (Ben):** they may, without an account or a password, but not without the organizer being
+  able to reach them and not in a way that lets somebody swamp an event with unconfirmed holds.
+  *"First Last Name, E-mail Address, Phone Number required so the event organizer can contact them to
+  make arrangements for collecting fees. We can let them know during sign up that we only collect their
+  information for the event organization."* Proposed design, to be built as slice 11d (after phase 11):
+  name, email and phone required for every booking (a signed-in guest is asked only for what their
+  profile lacks); a plain disclosure at sign-up that the three go to the organizer for this event only;
+  a signed-out pick shows the seats **pending for 15 minutes and becomes a real hold only when the
+  emailed link is clicked** — so a fake or mistyped address never blocks a seat — then the normal hold
+  expiry applies; one live hold per email per event, the existing per-hold seat cap, and a per-address
+  rate limit on unconfirmed picks. The link lets them manage the booking with no password; setting one
+  stays optional. Phone is required but not verified (the site cannot send texts).
 - Whether the public plan shows **counts** or only states (plan says states only).
 - **Person hard-purge** with hosted references: the census blocks and names the events (the
   existing tool's philosophy), account closure withdraws the person's undecided bookings and asks
