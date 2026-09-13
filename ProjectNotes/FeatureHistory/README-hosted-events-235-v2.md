@@ -842,6 +842,44 @@ waiting list for a confirmed booking or staff, programme per night in the venue 
 session, promotion mail; the *Programme* index link goes live. Compact: the programme is a
 per-night timeline, the most-looked-at thing during an event.
 
+#### Phase 10 as built (2026-09-13) — departures from the README's phase 4
+
+1. **No leaders table.** `LedBy` is text ("Dr Carol Hughes and Ben"): the programme prints a name,
+   and nobody asked for a leader to have an account, a login or a roster of their own. A helper who
+   leads a session is on the event's staff list already.
+2. **Places taken is a stored counter and the concurrency token**, not a count of rows inside a
+   serializable transaction. Two saves racing for the last place cannot both succeed; the loser is
+   retried on a fresh read and queued. Pinned by a two-context test that the token is what refuses
+   the second save (proved by removing it).
+3. **A queue that does not skip.** Promotion is in order, and a party at the head waits for enough
+   places for all of them rather than letting one person behind it take a single free place. The plan
+   did not say either way; skipping would be read by the party as the site losing their place.
+4. **Sign-up needs a Confirmed booking** (up to party size) or accepted staff. A Requested or Held
+   booking is told "signing up opens once the venue confirms your place". The plan's `EventSessions`
+   subscription limit is not enforced — the credit is the product for an event, and a second meter
+   on the same event would be two prices for one weekend.
+5. **One bell bucket, not two.** `EventScheduleChanges` (a confirmed guest's programme changed since
+   `ProgrammeSeenUtc`, cleared by opening the event page). Promotion from the queue is a letter, not
+   a bucket: it is good news that needs no action, and the page shows "You're in" the next time.
+6. **Calendar files** go per session through a website relay
+   (`/calendar/hosted-events/{event}/sessions/{session}.ics`) so the link works wherever the page does.
+   **Found:** `IcsBuilder` calls `ToUniversalTime()`, which shifts a database-read time (kind
+   Unspecified) by the SERVER's own offset; the session rows mark their times UTC explicitly. Other
+   callers pass times they computed as UTC and are unaffected, but the builder would be safer taking
+   `DateTimeKind.Unspecified` as UTC.
+7. **The session's cancellation stamp is `CalledOffUtc`**, not `CancelledAtUtc`: the lifecycle guard
+   forbids reading an event's `CancelledAtUtc` as a state, and a session's own stamp sharing the name
+   would have tripped it for a legitimate reason.
+8. **MyEvents does not list sessions yet**; the event page is where a guest's places show. Recorded
+   for phase 12's after-event pass.
+9. **Verified by.** `HostedEventSessionTests` on SQLite (capacity 2 → third queued at position 1;
+   leaving promotes and writes; the party is not jumped; unconfirmed refused; outside the nights
+   refused; the counter refuses a racing save; moving writes and rings the bell until seen;
+   cancelling writes to the queue too; a draft programme is invisible; the calendar file is 9 PM at
+   the venue), three rules broken once each. Playwright `HostedEventProgrammeTests`: the seeded guest
+   signs up and the count reads "1 of 15", the host adds a session that lands at 7:30 PM on its night
+   and removes it, and the programme fits at 1280/768/375.
+
 ### Phase 11 — Files, the flashy page and ads, the room
 
 As the README's phases 6, 7 and 9 with two changes: the CMS `EventBooking` section embeds

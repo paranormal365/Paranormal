@@ -86,6 +86,7 @@ internal static class HostedEventDemoSeeder
         await SeedWhatTheVenueKeepsAsync(db, owner.Id, now);
         await SeedWhatIsServedAsync(db, owner.Id, now);
         await SeedAPartyTheKitchenMustWorkAroundAsync(db, userManager, config, owner.Id, now);
+        await SeedTheProgrammeAsync(db, owner.Id, now);
     }
 
     /// <summary>
@@ -393,6 +394,51 @@ internal static class HostedEventDemoSeeder
         Console.WriteLine(
             $"[HostedEventDemoSeeder] Created The Thomas House Hotel with {Rooms.Length} rooms, "
             + $"{Rooms.Count(r => r.Bookable)} of them bookable.");
+    }
+
+    /// <summary>
+    /// A published programme for the rooms weekend (item 235 phase 10): a dinner anybody comes to, a
+    /// class that holds fifteen, and a séance that holds eight.
+    /// </summary>
+    /// <remarks>
+    /// Three kinds on purpose, so the programme shows "just come", a count with room, and a small
+    /// session that fills — the three things a guest reads it for.
+    /// </remarks>
+    private static async Task SeedTheProgrammeAsync(BenDataContext db, Guid ownerId, DateTime now)
+    {
+        if (await db.HostedEventSessions.AnyAsync(s => s.HostedEventId == RoomsEventId)) return;
+
+        var hosted = await db.HostedEvents.Include(e => e.Nights).FirstOrDefaultAsync(e => e.Id == RoomsEventId);
+        if (hosted is null || hosted.Nights.Count == 0) return;
+
+        var nights = hosted.Nights.OrderBy(n => n.Date).ToList();
+        var first = nights[0].Date;
+        var last = nights[^1].Date;
+
+        (string Title, DateTime Date, int From, int To, string Where, string? Leader, int? Capacity, bool SignUp)[] sessions =
+        [
+            ("Dinner in the dining room", first, 18, 20, "The dining room", null, null, false),
+            ("Operating the Ovilus", first, 21, 22, "The parlour", "Ben", 15, true),
+            ("Séance in the parlour", last, 22, 23, "The parlour", "Mrs Cole", 8, true),
+        ];
+
+        var order = 0;
+        foreach (var x in sessions)
+        {
+            var (startsUtc, endsUtc) = Services.Events.SessionSignUps.ToUtc(
+                hosted, x.Date, TimeSpan.FromHours(x.From), TimeSpan.FromHours(x.To));
+            db.HostedEventSessions.Add(new HostedEventSession
+            {
+                Id = Guid.NewGuid(), HostedEventId = RoomsEventId, Title = x.Title,
+                StartsAtUtc = startsUtc, EndsAtUtc = endsUtc, LocationText = x.Where, LedBy = x.Leader,
+                Capacity = x.Capacity, RequiresSignUp = x.SignUp, SortOrder = order++,
+                DateCreated = now, CreatedByAppUserId = ownerId,
+            });
+        }
+
+        hosted.ProgrammePublishedUtc ??= now;
+        await db.SaveChangesAsync();
+        Console.WriteLine("[HostedEventDemoSeeder] Published a programme of three sessions for the rooms weekend.");
     }
 
     /// <summary>

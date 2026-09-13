@@ -1475,6 +1475,28 @@ already gave standing.
 
 ![Reviewing a claim](help-media:organization-administration/venue-claim-review.png)
 
+### The programme
+
+**Programme** on the event page is where the classes, talks and meals go — the part of the weekend
+guests opt into one piece at a time. Add each session with its night, its times **on the venue's
+clock** (an end earlier than the start is the next morning), where it is — one of the venue's rooms,
+or words like "meet at reception" — and who leads it.
+
+- **Guests sign up for a place** with an optional limit. Leave the limit empty for no cap; switch
+  signing up off for something anybody just comes to.
+- Only guests the venue has **confirmed** can sign up, for up to their party's size, and anybody
+  helping at the event.
+- A full session **queues** people. When somebody leaves or you raise the limit, the queue moves up
+  in order, a party is never jumped by one person behind it, and whoever gets in is written to.
+- **Who's coming** lists the people with places and the queue, and lets you take somebody off.
+
+![The programme, as the host builds it](help-media:organization-administration/event-programme.png)
+
+**Nothing is shown to guests until you press Publish the programme.** After that, every change says
+what it will do: **moving** a session writes to everybody with a place and rings their bell;
+**cancelling** writes to everybody signed up or queued, with your reason; a session somebody signed
+up for cannot simply be removed — cancel it, so they hear.
+
 ### Letters about bookings
 
 **A request is answered because somebody was told.** Everybody who may say yes or no to bookings —

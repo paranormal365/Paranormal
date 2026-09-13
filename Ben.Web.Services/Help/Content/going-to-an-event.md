@@ -92,6 +92,29 @@ Places you have, or are waiting to hear about, come first. Underneath sits anyth
 and did not get — kept on purpose, because a weekend you were released from is a date you may
 still have free.
 
+## The programme
+
+Some events have a programme: a class, a talk, a séance, dinner. It is on the event's page, night by
+night, **on the venue's clock** — 9 PM means 9 PM at the venue, wherever you are reading it from.
+While the event is on, **Now** and **Next** mark what is happening.
+
+![The programme on the event's page](/help/media/going-to-an-event/programme.png)
+
+- **Just come** means there is nothing to sign up for.
+- **3 of 15** means a session has places, and how many are taken. You see how many, never who.
+- **Sign up** takes a place once the venue has **confirmed** yours at the event — for as many of your
+  party as you choose. While your booking is still waiting on the venue, the page says so instead.
+- **Join the queue** appears when it is full. You are told where you are in line, and if a place
+  comes free it is yours in the order people asked — we write to tell you. A party waits for enough
+  places for all of them rather than being split.
+- **Leave** gives your place back to whoever is next.
+- **Add to calendar** puts the session in your calendar at the right time.
+
+If a session moves or is cancelled after you have planned around it, you are written to, the bell
+says **The programme changed**, and the session is marked **Changed** until you have looked.
+
+![The programme on a phone](/help/media/going-to-an-event/programme-phone.png)
+
 ## Your pass
 
 Once a venue confirms you, your pass is on the event's page and on this list. **One pass admits

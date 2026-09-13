@@ -2381,6 +2381,58 @@ public sealed class HelpMediaCapture : BenTestBase
         }
     }
 
+    /// <summary>The programme: the host's editor, and what a guest reads on the event page (item 235 phase 10).</summary>
+    [Test]
+    [Description("organization-administration + going-to-an-event: the programme.")]
+    public async Task Capture_Programme()
+    {
+        var orgId = await OrgIdBySlugAsync("paranormal365");
+
+        await LoginAsync(SuperAdminEmail, SuperAdminPassword);
+        await GoAsync($"/organizations/{orgId}/events/{SeededRoomsEventId}/sessions");
+        await ShootAsync("organization-administration", "event-programme.png",
+            gated: true, selector: "#programme-list", proves: "Operating the Ovilus");
+
+        var api = await SignedInApiAsync(SuperAdminEmail, SuperAdminPassword);
+        var ev = await api.GetAsync($"/api/public/hosted-events/{SeededRoomsEventId}");
+        if (!ev.Ok) Assert.Ignore("The seeded rooms weekend is not published on this database, so there is no public programme to photograph.");
+        var slug = (await ev.JsonAsync())!.Value.GetProperty("urlName").GetString();
+
+        // The guest with a confirmed place, so the picture shows the Sign up buttons a guest sees.
+        var guest = await SignedInApiAsync(ClientEmail, ClientPassword);
+        var me = await guest.GetAsync("/api/me");
+        var guestId = (await me.JsonAsync())!.Value is var body && body.TryGetProperty("userId", out var uid) ? uid.GetString() : body.GetProperty("id").GetString();
+        var mine = await guest.GetAsync($"/api/public/hosted-events/{SeededRoomsEventId}/my-booking");
+        string? madeBookingId = null;
+        var confirmed = mine.Ok && (await mine.TextAsync()).Length > 2 && (await mine.JsonAsync())!.Value.GetProperty("status").GetInt32() == 1;
+        if (!confirmed)
+        {
+            if (mine.Ok && (await mine.TextAsync()).Length > 2)
+                await guest.DeleteAsync($"/api/public/hosted-events/{SeededRoomsEventId}/my-booking");
+            var made = await api.PostAsync($"/api/organizations/{orgId}/events/{SeededRoomsEventId}/bookings/on-behalf",
+                new() { DataObject = new { leadAppUserId = guestId, kind = 1, partySize = 2, confirmImmediately = true } });
+            if (made.Ok) madeBookingId = (await made.JsonAsync())!.Value.GetProperty("id").GetString();
+        }
+
+        try
+        {
+            await LoginAsync(ClientEmail, ClientPassword);
+            await GoAsync($"/o/paranormal365/events/{slug}");
+            await ShootAsync("going-to-an-event", "programme.png",
+                selector: "#hosted-programme", proves: "Sign up");
+            await ShootAsync("going-to-an-event", "programme-phone.png",
+                selector: "#hosted-programme", proves: "Sign up", width: 375);
+        }
+        finally
+        {
+            if (madeBookingId is not null)
+                await api.PostAsync($"/api/organizations/{orgId}/events/{SeededRoomsEventId}/bookings/{madeBookingId}/cancel",
+                    new() { DataObject = new { decisionNote = "Capture finished." } });
+            await guest.DisposeAsync();
+            await api.DisposeAsync();
+        }
+    }
+
     /// <summary>Letters about bookings, on the notifications page (item 235 phase 8).</summary>
     [Test]
     [Description("organization-administration: how often a group writes to you about bookings.")]

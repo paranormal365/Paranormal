@@ -18,6 +18,12 @@ day-by-day account of building it would say nothing to anyone using it now.
 
 ## 2026-09-13
 
+- Events can have a programme: classes, talks and meals night by night, on the venue's clock. Guests
+  with a confirmed place sign up for sessions that have a limit, join a queue when one is full, and
+  are written to when a place comes free, a session moves, or one is cancelled.
+- The event page shows what is on now and next, how many places each session has left, and an
+  add-to-calendar link for every session.
+
 - Places now have contact details — websites, phone numbers and email addresses — each public or
   private to the group that recorded it, for things like a coordinator's number for scheduling.
   Once a venue is confirmed, it keeps its own public details.

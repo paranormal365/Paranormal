@@ -376,6 +376,13 @@ else
             <BenGuideStrip Guides="@guides" Role="Your guide" Class="mb-4" />
         }
 
+        @* The programme (item 235 phase 10): after the booking card, because deciding to come comes
+           first, and before the description, because once somebody is coming it is what they read. *@
+        @if (_hosted is { } withProgramme)
+        {
+            <HostedEventProgramme HostedEventId="withProgramme.Id" IsAuthenticated="_isAuthenticated" />
+        }
+
         @if (!string.IsNullOrWhiteSpace(_event.Description))
         {
             @* The description is authored in a rich-text editor, so it IS markup and was being

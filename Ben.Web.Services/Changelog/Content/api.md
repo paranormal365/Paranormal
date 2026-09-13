@@ -20,6 +20,9 @@ belongs there; this is for the part underneath.
 
 ## 2026-09-13
 
+- Sessions on a hosted event, drafted privately and published, with first-come sign-up and a queue.
+  Two sign-ups for the last place cannot both succeed. Calendar files are served per session.
+
 - Contact details for places, public or private to a group, and claims to run a place: a code to a
   public address recorded by somebody else, a week for objections, a scheduled task that confirms
   unchallenged claims, and a review queue for everything else.

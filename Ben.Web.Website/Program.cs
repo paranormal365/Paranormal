@@ -669,6 +669,18 @@ app.MapGet("/media/tour-photo/{fileId:guid}", async (
         accessToken: null, httpFactory, ctx, ct);
 }).AllowAnonymous();
 
+// A session on a hosted event's programme, as a calendar file (item 235 phase 10). Anonymous: the
+// programme is public once published, and a calendar app following the link carries no session.
+app.MapGet("/calendar/hosted-events/{eventId:guid}/sessions/{sessionId:guid}.ics", async (
+    Guid eventId, Guid sessionId,
+    IHttpClientFactory httpFactory, IConfiguration config,
+    HttpContext ctx, CancellationToken ct) =>
+{
+    return await Ben.Web.Website.Services.MediaProxy.StreamAsync(
+        $"{config["WebApi:BaseUrl"]}/api/public/hosted-events/{eventId}/sessions/{sessionId}/calendar.ics",
+        accessToken: null, httpFactory, ctx, ct);
+}).AllowAnonymous();
+
 app.MapGet("/media/{fileId:guid}/{kind}", async (
     Guid fileId, string kind, string? t,
     Ben.Web.Website.Services.MediaTicketService tickets,
