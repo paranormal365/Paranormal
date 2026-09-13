@@ -99,6 +99,30 @@ public sealed class PlanModel
             Column: u.LayoutColumn,
             DisplayName: u.Name)));
 
+    /// <summary>
+    /// The same, from what a VISITOR is told about the plan (item 235 phase 6).
+    /// </summary>
+    /// <remarks>
+    /// A second overload rather than one shared record, because the two answers are deliberately
+    /// different shapes: the organizer's carries the venue's private note about a square and the
+    /// public one has no field for it. Mapping them both here is the cost of that, and it is the
+    /// right cost — the alternative is a public endpoint that can leak by being extended.
+    /// </remarks>
+    public static PlanModel From(
+        HostedEventLayoutKind kind, IEnumerable<PublicHostedEventPlanUnitRecord> units)
+        => new(kind, units.Select(u => new PlanUnit(
+            Key: Guid.NewGuid(),
+            Id: u.Id,
+            PlaceRoomId: null,
+            Label: kind == HostedEventLayoutKind.Seats ? u.Name : null,
+            Section: u.Section,
+            Capacity: u.Holds,
+            Price: u.Price,
+            Note: null,
+            Row: u.LayoutRow,
+            Column: u.LayoutColumn,
+            DisplayName: u.Name)));
+
     public HostedEventLayoutKind Kind { get; private set; }
 
     public IReadOnlyList<PlanUnit> Units => _units;

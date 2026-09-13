@@ -859,7 +859,8 @@ public sealed class PublicHostedEventBookingController : BenControllerBase
                 .OrderBy(g => g.SortOrder)
                 .Select(g => new HostedEventBookingGuestRecord(
                     g.Id, g.DisplayName, g.AppUserId, g.DietaryNotes, g.SortOrder))
-                .ToList());
+                .ToList(),
+            b.HoldExpiresUtc);
 
     private static string? Trimmed(string? value)
         => value?.Trim() is { Length: > 0 } v ? v : null;

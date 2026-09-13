@@ -166,13 +166,35 @@ else
            its street until you are coming would be protecting nothing if it did. *@
         <div class="event-act card mb-4">
             <div class="card-body">
-                @* ── A seat on a walk (item 234) ───────────────────────────
-                   On a tour date a sign-up is a REQUEST until the business approves it, so the
-                   page has to say which of the three a guest is looking at. Saying "you're
-                   coming" over a request nobody has agreed to would send somebody to a meeting
-                   point with no place held for them. *@
-                @if (_event.MySeat?.Status == TourSeatStatus.Requested)
+                @* ── A place at a hosted event (item 235 phase 6) ──────────
+                   FIRST IN THE CHAIN, and the tour branches below never run for one. A hosted
+                   event's places are rooms and seats over several nights with a hold on them, and
+                   the umbrella's one-row RSVP cannot say any of that — a page that offered both
+                   would let somebody "come along" to a weekend they have no bed for.
+
+                   Everything about it lives in the component. This page has enough to do drawing
+                   a walk's seats without also knowing what a soft hold is. *@
+                @if (_hosted is { } hostedPlaces)
                 {
+                    <HostedEventPlaces Hosted="hostedPlaces" IsAuthenticated="_isAuthenticated">
+                        <SignedOut>
+                            @* The umbrella's own email flow, unchanged and passed in rather than
+                               copied: it is what issues the token, and a second copy would be a
+                               second way to reach it. *@
+                            @if (!_event.Flags.RsvpHasClosed && !_event.Flags.IsFull)
+                            {
+                                @AttendByEmail
+                            }
+                        </SignedOut>
+                    </HostedEventPlaces>
+                }
+                else if (_event.MySeat?.Status == TourSeatStatus.Requested)
+                {
+                    @* ── A seat on a walk (item 234) ───────────────────────
+                       On a tour date a sign-up is a REQUEST until the business approves it, so
+                       the page has to say which of the three a guest is looking at. Saying
+                       "you're coming" over a request nobody has agreed to would send somebody to
+                       a meeting point with no place held for them. *@
                     <div class="d-flex flex-wrap align-items-center gap-2">
                         <span class="badge text-bg-warning">Asked for</span>
                         <span class="text-secondary small flex-grow-1">
@@ -258,50 +280,7 @@ else
                 }
                 else if (!_isAuthenticated && !_event.Flags.RsvpHasClosed && !_event.Flags.IsFull)
                 {
-                    @if (_emailSent)
-                    {
-                        <div class="event-act__ask mb-1">Check your email</div>
-                        <p class="text-secondary small mb-0">
-                            If that address can come along, there's a link on its way. Click it to
-                            confirm — it works once, and it's good for two weeks.
-                        </p>
-                    }
-                    else
-                    {
-                        <div class="event-act__ask mb-1">Coming along?</div>
-                        <p class="text-secondary small">
-                            You don't need an account. Give us an email address and we'll send you a
-                            link to confirm — no password to invent.
-                        </p>
-
-                        @if (_attendError is not null)
-                        {
-                            <div class="alert alert-danger py-2">@_attendError</div>
-                        }
-
-                        <div class="row g-2">
-                            <div class="col-md-5">
-                                <input class="form-control" type="email" maxlength="320"
-                                       placeholder="you@example.com" value="@_attendEmail"
-                                       @oninput="@(e => _attendEmail = e.Value?.ToString() ?? "")" />
-                            </div>
-                            <div class="col-md-4">
-                                <input class="form-control" maxlength="200"
-                                       placeholder="Your name (optional)" value="@_attendName"
-                                       @oninput="@(e => _attendName = e.Value?.ToString() ?? "")" />
-                            </div>
-                            <div class="col-md-3">
-                                <button type="button" class="btn btn-primary w-100"
-                                        @onclick="RequestAttendanceAsync"
-                                        disabled="@(_busy || !_attendEmail.Contains('@'))">Send me the link</button>
-                            </div>
-                        </div>
-
-                        <p class="text-secondary mt-2 mb-0" style="font-size:.75rem;">
-                            Already have an account? <a href="/login">Sign in</a> and say you're
-                            coming in one click.
-                        </p>
-                    }
+                    @AttendByEmail
                 }
                 else if (_event.Flags.RsvpBlockedReason is string reason)
                 {
@@ -498,6 +477,61 @@ else
 </FeatureGate>
 
 @code {
+
+    /// <summary>
+    /// "Give us an email address and we'll send you a link", for a visitor with no account.
+    /// </summary>
+    /// <remarks>
+    /// A fragment because two branches render it: an ordinary event's own sign-up, and a hosted
+    /// event's, which draws the house first and puts this underneath. A second copy would be a
+    /// second way to reach the same token, and the two would drift.
+    /// </remarks>
+    private RenderFragment AttendByEmail => @<text>
+                @if (_emailSent)
+                {
+                    <div class="event-act__ask mb-1">Check your email</div>
+                    <p class="text-secondary small mb-0">
+                        If that address can come along, there's a link on its way. Click it to
+                        confirm — it works once, and it's good for two weeks.
+                    </p>
+                }
+                else
+                {
+                    <div class="event-act__ask mb-1">Coming along?</div>
+                    <p class="text-secondary small">
+                        You don't need an account. Give us an email address and we'll send you a
+                        link to confirm — no password to invent.
+                    </p>
+
+                    @if (_attendError is not null)
+                    {
+                        <div class="alert alert-danger py-2">@_attendError</div>
+                    }
+
+                    <div class="row g-2">
+                        <div class="col-md-5">
+                            <input class="form-control" type="email" maxlength="320"
+                                   placeholder="you@example.com" value="@_attendEmail"
+                                   @oninput="@(e => _attendEmail = e.Value?.ToString() ?? "")" />
+                        </div>
+                        <div class="col-md-4">
+                            <input class="form-control" maxlength="200"
+                                   placeholder="Your name (optional)" value="@_attendName"
+                                   @oninput="@(e => _attendName = e.Value?.ToString() ?? "")" />
+                        </div>
+                        <div class="col-md-3">
+                            <button type="button" class="btn btn-primary w-100"
+                                    @onclick="RequestAttendanceAsync"
+                                    disabled="@(_busy || !_attendEmail.Contains('@'))">Send me the link</button>
+                        </div>
+                    </div>
+
+                    <p class="text-secondary mt-2 mb-0" style="font-size:.75rem;">
+                        Already have an account? <a href="/login">Sign in</a> and say you're
+                        coming in one click.
+                    </p>
+                }
+    </text>;
     [Parameter] public string UrlName { get; set; } = "";
     [Parameter] public string EventSlug { get; set; } = "";
 

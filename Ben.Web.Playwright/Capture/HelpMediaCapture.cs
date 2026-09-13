@@ -2008,6 +2008,100 @@ public sealed class HelpMediaCapture : BenTestBase
             gated: true, proves: "people expected", width: 375);
     }
 
+    /// <summary>
+    /// The guest's end: the house, the picker and what the venue has said (item 235 phase 6).
+    /// </summary>
+    /// <remarks>
+    /// <para>Three pictures, and the first two are the same screen to two different people. A
+    /// stranger sees the plan and cannot touch it, which is the case the public endpoint is
+    /// anonymous for; a signed-in guest sees the same squares answer. The third is the phone,
+    /// where the summary bar is fixed to the window and is the whole reason a guest can choose
+    /// seats in a pub.</para>
+    ///
+    /// <para>It signs in as the seeded guest with no group of his own — the person this feature is
+    /// for — and lets go of whatever the run before left him holding, so the picture is of an
+    /// empty house rather than of his own booking.</para>
+    /// </remarks>
+    [Test]
+    [Description("going-to-an-event: the house, choosing your own seats, and on a phone.")]
+    public async Task Capture_HostedEventGuest()
+    {
+        var orgId = await OrgIdBySlugAsync("paranormal365");
+        var slug = await SeatsEventSlugAsync(orgId);
+        var url = $"/o/paranormal365/events/{slug}";
+
+        // Signed out first, while nobody is signed in: the plan a stranger reads.
+        await GoAsync(url);
+        // Cropped to the card: a help picture of a seating plan should be mostly seating plan,
+        // and a full-page shot reduces the part being explained to a strip along the bottom.
+        await ShootAsync("going-to-an-event", "the-house.png",
+            gated: false, selector: "#hosted-places", proves: "You don't need an account");
+
+        await LoginAsync(ClientEmail, ClientPassword);
+        await LetGoOfEverythingAsync();
+
+        await GoAsync(url);
+        await Expect(Page.Locator("#picker-bar")).ToBeVisibleAsync(new() { Timeout = 30_000 });
+
+        // Three seats chosen, so the summary says what it adds up to before anything is held.
+        var free = Page.Locator(".plan__unit[data-state='free']");
+        await Expect(free.First).ToBeVisibleAsync(new() { Timeout = 20_000 });
+        for (var i = 0; i < 3; i++) await free.Nth(i).ClickAsync();
+
+        await ShootAsync("going-to-an-event", "choosing-seats.png",
+            gated: false, selector: "#hosted-places", proves: "a party of 3");
+
+        await ShootAsync("going-to-an-event", "choosing-seats-phone.png",
+            gated: false, proves: "Hold these places", width: 375);
+    }
+
+    /// <summary>The seeded evening's slug, which is the address on the poster.</summary>
+    private async Task<string> SeatsEventSlugAsync(string orgId)
+    {
+        var api = await SignedInApiAsync(SuperAdminEmail, SuperAdminPassword);
+        var ev = await api.GetAsync($"/api/organizations/{orgId}/events/{SeededSeatsEventId}");
+        Assert.That(ev.Ok, Is.True, await ev.TextAsync());
+
+        var slug = (await ev.JsonAsync())!.Value.GetProperty("urlName").GetString();
+        await api.DisposeAsync();
+
+        return slug!;
+    }
+
+    /// <summary>Lets the guest go of anything they are holding, so the house photographs empty.</summary>
+    private async Task LetGoOfEverythingAsync()
+    {
+        var api = await SignedInApiAsync(ClientEmail, ClientPassword);
+
+        var mine = await api.GetAsync("/api/public/hosted-events/mine");
+        if (mine.Ok)
+        {
+            foreach (var booking in (await mine.JsonAsync())!.Value.EnumerateArray())
+            {
+                if (booking.GetProperty("hostedEventId").GetString() is { } id)
+                    await api.DeleteAsync($"/api/public/hosted-events/{id}/my-booking");
+            }
+        }
+
+        await api.DisposeAsync();
+    }
+
+    private async Task<Microsoft.Playwright.IAPIRequestContext> SignedInApiAsync(
+        string email, string password)
+    {
+        var api = await Playwright.APIRequest.NewContextAsync(new() { BaseURL = ApiUrl });
+        var login = await api.PostAsync("/login", new() { DataObject = new { email, password } });
+        Assert.That(login.Ok, Is.True, $"{email} could not sign in: {await login.TextAsync()}");
+
+        var token = (await login.JsonAsync())!.Value.GetProperty("accessToken").GetString();
+
+        return await Playwright.APIRequest.NewContextAsync(new()
+        {
+            BaseURL = ApiUrl,
+            ExtraHTTPHeaders = new Dictionary<string, string> { ["Authorization"] = $"Bearer {token}" },
+        });
+    }
+
     /// <summary>The seeded Thomas House weekend and the seeded 260-seat evening.</summary>
     /// <remarks>
     /// Written out rather than referenced: this project drives the running site over HTTP and has

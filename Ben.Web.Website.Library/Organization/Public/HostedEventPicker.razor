@@ -1,0 +1,316 @@
+@namespace Ben.Web.Website.Library.Organization.Public
+
+@inject IBenAdminClient AdminClient
+
+@using Ben.Data.Common.Enums
+@using Ben.Service.Models.Entities
+@using Ben.Web.Website.Library.Kit
+@using Ben.Web.Website.Library.Kit.Plans
+@using Ben.Web.Website.Library.Manage.Icon
+
+@* A guest choosing their own places off the plan (item 235 phase 6).
+
+   WHAT IS PICKED IS WHAT IS HELD, and nothing is held until they press the button. Every tap
+   before that is a choice they can change; the moment they commit, the squares go out of
+   everybody else's reach and the venue has however long the host set to answer.
+
+   THE PARTY SIZE IS THE PICKS. On a seating plan four seats is a party of four, because a guest
+   who held one seat for four people had a booking nobody could ever confirm. On a rooms plan the
+   rail adds up what the rooms sleep, which is the most that can stay in them rather than a promise
+   about who does.
+
+   LOSING THE RACE IS ORDINARY. Two people reach for H9 in the same second and one of them is told
+   so, by name, with everything else they chose still theirs — which is why the refusal rings the
+   square instead of clearing the plan. *@
+
+<div class="picker" id="hosted-picker">
+
+    @if (Plan.Nights.Count > 1)
+    {
+        <div class="btn-group btn-group-sm mb-2 flex-wrap" role="group" aria-label="Which night">
+            @foreach (var night in Plan.Nights)
+            {
+                var thisNight = night;
+                <button type="button" id="@($"pick-night-{thisNight.Id}")"
+                        class="btn @(_night == thisNight.Id ? "btn-primary" : "btn-outline-primary")"
+                        @onclick="() => _night = thisNight.Id">
+                    @thisNight.Date.ToString("ddd MM/dd")
+                    @if (Chosen(thisNight.Id).Count > 0)
+                    {
+                        <span class="badge bg-body-secondary text-body-emphasis ms-1">
+                            @Chosen(thisNight.Id).Count
+                        </span>
+                    }
+                </button>
+            }
+        </div>
+        <p class="text-secondary small">
+            Choose on each @Hosted.DateNoun you are coming. A @Hosted.DateNoun with nothing chosen
+            is a @Hosted.DateNoun you are not here for.
+        </p>
+    }
+
+    @if (_refusal is { Length: > 0 })
+    {
+        @* The server's own sentence, which names the square. Rewriting it would lose the name,
+           and the name is the only part a guest can act on. *@
+        <div class="alert alert-warning py-2" id="picker-refusal" role="alert">@_refusal</div>
+    }
+    @if (_error is { Length: > 0 })
+    {
+        <div class="alert alert-danger py-2" id="picker-error" role="alert">@_error</div>
+    }
+
+    <BenPlan Model="_model" Mode="PlanMode.Pick"
+             Occupancy="@OccupancyForTheNight()"
+             Selection="@Chosen(_night)"
+             SelectionChanged="OnSelectionChanged"
+             Refused="_ringed"
+             AriaLabel="@($"Choose your places — {Where()}")" />
+
+    @* The summary sticks to the bottom of the card on a phone, because the button that commits is
+       otherwise four hundred squares below the first one somebody taps. *@
+    <div class="picker__bar" id="picker-bar">
+        <div class="picker__what">
+            <div class="fw-semibold">@Summary()</div>
+            @if (_places > 0)
+            {
+                <div class="small text-secondary">
+                    Held for @HoldWords() once you press it, while @Hosted.OrganizationName answers.
+                    @if (Money() is { Length: > 0 } money)
+                    {
+                        <text> @money</text>
+                    }
+                </div>
+            }
+        </div>
+
+        <div class="d-flex gap-2">
+            @if (_places > 0)
+            {
+                <button type="button" class="btn btn-outline-secondary" id="picker-clear"
+                        disabled="@_busy" @onclick="Clear">Start again</button>
+            }
+            <button type="button" class="btn btn-primary" id="picker-hold"
+                    disabled="@(_busy || _places == 0)" @onclick="HoldAsync">
+                @(_busy ? "Holding…" : "Hold these places")
+            </button>
+        </div>
+    </div>
+</div>
+
+@code {
+    [Parameter, EditorRequired] public PublicHostedEventRecord Hosted { get; set; } = null!;
+    [Parameter, EditorRequired] public PublicHostedEventPlanRecord Plan { get; set; } = null!;
+
+    /// <summary>Told what was held, so the page can swap the picker for the booking's card.</summary>
+    [Parameter] public EventCallback<MyHostedEventBookingRecord> OnHeld { get; set; }
+
+    private PlanModel _model = new(HostedEventLayoutKind.Seats);
+    private readonly Dictionary<Guid, HashSet<Guid>> _chosen = [];
+    private Guid _night;
+    private Guid? _planId;
+
+    private HashSet<Guid> _ringed = [];
+    private string? _refusal;
+    private string? _error;
+    private bool _busy;
+
+    /// <summary>How many places are chosen across every night.</summary>
+    /// <remarks>
+    /// Places and not people: two rooms on two nights is four choices and one family. What the
+    /// party SIZE is comes from <see cref="PartySize"/>, which is a different question with a
+    /// different answer on each kind of plan.
+    /// </remarks>
+    private int _places;
+
+    /// <summary>
+    /// Rebuilds the working plan when the answer from the server changes underneath it.
+    /// </summary>
+    /// <remarks>
+    /// Keyed on the event, not on every parameter set: the availability poll hands this component
+    /// a fresh record every thirty seconds, and rebuilding the model each time would throw away
+    /// what somebody had chosen while they were still choosing it.
+    /// </remarks>
+    protected override void OnParametersSet()
+    {
+        if (_planId == Plan.HostedEventId) return;
+
+        _planId = Plan.HostedEventId;
+        _model = PlanModel.From(Plan.Kind, Plan.Units);
+        _night = Plan.Nights.FirstOrDefault()?.Id ?? Guid.Empty;
+    }
+
+    // ── what is chosen ───────────────────────────────────────────────────────
+
+    private HashSet<Guid> Chosen(Guid nightId)
+        => _chosen.TryGetValue(nightId, out var set) ? set : [];
+
+    private void OnSelectionChanged(IReadOnlySet<Guid> selection)
+    {
+        _chosen[_night] = [.. selection];
+        _places = _chosen.Sum(pair => pair.Value.Count);
+        _refusal = null;
+        _ringed = [];
+    }
+
+    private void Clear()
+    {
+        _chosen.Clear();
+        _places = 0;
+        _refusal = null;
+        _ringed = [];
+    }
+
+    /// <summary>
+    /// How many people the choice is for.
+    /// </summary>
+    /// <remarks>
+    /// <b>On seats, one square is one person.</b> A guest who held a single seat for a party of
+    /// four had a booking the venue could never confirm and could never be told why, which is a
+    /// bug this counts its way out of. <b>On rooms it is what the rooms sleep</b> — the most who
+    /// can stay, since a family of three in a room for four is an ordinary booking.
+    /// </remarks>
+    private int PartySize()
+    {
+        if (Plan.Kind == HostedEventLayoutKind.Seats)
+            return Math.Max(1, _chosen.Max(pair => (int?)pair.Value.Count) ?? 0);
+
+        var byNight = _chosen.Select(pair => pair.Value
+            .Select(key => _model.Units.FirstOrDefault(u => u.Key == key))
+            .Sum(u => Holds(u) ?? 1));
+
+        return Math.Max(1, byNight.DefaultIfEmpty(0).Max());
+    }
+
+    private int? Holds(PlanUnit? unit)
+        => unit?.Id is { } id ? Plan.Units.FirstOrDefault(u => u.Id == id)?.Holds : null;
+
+    // ── what the plan looks like tonight ─────────────────────────────────────
+
+    /// <summary>
+    /// What each square is on the night being shown, keyed the way the component asks for it.
+    /// </summary>
+    /// <remarks>
+    /// The model's key is its own, made when the plan was read, so the server's unit id has to be
+    /// translated. Anything the server did not mention is free, which is most of a plan.
+    /// </remarks>
+    private IReadOnlyDictionary<Guid, HostedEventPlanCellState> OccupancyForTheNight()
+    {
+        var byUnit = new Dictionary<Guid, HostedEventPlanCellState>();
+
+        foreach (var unit in _model.Units)
+        {
+            if (unit.Id is not { } id) continue;
+
+            var cell = Plan.Cells.FirstOrDefault(
+                c => c.HostedEventNightId == _night && c.HostedEventLayoutUnitId == id);
+
+            if (cell is not null) byUnit[unit.Key] = cell.State;
+        }
+
+        return byUnit;
+    }
+
+    private string Where()
+        => Plan.Nights.FirstOrDefault(n => n.Id == _night) is { } night
+            ? night.Date.ToString("dddd MM/dd/yyyy")
+            : Hosted.Name;
+
+    // ── holding them ─────────────────────────────────────────────────────────
+
+    private async Task HoldAsync()
+    {
+        _busy = true;
+        _refusal = null;
+        _error = null;
+        _ringed = [];
+
+        var nights = _chosen
+            .SelectMany(pair => pair.Value.Select(key => (NightId: pair.Key, Key: key)))
+            .Select(choice => new HostedEventBookingNightChoice(
+                choice.NightId,
+                _model.Units.FirstOrDefault(u => u.Key == choice.Key)?.Id))
+            .Where(choice => choice.HostedEventLayoutUnitId is not null)
+            .ToList();
+
+        var (held, refused) = await AdminClient.HoldHostedEventPlacesAsync(
+            Hosted.Id, new HoldHostedEventPlacesRequest(nights, PartySize()));
+
+        _busy = false;
+
+        if (held is not null)
+        {
+            await OnHeld.InvokeAsync(held);
+            return;
+        }
+
+        if (refused is null)
+        {
+            _error = "Those places couldn't be held just now. Try again in a moment.";
+            return;
+        }
+
+        // THE REST OF THE CHOICE STAYS. Only the squares that went are dropped and ringed, so
+        // somebody who picked six seats and lost one is choosing one seat again rather than six.
+        _refusal = refused.Sentence;
+        _ringed = [.. _model.Units
+            .Where(u => u.Id is { } id && refused.TakenUnitIds.Contains(id))
+            .Select(u => u.Key)];
+
+        foreach (var night in _chosen.Keys.ToList()) _chosen[night].ExceptWith(_ringed);
+        _places = _chosen.Sum(pair => pair.Value.Count);
+    }
+
+    // ── words ────────────────────────────────────────────────────────────────
+
+    private string Summary()
+    {
+        if (_places == 0)
+            return Plan.Kind == HostedEventLayoutKind.Seats
+                ? "Tap the seats you want."
+                : "Tap the rooms you want.";
+
+        var what = Plan.Kind == HostedEventLayoutKind.Seats
+            ? $"{_places} {(_places == 1 ? "seat" : "seats")}"
+            : $"{_places} {(_places == 1 ? "room" : "rooms")}";
+
+        var across = _chosen.Count(pair => pair.Value.Count > 0);
+
+        return across > 1
+            ? $"{what} across {across} {Hosted.DateNoun}s · a party of {PartySize()}"
+            : $"{what} · a party of {PartySize()}";
+    }
+
+    /// <summary>How long the venue's hold lasts, said the way a person would say it.</summary>
+    private string HoldWords()
+    {
+        var hold = TimeSpan.FromMinutes(Plan.HoldMinutes);
+
+        return hold.TotalHours < 1 ? $"{hold.TotalMinutes:0} minutes"
+             : hold.TotalHours < 48 ? $"{hold.TotalHours:0} hours"
+             : $"{hold.TotalDays:0} days";
+    }
+
+    /// <summary>
+    /// What the places cost, and who to settle it with.
+    /// </summary>
+    /// <remarks>
+    /// Shown and never charged: this site does not take a guest's money, and a page that quietly
+    /// looked like a checkout would be the one lie in the whole feature.
+    /// </remarks>
+    private string? Money()
+    {
+        var priced = _chosen
+            .SelectMany(pair => pair.Value)
+            .Select(key => _model.Units.FirstOrDefault(u => u.Key == key)?.Id)
+            .Select(id => Plan.Units.FirstOrDefault(u => u.Id == id)?.Price)
+            .Where(price => price is not null)
+            .ToList();
+
+        if (priced.Count == 0) return null;
+
+        var total = priced.Sum(price => price!.Value);
+        return $"That comes to {total:C0}, settled with {Hosted.OrganizationName} and never here.";
+    }
+}

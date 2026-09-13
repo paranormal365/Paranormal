@@ -304,6 +304,21 @@ public interface IBenEventBookingClient
     Task<ItemResult<PublicHostedEventPlanRecord>> GetPublicHostedEventPlanAsync(
         Guid eventId, CancellationToken token = default);
 
+    /// <summary>
+    /// Takes the places a guest picked on the plan and holds them until the venue answers.
+    /// </summary>
+    /// <remarks>
+    /// <para><b>Two answers, not one and an error string.</b> Losing the race is an ordinary
+    /// outcome of pressing this button, and the server's refusal carries the squares that went so
+    /// the picker can ring them and keep the rest of the choice. A helper that flattened it to a
+    /// sentence would leave the page unable to do either.</para>
+    ///
+    /// <para>Both null means something else went wrong — the network, a session, a 500 — and the
+    /// caller says so in its own words.</para>
+    /// </remarks>
+    Task<(MyHostedEventBookingRecord? Held, HoldRefusedRecord? Refused)> HoldHostedEventPlacesAsync(
+        Guid eventId, HoldHostedEventPlacesRequest request, CancellationToken token = default);
+
     /// <summary>Posts the guest their own pass again, because letters get lost.</summary>
     /// <remarks>
     /// Re-sends the venue's own decision letter, which is what the pass travels in, so the guest

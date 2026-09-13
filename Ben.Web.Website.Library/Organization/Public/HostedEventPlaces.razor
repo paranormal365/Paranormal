@@ -1,0 +1,262 @@
+@namespace Ben.Web.Website.Library.Organization.Public
+
+@implements IDisposable
+
+@inject IBenAdminClient AdminClient
+@inject IBenUserState UserState
+
+@using Ben.Data.Common.Enums
+@using Ben.Service.Models.Entities
+@using Ben.Web.Services.WebApi
+@using Ben.Web.Website.Library.Kit
+@using Ben.Web.Website.Library.Kit.Plans
+@using Ben.Web.Website.Library.Manage.Icon
+
+@* Getting a place at a hosted event, whichever way this one does it (item 235 phase 6).
+
+   ONE BRANCH ON THE PUBLIC PAGE, and everything about it lives here: the event page has enough to
+   do drawing a walk's seats without also knowing what a soft hold is.
+
+   WHAT THE READER SEES IS DECIDED IN ONE PLACE, in this order — what the venue has already said to
+   them, then whether anything can be had at all, then how this event gives places out. A page that
+   worked that out in four separate `if`s is a page where two of them eventually disagree.
+
+   THE PLAN IS DRAWN EVEN WHEN NOTHING CAN BE CHOSEN. A stranger, a latecomer and somebody whose
+   weekend was called off all want to see the house; only one of them can touch it. *@
+
+<div id="hosted-places">
+
+    @* Owned here rather than by the card, because letting a request go deletes the card and a
+       sentence rendered inside it would vanish with the thing it was explaining. *@
+    @if (_note is { Length: > 0 })
+    {
+        <div class="alert alert-success py-2" id="booking-note">@_note</div>
+    }
+
+    @* ── what is true of the whole event ─────────────────────────────────── *@
+    @if (Hosted.LifecycleState == HostedEventLifecycleState.VenueWithdrawn)
+    {
+        <div class="alert alert-danger py-2" id="hosted-withdrawn">
+            <strong>The venue has withdrawn.</strong>
+            @if (Hosted.CancelledReason is { Length: > 0 } why)
+            {
+                <text> “@why”</text>
+            }
+            <div class="small mt-1">
+                Nothing can be booked, and anything already agreed has been released.
+            </div>
+        </div>
+    }
+    else if (GoNoGoLine() is { Length: > 0 } goNoGo)
+    {
+        <div class="alert alert-warning py-2" id="hosted-go-no-go">@goNoGo</div>
+    }
+
+    @if (_booking is { } mine)
+    {
+        <EventBookingCard Booking="mine" Hosted="Hosted"
+                          OnChanged="OnBookingChanged" OnSaid="Say"
+                          OnStartAgain="StartAgainAsync" />
+    }
+    else if (!Hosted.IsTakingBookings)
+    {
+        <div class="d-flex flex-wrap align-items-center gap-2" id="hosted-closed">
+            <span class="badge bg-body-secondary text-body-emphasis">
+                <BenIcon Name="clock" Class="me-1" />Closed
+            </span>
+            <span class="text-secondary small flex-grow-1">
+                @(Hosted.NotTakingBookingsSentence ?? "This one isn't taking bookings.")
+            </span>
+        </div>
+    }
+    else if (!IsAuthenticated)
+    {
+        @* Signed out, the plan is worth reading and cannot be touched: choosing a seat means
+           holding it, and holding something needs somebody to hold it for. *@
+        <div class="event-act__ask mb-1">Coming along?</div>
+
+        @if (_plan is { IsPicking: true, Units.Count: > 0 })
+        {
+            <p class="text-secondary small">
+                Sign in to choose your own places on the plan. This is how it looks right now.
+            </p>
+            <BenPlan Model="@ReadOnlyModel()" Mode="PlanMode.Read"
+                     Occupancy="@OccupancyForTheNight()"
+                     AriaLabel="How full the house is" />
+        }
+
+        @SignedOut
+    }
+    else if (_plan is { IsPicking: true, Units.Count: > 0 } picking)
+    {
+        <HostedEventPicker Hosted="Hosted" Plan="picking" OnHeld="OnBookingChanged" />
+    }
+    else
+    {
+        <AskForPlaceForm Hosted="Hosted" Plan="_plan" OnAsked="OnBookingChanged" />
+    }
+</div>
+
+@code {
+    [Parameter, EditorRequired] public PublicHostedEventRecord Hosted { get; set; } = null!;
+
+    [Parameter] public bool IsAuthenticated { get; set; }
+
+    /// <summary>
+    /// The page's own "give us an email address" form, for a visitor with no account.
+    /// </summary>
+    /// <remarks>
+    /// Passed in rather than rebuilt here: it is the umbrella's flow, it works, and a second copy
+    /// of it that drifted would be a second way to reach the same token. This component only
+    /// decides <i>where</i> it goes — under the plan, once somebody has seen the house.
+    /// </remarks>
+    [Parameter] public RenderFragment? SignedOut { get; set; }
+
+    private MyHostedEventBookingRecord? _booking;
+    private string? _note;
+    private PublicHostedEventPlanRecord? _plan;
+    private PlanModel? _readOnly;
+    private Guid _night;
+
+    /// <summary>
+    /// Re-reads the plan while somebody is looking at it.
+    /// </summary>
+    /// <remarks>
+    /// Thirty seconds, because the fact that matters is somebody else taking a seat and the page
+    /// is otherwise a photograph of a minute ago. It is a plain poll and not a live connection:
+    /// what is at stake is being told slightly late, and the database settles the race regardless
+    /// — a guest who picks a seat that went in the meantime is refused by name.
+    /// </remarks>
+    private static readonly TimeSpan LookAgainEvery = TimeSpan.FromSeconds(30);
+
+    private System.Threading.Timer? _poll;
+    private bool _disposed;
+
+    protected override async Task OnAfterRenderAsync(bool firstRender)
+    {
+        if (!firstRender) return;
+
+        // The page above waited for auth before it rendered this, but the wait is cheap and a
+        // component that only works when its parent remembered is a component that breaks the day
+        // somebody reuses it.
+        if (!await UserState.WaitUntilAuthReadyAsync(RendererInfo.IsInteractive)) return;
+
+        await LoadAsync();
+
+        _poll = new System.Threading.Timer(
+            async _ => await LookAgainAsync(), null, LookAgainEvery, LookAgainEvery);
+
+        StateHasChanged();
+    }
+
+    private async Task LoadAsync()
+    {
+        var plan = await AdminClient.GetPublicHostedEventPlanAsync(Hosted.Id);
+        _plan = plan.Item;
+        _readOnly = null;
+
+        if (_night == Guid.Empty && _plan?.Nights.FirstOrDefault() is { } first)
+            _night = first.Id;
+
+        if (IsAuthenticated)
+        {
+            var mine = await AdminClient.GetMyHostedEventBookingAsync(Hosted.Id);
+            _booking = mine.Item;
+        }
+    }
+
+    /// <summary>
+    /// Reads the plan again on a timer, and does nothing visible when nothing changed.
+    /// </summary>
+    /// <remarks>
+    /// Guarded on <c>_disposed</c> after the await: a guest who leaves the page mid-request comes
+    /// back to a component that no longer exists, and rendering into it throws inside a timer
+    /// callback where nothing catches it.
+    /// </remarks>
+    private async Task LookAgainAsync()
+    {
+        if (_disposed) return;
+
+        var plan = await AdminClient.GetPublicHostedEventPlanAsync(Hosted.Id);
+        if (_disposed || plan.Item is null) return;
+
+        _plan = plan.Item;
+        _readOnly = null;
+
+        await InvokeAsync(StateHasChanged);
+    }
+
+    private void Say(string what) => _note = what;
+
+    private async Task OnBookingChanged(MyHostedEventBookingRecord? booking)
+    {
+        _booking = booking;
+        await LoadAsync();
+        StateHasChanged();
+    }
+
+    /// <summary>They asked to start over — read everything again and put the chooser back.</summary>
+    private async Task StartAgainAsync()
+    {
+        _booking = null;
+        _note = null;
+        await LoadAsync();
+        StateHasChanged();
+    }
+
+    // ── the read-only plan a stranger sees ───────────────────────────────────
+
+    private PlanModel ReadOnlyModel()
+        => _readOnly ??= _plan is { } plan
+            ? PlanModel.From(plan.Kind, plan.Units)
+            : new PlanModel(HostedEventLayoutKind.Seats);
+
+    private IReadOnlyDictionary<Guid, HostedEventPlanCellState> OccupancyForTheNight()
+    {
+        var byUnit = new Dictionary<Guid, HostedEventPlanCellState>();
+        if (_plan is not { } plan) return byUnit;
+
+        foreach (var unit in ReadOnlyModel().Units)
+        {
+            if (unit.Id is not { } id) continue;
+
+            var cell = plan.Cells.FirstOrDefault(
+                c => c.HostedEventNightId == _night && c.HostedEventLayoutUnitId == id);
+
+            if (cell is not null) byUnit[unit.Key] = cell.State;
+        }
+
+        return byUnit;
+    }
+
+    // ── whether it is definitely happening ───────────────────────────────────
+
+    /// <summary>
+    /// What the minimum-numbers rule means to somebody deciding whether to come.
+    /// </summary>
+    /// <remarks>
+    /// A guest asked to keep a weekend free is owed the fact that it might not run, and the date
+    /// by which they will know. Saying nothing until the decision is made is how somebody books a
+    /// flight for an event that was never going to happen.
+    /// </remarks>
+    private string? GoNoGoLine()
+    {
+        if (Hosted.MinimumGuests is not { } minimum) return null;
+        if (Hosted.GoNoGoDecision == HostedEventGoNoGo.Go) return null;
+
+        if (Hosted.GoNoGoDecision == HostedEventGoNoGo.NoGo)
+            return "This one didn't reach the numbers it needed and is not going ahead.";
+
+        var by = Hosted.GoNoGoDeadlineUtc is { } deadline
+            ? $" {Hosted.OrganizationName} decides by {deadline.ToLocalTime():MM/dd/yyyy}."
+            : "";
+
+        return $"This runs if at least {minimum} people come.{by} You'll be told either way.";
+    }
+
+    public void Dispose()
+    {
+        _disposed = true;
+        _poll?.Dispose();
+    }
+}

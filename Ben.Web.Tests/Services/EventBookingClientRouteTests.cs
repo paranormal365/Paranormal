@@ -68,6 +68,7 @@ public sealed class EventBookingClientRouteTests
         "/api/public/hosted-events/{eventId}/my-booking/pass\"",
         "/api/public/hosted-events/{eventId}/menus\"",
         "/api/public/hosted-events/{eventId}/plan\"",
+        "/api/public/hosted-events/{eventId}/holds\"",
         "/api/public/hosted-events/{eventId}/my-booking/pass/email\"",
     ];
 
@@ -84,6 +85,7 @@ public sealed class EventBookingClientRouteTests
         "UpdateMyHostedEventBookingAsync", "AcknowledgeMyHostedEventBookingAsync",
         "WithdrawMyHostedEventBookingAsync", "GetMyHostedEventPassAsync", "GetMyHostedEventMenusAsync",
         "GetPublicHostedEventPlanAsync", "EmailMyHostedEventPassAsync",
+        "HoldHostedEventPlacesAsync",
     ];
 
     private static string Source(string fileName)

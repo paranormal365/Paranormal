@@ -16,6 +16,27 @@ read. Add today's heading at the top when you ship something people can see.
 The history before 2026-08-22 is summarised rather than listed: the site was not yet open, and a
 day-by-day account of building it would say nothing to anyone using it now.
 
+## 2026-09-13
+
+- You can now get a place at a hosted event from its own page. Where the venue sells by the
+  square, you tap the seats or rooms you want and hold them; where it takes requests, you say
+  which nights you are coming and what you would like, and they place you.
+- What you pick is the size of your party — three seats is three people — and the summary adds it
+  all up, with the price and who you settle it with, before you commit to anything.
+- Holding places puts them out of everybody else's reach while the venue answers, and the page
+  says how long that lasts before you press the button and counts it down afterwards.
+- If somebody takes a seat a second before you do, you are told which one went, by name, and
+  everything else you chose stays yours.
+- On a phone the summary and the button stay at the bottom of the screen while you choose, so you
+  never scroll back through two hundred squares to find them.
+- You do not need an account to look at a seating plan. Signed out you see exactly how full the
+  house is, and the way in by email is still there underneath.
+- Your booking says one thing plainly — asked for, held for you, you're coming, not this time, or
+  the hold ran out — with what it means and what you can do next.
+- An event that only runs if enough people come says so from the first time you look, along with
+  the date the venue decides by.
+- A new help page, **Going to an Event**, covers all of it.
+
 ## 2026-09-12
 
 - Events have a **Menus** page: every night, and under it every sitting you serve — breakfast,

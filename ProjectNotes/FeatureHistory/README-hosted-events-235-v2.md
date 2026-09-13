@@ -52,6 +52,13 @@ say so.
 15. From the competitor screenshots: revenue splits and in-cart ticket sales are out; the
     calendar mock-up is *"just the concept"* — borrow the spanning bar and hover popovers only.
     *"Telerik has a qr code generator"* — `TelerikQRCode` for display on the web.
+16. **Bands** (2026-09-13): a party wears a colour that says what they are registered for — *"blue
+    could be the full event with food, purple the full event, red is day one"* — so a steward knows
+    by glance, and the colour shows on the scanner beside the name. **Built in phase 7, not as a
+    phase of its own**, because the door is the screen that reads it and configuration built ahead
+    of its screen is how this codebase collected eight write-only features. The shape is written
+    out under that phase; the one thing it cannot derive today is "with food", which waits for
+    dining in phase 13 and is a by-hand band until then.
 
 ## What the exploration established (only what a builder needs)
 
@@ -531,8 +538,25 @@ device in under ten seconds with or without a camera.
 - Tests: `HostedEventAccessTests` extended with staff rows; `HostedEventCheckInTests` (second scan
   says when they first arrived; Saturday scan of a Friday-only booking says so); Playwright
   `EventStaffTests`, `EventDoorTests` at 375 with the manual box; `VendoredPluginsAreDocumentedTests`.
+- **Bands** (Ben, 2026-09-13): *"the organizer gets coloured wrist bands which mean different
+  things — blue could be the full event with food, purple the full event, red is day one … lets
+  their employees know by glance what a person is registered for … or lanyard colour or shirt
+  colour or colour displayed on the QR code reader next to the name."* Built here because the door
+  is where it earns its keep, and building the configuration before the screen that reads it would
+  be a ninth write-only feature.
+  - `HostedEventBand` per event: name, colour, and a **rule** — every night / one night only / day
+    pass / by hand. Derived where it can be, because a venue that has to tag two hundred parties by
+    hand will tag none of them. "With food" is NOT derivable today: nothing on a booking says a
+    party is eating, so that is a by-hand band until dining lands in phase 13.
+  - It appears in three places and is computed in one: the door's scan card (a coloured chip beside
+    the name, with the band's **name** as well as its colour — a chip that is only a colour is
+    useless to the one steward in twelve who cannot separate red from green), the booking board's
+    Everybody list, and the guest's own pass so they know what to collect at the desk.
+  - The colour is the venue's, and the site never invents one: a venue with orange wristbands in a
+    drawer needs the screen to say orange.
 - **Verified by**: a non-member helper on a phone admits a party by camera; the owner's board shows
-  them arrived; the camera is covered and the same party is found by name.
+  them arrived; the camera is covered and the same party is found by name; a party registered for
+  the whole run reads as the band the venue named for that, on the door and on their own pass.
 
 ### Phase 8 — Alerts and digests (item 238)
 

@@ -153,7 +153,18 @@ public sealed record MyHostedEventBookingRecord(
     DateTime? CancellationRequestedUtc,
     string? Note,
     IReadOnlyList<HostedEventBookingNightRecord> Nights,
-    IReadOnlyList<HostedEventBookingGuestRecord> Guests);
+    IReadOnlyList<HostedEventBookingGuestRecord> Guests,
+
+    /// <summary>
+    /// When the guest's own hold runs out (item 235 phase 6).
+    /// </summary>
+    /// <remarks>
+    /// The guest's screen counts down from it. Without this the one state with a clock on it read
+    /// exactly like the one without: a hold that lapses is a decision the clock takes instead of
+    /// the venue, and somebody who was never shown the deadline lost their seats without being
+    /// asked. Kept after it lapses, so an expired booking can say when.
+    /// </remarks>
+    DateTime? HoldExpiresUtc = null);
 
 /// <summary>What a guest, or a host on their behalf, is asking for.</summary>
 /// <param name="Nights">

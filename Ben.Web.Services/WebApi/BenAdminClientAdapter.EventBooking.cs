@@ -220,6 +220,11 @@ public sealed partial class BenAdminClientAdapter
         => _api.GetItemAsync<HostedEventMenusRecord>(
                $"/api/public/hosted-events/{eventId}/menus", token);
 
+    public Task<(MyHostedEventBookingRecord? Held, HoldRefusedRecord? Refused)> HoldHostedEventPlacesAsync(
+        Guid eventId, HoldHostedEventPlacesRequest request, CancellationToken token = default)
+        => _api.PostExpectingConflictAsync<HoldHostedEventPlacesRequest, MyHostedEventBookingRecord, HoldRefusedRecord>(
+               $"/api/public/hosted-events/{eventId}/holds", request, token);
+
     public Task<ItemResult<PublicHostedEventPlanRecord>> GetPublicHostedEventPlanAsync(
         Guid eventId, CancellationToken token = default)
         => _api.GetItemAsync<PublicHostedEventPlanRecord>(
