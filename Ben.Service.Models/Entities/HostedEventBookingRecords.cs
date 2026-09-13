@@ -144,7 +144,13 @@ public sealed record HostedEventBookingRecord(
     /// wearing, and whether somebody chose it. A picker that showed the worked-out colour as the
     /// chosen one would make "back to the rules" impossible to see.
     /// </remarks>
-    Guid? HandPickedBandId = null);
+    Guid? HandPickedBandId = null,
+
+    /// <summary>
+    /// The number the guest gave for this booking (slice 11d), for the organizer to ring. Null on
+    /// bookings from before it was asked for and on ones a host made for somebody.
+    /// </summary>
+    string? ContactPhone = null);
 
 /// <summary>
 /// A guest's own booking, as their own screen and the phone read it.
@@ -195,7 +201,10 @@ public sealed record RequestHostedEventBookingRequest(
     int PartySize,
     IReadOnlyList<HostedEventBookingNightChoice>? Nights = null,
     IReadOnlyList<HostedEventBookingGuestInput>? Guests = null,
-    string? Note = null);
+    string? Note = null,
+    string? FirstName = null,
+    string? LastName = null,
+    string? Phone = null);
 
 /// <summary>
 /// One night being asked for or given.
@@ -213,11 +222,63 @@ public sealed record HostedEventBookingNightChoice(
 /// nothing and joins a queue, a pick takes the squares out of everybody else's reach until the
 /// venue answers. One endpoint serving both would have had to guess which the caller meant.
 /// </remarks>
+/// <param name="FirstName">
+/// With <paramref name="LastName"/> and <paramref name="Phone"/>, only what the guest's account lacks
+/// (slice 11d); the organizer needs all three to reach them.
+/// </param>
 public sealed record HoldHostedEventPlacesRequest(
     IReadOnlyList<HostedEventBookingNightChoice> Nights,
     int PartySize,
     IReadOnlyList<HostedEventBookingGuestInput>? Guests = null,
+    string? Note = null,
+    string? FirstName = null,
+    string? LastName = null,
+    string? Phone = null);
+
+/// <summary>
+/// The name, number and address a signed-in guest's account already has, for the booking form
+/// (slice 11d). Any of them may be missing; the form asks for those.
+/// </summary>
+public sealed record BookingContactRecord(string? FirstName, string? LastName, string? Phone, string? Email);
+
+/// <summary>
+/// Places picked by somebody not signed in, pending until they click the emailed link (slice 11d).
+/// </summary>
+public sealed record PickHostedEventPlacesByEmailRequest(
+    string FirstName,
+    string LastName,
+    string Email,
+    string Phone,
+    IReadOnlyList<HostedEventBookingNightChoice> Nights,
+    int PartySize,
     string? Note = null);
+
+/// <summary>What somebody who picked without signing in is told straight away.</summary>
+/// <param name="PendingUntilUtc">When the places go back if the link has not been clicked.</param>
+public sealed record HostedEventEmailPickPlacedRecord(
+    DateTime PendingUntilUtc,
+    IReadOnlyList<string> Places);
+
+/// <summary>Where a pick made by email stands, for the page the link opens.</summary>
+/// <remarks>
+/// <paramref name="State"/>: <c>waiting</c> (not yet clicked), <c>lapsed</c> (too late),
+/// <c>held</c> (became a booking — see <paramref name="Booking"/>), <c>refused</c> (could not become
+/// one — see <paramref name="Sentence"/>), <c>let-go</c>.
+/// </remarks>
+public sealed record HostedEventEmailPickRecord(
+    string State,
+    Guid HostedEventId,
+    string EventName,
+    string? EventUrlName,
+    string? OrganizationName,
+    string? OrganizationUrlName,
+    string Email,
+    int PartySize,
+    DateTime PendingUntilUtc,
+    IReadOnlyList<string> Places,
+    string? Sentence = null,
+    MyHostedEventBookingRecord? Booking = null,
+    bool AccountHasNoPassword = false);
 
 /// <summary>
 /// Why a hold could not be taken, and what the plan looks like now (item 235 phase 4).

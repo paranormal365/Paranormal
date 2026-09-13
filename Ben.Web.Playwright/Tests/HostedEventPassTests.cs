@@ -59,6 +59,8 @@ public class HostedEventPassTests : BenTestBase
                 {
                     nights = new[] { new { hostedEventNightId = night, hostedEventLayoutUnitId = seat } },
                     partySize = 1,
+                    // The organizer has to be able to reach whoever holds (slice 11d).
+                    firstName = "Test", lastName = "Guest", phone = "615-555-0100",
                 },
             });
         Assert.That(held.Status, Is.EqualTo(200), await held.TextAsync());

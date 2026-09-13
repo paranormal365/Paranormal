@@ -93,6 +93,7 @@ public class HostedEventSeatPickerTests : BenTestBase
 
         await Expect(Page.Locator("#picker-bar")).ToContainTextAsync("Held for");
 
+        await FillBookingContactAsync("picker");
         await ClickUntilAsync(Page.Locator("#picker-hold"), Page.Locator("#hosted-booking"));
 
         await Expect(Page.Locator("#booking-state")).ToContainTextAsync("Held for you");
@@ -106,6 +107,7 @@ public class HostedEventSeatPickerTests : BenTestBase
         // everybody else's reach, and it is drawn as being decided rather than as sold.
         await OpenThePickerAsync();
         await PickAsync(0);
+        await FillBookingContactAsync("picker");
         await ClickUntilAsync(Page.Locator("#picker-hold"), Page.Locator("#hosted-booking"));
         await Expect(Page.Locator("#booking-state")).ToContainTextAsync("Held for you");
 
@@ -122,6 +124,7 @@ public class HostedEventSeatPickerTests : BenTestBase
     {
         await OpenThePickerAsync();
         await PickAsync(0);
+        await FillBookingContactAsync("picker");
         await ClickUntilAsync(Page.Locator("#picker-hold"), Page.Locator("#hosted-booking"));
 
         await ClickUntilAsync(Page.Locator("#booking-let-go"), Page.Locator("#booking-note"));

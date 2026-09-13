@@ -313,10 +313,44 @@ public sealed partial class BenAdminClientAdapter
                $"/api/public/hosted-event-staff/{Uri.EscapeDataString(token)}/accept",
                new { }, cancellationToken);
 
-    public Task<(MyHostedEventBookingRecord? Held, HoldRefusedRecord? Refused)> HoldHostedEventPlacesAsync(
+    public async Task<(MyHostedEventBookingRecord? Held, HoldRefusedRecord? Refused, string? Error)> HoldHostedEventPlacesAsync(
         Guid eventId, HoldHostedEventPlacesRequest request, CancellationToken token = default)
-        => _api.PostExpectingConflictAsync<HoldHostedEventPlacesRequest, MyHostedEventBookingRecord, HoldRefusedRecord>(
-               $"/api/public/hosted-events/{eventId}/holds", request, token);
+    {
+        var (held, error, refused) = await _api.SendExpectingConflictAsync<HoldHostedEventPlacesRequest, MyHostedEventBookingRecord, HoldRefusedRecord>(
+            HttpMethod.Post, $"/api/public/hosted-events/{eventId}/holds", request, token);
+        return (held, refused, error);
+    }
+
+    public Task<ItemResult<BookingContactRecord>> GetMyBookingContactAsync(CancellationToken token = default)
+        => _api.GetItemAsync<BookingContactRecord>("/api/public/hosted-events/my-contact", token);
+
+    public async Task<(HostedEventEmailPickPlacedRecord? Placed, HoldRefusedRecord? Refused, string? Error)> PickHostedEventPlacesByEmailAsync(
+        Guid eventId, PickHostedEventPlacesByEmailRequest request, CancellationToken token = default)
+    {
+        var (placed, error, refused) = await _api.SendExpectingConflictAsync<PickHostedEventPlacesByEmailRequest, HostedEventEmailPickPlacedRecord, HoldRefusedRecord>(
+            HttpMethod.Post, $"/api/public/hosted-events/{eventId}/email-picks", request, token);
+        return (placed, refused, error);
+    }
+
+    public Task<ItemResult<HostedEventEmailPickRecord>> GetEmailPickAsync(string pickToken, CancellationToken token = default)
+        => _api.GetAnonymousItemAsync<HostedEventEmailPickRecord>(
+               $"/api/public/hosted-events/email-picks/{Uri.EscapeDataString(pickToken)}", token);
+
+    public Task<(HostedEventEmailPickRecord? Result, string? Error)> ConfirmEmailPickAsync(
+        string pickToken, CancellationToken token = default)
+        => _api.SendExpectingReasonAsync<object, HostedEventEmailPickRecord>(
+               HttpMethod.Post, $"/api/public/hosted-events/email-picks/{Uri.EscapeDataString(pickToken)}/confirm",
+               new { }, token);
+
+    public Task<(HostedEventEmailPickRecord? Result, string? Error)> LetGoEmailPickAsync(
+        string pickToken, CancellationToken token = default)
+        => _api.SendExpectingReasonAsync<object, HostedEventEmailPickRecord>(
+               HttpMethod.Delete, $"/api/public/hosted-events/email-picks/{Uri.EscapeDataString(pickToken)}",
+               new { }, token);
+
+    public Task<(bool Sent, string? Error)> RequestHostedEventAttendanceAsync(
+        Guid eventId, RequestEventAttendanceRequest request, CancellationToken token = default)
+        => _api.PostAnonymousExpectingReasonAsync($"/api/public/event-attendance/{eventId}/request", request, token);
 
     public Task<ItemResult<PublicHostedEventPlanRecord>> GetPublicHostedEventPlanAsync(
         Guid eventId, CancellationToken token = default)

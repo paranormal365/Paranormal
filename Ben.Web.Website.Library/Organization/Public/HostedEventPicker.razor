@@ -25,6 +25,29 @@
 
 <div class="picker" id="hosted-picker">
 
+    @if (_emailed is { } emailed)
+    {
+        @* SENT, AND NOTHING IS HELD YET. The squares are pending for everybody else, so the plan is
+           not redrawn as though they were theirs; the letter is the next step and this says so. *@
+        <div class="alert alert-info" id="picker-emailed" role="status">
+            <div class="fw-semibold mb-1">Check your email</div>
+            <div class="small">
+                We've sent a link to @_contact.Email. Press the button in it by
+                <strong>@emailed.PendingUntilUtc.ToLocalTime().ToString("h:mm tt")</strong> to hold
+                @(emailed.Places.Count == 1 ? "this place" : $"these {emailed.Places.Count} places") —
+                until then nobody else can take them, and after that they go back.
+            </div>
+            <ul class="small mb-2 mt-2">
+                @foreach (var place in emailed.Places)
+                {
+                    <li>@place</li>
+                }
+            </ul>
+            <button type="button" class="btn btn-sm btn-outline-secondary" id="picker-pick-again"
+                    @onclick="PickAgain">Choose different places</button>
+        </div>
+    }
+
     @if (Plan.Nights.Count > 1)
     {
         <div class="btn-group btn-group-sm mb-2 flex-wrap" role="group" aria-label="Which night">
@@ -68,6 +91,21 @@
              Refused="_ringed"
              AriaLabel="@($"Choose your places — {Where()}")" />
 
+    @if (_places > 0 && _emailed is null)
+    {
+        @* Who the places are for, before the button that holds them. On a phone this sits above the
+           fixed bar, in the page, so it scrolls like any other part of the form. *@
+        <div class="mt-3" id="picker-contact">
+            <div class="fw-semibold small mb-2">
+                @(Anonymous
+                    ? "Who these are for — we'll email you a link to hold them"
+                    : "Who these are for")
+            </div>
+            <BookingContactFields Draft="_contact" IdPrefix="picker" AskEmail="Anonymous"
+                                  OrganizationName="@Hosted.OrganizationName" Changed="StateHasChanged" />
+        </div>
+    }
+
     @* The summary sticks to the bottom of the card on a phone, because the button that commits is
        otherwise four hundred squares below the first one somebody taps. *@
     <div class="picker__bar" id="picker-bar">
@@ -92,8 +130,10 @@
                         disabled="@_busy" @onclick="Clear">Start again</button>
             }
             <button type="button" class="btn btn-primary" id="picker-hold"
-                    disabled="@(_busy || _places == 0)" @onclick="HoldAsync">
-                @(_busy ? "Holding…" : "Hold these places")
+                    disabled="@(_busy || _places == 0 || _emailed is not null || !_contact.IsEnough(Anonymous))"
+                    @onclick="HoldAsync">
+                @(_busy ? (Anonymous ? "Sending…" : "Holding…")
+                        : Anonymous ? "Email me a link to hold these" : "Hold these places")
             </button>
         </div>
     </div>
@@ -105,6 +145,15 @@
 
     /// <summary>Told what was held, so the page can swap the picker for the booking's card.</summary>
     [Parameter] public EventCallback<MyHostedEventBookingRecord> OnHeld { get; set; }
+
+    /// <summary>
+    /// Nobody is signed in: the places are picked with a name, email and phone, and wait fifteen
+    /// minutes for the emailed link (slice 11d).
+    /// </summary>
+    [Parameter] public bool Anonymous { get; set; }
+
+    private readonly BookingContactDraft _contact = new();
+    private HostedEventEmailPickPlacedRecord? _emailed;
 
     private PlanModel _model = new(HostedEventLayoutKind.Seats);
     private readonly Dictionary<Guid, HashSet<Guid>> _chosen = [];
@@ -132,6 +181,22 @@
     /// a fresh record every thirty seconds, and rebuilding the model each time would throw away
     /// what somebody had chosen while they were still choosing it.
     /// </remarks>
+    /// <summary>What the account already says about who they are, for a signed-in guest.</summary>
+    protected override async Task OnAfterRenderAsync(bool firstRender)
+    {
+        if (!firstRender || Anonymous) return;
+
+        var mine = await AdminClient.GetMyBookingContactAsync();
+        _contact.Fill(mine.Item);
+        StateHasChanged();
+    }
+
+    private void PickAgain()
+    {
+        _emailed = null;
+        Clear();
+    }
+
     protected override void OnParametersSet()
     {
         if (_planId == Plan.HostedEventId) return;
@@ -234,20 +299,42 @@
             .Where(choice => choice.HostedEventLayoutUnitId is not null)
             .ToList();
 
-        var (held, refused) = await AdminClient.HoldHostedEventPlacesAsync(
-            Hosted.Id, new HoldHostedEventPlacesRequest(nights, PartySize()));
+        HoldRefusedRecord? refused;
+        string? error;
 
-        _busy = false;
-
-        if (held is not null)
+        if (Anonymous)
         {
-            await OnHeld.InvokeAsync(held);
-            return;
+            (_emailed, refused, error) = await AdminClient.PickHostedEventPlacesByEmailAsync(
+                Hosted.Id,
+                new PickHostedEventPlacesByEmailRequest(
+                    _contact.FirstName.Trim(), _contact.LastName.Trim(), _contact.Email.Trim(), _contact.Phone.Trim(),
+                    nights, PartySize()));
+
+            _busy = false;
+            if (_emailed is not null) return;
+        }
+        else
+        {
+            MyHostedEventBookingRecord? held;
+            (held, refused, error) = await AdminClient.HoldHostedEventPlacesAsync(
+                Hosted.Id,
+                new HoldHostedEventPlacesRequest(nights, PartySize(),
+                    FirstName: BookingContactDraft.Sent(_contact.FirstName),
+                    LastName: BookingContactDraft.Sent(_contact.LastName),
+                    Phone: BookingContactDraft.Sent(_contact.Phone)));
+
+            _busy = false;
+
+            if (held is not null)
+            {
+                await OnHeld.InvokeAsync(held);
+                return;
+            }
         }
 
         if (refused is null)
         {
-            _error = "Those places couldn't be held just now. Try again in a moment.";
+            _error = error ?? "Those places couldn't be held just now. Try again in a moment.";
             return;
         }
 

@@ -60,6 +60,8 @@ public sealed class HoldExpiryJob : IScheduledJob
         await using var db = await _dbFactory.CreateDbContextAsync(ct);
         var now = DateTime.UtcNow;
 
+        await ForgetEmailPicksAsync(db, now, ct);
+
         var lapsed = await db.HostedEventBookings
             .Include(b => b.Nights)
             .Include(b => b.HostedEvent).ThenInclude(e => e.Nights)
@@ -103,6 +105,31 @@ public sealed class HoldExpiryJob : IScheduledJob
 
         if (freed > 0)
             _logger.LogInformation("Gave back the places held by {Count} lapsed booking(s).", freed);
+    }
+
+    /// <summary>
+    /// Gives back the places picked by email that nobody confirmed, and deletes the picks nobody needs
+    /// any more (slice 11d).
+    /// </summary>
+    /// <remarks>
+    /// Here because it is the same act — places nobody stood behind going back — on the same pass.
+    /// The pick door retires lapsed picks for its own event before every pick too, so this is the
+    /// sweep for events nobody is looking at, and the deletion of a stranger's name and phone once
+    /// they no longer serve anybody. In its own try, so a failure here never keeps a lapsed hold.
+    /// </remarks>
+    private async Task ForgetEmailPicksAsync(BenDataContext db, DateTime now, CancellationToken ct)
+    {
+        try
+        {
+            await EmailPicks.RetireLapsedAsync(db, now, hostedEventId: null, ct);
+            var forgotten = await EmailPicks.ForgetAsync(db, now, ct);
+            if (forgotten > 0)
+                _logger.LogInformation("Deleted {Count} picks made by email that are no longer needed.", forgotten);
+        }
+        catch (Exception ex) when (ex is not OperationCanceledException)
+        {
+            _logger.LogWarning(ex, "Could not tidy the places picked by email.");
+        }
     }
 
     /// <summary>

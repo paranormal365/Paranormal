@@ -80,23 +80,25 @@ public class HostedEventGuestTests : BenTestBase
     // ── signed out ───────────────────────────────────────────────────────────
 
     [Test]
-    public async Task A_stranger_sees_the_house_and_cannot_touch_it()
+    public async Task A_stranger_can_choose_seats_and_is_asked_who_they_are_before_anything_is_sent()
     {
-        // The case this endpoint is anonymous for. A seating plan somebody has to make an account
-        // to look at is a seating plan that sells nothing.
+        // The case this endpoint is anonymous for. Since slice 11d a stranger may pick too: the
+        // places wait fifteen minutes for an emailed link, so the button says it sends one, and
+        // the organizer's three questions come with the sentence saying why.
         await Page.GotoAsync(_seatsUrl);
         await Page.WaitForLoadStateAsync(LoadState.NetworkIdle);
 
         await Expect(Page.Locator("#hosted-places")).ToBeVisibleAsync(new() { Timeout = 30_000 });
         await Expect(Page.Locator(".plan__grid")).ToBeVisibleAsync(new() { Timeout = 20_000 });
 
-        // Read mode: the squares are cells rather than checkboxes, so nothing offers to be chosen.
-        await Expect(Page.Locator(".plan__unit[role='gridcell']").First).ToBeVisibleAsync();
-        Assert.That(await Page.Locator("#picker-hold").CountAsync(), Is.Zero,
-            "a signed-out reader was offered a button that needs somebody to hold seats for");
+        var free = Page.Locator(".plan__unit[data-state='free']");
+        await Expect(free.First).ToBeVisibleAsync(new() { Timeout = 20_000 });
+        await ClickUntilAsync(free.First, Page.Locator("#picker-contact"));
 
-        // And the way in is the one that needs no password.
-        await Expect(Page.GetByText("You don't need an account")).ToBeVisibleAsync();
+        await Expect(Page.Locator("#picker-email")).ToBeVisibleAsync();
+        await Expect(Page.Locator("#picker-disclosure")).ToContainTextAsync("for this event only");
+        await Expect(Page.Locator("#picker-hold")).ToContainTextAsync("Email me a link");
+        await Expect(Page.Locator("#picker-hold")).ToBeDisabledAsync();
     }
 
     [Test]
@@ -141,6 +143,7 @@ public class HostedEventGuestTests : BenTestBase
         var firstNight = Page.Locator("#hosted-ask input[type=checkbox]").First;
         await firstNight.CheckAsync();
 
+        await FillBookingContactAsync("ask");
         await ClickUntilAsync(Page.Locator("#ask-send"), Page.Locator("#hosted-booking"));
 
         await Expect(Page.Locator("#booking-state")).ToContainTextAsync("Asked for");
@@ -187,6 +190,7 @@ public class HostedEventGuestTests : BenTestBase
         await Expect(Page.Locator("#hosted-ask")).ToBeVisibleAsync(new() { Timeout = 30_000 });
 
         await Page.Locator("#hosted-ask input[type=checkbox]").First.CheckAsync();
+        await FillBookingContactAsync("ask");
         await ClickUntilAsync(Page.Locator("#ask-send"), Page.Locator("#hosted-booking"));
     }
 

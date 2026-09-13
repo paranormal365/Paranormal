@@ -113,8 +113,14 @@
         <p class="text-secondary small">@money</p>
     }
 
+    <div class="mb-3">
+        <div class="fw-semibold small mb-2">Who this is for</div>
+        <BookingContactFields Draft="_contact" IdPrefix="ask" OrganizationName="@Hosted.OrganizationName"
+                              Changed="StateHasChanged" />
+    </div>
+
     <button type="button" class="btn btn-primary" id="ask-send"
-            disabled="@(_busy || _nights.Count == 0)" @onclick="AskAsync">
+            disabled="@(_busy || _nights.Count == 0 || !_contact.IsEnough(withEmail: false))" @onclick="AskAsync">
         @(_busy ? "Asking…" : "Ask for a place")
     </button>
 
@@ -138,6 +144,7 @@
 
     [Parameter] public EventCallback<MyHostedEventBookingRecord> OnAsked { get; set; }
 
+    private readonly BookingContactDraft _contact = new();
     private readonly HashSet<Guid> _nights = [];
     private readonly Dictionary<Guid, Guid?> _preferred = [];
     private HostedEventBookingKind _kind = HostedEventBookingKind.Overnight;
@@ -156,6 +163,16 @@
     protected override void OnInitialized()
     {
         if (Hosted.Nights.Count == 1) _nights.Add(Hosted.Nights[0].Id);
+    }
+
+    /// <summary>What the account already says about who they are (slice 11d).</summary>
+    protected override async Task OnAfterRenderAsync(bool firstRender)
+    {
+        if (!firstRender) return;
+
+        var mine = await AdminClient.GetMyBookingContactAsync();
+        _contact.Fill(mine.Item);
+        StateHasChanged();
     }
 
     private void Toggle(Guid nightId, bool on)
@@ -233,7 +250,10 @@
             Hosted.Id,
             new RequestHostedEventBookingRequest(
                 _kind, _partySize, nights, Guests: null,
-                Note: _note?.Trim() is { Length: > 0 } said ? said : null));
+                Note: _note?.Trim() is { Length: > 0 } said ? said : null,
+                FirstName: BookingContactDraft.Sent(_contact.FirstName),
+                LastName: BookingContactDraft.Sent(_contact.LastName),
+                Phone: BookingContactDraft.Sent(_contact.Phone)));
 
         _busy = false;
 

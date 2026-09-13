@@ -268,6 +268,24 @@ public sealed class WebApiClient : IWebApiClient
         return response.IsSuccessStatusCode;
     }
 
+    /// <inheritdoc />
+    public async Task<(bool Sent, string? Error)> PostAnonymousExpectingReasonAsync<TRequest>(
+        string relativeUrl, TRequest payload, CancellationToken token = default)
+    {
+        using var req = new HttpRequestMessage(HttpMethod.Post, relativeUrl) { Content = JsonContent.Create(payload) };
+        using var response = await _httpClient.SendAsync(req, token);
+        if (response.IsSuccessStatusCode) return (true, null);
+
+        // The same prose test as SendExpectingReasonAsync: a refusal we wrote is a sentence.
+        var body = await response.Content.ReadAsStringAsync(token);
+        var looksLikeProse = !string.IsNullOrWhiteSpace(body)
+                          && body.Length < 400
+                          && !body.TrimStart().StartsWith('{')
+                          && !body.TrimStart().StartsWith('<');
+
+        return (false, looksLikeProse ? body.Trim('"', ' ', '\n') : null);
+    }
+
     public async Task<TResponse?> PutAsync<TRequest, TResponse>(string relativeUrl, TRequest payload, CancellationToken token = default)
     {
         using var req = Auth(HttpMethod.Put, relativeUrl);

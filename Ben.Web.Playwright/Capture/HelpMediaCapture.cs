@@ -2035,7 +2035,33 @@ public sealed class HelpMediaCapture : BenTestBase
         // Cropped to the card: a help picture of a seating plan should be mostly seating plan,
         // and a full-page shot reduces the part being explained to a strip along the bottom.
         await ShootAsync("going-to-an-event", "the-house.png",
-            gated: false, selector: "#hosted-places", proves: "You don't need an account");
+            gated: false, selector: "#hosted-places", proves: "no account needed");
+
+        // Slice 11d: a stranger chooses too, and is asked the organizer's three questions.
+        var anyone = Page.Locator(".plan__unit[data-state='free']");
+        await Expect(anyone.First).ToBeVisibleAsync(new() { Timeout = 20_000 });
+        await anyone.Last.ClickAsync();
+        await Expect(Page.Locator("#picker-contact")).ToBeVisibleAsync(new() { Timeout = 10_000 });
+        var stranger = $"capture-{Guid.NewGuid():N}@example.test";
+        await Page.Locator("#picker-first").FillAsync("Ada");
+        await Page.Locator("#picker-last").FillAsync("Lovelace");
+        await Page.Locator("#picker-email").FillAsync(stranger);
+        await Page.Locator("#picker-phone").FillAsync("(615) 555-0100");
+        await ShootAsync("going-to-an-event", "choosing-without-an-account.png",
+            gated: false, selector: "#picker-contact", proves: "for this event only");
+
+        await Page.Locator("#picker-hold").ClickAsync();
+        await Expect(Page.Locator("#picker-emailed")).ToBeVisibleAsync(new() { Timeout = 15_000 });
+        if (PickTokenFromTheApiLog(stranger) is { } pickToken)
+        {
+            await GoAsync($"/event-picks/{pickToken}");
+            await Expect(Page.Locator("#pick-confirm")).ToBeVisibleAsync(new() { Timeout = 20_000 });
+            await ShootAsync("going-to-an-event", "hold-your-places-link.png",
+                gated: false, selector: "#pick-card", proves: "Hold my places");
+            // Let it go, so the seat is back for the pictures that follow.
+            await Page.Locator("#pick-let-go").ClickAsync();
+            await Expect(Page.Locator("#pick-let-go-done")).ToBeVisibleAsync(new() { Timeout = 15_000 });
+        }
 
         await LoginAsync(ClientEmail, ClientPassword);
         await LetGoOfEverythingAsync();
@@ -2053,6 +2079,26 @@ public sealed class HelpMediaCapture : BenTestBase
 
         await ShootAsync("going-to-an-event", "choosing-seats-phone.png",
             gated: false, proves: "Hold these places", width: 375);
+    }
+
+    /// <summary>The emailed link's token, as the API logs it when no mail server is set up.</summary>
+    private static string? PickTokenFromTheApiLog(string email)
+    {
+        var log = Environment.GetEnvironmentVariable("BEN_E2E_API_LOG");
+        if (string.IsNullOrWhiteSpace(log) || !File.Exists(log)) return null;
+
+        for (var attempt = 0; attempt < 20; attempt++)
+        {
+            using var stream = new FileStream(log, FileMode.Open, FileAccess.Read, FileShare.ReadWrite);
+            using var reader = new StreamReader(stream);
+            var match = System.Text.RegularExpressions.Regex.Matches(reader.ReadToEnd(),
+                    $@"pick link for ""?{System.Text.RegularExpressions.Regex.Escape(email)}""? was not sent\. Pick token: ""?([A-Za-z0-9_\-]+)")
+                .LastOrDefault();
+            if (match is not null) return match.Groups[1].Value;
+            Thread.Sleep(500);
+        }
+
+        return null;
     }
 
     /// <summary>
@@ -2112,6 +2158,8 @@ public sealed class HelpMediaCapture : BenTestBase
         {
             nights = new[] { new { hostedEventNightId = night, hostedEventLayoutUnitId = seat } },
             partySize = 2,
+            // The organizer has to be able to reach whoever holds (slice 11d).
+            firstName = "Test", lastName = "Guest", phone = "615-555-0100",
         };
 
         var held = await guest.PostAsync(

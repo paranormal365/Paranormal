@@ -74,6 +74,8 @@ public class EventMenusTests : BenTestBase
                         hostedEventLayoutUnitId = s,
                     }).ToArray(),
                     partySize = 4,
+                    // The organizer has to be able to reach whoever holds (slice 11d).
+                    firstName = "Test", lastName = "Guest", phone = "615-555-0100",
                     guests = new[]
                     {
                         new { displayName = "Ada Fielding", dietaryNotes = "no nuts" },

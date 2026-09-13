@@ -71,6 +71,34 @@ public sealed class PublicHostedEventBookingController : BenControllerBase
     }
 
     /// <summary>This person's booking at one event, or 404 when they have none.</summary>
+    /// <summary>
+    /// What the booking form can fill in for this guest: the name and phone their account already
+    /// has (slice 11d).
+    /// </summary>
+    /// <remarks>
+    /// Read, never written: the phone typed into a booking stays with that booking, so the form asks
+    /// again next time for anybody whose account has none.
+    /// </remarks>
+    [HttpGet("my-contact")]
+    public async Task<ActionResult<BookingContactRecord>> GetMyContact(CancellationToken ct)
+    {
+        var userId = GetCurrentUserId();
+        if (userId == Guid.Empty) return Unauthorized();
+
+        await using var db = await _db.CreateDbContextAsync(ct);
+        var me = await db.Users.AsNoTracking()
+            .Where(u => u.Id == userId)
+            .Select(u => new
+            {
+                u.FirstName, u.LastName, u.Email, u.PhoneNumber,
+                Listed = u.UserPhones.OrderByDescending(p => p.IsPrimary).Select(p => p.PhoneNumber).FirstOrDefault(),
+            })
+            .FirstOrDefaultAsync(ct);
+        if (me is null) return NotFound();
+
+        return Ok(new BookingContactRecord(me.FirstName, me.LastName, me.Listed ?? me.PhoneNumber, me.Email));
+    }
+
     [HttpGet("{eventId:guid}/my-booking")]
     public async Task<ActionResult<MyHostedEventBookingRecord>> GetMyBooking(
         Guid eventId, CancellationToken ct)
@@ -331,9 +359,25 @@ public sealed class PublicHostedEventBookingController : BenControllerBase
         if (await WhatIsNotOnOfferAsync(db, eventId, chosen, ct) is { } withheld)
             return Conflict(withheld);
 
+        var (contact, missing) = await BookingContact.ForAccountAsync(
+            db, userId, request.FirstName, request.LastName, request.Phone, ct);
+        if (contact is null) return BadRequest(missing);
+
         var now = DateTime.UtcNow;
+
+        // Somebody not signed in may be confirming one of these by email (slice 11d). Their pick is
+        // not a booking and the database's arbiter cannot see it, so it is checked here, after the
+        // lapsed ones have gone back.
+        await EmailPicks.RetireLapsedAsync(db, now, eventId, ct);
+        if (await EmailPicks.PendingAmongAsync(db, eventId, chosen, exceptPickId: null, ct) is { } pending)
+            return Conflict(await WhoGotThereFirstAsync(_db, eventId,
+                [.. chosen.Where(c => c.HostedEventLayoutUnitId is { } u && pending.Contains(u))], ct));
+
+        await BookingContact.FillEmptyNamesAsync(db, userId, contact, ct);
+
         var booking = new HostedEventBooking
         {
+            ContactPhone = contact.Phone,
             Id = Guid.NewGuid(),
             HostedEventId = eventId,
             LeadAppUserId = userId,
@@ -360,7 +404,7 @@ public sealed class PublicHostedEventBookingController : BenControllerBase
         {
             // Somebody else's insert won. Re-read what is actually held now and say which squares
             // went, so the picker can repaint and the guest keeps the rest of their choice.
-            return Conflict(await WhoGotThereFirstAsync(db, eventId, chosen, ct));
+            return Conflict(await WhoGotThereFirstAsync(_db, eventId, chosen, ct));
         }
 
         // After the save, and best effort. A guest whose places are held but whose letter bounced
@@ -386,7 +430,7 @@ public sealed class PublicHostedEventBookingController : BenControllerBase
     /// <para>The busiest night decides, since somebody taking two seats on Friday and one on
     /// Saturday is a party of two who are not all staying.</para>
     /// </remarks>
-    private static int PartyPicking(
+    internal static int PartyPicking(
         HostedEvent hosted, IReadOnlyList<HostedEventBookingNightChoice> chosen, int asked)
     {
         if (hosted.LayoutKind != HostedEventLayoutKind.Seats)
@@ -408,9 +452,9 @@ public sealed class PublicHostedEventBookingController : BenControllerBase
     /// damage a determined person can do with one account; the hold expiry bounds how long they can
     /// do it for.
     /// </remarks>
-    private const int MaximumLiveHolds = 5;
+    internal const int MaximumLiveHolds = 5;
 
-    private static Task<int> CountMyLiveHoldsAsync(
+    internal static Task<int> CountMyLiveHoldsAsync(
         BenDataContext db, Guid userId, CancellationToken ct)
         => db.HostedEventBookings.CountAsync(
                b => b.LeadAppUserId == userId
@@ -421,26 +465,32 @@ public sealed class PublicHostedEventBookingController : BenControllerBase
     /// 2601 and 2627 are SQL Server's two unique-violation numbers; 19 is SQLite's, which the tests
     /// run on. Anything else is a real fault and must not be dressed up as a lost race.
     /// </remarks>
-    private static bool IsSomebodyGotThereFirst(DbUpdateException ex)
+    internal static bool IsSomebodyGotThereFirst(DbUpdateException ex)
         => ex.InnerException?.GetType().GetProperty("SqliteErrorCode")?.GetValue(ex.InnerException)
                is int sqlite && sqlite == 19
         || ex.InnerException?.GetType().GetProperty("Number")?.GetValue(ex.InnerException)
                is int number && number is 2601 or 2627;
 
     /// <summary>Which of the squares this guest picked are now somebody else's, in words.</summary>
-    private async Task<HoldRefusedRecord> WhoGotThereFirstAsync(
-        BenDataContext db, Guid eventId,
-        IReadOnlyList<HostedEventBookingNightChoice> chosen, CancellationToken ct)
+    /// <param name="countEmailPicks">
+    /// Whether a square somebody is confirming by email counts as gone (slice 11d). False when it is
+    /// that very pick being turned into a booking, whose own squares would otherwise be named as
+    /// taken from itself.
+    /// </param>
+    internal static async Task<HoldRefusedRecord> WhoGotThereFirstAsync(
+        IDbContextFactory<BenDataContext> factory, Guid eventId,
+        IReadOnlyList<HostedEventBookingNightChoice> chosen, CancellationToken ct,
+        bool countEmailPicks = true)
     {
         // A fresh context: the failed save left the old one holding a booking that does not exist.
-        await using var fresh = await _db.CreateDbContextAsync(ct);
+        await using var fresh = await factory.CreateDbContextAsync(ct);
 
         var occupancy = await PlanOccupancy.ReadAsync(fresh, eventId, ct);
 
         var taken = chosen
             .Where(c => c.HostedEventLayoutUnitId is { } unit
                      && occupancy.TryGetValue((c.HostedEventNightId, unit), out var cell)
-                     && cell.BookingId is not null)
+                     && (cell.BookingId is not null || (countEmailPicks && cell.AwaitingEmail)))
             .Select(c => c.HostedEventLayoutUnitId!.Value)
             .Distinct()
             .ToList();
@@ -462,7 +512,7 @@ public sealed class PublicHostedEventBookingController : BenControllerBase
     }
 
     /// <summary>Why the venue is not offering one of these squares, or null when it is.</summary>
-    private static async Task<string?> WhatIsNotOnOfferAsync(
+    internal static async Task<string?> WhatIsNotOnOfferAsync(
         BenDataContext db, Guid eventId,
         IReadOnlyList<HostedEventBookingNightChoice> chosen, CancellationToken ct)
     {
@@ -508,6 +558,10 @@ public sealed class PublicHostedEventBookingController : BenControllerBase
         if (request.Kind == HostedEventBookingKind.DayPass && ev.DayPassCapacity is 0)
             return Conflict("This event isn't selling day passes.");
 
+        var (contact, missing) = await BookingContact.ForAccountAsync(
+            db, userId, request.FirstName, request.LastName, request.Phone, ct);
+        if (contact is null) return BadRequest(missing);
+
         // Pressing the button twice is the same statement, not a second party.
         var existing = await db.HostedEventBookings
             .Include(b => b.Nights).Include(b => b.Guests)
@@ -524,6 +578,7 @@ public sealed class PublicHostedEventBookingController : BenControllerBase
             PartySize = EventCapacity.ClampPartySize(request.PartySize),
             Kind = request.Kind,
             Status = HostedEventBookingStatus.Requested,
+            ContactPhone = contact.Phone,
             Note = Trimmed(request.Note),
             DateCreated = DateTime.UtcNow,
             CreatedByAppUserId = userId,
@@ -535,6 +590,7 @@ public sealed class PublicHostedEventBookingController : BenControllerBase
 
         WriteNights(booking, request.Nights ?? []);
         WriteGuests(booking, request.Guests ?? []);
+        await BookingContact.FillEmptyNamesAsync(db, userId, contact, ct);
 
         await db.SaveChangesAsync(ct);
 
@@ -747,7 +803,7 @@ public sealed class PublicHostedEventBookingController : BenControllerBase
     /// is the moment that spends a credit — so a booking against a draft would be a place at
     /// something nobody has paid for.
     /// </remarks>
-    private static Task<HostedEvent?> BookableEventAsync(
+    internal static Task<HostedEvent?> BookableEventAsync(
         BenDataContext db, Guid eventId, CancellationToken ct)
         => db.HostedEvents
             .FirstOrDefaultAsync(
@@ -761,7 +817,7 @@ public sealed class PublicHostedEventBookingController : BenControllerBase
     /// expressing a preference the venue will override anyway, and refusing it would be a form
     /// error about somebody else's booking system.
     /// </remarks>
-    private static async Task<string?> WhyTheseNightsAreNotRealAsync(
+    internal static async Task<string?> WhyTheseNightsAreNotRealAsync(
         BenDataContext db, Guid eventId,
         IReadOnlyList<HostedEventBookingNightChoice> nights, CancellationToken ct)
     {
@@ -788,7 +844,7 @@ public sealed class PublicHostedEventBookingController : BenControllerBase
     /// writer after the key was widened. Found by a hold test whose second guest was allowed a seat
     /// somebody already had, because the seat that clashed had been discarded before the insert.
     /// </remarks>
-    private static void WriteNights(
+    internal static void WriteNights(
         HostedEventBooking booking, IReadOnlyList<HostedEventBookingNightChoice> nights)
     {
         foreach (var choice in nights
@@ -807,7 +863,7 @@ public sealed class PublicHostedEventBookingController : BenControllerBase
         }
     }
 
-    private static void WriteGuests(
+    internal static void WriteGuests(
         HostedEventBooking booking, IReadOnlyList<HostedEventBookingGuestInput> guests)
     {
         var order = 0;
@@ -835,7 +891,7 @@ public sealed class PublicHostedEventBookingController : BenControllerBase
     /// stop the guest ever asking again. True only for the list of what they have coming up, where
     /// leaving it out silently drops a weekend they are still keeping free.
     /// </param>
-    private static IQueryable<HostedEventBooking> MineQuery(
+    internal static IQueryable<HostedEventBooking> MineQuery(
         BenDataContext db, Guid userId, bool includeReleased = false)
         => db.HostedEventBookings
             .AsNoTracking()
@@ -880,7 +936,7 @@ public sealed class PublicHostedEventBookingController : BenControllerBase
     /// name and no dietary note but their own party's, because a guest's screen is not a window
     /// into the venue's book.
     /// </remarks>
-    private static MyHostedEventBookingRecord ToMine(HostedEventBooking b)
+    internal static MyHostedEventBookingRecord ToMine(HostedEventBooking b)
         => new(
             b.Id,
             b.HostedEventId,
@@ -911,6 +967,6 @@ public sealed class PublicHostedEventBookingController : BenControllerBase
                 .ToList(),
             b.HoldExpiresUtc);
 
-    private static string? Trimmed(string? value)
+    internal static string? Trimmed(string? value)
         => value?.Trim() is { Length: > 0 } v ? v : null;
 }

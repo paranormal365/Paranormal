@@ -82,6 +82,10 @@ public sealed class PublicEventAttendanceTests
             NullLogger<UserManager<AppUser>>.Instance);
     }
 
+    private static Ben.Data.WebApi.Services.EmailLinkAccounts Accounts(IDbContextFactory<BenDataContext> factory)
+        => new(UserManagerFor(factory), new Ben.Data.WebApi.Services.UserHandleService(factory),
+               NullLogger<Ben.Data.WebApi.Services.EmailLinkAccounts>.Instance);
+
     private static PublicEventAttendanceController Build(
         IDbContextFactory<BenDataContext> factory, IEmailService? email = null)
     {
@@ -259,7 +263,7 @@ public sealed class PublicEventAttendanceTests
             await db.SaveChangesAsync();
         }
 
-        var result = await Build(w.Factory).Confirm(await TokenFor(w, "walkup@example.com"), NoHostedMail(), default);
+        var result = await Build(w.Factory).Confirm(await TokenFor(w, "walkup@example.com"), NoHostedMail(), Accounts(w.Factory), default);
 
         Assert.IsNotType<ConflictObjectResult>(result.Result);
     }
@@ -281,7 +285,7 @@ public sealed class PublicEventAttendanceTests
             await db.SaveChangesAsync();
         }
 
-        var result = await Build(w.Factory).Confirm(await TokenFor(w, "selfserve@example.com"), NoHostedMail(), default);
+        var result = await Build(w.Factory).Confirm(await TokenFor(w, "selfserve@example.com"), NoHostedMail(), Accounts(w.Factory), default);
 
         Assert.IsType<ConflictObjectResult>(result.Result);
     }
@@ -308,7 +312,7 @@ public sealed class PublicEventAttendanceTests
             await db.SaveChangesAsync();
         }
 
-        var result = await Build(w.Factory).Confirm(await TokenFor(w, "extra@example.com"), NoHostedMail(), default);
+        var result = await Build(w.Factory).Confirm(await TokenFor(w, "extra@example.com"), NoHostedMail(), Accounts(w.Factory), default);
 
         Assert.IsNotType<ConflictObjectResult>(result.Result);
     }
@@ -405,7 +409,7 @@ public sealed class PublicEventAttendanceTests
         await Build(w.Factory).RequestAttendance(
             w.EventId, new RequestEventAttendanceRequest(StrangerEmail, "A Stranger"), default);
 
-        var result = await Build(w.Factory).Confirm(await TokenFor(w, StrangerEmail), NoHostedMail(), default);
+        var result = await Build(w.Factory).Confirm(await TokenFor(w, StrangerEmail), NoHostedMail(), Accounts(w.Factory), default);
         Assert.IsType<EventAttendanceConfirmation>(Assert.IsType<OkObjectResult>(result.Result).Value);
 
         await using var db = await w.Factory.CreateDbContextAsync();
@@ -435,7 +439,7 @@ public sealed class PublicEventAttendanceTests
         await Build(w.Factory).RequestAttendance(
             w.EventId, new RequestEventAttendanceRequest(ExistingEmail, null), default);
 
-        await Build(w.Factory).Confirm(await TokenFor(w, ExistingEmail), NoHostedMail(), default);
+        await Build(w.Factory).Confirm(await TokenFor(w, ExistingEmail), NoHostedMail(), Accounts(w.Factory), default);
 
         await using var db = await w.Factory.CreateDbContextAsync();
         Assert.Single(await db.Users.Where(u => u.Email == ExistingEmail).ToListAsync());
@@ -454,8 +458,8 @@ public sealed class PublicEventAttendanceTests
             w.EventId, new RequestEventAttendanceRequest(StrangerEmail, null), default);
 
         var token = await TokenFor(w, StrangerEmail);
-        Assert.IsType<OkObjectResult>((await Build(w.Factory).Confirm(token, NoHostedMail(), default)).Result);
-        Assert.IsType<NotFoundResult>((await Build(w.Factory).Confirm(token, NoHostedMail(), default)).Result);
+        Assert.IsType<OkObjectResult>((await Build(w.Factory).Confirm(token, NoHostedMail(), Accounts(w.Factory), default)).Result);
+        Assert.IsType<NotFoundResult>((await Build(w.Factory).Confirm(token, NoHostedMail(), Accounts(w.Factory), default)).Result);
     }
 
     [Fact]
@@ -473,7 +477,7 @@ public sealed class PublicEventAttendanceTests
             await db.SaveChangesAsync();
         }
 
-        Assert.IsType<NotFoundResult>((await Build(w.Factory).Confirm(token, NoHostedMail(), default)).Result);
+        Assert.IsType<NotFoundResult>((await Build(w.Factory).Confirm(token, NoHostedMail(), Accounts(w.Factory), default)).Result);
         Assert.IsType<NotFoundResult>((await Build(w.Factory).GetInvite(token, default)).Result);
     }
 
@@ -503,7 +507,7 @@ public sealed class PublicEventAttendanceTests
             await db.SaveChangesAsync();
         }
 
-        Assert.IsType<ConflictObjectResult>((await Build(w.Factory).Confirm(token, NoHostedMail(), default)).Result);
+        Assert.IsType<ConflictObjectResult>((await Build(w.Factory).Confirm(token, NoHostedMail(), Accounts(w.Factory), default)).Result);
     }
 
     [Fact]

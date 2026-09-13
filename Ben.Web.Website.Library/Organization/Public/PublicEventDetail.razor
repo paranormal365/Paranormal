@@ -547,6 +547,19 @@ else
                         <div class="alert alert-danger py-2">@_attendError</div>
                     }
 
+                    @if (_hosted is { } askingHost)
+                    {
+                        @* A hosted event's organizer has to be able to reach whoever asks
+                           (slice 11d), so this door asks for the three and says why. *@
+                        <BookingContactFields Draft="_attendContact" IdPrefix="attend" AskEmail="true"
+                                              OrganizationName="@askingHost.OrganizationName"
+                                              Changed="StateHasChanged" />
+                        <button type="button" class="btn btn-primary mt-2" id="attend-send"
+                                @onclick="RequestAttendanceAsync"
+                                disabled="@(_busy || !_attendContact.IsEnough(withEmail: true))">Send me the link</button>
+                    }
+                    else
+                    {
                     <div class="row g-2">
                         <div class="col-md-5">
                             <input class="form-control" type="email" maxlength="320"
@@ -564,6 +577,7 @@ else
                                     disabled="@(_busy || !_attendEmail.Contains('@'))">Send me the link</button>
                         </div>
                     </div>
+                    }
 
                     <p class="text-secondary mt-2 mb-0" style="font-size:.75rem;">
                         Already have an account? <a href="/login">Sign in</a> and say you're
@@ -728,10 +742,30 @@ else
     private bool _emailSent;
     private string? _attendError;
 
+    private readonly Ben.Web.Website.Library.Organization.Public.BookingContactDraft _attendContact = new();
+
     private async Task RequestAttendanceAsync()
     {
         if (_event is null) return;
         _busy = true; _attendError = null;
+
+        if (_hosted is not null)
+        {
+            var (sent, error) = await AdminClient.RequestHostedEventAttendanceAsync(
+                _event.Id,
+                new RequestEventAttendanceRequest(
+                    _attendContact.Email.Trim(),
+                    $"{_attendContact.FirstName.Trim()} {_attendContact.LastName.Trim()}",
+                    FirstName: _attendContact.FirstName.Trim(),
+                    LastName: _attendContact.LastName.Trim(),
+                    Phone: _attendContact.Phone.Trim()));
+
+            if (sent) _emailSent = true;
+            else _attendError = error ?? "That couldn't be sent. The event may have filled up or closed.";
+
+            _busy = false;
+            return;
+        }
 
         // The server answers the same way whether or not that address is known here, so there is
         // nothing to report back beyond "we tried".

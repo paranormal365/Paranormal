@@ -35,6 +35,14 @@ namespace Ben.Data.Source.Entities
         public string? DisplayName { get; set; }
 
         /// <summary>
+        /// The name and number an organizer needs to reach somebody asking for a hosted event by
+        /// email (slice 11d). Null on every other kind of event, which never asked for them.
+        /// </summary>
+        public string? FirstName { get; set; }
+        public string? LastName { get; set; }
+        public string? Phone { get; set; }
+
+        /// <summary>
         /// How many places they asked for, on a tour date (item 234). Null on every other event.
         /// </summary>
         /// <remarks>

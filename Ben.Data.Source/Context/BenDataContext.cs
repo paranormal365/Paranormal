@@ -116,6 +116,8 @@ namespace Ben.Data.Source.Context
         public virtual DbSet<HostedEventLayoutUnit> HostedEventLayoutUnits { get; set; }
         public virtual DbSet<HostedEventUnitBlock> HostedEventUnitBlocks { get; set; }
         public virtual DbSet<HostedEventBooking> HostedEventBookings { get; set; }
+        public virtual DbSet<HostedEventEmailPick> HostedEventEmailPicks { get; set; }
+        public virtual DbSet<HostedEventEmailPickPlace> HostedEventEmailPickPlaces { get; set; }
         public virtual DbSet<HostedEventBookingNight> HostedEventBookingNights { get; set; }
         public virtual DbSet<HostedEventBookingGuest> HostedEventBookingGuests { get; set; }
         public virtual DbSet<HostedEventMenu> HostedEventMenus { get; set; }
@@ -545,6 +547,9 @@ namespace Ben.Data.Source.Context
                 .HasForeignKey(e => e.InvitedByAppUserId).IsRequired(false).OnDelete(DeleteBehavior.NoAction);
             modelBuilder.Entity<EventAttendanceInvite>().Property(e => e.Email).HasMaxLength(320);
             modelBuilder.Entity<EventAttendanceInvite>().Property(e => e.DisplayName).HasMaxLength(200);
+            modelBuilder.Entity<EventAttendanceInvite>().Property(e => e.FirstName).HasMaxLength(100);
+            modelBuilder.Entity<EventAttendanceInvite>().Property(e => e.LastName).HasMaxLength(100);
+            modelBuilder.Entity<EventAttendanceInvite>().Property(e => e.Phone).HasMaxLength(40);
             modelBuilder.Entity<EventAttendanceInvite>().Property(e => e.Token).HasMaxLength(128);
             // The token is how the link is resolved, and it must be unique while it exists. Filtered
             // because it is cleared on confirmation and a pile of nulls would collide.
@@ -1301,6 +1306,53 @@ namespace Ben.Data.Source.Context
                 .Property(b => b.DecisionNote).HasMaxLength(1000);
             modelBuilder.Entity<HostedEventBooking>()
                 .Property(b => b.CancellationReason).HasMaxLength(1000);
+            modelBuilder.Entity<HostedEventBooking>()
+                .Property(b => b.ContactPhone).HasMaxLength(40);
+
+            // ── places picked by somebody not signed in (slice 11d) ────────────────
+            modelBuilder.Entity<HostedEventEmailPick>()
+                .HasOne(p => p.HostedEvent).WithMany()
+                .HasForeignKey(p => p.HostedEventId).OnDelete(DeleteBehavior.Cascade);
+            // SetNull is not allowed beside the event's cascade (two paths), so NoAction; a booking
+            // is never deleted while its event exists except by a guest withdrawing a request, which
+            // a pick never becomes.
+            modelBuilder.Entity<HostedEventEmailPick>()
+                .HasOne(p => p.HostedEventBooking).WithMany()
+                .HasForeignKey(p => p.HostedEventBookingId).OnDelete(DeleteBehavior.NoAction);
+            modelBuilder.Entity<HostedEventEmailPick>().Property(p => p.FirstName).HasMaxLength(100);
+            modelBuilder.Entity<HostedEventEmailPick>().Property(p => p.LastName).HasMaxLength(100);
+            modelBuilder.Entity<HostedEventEmailPick>().Property(p => p.Email).HasMaxLength(320);
+            modelBuilder.Entity<HostedEventEmailPick>().Property(p => p.Phone).HasMaxLength(40);
+            modelBuilder.Entity<HostedEventEmailPick>().Property(p => p.Note).HasMaxLength(2000);
+            modelBuilder.Entity<HostedEventEmailPick>().Property(p => p.RefusedSentence).HasMaxLength(500);
+            modelBuilder.Entity<HostedEventEmailPick>().Property(p => p.TokenHash).HasMaxLength(64);
+            modelBuilder.Entity<HostedEventEmailPick>().HasIndex(p => p.TokenHash).IsUnique();
+            // ONE LIVE PICK PER ADDRESS PER EVENT. Picking again replaces the first, which is what a
+            // person whose letter went to spam does; the index makes a second live one impossible.
+            modelBuilder.Entity<HostedEventEmailPick>()
+                .HasIndex(p => new { p.HostedEventId, p.Email })
+                .IsUnique()
+                .HasFilter("[IsLive] = 1")
+                .HasDatabaseName("UX_HostedEventEmailPicks_OneLivePerAddress");
+            // What the lapse sweep asks for.
+            modelBuilder.Entity<HostedEventEmailPick>().HasIndex(p => new { p.IsLive, p.ExpiresUtc });
+
+            modelBuilder.Entity<HostedEventEmailPickPlace>()
+                .HasOne(p => p.HostedEventEmailPick).WithMany(p => p.Places)
+                .HasForeignKey(p => p.HostedEventEmailPickId).OnDelete(DeleteBehavior.Cascade);
+            modelBuilder.Entity<HostedEventEmailPickPlace>()
+                .HasOne(p => p.HostedEventNight).WithMany()
+                .HasForeignKey(p => p.HostedEventNightId).OnDelete(DeleteBehavior.NoAction);
+            modelBuilder.Entity<HostedEventEmailPickPlace>()
+                .HasOne(p => p.HostedEventLayoutUnit).WithMany()
+                .HasForeignKey(p => p.HostedEventLayoutUnitId).OnDelete(DeleteBehavior.NoAction);
+            // THE ARBITER BETWEEN PICKS, as the bookings' own is between holds: two strangers pressing
+            // "hold these seats" in the same instant cannot both have seat H9 pending.
+            modelBuilder.Entity<HostedEventEmailPickPlace>()
+                .HasIndex(p => new { p.HostedEventNightId, p.HostedEventLayoutUnitId })
+                .IsUnique()
+                .HasFilter("[IsLive] = 1 AND [HostedEventLayoutUnitId] IS NOT NULL")
+                .HasDatabaseName("UX_HostedEventEmailPickPlaces_LiveUnitNight");
             modelBuilder.Entity<HostedEventBooking>()
                 .HasOne(b => b.HostedEvent).WithMany(e => e.Bookings)
                 .HasForeignKey(b => b.HostedEventId).OnDelete(DeleteBehavior.Cascade);

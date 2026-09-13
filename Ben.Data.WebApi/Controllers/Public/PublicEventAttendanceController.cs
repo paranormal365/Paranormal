@@ -122,6 +122,12 @@ public sealed class PublicEventAttendanceController : BenControllerBase
             && HostedEventGuestDoor.WhyTheEmailDoorIsClosed(hosted, DateTime.UtcNow) is { } shut)
             return Conflict(shut);
 
+        // Item 235 slice 11d: a hosted event's organizer has to be able to reach whoever asks, so
+        // the name and a phone are required here and nowhere else on this door.
+        if (hosted is not null
+            && BookingContact.WhyNotEnough(request.FirstName, request.LastName, request.Phone) is { } missing)
+            return BadRequest(missing);
+
         // Counted in PLACES (item 234), and a TOUR date is not refused for fullness at all: a
         // request holds nothing, so the overflow is a waiting list the business works through.
         // A hosted event is the same and for the same reason — the venue decides, and refusing a
@@ -180,6 +186,9 @@ public sealed class PublicEventAttendanceController : BenControllerBase
                 OrgCalendarEventId = eventId,
                 Email              = email,
                 DisplayName        = string.IsNullOrWhiteSpace(request.DisplayName) ? null : request.DisplayName.Trim(),
+                FirstName          = hosted is null ? null : BookingContact.Trimmed(request.FirstName),
+                LastName           = hosted is null ? null : BookingContact.Trimmed(request.LastName),
+                Phone              = hosted is null ? null : BookingContact.Trimmed(request.Phone),
                 // On a tour date and on a hosted event, where the number asked for is part of the
                 // ask. Every other event seats one person per sign-up (item 234).
                 Seats              = TourSeats.IsTourDate(ev) || hosted is not null
@@ -197,6 +206,12 @@ public sealed class PublicEventAttendanceController : BenControllerBase
             invite.DateExpires = DateTime.UtcNow.Add(LinkLifetime);
             invite.DateUpdated = DateTime.UtcNow;
             if (!string.IsNullOrWhiteSpace(request.DisplayName)) invite.DisplayName = request.DisplayName.Trim();
+            if (hosted is not null)
+            {
+                invite.FirstName = BookingContact.Trimmed(request.FirstName);
+                invite.LastName  = BookingContact.Trimmed(request.LastName);
+                invite.Phone     = BookingContact.Trimmed(request.Phone);
+            }
             // Asking again with a different party size is the newer answer, not a second guest.
             if (TourSeats.IsTourDate(ev) || hosted is not null)
                 invite.Seats = TourSeats.Clamp(request.Seats);
@@ -248,6 +263,7 @@ public sealed class PublicEventAttendanceController : BenControllerBase
     public async Task<ActionResult<EventAttendanceConfirmation>> Confirm(
         string token,
         [FromServices] Services.Events.EventGuestMailer hostedMail,
+        [FromServices] Services.EmailLinkAccounts accounts,
         CancellationToken ct)
     {
         await using var db = await _db.CreateDbContextAsync(ct);
@@ -293,35 +309,9 @@ public sealed class PublicEventAttendanceController : BenControllerBase
             .Where(a => a.OrgCalendarEventId == ev.Id)
             .ToListAsync(ct);
 
-        var user = await _users.FindByEmailAsync(invite.Email);
-        if (user is null)
-        {
-            user = new AppUser
-            {
-                Id                 = Guid.NewGuid(),
-                Email              = invite.Email,
-                UserName           = invite.Email,
-                NormalizedEmail    = invite.Email.ToUpperInvariant(),
-                NormalizedUserName = invite.Email.ToUpperInvariant(),
-                // They proved it by clicking a link sent to it, which is what confirmation means.
-                EmailConfirmed     = true,
-                DisplayName        = invite.DisplayName ?? invite.Email.Split('@')[0],
-                // C1: allocated at creation. A guest who signs up at a walking tour and is then
-                // invisible to every @mention is a person the group cannot talk to afterwards.
-                Handle             = await _handles.AllocateAsync(invite.DisplayName, invite.Email, ct),
-                DateCreated        = DateTime.UtcNow,
-            };
-
-            // No password. They can set one whenever they want an account they sign into; until
-            // then this exists so the group has somebody to reach and they have somewhere to look.
-            var created = await _users.CreateAsync(user);
-            if (!created.Succeeded)
-            {
-                _logger.LogWarning("Could not create an account for an event attendee: {Errors}",
-                    string.Join("; ", created.Errors.Select(e => e.Description)));
-                return BadRequest("That account could not be created.");
-            }
-        }
+        var user = await accounts.FindOrCreateAsync(
+            invite.Email, invite.DisplayName, invite.FirstName, invite.LastName, ct);
+        if (user is null) return BadRequest("That account could not be created.");
 
         // ── A tour date asks; everything else simply comes (item 234) ────────
         // Confirming the emailed link proves the address. On a TOUR date it does not also reserve
@@ -382,8 +372,14 @@ public sealed class PublicEventAttendanceController : BenControllerBase
         // a day pass starts counting.
         HostedEventBooking? asked = null;
         if (hosted is not null)
+        {
             asked = await HostedEventGuestDoor.AddDayPassRequestAsync(
                 db, hosted, user.Id, invite.Seats, note: null, ct);
+            if (asked is not null) asked.ContactPhone = invite.Phone;
+            if (invite.FirstName is { } first && invite.LastName is { } last)
+                await BookingContact.FillEmptyNamesAsync(
+                    db, user.Id, new BookingContact.Details(first, last, invite.Phone ?? ""), ct);
+        }
 
         invite.DateConfirmed        = DateTime.UtcNow;
         invite.ConfirmedByAppUserId = user.Id;

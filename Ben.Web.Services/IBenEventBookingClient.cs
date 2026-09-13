@@ -414,8 +414,42 @@ public interface IBenEventBookingClient
     /// <para>Both null means something else went wrong — the network, a session, a 500 — and the
     /// caller says so in its own words.</para>
     /// </remarks>
-    Task<(MyHostedEventBookingRecord? Held, HoldRefusedRecord? Refused)> HoldHostedEventPlacesAsync(
+    /// <remarks>
+    /// Three answers since slice 11d: held, refused because a square went (named), or refused in
+    /// words — most often that the organizer needs a name or a phone number.
+    /// </remarks>
+    Task<(MyHostedEventBookingRecord? Held, HoldRefusedRecord? Refused, string? Error)> HoldHostedEventPlacesAsync(
         Guid eventId, HoldHostedEventPlacesRequest request, CancellationToken token = default);
+
+    /// <summary>
+    /// The name and phone the signed-in guest's account already has, to fill the booking form
+    /// (slice 11d). Nothing is sent to anybody by reading it.
+    /// </summary>
+    Task<ItemResult<BookingContactRecord>> GetMyBookingContactAsync(CancellationToken token = default);
+
+    /// <summary>
+    /// Picks places without signing in; they wait fifteen minutes for the emailed link (slice 11d).
+    /// </summary>
+    Task<(HostedEventEmailPickPlacedRecord? Placed, HoldRefusedRecord? Refused, string? Error)> PickHostedEventPlacesByEmailAsync(
+        Guid eventId, PickHostedEventPlacesByEmailRequest request, CancellationToken token = default);
+
+    /// <summary>Where a pick made by email stands, for the page its link opens.</summary>
+    Task<ItemResult<HostedEventEmailPickRecord>> GetEmailPickAsync(string pickToken, CancellationToken token = default);
+
+    /// <summary>Proves the address and turns the pick into a hold.</summary>
+    Task<(HostedEventEmailPickRecord? Result, string? Error)> ConfirmEmailPickAsync(
+        string pickToken, CancellationToken token = default);
+
+    /// <summary>Lets a pick, or the hold it became, go.</summary>
+    Task<(HostedEventEmailPickRecord? Result, string? Error)> LetGoEmailPickAsync(
+        string pickToken, CancellationToken token = default);
+
+    /// <summary>
+    /// Asks for a hosted event's day pass by email, with the name and phone the organizer needs
+    /// (slice 11d). The refusal comes back in words.
+    /// </summary>
+    Task<(bool Sent, string? Error)> RequestHostedEventAttendanceAsync(
+        Guid eventId, RequestEventAttendanceRequest request, CancellationToken token = default);
 
     /// <summary>Posts the guest their own pass again, because letters get lost.</summary>
     /// <remarks>

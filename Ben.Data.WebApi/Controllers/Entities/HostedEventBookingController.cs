@@ -1192,7 +1192,8 @@ public sealed class HostedEventBookingController : OrgCmsControllerBase
                 ? new HostedEventBandRecord(
                     band.Id, band.Colour, band.Meaning, band.Hex, band.Rule, band.SortOrder)
                 : null,
-            HandPickedBandId: b.HostedEventBandId))
+            HandPickedBandId: b.HostedEventBandId,
+            ContactPhone: b.ContactPhone))
             .ToList();
     }
 

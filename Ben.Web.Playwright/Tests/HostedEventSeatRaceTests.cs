@@ -134,6 +134,8 @@ public class HostedEventSeatRaceTests : BenTestBase
         {
             nights = new[] { new { hostedEventNightId = nightId, hostedEventLayoutUnitId = unitId } },
             partySize = 1,
+            // The organizer has to be able to reach whoever holds (slice 11d).
+            firstName = "Test", lastName = "Guest", phone = "615-555-0100",
         };
 
         // Fired together, not one after the other. Awaiting the first would test nothing: the
@@ -179,6 +181,8 @@ public class HostedEventSeatRaceTests : BenTestBase
         {
             nights = new[] { new { hostedEventNightId = nightId, hostedEventLayoutUnitId = unitId } },
             partySize = 1,
+            // The organizer has to be able to reach whoever holds (slice 11d).
+            firstName = "Test", lastName = "Guest", phone = "615-555-0100",
         };
 
         var taken = await holder.PostAsync(
@@ -212,6 +216,8 @@ public class HostedEventSeatRaceTests : BenTestBase
         {
             nights = new[] { new { hostedEventNightId = nightId, hostedEventLayoutUnitId = unitId } },
             partySize = 1,
+            // The organizer has to be able to reach whoever holds (slice 11d).
+            firstName = "Test", lastName = "Guest", phone = "615-555-0100",
         };
 
         Assert.That(

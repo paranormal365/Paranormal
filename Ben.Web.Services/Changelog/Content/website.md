@@ -18,6 +18,13 @@ day-by-day account of building it would say nothing to anyone using it now.
 
 ## 2026-09-13
 
+- You can choose seats or rooms at a hosted event without an account. Give your name, email address
+  and phone number, and press the button in the letter within fifteen minutes to hold them; the same
+  link shows whether the venue has answered and lets you let them go.
+- Booking forms for hosted events ask for a name and phone number the organizer can use to reach
+  you, and say plainly that they go to the organizer for that event only. Organizers see the number
+  on the booking.
+
 - Event pages open with the host's pictures and a countdown to the first night, and on a phone keep an
   ask-for-a-place button in reach. Hosts manage the pictures from a new gallery page.
 - A group's own public pages can show one of its events — its dates, programme, pictures or venue — and

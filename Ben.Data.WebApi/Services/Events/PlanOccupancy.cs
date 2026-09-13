@@ -5,7 +5,7 @@ using Microsoft.EntityFrameworkCore;
 namespace Ben.Data.WebApi.Services.Events;
 
 /// <summary>
-/// What every square on a plan is, for every night, in three queries (item 235 phase 4).
+/// What every square on a plan is, for every night, in a handful of queries (item 235 phase 4).
 /// </summary>
 /// <remarks>
 /// <para><b>What it replaces.</b> The board asked <c>PeopleIn</c> once per unit per night, and each
@@ -14,7 +14,7 @@ namespace Ben.Data.WebApi.Services.Events;
 /// screen — all of it in memory, all of it repeated on every render, and all of it computing the
 /// same handful of numbers over and over.</para>
 ///
-/// <para><b>Three queries, whatever the size.</b> One for the units, one for the live holdings, one
+/// <para><b>A handful of queries, whatever the size.</b> One for the units, one for the live holdings, one
 /// for what people have merely asked for. Grouped in the database, which is the one place that
 /// already has an index shaped exactly like the question.</para>
 ///
@@ -30,13 +30,18 @@ public static class PlanOccupancy
     /// The party holding it, so the organizer's board can put a name on the square. Null when
     /// nothing holds it — and never returned to a guest, who is told only the state.
     /// </param>
+    /// <param name="AwaitingEmail">
+    /// Held by somebody not signed in who has not yet clicked their emailed link (slice 11d). Reads
+    /// as pending everywhere, with no booking behind it to name.
+    /// </param>
     public readonly record struct Cell(
         Guid NightId,
         Guid UnitId,
         Guid? BookingId,
         HostedEventBookingStatus? HeldAs,
         int People,
-        int Asked);
+        int Asked,
+        bool AwaitingEmail = false);
 
     /// <summary>Every square of an event's plan on every night, with what is on it.</summary>
     /// <remarks>
@@ -92,6 +97,17 @@ public static class PlanOccupancy
         {
             cells[(row.NightId, row.UnitId)] = new Cell(
                 row.NightId, row.UnitId, row.BookingId, row.Status, Math.Max(1, row.People), 0);
+        }
+
+        // ── and what somebody is confirming by email (slice 11d) ──────────────
+        //
+        // Pending to everybody, because it is: nobody else may take those squares for the next few
+        // minutes. A booking holding the same square wins the drawing, since only the booking is
+        // real — the pick will be told so when its link is clicked.
+        foreach (var (nightId, unitId, _, people) in await EmailPicks.LiveSquaresAsync(db, hostedEventId, ct))
+        {
+            cells.TryAdd((nightId, unitId), new Cell(
+                nightId, unitId, null, HostedEventBookingStatus.Held, Math.Max(1, people), 0, AwaitingEmail: true));
         }
 
         foreach (var row in asked)

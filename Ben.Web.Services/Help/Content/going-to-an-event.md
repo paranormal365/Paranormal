@@ -28,9 +28,7 @@ to the part of the page where you choose.
 
 ![An event's page on a phone](/help/media/going-to-an-event/event-page-phone.png)
 
-Choosing a seat means holding it, and holding something needs somebody to hold it for — so that
-part needs an account. Signing in takes a moment; if you would rather not, most events also let
-you ask for a place by email and confirm it with a link.
+You don't need an account to choose, either — see [Choosing without an account](#choosing-without-an-account).
 
 ## Two ways to get a place
 
@@ -190,9 +188,37 @@ holding one.
 If a site has no outgoing mail set up, nothing is sent and everything still works — the pages say
 the same things.
 
+## Choosing without an account
+
+You can pick seats or rooms without signing in. Tap what you want, then give your **first and last
+name, your email address and a phone number** — the organizer needs to be able to reach you about
+your booking. Those go to the organizer for this event only, and we don't use them for anything else.
+
+![The questions asked when you choose without an account](/help/media/going-to-an-event/choosing-without-an-account.png)
+
+Press **Email me a link to hold these**. For the next **fifteen minutes** nobody else can take those
+places, and the letter has a button that holds them properly:
+
+![The page the emailed link opens](/help/media/going-to-an-event/hold-your-places-link.png)
+
+- **Press the button in the letter within fifteen minutes.** After that the places go back, and you
+  can simply pick again.
+- **Once you press it, the places are held** exactly as if you had signed in, for as long as the venue
+  gives itself to answer.
+- **The same link keeps working for a month.** It shows whether the venue has answered and lets you
+  let the places go, with no password.
+- **If you pick again from the same address**, your new choice replaces the old one.
+- **If a lot of people are waiting to confirm at once**, you may be asked to sign in or try again in
+  a few minutes. That stops anyone tying up a whole night with addresses that never confirm.
+- Pressing the button makes you an account with that email address and no password. Set one whenever
+  you like; you don't have to.
+
+Signed in, you're asked for the same three things only if your account doesn't already have them. A
+phone number you give for a booking stays with that booking — it is not added to your profile.
+
 ## Coming without an account
 
-You can ask for a day pass with nothing but an email address. We send a link, and clicking it says
+You can ask for a day pass with your name, email address and phone number. We send a link, and clicking it says
 **you've asked for a place** — not that you are coming, because the venue has not answered yet.
 
 That link also makes you an account with no password on it. Everything beyond a day pass —

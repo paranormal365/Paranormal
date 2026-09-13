@@ -20,6 +20,12 @@ belongs there; this is for the part underneath.
 
 ## 2026-09-13
 
+- Seats on a hosted event can be picked without an account. They wait fifteen minutes for the person
+  to confirm by a link sent to their email address, then become an ordinary hold. Unconfirmed picks are
+  limited per address and per event, and deleted a day later.
+- Hosted event bookings now carry a name and a phone number for the organizer. A phone given for a
+  booking stays with that booking and is not added to the person's account.
+
 - Hosted events can carry a gallery of the host's own pictures, up to fifty, resized with their
   location removed. Guests' photos from an event's room are never added to it.
 - Each event now has a storage allowance, 2,000 MB unless the site changes it, shared by its files,

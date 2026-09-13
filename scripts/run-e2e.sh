@@ -266,12 +266,16 @@ echo "   database: $DB_NAME"
 echo "   uploads : $UPLOADS_DIR"
 echo ""
 
+# BEN_E2E_API_LOG: with no mail server, a link that would have been emailed (picking seats without
+# signing in) is written to the API's log instead, and the browser test that follows one reads it
+# from there. Nothing but a token for a throwaway address on this throwaway database is ever in it.
+#
 # -p:IsTestProject=true is NOT optional: the csproj sets it false to stay out of the solution's
 # test run, and without the override `dotnet test` finds zero tests and EXITS 0 — a silent pass
 # that has been reported as a real one before.
 set +e
 dotnet test Ben.Web.Playwright -p:IsTestProject=true -c Release --nologo \
-  -e BEN_BASE_URL="$WEB_URL" "${PASSTHROUGH[@]:-}" 2>&1 | tee "$LOG_DIR/e2e.log"
+  -e BEN_BASE_URL="$WEB_URL" -e BEN_E2E_API_LOG="$LOG_DIR/api.log" "${PASSTHROUGH[@]:-}" 2>&1 | tee "$LOG_DIR/e2e.log"
 STATUS=${PIPESTATUS[0]}
 set -e
 

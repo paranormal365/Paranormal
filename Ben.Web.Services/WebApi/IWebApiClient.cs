@@ -47,6 +47,12 @@ public interface IWebApiClient
     Task<bool> PostAnonymousVoidAsync<TRequest>(string relativeUrl, TRequest payload, CancellationToken token = default);
 
     /// <summary>
+    /// An anonymous POST with no answer body, keeping the refusal's sentence when there is one.
+    /// </summary>
+    Task<(bool Sent, string? Error)> PostAnonymousExpectingReasonAsync<TRequest>(
+        string relativeUrl, TRequest payload, CancellationToken token = default);
+
+    /// <summary>
     /// Anonymous POST that returns the body <b>whatever the status</b>.
     /// </summary>
     /// <remarks>

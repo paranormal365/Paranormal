@@ -69,6 +69,9 @@ public sealed class HostedEventHoldTests
             {
                 Id = id, Email = $"{id:N}@example.test", UserName = $"{id:N}@example.test",
                 DisplayName = name, DateCreated = now,
+                // The profile already says who they are and how to reach them, so these guests are
+                // asked for nothing more (slice 11d); BookingContactTests covers the ones who are.
+                FirstName = name.Split(' ')[0], LastName = name.Split(' ')[^1], PhoneNumber = "615-555-0100",
             });
         }
 

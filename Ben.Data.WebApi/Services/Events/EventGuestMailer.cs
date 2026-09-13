@@ -338,6 +338,75 @@ public sealed class EventGuestMailer
     }
 
     /// <summary>
+    /// Sends the link that turns places picked without signing in into a real hold (slice 11d).
+    /// </summary>
+    /// <remarks>
+    /// <para><b>The deadline is in the subject's first sentence</b>, because fifteen minutes is short
+    /// and a letter read at leisure is a letter read too late.</para>
+    ///
+    /// <para><b>"If this wasn't you, do nothing"</b> — the address has not been proved, so this may be
+    /// going to somebody who never visited the site. Nothing is held for them beyond the fifteen
+    /// minutes and no account exists until the button is pressed.</para>
+    ///
+    /// <para>When mail is not set up the link is logged instead, as the public sign-up link is, so a
+    /// developer's machine and the browser tests can still follow it.</para>
+    /// </remarks>
+    /// <returns>True when a letter was written.</returns>
+    public async Task<bool> SendEmailPickLinkAsync(
+        HostedEventEmailPick pick, HostedEvent ev, IReadOnlyList<string> places, string token,
+        CancellationToken ct)
+    {
+        var link = _site.AbsoluteUrl($"/event-picks/{token}");
+
+        if (!_email.IsConfigured)
+        {
+            _log.LogInformation(
+                "Email is not configured; the pick link for {Email} was not sent. Pick token: {Token}",
+                pick.Email, token);
+            return false;
+        }
+
+        var name = Safe(ev.Name);
+        var org = Safe(ev.Organization?.Name ?? "the organizer");
+
+        var body = new System.Text.StringBuilder();
+        body.Append($"<p>Hello {Safe(pick.FirstName)},</p>");
+        body.Append($"<p>You picked places at <strong>{name}</strong>. They are waiting for you until "
+                  + $"<strong>{AtTheVenue(pick.ExpiresUtc, ev)}</strong> — press the button to hold them.</p>");
+        if (places.Count > 0)
+            body.Append($"<ul><li>{string.Join("</li><li>", places.Select(Safe))}</li></ul>");
+        body.Append($"<p><a href=\"{link}\">Hold my places</a></p>");
+        body.Append($"<p>Once they are held, {org} answers you, and nobody else can take them in the "
+                  + "meantime. Nothing is paid through this site.</p>");
+        body.Append($"<p>{Safe(BookingContact.Disclosure(ev.Organization?.Name))}</p>");
+        body.Append("<p>If this wasn't you, do nothing: the places go back by themselves and no account "
+                  + "is made.</p>");
+
+        await _email.SendAsync(new EmailMessage(
+            pick.Email,
+            $"Hold your places at {ev.Name} within 15 minutes",
+            body.ToString(),
+            ReplyTo: ev.Organization?.PublicEmail), ct);
+
+        return true;
+    }
+
+    /// <summary>A moment on the venue's clock, as the letters write it.</summary>
+    internal static string AtTheVenue(DateTime utc, HostedEvent? ev)
+    {
+        try
+        {
+            var zone = TimeZoneInfo.FindSystemTimeZoneById(ev?.TimeZoneId ?? "UTC");
+            var local = TimeZoneInfo.ConvertTimeFromUtc(DateTime.SpecifyKind(utc, DateTimeKind.Utc), zone);
+            return local.ToString("h:mm tt on MM/dd/yyyy");
+        }
+        catch (Exception e) when (e is TimeZoneNotFoundException or InvalidTimeZoneException)
+        {
+            return utc.ToString("h:mm tt on MM/dd/yyyy") + " UTC";
+        }
+    }
+
+    /// <summary>
     /// Tells everybody with a place that the event is off (item 235 phase 6).
     /// </summary>
     /// <remarks>

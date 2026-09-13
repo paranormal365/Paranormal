@@ -934,6 +934,45 @@ Tests: `HostedEventFileTests`, `EventRoomTests` (unit and Playwright), `EventAdT
 `CmsEventSectionTests`, Playwright `EventFilesTests`, `EventGalleryTests`; captures
 `event-gallery.png`, `event-page-phone.png` and the room and wall shots.
 
+#### Slice 11d as built (2026-09-13) — guests without an account
+
+Ben's decision is in *Still Ben's* below. Built as proposed, with these shapes:
+
+1. **A pick is not a booking.** `HostedEventEmailPick` (+ places) lives beside the bookings for fifteen
+   minutes. Every booking still has a lead account; no account is made until the emailed link's button
+   is pressed, so a mistyped or invented address leaves nothing behind and never puts a hold on the
+   account of whoever really owns the address. The places read as pending on every plan
+   (`PlanOccupancy` gained a fourth query) and a second pick of the same square is refused by its own
+   filtered unique index.
+2. **The click becomes an ordinary hold** through `BookingTransitions`, with the event's own deadline
+   starting at the click and the same letters. A square the venue or a signed-in guest took in the
+   meantime is named ("A1 was taken a moment ago"), and the rest go back.
+3. **Two arbiters, one gap, accepted.** The bookings' index cannot see picks, so the signed-in hold door
+   checks for live picks first (after retiring lapsed ones). A race between the two doors in the same
+   instant is settled at the click, in words.
+4. **Anti-swamp, in the order it bites:** six picks per address per ten minutes (a new rate-limit
+   policy); one live pick per email per event (index; picking again replaces the first); three live
+   picks per email across the site; unproven picks may hold at most a quarter of a night's places,
+   never fewer than eight.
+5. **Name, email and phone on every web booking.** Signed-in guests are asked only for what the account
+   lacks (a new `GET my-contact` fills the form, folded to one line when complete). The phone is stored
+   on the booking (`ContactPhone`) and shown on the organizer's decision sheet; it is never written to the
+   profile. Empty first/last names on the profile are filled. The disclosure sentence is shown on every
+   form. The hosted email door (day passes) asks for the three too; the shipped phone app's RSVP and a
+   host's booking-for-somebody do not.
+6. **The link manages the booking without a password** for a month: see whether the venue answered, let
+   the places go. After confirmation, letting go needs signing in. A button, never the page load, holds
+   the places, so mail scanners hold nothing.
+7. **Privacy:** a pick nobody confirmed is deleted a day later with the name and phone in it; a confirmed
+   pick's row goes after a month. Only the token's SHA-256 is stored. With no mail server the link is
+   logged, as the public sign-up link already was; the browser tests read it via `BEN_E2E_API_LOG`.
+8. Account creation for proven addresses moved into `EmailLinkAccounts`, shared by both email doors.
+
+Tests: `HostedEventEmailPickTests` (25, the index, the pending check, the share ceiling and the lapse each
+seen failing with its rule removed), Playwright `HostedEventEmailPickTests` (3), the stranger test in
+`HostedEventGuestTests` rewritten; captures `choosing-without-an-account.png`,
+`hold-your-places-link.png`.
+
 ### Phase 12 — After the event
 
 **Added 2026-09-13 (Ben), for after the event:**
@@ -1126,7 +1165,7 @@ ticks by hand; the three jobs; the `https` profile for LAN camera testing).
   able to reach them and not in a way that lets somebody swamp an event with unconfirmed holds.
   *"First Last Name, E-mail Address, Phone Number required so the event organizer can contact them to
   make arrangements for collecting fees. We can let them know during sign up that we only collect their
-  information for the event organization."* Proposed design, to be built as slice 11d (after phase 11):
+  information for the event organization."* **Built as slice 11d** (as-built record under phase 11). The design:
   name, email and phone required for every booking (a signed-in guest is asked only for what their
   profile lacks); a plain disclosure at sign-up that the three go to the organizer for this event only;
   a signed-out pick shows the seats **pending for 15 minutes and becomes a real hold only when the

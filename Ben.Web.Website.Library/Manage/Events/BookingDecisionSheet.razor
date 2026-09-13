@@ -33,6 +33,11 @@
                 {
                     <span class="text-secondary small">· @email</span>
                 }
+                @if (party.ContactPhone is { Length: > 0 } phone)
+                {
+                    @* Given for this booking so the venue can ring about it (slice 11d). *@
+                    <span class="text-secondary small" id="sheet-phone">· <a href="@($"tel:{phone}")">@phone</a></span>
+                }
             </div>
 
             @if (party.Note is { Length: > 0 } said)

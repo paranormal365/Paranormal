@@ -199,6 +199,17 @@ namespace Ben.Data.Source.Entities
         /// </summary>
         public DateTime? ProgrammeSeenUtc { get; set; }
 
+        /// <summary>
+        /// The number the organizer can ring about this booking (slice 11d).
+        /// </summary>
+        /// <remarks>
+        /// <b>On the booking, not the profile.</b> Ben: <i>"We can let them know during sign up that we
+        /// only collect their information for the event organization."</i> A phone given to one venue
+        /// for one weekend is not a phone the person has put on their account for everybody. Null on
+        /// bookings made before it was asked for, and on the ones a host makes for somebody.
+        /// </remarks>
+        public string? ContactPhone { get; set; }
+
         /// <summary>What the guest said when asking — arrival time, a request, an explanation.</summary>
         public string? Note { get; set; }
 

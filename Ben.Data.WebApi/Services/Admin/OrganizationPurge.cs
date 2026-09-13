@@ -366,6 +366,18 @@ public sealed class OrganizationPurge
             // NoAction, so they have to go before the rooms further down. They are taken here
             // rather than there because they also hang off the event, and deleting the event
             // first would be refused by these same rows (item 235 phase 2).
+            // Places picked by email (slice 11d) point at nights and units with NoAction, and a pick
+            // points at the booking it became. Taken whole — the pick's places cascade from it — by
+            // the event, and by the reference, for the same reason as the nights below.
+            await db.HostedEventEmailPicks
+                .Where(x => x.HostedEvent.OrganizationId == organizationId
+                         || (x.HostedEventBookingId != null
+                             && x.HostedEventBooking!.HostedEvent.OrganizationId == organizationId))
+                .ExecuteDeleteAsync(ct);
+            await db.HostedEventEmailPickPlaces
+                .Where(x => x.HostedEventLayoutUnitId != null
+                         && x.HostedEventLayoutUnit!.HostedEvent.OrganizationId == organizationId)
+                .ExecuteDeleteAsync(ct);
             await db.HostedEventBookingNights
                 .Where(x => x.HostedEventBooking.HostedEvent.OrganizationId == organizationId)
                 .ExecuteDeleteAsync(ct);

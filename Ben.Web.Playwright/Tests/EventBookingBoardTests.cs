@@ -66,6 +66,8 @@ public class EventBookingBoardTests : BenTestBase
                 {
                     nights = new[] { new { hostedEventNightId = night, hostedEventLayoutUnitId = seat } },
                     partySize = 2,
+                    // The organizer has to be able to reach whoever holds (slice 11d).
+                    firstName = "Test", lastName = "Guest", phone = "615-555-0100",
                 },
             });
         Assert.That(held.Status, Is.EqualTo(200),

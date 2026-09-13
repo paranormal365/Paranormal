@@ -71,21 +71,30 @@
     }
     else if (!IsAuthenticated)
     {
-        @* Signed out, the plan is worth reading and cannot be touched: choosing a seat means
-           holding it, and holding something needs somebody to hold it for. *@
         <div class="event-act__ask mb-1">Coming along?</div>
 
-        @if (_plan is { IsPicking: true, Units.Count: > 0 })
+        @if (_plan is { IsPicking: true, Units.Count: > 0 } anyone)
         {
+            @* Signed out, the plan can be chosen from too (slice 11d): the places wait fifteen minutes
+               for the emailed link, which is what stands behind them instead of an account. *@
             <p class="text-secondary small">
-                Sign in to choose your own places on the plan. This is how it looks right now.
+                Choose your places — no account needed. <a href="/login">Sign in</a> to hold them
+                straight away.
             </p>
-            <BenPlan Model="@ReadOnlyModel()" Mode="PlanMode.Read"
-                     Occupancy="@OccupancyForTheNight()"
-                     AriaLabel="How full the house is" />
-        }
+            <HostedEventPicker Hosted="Hosted" Plan="anyone" Anonymous="true" />
 
-        @SignedOut
+            @if (Hosted.DayPassCapacity is not 0)
+            {
+                <div class="mt-4" id="hosted-day-by-email">
+                    <div class="fw-semibold small mb-1">Just for the day?</div>
+                    @SignedOut
+                </div>
+            }
+        }
+        else
+        {
+            @SignedOut
+        }
     }
     else if (_plan is { IsPicking: true, Units.Count: > 0 } picking)
     {
@@ -115,8 +124,6 @@
     private MyHostedEventBookingRecord? _booking;
     private string? _note;
     private PublicHostedEventPlanRecord? _plan;
-    private PlanModel? _readOnly;
-    private Guid _night;
 
     /// <summary>
     /// Re-reads the plan while somebody is looking at it.
@@ -153,10 +160,6 @@
     {
         var plan = await AdminClient.GetPublicHostedEventPlanAsync(Hosted.Id);
         _plan = plan.Item;
-        _readOnly = null;
-
-        if (_night == Guid.Empty && _plan?.Nights.FirstOrDefault() is { } first)
-            _night = first.Id;
 
         if (IsAuthenticated)
         {
@@ -181,7 +184,6 @@
         if (_disposed || plan.Item is null) return;
 
         _plan = plan.Item;
-        _readOnly = null;
 
         // A HOLD THAT HAS RUN OUT IS READ AGAIN, and only then. The expiry job releases the places
         // within five minutes and the card is otherwise a photograph of a promise that has already
@@ -215,31 +217,6 @@
         _note = null;
         await LoadAsync();
         StateHasChanged();
-    }
-
-    // ── the read-only plan a stranger sees ───────────────────────────────────
-
-    private PlanModel ReadOnlyModel()
-        => _readOnly ??= _plan is { } plan
-            ? PlanModel.From(plan.Kind, plan.Units)
-            : new PlanModel(HostedEventLayoutKind.Seats);
-
-    private IReadOnlyDictionary<Guid, HostedEventPlanCellState> OccupancyForTheNight()
-    {
-        var byUnit = new Dictionary<Guid, HostedEventPlanCellState>();
-        if (_plan is not { } plan) return byUnit;
-
-        foreach (var unit in ReadOnlyModel().Units)
-        {
-            if (unit.Id is not { } id) continue;
-
-            var cell = plan.Cells.FirstOrDefault(
-                c => c.HostedEventNightId == _night && c.HostedEventLayoutUnitId == id);
-
-            if (cell is not null) byUnit[unit.Key] = cell.State;
-        }
-
-        return byUnit;
     }
 
     // ── whether it is definitely happening ───────────────────────────────────

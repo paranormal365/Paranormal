@@ -469,6 +469,33 @@ public abstract class BenTestBase : PageTest
     }
 
     /// <summary>
+    /// Gives a hosted-event booking form the name, phone and (signed out) email the organizer needs
+    /// (item 235 slice 11d), filling only what the account did not already provide.
+    /// </summary>
+    /// <param name="prefix">The form's id prefix: <c>picker</c>, <c>ask</c> or <c>attend</c>.</param>
+    protected async Task FillBookingContactAsync(string prefix, string? email = null)
+    {
+        var summary = Page.Locator($"#{prefix}-contact-summary");
+        var phone = Page.Locator($"#{prefix}-phone");
+
+        // Either the account filled everything and the form folded to one line, or it is asking.
+        await Expect(summary.Or(phone)).ToBeVisibleAsync(new() { Timeout = 15_000 });
+        if (!await phone.IsVisibleAsync()) return;
+
+        async Task FillIfEmpty(string id, string value)
+        {
+            var field = Page.Locator($"#{prefix}-{id}");
+            if (await field.CountAsync() == 0) return;
+            if (string.IsNullOrWhiteSpace(await field.InputValueAsync())) await field.FillAsync(value);
+        }
+
+        await FillIfEmpty("first", "Test");
+        await FillIfEmpty("last", "Guest");
+        if (email is not null) await FillIfEmpty("email", email);
+        await FillIfEmpty("phone", "615-555-0100");
+    }
+
+    /// <summary>
     /// Clicks <paramref name="target"/> until <paramref name="expected"/> appears, then returns.
     /// <para>
     /// Blazor Server attaches its event handlers when the circuit connects, which happens *after*

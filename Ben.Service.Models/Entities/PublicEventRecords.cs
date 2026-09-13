@@ -164,7 +164,14 @@ public sealed record RequestEventAttendanceRequest(
     /// <summary>
     /// How many places, on a tour date (item 234). Null and 0 both mean one; the server clamps.
     /// </summary>
-    int? Seats = null);
+    int? Seats = null,
+    /// <summary>
+    /// Required on a hosted event (item 235 slice 11d), so the organizer can reach them; ignored on
+    /// every other kind, where an email is still enough.
+    /// </summary>
+    string? FirstName = null,
+    string? LastName = null,
+    string? Phone = null);
 
 /// <summary>What a confirmation link points at, shown before it is used.</summary>
 public sealed record EventAttendanceInviteInfo(

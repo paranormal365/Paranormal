@@ -219,6 +219,7 @@ builder.Services.AddHostedService<Ben.Data.WebApi.Services.FileMigrationService>
 // person. The backfill service gives one to any account that predates the column and then does
 // nothing on every subsequent start.
 builder.Services.AddScoped<Ben.Data.WebApi.Services.UserHandleService>();
+builder.Services.AddScoped<Ben.Data.WebApi.Services.EmailLinkAccounts>();
 // Every external door's decisions, once. Apple and Microsoft were two doors each hand-rolling the
 // same checks, and every defect found on one was then found on the other; a third provider would
 // have inherited none of the fixes. Controllers keep only token validation and HTTP.
