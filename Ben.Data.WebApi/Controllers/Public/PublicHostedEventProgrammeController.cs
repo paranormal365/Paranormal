@@ -143,13 +143,7 @@ public sealed class PublicHostedEventProgrammeController : BenControllerBase
                 })
                 .ToListAsync(ct))
             .Select(s => new IcsBuilder.IcsEvent(
-                // Marked UTC explicitly: a value read back from the database carries no kind, and the
-                // builder's ToUniversalTime would otherwise treat it as the SERVER's local time and move
-                // the class by however far the server is from Greenwich.
-                $"session-{s.Id}@ishaunted",
-                DateTime.SpecifyKind(s.StartsAtUtc, DateTimeKind.Utc),
-                DateTime.SpecifyKind(s.EndsAtUtc, DateTimeKind.Utc),
-                $"{s.Title} — {s.EventName}",
+                $"session-{s.Id}@ishaunted", s.StartsAtUtc, s.EndsAtUtc, $"{s.Title} — {s.EventName}",
                 Description: s.Description,
                 Location: string.Join(", ", new[] { s.Where, s.Venue }.Where(x => !string.IsNullOrWhiteSpace(x))),
                 // A later file for the same session replaces the entry rather than adding a second one.

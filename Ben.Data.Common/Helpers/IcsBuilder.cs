@@ -137,8 +137,18 @@ public static class IcsBuilder
     }
 
     /// <summary>UTC, in the basic form the format wants: <c>20260913T190000Z</c>.</summary>
-    private static string Stamp(DateTime value)
-        => value.ToUniversalTime().ToString("yyyyMMdd'T'HHmmss'Z'", CultureInfo.InvariantCulture);
+    /// <remarks>
+    /// <para><b>Unspecified is UTC.</b> Everything this product stores is UTC, and a time read back
+    /// from the database arrives with no kind at all. <c>ToUniversalTime()</c> treats that as the
+    /// SERVER's local time and shifts it — so a 9 PM séance was written at 2 AM on a machine in
+    /// Chicago and correctly on one in UTC, and the bug lived or died with where the site was
+    /// hosted (found in item 235 phase 10).</para>
+    ///
+    /// <para>Only a value that says it is Local is converted.</para>
+    /// </remarks>
+    internal static string Stamp(DateTime value)
+        => (value.Kind == DateTimeKind.Local ? value.ToUniversalTime() : DateTime.SpecifyKind(value, DateTimeKind.Utc))
+            .ToString("yyyyMMdd'T'HHmmss'Z'", CultureInfo.InvariantCulture);
 
     private static string Number(decimal value)
         => value.ToString("0.######", CultureInfo.InvariantCulture);

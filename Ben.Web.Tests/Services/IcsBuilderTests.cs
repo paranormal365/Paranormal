@@ -60,12 +60,23 @@ public sealed class IcsBuilderTests
     [Fact]
     public void A_local_start_time_is_converted_rather_than_written_as_it_stands()
     {
-        // Everything in this product stores UTC, but a DateTime that arrives Unspecified or Local
-        // must not be stamped with a Z it has not earned.
+        // A DateTime that says it is Local must not be stamped with a Z it has not earned.
         var local = new DateTime(2026, 9, 13, 0, 8, 0, DateTimeKind.Utc).ToLocalTime();
         var ics = IcsBuilder.Build(Sample() with { StartUtc = local });
 
         Assert.Contains("DTSTART:20260913T000800Z", Lines(ics));
+    }
+
+    [Fact]
+    public void A_time_read_back_from_the_database_is_taken_as_the_utc_it_was_stored_as()
+    {
+        // Unspecified is what EF hands back for every stored time. Treating it as the server's local
+        // time moved every such calendar entry by however far the server was from Greenwich.
+        var fromTheDatabase = new DateTime(2026, 10, 17, 2, 0, 0, DateTimeKind.Unspecified);
+        var ics = IcsBuilder.Build(Sample() with { StartUtc = fromTheDatabase, EndUtc = fromTheDatabase.AddHours(1) });
+
+        Assert.Contains("DTSTART:20261017T020000Z", Lines(ics));
+        Assert.Contains("DTEND:20261017T030000Z", Lines(ics));
     }
 
     [Fact]
