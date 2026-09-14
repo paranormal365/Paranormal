@@ -14,8 +14,11 @@ namespace Ben.Web.Tests.Services;
 /// as long as those messages have existed. It was found by reading a real conversation on a
 /// phone, which is the only place anybody had looked at one recently.</para>
 ///
-/// <para>The rule is the simple one: a case message body is plain text. If it ever needs
-/// formatting, the renderers change first and this test changes with them.</para>
+/// <para>The rule is the simple one: a case message <c>Body</c> is plain text. Formatting arrived on
+/// 2026-09-14 without changing that: a message written in the website's editor keeps a sanitized
+/// copy in the separate <c>BodyHtml</c> column, which only the website draws, and its <c>Body</c> is
+/// written from it as plain text (<c>CaseMessageBodies</c>) — because the iPhone app in review draws
+/// <c>Body</c>. So this guard still holds for every <c>Body</c> the server writes.</para>
 /// </remarks>
 public sealed class CaseMessageBodiesArePlainTextTests
 {

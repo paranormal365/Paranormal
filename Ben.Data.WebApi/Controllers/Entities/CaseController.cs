@@ -34,8 +34,10 @@ public sealed class CaseController : BenControllerBase
         Services.Billing.SubscriptionLimitGuard limits,
         Ben.Service.RepositoryService.GenericInterfaces.IOrganizationSecurityService security,
         Services.RequestReviewNotifier reviewNotifier,
-        Services.ClientStatusMailer clientMail)
+        Services.ClientStatusMailer clientMail,
+        Services.ICmsMarkupSanitizer sanitizer)
     {
+        _sanitizer = sanitizer;
         _clientMail = clientMail;
         _db = db;
         _mapper = mapper;
@@ -45,6 +47,24 @@ public sealed class CaseController : BenControllerBase
     }
 
     private readonly Services.RequestReviewNotifier _reviewNotifier;
+
+    private readonly Services.ICmsMarkupSanitizer _sanitizer;
+
+    /// <summary>
+    /// A case description as it is stored: sanitized HTML, or null when the editor held nothing.
+    /// </summary>
+    /// <remarks>
+    /// The description has always been rendered as markup — on the case, and on the public case page once
+    /// published — but it was stored exactly as sent. Beta feedback (2026-09-14) gave it a formatting editor on
+    /// Edit Case and New Case, which made the gap plain: nothing between a request body and a MarkupString on a
+    /// public page. An emptied editor still sends <c>&lt;p&gt;&lt;/p&gt;</c>, which is no description at all.
+    /// </remarks>
+    public static string? CleanDescription(string? html, Services.ICmsMarkupSanitizer sanitizer)
+    {
+        if (!Ben.Data.Common.Text.PlainTextHtml.HasText(html)) return null;
+        var clean = sanitizer.SanitizeHtml(html).Trim();
+        return Ben.Data.Common.Text.PlainTextHtml.HasText(clean) ? clean : null;
+    }
 
     private readonly Ben.Service.RepositoryService.GenericInterfaces.IOrganizationSecurityService _security;
 
@@ -286,7 +306,7 @@ public sealed class CaseController : BenControllerBase
             OrganizationId     = orgId,
             Status             = CaseStatus.Proposed,
             Title              = request.Title.Trim(),
-            Description        = request.Description?.Trim(),
+            Description        = CleanDescription(request.Description, _sanitizer),
             StreetAddress1     = request.StreetAddress1.Trim(),
             StreetAddress2     = request.StreetAddress2?.Trim(),
             City               = request.City.Trim(),
@@ -590,7 +610,7 @@ public sealed class CaseController : BenControllerBase
         }
 
         entity.Title                = request.Title?.Trim() ?? entity.Title;
-        entity.Description          = request.Description?.Trim();
+        entity.Description          = CleanDescription(request.Description, _sanitizer);
         var previousStatus = entity.Status;
         entity.Status               = request.Status;
         entity.PublicPseudonym      = request.PublicPseudonym?.Trim();

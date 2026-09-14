@@ -67,8 +67,7 @@
                 <GridColumn Title="Actions" Width="140px">
                     <Template>
                         @{ var s = (MemberSeatAdminRecord)context; }
-                        <button type="button" class="btn btn-outline-primary btn-sm text-nowrap"
-                                @onclick="@(() => OpenEdit(s))">Set standing…</button>
+                        <BenGridAction Icon="sliders" Label="Set standing" Tone="GridActionTone.Primary" OnClick="@(() => OpenEdit(s))" />
                     </Template>
                 </GridColumn>
             </GridColumns>

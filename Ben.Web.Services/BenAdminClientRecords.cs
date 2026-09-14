@@ -1372,7 +1372,10 @@ public sealed record CaseMessageRecord(
     Ben.Data.Common.Enums.CaseMessageSide SenderSide,
     bool                             IsReadByClient,
     bool                             IsReadByOrg,
-    DateTime                         DateCreated);
+    DateTime                         DateCreated,
+    // 2026-09-14: the formatted copy, when the message was written in the website's editor. Body always holds the
+    // same words as plain text — the iPhone app reads Body.
+    string?                          BodyHtml = null);
 
 // ── My Investigations response records ───────────────────────────────────────
 public sealed record MyInvestigationItem(

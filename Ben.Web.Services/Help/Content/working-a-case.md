@@ -13,7 +13,10 @@ Every case belongs to a group, and the group's own page is where its cases are l
 
 ## Taking on a request — reviewing and voting
 
-Client requests arrive under **Pending Requests** on the group's Cases screen. Every request
+Client requests arrive under **Pending Requests** on the group's Cases screen. When any are
+waiting, the button turns yellow and shows how many. The status buttons above the list work the
+same way: a status with cases in it shows its count in that status's colour, so new proposals and
+active cases stand out. Every request
 shows **Review & vote**, which opens everything the client submitted — their description, the
 location, and any files they attached: photos, recordings, documents. Every group the client
 sent the request to sees the same materials while it decides.
@@ -57,11 +60,25 @@ field rather than here.
 **Overview** carries the original request exactly as the client submitted it, shown separately
 from the case description so the two never blur together as the case is edited.
 
-**Timeline** is the working record. Every entry has a visibility: internal to the group, shared
-with the client, or public. Choose deliberately — "internal" means not shared onward, not hidden
+**Edit Case**, at the top of the case, opens a page of its own. The description takes the wide
+column, with room for a line or several paragraphs and a short toolbar for bold, italics, lists
+and links. The status, the public pseudonym, **Make Public**, the private-engagement setting and
+the case manager sit beside it. On a phone they follow it, below. If you have made changes and try
+to leave another way, the page asks first; **Cancel** leaves without saving. **New Case** uses the
+same editor for its description.
+
+**Timeline** is the working record. Entries are client reports, investigator notes, evidence and
+instrument readings; research is written on the case's **Research** tab instead, where each page
+carries its own date and time. Research entries written on the timeline before that change are
+still there, under the **Research** filter. Every entry has a visibility: internal to the group,
+shared with the client, or public. Choose deliberately — "internal" means not shared onward, not hidden
 from its author.
 
 **Investigations** covers scheduled visits, attendees and RSVPs, and each visit's binder.
+
+**Notes** are the group's own working notes, never shown to the client. A note can be formatted — bold,
+italics, lists and links — and pinned to the top. Notes written before formatting arrived keep their
+line breaks.
 
 ## Binders
 
@@ -282,6 +299,10 @@ Every case answers "who do I talk to" with a name. On the case's **Details** col
 contact** lists the members the client sees on their side of the case, and their messages are
 what land in those members' notifications. Choose contacts with the button there — the case
 manager and group admins can save the choice.
+
+Messages with the client, on the case's **Messages** tab, can be formatted with bold, italics,
+lists and links. The client sees the formatting on the website; the iPhone app shows the same words
+as plain text.
 
 With no explicit contact chosen, the **case manager stands in** automatically, marked as such.
 Clearing everyone returns to that fallback; the client's view is never blank while the case has

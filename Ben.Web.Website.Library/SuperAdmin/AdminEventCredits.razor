@@ -101,8 +101,7 @@
                         @{ var c = (AdminEventCreditRecord)context; }
                         @if (c.RefundedUtc is null && c.SpentUtc is null)
                         {
-                            <button type="button" class="btn btn-sm btn-outline-danger text-nowrap"
-                                    @onclick="() => OpenRefund(c)">Refund</button>
+                            <BenGridAction Icon="rotate-ccw" Label="Refund" Tone="GridActionTone.Danger" OnClick="() => OpenRefund(c)" />
                         }
                     </Template>
                 </GridColumn>

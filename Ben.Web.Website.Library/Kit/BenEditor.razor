@@ -1,4 +1,5 @@
 @namespace Ben.Web.Website.Library.Kit
+@implements IAsyncDisposable
 
 @*
     The site's rich-text box. One wrapper so the font is decided once.
@@ -16,15 +17,47 @@
 
     Three parameters, declared rather than splatted: TelerikEditor throws on an attribute it does
     not recognise, so this forwards exactly what call sites pass and nothing else.
+
+    GetCurrentHtmlAsync (2026-09-14) is for forms: read it on submit, because ValueChanged arrives on
+    a debounce and a quick click beats it.
 *@
 
-<TelerikEditor Value="@Value"
-               ValueChanged="@ValueChanged"
-               EditMode="@EditorEditMode.Div"
-               Height="@Height"
-               Tools="@Tools" />
+<div class="ben-editor" @ref="_host">
+    <TelerikEditor Value="@Value"
+                   ValueChanged="@ValueChanged"
+                   EditMode="@EditorEditMode.Div"
+                   Height="@Height"
+                   Tools="@Tools" />
+</div>
 
 @code {
+    [Inject] private IJSRuntime JS { get; set; } = null!;
+
+    private ElementReference _host;
+    private IJSObjectReference? _module;
+
+    /// <summary>
+    /// What the editor holds right now, read from the page rather than from the last debounced
+    /// <see cref="ValueChanged"/>.
+    /// </summary>
+    /// <remarks>
+    /// Call it when a form is submitted and use its answer: Telerik tells .NET about typing 100 ms after it stops,
+    /// so a Send or Save pressed inside that window would otherwise act on the value from before the last
+    /// keystrokes (e2e suite, 2026-09-14). Falls back to <see cref="Value"/> when the page cannot be asked — during
+    /// prerender, or after the circuit has gone.
+    /// </remarks>
+    public async Task<string?> GetCurrentHtmlAsync()
+    {
+        try
+        {
+            _module ??= await JS.InvokeAsync<IJSObjectReference>(
+                "import", "/_content/Ben.Web.Website.Library/Kit/BenEditor.razor.js");
+            return await _module.InvokeAsync<string?>("currentHtml", _host) ?? Value;
+        }
+        catch (JSDisconnectedException) { return Value; }
+        catch (InvalidOperationException) { return Value; }   // prerendering: no browser to ask
+    }
+
     /// <summary>The HTML being edited. Two-way bindable: <c>@bind-Value</c>.</summary>
     [Parameter] public string? Value { get; set; }
 
@@ -39,4 +72,11 @@
     /// (a note on an audio region, a message body).
     /// </summary>
     [Parameter] public List<IEditorTool> Tools { get; set; } = Telerik.Blazor.Components.Editor.EditorToolSets.Default;
+
+    public async ValueTask DisposeAsync()
+    {
+        if (_module is null) return;
+        try { await _module.DisposeAsync(); }
+        catch (JSDisconnectedException) { }
+    }
 }

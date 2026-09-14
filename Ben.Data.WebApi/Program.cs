@@ -260,6 +260,8 @@ builder.Services.AddHostedService<Ben.Data.WebApi.Services.UserNameBackfillServi
 // first pass it finds nothing and writes nothing, so it stays registered rather than being a step
 // somebody has to remember on one deployment and never again.
 builder.Services.AddHostedService<Ben.Data.WebApi.Services.MessageBodySanitizeBackfillService>();
+// Case notes became formatted text on 2026-09-14: converts the plain-text notes written before then, once.
+builder.Services.AddHostedService<Ben.Data.WebApi.Services.CaseNoteBodyHtmlBackfillService>();
 
 // ── Scheduled background work ────────────────────────────────────────────────
 // Jobs are Scoped: the scheduler resolves them from a fresh scope on every pass, so they may take

@@ -47,13 +47,13 @@
                             Title="Role Name" />
                 <GridColumn Field="@nameof(AdminRoleWithCountResponse.UserCount)"
                             Title="Users" Width="90px" />
-                <GridCommandColumn Width="110px">
+                <GridCommandColumn Width="72px">
                     <GridCommandButton Command="Delete"
-                                       Icon="@SvgIcon.Trash"
                                        ThemeColor="@ThemeConstants.Button.ThemeColor.Error"
-                                       OnClick="@((GridCommandEventArgs e) => RequestDelete((AdminRoleWithCountResponse)e.Items.First()))">
-                        Delete
-                    </GridCommandButton>
+                                       OnClick="@((GridCommandEventArgs e) => RequestDelete((AdminRoleWithCountResponse)e.Items.First()))"
+                                       Title="Delete"
+                                       Class="ben-grid-action"
+                                       FillMode="@ThemeConstants.Button.FillMode.Outline"><BenIcon Name="trash-2" /></GridCommandButton>
                 </GridCommandColumn>
             </GridColumns>
         </TelerikGrid>

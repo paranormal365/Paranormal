@@ -460,8 +460,8 @@ public sealed partial class BenAdminClientAdapter
     public Task<LoadResult<CaseMessageRecord>> GetMyCaseMessagesAsync(Guid caseId, CancellationToken token = default)
         => _api.GetListAsync<CaseMessageRecord>($"/api/my-cases/{caseId}/messages", token);
 
-    public Task<CaseMessageRecord?> PostMyCaseMessageAsync(Guid caseId, string body, CancellationToken token = default)
-        => _api.PostAsync<object, CaseMessageRecord>($"/api/my-cases/{caseId}/messages", new { Body = body }, token);
+    public Task<CaseMessageRecord?> PostMyCaseMessageAsync(Guid caseId, string bodyHtml, CancellationToken token = default)
+        => _api.PostAsync<object, CaseMessageRecord>($"/api/my-cases/{caseId}/messages", new { BodyHtml = bodyHtml }, token);
 
     // ── Co-client access management ───────────────────────────────────────────
 
@@ -548,9 +548,9 @@ public sealed partial class BenAdminClientAdapter
     public Task<LoadResult<CaseMessageRecord>> GetCaseMessagesAsync(Guid orgId, Guid caseId, CancellationToken token = default)
         => _api.GetListAsync<CaseMessageRecord>($"/api/orgs/{orgId}/cases/{caseId}/messages", token);
 
-    public Task<(CaseMessageRecord? Result, string? Error)> PostCaseMessageAsync(Guid orgId, Guid caseId, string body, CancellationToken token = default)
+    public Task<(CaseMessageRecord? Result, string? Error)> PostCaseMessageAsync(Guid orgId, Guid caseId, string bodyHtml, CancellationToken token = default)
         => _api.SendExpectingReasonAsync<object, CaseMessageRecord>(
-            HttpMethod.Post, $"/api/orgs/{orgId}/cases/{caseId}/messages", new { Body = body }, token);
+            HttpMethod.Post, $"/api/orgs/{orgId}/cases/{caseId}/messages", new { BodyHtml = bodyHtml }, token);
 
     public async Task<int> GetCaseMessageUnreadCountAsync(Guid orgId, Guid caseId, CancellationToken token = default)
     {

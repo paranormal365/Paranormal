@@ -120,9 +120,9 @@
                             <Template>
                                 @{ var row = (VideoProjectRecord)context; }
                                 <span class="d-flex gap-1 text-nowrap">
-                                <button type="button" class="btn btn-secondary btn-sm" @onclick="@(() => OpenProjectAsync(row))">Open</button>
-                                <button type="button" class="btn btn-success btn-sm" @onclick="@(() => TriggerPublishAsync(row))" disabled="@(!(!_publishing))" title="Publish rendered video"><BenIcon Name="upload" /></button>
-                                <button type="button" class="btn btn-danger btn-sm" @onclick="@(() => ConfirmDeleteAsync(row))"><BenIcon Name="trash-2" /></button>
+                                <BenGridAction Icon="edit-2" Label="Open" OnClick="@(() => OpenProjectAsync(row))" />
+                                <BenGridAction Icon="upload" Label="Publish rendered video" Tone="GridActionTone.Success" OnClick="@(() => TriggerPublishAsync(row))" Disabled="@_publishing" />
+                                <BenGridAction Icon="trash-2" Label="Delete" Tone="GridActionTone.Danger" OnClick="@(() => ConfirmDeleteAsync(row))" />
                                 </span>
                             </Template>
                         </GridColumn>

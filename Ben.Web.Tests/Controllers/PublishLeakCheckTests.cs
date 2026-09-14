@@ -119,7 +119,7 @@ public sealed class PublishLeakCheckTests
             new Ben.Data.WebApi.Services.Billing.SubscriptionLimitGuard(factory),
             new Ben.Service.RepositoryService.Services.OrganizationSecurityService(factory),
             new Ben.Data.WebApi.Services.RequestReviewNotifier(factory, new Ben.Data.WebApi.Services.PlatformMessageService(factory)),
-            Ben.Web.Tests.TestMailer.Quiet())
+            Ben.Web.Tests.TestMailer.Quiet(), new Ben.Data.WebApi.Services.CmsMarkupSanitizer())
         {
             ControllerContext = new ControllerContext
             {

@@ -64,9 +64,9 @@
                                 <div class="d-flex gap-1">
                                     @if (!row.IsApproved)
                                     {
-                                        <button type="button" class="btn btn-primary btn-sm" @onclick="@(() => ApproveBrandAsync(row.Id))" disabled="@(!(!_busy))">Approve</button>
+                                        <BenGridAction Icon="check" Label="Approve" Tone="GridActionTone.Success" OnClick="@(() => ApproveBrandAsync(row.Id))" Disabled="@_busy" />
                                     }
-                                    <button type="button" class="btn btn-danger btn-sm" @onclick="@(() => RejectBrandAsync(row.Id))" disabled="@(!(!_busy))">Reject</button>
+                                    <BenGridAction Icon="x" Label="Reject" Tone="GridActionTone.Danger" OnClick="@(() => RejectBrandAsync(row.Id))" Disabled="@_busy" />
                                 </div>
                             </Template>
                         </GridColumn>
@@ -106,9 +106,9 @@
                                 <div class="d-flex gap-1">
                                     @if (!row.IsApproved)
                                     {
-                                        <button type="button" class="btn btn-primary btn-sm" @onclick="@(() => ApproveModelAsync(row.Id))" disabled="@(!(!_busy))">Approve</button>
+                                        <BenGridAction Icon="check" Label="Approve" Tone="GridActionTone.Success" OnClick="@(() => ApproveModelAsync(row.Id))" Disabled="@_busy" />
                                     }
-                                    <button type="button" class="btn btn-danger btn-sm" @onclick="@(() => RejectModelAsync(row.Id))" disabled="@(!(!_busy))">Reject</button>
+                                    <BenGridAction Icon="x" Label="Reject" Tone="GridActionTone.Danger" OnClick="@(() => RejectModelAsync(row.Id))" Disabled="@_busy" />
                                 </div>
                             </Template>
                         </GridColumn>
@@ -142,8 +142,8 @@
                             <Template>
                                 @{ var row = (EquipmentCategoryRecord)context; }
                                 <div class="d-flex gap-1">
-                                    <button type="button" class="btn btn-secondary btn-sm" @onclick="@(() => OpenEditCategory(row))" disabled="@(!(!_busy))">Edit</button>
-                                    <button type="button" class="btn btn-danger btn-sm" @onclick="@(() => DeleteCategoryAsync(row.Id))" disabled="@(!(!_busy))">Delete</button>
+                                    <BenGridAction Icon="edit-2" Label="Edit" OnClick="@(() => OpenEditCategory(row))" Disabled="@_busy" />
+                                    <BenGridAction Icon="trash-2" Label="Delete" Tone="GridActionTone.Danger" OnClick="@(() => DeleteCategoryAsync(row.Id))" Disabled="@_busy" />
                                 </div>
                             </Template>
                         </GridColumn>

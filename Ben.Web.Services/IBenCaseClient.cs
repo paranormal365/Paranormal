@@ -331,7 +331,8 @@ public interface IBenCaseClient
     Task<LoadResult<CaseMessageRecord>> GetCaseMessagesAsync(Guid orgId, Guid caseId, CancellationToken token = default);
 
     /// <summary>Posts a message from the org to the client on this case.</summary>
-    Task<(CaseMessageRecord? Result, string? Error)> PostCaseMessageAsync(Guid orgId, Guid caseId, string body, CancellationToken token = default);
+    /// <summary>Posts the group's message, written in the formatting editor, as HTML; the API derives the plain Body.</summary>
+    Task<(CaseMessageRecord? Result, string? Error)> PostCaseMessageAsync(Guid orgId, Guid caseId, string bodyHtml, CancellationToken token = default);
 
     /// <summary>Returns the count of unread client messages the org hasn't seen yet.</summary>
     Task<int> GetCaseMessageUnreadCountAsync(Guid orgId, Guid caseId, CancellationToken token = default);

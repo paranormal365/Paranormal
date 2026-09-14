@@ -149,11 +149,23 @@ body.k-body {
     min-width: 1em;
 }
 
-/* Buttons sit side by side rather than stacking, with a small gap so they stay distinguishable. */
+/* Buttons sit side by side with a small gap so they stay distinguishable.
+
+   The cell itself stays a table cell. This rule used to make the <td> `display: flex`, which takes
+   it out of table layout: the browser wraps it in an anonymous cell, the <td>'s own box is only as
+   tall as its buttons, and so its bottom border stopped short of the row's — the line under every
+   row broke off at the action buttons (beta feedback, 2026-09-14, /admin/org-subscriptions). Kendo
+   already makes `.k-button` inline-flex, so margins on the buttons give the same spacing without
+   touching the cell's formatting. Wrapping is app.css's decision (`white-space: normal`, item 139). */
 .k-grid .k-command-cell {
-    white-space: nowrap;
-    display: flex;
-    flex-wrap: nowrap;
-    gap: 0.25rem;
-    align-items: center;
+    vertical-align: middle;
+}
+
+.k-grid .k-command-cell > .k-button {
+    margin-inline-end: 0.25rem;
+    margin-block: 1px;
+}
+
+.k-grid .k-command-cell > .k-button:last-child {
+    margin-inline-end: 0;
 }

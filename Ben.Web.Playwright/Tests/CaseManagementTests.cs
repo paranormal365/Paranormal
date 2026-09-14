@@ -76,4 +76,87 @@ public class CaseManagementTests : BenTestBase
             Assert.Pass("No case rows visible — BenCo may have no cases seeded. TGH cases are on that org.");
         }
     }
+
+    // ── Beta feedback 2026-09-14: statuses and waiting requests draw the eye ──────────────────────────
+
+    /// <summary>The colour a status's count takes when it has cases — the same as CaseStatusExtensions.BadgeClass.</summary>
+    private static readonly Dictionary<string, string> StatusColour = new()
+    {
+        ["proposed"] = "bg-secondary", ["accepted"] = "bg-primary", ["active"] = "bg-success",
+        ["summarized"] = "bg-warning", ["paused"] = "bg-danger", ["closed"] = "bg-dark",
+        ["public"] = "bg-info", ["haunted"] = "bg-warning", ["transferred"] = "bg-secondary",
+    };
+
+    private async Task OpenParanormal365CasesAsync()
+    {
+        var orgId = await OrgIdBySlugAsync("paranormal365");
+        await Page.GotoAsync($"{BaseUrl}/organizations/{orgId}/cases");
+        await WaitForTheCircuitAsync();
+        await Expect(Page.Locator("button[data-testid^='case-filter-']").First).ToBeVisibleAsync(new() { Timeout = 20_000 });
+    }
+
+    [Test]
+    public async Task CaseList_StatusPills_ColourTheCountWhenNonZero()
+    {
+        await OpenParanormal365CasesAsync();
+
+        var pills = Page.Locator("button[data-testid^='case-filter-']");
+        var problems = new List<string>();
+        var coloured = 0;
+
+        for (var i = 0; i < await pills.CountAsync(); i++)
+        {
+            var pill = pills.Nth(i);
+            var status = (await pill.GetAttributeAsync("data-testid"))!["case-filter-".Length..];
+            if (status == "all") continue;
+
+            var badge = pill.Locator("[data-testid='case-filter-count']");
+            var count = int.Parse((await badge.InnerTextAsync()).Trim());
+            var classes = await badge.GetAttributeAsync("class") ?? "";
+
+            if (count > 0)
+            {
+                coloured++;
+                if (StatusColour.TryGetValue(status, out var colour) && !classes.Contains(colour))
+                    problems.Add($"{status} has {count} cases but its count is \"{classes}\", not {colour}");
+            }
+            else if (!classes.Contains("bg-body-secondary"))
+            {
+                problems.Add($"{status} has no cases but its count is coloured: \"{classes}\"");
+            }
+
+            var name = await pill.GetAttributeAsync("aria-label") ?? "";
+            if (!name.Contains(count.ToString()))
+                problems.Add($"{status}: its accessible name \"{name}\" does not say how many cases");
+        }
+
+        Assert.That(coloured, Is.GreaterThan(0), "The seeded group has no cases in any status, so nothing here was tested.");
+        Assert.That(problems, Is.Empty, string.Join("\n", problems));
+    }
+
+    [Test]
+    public async Task CaseList_PendingRequests_StandsOutWhenSomethingWaits()
+    {
+        await OpenParanormal365CasesAsync();
+
+        var button = Page.Locator("[data-testid='pending-requests']");
+        await Expect(button).ToBeVisibleAsync();
+        var classes = await button.GetAttributeAsync("class") ?? "";
+        var badge = button.Locator("[data-testid='pending-count']");
+
+        // The seed decides whether anything waits; either way the button has to say so the right way.
+        if (await badge.CountAsync() > 0)
+        {
+            var waiting = int.Parse((await badge.InnerTextAsync()).Trim());
+            Assert.That(waiting, Is.GreaterThan(0));
+            Assert.That(classes, Does.Contain("btn-warning"), "requests are waiting but the button is not highlighted");
+            Assert.That(await button.GetAttributeAsync("aria-label"), Does.Contain($"{waiting} waiting"));
+            Assert.That(await button.InnerTextAsync(), Does.Not.Contain("("), "the count is a badge now, not in brackets");
+        }
+        else
+        {
+            Assert.That(classes, Does.Contain("btn-outline-secondary"), "nothing waits, so the button should stay quiet");
+            Assert.That(await button.GetAttributeAsync("aria-label"), Does.Contain("none waiting"));
+        }
+    }
 }

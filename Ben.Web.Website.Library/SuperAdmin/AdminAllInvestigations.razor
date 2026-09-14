@@ -36,10 +36,8 @@
                         @inv.ScheduledDateTime.ToViewerLocalTime(UserState).ToDisplayDateTime()
                     </Template>
                 </GridColumn>
-                <GridCommandColumn Width="90px">
-                    <GridCommandButton OnClick="@((GridCommandEventArgs e) => OpenCase((AdminInvestigationSummaryRecord)e.Items.First()))">
-                        Open
-                    </GridCommandButton>
+                <GridCommandColumn Width="72px">
+                    <GridCommandButton OnClick="@((GridCommandEventArgs e) => OpenCase((AdminInvestigationSummaryRecord)e.Items.First()))" Title="Open the case" Class="ben-grid-action" FillMode="@ThemeConstants.Button.FillMode.Outline"><BenIcon Name="external-link" /></GridCommandButton>
                 </GridCommandColumn>
             </GridColumns>
         </TelerikGrid>

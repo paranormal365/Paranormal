@@ -133,10 +133,7 @@
                             var org = (OrganizationListItemResponse)context;
                         }
                         <div class="btn-group">
-                            <button type="button" class="btn btn-link text-decoration-none btn-sm text-nowrap"
-                                    @onclick="@(() => NavManager.NavigateTo($"/organizations/{org.Id}"))">
-                                <BenIcon Name="eye" Class="me-1" />View
-                            </button>
+                            <BenGridAction Icon="eye" Label="View" OnClick="@(() => NavManager.NavigateTo($"/organizations/{org.Id}"))" />
                             <BenDropdown ToggleClass="btn btn-link text-decoration-none btn-sm" Title="More actions" MinWidth="180px">
                                 <ToggleContent><span class="visually-hidden">More actions</span></ToggleContent>
                                 <ChildContent>

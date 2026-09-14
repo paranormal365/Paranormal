@@ -115,7 +115,9 @@
                 @if (_perms?.May(Ben.Data.Common.Enums.OrganizationPermissionArea.Cases,
                                  Ben.Data.Common.Enums.OrganizationSecurityAction.Update) == true)
                 {
-                    <button type="button" id="case-edit" class="btn btn-secondary btn-sm" @onclick="OpenEditDialog"><BenIcon Name="edit-2" Class="me-1" />Edit Case</button>
+                    @* Its own page since 2026-09-14 (Ben: a case's description can be any length, and a dialog
+                       gives it whatever room is left). *@
+                    <a id="case-edit" class="btn btn-secondary btn-sm" href="@($"/organizations/{OrgId}/cases/{CaseId}/edit")"><BenIcon Name="edit-2" Class="me-1" />Edit Case</a>
                 }
             </div>
         </div>
@@ -332,163 +334,6 @@
     </div>
 }
 
-@* ── Item 182: apply privacy protections after an upgrade ─────────────────── *@
-<BenModal @bind-Visible="@_showPrivacyResult" Title="Privacy protections applied">
-    <ChildContent>
-        @if (_privacyResult is { } r)
-        {
-            <ul class="mb-3">
-                <li>@(r.MadePrivate ? "The case is now private." : "The case was already private.")</li>
-                <li>@(r.LocationGeneralized ? "The exact coordinates were removed." : "There were no exact coordinates stored.")</li>
-                <li>
-                    @r.FilesStripped file(s) had their location data removed just now;
-                    @r.FilesAlreadyClean already had.
-                    @if (r.FilesUnstrippable > 0)
-                    {
-                        <text>@r.FilesUnstrippable could not be cleaned on this site — audio and video need the media tool, and your plan must include it.</text>
-                    }
-                </li>
-            </ul>
-
-            @if (r.WasEverPublic)
-            {
-                @* The half that cannot be fixed by software, said plainly rather than buried. *@
-                <div class="alert alert-warning py-2">
-                    <strong>This case was public before now.</strong> Anything a visitor already saw,
-                    a search engine already indexed, or somebody already saved cannot be recalled.
-                    Making it private stops it going further; it does not undo what has been.
-                </div>
-            }
-
-            @if (r.NameOccurrences.Count > 0)
-            {
-                <p class="fw-semibold mb-1">Your client's name still appears in text somebody wrote:</p>
-                <p class="text-secondary small">
-                    These are left exactly as written — an account of a night is the investigator's,
-                    and a find-and-replace through it can change what it says. Edit the ones that
-                    should use the pseudonym instead.
-                </p>
-                <ul class="mb-0">
-                    @foreach (var o in _privacyResult.NameOccurrences)
-                    {
-                        <li>@o.Where — @o.Field (<code>@o.Matched</code>)</li>
-                    }
-                </ul>
-            }
-            else
-            {
-                <p class="text-success mb-0">No prose on this case names the client.</p>
-            }
-        }
-        <div class="dialog-footer-actions">
-            <span class="dialog-footer-spacer"></span>
-            <button type="button" class="btn btn-primary" @onclick="@(() => _showPrivacyResult = false)">Close</button>
-        </div>
-    </ChildContent>
-</BenModal>
-
-@* ── Edit dialog ──────────────────────────────────────────────────────────── *@
-<BenModal @bind-Visible="@_showEdit" Title="Edit Case">
-    <ChildContent>
-        <div class="row g-3">
-            <div class="col-12">
-                <label class="form-label fw-semibold" for="casedetail-case-label-surname-city-0146">Case Label <span class="text-secondary fw-normal small">(surname, city state)</span></label>
-                @* W-P4: the check re-runs when the label is left, not only at Save. *@
-                <input id="casedetail-case-label-surname-city-0146" type="text" class="form-control" @bind="@_editTitle" @bind:event="oninput" @onblur="CheckLeaksAsync" />
-            </div>
-            <div class="col-12">
-                <label class="form-label fw-semibold">Status</label>
-                <BenSelect Data="@_statusOptions" @bind-Value="@_editStatus" TextField="@nameof(StatusOption.Label)" ValueField="@nameof(StatusOption.Value)" Width="100%" />
-                @* Item 183. There is no Delete on this dialog and there never was; until now
-                   nothing said so, which reads as an oversight rather than a rule. A case is a
-                   record of real work, usually for a client, so it is closed and kept. The one
-                   route out for a genuine mistake is named, because a rule with no path is
-                   worse than no rule. *@
-                <p class="text-secondary small mt-2 mb-0" data-testid="cases-are-closed-not-deleted">
-                    A case is never deleted — set it to <strong>Closed</strong> and it stays as a
-                    record of the work. Opened one by mistake, or twice?
-                    <a href="/contact">Ask us to remove it</a>.
-                </p>
-            </div>
-            <div class="col-12">
-                <label class="form-label fw-semibold">Description (optional HTML summary)</label>
-                <BenEditor @bind-Value="@_editDescription" Height="200px" />
-            </div>
-            <div class="col-md-8">
-                <label class="form-label fw-semibold" for="casedetail-public-pseudonym-88c6">Public Pseudonym</label>
-                <input id="casedetail-public-pseudonym-88c6" type="text" class="form-control" placeholder="e.g. The Henderson Family" @bind="@_editPseudonym" @bind:event="oninput" @onblur="CheckLeaksAsync" />
-                <div class="form-text">Shown on public pages instead of real client name.</div>
-            </div>
-            <div class="col-md-4 d-flex align-items-center gap-2 pt-4">
-                <input type="checkbox" class="form-check-input" id="case-public"
-                       @bind="@_editIsPublic" @bind:after="CheckLeaksAsync" />
-                <label for="case-public" class="form-label mb-0">Make Public</label>
-            </div>
-            @* W-P4: the warning sits with the decision it is about. It used to render at the
-               bottom of this dialog, below the fold, and only after Save had already been pressed
-               once — so the first thing a group learned about publishing their client's surname
-               was that their save had not happened, for a reason they had to scroll to read. *@
-            @if (_leakWarnings.Count > 0)
-            {
-                <div class="col-12">
-                    <div class="alert alert-warning mb-0" id="case-title-leak-warning">
-                        <strong>Before this goes public:</strong>
-                        <ul class="mb-1">
-                            @foreach (var w in _leakWarnings) { <li>@w</li> }
-                        </ul>
-                        <span class="small">This is a warning, not a refusal — Save again to publish with this label.</span>
-                    </div>
-                </div>
-            }
-            @* Item 193: this rendered for every group, so a free-tier group could tick it, save,
-               and collect a 400 from PrivateCaseGate. The plan is knowable before the click — say
-               so beside the control rather than after the attempt. Already-private cases keep the
-               box readable (and clearable): the plan governs new commitments, not work in hand. *@
-            @{ var mayGoPrivate = _planIncludesPrivate || _editIsPrivate; }
-            <div class="col-12 d-flex align-items-start gap-2">
-                <input type="checkbox" class="form-check-input mt-1" id="case-private-engagement"
-                       @bind="@_editIsPrivate" disabled="@(!mayGoPrivate)" />
-                <div>
-                    <label for="case-private-engagement" class="form-label mb-0">Private engagement<HelpLink Slug="working-a-case" Anchor="private-engagements" /></label>
-                    <div class="form-text">
-                        A client's home rather than a public place. Real names are replaced on every
-                        public page, and publishing the case requires a plan that includes
-                        private-residence work.
-                    </div>
-                    @if (!mayGoPrivate)
-                    {
-                        <div class="form-text text-warning" data-testid="private-needs-plan">
-                            Your group's plan covers public investigations only.
-                            <a href="/pricing">See what each plan includes.</a>
-                        </div>
-                    }
-                </div>
-            </div>
-            <div class="col-12">
-                <label class="form-label fw-semibold">Case Manager</label>
-                <BenSelect Data="@_memberOptions" @bind-Value="@_editCaseManagerId" TextField="@nameof(MemberOption.Label)" ValueField="@nameof(MemberOption.Id)" DefaultText="— Unassigned —" Width="100%" />
-            </div>
-        </div>
-        @if (_editError is not null)
-        {
-            <div class="alert alert-danger mt-3 mb-0">@_editError</div>
-        }
-            <div class="dialog-footer-actions">
-            <span class="dialog-footer-spacer"></span>
-
-            <button type="button" class="btn btn-outline-secondary me-auto" id="case-apply-privacy"
-                    @onclick="ApplyPrivacyAsync" disabled="@_isBusy"
-                    title="Make this case private, remove exact coordinates, clean the files, and list any prose naming the client.">
-                Apply privacy protections
-            </button>
-            <button type="button" class="btn btn-secondary" @onclick="@(() => _showEdit = false)">Cancel</button>
-            <button type="button" class="btn btn-primary" @onclick="SaveEdit" disabled="@(!(!_isBusy))"><BenIcon Name="save" Class="me-1" />
-                @(_isBusy ? "Saving…" : "Save")
-            </button>
-        </div>
-    </ChildContent>
-</BenModal>
-
 <BenTour @ref="_tourRef" Model="@_tour" OnEnded="@OnTourEndedAsync" />
 
 @code {
@@ -500,11 +345,8 @@
     private readonly TourModel _tour = new(
     [
         new TourModel.TourStep("#case-edit",
-            "Publishing starts in Edit",
-            "A case reaches the public in two moves, both in Edit Case: set the status, and tick Make Public. Until then, nothing about it exists outside your group."),
-        new TourModel.TourStep("#casedetail-public-pseudonym-88c6",
-            "Nobody's real name",
-            "The Public Pseudonym replaces the client's name on every public surface — pick something like \"The Henderson Family\". Addresses are generalized the same way: public pages show the area, never the street. (This field lives in the Edit Case dialog.)"),
+            "Publishing starts in Edit Case",
+            "A case reaches the public in two moves, both on the Edit Case page: set the status, and tick Make Public. Beside them is the Public Pseudonym, so nobody's real name appears: it replaces the client's name on every public surface — pick something like \"The Henderson Family\". Addresses are generalized the same way: public pages show the area, never the street."),
         new TourModel.TourStep("#tab-files",
             "What media may go public",
             "Publishing the case publishes its story, not its files. A photo appears publicly only when it's placed in a case slot on one of your CMS pages and approved for publication — the general Files tab is never publishable."),
@@ -560,34 +402,9 @@
         _                => "overview",
     };
 
-    // Edit dialog
-    private bool _showEdit;
-    private string _editTitle        = "";
-    private CaseStatus _editStatus   = CaseStatus.Accepted;
-    private string _editDescription  = "";
-    private string _editPseudonym    = "";
-    private bool _editIsPublic;
-    private bool _editIsPrivate;
-
     /// <summary>What this viewer may do with cases in this group (IH-03 step 2).</summary>
     /// <remarks>Fails closed: an unknown verdict hides the control rather than offering it.</remarks>
     private MyOrgPermissionsItem? _perms;
-
-    /// <summary>Whether the group's plan covers private-residence work (item 193).</summary>
-    /// <remarks>
-    /// Starts TRUE and is narrowed by what the server says, matching the server's own fail-open
-    /// rule: only a plan that explicitly excludes the capability refuses. A lookup that fails must
-    /// not disable a control the group is entitled to.
-    /// </remarks>
-    private bool _planIncludesPrivate = true;
-    private Guid? _editCaseManagerId;
-    private string? _editError;
-    private List<MemberOption> _memberOptions = [];
-
-    private static readonly List<StatusOption> _statusOptions = Enum
-        .GetValues<CaseStatus>()
-        .Select(s => new StatusOption(s, s.Label()))
-        .ToList();
 
     private Guid _loadedCaseId;
 
@@ -623,18 +440,10 @@
 
         _clientRequest = null;
 
-        // Item 193: what the PLAN allows, fetched beside the case so the private-engagement
-        // toggle can say what it will do before somebody uses it. A failure here leaves the
-        // control enabled — the same fail-open rule the server applies to capabilities.
-        // One fetch answers both questions this screen asks: what the PERSON may do, and what the
-        // group's PLAN allows. They fail in opposite directions on purpose — see PlanIncludes.
-        try
-        {
-            _perms = await AdminClient.GetMyOrgPermissionsAsync(OrgId);
-            _planIncludesPrivate = _perms?.PlanIncludes(
-                Ben.Data.Common.Enums.TierCapability.PrivateResidenceCases) ?? true;
-        }
-        catch { _perms = null; _planIncludesPrivate = true; }
+        // What this PERSON may do here (IH-03). The plan's word on private engagements moved with the
+        // edit form to CaseEditPage (2026-09-14).
+        try { _perms = await AdminClient.GetMyOrgPermissionsAsync(OrgId); }
+        catch { _perms = null; }
 
         try { _case = await AdminClient.GetOrgCaseAsync(OrgId, CaseId); }
         catch { _error = "Failed to load case."; }
@@ -665,68 +474,9 @@
         _ => $"{bytes / (1024.0 * 1024 * 1024):0.#} GB",
     };
 
-    private void OpenEditDialog()
-    {
-        if (_case is null) return;
-        _editTitle          = _case.Title;
-        _editStatus         = _case.Status;
-        _editDescription    = _case.Description ?? "";
-        _editPseudonym      = _case.PublicPseudonym ?? "";
-        _editIsPublic       = _case.IsPublic;
-        _editIsPrivate      = _case.IsPrivateEngagement;
-        _editCaseManagerId  = _case.CaseManagerAppUserId;
-        _editError          = null;
-        _leakWarnings       = [];
-        _leakWarnedTitle    = null;
-        // Load org members lazily for the dropdown
-        if (_memberOptions.Count == 0)
-            _ = LoadMembersAsync();
-        _showEdit = true;
-    }
-
-    private async Task LoadMembersAsync()
-    {
-        try
-        {
-            var members = (await AdminClient.GetOrganizationMembersAsync(OrgId)).Items;
-            _memberOptions = members
-                .Where(m => m.IsActive)
-                .OrderBy(m => m.DisplayName)
-                .Select(m => new MemberOption(m.AppUserId, m.DisplayName ?? m.AppUserId.ToString()))
-                .ToList();
-            StateHasChanged();
-        }
-        catch { /* non-critical — dropdown just stays empty */ }
-    }
-
-    // Item 176: warn — never block — when a title or pseudonym about to go public carries the
-    // client's name or the street address past the pseudonym. The warnings are remembered per
-    // exact input pair, so the second Save on the same text publishes as-is, and any edit re-checks.
-    private IReadOnlyList<string> _leakWarnings = [];
-    private string? _leakWarnedTitle;
-
-    // Item 182: the retrofit for a group that upgraded after taking the case on.
-    private bool _showPrivacyResult;
-    private CasePrivacyRetrofitResult? _privacyResult;
-
-    private async Task ApplyPrivacyAsync()
-    {
-        _isBusy = true;
-        try
-        {
-            var (result, error) = await AdminClient.ApplyCasePrivacyAsync(OrgId, CaseId);
-            if (result is null) { _editError = error ?? "Applying privacy failed."; return; }
-            _privacyResult     = result;
-            _showPrivacyResult = true;
-            _showEdit          = false;
-            if (await AdminClient.GetOrgCaseAsync(OrgId, CaseId) is { } refreshed) _case = refreshed;
-        }
-        finally { _isBusy = false; }
-    }
-
     private string? _republishError;
 
-    /// <summary>The banner's one click: the same Update the edit dialog performs, flipping only
+    /// <summary>The banner's one click: the same Update the Edit Case page performs, flipping only
     /// IsPublic. A refusal (the plan gate, a slug problem) renders under the banner.</summary>
     private async Task RepublishAsync()
     {
@@ -747,81 +497,6 @@
         catch (Exception ex) { _republishError = ex.Message; }
         finally { _isBusy = false; }
     }
-
-    /// <summary>
-    /// Runs the publish leak check now, while the dialog is still open (W-P4).
-    /// </summary>
-    /// <remarks>
-    /// <para>Called when Make Public is ticked and whenever the label or the pseudonym is left.
-    /// The check used to run only inside Save, so a group learned that they were about to publish
-    /// their client's surname by having their save silently not happen — the reason waiting at the
-    /// bottom of a dialog they had to scroll.</para>
-    ///
-    /// <para>Silent when the case is not going public and silent when the check itself fails.
-    /// An advisory that cannot run must never look like an all-clear OR like a problem; it is
-    /// simply not offering an opinion.</para>
-    ///
-    /// <para><b>This shows the warning; it does not spend it.</b> <c>_leakWarnedTitle</c> stays
-    /// where it was, so the first Save still stops once and asks for a second — which is what the
-    /// original design got right and W-P4 was never about. The complaint was that the warning
-    /// arrived only after a save had silently not happened, at the bottom of a dialog somebody
-    /// had to scroll. Now it arrives while they are still choosing, and the stop is unchanged.</para>
-    /// </remarks>
-    private async Task CheckLeaksAsync()
-    {
-        if (!_editIsPublic || string.IsNullOrWhiteSpace(_editTitle))
-        {
-            _leakWarnings = [];
-            return;
-        }
-
-        var check = await AdminClient.GetPublishLeakWarningsAsync(
-            OrgId, CaseId, _editTitle.Trim(), _editPseudonym.Trim());
-        if (check.Failed) return;
-
-        _leakWarnings = check.Items;
-    }
-
-    private async Task SaveEdit()
-    {
-        if (string.IsNullOrWhiteSpace(_editTitle)) { _editError = "Label is required."; return; }
-        _isBusy = true; _editError = null;
-        try
-        {
-            var leakInputs = $"{_editTitle.Trim()}\n{_editPseudonym.Trim()}";
-            if (_editIsPublic && _leakWarnedTitle != leakInputs)
-            {
-                var check = await AdminClient.GetPublishLeakWarningsAsync(
-                    OrgId, CaseId, _editTitle.Trim(), _editPseudonym.Trim());
-                // A check that couldn't run (check.Failed) is silence, not a warning — an
-                // advisory that fails must never stand between the org and publishing.
-                if (!check.Failed && check.Items.Count > 0)
-                {
-                    _leakWarnings = check.Items;
-                    _leakWarnedTitle = leakInputs;
-                    return;
-                }
-            }
-            _leakWarnings = [];
-            var req = new UpdateCaseRequest(
-                Title:                _editTitle.Trim(),
-                Description:          string.IsNullOrWhiteSpace(_editDescription) ? null : _editDescription.Trim(),
-                Status:               _editStatus,
-                PublicPseudonym:      string.IsNullOrWhiteSpace(_editPseudonym) ? null : _editPseudonym.Trim(),
-                IsPublic:             _editIsPublic,
-                CaseManagerAppUserId: _editCaseManagerId,
-                IsPrivateEngagement:  _editIsPrivate);
-
-            var (result, error) = await AdminClient.UpdateOrgCaseAsync(OrgId, CaseId, req);
-            if (result is null) { _editError = error ?? "Save failed."; }
-            else { _case = result; _showEdit = false; }
-        }
-        catch (Exception ex) { _editError = ex.Message; }
-        finally { _isBusy = false; }
-    }
-
-    private record StatusOption(CaseStatus Value, string Label);
-    private record MemberOption(Guid Id, string Label);
 
     private async Task<LoadResult<CaseMessageRecord>> LoadOrgMessages()
     {

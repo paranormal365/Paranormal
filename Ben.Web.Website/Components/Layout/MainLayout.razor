@@ -64,6 +64,15 @@
         @* One toast host for the whole app; BenToastService is what pages talk to. *@
         <BenToastHost />
 
+        @* One tooltip for every icon-only row action in every grid (BenGridAction, and command
+           buttons given Class="ben-grid-action"). Telerik reads each target's title, so the words
+           a person sees on hover or focus are the same words a screen reader hears from its
+           aria-label. Here rather than per grid: rows arrive, page and filter long after a grid's
+           first render, and one delegated tooltip covers all of them. *@
+        <TelerikTooltip TargetSelector=".ben-grid-action[title], .ben-grid-action-tip[title]"
+                        Position="@TooltipPosition.Top"
+                        ShowDelay="300" />
+
     </div>
 </TelerikRootComponent>
 

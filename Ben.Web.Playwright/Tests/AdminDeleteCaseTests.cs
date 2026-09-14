@@ -120,7 +120,7 @@ public class AdminDeleteCaseTests : BenTestBase
 
         var editBtn = Page.Locator("#case-edit");
         await Expect(editBtn).ToBeVisibleAsync(new() { Timeout = 10_000 });
-        await editBtn.ClickAsync();
+        await ClickUntilUrlAsync(editBtn, @"/cases/[0-9a-f\-]+/edit$");   // a page since 2026-09-14
 
         await Expect(Page.Locator("[data-testid='cases-are-closed-not-deleted']"))
             .ToBeVisibleAsync(new() { Timeout = 10_000 });

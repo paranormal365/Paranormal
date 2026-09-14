@@ -727,6 +727,9 @@ namespace Ben.Data.Source.Migrations
                         .HasMaxLength(4000)
                         .HasColumnType("nvarchar(4000)");
 
+                    b.Property<string>("BodyHtml")
+                        .HasColumnType("nvarchar(max)");
+
                     b.Property<Guid>("CaseId")
                         .HasColumnType("uniqueidentifier");
 

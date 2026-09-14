@@ -26,8 +26,13 @@
                     <div class="form-text">A brief label identifying this case.</div>
                 </div>
                 <div class="col-12">
-                    <label class="form-label fw-semibold" for="casecreatepage-description-483a">Description</label>
-                    <textarea id="casecreatepage-description-483a" class="form-control" rows="4" placeholder="Summarise the reported activity or reason for opening the case…" @bind="@_form.Description"></textarea>
+                    @* A formatting editor, the same short toolbar as Edit Case (beta feedback, 2026-09-14): the
+                       description is the case's summary and is shown as formatted text everywhere it appears. *@
+                    <div class="form-label fw-semibold">Description</div>
+                    <div id="casecreatepage-description-483a">
+                        <BenEditor @ref="_descriptionEditor" @bind-Value="@_form.Description" Height="220px" Tools="@CaseEditorTools.Prose" />
+                    </div>
+                    <div class="form-text">Summarise the reported activity or the reason for opening the case.</div>
                 </div>
 
                 <div class="col-12">
@@ -72,6 +77,7 @@
     [Parameter] public Guid OrgId { get; set; }
 
     private readonly CaseForm _form = new();
+    private BenEditor? _descriptionEditor;
     private bool _saving;
     private string? _error;
 
@@ -93,11 +99,13 @@
     {
         _saving = true;
         _error  = null;
+        // What the editor holds now, not its last debounced report — see BenEditor.GetCurrentHtmlAsync.
+        if (_descriptionEditor is not null) _form.Description = await _descriptionEditor.GetCurrentHtmlAsync() ?? _form.Description;
         try
         {
             var request = new CreateCaseRequest(
                 _form.Title.Trim(),
-                string.IsNullOrWhiteSpace(_form.Description) ? null : _form.Description.Trim(),
+                Ben.Data.Common.Text.PlainTextHtml.HasText(_form.Description) ? _form.Description!.Trim() : null,
                 _form.StreetAddress1.Trim(),
                 string.IsNullOrWhiteSpace(_form.StreetAddress2) ? null : _form.StreetAddress2.Trim(),
                 _form.City.Trim(),

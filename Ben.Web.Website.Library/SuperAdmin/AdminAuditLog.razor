@@ -156,7 +156,7 @@
             <GridColumn Title="" Width="60px" Filterable="false" Sortable="false">
                 <Template>
                     @{ var r5 = (AuditLogRecord)context; }
-                    <button type="button" class="btn @(ThemeConstants.Button.FillMode.Flat == ThemeConstants.Button.FillMode.Solid ? "btn-secondary" : "btn-outline-secondary") btn-sm" @onclick="@(() => OpenMailDialog(r5))" title="Send as message"><BenIcon Name="mail" /></button>
+                    <BenGridAction Icon="mail" Label="Send as message" OnClick="@(() => OpenMailDialog(r5))" />
                 </Template>
             </GridColumn>
         </GridColumns>

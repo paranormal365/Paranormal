@@ -171,7 +171,7 @@
         <div class="row g-3">
             <div class="col-md-6">
                 <label class="form-label fw-semibold">Type</label>
-                <BenSelect Data="@_entryTypeOptions" @bind-Value="@_form.EntryType" TextField="@nameof(EntryTypeOption.Label)" ValueField="@nameof(EntryTypeOption.Value)" Width="100%" />
+                <BenSelect Data="@EntryTypeOptionsFor(_editEntry)" @bind-Value="@_form.EntryType" TextField="@nameof(EntryTypeOption.Label)" ValueField="@nameof(EntryTypeOption.Value)" Width="100%" />
             </div>
             <div class="col-md-6">
                 <label class="form-label fw-semibold">Event Date/Time (optional)</label>
@@ -358,14 +358,29 @@
             await _imageEditor.OpenAsync();
     }
 
+    // Research stays as a filter: entries written as research before 2026-09-14 still exist. Instrument
+    // reading was never filterable at all, which left a whole kind of entry impossible to pick out.
     private static readonly CaseTimelineEntryType?[] _typeFilters =
         [null, CaseTimelineEntryType.ClientReport, CaseTimelineEntryType.InvestigatorNote,
-         CaseTimelineEntryType.Evidence, CaseTimelineEntryType.ResearchNote];
+         CaseTimelineEntryType.Evidence, CaseTimelineEntryType.InstrumentReading, CaseTimelineEntryType.ResearchNote];
 
-    private static readonly List<EntryTypeOption> _entryTypeOptions = Enum
+    // What a new entry may be. Research is not offered — it has its own tab and its pages carry their own
+    // date (beta feedback, 2026-09-14); see CaseTimelineEntryTypes.Pickable.
+    private static readonly List<EntryTypeOption> _entryTypeOptions = CaseTimelineEntryTypes.Pickable
+        .Select(t => new EntryTypeOption(t, EntryTypeLabel(t)))
+        .ToList();
+
+    private static readonly List<EntryTypeOption> _entryTypeOptionsWithResearch = Enum
         .GetValues<CaseTimelineEntryType>()
         .Select(t => new EntryTypeOption(t, EntryTypeLabel(t)))
         .ToList();
+
+    /// <summary>
+    /// The Type list for the dialog. Editing an entry that is already research keeps Research in the list, so
+    /// the picker shows the entry's real kind instead of silently turning it into something else on save.
+    /// </summary>
+    private static List<EntryTypeOption> EntryTypeOptionsFor(CaseTimelineEntryRecord? editing) =>
+        editing?.EntryType == CaseTimelineEntryType.ResearchNote ? _entryTypeOptionsWithResearch : _entryTypeOptions;
 
     private static readonly List<Telerik.Blazor.Components.IEditorTool> _editorTools =
     [

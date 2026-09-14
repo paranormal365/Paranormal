@@ -111,9 +111,7 @@
                             <Template>
                                 @{ var pg = (CmsPageListItem)context; }
                                 <span class="text-nowrap">
-                                <button type="button" class="btn @(ThemeConstants.Button.FillMode.Flat == ThemeConstants.Button.FillMode.Solid ? "btn-secondary" : "btn-outline-secondary") btn-sm" @onclick="@(() => NavManager.NavigateTo($"/organizations/{OrgId}/cms/pages/{pg.Id}"))"><BenIcon Name="layout" Class="me-1" />
-                                    Sections
-                                </button>
+                                <BenGridAction Icon="layout" Label="Sections" OnClick="@(() => NavManager.NavigateTo($"/organizations/{OrgId}/cms/pages/{pg.Id}"))" />
                                 <BenDropdown ToggleClass="btn btn-link text-decoration-none btn-sm" Title="More actions" MinWidth="160px">
                                     <ToggleContent><span class="visually-hidden">More actions</span></ToggleContent>
                                     <ChildContent>
@@ -182,13 +180,9 @@
                                 <span class="text-nowrap">
                                 @if (!logo.IsActive)
                                 {
-                                    <button type="button" class="btn @(ThemeConstants.Button.FillMode.Flat == ThemeConstants.Button.FillMode.Solid ? "btn-secondary" : "btn-outline-secondary") btn-sm" @onclick="@(() => SetLogoActive(logo))">
-                                        Set Active
-                                    </button>
+                                    <BenGridAction Icon="star" Label="Set Active" OnClick="@(() => SetLogoActive(logo))" />
                                 }
-                                <button type="button" class="btn @(ThemeConstants.Button.FillMode.Flat == ThemeConstants.Button.FillMode.Solid ? "btn-danger" : "btn-outline-danger") btn-sm ms-1" @onclick="@(() => DeleteLogo(logo))"><BenIcon Name="trash-2" Class="me-1" />
-                                    Remove
-                                </button>
+                                <BenGridAction Icon="trash-2" Label="Remove" Tone="GridActionTone.Danger" OnClick="@(() => DeleteLogo(logo))" />
                                 </span>
                             </Template>
                         </GridColumn>
@@ -228,22 +222,23 @@
                                 { <BenIcon Name="check" /> }
                             </Template>
                         </GridColumn>
-                        <GridCommandColumn Width="210px">
+                        <GridCommandColumn Width="136px">
                             <GridCommandButton Command="Edit"
-                                               Icon="@SvgIcon.Pencil"
-                                               OnClick="@((GridCommandEventArgs e) => OpenEditGroupDialog((OrgMemberGroupRecord)e.Items.First()))">
-                                Edit
-                            </GridCommandButton>
+                                               OnClick="@((GridCommandEventArgs e) => OpenEditGroupDialog((OrgMemberGroupRecord)e.Items.First()))"
+                                               Title="Edit"
+                                               Class="ben-grid-action"
+                                               FillMode="@ThemeConstants.Button.FillMode.Outline"><BenIcon Name="edit-2" /></GridCommandButton>
                             <GridCommandButton Command="Members"
-                                               Icon="@SvgIcon.User"
-                                               OnClick="@((GridCommandEventArgs e) => OpenMembersDialog((OrgMemberGroupRecord)e.Items.First()))">
-                                Members
-                            </GridCommandButton>
+                                               OnClick="@((GridCommandEventArgs e) => OpenMembersDialog((OrgMemberGroupRecord)e.Items.First()))"
+                                               Title="Members"
+                                               Class="ben-grid-action"
+                                               FillMode="@ThemeConstants.Button.FillMode.Outline"><BenIcon Name="users" /></GridCommandButton>
                             <GridCommandButton Command="Delete"
-                                               Icon="@SvgIcon.Trash"
                                                ThemeColor="@ThemeConstants.Button.ThemeColor.Error"
-                                               OnClick="@((GridCommandEventArgs e) => ConfirmDeleteGroup((OrgMemberGroupRecord)e.Items.First()))">
-                            </GridCommandButton>
+                                               OnClick="@((GridCommandEventArgs e) => ConfirmDeleteGroup((OrgMemberGroupRecord)e.Items.First()))"
+                                               Title="Delete"
+                                               Class="ben-grid-action"
+                                               FillMode="@ThemeConstants.Button.FillMode.Outline"><BenIcon Name="trash-2" /></GridCommandButton>
                         </GridCommandColumn>
                     </GridColumns>
                 </TelerikGrid>
@@ -520,12 +515,13 @@
                     <GridColumns>
                         <GridColumn Title="Member" Field="@nameof(GroupMemberRow.DisplayName)" />
                         <GridColumn Title="Role" Field="@nameof(GroupMemberRow.Role)" Width="110px" />
-                        <GridCommandColumn Width="90px">
+                        <GridCommandColumn Width="72px">
                             <GridCommandButton Command="Remove"
-                                               Icon="@SvgIcon.Trash"
                                                ThemeColor="@ThemeConstants.Button.ThemeColor.Error"
-                                               OnClick="@((GridCommandEventArgs e) => RemoveMemberAsync((GroupMemberRow)e.Items.First()))">
-                            </GridCommandButton>
+                                               OnClick="@((GridCommandEventArgs e) => RemoveMemberAsync((GroupMemberRow)e.Items.First()))"
+                                               Title="Remove from the group"
+                                               Class="ben-grid-action"
+                                               FillMode="@ThemeConstants.Button.FillMode.Outline"><BenIcon Name="user-x" /></GridCommandButton>
                         </GridCommandColumn>
                     </GridColumns>
                 </TelerikGrid>

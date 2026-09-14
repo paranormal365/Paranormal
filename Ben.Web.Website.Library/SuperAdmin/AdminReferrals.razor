@@ -72,8 +72,7 @@
                 <GridColumn Title="Actions" Width="130px">
                     <Template>
                         @{ var r = (ReferrerSummaryRecord)context; }
-                        <button type="button" class="btn btn-outline-primary btn-sm text-nowrap"
-                                @onclick="@(() => OpenPayout(r))">Record payout…</button>
+                        <BenGridAction Icon="dollar-sign" Label="Record payout" Tone="GridActionTone.Primary" OnClick="@(() => OpenPayout(r))" />
                     </Template>
                 </GridColumn>
             </GridColumns>

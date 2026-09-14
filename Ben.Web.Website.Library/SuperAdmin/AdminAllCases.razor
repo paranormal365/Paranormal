@@ -42,20 +42,19 @@
                         @cs.DateCaseOpened.ToViewerLocalTime(UserState).ToDisplayDate()
                     </Template>
                 </GridColumn>
-                <GridCommandColumn Width="150px">
-                    <GridCommandButton OnClick="@((GridCommandEventArgs e) => OpenCase((AdminCaseSummaryRecord)e.Items.First()))">
-                        Open
-                    </GridCommandButton>
+                <GridCommandColumn Width="100px">
+                    <GridCommandButton OnClick="@((GridCommandEventArgs e) => OpenCase((AdminCaseSummaryRecord)e.Items.First()))" Title="Open the case" Class="ben-grid-action" FillMode="@ThemeConstants.Button.FillMode.Outline"><BenIcon Name="external-link" /></GridCommandButton>
                     @* Item 183: goes to the delete page with this case chosen, never deletes from
                        here. A destructive verb on a grid row is the first half of an accident. *@
                     @* Icon only, with Title for the tooltip and the accessible name. NO
                        aria-label: Telerik throws on an unmatched attribute and takes the circuit
                        with it (item 112). Title is a real GridCommandButton parameter. *@
                     <GridCommandButton Command="Delete"
-                                       Icon="@SvgIcon.Trash"
                                        ThemeColor="@ThemeConstants.Button.ThemeColor.Error"
+                                       OnClick="@((GridCommandEventArgs e) => DeleteCase((AdminCaseSummaryRecord)e.Items.First()))"
                                        Title="Delete this case"
-                                       OnClick="@((GridCommandEventArgs e) => DeleteCase((AdminCaseSummaryRecord)e.Items.First()))" />
+                                       Class="ben-grid-action"
+                                       FillMode="@ThemeConstants.Button.FillMode.Outline"><BenIcon Name="trash-2" /></GridCommandButton>
                 </GridCommandColumn>
             </GridColumns>
         </TelerikGrid>

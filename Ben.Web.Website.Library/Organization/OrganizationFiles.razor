@@ -99,26 +99,33 @@
                 <GridColumn Field="@nameof(OrganizationFileRecord.Description)" Title="Description" />
                 @* Publish/Unpublish + Edit + Delete, and Edit Image as well on an image row —
                    the widest of these columns, and the one whose contents change per row. *@
-                <GridCommandColumn Width="380px">
+                <GridCommandColumn Width="172px">
                     <GridCommandButton OnClick="@(e => OpenPublish((OrganizationFileRecord)e.Items.First()))"
                                        ThemeColor="@ThemeConstants.Button.ThemeColor.Success"
-                                       Size="@ThemeConstants.Button.Size.Small">
-                        @(((OrganizationFileRecord)context).IsPublic ? "Unpublish" : "Publish")
-                    </GridCommandButton>
+                                       Size="@ThemeConstants.Button.Size.Small"
+                                       Title="@(((OrganizationFileRecord)context).IsPublic ? "Unpublish" : "Publish")"
+                                       Class="ben-grid-action"
+                                       FillMode="@ThemeConstants.Button.FillMode.Outline"><BenIcon Name="@(((OrganizationFileRecord)context).IsPublic ? "cloud-off" : "upload-cloud")" /></GridCommandButton>
                     @{ var fc = (OrganizationFileRecord)context; }
                     @if (fc.ContentType.StartsWith("image/"))
                     {
-                        <GridCommandButton Icon="@SvgIcon.Pencil"
-                                           Size="@ThemeConstants.Button.Size.Small" Class="ms-1"
-                                           OnClick="@((GridCommandEventArgs e) => OpenImageEditor((OrganizationFileRecord)e.Items.First()))">
-                            Edit Image
-                        </GridCommandButton>
+                        <GridCommandButton Size="@ThemeConstants.Button.Size.Small"
+                                           OnClick="@((GridCommandEventArgs e) => OpenImageEditor((OrganizationFileRecord)e.Items.First()))"
+                                           Title="Edit image"
+                                           Class="ben-grid-action"
+                                           FillMode="@ThemeConstants.Button.FillMode.Outline"><BenIcon Name="image" /></GridCommandButton>
                     }
                     <GridCommandButton OnClick="@(e => OpenEdit((OrganizationFileRecord)e.Items.First()))"
-                                       Size="@ThemeConstants.Button.Size.Small" Class="ms-1">Edit</GridCommandButton>
+                                       Size="@ThemeConstants.Button.Size.Small"
+                                       Title="Edit"
+                                       Class="ben-grid-action"
+                                       FillMode="@ThemeConstants.Button.FillMode.Outline"><BenIcon Name="edit-2" /></GridCommandButton>
                     <GridCommandButton OnClick="@(e => ConfirmDelete((OrganizationFileRecord)e.Items.First()))"
                                        ThemeColor="@ThemeConstants.Button.ThemeColor.Error"
-                                       Size="@ThemeConstants.Button.Size.Small" Class="ms-1">Delete</GridCommandButton>
+                                       Size="@ThemeConstants.Button.Size.Small"
+                                       Title="Delete"
+                                       Class="ben-grid-action"
+                                       FillMode="@ThemeConstants.Button.FillMode.Outline"><BenIcon Name="trash-2" /></GridCommandButton>
                 </GridCommandColumn>
             </GridColumns>
         </TelerikGrid>

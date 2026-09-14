@@ -94,16 +94,40 @@ public class CaseNotesTests : BenTestBase
         await Page.WaitForTimeoutAsync(300);
 
         var uniqueBody = $"Playwright test note {Guid.NewGuid():N}";
-        var textArea   = Page.GetByPlaceholder("Internal note details", new() { Exact = false });
-        await Expect(textArea).ToBeVisibleAsync(new() { Timeout = 5_000 });
-        await textArea.FillAsync(uniqueBody);
+        // The body is a formatting editor since 2026-09-14, not a textarea.
+        var editor = Page.Locator("[data-testid='note-body-editor'] [contenteditable='true']");
+        await Expect(editor).ToBeVisibleAsync(new() { Timeout = 5_000 });
+        await editor.ClickAsync();
+        await Page.Keyboard.TypeAsync(uniqueBody);
 
-        var saveBtn = Page.GetByRole(AriaRole.Button, new() { Name = "Save" });
-        await saveBtn.ClickAsync();
-        await Page.WaitForLoadStateAsync(LoadState.NetworkIdle);
+        await Page.Locator(".modal.show").GetByRole(AriaRole.Button, new() { Name = "Save" }).ClickAsync();
 
-        var note = Page.GetByText(uniqueBody, new() { Exact = false });
+        var note = Page.Locator("[data-testid='case-note-body']", new() { HasTextString = uniqueBody });
         await Expect(note).ToBeVisibleAsync(new() { Timeout = 8_000 });
+    }
+
+    [Test]
+    [Description("Bold typed in a note's editor is still bold once the note is saved.")]
+    public async Task NotesTab_BoldSurvivesSave()
+    {
+        await NavigateToCaseNotesTabAsync();
+        await Page.GetByRole(AriaRole.Button, new() { Name = "New Note" }).ClickAsync();
+
+        var editor = Page.Locator("[data-testid='note-body-editor'] [contenteditable='true']");
+        await Expect(editor).ToBeVisibleAsync(new() { Timeout = 5_000 });
+        await editor.ClickAsync();
+
+        // Type, select it, then press Bold — the way a person formats a word.
+        var marker = $"bold-{Guid.NewGuid():N}";
+        await Page.Keyboard.TypeAsync(marker);
+        await Page.Keyboard.PressAsync("ControlOrMeta+a");
+        await Page.Locator("[data-testid='note-body-editor']").GetByRole(AriaRole.Button, new() { Name = "Bold", Exact = true }).ClickAsync();
+        await Expect(editor.Locator("strong", new() { HasTextString = marker })).ToBeVisibleAsync(new() { Timeout = 5_000 });
+
+        await Page.Locator(".modal.show").GetByRole(AriaRole.Button, new() { Name = "Save" }).ClickAsync();
+
+        var saved = Page.Locator("[data-testid='case-note-body'] strong", new() { HasTextString = marker });
+        await Expect(saved).ToBeVisibleAsync(new() { Timeout = 10_000 });
     }
 
     // ── No errors ─────────────────────────────────────────────────────────────

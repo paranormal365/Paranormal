@@ -93,11 +93,12 @@
                         @(s.CurrentPeriodEnd?.ToString("MM/dd/yyyy") ?? "—")
                     </Template>
                 </GridColumn>
-                <GridCommandColumn Width="110px">
-                    <GridCommandButton Command="Set" Icon="@SvgIcon.Pencil"
-                                       OnClick="@((GridCommandEventArgs e) => OpenEdit((OrganizationSubscriptionAdminRecord)e.Items.First()))">
-                        Set
-                    </GridCommandButton>
+                <GridCommandColumn Width="72px">
+                    <GridCommandButton Command="Set"
+                                       OnClick="@((GridCommandEventArgs e) => OpenEdit((OrganizationSubscriptionAdminRecord)e.Items.First()))"
+                                       Title="Set the plan"
+                                       Class="ben-grid-action"
+                                       FillMode="@ThemeConstants.Button.FillMode.Outline"><BenIcon Name="sliders" /></GridCommandButton>
                 </GridCommandColumn>
             </GridColumns>
         </TelerikGrid>

@@ -68,10 +68,8 @@
                     <Template>
                         @{ var r = (TaxRateRuleRecord)context; }
                         <span class="text-nowrap">
-                            <button type="button" class="btn btn-outline-primary btn-sm"
-                                    @onclick="@(() => { _formState = r.State; _formRate = r.RatePercent; _formNotes = r.Notes; })">Edit</button>
-                            <button type="button" class="btn btn-outline-danger btn-sm ms-1"
-                                    @onclick="@(() => DeleteAsync(r))">Delete</button>
+                            <BenGridAction Icon="edit-2" Label="Edit" OnClick="@(() => { _formState = r.State; _formRate = r.RatePercent; _formNotes = r.Notes; })" />
+                            <BenGridAction Icon="trash-2" Label="Delete" Tone="GridActionTone.Danger" OnClick="@(() => DeleteAsync(r))" />
                         </span>
                     </Template>
                 </GridColumn>

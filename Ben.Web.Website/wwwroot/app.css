@@ -581,14 +581,56 @@ textarea.form-control::placeholder {
    self-correcting and cannot hide anything. The explicit widths below still keep the common cases
    on one line. Item 139.
 
-   `white-space: normal` alone, deliberately. The first version also set `display: flex` here,
-   which turned out to be redundant: `telerik-night.css` already makes command cells flex. Adding
-   it again only risked a second opinion about a `<td>`'s formatting context in a file that does
-   not own that decision. Measured with the cell constrained to 220px: the buttons wrap, the last
-   one is fully visible, and the header and body columns still line up. */
+   `white-space: normal` alone, deliberately. Command cells are ordinary table cells — a `<td>`
+   made `display: flex` loses its place in the row, and its bottom border then stops short of the
+   rest of the row's (beta feedback, 2026-09-14; the spacing now lives on the buttons in
+   `telerik-night.css`). The buttons are inline-flex, so they wrap like words when the column is
+   too narrow: the row grows taller and the last button stays whole. */
 .k-grid td.k-command-cell,
 .k-grid .k-table-td.k-command-cell {
     white-space: normal;
+}
+
+/* ── Row actions are icons ────────────────────────────────────────────────────
+   Ben, 2026-09-14: no text in grid buttons; an icon, with its words in a tooltip. `.ben-grid-action`
+   is both Kit/BenGridAction and any GridCommandButton given that class, so the two look identical.
+   A 2rem square (32px) — over the 24px WCAG 2.2 minimum target, and small enough that four actions
+   still fit a 180px column on one line. The theme's shrunken-button padding (telerik-night.css)
+   would make an icon-only command button a lopsided rectangle, so padding is set here in both
+   directions. */
+.k-grid .ben-grid-action,
+.ben-grid-action {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    min-width: 2rem;
+    min-height: 2rem;
+    padding: 0.25rem;
+    line-height: 1;
+}
+
+.ben-grid-action-tip {
+    display: inline-block;
+}
+
+.ben-grid-action-tip > .ben-grid-action:disabled {
+    pointer-events: none;
+}
+
+.ben-grid-action .sa-icon {
+    width: 1rem;
+    height: 1rem;
+}
+
+.ben-grid-action + .ben-grid-action,
+.ben-grid-action + .ben-grid-action-tip,
+.ben-grid-action-tip + .ben-grid-action,
+.ben-grid-action-tip + .ben-grid-action-tip {
+    margin-inline-start: 0.25rem;
+}
+
+.k-grid .k-command-cell > .ben-grid-action + .ben-grid-action {
+    margin-inline-start: 0;
 }
 
 /* ── Dropdown popups are not limited to the width of what opened them ────────

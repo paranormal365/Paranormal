@@ -96,6 +96,17 @@ public class CaseMessageBoardTests : BenTestBase
     }
 
     // ── Client-side: compose and send ────────────────────────────────────────
+    // The compose box is a small formatting editor since 2026-09-14 (beta feedback), not a textarea.
+
+    private ILocator Compose => Page.Locator("[data-testid='case-thread-compose'] [contenteditable='true']");
+    private ILocator SendButton => Page.Locator("#case-thread-send");
+
+    private async Task TypeMessageAsync(string text)
+    {
+        await Expect(Compose).ToBeVisibleAsync(new() { Timeout = 12_000 });
+        await Compose.ClickAsync();
+        await Page.Keyboard.TypeAsync(text);
+    }
 
     [Test]
     public async Task ClientCaseDetail_MessagesPanel_ComposeBox_IsPresent()
@@ -104,22 +115,17 @@ public class CaseMessageBoardTests : BenTestBase
 
         await Expect(Page.GetByText("Messages with your investigation group", new() { Exact = false }))
             .ToBeVisibleAsync(new() { Timeout = 12_000 });
-
-        var textArea = Page.GetByPlaceholder("Message your investigation group", new() { Exact = false });
-        await Expect(textArea).ToBeVisibleAsync(new() { Timeout = 8_000 });
+        await Expect(Compose).ToBeVisibleAsync(new() { Timeout = 8_000 });
     }
 
     [Test]
-    public async Task ClientCaseDetail_MessagesPanel_SendDisabled_WhenEmpty()
+    public async Task ClientCaseDetail_MessagesPanel_SendingNothing_SaysSo()
     {
         await NavigateToClientCaseDetail();
+        await Expect(Compose).ToBeVisibleAsync(new() { Timeout = 12_000 });
 
-        await Expect(Page.GetByText("Messages with your investigation group", new() { Exact = false }))
-            .ToBeVisibleAsync(new() { Timeout = 12_000 });
-
-        // Send button should be disabled (no text entered)
-        var sendBtn = Page.GetByRole(AriaRole.Button, new() { Name = "Send" });
-        await Expect(sendBtn).ToBeDisabledAsync(new() { Timeout = 8_000 });
+        await SendButton.ClickAsync();
+        await Expect(Page.GetByText("Type a message first.")).ToBeVisibleAsync(new() { Timeout = 8_000 });
     }
 
     [Test]
@@ -127,19 +133,11 @@ public class CaseMessageBoardTests : BenTestBase
     {
         await NavigateToClientCaseDetail();
 
-        await Expect(Page.GetByText("Messages with your investigation group", new() { Exact = false }))
-            .ToBeVisibleAsync(new() { Timeout = 12_000 });
-
         var uniqueText = $"Playwright test message {Guid.NewGuid():N}";
-        var textArea   = Page.GetByPlaceholder("Message your investigation group", new() { Exact = false });
-        await textArea.FillAsync(uniqueText);
+        await TypeMessageAsync(uniqueText);
+        await SendButton.ClickAsync();
 
-        var sendBtn = Page.GetByRole(AriaRole.Button, new() { Name = "Send" });
-        await Expect(sendBtn).ToBeEnabledAsync(new() { Timeout = 4_000 });
-        await sendBtn.ClickAsync();
-
-        // New message should appear in the thread
-        var sent = Page.GetByText(uniqueText, new() { Exact = false });
+        var sent = Page.Locator("[data-testid='case-message-bubble']", new() { HasTextString = uniqueText });
         await Expect(sent).ToBeVisibleAsync(new() { Timeout = 10_000 });
     }
 
@@ -148,19 +146,14 @@ public class CaseMessageBoardTests : BenTestBase
     {
         await NavigateToClientCaseDetail();
 
-        await Expect(Page.GetByText("Messages with your investigation group", new() { Exact = false }))
-            .ToBeVisibleAsync(new() { Timeout = 12_000 });
+        var text = $"Temporary message to test compose clear {Guid.NewGuid():N}";
+        await TypeMessageAsync(text);
+        await SendButton.ClickAsync();
 
-        var textArea = Page.GetByPlaceholder("Message your investigation group", new() { Exact = false });
-        await textArea.FillAsync("Temporary message to test compose clear");
-
-        await Page.GetByRole(AriaRole.Button, new() { Name = "Send" }).ClickAsync();
-
-        // Not WaitForLoadState(NetworkIdle): sending is a SignalR message on the live circuit, not
-        // an HTTP request, so NetworkIdle is already true and returns before the send has been
-        // handled. Reading the box straight after that raced the re-render and saw the text still
-        // in it. Expect polls until the clear actually happens.
-        await Expect(textArea).ToHaveValueAsync("", new() { Timeout = 10_000 });
+        // Sending is a SignalR message on the live circuit; Expect polls until the clear actually happens.
+        await Expect(Page.Locator("[data-testid='case-message-bubble']", new() { HasTextString = text }))
+            .ToBeVisibleAsync(new() { Timeout = 10_000 });
+        await Expect(Compose).ToHaveTextAsync("", new() { Timeout = 10_000 });
     }
 
     // ── Org-side: Messages tab in CaseDetail ─────────────────────────────────
@@ -186,12 +179,8 @@ public class CaseMessageBoardTests : BenTestBase
         if (!await OpenOrgCaseAsync("Paranormal365", "Belmont"))
         { Assert.Pass("TGH case not in the seed data."); return; }
 
-        // Click Messages tab
-        // The compose box is the one thing both sides of the thread render. Its placeholder differs
-        // by side — "Message your investigation group…" for the client, "Message the client…" for
-        // the organisation — so match the shared prefix rather than the client's wording, which is
-        // not what this tab shows.
-        await OpenTabAsync("Messages", Main.GetByPlaceholder("Message", new() { Exact = false }).First);
+        // The compose box is the one thing both sides of the thread render.
+        await OpenTabAsync("Messages", Compose);
 
         // Daniel's reply should be visible to the org
         var clientMsg = Page.GetByText("activity has been a bit more frequent", new() { Exact = false });
@@ -205,25 +194,46 @@ public class CaseMessageBoardTests : BenTestBase
         if (!await OpenOrgCaseAsync("Paranormal365", "Belmont"))
         { Assert.Pass("TGH case not in the seed data."); return; }
 
-        // The compose box is the one thing both sides of the thread render. Its placeholder differs
-        // by side — "Message your investigation group…" for the client, "Message the client…" for
-        // the organisation — so match the shared prefix rather than the client's wording, which is
-        // not what this tab shows.
-        await OpenTabAsync("Messages", Main.GetByPlaceholder("Message", new() { Exact = false }).First);
+        await OpenTabAsync("Messages", Compose);
+        await WaitUntilLoadedAsync();
 
         var uniqueText = $"Org reply from Playwright {Guid.NewGuid():N}";
-        var textArea   = Page.GetByPlaceholder("Message the client", new() { Exact = false });
-        await Expect(textArea).ToBeVisibleAsync(new() { Timeout = 8_000 });
+        await TypeMessageAsync(uniqueText);
+        await SendButton.ClickAsync();
 
-        // Let the thread finish loading before sending into it. Sending mid-load used to lose the
-        // message on screen; the component now survives that, but the test should still exercise
-        // the ordinary path rather than depend on the fix for its own timing.
-        await WaitUntilLoadedAsync();
-        await textArea.FillAsync(uniqueText);
-
-        await Page.GetByRole(AriaRole.Button, new() { Name = "Send" }).ClickAsync();
-
-        var sent = Page.GetByText(uniqueText, new() { Exact = false });
+        var sent = Page.Locator("[data-testid='case-message-bubble']", new() { HasTextString = uniqueText });
         await Expect(sent).ToBeVisibleAsync(new() { Timeout = 10_000 });
+    }
+
+    /// <summary>
+    /// What the group writes in bold arrives in the client's thread in bold — the formatted copy crosses the API, not
+    /// only the plain one.
+    /// </summary>
+    [Test]
+    public async Task Org_bold_reaches_the_client_as_bold()
+    {
+        await LoginAsync(UserEmail, UserPassword); // Sarah
+        Assert.That(await OpenOrgCaseAsync("Paranormal365", "Belmont"), Is.True,
+            "The seeded Belmont case, which carries the conversation, could not be opened.");
+
+        await OpenTabAsync("Messages", Compose);
+        await WaitUntilLoadedAsync();
+
+        // Type, select what was typed, then press Bold — the way a person formats a word, and independent of
+        // whether pressing a toolbar button first leaves the caret where it was.
+        var marker = $"bold-{Guid.NewGuid():N}";
+        await TypeMessageAsync(marker);
+        await Page.Keyboard.PressAsync("ControlOrMeta+a");
+        await Page.Locator("[data-testid='case-thread-compose']").GetByRole(AriaRole.Button, new() { Name = "Bold", Exact = true }).ClickAsync();
+        await Expect(Compose.Locator("strong", new() { HasTextString = marker })).ToBeVisibleAsync(new() { Timeout = 5_000 });
+        await SendButton.ClickAsync();
+        await Expect(Page.Locator("[data-testid='case-message-bubble'] strong", new() { HasTextString = marker }))
+            .ToBeVisibleAsync(new() { Timeout = 10_000 });
+
+        await LogoutAsync();
+        await NavigateToClientCaseDetail();
+
+        await Expect(Page.Locator("[data-testid='case-message-bubble'] strong", new() { HasTextString = marker }))
+            .ToBeVisibleAsync(new() { Timeout = 15_000 });
     }
 }

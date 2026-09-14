@@ -140,11 +140,12 @@
                     </Template>
                 </GridColumn>
                 <GridColumn Field="@nameof(SubscriptionTierAdminRecord.OrganizationCount)" Title="Groups" Width="90px" />
-                <GridCommandColumn Width="100px">
-                    <GridCommandButton Command="Edit" Icon="@SvgIcon.Pencil"
-                                       OnClick="@((GridCommandEventArgs e) => OpenEdit((SubscriptionTierAdminRecord)e.Items.First()))">
-                        Edit
-                    </GridCommandButton>
+                <GridCommandColumn Width="72px">
+                    <GridCommandButton Command="Edit"
+                                       OnClick="@((GridCommandEventArgs e) => OpenEdit((SubscriptionTierAdminRecord)e.Items.First()))"
+                                       Title="Edit"
+                                       Class="ben-grid-action"
+                                       FillMode="@ThemeConstants.Button.FillMode.Outline"><BenIcon Name="edit-2" /></GridCommandButton>
                 </GridCommandColumn>
             </GridColumns>
         </TelerikGrid>

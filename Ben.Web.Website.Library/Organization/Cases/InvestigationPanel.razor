@@ -435,13 +435,14 @@
     private sealed record BinderTypeOption(string Label, CaseTimelineEntryType Value);
 
     // Named from the shared helper (W-A11) rather than typed here, so a fifth kind added to the
-    // enum cannot be listed under one name in this panel and another on the timeline.
+    // enum cannot be listed under one name in this panel and another on the timeline. No Research:
+    // research is written on the case's Research tab, as a page with its own date (beta feedback,
+    // 2026-09-14) — see CaseTimelineEntryTypes.Pickable.
     private static readonly List<BinderTypeOption> _binderEntryTypes =
     [
         new(CaseTimelineEntryTypes.ShortName(CaseTimelineEntryType.InvestigatorNote),  CaseTimelineEntryType.InvestigatorNote),
         new(CaseTimelineEntryTypes.DisplayName(CaseTimelineEntryType.InstrumentReading), CaseTimelineEntryType.InstrumentReading),
         new(CaseTimelineEntryTypes.ShortName(CaseTimelineEntryType.Evidence),          CaseTimelineEntryType.Evidence),
-        new(CaseTimelineEntryTypes.ShortName(CaseTimelineEntryType.ResearchNote),      CaseTimelineEntryType.ResearchNote),
     ];
 
     private async Task ToggleBinderAsync(InvestigationRecord inv)
