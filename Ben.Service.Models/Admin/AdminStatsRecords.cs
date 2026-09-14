@@ -259,7 +259,11 @@ public sealed record CasePurgePreview(
     int EvidenceVotesUnlinked,
     int PublicPagesUnlinked,
 
-    string? ClientName);
+    string? ClientName,
+
+    // Case canvas boards, destroyed with the case. Last and defaulted so an API that predates
+    // the canvas still deserialises.
+    int Boards = 0);
 
 /// <summary>What deleting a case actually did.</summary>
 public sealed record CasePurgeResult(

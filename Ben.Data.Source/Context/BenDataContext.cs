@@ -222,6 +222,8 @@ namespace Ben.Data.Source.Context
         public virtual DbSet<OrganizationCmsTemplate> OrganizationCmsTemplates { get; set; }
         public virtual DbSet<EventAttendanceInvite> EventAttendanceInvites { get; set; }
         public virtual DbSet<VideoProject> VideoProjects { get; set; }
+        public virtual DbSet<CanvasDocument> CanvasDocuments { get; set; }
+        public virtual DbSet<LinkUnfurlCache> LinkUnfurlCache { get; set; }
 
         protected override void OnModelCreating(ModelBuilder modelBuilder)
         {
@@ -2197,6 +2199,59 @@ namespace Ben.Data.Source.Context
                 .HasIndex(e => e.CaseId);
             modelBuilder.Entity<VideoProject>()
                 .HasIndex(e => e.CreatedByAppUserId);
+
+            // ── CanvasDocument ────────────────────────────────────────────────
+            // Same shape as VideoProject, for the same reasons: losing the case or the published
+            // snapshot clears the reference (SetNull) rather than taking the board with it. The
+            // THREE references to AppUsers must all be NoAction — SQL Server refuses a table with
+            // more than one cascade path to the same parent, and it refuses at migration time on
+            // production, not in a test.
+            modelBuilder.Entity<CanvasDocument>()
+                .HasOne(e => e.Case).WithMany()
+                .HasForeignKey(e => e.CaseId).IsRequired(false).OnDelete(DeleteBehavior.SetNull);
+            modelBuilder.Entity<CanvasDocument>()
+                .HasOne(e => e.PublishedUploadFile).WithMany()
+                .HasForeignKey(e => e.PublishedUploadFileId).IsRequired(false).OnDelete(DeleteBehavior.SetNull);
+            modelBuilder.Entity<CanvasDocument>()
+                .HasOne(e => e.CreatedByAppUser).WithMany()
+                .HasForeignKey(e => e.CreatedByAppUserId).OnDelete(DeleteBehavior.NoAction);
+            modelBuilder.Entity<CanvasDocument>()
+                .HasOne(e => e.UpdatedByAppUser).WithMany()
+                .HasForeignKey(e => e.UpdatedByAppUserId).IsRequired(false).OnDelete(DeleteBehavior.NoAction);
+            modelBuilder.Entity<CanvasDocument>()
+                .HasOne(e => e.PublishedByAppUser).WithMany()
+                .HasForeignKey(e => e.PublishedByAppUserId).IsRequired(false).OnDelete(DeleteBehavior.NoAction);
+            modelBuilder.Entity<CanvasDocument>()
+                .Property(e => e.DocumentJson).HasColumnType("nvarchar(max)");
+            modelBuilder.Entity<CanvasDocument>()
+                .Property(e => e.Name).HasMaxLength(256);
+            // The optimistic-concurrency token (R20): an accepted save's UPDATE carries
+            // WHERE Revision = <the revision the caller loaded>, so two saves racing between the
+            // read and the write cannot both succeed. A compare in C# alone would let them.
+            modelBuilder.Entity<CanvasDocument>()
+                .Property(e => e.Revision).HasDefaultValue(1).IsConcurrencyToken();
+            modelBuilder.Entity<CanvasDocument>()
+                .HasIndex(e => e.CaseId);
+            modelBuilder.Entity<CanvasDocument>()
+                .HasIndex(e => e.CreatedByAppUserId);
+
+            // ── LinkUnfurlCache ───────────────────────────────────────────────
+            modelBuilder.Entity<LinkUnfurlCache>()
+                .HasIndex(e => e.UrlHash).IsUnique();
+            modelBuilder.Entity<LinkUnfurlCache>()
+                .Property(e => e.UrlHash).HasMaxLength(64);
+            modelBuilder.Entity<LinkUnfurlCache>()
+                .Property(e => e.Url).HasMaxLength(2048);
+            modelBuilder.Entity<LinkUnfurlCache>()
+                .Property(e => e.Title).HasMaxLength(512);
+            modelBuilder.Entity<LinkUnfurlCache>()
+                .Property(e => e.Description).HasMaxLength(2048);
+            modelBuilder.Entity<LinkUnfurlCache>()
+                .Property(e => e.ImageSourceUrl).HasMaxLength(2048);
+            modelBuilder.Entity<LinkUnfurlCache>()
+                .Property(e => e.SiteName).HasMaxLength(256);
+            modelBuilder.Entity<LinkUnfurlCache>()
+                .HasIndex(e => e.ExpiresAtUtc);
 
             // ── UploadFile self-reference (clip parent/child) ─────────────────
             modelBuilder.Entity<UploadFile>()

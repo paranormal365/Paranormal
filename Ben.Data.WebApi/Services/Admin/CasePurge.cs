@@ -51,7 +51,11 @@ public sealed record CasePurgePreview(
     int PublicPagesUnlinked,
 
     // ── worth reading before pressing the button ──────────────────────────────
-    string? ClientName);
+    string? ClientName,
+
+    // ── destroyed, added after the rest (canvas plan R3) ──────────────────────
+    // Last and defaulted so the website's copy of this record still deserialises an older API.
+    int Boards = 0);
 
 /// <summary>What deleting the case actually did.</summary>
 public sealed record CasePurgeResult(
@@ -162,7 +166,8 @@ public sealed class CasePurge
             EvidenceVotesUnlinked:  await db.EvidenceVotes.AsNoTracking().CountAsync(x => x.CaseId == caseId, ct),
             PublicPagesUnlinked:    await db.OrganizationPages.AsNoTracking().CountAsync(x => x.CaseId == caseId, ct),
 
-            ClientName: clientName);
+            ClientName: clientName,
+            Boards:     await db.CanvasDocuments.AsNoTracking().CountAsync(x => x.CaseId == caseId, ct));
     }
 
     /// <summary>
@@ -276,6 +281,12 @@ public sealed class CasePurge
             // The consent a feed post recorded against this case. Its CaseId is required, so it
             // cannot outlive the case even though the post it belongs to does.
             await db.FeedPostConsents.Where(x => x.CaseId == caseId).ExecuteDeleteAsync(ct);
+            // A board on the case IS the case's notes — witness names, addresses, evidence
+            // pictures laid out on one surface — so it goes with the case. Its foreign key is
+            // SetNull, and leaving that to the database would keep the board as a personal board
+            // of whoever created it, who may have left the group. A video project is different:
+            // it is an editor's own work, and it only loses the link above.
+            await db.CanvasDocuments.Where(x => x.CaseId == caseId).ExecuteDeleteAsync(ct);
 
             await db.Cases.Where(c => c.Id == caseId).ExecuteDeleteAsync(ct);
 

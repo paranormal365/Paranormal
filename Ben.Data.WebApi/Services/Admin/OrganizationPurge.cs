@@ -301,6 +301,10 @@ public sealed class OrganizationPurge
             await db.CaseVotes.Where(x => caseIds.Contains(x.CaseId)).ExecuteDeleteAsync(ct);
             await db.EvidenceVotes.Where(x => x.CaseId != null && caseIds.Contains(x.CaseId.Value)).ExecuteDeleteAsync(ct);
             await db.FeedPostConsents.Where(x => caseIds.Contains(x.CaseId)).ExecuteDeleteAsync(ct);
+            // A case board is the case's notes, so it goes with the case, as in CasePurge. Its key
+            // is SetNull: left to the database, every board of the group would become a personal
+            // board of whichever member made it.
+            await db.CanvasDocuments.Where(x => x.CaseId != null && caseIds.Contains(x.CaseId.Value)).ExecuteDeleteAsync(ct);
             await db.CaseReports.Where(x => caseIds.Contains(x.CaseId)).ExecuteDeleteAsync(ct);
 
             await db.EquipmentCheckouts
