@@ -52,9 +52,10 @@ public class EventGalleryTests : BenTestBase
         await Expect(Page.Locator("#hosted-gallery")).ToBeVisibleAsync(new() { Timeout = 30_000 });
 
         // And a shared link shows it (audit finding A6): the card is in the prerendered HTML a link preview reads,
-        // pointing at the same public photo, absolute because the crawler isn't on our domain.
+        // pointing at the same public photo. Absolute where the site knows its public origin (SiteIdentity:BaseUrl, set
+        // in production); a test stack has none, so the path is written as it is.
         var html = await (await Page.APIRequest.GetAsync($"{BaseUrl}/o/paranormal365/events/{await SlugAsync()}")).TextAsync();
-        Assert.That(html, Does.Match(@"<meta property=""og:image"" content=""https?://[^""]+/media/event-photo/[0-9a-f-]+"""));
+        Assert.That(html, Does.Match(@"<meta property=""og:image"" content=""(https?://[^""/]+)?/media/event-photo/[0-9a-f-]+"""));
         Assert.That(html, Does.Contain(@"name=""twitter:card"" content=""summary_large_image"""));
     }
 
