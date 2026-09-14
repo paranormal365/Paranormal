@@ -101,6 +101,23 @@ public sealed class BlockAutosaveTests
     }
 
     [Fact]
+    public async Task Every_finished_flush_is_counted_including_one_that_had_nothing_to_save()
+    {
+        var autosave = Build();
+        Assert.Equal(0, autosave.FlushesFinished);
+        await autosave.FlushAsync();
+        Assert.Equal(1, autosave.FlushesFinished);
+
+        autosave.Touch();
+        var flush = autosave.FlushAsync();
+        await SavesAskedAsync(1);
+        Assert.Equal(1, autosave.FlushesFinished);   // not until the save it started has answered
+        _saves[0].SetResult(AutosaveOutcome.Saved);
+        await flush;
+        Assert.Equal(2, autosave.FlushesFinished);
+    }
+
+    [Fact]
     public async Task A_failed_save_keeps_the_work_unsaved_and_a_later_flush_tries_again()
     {
         var autosave = Build();

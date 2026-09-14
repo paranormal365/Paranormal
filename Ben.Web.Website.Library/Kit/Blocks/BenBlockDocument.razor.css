@@ -68,8 +68,7 @@
 
 /* 44px targets: a thumb on a phone has to be able to take hold of a block. In px, not rem: the site's root font
    shrinks on wide screens, and 2.75rem came out at 38.5px there (CaseResearchPageViewportTests, 2026-09-14). */
-.ben-block__handle,
-.ben-block__menu-toggle {
+.ben-block__handle {
     display: inline-flex;
     align-items: center;
     justify-content: center;
@@ -92,18 +91,10 @@
 }
 
 .ben-block__handle:hover,
-.ben-block__menu-toggle:hover,
 .ben-block__handle:focus-visible,
-.ben-block__menu-toggle:focus-visible {
+.ben-block__handle[aria-expanded="true"] {
     background: var(--bs-secondary-bg);
     color: var(--bs-body-color);
-}
-
-/* On a pointer that can hover, the menu toggle shows only when it is wanted. On touch it is always there. */
-@media (hover: hover) {
-    .ben-block:not(:hover):not(:focus-within):not(.is-active) .ben-block__menu-toggle {
-        visibility: hidden;
-    }
 }
 
 .ben-block__body {

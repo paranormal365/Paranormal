@@ -5,7 +5,8 @@
     save (with a way to try again), or stopped because newer work would be overwritten.
 *@
 
-<span class="ben-save-status" role="status" aria-live="polite" data-testid="save-status" data-state="@Autosave.State">
+<span class="ben-save-status" role="status" aria-live="polite" data-testid="save-status" data-state="@Autosave.State"
+      data-flushes="@Autosave.FlushesFinished">
     @switch (Autosave.State)
     {
         case AutosaveState.Saving:

@@ -63,11 +63,20 @@ public abstract class ResearchPageTestBase : BenTestBase
     }
 
     /// <summary>Save now, and wait until the status says it is saved.</summary>
-    protected async Task SaveNowAsync()
+    protected Task SaveNowAsync() => SaveNowAsync(Page);
+
+    /// <summary>
+    /// Presses Save now and waits for that save to finish. Waiting for "Clean" alone is not enough: a page already saved
+    /// once reads Clean before the new save starts, and a test that moved on then closed the tab mid-save (2026-09-14).
+    /// </summary>
+    protected async Task SaveNowAsync(IPage page)
     {
-        await Page.Locator("#research-page-save").ClickAsync();
-        await Expect(SaveStatus).ToHaveAttributeAsync("data-state", "Clean", new() { Timeout = 20_000 });
-        await Expect(SaveStatus).ToContainTextAsync("Saved");
+        var status = page.Locator("[data-testid=save-status]");
+        var before = await status.GetAttributeAsync("data-flushes");
+        await page.Locator("#research-page-save").ClickAsync();
+        await Expect(status).Not.ToHaveAttributeAsync("data-flushes", before ?? "", new() { Timeout = 20_000 });
+        await Expect(status).ToHaveAttributeAsync("data-state", "Clean");
+        await Expect(status).ToContainTextAsync("Saved");
     }
 
     protected async Task PublishAsync()

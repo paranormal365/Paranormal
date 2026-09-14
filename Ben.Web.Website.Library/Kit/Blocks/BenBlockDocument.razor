@@ -48,15 +48,17 @@
                 var active = b.Id == _activeId;
                 <section @key="b.Id" class="ben-block @(active ? "is-active" : "")" data-block-id="@b.Id" data-kind="@b.Kind"
                          aria-label="@($"{kind.Label} block")">
+                    @* One handle: drag it to move the block, click or tap it for the block's options (UI test pass, 2026-09-14).
+                       It used to sit above a separate options button, which kept every block at least two 44px targets
+                       tall — a one-line paragraph took a hundred pixels. The script tells a click from a drag. *@
                     <div class="ben-block__gutter">
-                        <button type="button" class="ben-block__handle" data-block-handle title="Drag to move"
-                                aria-label="@($"Move this {kind.Label.ToLowerInvariant()} block. Alt and the arrow keys move it up and down.")"
+                        <button type="button" class="ben-block__handle" data-block-handle data-testid="block-menu-toggle"
+                                title="Drag to move · click for options" aria-haspopup="menu"
+                                aria-expanded="@(_menuFor == b.Id ? "true" : "false")"
+                                aria-label="@($"Options for this {kind.Label.ToLowerInvariant()} block. Drag to move it; Alt and the arrow keys move it up and down.")"
+                                @onclick="@(() => _menuFor = _menuFor == b.Id ? null : b.Id)"
                                 @onkeydown="@(e => OnHandleKeyAsync(e, b))">
                             <BenIcon Name="more-vertical" />
-                        </button>
-                        <button type="button" class="ben-block__menu-toggle" aria-label="Block options" aria-expanded="@(_menuFor == b.Id ? "true" : "false")"
-                                @onclick="@(() => _menuFor = _menuFor == b.Id ? null : b.Id)" data-testid="block-menu-toggle">
-                            <BenIcon Name="chevron-down" />
                         </button>
                     </div>
 
@@ -201,7 +203,7 @@
     private bool _busy;
     private string _busyText = "";
     private string? _focusAfterRender;
-    private string? _insertHtmlAfterRender;
+    private (string Html, string Text)? _pasteAfterRender;
 
     /// <summary>The block being worked on, if any.</summary>
     public string? ActiveBlockId => _activeId;
@@ -218,15 +220,15 @@
             await _module.InvokeVoidAsync("attach", _root, _self, MaxFileBytes);
         }
 
-        if (_insertHtmlAfterRender is { } html && _textRef is not null)
-        {
-            _insertHtmlAfterRender = null;
-            await _textRef.InsertAtCursorAsync(html);
-        }
-
         if (_focusAfterRender is { } id && _module is not null)
         {
             _focusAfterRender = null;
+            if (_pasteAfterRender is { } paste)
+            {
+                _pasteAfterRender = null;
+                await _module.InvokeVoidAsync("focusBlock", id, paste.Html, paste.Text);
+                return;
+            }
             await _module.InvokeVoidAsync("focusBlock", id);
         }
     }
@@ -292,11 +294,16 @@
     [JSInvokable]
     public Task PastedTextAsync(string html, string text) => InvokeAsync(async () =>
     {
-        // Pasted HTML is put into a new text block through the editor, whose schema keeps structure and drops anything
-        // else — never drawn raw. Plain text becomes paragraphs.
+        // Formatted text becomes a new text block and is pasted into its editor, exactly as a paste inside a text block
+        // would be — the editor's schema keeps structure and drops anything else, and nothing is ever drawn raw. Plain text
+        // becomes paragraphs.
+        //
+        // UI test pass, 2026-09-14: the formatted words were handed to the new editor's "insert at the cursor" in the
+        // render that created it, before the editor existed, and the block came out empty. The paste now waits for the
+        // editor (focusBlock) and is given to it as the browser's own paste.
         var block = NewBlock.Text();
         if (string.IsNullOrWhiteSpace(html)) block.Html = PlainTextHtml.FromPlainText(text);
-        else _insertHtmlAfterRender = html;
+        else _pasteAfterRender = (html, text);
         await InsertAsync(block);
         StateHasChanged();
     });
@@ -427,6 +434,8 @@
         _textRef = null;
         _activeId = id;
         _menuFor = null;
+        // A text block becomes an editor: focus it, at the point clicked (see focusBlock), so typing goes somewhere.
+        if (Document.Blocks.FirstOrDefault(b => b.Id == id)?.Kind == BlockKinds.Text) _focusAfterRender = id;
     }
 
     private Task NotifyChangedAsync() => DocumentChanged.InvokeAsync();

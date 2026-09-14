@@ -47,6 +47,28 @@ day-by-day account of building it would say nothing to anyone using it now.
   driving route between them. Each leg shows its distance and time, with a total, and the route opens in Maps.
 - Links in group messages, case messages, feed posts and research pages show a card with the page's title,
   description and picture. While you write, the card appears once the address is finished.
+- A research page's date is added with Add a date and can be taken away again; there is no empty date box.
+- Each block on a research page has one handle beside it: drag it to move the block, click or tap it for the block's
+  options. Clicking into a paragraph puts the cursor where you clicked, and formatted text pasted onto the page
+  arrives with its formatting.
+- Everyone in the group now sees the pictures and files on a published research page; before, only the person who
+  added them could.
+- On a case timeline, times are shown and entered in your own time zone; they were five hours out in the edit
+  window. A new entry starts at the current time, and a client suggesting a different date starts on tomorrow evening.
+- Bold words in notes, messages and research pages are properly bold.
+- A case's messages open at the newest one and stay there as you send.
+- A group's cases list names each case's manager instead of "Unassigned".
+- A group's tab row fades at the edge that has more tabs, scrolls with an ordinary mouse wheel, and brings the chosen
+  tab into view.
+- Members tables say Yes or No for Active; the Clients tab's switch is labelled "Taking new cases".
+- The bell shows "99+" in full, opening a notification scrolls to it, and the desk shows today's date in your time.
+- On Public Investigations, a case you can open only because you are in its group is marked "Not public".
+- The More actions menu on the organizations and page lists opens in full instead of clipped by the table.
+- In dark mode, outlined buttons are readable; in light mode, the logo on phones and the sign-in card, the sidebar's
+  Filter box and the work-waiting banners' links are too.
+- On the investigation request form, example values start "e.g.", the missing address fields are named, and changing
+  a checked address asks for it to be checked again.
+- On a phone, the footer wraps instead of running off the screen, and the home map starts on the pins.
 - SuperAdmins have an Event health tab on the dashboard. It shows holds and how long parties wait for an answer,
   letters going out, errors on event pages, requests turned away by the booking limits, and when each
   background job last ran and whether it failed.

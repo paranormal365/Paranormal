@@ -60,7 +60,11 @@
     private IJSObjectReference? _module;
     private TelerikEditor? _editor;
 
-    private static readonly List<string> StrippedOnPaste = ["script", "style", "iframe", "object", "embed", "form", "link", "meta"];
+    // Tags unwrapped on paste. Not script, style or object: Telerik 14.1's StripTags removes only the tags themselves (a
+    // regex on "<script>" and "</script>"), keeping what is between them — despite its documentation — so listing them put
+    // a script's code, or the CSS in the <style> block Word puts on the clipboard, into the text as paragraphs (UI test pass
+    // 5.13, 2026-09-14). Left alone, the editor's own parser drops those elements whole, contents and all.
+    private static readonly List<string> StrippedOnPaste = ["iframe", "embed", "form", "link", "meta"];
 
     /// <summary>Cleans what is pasted: Office classes and styles, comments, and tags that have no place in a page.</summary>
     [Parameter] public bool CleanPaste { get; set; }

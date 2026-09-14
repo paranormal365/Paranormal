@@ -124,9 +124,9 @@ does the same. On a phone, **Picture** offers the camera.
 ![A research page on a phone](/help/media/working-a-case/research-page-phone.png)
 *On a phone the page is one column, and Files and links folds behind a button above it.*
 
-Drag a block by its handle to move it; on a touch screen, press and hold the handle first. The handle's menu also has
-**Move up**, **Move down**, **Add text below** and **Delete block**, and with the handle focused, Alt and the arrow
-keys move the block.
+Every block has one handle beside it (⋮). Drag the handle to move the block; on a touch screen, press and hold it
+first. Click or tap the handle for **Move up**, **Move down**, **Add text below** and **Delete block**, and with the
+handle focused, Alt and the arrow keys move the block.
 
 ### Files and links
 

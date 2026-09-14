@@ -135,16 +135,46 @@ sent message; transfers; the case header.
 
 ## Layer 5 — Research pages and the block editor
 
-Found before the visual pass, by the new CaseResearchEditorTests (to be confirmed by eye when this layer is reached):
+Walked a research page as the SuperAdmin and read it as James: the title and date, text blocks (typing, bold, lists,
+paste), the Add bar (text, picture, file, link, map), the block handle and its menu, mouse drags, Files & links (Insert,
+Remove), captions, link cards, map places and routes, Save now, Publish, leaving, two tabs — at 1280 and 375. Twenty-one new
+browser tests (`CaseResearchEditorTests`) do each of these the way a person would, and found most of what follows first.
 
-- [ ] **5.1 Pasting formatted text onto the page makes an empty text block.** HTML paste outside a text block inserts a
-  new block but the words never arrive (editor shows an empty paragraph).
-- [ ] **5.2 Words typed straight after clicking back into an earlier text block are lost.** Two blocks, click the first,
-  type ", and more", Save now → the saved first block has no ", and more".
-- [ ] **5.3 Clicking into a drawn text block puts the cursor at the start**, not where the click was: typing " and the
-  second" after pressing End produced " and the secondFrom the first tab".
-- [ ] **5.4 The bulleted-list tool** did not produce a list (test clicked by title; confirm the button and its name).
-- [ ] **5.5 A typed link from the Add bar, then Refresh card, then Save now, stays "Unsaved changes".**
-- [ ] **5.6 Captions test timed out** part way (picture alt/caption, file caption, reader) — find which step.
+- [x] **5.1 Pasting formatted text onto the page made an empty text block.** The new block's editor did not exist yet when
+  the words were handed to it, so they went nowhere. → the paste waits for the new block's editor to appear and is then
+  pasted into it as the browser would, so the editor's own clean-up runs.
+- [x] **5.2 Words typed straight after clicking back into an earlier text block were lost.** Clicking a drawn block opened
+  its editor but left the keyboard on the page, so typing went nowhere. → the editor that opens takes the keyboard.
+- [x] **5.3 Clicking into a drawn text block put the cursor at the start**, not where the click was. A first fix took the
+  click's position on the screen and found the same spot in the editor, and by hand it still landed at the start: the
+  editor draws the same words 14px further in, under a toolbar, so the spot was above the first line. → the click is
+  counted in characters into the words, and the editor's cursor goes after the same character — mid-sentence, or at the
+  end when the click was past the words.
+- [x] **5.4 The bulleted-list tool** — the button was fine ("Insert unordered list"); the test typed before the list
+  appeared, the same round trip as 4.5. → test waits for the bullet, as a person does. *Test fix, not a site defect.*
+- [x] **5.7 Every block had two 44px buttons down its left side** — a drag handle and, below it, a "⋯" menu button that only
+  appeared on hover (so a touch screen never showed it without a tap first) — which made short blocks tall and gave the
+  page a double gutter. → one handle: drag it to move, click or tap it for the menu, Alt+Arrow to move from the keyboard.
+- [x] **5.12 Members could not see pictures or files on a research page.** File access rules covered case files, timeline
+  attachments and published videos, not research: every picture on a published research page was a broken image to the
+  group except the person who uploaded it, and so were the older "File" research entries. → research attachments follow the
+  Research tab's rule (the group's once published; the author's alone before), and older File entries are the group's.
+  `FileAudienceAccessTests`, seen failing first.
+- [x] **5.13 Pasted formatted text brought the code inside it along as words.** A `<script>` in the pasted HTML came out as
+  a paragraph reading its code, and so would the stylesheet Word puts on the clipboard. The editor was told to strip
+  script and style on paste, and Telerik's stripping removes only the tags and keeps what is between them — its
+  documentation says the opposite. → those tags are left to the editor's own parser, which drops them whole.
+- [x] **5.14 Letters typed straight after clicking into a paragraph were lost.** The editor opens after a trip to the
+  server; keys pressed before it arrived went nowhere — every one of " in 1921" in the test, and more on a slow connection.
+  → keys typed in that moment are held and given to the editor when it is ready. Plain characters and Backspace only; a
+  shortcut, Enter or an arrow ends the hold. `WordsTypedTheMomentABlockIsClicked_AreKept`, seen failing with the hold off.
+- [x] **Test fix: "saved" was read before the save.** The Save helper waited for the status to read Clean, which a page
+  already saved once reads before the new save starts; the two-tabs test then closed its second tab mid-save and blamed the
+  first. → the save status counts finished saves (`data-flushes`) and the helper waits for the count to move.
+- [ ] **4.5 again: click B then type at once is not bold.** Telerik's toolbar is a server round trip. → *Not changed*;
+  answered by the next research phase (item 241: the editor runs in the browser).
+
+Measured and fine: a block move, menu open and text-block open each answered in 3–5 ms locally; words typed quickly are all
+kept (an earlier loss was the browser tool's own typing).
 
 ## Layer 6 — Inner workings: seats, persistence, refusals, saving

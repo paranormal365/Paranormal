@@ -72,6 +72,12 @@ public sealed class BlockAutosave : IAsyncDisposable
 
     public DateTimeOffset? LastSavedAt { get; private set; }
 
+    /// <summary>
+    /// How many flushes — Save now, Publish's save, a save on leaving — have finished, whatever they found to do. Shown on
+    /// the save status so a test can wait for the save it asked for, not a "Saved" left over from an earlier one.
+    /// </summary>
+    public int FlushesFinished { get; private set; }
+
     /// <summary>The last failure's or conflict's sentence.</summary>
     public string? Message { get; private set; }
 
@@ -92,9 +98,17 @@ public sealed class BlockAutosave : IAsyncDisposable
     public async Task<bool> FlushAsync(CancellationToken ct = default)
     {
         _wait?.Cancel();
-        if (State == AutosaveState.Conflict) return false;
-        await SaveAsync(ct);
-        return !HasUnsavedChanges;
+        try
+        {
+            if (State == AutosaveState.Conflict) return false;
+            await SaveAsync(ct);
+            return !HasUnsavedChanges;
+        }
+        finally
+        {
+            FlushesFinished++;
+            _changed();
+        }
     }
 
     private void RestartWait()

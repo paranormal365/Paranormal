@@ -167,9 +167,8 @@ public class CaseResearchPageTests : ResearchPageTestBase
         await AddTextAsync("Alpha");
         await AddTextAsync("Beta");
 
-        // The options button shows on the block under the pointer, or the one being worked on.
+        // A click on the block's handle — not a drag — opens its options.
         var first = Page.Locator("section[data-kind=text]").First;
-        await first.HoverAsync();
         await first.Locator("[data-testid=block-menu-toggle]").ClickAsync();
         await Page.Locator("[data-testid=block-menu]").GetByRole(AriaRole.Menuitem, new() { Name = "Move down" }).ClickAsync();
         await SaveNowAsync();
