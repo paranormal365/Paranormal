@@ -263,6 +263,13 @@ builder.Services.AddHostedService<Ben.Data.WebApi.Services.MessageBodySanitizeBa
 // Case notes became formatted text on 2026-09-14: converts the plain-text notes written before then, once.
 builder.Services.AddHostedService<Ben.Data.WebApi.Services.CaseNoteBodyHtmlBackfillService>();
 
+// Link previews (beta feedback, 2026-09-14): the card under a pasted link. The fetcher's handler dials only addresses
+// OutboundUrlGuard approves and follows no redirects on its own — see OpenGraphFetcher.
+builder.Services.AddHttpClient<Ben.Data.WebApi.Services.LinkPreviews.OpenGraphFetcher>()
+    .ConfigurePrimaryHttpMessageHandler(Ben.Data.WebApi.Services.LinkPreviews.OpenGraphFetcher.CreateHandler);
+builder.Services.AddScoped<Ben.Data.WebApi.Services.LinkPreviews.ILinkPreviewService, Ben.Data.WebApi.Services.LinkPreviews.LinkPreviewService>();
+builder.Services.AddSingleton<Ben.Data.WebApi.Services.LinkPreviews.ILinkPreviewWarmer, Ben.Data.WebApi.Services.LinkPreviews.LinkPreviewWarmer>();
+
 // ── Scheduled background work ────────────────────────────────────────────────
 // Jobs are Scoped: the scheduler resolves them from a fresh scope on every pass, so they may take
 // scoped dependencies exactly as a controller does, and nothing holds a database connection open
@@ -283,6 +290,9 @@ builder.Services.AddScoped<Ben.Data.WebApi.Services.Scheduling.IScheduledJob,
 // the audit log, which item 191 settled is archived rather than deleted.
 builder.Services.AddScoped<Ben.Data.WebApi.Services.Scheduling.IScheduledJob,
                            Ben.Data.WebApi.Services.Scheduling.LogRetentionJob>();
+// Link previews (2026-09-14) are week-long snapshots of other sites; this forgets the stale ones.
+builder.Services.AddScoped<Ben.Data.WebApi.Services.Scheduling.IScheduledJob,
+                           Ben.Data.WebApi.Services.LinkPreviews.LinkPreviewRetentionJob>();
 // Item 239: posts what the outbox holds, retries what did not go, and clears the words out of
 // letters that went a month ago. Nothing else sends mail any more.
 builder.Services.AddScoped<Ben.Data.WebApi.Services.Scheduling.IScheduledJob,

@@ -60,7 +60,7 @@ public class MyCaseControllerTests
             emailService ?? CreateUnconfiguredEmailService(), new ConfigurationBuilder().Build(),
             Microsoft.Extensions.Logging.Abstractions.NullLogger<MyCaseController>.Instance, Microsoft.Extensions.Options.Options.Create(new Ben.Data.Common.SiteIdentity()),
             new Ben.Data.WebApi.Services.PlatformMessageService(factory), Ben.Web.Tests.TestMedia.Ingest(),
-            new Ben.Data.WebApi.Services.CmsMarkupSanitizer());
+            new Ben.Data.WebApi.Services.CmsMarkupSanitizer(), Ben.Data.WebApi.Services.LinkPreviews.LinkPreviewWarmer.None);
         ctrl.ControllerContext = new ControllerContext
         {
             HttpContext = new DefaultHttpContext
@@ -79,7 +79,7 @@ public class MyCaseControllerTests
             CreateUnconfiguredEmailService(), new ConfigurationBuilder().Build(),
             Microsoft.Extensions.Logging.Abstractions.NullLogger<MyCaseController>.Instance, Microsoft.Extensions.Options.Options.Create(new Ben.Data.Common.SiteIdentity()),
             new Ben.Data.WebApi.Services.PlatformMessageService(factory), Ben.Web.Tests.TestMedia.Ingest(),
-            new Ben.Data.WebApi.Services.CmsMarkupSanitizer());
+            new Ben.Data.WebApi.Services.CmsMarkupSanitizer(), Ben.Data.WebApi.Services.LinkPreviews.LinkPreviewWarmer.None);
         ctrl.ControllerContext = new ControllerContext
         {
             HttpContext = new DefaultHttpContext { User = new ClaimsPrincipal(new ClaimsIdentity()) }

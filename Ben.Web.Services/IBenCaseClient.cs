@@ -108,6 +108,12 @@ public interface IBenCaseClient
     /// </summary>
     Task<LinkPreview?> GetLinkPreviewAsync(string url, CancellationToken token = default);
 
+    /// <summary>
+    /// Asks the server to make (or refresh) the card for another site's link, as a signed-in person about to post it
+    /// (2026-09-14). Null when the page could not be read or the address is not a web address.
+    /// </summary>
+    Task<LinkPreview?> CreateLinkPreviewAsync(string url, bool refresh = false, CancellationToken token = default);
+
     // ── Cases ─────────────────────────────────────────────────────────────────
 
     Task<LoadResult<CaseRecord>> GetOrgCasesAsync(Guid orgId, CancellationToken token = default);

@@ -135,6 +135,9 @@ public sealed partial class BenAdminClientAdapter
     public Task<LinkPreview?> GetLinkPreviewAsync(string url, CancellationToken token = default)
         => _api.GetAsync<LinkPreview>($"/api/public/link-preview?url={Uri.EscapeDataString(url)}", token);
 
+    public Task<LinkPreview?> CreateLinkPreviewAsync(string url, bool refresh = false, CancellationToken token = default)
+        => _api.PostAsync<object, LinkPreview>("/api/link-previews", new { Url = url, Refresh = refresh }, token);
+
     public Task<bool> ReportCaseCommentAsync(Guid caseId, Guid commentId, string? reason, CancellationToken token = default)
         => _api.PostVoidAsync(
                $"/api/public/cases/{caseId}/comments/{commentId}/report", new { Reason = reason }, token);

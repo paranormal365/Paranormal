@@ -28,7 +28,7 @@ public class CaseMessageControllerTests
 
     private static CaseMessageController BuildController(IDbContextFactory<BenDataContext> factory, Guid userId)
     {
-        var ctrl = new CaseMessageController(factory, new Ben.Data.WebApi.Services.Billing.SubscriptionLimitGuard(factory), new Ben.Service.RepositoryService.Services.OrganizationSecurityService(factory), new Ben.Data.WebApi.Services.CmsMarkupSanitizer());
+        var ctrl = new CaseMessageController(factory, new Ben.Data.WebApi.Services.Billing.SubscriptionLimitGuard(factory), new Ben.Service.RepositoryService.Services.OrganizationSecurityService(factory), new Ben.Data.WebApi.Services.CmsMarkupSanitizer(), Ben.Data.WebApi.Services.LinkPreviews.LinkPreviewWarmer.None);
         ctrl.ControllerContext = new ControllerContext
         {
             HttpContext = new DefaultHttpContext
@@ -42,7 +42,7 @@ public class CaseMessageControllerTests
 
     private static CaseMessageController BuildAnonymous(IDbContextFactory<BenDataContext> factory)
     {
-        var ctrl = new CaseMessageController(factory, new Ben.Data.WebApi.Services.Billing.SubscriptionLimitGuard(factory), new Ben.Service.RepositoryService.Services.OrganizationSecurityService(factory), new Ben.Data.WebApi.Services.CmsMarkupSanitizer());
+        var ctrl = new CaseMessageController(factory, new Ben.Data.WebApi.Services.Billing.SubscriptionLimitGuard(factory), new Ben.Service.RepositoryService.Services.OrganizationSecurityService(factory), new Ben.Data.WebApi.Services.CmsMarkupSanitizer(), Ben.Data.WebApi.Services.LinkPreviews.LinkPreviewWarmer.None);
         ctrl.ControllerContext = new ControllerContext
         {
             HttpContext = new DefaultHttpContext { User = new ClaimsPrincipal(new ClaimsIdentity()) }
@@ -231,6 +231,31 @@ public class CaseMessageControllerTests
         var result = await BuildController(factory, userId).PostMessage(orgId, caseId,
             new PostCaseMessageRequest(BodyHtml: html), default);
         Assert.IsType<BadRequestObjectResult>(result.Result);
+    }
+
+    /// <summary>Records what a post asked to have previews made for.</summary>
+    private sealed class RecordingWarmer : Ben.Data.WebApi.Services.LinkPreviews.ILinkPreviewWarmer
+    {
+        public readonly List<(string? Text, string? Html, Guid User)> Calls = [];
+        public void WarmFrom(string? text, string? html, Guid userId) => Calls.Add((text, html, userId));
+    }
+
+    [Fact]
+    public async Task PostMessage_AsksForTheCardsOfItsLinks_AfterItIsSaved()
+    {
+        var (factory, orgId, caseId, userId) = await SeedAsync();
+        var warmer = new RecordingWarmer();
+        var ctrl = new CaseMessageController(factory, new Ben.Data.WebApi.Services.Billing.SubscriptionLimitGuard(factory),
+            new Ben.Service.RepositoryService.Services.OrganizationSecurityService(factory), new Ben.Data.WebApi.Services.CmsMarkupSanitizer(), warmer)
+        {
+            ControllerContext = BuildController(factory, userId).ControllerContext,
+        };
+
+        await ctrl.PostMessage(orgId, caseId, new PostCaseMessageRequest(BodyHtml: "<p>See <a href=\"https://example.com/deed\">the deed</a></p>"), default);
+
+        var call = Assert.Single(warmer.Calls);
+        Assert.Equal(userId, call.User);
+        Assert.Single(Ben.Data.WebApi.Services.LinkPreviews.LinkPreviewWarmer.LinksIn(call.Text, call.Html), "https://example.com/deed");
     }
 
     [Fact]

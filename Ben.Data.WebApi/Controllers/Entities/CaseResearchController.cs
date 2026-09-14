@@ -41,9 +41,13 @@ public sealed class CaseResearchController : BenControllerBase
     public CaseResearchController(IDbContextFactory<BenDataContext> db, IFileStorageService fileStorage,
         IMediaIngestService mediaIngest, IAvMetadataStripper avStripper,
         Ben.Service.RepositoryService.GenericInterfaces.IOrganizationSecurityService security,
-        ICmsMarkupSanitizer sanitizer)
+        ICmsMarkupSanitizer sanitizer,
+        Services.LinkPreviews.ILinkPreviewService previews)
     { _db = db; _fileStorage = fileStorage; _mediaIngest = mediaIngest;
-        _avStripper  = avStripper; _security = security; _sanitizer = sanitizer; }
+        _avStripper  = avStripper; _security = security; _sanitizer = sanitizer; _previews = previews; }
+
+    /// <summary>The card for a link added to a page's rail (2026-09-14).</summary>
+    private readonly Services.LinkPreviews.ILinkPreviewService _previews;
 
     [HttpGet]
     public async Task<ActionResult<IEnumerable<CaseResearchEntryDto>>> GetAll(Guid orgId, Guid caseId, CancellationToken ct)
@@ -322,7 +326,7 @@ public sealed class CaseResearchController : BenControllerBase
         entry.UpdatedByAppUserId = userId;
         await db.SaveChangesAsync(ct);
 
-        entry.Attachments = await db.CaseResearchAttachments.AsNoTracking().Include(a => a.UploadFile)
+        entry.Attachments = await db.CaseResearchAttachments.AsNoTracking().Include(a => a.UploadFile).Include(a => a.LinkPreview)
             .Where(a => a.ResearchEntryId == entryId).ToListAsync(ct);
         return Ok(await PageDtoAsync(db, entry, userId, showDraft: false, ct));
     }
@@ -373,20 +377,37 @@ public sealed class CaseResearchController : BenControllerBase
         if (!Uri.TryCreate(request.Url?.Trim(), UriKind.Absolute, out var url) || url.Scheme is not ("http" or "https") || url.AbsoluteUri.Length > 2000)
             return BadRequest("That isn't a web address. It should start with http:// or https://.");
 
-        // The same address pasted twice is one entry in the rail.
-        var existing = await db.CaseResearchAttachments.AsNoTracking()
+        // The card: fetched now, behind the preview service's guards and this person's budget. A page that cannot be
+        // read still becomes a rail entry — its card shows the host.
+        var preview = await _previews.GetOrFetchAsync(url.AbsoluteUri, userId, request.RefreshPreview, ct);
+
+        // The same address pasted twice is one entry in the rail; pasting it again, or "Refresh preview", updates its card.
+        var existing = await db.CaseResearchAttachments.Include(a => a.LinkPreview)
             .FirstOrDefaultAsync(a => a.ResearchEntryId == entryId && a.Kind == CaseResearchAttachmentKind.Link && a.Url == url.AbsoluteUri, ct);
-        if (existing is not null) return Ok(ToAttachmentDto(existing));
+        if (existing is not null)
+        {
+            if (preview is not null && existing.LinkPreviewId != preview.Id)
+            {
+                existing.LinkPreviewId = preview.Id;
+                await db.SaveChangesAsync(ct);
+            }
+            existing.LinkPreview = preview ?? existing.LinkPreview;
+            return Ok(ToAttachmentDto(existing));
+        }
 
         var attachment = new CaseResearchAttachment
         {
             Id = Guid.NewGuid(), ResearchEntryId = entryId, Kind = CaseResearchAttachmentKind.Link,
-            Url = url.AbsoluteUri, Title = Truncate(string.IsNullOrWhiteSpace(request.Title) ? url.Host : request.Title.Trim(), 300),
+            Url = url.AbsoluteUri,
+            Title = Truncate(!string.IsNullOrWhiteSpace(request.Title) ? request.Title.Trim()
+                           : preview is { Fetched: true, Title: { } t } ? t : url.Host, 300),
+            LinkPreviewId = preview?.Id,
             SortOrder = await NextRailOrderAsync(db, entryId, ct),
             DateCreated = DateTime.UtcNow, CreatedByAppUserId = userId,
         };
         db.CaseResearchAttachments.Add(attachment);
         await db.SaveChangesAsync(ct);
+        attachment.LinkPreview = preview;
         return Ok(ToAttachmentDto(attachment));
     }
 
@@ -426,6 +447,7 @@ public sealed class CaseResearchController : BenControllerBase
     private static Task<CaseResearchEntry?> LoadPageEntryAsync(BenDataContext db, Guid caseId, Guid entryId, CancellationToken ct) =>
         db.CaseResearchEntries.AsNoTracking()
             .Include(e => e.Attachments).ThenInclude(a => a.UploadFile)
+            .Include(e => e.Attachments).ThenInclude(a => a.LinkPreview)
             .FirstOrDefaultAsync(e => e.Id == entryId && e.CaseId == caseId && e.ResearchType == CaseResearchType.Note, ct);
 
     /// <summary>The name of whoever else holds an unpublished draft of this page, or null.</summary>
@@ -547,7 +569,8 @@ public sealed class CaseResearchController : BenControllerBase
     private static CaseResearchAttachmentDto ToAttachmentDto(CaseResearchAttachment a) => new(
         a.Id, a.Kind, a.Title,
         a.UploadFileId, a.UploadFile?.FileName, a.UploadFile?.ContentType, a.UploadFile?.FileSize,
-        a.Url, a.SortOrder, a.DateCreated);
+        a.Url, a.SortOrder, a.DateCreated,
+        a.LinkPreview is { Fetched: true } p ? LinkPreviewsController.ToCard(p) : null);
 }
 
 public sealed record UpsertResearchRequest(
@@ -608,7 +631,8 @@ public sealed record CaseResearchAttachmentDto(
     long? FileSize,
     string? Url,
     int SortOrder,
-    DateTime DateCreated);
+    DateTime DateCreated,
+    Ben.Service.Models.Entities.LinkPreview? Preview = null);
 
 /// <param name="ClientSaveId">A new id for each save the editor makes; the same id again is a retry.</param>
 public sealed record SaveResearchDraftRequest(

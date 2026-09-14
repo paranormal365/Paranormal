@@ -38,7 +38,7 @@ public class CaseResearchControllerTests
         storage.Setup(s => s.DeleteAsync(It.IsAny<string>(), It.IsAny<CancellationToken>()))
                .Returns(Task.CompletedTask);
 
-        var ctrl = new CaseResearchController(factory, storage.Object, Ben.Web.Tests.TestMedia.Ingest(), Ben.Web.Tests.TestMedia.Stripper(), new Ben.Service.RepositoryService.Services.OrganizationSecurityService(factory), new Ben.Data.WebApi.Services.CmsMarkupSanitizer());
+        var ctrl = new CaseResearchController(factory, storage.Object, Ben.Web.Tests.TestMedia.Ingest(), Ben.Web.Tests.TestMedia.Stripper(), new Ben.Service.RepositoryService.Services.OrganizationSecurityService(factory), new Ben.Data.WebApi.Services.CmsMarkupSanitizer(), new Ben.Web.Tests.FakeLinkPreviews());
         ctrl.ControllerContext = new ControllerContext
         {
             HttpContext = new DefaultHttpContext

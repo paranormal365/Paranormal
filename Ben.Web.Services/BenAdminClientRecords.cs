@@ -1452,7 +1452,8 @@ public sealed record CaseResearchAttachmentDto(
     long? FileSize,
     string? Url,
     int SortOrder,
-    DateTime DateCreated);
+    DateTime DateCreated,
+    Ben.Service.Models.Entities.LinkPreview? Preview = null);
 
 public sealed record SaveResearchDraftRequest(
     Ben.Data.Common.Blocks.BlockDocument Document,

@@ -55,7 +55,7 @@ public sealed class UserBlockTests
                new Ben.Data.WebApi.Services.Feed.FeedLearningService(
                    TestMedia.StorageOnDisk(MediaRoot),
                    Microsoft.Extensions.Logging.Abstractions.NullLogger<Ben.Data.WebApi.Services.Feed.FeedLearningService>.Instance),
-               Microsoft.Extensions.Logging.Abstractions.NullLogger<FeedController>.Instance)
+               Microsoft.Extensions.Logging.Abstractions.NullLogger<FeedController>.Instance, Ben.Data.WebApi.Services.LinkPreviews.LinkPreviewWarmer.None)
         { ControllerContext = As(userId) };
 
     private static AppUser MakeUser(string handle) => new()
@@ -269,7 +269,7 @@ public sealed class UserBlockTests
             new Ben.Data.WebApi.Services.Feed.FeedLearningService(
                 TestMedia.StorageOnDisk(MediaRoot),
                 Microsoft.Extensions.Logging.Abstractions.NullLogger<Ben.Data.WebApi.Services.Feed.FeedLearningService>.Instance),
-            Microsoft.Extensions.Logging.Abstractions.NullLogger<FeedController>.Instance)
+            Microsoft.Extensions.Logging.Abstractions.NullLogger<FeedController>.Instance, Ben.Data.WebApi.Services.LinkPreviews.LinkPreviewWarmer.None)
         { ControllerContext = new ControllerContext { HttpContext = new DefaultHttpContext { User = new ClaimsPrincipal(new ClaimsIdentity()) } } };
 
         var result = await anonymous.GetFeed(null, null, null, CancellationToken.None);

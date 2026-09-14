@@ -34,6 +34,9 @@ public sealed class MyCaseController : BenControllerBase
     /// <summary>For the formatted copy of a client's message (2026-09-14) — see CaseMessageBodies.</summary>
     private readonly Services.ICmsMarkupSanitizer _sanitizer;
 
+    /// <summary>Makes the cards for links in a client's message once it is saved (2026-09-14).</summary>
+    private readonly Ben.Data.WebApi.Services.LinkPreviews.ILinkPreviewWarmer _previews;
+
     // Fixed Guid for the 'Case Evidence' upload file type seeded by UploadFileTypeSeeder
     private static readonly Guid EvidenceFileTypeId = new("20000000-0000-0000-0000-000000000001");
 
@@ -43,9 +46,11 @@ public sealed class MyCaseController : BenControllerBase
         Microsoft.Extensions.Options.IOptions<Ben.Data.Common.SiteIdentity> site,
         Services.PlatformMessageService messages,
         Services.IMediaIngestService mediaIngest,
-        Services.ICmsMarkupSanitizer sanitizer)
+        Services.ICmsMarkupSanitizer sanitizer,
+        Ben.Data.WebApi.Services.LinkPreviews.ILinkPreviewWarmer previews)
     {
         _sanitizer = sanitizer;
+        _previews = previews;
         _db = db; _mapper = mapper; _fileStorage = fileStorage; _metadataExtractor = metadataExtractor; _auditLog = auditLog;
         _emailService = emailService; _configuration = configuration; _logger = logger;
         _site = site.Value;
@@ -734,6 +739,7 @@ public sealed class MyCaseController : BenControllerBase
         };
         db.CaseMessages.Add(msg);
         await db.SaveChangesAsync(ct);
+        _previews.WarmFrom(msg.Body, msg.BodyHtml, userId);
 
         await db.Entry(msg).Reference(m => m.AuthorAppUser).LoadAsync(ct);
         return Ok(ToRecord(msg));

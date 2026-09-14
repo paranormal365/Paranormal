@@ -29,10 +29,12 @@ public sealed class ResearchPageTests : IAsyncLifetime
     private readonly Guid _author = Guid.NewGuid();
     private readonly Guid _colleague = Guid.NewGuid();
     private readonly Mock<IFileStorageService> _storage = new();
+    private FakeLinkPreviews _previews = null!;
 
     public async Task InitializeAsync()
     {
         _sqlite = await SqliteTestDb.CreateAsync();
+        _previews = new FakeLinkPreviews(_sqlite.Factory);
         await using var db = await _sqlite.NewContextAsync();
         var now = DateTime.UtcNow;
         db.Users.Add(new AppUser { Id = _author, UserName = "sarah@t.test", Email = "sarah@t.test", DisplayName = "Sarah Mitchell", DateCreated = now });
@@ -65,7 +67,7 @@ public sealed class ResearchPageTests : IAsyncLifetime
 
     private CaseResearchController As(Guid userId) => new(
         _sqlite.Factory, _storage.Object, TestMedia.Ingest(), TestMedia.Stripper(),
-        new Ben.Service.RepositoryService.Services.OrganizationSecurityService(_sqlite.Factory), new CmsMarkupSanitizer())
+        new Ben.Service.RepositoryService.Services.OrganizationSecurityService(_sqlite.Factory), new CmsMarkupSanitizer(), _previews)
     {
         ControllerContext = new ControllerContext
         {
@@ -333,12 +335,22 @@ public sealed class ResearchPageTests : IAsyncLifetime
     }
 
     [Fact]
-    public async Task A_link_in_the_rail_is_kept_once_per_address_and_must_be_a_web_address()
+    public async Task A_link_in_the_rail_is_kept_once_per_address_with_its_card_and_must_be_a_web_address()
     {
         var page = await NewPageAsync(_author);
         var first = Value(await As(_author).AddLinkAttachment(_orgId, _caseId, page, new AddResearchLinkRequest("https://example.com/census"), default));
         var again = Value(await As(_author).AddLinkAttachment(_orgId, _caseId, page, new AddResearchLinkRequest("https://example.com/census"), default));
         Assert.Equal(first.Id, again.Id);
+        Assert.Equal("Page at example.com", first.Preview?.Title);
+        Assert.Equal("Page at example.com", first.Title);
+        Assert.Single(_previews.Fetched);   // the second paste used the kept card
+
+        Value(await As(_author).AddLinkAttachment(_orgId, _caseId, page, new AddResearchLinkRequest("https://example.com/census", RefreshPreview: true), default));
+        Assert.Equal(2, _previews.Fetched.Count);
+
+        var rail = Value(await As(_author).GetPage(_orgId, _caseId, page, default)).Attachments;
+        Assert.Equal("example.com", Assert.Single(rail).Preview?.Domain);
+
         Assert.IsType<BadRequestObjectResult>((await As(_author).AddLinkAttachment(_orgId, _caseId, page, new AddResearchLinkRequest("ftp://example.com"), default)).Result);
     }
 

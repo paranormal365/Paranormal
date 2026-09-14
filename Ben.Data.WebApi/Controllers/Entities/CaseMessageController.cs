@@ -21,8 +21,11 @@ public sealed class CaseMessageController : BenControllerBase
         IDbContextFactory<BenDataContext> db,
         Services.Billing.SubscriptionLimitGuard limits,
         Ben.Service.RepositoryService.GenericInterfaces.IOrganizationSecurityService security,
-        Services.ICmsMarkupSanitizer sanitizer)
-    { _db = db; _limits = limits; _security = security; _sanitizer = sanitizer; }
+        Services.ICmsMarkupSanitizer sanitizer,
+        Ben.Data.WebApi.Services.LinkPreviews.ILinkPreviewWarmer previews)
+    { _db = db; _limits = limits; _security = security; _sanitizer = sanitizer; _previews = previews; }
+
+    private readonly Ben.Data.WebApi.Services.LinkPreviews.ILinkPreviewWarmer _previews;
 
     private readonly Services.ICmsMarkupSanitizer _sanitizer;
 
@@ -91,6 +94,7 @@ public sealed class CaseMessageController : BenControllerBase
         };
         db.CaseMessages.Add(msg);
         await db.SaveChangesAsync(ct);
+        _previews.WarmFrom(msg.Body, msg.BodyHtml, userId);
 
         await db.Entry(msg).Reference(m => m.AuthorAppUser).LoadAsync(ct);
         return Ok(ToRecord(msg));

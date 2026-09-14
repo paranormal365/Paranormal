@@ -14,8 +14,13 @@ namespace Ben.Data.WebApi.Controllers.Public;
 /// <para><b>Nothing here fetches anything.</b> A preview that went and read the target page would
 /// be a request this server makes to an address a stranger chose, which is the shape of every
 /// server-side request forgery there has ever been — an internal address, a cloud metadata
-/// endpoint, a slow host that ties up a thread. So this answers for OUR OWN addresses, out of our
-/// own records, and says nothing about anybody else's beyond the host they name.</para>
+/// endpoint, a slow host that ties up a thread. So this answers for OUR OWN addresses out of our
+/// own records, and for anybody else's only with a preview already KEPT.</para>
+///
+/// <para><b>Kept previews (2026-09-14).</b> Ben asked for cards like a pasted link on X. Those are
+/// fetched through <c>LinkPreviewService</c>, behind its guards, and only when a signed-in person
+/// posts or pastes the link (<c>api/link-previews</c>, and the posting endpoints). This anonymous
+/// endpoint still never fetches: it reads what was kept, or answers 404 and the card shows the host.</para>
 ///
 /// <para>That is also the better preview. A case's title, its group and its status are facts we
 /// hold, correct at the moment of asking, and they stay correct when the case is renamed — which
@@ -28,9 +33,11 @@ public sealed class PublicLinkPreviewController : ControllerBase
 {
     private readonly IDbContextFactory<BenDataContext> _db;
     private readonly IConfiguration _configuration;
+    private readonly Ben.Data.WebApi.Services.LinkPreviews.ILinkPreviewService _kept;
 
-    public PublicLinkPreviewController(IDbContextFactory<BenDataContext> db, IConfiguration configuration)
-    { _db = db; _configuration = configuration; }
+    public PublicLinkPreviewController(IDbContextFactory<BenDataContext> db, IConfiguration configuration,
+        Ben.Data.WebApi.Services.LinkPreviews.ILinkPreviewService kept)
+    { _db = db; _configuration = configuration; _kept = kept; }
 
     /// <summary>What we can say about <paramref name="url"/>, or 404 when it is not one of ours.</summary>
     [HttpGet]
@@ -42,7 +49,12 @@ public sealed class PublicLinkPreviewController : ControllerBase
         // A relative path is ours by construction; an absolute one is ours only if it names this
         // site. Anything else gets no lookup at all.
         var path = PathOfOurs(url);
-        if (path is null) return NotFound();
+        if (path is null)
+        {
+            // Somebody else's page: a card only if one was kept, and only one that was actually read.
+            var kept = await _kept.FindAsync(url, ct);
+            return kept is { Fetched: true } ? Ok(LinkPreviewsController.ToCard(kept)) : NotFound();
+        }
 
         var parts = path.Trim('/').Split('/', StringSplitOptions.RemoveEmptyEntries);
 

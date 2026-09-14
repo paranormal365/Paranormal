@@ -24,10 +24,14 @@ public sealed class OrgMessageController : BenControllerBase
     public OrgMessageController(
         IDbContextFactory<BenDataContext> db, IMapper mapper,
         Ben.Service.RepositoryService.GenericInterfaces.IOrganizationSecurityService security,
-        Ben.Data.WebApi.Services.ICmsMarkupSanitizer sanitizer)
+        Ben.Data.WebApi.Services.ICmsMarkupSanitizer sanitizer,
+        Ben.Data.WebApi.Services.LinkPreviews.ILinkPreviewWarmer previews)
     {
-        _db = db; _mapper = mapper; _security = security; _sanitizer = sanitizer;
+        _db = db; _mapper = mapper; _security = security; _sanitizer = sanitizer; _previews = previews;
     }
+
+    /// <summary>Makes the cards for links in a message once it is saved (2026-09-14).</summary>
+    private readonly Ben.Data.WebApi.Services.LinkPreviews.ILinkPreviewWarmer _previews;
 
     /// <summary>
     /// Whether the caller belongs to this organization at all.
@@ -225,6 +229,7 @@ public sealed class OrgMessageController : BenControllerBase
         }
 
         await db.SaveChangesAsync(ct);
+        _previews.WarmFrom(text: null, html: message.Body, userId);
 
         var loaded = await db.OrgMessages.AsNoTracking()
             .Include(m => m.AuthorAppUser)

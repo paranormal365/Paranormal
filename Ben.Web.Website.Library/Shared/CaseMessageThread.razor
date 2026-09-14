@@ -76,6 +76,7 @@ else
     @* Keyed by the number of messages sent: after a send the box is a new editor, so a keystroke update still on
        its way from the old one (Telerik reports typing on a debounce) cannot put the sent words back. *@
     <BenEditor @key="_composeGeneration" @ref="_compose" @bind-Value="@_draft" Height="130px" Tools="@Ben.Web.Website.Library.Organization.Cases.CaseEditorTools.Prose" />
+    <BenComposerLinkCard Html="@_draft" />
     <div class="d-flex justify-content-end mt-2">
         <button type="button" class="btn btn-primary" id="case-thread-send"
                 disabled="@_sending"

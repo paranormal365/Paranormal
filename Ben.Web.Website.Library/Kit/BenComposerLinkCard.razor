@@ -1,0 +1,31 @@
+@namespace Ben.Web.Website.Library.Kit
+@using Ben.Data.Common.Helpers
+
+@*
+    The card for the first link in something being written, shown under the box while it is written — and, by asking
+    for it now, ready on the message by the time it is sent (Ben, 2026-09-14: like pasting a link on X).
+
+    Only a link that is finished: one with a space or a new line after it, or one made with the editor's link button.
+    A link still being typed is a new address at every keystroke, and asking for each would read a dozen pages that do
+    not exist and spend the person's preview budget before the address was even complete. A link pasted and sent at
+    once still gets its card: the server makes it after the message is saved.
+
+    Only the first link, as a sent message shows only the first.
+*@
+
+@if (FirstFinishedLink is { } link)
+{
+    <div class="mt-2" data-testid="composer-link-card">
+        <BenLinkPreview Url="@link" EnsureFetched="true" />
+    </div>
+}
+
+@code {
+    /// <summary>What is being written as plain text.</summary>
+    [Parameter] public string? Text { get; set; }
+
+    /// <summary>What is being written as HTML, from an editor.</summary>
+    [Parameter] public string? Html { get; set; }
+
+    private string? FirstFinishedLink => PostLinks.FirstFinished(Text, Html);
+}

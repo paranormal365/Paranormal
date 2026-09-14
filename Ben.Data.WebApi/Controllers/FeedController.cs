@@ -54,14 +54,19 @@ public sealed class FeedController : BenControllerBase
     private readonly FeedLearningService _learning;
     private readonly ILogger<FeedController> _logger;
 
+    /// <summary>Makes the cards for links in a post once it is saved (2026-09-14).</summary>
+    private readonly Ben.Data.WebApi.Services.LinkPreviews.ILinkPreviewWarmer _previews;
+
     public FeedController(
         IDbContextFactory<BenDataContext> db,
         IFileStorageService fileStorage,
         IMediaIngestService mediaIngest,
         IFeedMediaScreener screener,
         FeedLearningService learning,
-        ILogger<FeedController> logger)
+        ILogger<FeedController> logger,
+        Ben.Data.WebApi.Services.LinkPreviews.ILinkPreviewWarmer previews)
     {
+        _previews = previews;
         _db = db;
         _fileStorage = fileStorage;
         _mediaIngest = mediaIngest;
@@ -478,6 +483,8 @@ public sealed class FeedController : BenControllerBase
         }
 
         await db.SaveChangesAsync(ct);
+        // The cards for the post's links, made in the background (2026-09-14).
+        _previews.WarmFrom(body, html: null, userId);
 
         // ── Features + category-match score (item 186 F6) ────────────────────
         // After the save so the extractor reads the committed metadata row. Fails OPEN into an

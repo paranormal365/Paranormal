@@ -46,7 +46,7 @@ public sealed class FeedControllerTests
                new Ben.Data.WebApi.Services.Feed.FeedLearningService(
                    Ben.Web.Tests.TestMedia.StorageOnDisk(MediaRoot),
                    Microsoft.Extensions.Logging.Abstractions.NullLogger<Ben.Data.WebApi.Services.Feed.FeedLearningService>.Instance),
-               Microsoft.Extensions.Logging.Abstractions.NullLogger<FeedController>.Instance)
+               Microsoft.Extensions.Logging.Abstractions.NullLogger<FeedController>.Instance, Ben.Data.WebApi.Services.LinkPreviews.LinkPreviewWarmer.None)
         {
             ControllerContext = new ControllerContext
             {
@@ -66,7 +66,7 @@ public sealed class FeedControllerTests
                new Ben.Data.WebApi.Services.Feed.FeedLearningService(
                    Ben.Web.Tests.TestMedia.StorageOnDisk(MediaRoot),
                    Microsoft.Extensions.Logging.Abstractions.NullLogger<Ben.Data.WebApi.Services.Feed.FeedLearningService>.Instance),
-               Microsoft.Extensions.Logging.Abstractions.NullLogger<FeedController>.Instance)
+               Microsoft.Extensions.Logging.Abstractions.NullLogger<FeedController>.Instance, Ben.Data.WebApi.Services.LinkPreviews.LinkPreviewWarmer.None)
         {
             ControllerContext = new ControllerContext
             {
@@ -104,7 +104,7 @@ public sealed class FeedControllerTests
                new Ben.Data.WebApi.Services.Feed.FeedLearningService(
                    Ben.Web.Tests.TestMedia.StorageOnDisk(MediaRoot),
                    Microsoft.Extensions.Logging.Abstractions.NullLogger<Ben.Data.WebApi.Services.Feed.FeedLearningService>.Instance),
-               Microsoft.Extensions.Logging.Abstractions.NullLogger<FeedController>.Instance)
+               Microsoft.Extensions.Logging.Abstractions.NullLogger<FeedController>.Instance, Ben.Data.WebApi.Services.LinkPreviews.LinkPreviewWarmer.None)
         {
             ControllerContext = new ControllerContext
             {
