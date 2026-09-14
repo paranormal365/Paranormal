@@ -60,12 +60,44 @@ public sealed class LocalFileStorageService : IFileStorageService
             {
                 await data.CopyToAsync(fs, ct);
             }
-            File.Move(partial, fullPath, overwrite: true);
+            ReplaceWith(partial, fullPath);
         }
         catch
         {
             File.Delete(partial);
             throw;
+        }
+    }
+
+    /// <summary>Puts a finished partial file in place of the target, in one step, even while the target is being read.</summary>
+    /// <remarks>
+    /// <para><b>Not <c>File.Move(overwrite: true)</c>, which fails on Windows and Windows is production.</b> It maps to
+    /// <c>MoveFileEx</c> with <c>REPLACE_EXISTING</c>, and that refuses to replace a file any handle has open - even one
+    /// opened with <c>FileShare.Delete</c>, which <see cref="OpenReadAsync"/> grants precisely so that a replace could
+    /// happen. Measured on the production box, 2026-09-14, against a reader holding exactly that sharing:
+    /// <c>File.Move</c> overwrite threw <c>UnauthorizedAccessException</c>; <c>File.Replace</c> succeeded and the open
+    /// reader went on reading the old bytes; delete-then-move also succeeded but leaves a moment where the file is
+    /// not there at all, which is the half-state this method exists to prevent. macOS allows the move, so a
+    /// Mac-only run of <c>A_file_open_for_reading_can_still_be_replaced</c> never saw it.</para>
+    ///
+    /// <para><c>File.Replace</c> needs a target to replace, so a first write moves instead. If another writer creates
+    /// the target in between, the move finds it there and the replace is the right answer after all.</para>
+    /// </remarks>
+    private static void ReplaceWith(string partial, string fullPath)
+    {
+        if (File.Exists(fullPath))
+        {
+            File.Replace(partial, fullPath, destinationBackupFileName: null);
+            return;
+        }
+
+        try
+        {
+            File.Move(partial, fullPath);
+        }
+        catch (IOException) when (File.Exists(fullPath))
+        {
+            File.Replace(partial, fullPath, destinationBackupFileName: null);
         }
     }
 
