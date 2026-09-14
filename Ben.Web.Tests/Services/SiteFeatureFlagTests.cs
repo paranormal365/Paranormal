@@ -80,17 +80,23 @@ public sealed class SiteFeatureFlagTests
     }
 
     [Fact]
-    public void The_two_unbuilt_features_are_off_until_someone_turns_them_on()
+    public void The_unbuilt_features_are_off_until_someone_turns_them_on()
     {
         // The whole point of shipping these flags before the features: a half-built section must
         // not be reachable because a default was written optimistically.
         Assert.False(SiteSettingKeys.DefaultFor(SiteSettingKeys.FeaturePublicFeed));
         Assert.False(SiteSettingKeys.DefaultFor(SiteSettingKeys.FeaturePublications));
 
+        // The canvas editor (2026-09-14) is unbuilt too, and its flag also gates the link-unfurl
+        // fetcher: a default of on would switch on server-side fetching of strangers' pages the
+        // moment the API deployed.
+        Assert.False(SiteSettingKeys.DefaultFor(SiteSettingKeys.FeatureCanvasEditor));
+
         // ...and everything that already works must stay working when the flags ship.
         foreach (var (key, defaultWhenUnset) in SiteSettingKeys.FeatureDefaults)
         {
-            if (key is SiteSettingKeys.FeaturePublicFeed or SiteSettingKeys.FeaturePublications)
+            if (key is SiteSettingKeys.FeaturePublicFeed or SiteSettingKeys.FeaturePublications
+                    or SiteSettingKeys.FeatureCanvasEditor)
                 continue;
 
             Assert.True(defaultWhenUnset,
