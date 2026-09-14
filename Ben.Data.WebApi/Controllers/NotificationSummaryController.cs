@@ -260,7 +260,11 @@ public sealed class NotificationSummaryController : BenControllerBase
                     .Where(a => a.SeatStatus == TourSeatStatus.Requested
                              && myAdminOrgIds.Contains(a.OrgCalendarEvent.OrganizationId)
                              // A night already past is not a decision anybody still needs to make.
-                             && a.OrgCalendarEvent.StartDateTime > DateTime.UtcNow)
+                             && a.OrgCalendarEvent.StartDateTime > DateTime.UtcNow
+                             // Item 235: an umbrella row's requested seats belong to a hosted
+                             // event's own bucket below. Counting them here would put a hotel
+                             // weekend behind a bell row that lands on a walk's screen.
+                             && a.OrgCalendarEvent.HostedEventId == null)
                     .Select(a => (DateTime?)a.DateCreated),
                 ct);
 
@@ -272,9 +276,135 @@ public sealed class NotificationSummaryController : BenControllerBase
                          && a.SeatStatus != null
                          && a.SeatStatus != TourSeatStatus.Requested
                          && a.GuestAcknowledgedUtc == null
-                         && a.OrgCalendarEvent.StartDateTime > DateTime.UtcNow)
+                         && a.OrgCalendarEvent.StartDateTime > DateTime.UtcNow
+                         && a.OrgCalendarEvent.HostedEventId == null)
                 // Dated by the DECISION, so "waiting since" means since somebody answered them.
                 .Select(a => a.SeatDecidedUtc),
+            ct);
+
+        // ── Hosted events, the same two sides (item 235 phase 2.3) ───────────
+        // Read off the BOOKING rather than the umbrella attendee row, because the booking is where
+        // a hosted event's truth lives: a request has no attendee row at all until somebody
+        // confirms it, so counting attendees would show a venue an empty queue.
+        // ── Hosted-event bookings (item 235) ─────────────────────────────────
+        // WHO DECIDES is whoever HostedEventAccess says may (phase 8): owners and administrators,
+        // anybody whose role grants EventBooking.Update, and the event's own staff handed Decides.
+        // The bell used to ask only the first of those, so a steward told to answer requests was
+        // never told there were any.
+        var deciderOrgIds = new HashSet<Guid>(myAdminOrgIds);
+        foreach (var orgId in myOrgIds.Where(o => !deciderOrgIds.Contains(o)))
+        {
+            if (await _security.HasAccessAsync(userId, orgId, OrganizationSecurityTable.EventBooking,
+                                               OrganizationSecurityAction.Update, ct))
+                deciderOrgIds.Add(orgId);
+        }
+
+        var staffEventIds = await db.HostedEventStaff.AsNoTracking()
+            .Where(x => x.AppUserId == userId && x.DateConfirmed != null && x.Decides)
+            .Select(x => x.HostedEventId)
+            .ToListAsync(ct);
+
+        var now = DateTime.UtcNow;
+        var lapsingBy = now + Services.Events.EventBookingDigest.SoonLapsing;
+
+        var decidable = db.HostedEventBookings.AsNoTracking()
+            .Where(b => (deciderOrgIds.Contains(b.HostedEvent.OrganizationId)
+                      || staffEventIds.Contains(b.HostedEventId))
+                     // Their own booking is not a decision waiting on them.
+                     && b.LeadAppUserId != userId
+                     // A weekend already over is not a decision anybody still needs to make.
+                     && b.HostedEvent.EndsOn >= now.Date);
+
+        var anyDecider = deciderOrgIds.Count > 0 || staffEventIds.Count > 0;
+
+        // A HOLD IS WAITING ON THE VENUE as much as a request is — the guest picked, and nothing
+        // happens until somebody confirms. A hold about to run out gets its own row instead, so a
+        // booking is counted once and the urgent ones are not lost among the rest.
+        var eventBookingsToDecide = !anyDecider
+            ? NotificationBucket.Empty
+            : await BucketAsync(
+                decidable
+                    .Where(b => b.Status == HostedEventBookingStatus.Requested
+                             || (b.Status == HostedEventBookingStatus.Held
+                                 && (b.HoldExpiresUtc == null || b.HoldExpiresUtc > lapsingBy)))
+                    .Select(b => (DateTime?)b.DateCreated),
+                ct);
+
+        var eventHoldsLapsing = !anyDecider
+            ? NotificationBucket.Empty
+            : await BucketAsync(
+                decidable
+                    .Where(b => b.Status == HostedEventBookingStatus.Held
+                             && b.HoldExpiresUtc != null
+                             && b.HoldExpiresUtc > now
+                             && b.HoldExpiresUtc <= lapsingBy)
+                    .Select(b => (DateTime?)b.DateCreated),
+                ct);
+
+        // A guest whose booking was answered, and who has not said they read it. Includes a
+        // cancellation they never asked for, which is the one they most need to see. NOT a hold:
+        // holding seats is what the guest did, not something anybody answered (phase 8).
+        var myEventBookings = await BucketAsync(
+            db.HostedEventBookings.AsNoTracking()
+                .Where(b => b.LeadAppUserId == userId
+                         && b.Status != HostedEventBookingStatus.Requested
+                         && b.Status != HostedEventBookingStatus.Held
+                         && b.GuestAcknowledgedUtc == null
+                         && b.HostedEvent.EndsOn >= now.Date)
+                // Dated by the DECISION, so "waiting since" means since somebody answered them.
+                .Select(b => b.DecidedUtc),
+            ct);
+
+        // The guest's own hold running out while the venue has still not confirmed it: the one
+        // moment they might want to ask the venue, or pick something they can be sure of.
+        var myEventHoldLapsing = await BucketAsync(
+            db.HostedEventBookings.AsNoTracking()
+                .Where(b => b.LeadAppUserId == userId
+                         && b.Status == HostedEventBookingStatus.Held
+                         && b.HoldExpiresUtc != null
+                         && b.HoldExpiresUtc > now
+                         && b.HoldExpiresUtc <= lapsingBy)
+                .Select(b => (DateTime?)b.DateCreated),
+            ct);
+
+        // ── Groups asking to use a venue this person answers for (phase 9) ───────
+        // Answered by whoever may change the group's settings, like the page itself: letting
+        // another group publish at your address is a commitment the building makes.
+        var venueOrgIds = new HashSet<Guid>(myAdminOrgIds);
+        var pendingVenueOrgs = await db.VenueHostingRequests.AsNoTracking()
+            .Where(r => r.Status == VenueHostingRequestStatus.Pending && myOrgIds.Contains(r.VenueOrganizationId))
+            .Select(r => r.VenueOrganizationId).Distinct().ToListAsync(ct);
+        foreach (var orgId in pendingVenueOrgs.Where(o => !venueOrgIds.Contains(o)))
+        {
+            if (await _security.HasAccessAsync(userId, orgId, OrganizationSecurityTable.OrganizationSettings,
+                                               OrganizationSecurityAction.Update, ct))
+                venueOrgIds.Add(orgId);
+        }
+
+        var venueRequestsToDecide = venueOrgIds.Count == 0
+            ? NotificationBucket.Empty
+            : await BucketAsync(
+                db.VenueHostingRequests.AsNoTracking()
+                    .Where(r => r.Status == VenueHostingRequestStatus.Pending
+                             && venueOrgIds.Contains(r.VenueOrganizationId))
+                    .Select(r => (DateTime?)r.DateCreated),
+                ct);
+
+        // ── A guest's programme changed since they last looked (phase 10) ────────
+        // Dated by the change, one per booking however many sessions moved: "the programme changed"
+        // is one thing to go and read, not a count of edits.
+        var eventScheduleChanges = await BucketAsync(
+            db.HostedEventBookings.AsNoTracking()
+                .Where(b => b.LeadAppUserId == userId
+                         && b.Status == HostedEventBookingStatus.Confirmed
+                         && b.HostedEvent.ProgrammePublishedUtc != null
+                         && b.HostedEvent.EndsOn >= now.Date
+                         && db.HostedEventSessions.Any(x => x.HostedEventId == b.HostedEventId
+                                && x.ChangedUtc != null
+                                && (b.ProgrammeSeenUtc == null || x.ChangedUtc > b.ProgrammeSeenUtc)))
+                .Select(b => db.HostedEventSessions
+                    .Where(x => x.HostedEventId == b.HostedEventId && x.ChangedUtc != null)
+                    .Max(x => x.ChangedUtc)),
             ct);
 
         return Ok(new NotificationSummaryResponse(
@@ -284,7 +414,13 @@ public sealed class NotificationSummaryController : BenControllerBase
             CaseMessagesAsOrgMemberByCase:
                 [.. caseMessagesAsOrgByCase.OrderBy(b => b.OrganizationName).ThenBy(b => b.CaseTitle)],
             TourSeatsToDecide: seatsToDecide,
-            MyTourSeats: mySeats));
+            MyTourSeats: mySeats,
+            EventBookingsToDecide: eventBookingsToDecide,
+            MyEventBookings: myEventBookings,
+            EventHoldsLapsing: eventHoldsLapsing,
+            MyEventHoldLapsing: myEventHoldLapsing,
+            VenueRequestsToDecide: venueRequestsToDecide,
+            EventScheduleChanges: eventScheduleChanges));
     }
 
     /// <summary>The aggregate a breakdown folds to — the bell's total stays the sum of its rows.</summary>

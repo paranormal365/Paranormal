@@ -1,0 +1,25 @@
+/* What a guest has coming up (item 235 phase 6).
+
+   A ROW IS TWO THINGS: what it is, and where it stands. They sit side by side while there is room
+   and stack when there is not, because "You're coming" squeezed to two characters beside a long
+   event name is the one part of the row somebody is actually scanning for. */
+
+.my-event {
+    display: flex;
+    flex-wrap: wrap;
+    gap: .75rem;
+    align-items: center;
+    justify-content: space-between;
+}
+
+.my-event__what {
+    min-width: 14rem;
+    flex: 1 1 auto;
+}
+
+.my-event__state {
+    display: flex;
+    gap: .5rem;
+    align-items: center;
+    flex-wrap: wrap;
+}

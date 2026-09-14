@@ -103,7 +103,8 @@
                                             Open this link yourself to confirm the address:
                                         </div>
                                     }
-                                    <input class="form-control form-control-sm" readonly value="@_lastLink" />
+                                    <input id="email-validation-link" class="form-control form-control-sm"
+                                           readonly value="@_lastLink" aria-label="Confirmation link" />
                                 </div>
                             }
                         </div>
@@ -309,9 +310,13 @@
         // A save that says nothing is indistinguishable from a save that was refused, which is
         // exactly what Ben hit: he added an address, came back to the page, and nothing on it
         // said anything had happened. So the card says what it did, naming the address.
+        // "On its way" and not "we've emailed you": since item 239 every letter is written down
+        // and posted by a task a few minutes later, so at this moment the site knows it has been
+        // queued and cannot yet know it was delivered. Claiming delivery would be the page saying
+        // something it has no way to check.
         _saved = wasNew
             ? (result.ValidationEmailSent
-                ? $"{result.EmailAddress} added. We've emailed you a link to confirm it."
+                ? $"{result.EmailAddress} added. A link to confirm it is on its way."
                 : $"{result.EmailAddress} added. Use the confirmation link below.")
             : $"{result.EmailAddress} updated.";
 

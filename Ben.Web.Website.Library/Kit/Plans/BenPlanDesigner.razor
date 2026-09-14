@@ -1,0 +1,621 @@
+@namespace Ben.Web.Website.Library.Kit.Plans
+@using Ben.Data.Common.Enums
+@using Ben.Web.Website.Library.Kit
+
+@*
+    Everything around the grid: the toolbar, the tray of rooms, the block builder, the selection
+    bar and the per-unit sheet (item 235 phase 2).
+
+    It owns the SELECTION and the dialogs and nothing else. Loading and saving belong to the page,
+    because a Kit component that fetched its own data could only ever be used on the one page that
+    wanted exactly that.
+
+    EVERY TAP TOGGLES, AND NOTHING EVER REPLACES A SELECTION. The grid reports a gesture as
+    "these squares, added or removed"; there is no gesture that means "only these". That is a
+    deliberate departure from the spreadsheet convention, and it is the one rule that reads the
+    same under a mouse, a finger and a keyboard — which matters more here than matching a
+    spreadsheet, because the same component is the guest's seat picker on a phone. The price of it
+    is that Clear has to be a button, so it is one, on the selection bar beside the count.
+
+    ON A PHONE IT IS READ-MOSTLY, and says so in a line rather than pretending. Arranging four
+    hundred seats is a desktop or iPad job; reading the plan, fixing a price and blocking a seat
+    are the things somebody does on the night, and those all work through the per-unit sheet.
+*@
+
+<div class="plan-designer @Class">
+
+    <div class="plan-designer__bar" role="toolbar" aria-label="Plan tools">
+
+        @if (Model.Units.Count == 0 && AllowKindChange)
+        {
+            @* Only while it is empty. The server refuses a change once anything is confirmed into
+               the plan, and the model refuses one once anything is on it, so the control simply
+               stops being offered rather than offering something that will bounce. *@
+            <div class="btn-group btn-group-sm" role="group" aria-label="What this plan holds">
+                <button type="button" id="plan-kind-rooms"
+                        class="btn @(Model.Kind == HostedEventLayoutKind.Rooms ? "btn-primary" : "btn-outline-secondary")"
+                        @onclick="() => ChangeKind(HostedEventLayoutKind.Rooms)">
+                    <BenIcon Name="home" Class="me-1" />Rooms
+                </button>
+                <button type="button" id="plan-kind-seats"
+                        class="btn @(Model.Kind == HostedEventLayoutKind.Seats ? "btn-primary" : "btn-outline-secondary")"
+                        @onclick="() => ChangeKind(HostedEventLayoutKind.Seats)">
+                    <BenIcon Name="grid" Class="me-1" />Seats
+                </button>
+            </div>
+        }
+
+        @if (Model.Kind == HostedEventLayoutKind.Seats)
+        {
+            <button type="button" class="btn btn-sm btn-primary" id="plan-add-block"
+                    disabled="@Busy" @onclick="OpenBlock">
+                <BenIcon Name="plus" Class="me-1" />Add a block
+            </button>
+            <button type="button" class="btn btn-sm btn-outline-secondary" id="plan-insert-aisle"
+                    disabled="@(Busy || Model.LastColumn < 0)" @onclick="InsertAisle">
+                <BenIcon Name="columns" Class="me-1" />Insert an aisle
+            </button>
+        }
+        else
+        {
+            <button type="button" class="btn btn-sm btn-primary" id="plan-open-tray"
+                    aria-expanded="@_trayOpen.ToString().ToLowerInvariant()"
+                    disabled="@Busy" @onclick="() => _trayOpen = !_trayOpen">
+                <BenIcon Name="list" Class="me-1" />Rooms to place (@Tray.Count)
+            </button>
+            <button type="button" class="btn btn-sm btn-outline-secondary" id="plan-auto-arrange"
+                    disabled="@(Busy || Model.Unplaced.Count == 0)" @onclick="AutoArrange">
+                <BenIcon Name="layout" Class="me-1" />Arrange them for me
+            </button>
+        }
+
+        <div class="plan-designer__spacer"></div>
+
+        <button type="button" class="btn btn-sm btn-outline-secondary" id="plan-undo"
+                disabled="@(Busy || !Model.CanUndo)" @onclick="Undo" title="Undo">
+            <BenIcon Name="rotate-ccw" Title="Undo" />
+        </button>
+        <button type="button" class="btn btn-sm btn-outline-secondary" id="plan-redo"
+                disabled="@(Busy || !Model.CanRedo)" @onclick="Redo" title="Redo">
+            <BenIcon Name="rotate-cw" Title="Redo" />
+        </button>
+
+        <BenDropdown ToggleClass="btn btn-sm btn-outline-secondary" Title="More tools">
+            <ToggleContent><BenIcon Name="sliders" Title="More tools" /></ToggleContent>
+            <ChildContent>
+                <button type="button" class="dropdown-item" id="plan-fit"
+                        @onclick="() => _fit = !_fit">
+                    @(Dense ? "Bigger squares" : "Fit the whole plan")
+                </button>
+                <button type="button" class="dropdown-item" id="plan-select-all"
+                        @onclick="SelectAll">Select everything</button>
+                <button type="button" class="dropdown-item" id="plan-clear-selection"
+                        disabled="@(_selection.Count == 0)" @onclick="ClearSelection">Clear the selection</button>
+            </ChildContent>
+        </BenDropdown>
+
+        <button type="button" class="btn btn-sm btn-primary" id="plan-save"
+                disabled="@Busy" @onclick="SaveAsync">
+            @(Busy ? "Saving…" : "Save the plan")
+        </button>
+    </div>
+
+    @if (Model.IsDirty)
+    {
+        <p class="plan-designer__dirty small mb-2" id="plan-unsaved">
+            <BenIcon Name="edit-2" Class="me-1" />Not saved yet.
+        </p>
+    }
+
+    @if (!string.IsNullOrWhiteSpace(Error))
+    {
+        @* The server's own sentence, verbatim. It names the rooms or seats that stopped the save. *@
+        <div class="alert alert-danger py-2" id="plan-error" role="alert">@Error</div>
+    }
+
+    <p class="plan-designer__phone-note small d-md-none" id="plan-phone-note">
+        Laying a whole house out is easier on a computer or an iPad. Here you can read the plan and
+        change one room or seat at a time — tap it.
+    </p>
+
+    @if (_trayOpen && Model.Kind == HostedEventLayoutKind.Rooms)
+    {
+        <div class="plan-designer__tray" id="plan-tray">
+            @if (Tray.Count == 0)
+            {
+                <p class="text-secondary small mb-0">
+                    Every bookable room this venue has described is already on the plan. Rooms are
+                    described on the venue's own Rooms page, and only the bookable ones appear here.
+                </p>
+            }
+            else
+            {
+                <p class="plan-designer__tray-how small mb-2">
+                    Pick a room, then press an empty square to say where it goes.
+                </p>
+                @foreach (var floor in Tray
+                    .GroupBy(r => r.Floor?.Trim() ?? "")
+                    .OrderBy(g => g.Key, StringComparer.OrdinalIgnoreCase))
+                {
+                    <div class="plan-designer__tray-floor">
+                        <span class="plan-designer__tray-label">
+                            @(floor.Key.Length > 0 ? floor.Key : "No floor named")
+                        </span>
+                        @foreach (var room in floor)
+                        {
+                            var chosen = room;
+                            <button type="button" id="@chosen.ElementId"
+                                    class="btn btn-sm @(IsChosen(chosen) ? "btn-primary" : "btn-outline-primary")"
+                                    disabled="@Busy" @onclick="() => TakeFromTray(chosen)">
+                                @chosen.Name
+                                <span class="plan-designer__tray-detail">
+                                    @(chosen.Capacity is { } holds ? $"sleeps {holds}" : "sleeps ?")@(chosen.BedNote is { Length: > 0 } beds ? $" · {beds}" : "")
+                                </span>
+                            </button>
+                        }
+                    </div>
+                }
+            }
+        </div>
+    }
+
+    @if (_selection.Count > 0)
+    {
+        <div class="plan-designer__selection" id="plan-selection-bar" role="group"
+             aria-label="What to do with the chosen squares">
+            <span class="plan-designer__selection-count">@_selection.Count chosen</span>
+
+            <button type="button" class="btn btn-sm btn-outline-secondary" id="plan-clear"
+                    @onclick="ClearSelection">Clear</button>
+
+            <button type="button" class="btn btn-sm btn-outline-secondary" id="plan-set-details"
+                    @onclick="() => OpenSheet(null)">Section, price or note</button>
+
+            @if (Model.Kind == HostedEventLayoutKind.Seats)
+            {
+                <button type="button" class="btn btn-sm btn-outline-secondary" id="plan-relabel"
+                        @onclick="Relabel">Relabel by row</button>
+            }
+
+            <div class="btn-group btn-group-sm" role="group" aria-label="Move what is chosen">
+                <button type="button" class="btn btn-outline-secondary" id="plan-move-up"
+                        @onclick="() => Nudge(-1, 0)" title="Move up">
+                    <BenIcon Name="arrow-up" Title="Move up" /></button>
+                <button type="button" class="btn btn-outline-secondary" id="plan-move-down"
+                        @onclick="() => Nudge(1, 0)" title="Move down">
+                    <BenIcon Name="arrow-down" Title="Move down" /></button>
+                <button type="button" class="btn btn-outline-secondary" id="plan-move-left"
+                        @onclick="() => Nudge(0, -1)" title="Move left">
+                    <BenIcon Name="arrow-left" Title="Move left" /></button>
+                <button type="button" class="btn btn-outline-secondary" id="plan-move-right"
+                        @onclick="() => Nudge(0, 1)" title="Move right">
+                    <BenIcon Name="arrow-right" Title="Move right" /></button>
+            </div>
+
+            @if (Model.Kind == HostedEventLayoutKind.Rooms)
+            {
+                <button type="button" class="btn btn-sm btn-outline-secondary" id="plan-unplace"
+                        @onclick="Unplace">Back to the list</button>
+            }
+
+            <button type="button" class="btn btn-sm btn-outline-danger" id="plan-remove"
+                    @onclick="() => _confirmRemove = true">Remove</button>
+        </div>
+    }
+
+    <BenPlan Model="@Model" Mode="PlanMode.Edit" Compact="@Dense" Refused="@Refused"
+             Selection="@_selection" SelectionChanged="@OnSelectionChanged"
+             OnUnitActivated="@OpenSheet"
+             OnEmptyActivated="@OnEmptyAsync"
+             AriaLabel="@(Model.Kind == HostedEventLayoutKind.Seats ? "Seating plan" : "Floor plan")" />
+</div>
+
+@* ── Add a block ─────────────────────────────────────────────────────────── *@
+<BenModal @bind-Visible="_blockOpen" Title="Add a block of seats" Size="lg">
+    <ChildContent>
+        <div class="row g-3">
+            <div class="col-6 col-md-3">
+                <label class="form-label" for="block-rows">Rows</label>
+                <input id="block-rows" type="number" min="1" class="form-control"
+                       @bind="_blockRows" @bind:event="oninput" />
+            </div>
+            <div class="col-6 col-md-3">
+                <label class="form-label" for="block-seats">Seats in each</label>
+                <input id="block-seats" type="number" min="1" class="form-control"
+                       @bind="_blockSeats" @bind:event="oninput" />
+            </div>
+            <div class="col-6 col-md-3">
+                <label class="form-label" for="block-first-row">First row</label>
+                <input id="block-first-row" class="form-control" maxlength="3" placeholder="@NextRowName"
+                       @bind="_blockFirstRow" @bind:event="oninput" />
+                <div class="form-text">Blank carries on below what is there.</div>
+            </div>
+            <div class="col-6 col-md-3">
+                <label class="form-label" for="block-start-at">First seat number</label>
+                <input id="block-start-at" type="number" min="1" class="form-control"
+                       @bind="_blockStartAt" @bind:event="oninput" />
+            </div>
+
+            <div class="col-12 col-md-4">
+                <label class="form-label" for="block-numbering">Numbered</label>
+                <select id="block-numbering" class="form-select" @bind="_blockNumbering">
+                    <option value="@SeatNumbering.LeftToRight">1, 2, 3 from the left</option>
+                    <option value="@SeatNumbering.RightToLeft">1, 2, 3 from the right</option>
+                    <option value="@SeatNumbering.OddEvenFromCentre">Odd and even from the centre</option>
+                </select>
+            </div>
+            <div class="col-12 col-md-4">
+                <label class="form-label" for="block-pattern">Labelled</label>
+                <select id="block-pattern" class="form-select" @bind="_blockPattern">
+                    @foreach (var pattern in PlanLabels.Patterns)
+                    {
+                        <option value="@pattern">@PlanLabels.Format(pattern, "C", 4)</option>
+                    }
+                </select>
+            </div>
+            <div class="col-6 col-md-2">
+                <label class="form-label" for="block-section">Section</label>
+                <input id="block-section" class="form-control" maxlength="80" placeholder="Stalls"
+                       @bind="_blockSection" @bind:event="oninput" />
+            </div>
+            <div class="col-6 col-md-2">
+                <label class="form-label" for="block-price">Price</label>
+                <input id="block-price" type="number" step="0.01" min="0" class="form-control"
+                       @bind="_blockPrice" @bind:event="oninput" />
+            </div>
+        </div>
+
+        @* Somebody about to make two hundred and sixty things is shown the first and the last of
+           them first. It is the cheapest way to catch a wrong starting row or backwards numbering. *@
+        <p class="mt-3 mb-0 fw-semibold" id="block-preview">@BlockPreview</p>
+        <div class="form-text">
+            Every seat holds one person. Prices are shown to guests and never charged here — you and
+            they settle it between you.
+        </div>
+    </ChildContent>
+    <FooterContent>
+        <button type="button" class="btn btn-outline-secondary" @onclick="() => _blockOpen = false">Cancel</button>
+        <button type="button" class="btn btn-primary" id="block-add" @onclick="AddBlock">Add them</button>
+    </FooterContent>
+</BenModal>
+
+@* ── One room or seat, or everything chosen ──────────────────────────────── *@
+<BenModal @bind-Visible="_sheetOpen" Title="@SheetTitle">
+    <ChildContent>
+        @if (_sheetUnit is null)
+        {
+            <p class="small text-secondary">
+                A box left blank changes nothing. Fill one in to set it on all @_selection.Count.
+            </p>
+        }
+        <div class="row g-3">
+            @if (Model.Kind == HostedEventLayoutKind.Rooms)
+            {
+                <div class="col-6">
+                    <label class="form-label" for="sheet-capacity">Sleeps, for this event</label>
+                    <input id="sheet-capacity" type="number" min="0" class="form-control"
+                           placeholder="@SheetCapacityPlaceholder"
+                           @bind="_sheetCapacity" @bind:event="oninput" />
+                    <div class="form-text">Blank uses whatever the room itself says.</div>
+                </div>
+            }
+            <div class="col-6">
+                <label class="form-label" for="sheet-price">Price</label>
+                <input id="sheet-price" type="number" step="0.01" min="0" class="form-control"
+                       @bind="_sheetPrice" @bind:event="oninput" />
+                <div class="form-text">Blank means "ask us". Zero means it is included.</div>
+            </div>
+            <div class="col-12">
+                <label class="form-label" for="sheet-section">Section</label>
+                <input id="sheet-section" class="form-control" maxlength="80"
+                       placeholder="Stalls, Balcony, Second floor"
+                       @bind="_sheetSection" @bind:event="oninput" />
+                <div class="form-text">Squares in one section share a colour and a legend line.</div>
+            </div>
+            <div class="col-12">
+                <label class="form-label" for="sheet-note">Note</label>
+                <input id="sheet-note" class="form-control" maxlength="500"
+                       placeholder="Up two flights, no lift"
+                       @bind="_sheetNote" @bind:event="oninput" />
+                <div class="form-text">Shown to a guest choosing.</div>
+            </div>
+        </div>
+    </ChildContent>
+    <FooterContent>
+        <button type="button" class="btn btn-outline-secondary" @onclick="() => _sheetOpen = false">Cancel</button>
+        <button type="button" class="btn btn-primary" id="sheet-apply" @onclick="ApplySheet">Apply</button>
+    </FooterContent>
+</BenModal>
+
+<BenConfirmDialog @bind-Visible="_confirmRemove"
+                  Title="Take them off the plan?"
+                  Message="@RemoveQuestion"
+                  ConfirmText="Remove" Destructive="true" OnConfirm="@Remove" />
+
+@code {
+    /// <summary>The plan being arranged. Owned by the page, so a save reads the same object.</summary>
+    [Parameter, EditorRequired] public PlanModel Model { get; set; } = new(HostedEventLayoutKind.Rooms);
+
+    /// <summary>The venue's bookable rooms, for the tray. Empty on a seating plan.</summary>
+    [Parameter] public IReadOnlyList<PlanRoomOption> Rooms { get; set; } = [];
+
+    /// <summary>The page saves; this only asks.</summary>
+    [Parameter] public EventCallback OnSave { get; set; }
+
+    /// <summary>The server's own refusal, shown verbatim.</summary>
+    [Parameter] public string? Error { get; set; }
+
+    /// <summary>The units that refusal named, ringed on the plan so it can be acted on.</summary>
+    [Parameter] public IReadOnlySet<Guid>? Refused { get; set; }
+
+    [Parameter] public bool Busy { get; set; }
+
+    /// <summary>Whether the kind may still be switched — false once the server says bookings exist.</summary>
+    [Parameter] public bool AllowKindChange { get; set; } = true;
+
+    /// <summary>Start with small squares. A person can still change their mind under Tools.</summary>
+    [Parameter] public bool Compact { get; set; }
+
+    [Parameter] public string? Class { get; set; }
+
+    private HashSet<Guid> _selection = [];
+    private bool _fit;
+    private bool _trayOpen;
+    private bool _blockOpen;
+    private bool _sheetOpen;
+    private bool _confirmRemove;
+    private Guid? _sheetUnit;
+
+    private int _blockRows = 10;
+    private int _blockSeats = 20;
+    private string? _blockFirstRow;
+    private int _blockStartAt = 1;
+    private SeatNumbering _blockNumbering = SeatNumbering.LeftToRight;
+    private string _blockPattern = PlanLabels.Patterns[0];
+    private string? _blockSection;
+    private decimal? _blockPrice;
+
+    private int? _sheetCapacity;
+    private decimal? _sheetPrice;
+    private string? _sheetSection;
+    private string? _sheetNote;
+
+    /// <summary>
+    /// A fresh floor plan opens with its list of rooms showing, because placing them is the job.
+    /// </summary>
+    /// <remarks>
+    /// Once, at the start, and never again: reopening the list every time the page re-rendered
+    /// would be the component arguing with somebody who had just closed it.
+    /// </remarks>
+    protected override void OnInitialized()
+        => _trayOpen = Model.Kind == HostedEventLayoutKind.Rooms;
+
+    /// <summary>Small squares because the page said so, or because somebody pressed Fit.</summary>
+    private bool Dense => Compact || _fit;
+
+    /// <summary>
+    /// One room waiting to be placed, from either of the two piles it can be waiting in.
+    /// </summary>
+    /// <param name="Key">
+    /// Set when it is already a unit on this plan that simply has no square yet. Null when it is
+    /// still only one of the venue's rooms and pressing it will add it.
+    /// </param>
+    private sealed record TrayEntry(
+        string ElementId, string Name, string? Floor, int? Capacity, string? BedNote,
+        Guid? Key, Guid? PlaceRoomId);
+
+    /// <summary>
+    /// Every room that is not on the plan, whether or not this event has adopted it yet.
+    /// </summary>
+    /// <remarks>
+    /// <para><b>Two piles, one list, and it took a broken screen to see why.</b> A room can be
+    /// waiting in either of two states: a unit of this event that has no square yet, or one of the
+    /// venue's rooms this event has never taken. The first version of this listed only the second,
+    /// so pressing <i>Back to the list</i> took a room off the grid and it appeared nowhere at all
+    /// — not on the plan, not in the list, and recoverable only by undo. To a venue that is a
+    /// deleted room.</para>
+    ///
+    /// <para>Unplaced units come first: they are the ones somebody just put down and is about to
+    /// pick up again.</para>
+    /// </remarks>
+    private IReadOnlyList<TrayEntry> Tray
+    {
+        get
+        {
+            var loose = Model.Unplaced.Select(u =>
+            {
+                var room = u.PlaceRoomId is { } id
+                    ? Rooms.FirstOrDefault(r => r.PlaceRoomId == id)
+                    : null;
+                return new TrayEntry(
+                    $"plan-tray-{u.Key}", u.Name, room?.Floor,
+                    u.Capacity ?? room?.Capacity, room?.BedNote, u.Key, u.PlaceRoomId);
+            });
+
+            var never = Rooms
+                .Where(r => Model.Units.All(u => u.PlaceRoomId != r.PlaceRoomId))
+                .Select(r => new TrayEntry(
+                    $"plan-tray-{r.PlaceRoomId}", r.Name, r.Floor, r.Capacity, r.BedNote,
+                    Key: null, PlaceRoomId: r.PlaceRoomId));
+
+            return [.. loose, .. never];
+        }
+    }
+
+    private bool IsChosen(TrayEntry entry) => entry.Key is { } key && _selection.Contains(key);
+
+    private string NextRowName => PlanLabels.RowName(Model.LastRow + 1);
+
+    private string BlockPreview => PlanLabels.Describe(
+        PlanLabels.RowIndex(_blockFirstRow) ?? Model.LastRow + 1,
+        _blockRows, _blockSeats, _blockNumbering, _blockStartAt, _blockPattern);
+
+    private string SheetTitle => _sheetUnit is { } key && Model.ByKey(key) is { } unit
+        ? unit.Name
+        : $"{_selection.Count} chosen";
+
+    /// <summary>What the room itself says it sleeps, so the blank box is not a mystery.</summary>
+    private string SheetCapacityPlaceholder
+        => _sheetUnit is { } key
+        && Model.ByKey(key)?.PlaceRoomId is { } roomId
+        && Rooms.FirstOrDefault(r => r.PlaceRoomId == roomId)?.Capacity is { } holds
+            ? holds.ToString()
+            : "whatever the room says";
+
+    /// <summary>Removing says what survives it: a venue's rooms are not this plan's to delete.</summary>
+    private string RemoveQuestion => Model.Kind == HostedEventLayoutKind.Rooms
+        ? $"{_selection.Count} will come off this event's plan. The venue's own rooms are untouched."
+        : $"{_selection.Count} seat{(_selection.Count == 1 ? "" : "s")} will be removed from this plan.";
+
+    // ── the selection ────────────────────────────────────────────────────────
+
+    /// <summary>Takes the grid's new selection as it stands.</summary>
+    /// <remarks>
+    /// The grid has already added or removed whatever the gesture touched, so there is nothing to
+    /// merge here.
+    /// </remarks>
+    private void OnSelectionChanged(IReadOnlySet<Guid> next) => _selection = [.. next];
+
+    private void ClearSelection() => _selection = [];
+
+    private void SelectAll() => _selection = [.. Model.Units.Select(u => u.Key)];
+
+    // ── the toolbar ──────────────────────────────────────────────────────────
+
+    private void ChangeKind(HostedEventLayoutKind kind) => Model.ChangeKind(kind);
+
+    private void Undo()
+    {
+        Model.Undo();
+        // Anything chosen may not exist any more, and a selection bar acting on ghosts is how a
+        // plan loses a row nobody meant to touch.
+        _selection.RemoveWhere(k => Model.ByKey(k) is null);
+    }
+
+    private void Redo()
+    {
+        Model.Redo();
+        _selection.RemoveWhere(k => Model.ByKey(k) is null);
+    }
+
+    private void OpenBlock()
+    {
+        _blockFirstRow = null;
+        _blockOpen = true;
+    }
+
+    private void AddBlock()
+    {
+        var made = Model.AddBlock(
+            _blockRows, _blockSeats, _blockNumbering, _blockStartAt, _blockPattern,
+            _blockSection, _blockPrice,
+            atRow: PlanLabels.RowIndex(_blockFirstRow));
+
+        // Nothing made means the preview already said why — too many at once, or none asked for —
+        // so the dialog stays open with that sentence under the boxes.
+        if (made.Count == 0) return;
+
+        _selection = [.. made];
+        _blockOpen = false;
+    }
+
+    /// <summary>Opens a gap left of what is chosen, or at the far right when nothing is.</summary>
+    private void InsertAisle() => Model.InsertColumn(Model.AisleColumnFor(_selection));
+
+    /// <summary>
+    /// Picks a room up out of the list, so the next empty square pressed is where it goes.
+    /// </summary>
+    /// <remarks>
+    /// Adopting a room the event has never used and re-selecting one it already has are the same
+    /// gesture to the person doing it, so they are the same button. Only the first of them adds
+    /// anything.
+    /// </remarks>
+    private void TakeFromTray(TrayEntry entry)
+    {
+        if (entry.Key is { } existing)
+        {
+            _selection = [existing];
+            return;
+        }
+
+        if (entry.PlaceRoomId is { } roomId
+            && Model.AddRoom(roomId, entry.Name, entry.Capacity) is { } key)
+        {
+            _selection = [key];
+        }
+    }
+
+    private void AutoArrange()
+        => Model.AutoArrange(u => Rooms.FirstOrDefault(r => r.PlaceRoomId == u.PlaceRoomId)?.Floor);
+
+    private Task OnEmptyAsync((int Row, int Column) at)
+    {
+        // An empty square is where the one chosen thing goes. With several chosen it does nothing,
+        // rather than guessing which of them was meant — the arrows are how a group moves.
+        if (_selection.Count == 1) Model.Place(_selection.First(), at.Row, at.Column);
+        return Task.CompletedTask;
+    }
+
+    // ── the selection bar ────────────────────────────────────────────────────
+
+    private void Nudge(int rowDelta, int columnDelta) => Model.Move(_selection, rowDelta, columnDelta);
+
+    private void Relabel()
+        => Model.Relabel(_selection, _blockPattern, _blockNumbering, _blockStartAt);
+
+    private void Unplace()
+    {
+        Model.Unplace(_selection);
+        _trayOpen = true;
+    }
+
+    private void Remove()
+    {
+        Model.Remove(_selection);
+        _selection = [];
+        _confirmRemove = false;
+    }
+
+    // ── the sheet ────────────────────────────────────────────────────────────
+
+    /// <summary>Enter, or a second tap, on one square.</summary>
+    private void OpenSheet(Guid key) => OpenSheet((Guid?)key);
+
+    private void OpenSheet(Guid? key)
+    {
+        _sheetUnit = key;
+        if (key is { } one)
+        {
+            _selection = [one];
+            var unit = Model.ByKey(one);
+            _sheetCapacity = unit?.Capacity;
+            _sheetPrice = unit?.Price;
+            _sheetSection = unit?.Section;
+            _sheetNote = unit?.Note;
+        }
+        else
+        {
+            // Several at once: every box starts empty, and an empty box changes nothing rather
+            // than clearing what fifty seats already say.
+            _sheetCapacity = null;
+            _sheetPrice = null;
+            _sheetSection = null;
+            _sheetNote = null;
+        }
+        _sheetOpen = true;
+    }
+
+    /// <summary>
+    /// Writes the sheet onto what is chosen: one unit's blanks clear, a group's blanks are silence.
+    /// </summary>
+    private void ApplySheet()
+    {
+        Model.ApplySheet(
+            _selection, _sheetSection, _sheetPrice, _sheetNote, _sheetCapacity,
+            blanksClear: _sheetUnit is not null);
+
+        _sheetOpen = false;
+    }
+
+    private Task SaveAsync() => OnSave.InvokeAsync();
+}

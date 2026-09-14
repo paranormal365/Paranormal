@@ -106,8 +106,11 @@ public struct PublicEventRecord: Sendable, Codable, Equatable, Identifiable {
     public var mySeat: PublicSeat?
     /// The IANA zone the night happens in. Nil means nobody said, and the time is UTC.
     public var timeZoneId: String?
-
-
+    // ── The hosted event this date stands for (item 235) ────────────────────
+    // Nil on every ordinary date. When set, places are booked through the hosted event's own
+    // endpoints, and the RSVP flags above only say what the calendar row says.
+    public var hostedEventId: UUID? = nil
+    public var hostedEventName: String? = nil
 }
 
 /// One public event as it appears in a list (`GET api/public/events`).

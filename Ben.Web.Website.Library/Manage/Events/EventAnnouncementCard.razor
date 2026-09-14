@@ -1,0 +1,247 @@
+@namespace Ben.Web.Website.Library.Manage.Events
+
+@inject IBenAdminClient AdminClient
+
+@using Ben.Service.Models.Entities
+@using Ben.Web.Services.WebApi
+@using Ben.Web.Website.Library.Kit
+@using Ben.Web.Website.Library.Manage.Icon
+
+@* Writing to everybody coming (item 235 phase 17a, audit finding A4).
+
+   THE COUNT BEFORE THE BUTTON. A letter to guests can't be taken back, so the card says who it
+   will reach — "3 parties, 6 people" — as the choices change, and sending is a second, deliberate
+   click that repeats the number.
+
+   WHAT WENT IS KEPT. Underneath is every letter sent, by whom, to how many, and how many of them by
+   email, so a host asked "did anybody tell us about the parking?" can answer. *@
+
+<div class="card mb-3" id="board-letters">
+    <div class="card-header fw-semibold d-flex justify-content-between align-items-center gap-2 flex-wrap">
+        <span>Write to your guests <HelpLink Slug="organization-administration" Anchor="hosted-events" /></span>
+        @if (!_writing)
+        {
+            <button type="button" class="btn btn-sm btn-outline-primary" id="letter-start" @onclick="StartAsync">
+                <BenIcon Name="mail" Class="me-1" />Write a letter
+            </button>
+        }
+    </div>
+
+    @if (_writing)
+    {
+        <div class="card-body border-bottom">
+            @if (_error is { Length: > 0 })
+            {
+                <div class="alert alert-danger py-2" id="letter-error" role="alert">@_error</div>
+            }
+
+            <div class="row g-2 mb-2">
+                <div class="col-12 col-md-6">
+                    <label class="form-label small mb-1" for="letter-night">Who it goes to</label>
+                    <select class="form-select form-select-sm" id="letter-night" value="@(_night?.ToString() ?? "")"
+                            @onchange="NightChangedAsync">
+                        <option value="">Everybody with a place</option>
+                        @foreach (var night in Nights.OrderBy(n => n.Date))
+                        {
+                            <option value="@night.Id">Only people there on @night.Date.ToString("dddd MM/dd")</option>
+                        }
+                    </select>
+                </div>
+                <div class="col-12 col-md-6 d-flex align-items-end">
+                    <div class="form-check form-switch">
+                        <input class="form-check-input" type="checkbox" role="switch" id="letter-unconfirmed"
+                               checked="@_includeUnconfirmed" @onchange="UnconfirmedChangedAsync" />
+                        <label class="form-check-label small" for="letter-unconfirmed">
+                            Include people you haven't answered yet
+                        </label>
+                    </div>
+                </div>
+            </div>
+
+            <div class="mb-2">
+                <label class="form-label small mb-1" for="letter-subject">Subject</label>
+                <input class="form-control form-control-sm" id="letter-subject" maxlength="160"
+                       placeholder="Parking has moved" @bind="_subject" @bind:event="oninput" />
+            </div>
+            <div class="mb-2">
+                <label class="form-label small mb-1" for="letter-body">Letter</label>
+                <textarea class="form-control form-control-sm" id="letter-body" rows="5" maxlength="4000"
+                          placeholder="Park behind the church on Main Street tonight — the hotel car park is closed."
+                          @bind="_body" @bind:event="oninput"></textarea>
+            </div>
+
+            <p class="small text-secondary mb-2" id="letter-audience">
+                @AudienceWords
+                It goes by email, and into their messages on this site. Replies come to your group's email address.
+            </p>
+
+            @if (_confirming)
+            {
+                <div class="alert alert-warning py-2 d-flex flex-wrap align-items-center gap-2" id="letter-confirm">
+                    <span>Send this to @PartiesWords now? It can't be taken back.</span>
+                    <button type="button" class="btn btn-sm btn-primary" id="letter-send" disabled="@_busy" @onclick="SendAsync">
+                        @(_busy ? "Sending…" : "Send it")
+                    </button>
+                    <button type="button" class="btn btn-sm btn-outline-secondary" id="letter-not-yet" @onclick="() => _confirming = false">
+                        Not yet
+                    </button>
+                </div>
+            }
+            else
+            {
+                <div class="d-flex gap-2">
+                    <button type="button" class="btn btn-sm btn-primary" id="letter-review" disabled="@_busy" @onclick="Review">
+                        Send…
+                    </button>
+                    <button type="button" class="btn btn-sm btn-outline-secondary" id="letter-cancel" @onclick="Close">
+                        Close
+                    </button>
+                </div>
+            }
+        </div>
+    }
+
+    @if (_note is { Length: > 0 })
+    {
+        <div class="alert alert-success rounded-0 border-0 border-bottom py-2 mb-0" id="letter-note">@_note</div>
+    }
+
+    <BenItemState TItem="HostedEventAnnouncementsRecord" Result="_letters" Loading="_loading"
+                  LoadingText="Loading the letters…" OnRetry="LoadAsync">
+        <ChildContent Context="sent">
+            @if (sent.Letters.Count == 0)
+            {
+                <div class="card-body text-secondary small" id="letters-none">
+                    Nothing sent yet. Use this for what everybody needs to know — doors open at eight, the parking has
+                    moved, bring a coat.
+                </div>
+            }
+            else
+            {
+                <ul class="list-group list-group-flush" id="letters-sent">
+                    @foreach (var letter in sent.Letters)
+                    {
+                        <li class="list-group-item">
+                            <div class="fw-semibold">@letter.Subject</div>
+                            <div class="small text-secondary">
+                                @letter.SentUtc.ToLocalTime().ToString("MM/dd/yyyy h:mm tt") · @letter.SentByName ·
+                                to @Parties(letter.Recipients)@(letter.NightDate is { } d ? $" there on {d:ddd MM/dd}" : "")
+                                @(letter.IncludeUnconfirmed ? " (and people still waiting)" : "")
+                                · @letter.Emailed emailed
+                            </div>
+                            <div class="small text-body letter-body">@letter.Body</div>
+                        </li>
+                    }
+                </ul>
+            }
+        </ChildContent>
+    </BenItemState>
+</div>
+
+@code {
+    [Parameter, EditorRequired] public Guid OrgId { get; set; }
+    [Parameter, EditorRequired] public Guid EventId { get; set; }
+
+    /// <summary>The event's dates, for writing to one night's people.</summary>
+    [Parameter] public IReadOnlyList<HostedEventNightRecord> Nights { get; set; } = [];
+
+    private ItemResult<HostedEventAnnouncementsRecord> _letters;
+    private HostedEventAnnouncementAudienceRecord? _audience;
+    private bool _loading = true;
+    private bool _writing;
+    private bool _confirming;
+    private bool _busy;
+    private Guid? _night;
+    private bool _includeUnconfirmed;
+    private string _subject = "";
+    private string _body = "";
+    private string? _note;
+    private string? _error;
+
+    // Rendered only inside the board once it has loaded, so the circuit is interactive and signed in by now.
+    protected override async Task OnInitializedAsync() => await LoadAsync();
+
+    private async Task LoadAsync()
+    {
+        _loading = true;
+        _letters = await AdminClient.GetEventAnnouncementsAsync(OrgId, EventId);
+        _loading = false;
+    }
+
+    private string AudienceWords => _audience is { } a
+        ? a.Parties == 0
+            ? "Nobody matches these choices yet."
+            : $"This reaches {Parties(a.Parties)} — {a.People} {(a.People == 1 ? "person" : "people")} in all."
+        : "Counting who this reaches…";
+
+    private string PartiesWords => _audience is { } a ? Parties(a.Parties) : "everybody with a place";
+
+    private static string Parties(int n) => n == 1 ? "1 party" : $"{n} parties";
+
+    private async Task StartAsync()
+    {
+        _writing = true;
+        _note = null;
+        await CountAsync();
+    }
+
+    private void Close()
+    {
+        _writing = false;
+        _confirming = false;
+        _error = null;
+    }
+
+    private async Task NightChangedAsync(ChangeEventArgs e)
+    {
+        _night = Guid.TryParse(e.Value?.ToString(), out var id) ? id : null;
+        _confirming = false;
+        await CountAsync();
+    }
+
+    private async Task UnconfirmedChangedAsync(ChangeEventArgs e)
+    {
+        _includeUnconfirmed = e.Value is true;
+        _confirming = false;
+        await CountAsync();
+    }
+
+    private async Task CountAsync()
+    {
+        var counted = await AdminClient.GetEventAnnouncementAudienceAsync(OrgId, EventId, _night, _includeUnconfirmed);
+        _audience = counted.Item;
+    }
+
+    /// <summary>The first click: says what is missing, or asks for the second click.</summary>
+    private void Review()
+    {
+        _error = string.IsNullOrWhiteSpace(_subject) ? "Give the letter a subject — it's the line people see first."
+               : string.IsNullOrWhiteSpace(_body) ? "Write something to send."
+               : _audience is { Parties: 0 } ? "Nobody matches these choices, so there's nobody to send it to."
+               : null;
+        _confirming = _error is null;
+    }
+
+    private async Task SendAsync()
+    {
+        _busy = true;
+        _error = null;
+
+        var (sent, error) = await AdminClient.SendEventAnnouncementAsync(OrgId, EventId,
+            new SendHostedEventAnnouncementRequest(_subject, _body, _night, _includeUnconfirmed));
+        _busy = false;
+        _confirming = false;
+
+        if (sent is null)
+        {
+            _error = error ?? "That letter couldn't be sent just now. Nothing went out.";
+            return;
+        }
+
+        _note = sent.Note;
+        _letters = ItemResult<HostedEventAnnouncementsRecord>.Ok(sent);
+        _subject = "";
+        _body = "";
+        _writing = false;
+    }
+}

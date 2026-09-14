@@ -36,6 +36,9 @@ final class AppDependencies {
     /// Which parts of the app apply to this person — the server decides, the shell renders it.
     let surfaces: SurfacesStore
 
+    /// Sends room posts kept for a signal, and keeps the Share Extension's list of events (item 235 phase 14d).
+    @ObservationIgnored private(set) lazy var roomOutbox = RoomOutboxDrain(dependencies: self)
+
     /// Written by the shared holder so every request follows a switch instantly.
     private let environmentBox: EnvironmentBox
 
@@ -58,7 +61,8 @@ final class AppDependencies {
         self.session = SessionStore(
             auth: IdentityAuthClient(environment: { box.value }, transport: transport),
             tokens: tokens,
-            api: api)
+            api: api,
+            identity: FileIdentityStorage.applicationSupport())
         self.feedActions = FeedActions(api: api)
         self.notifications = NotificationsStore(api: api)
         self.imageLoader = AuthenticatedImageLoader(api: api)
@@ -67,6 +71,16 @@ final class AppDependencies {
         self.evidenceActions = EvidenceActions(api: api)
         self.surfaces = SurfacesStore(api: api)
         self.appleSignIn = AppleSignInClient(api: api, tokens: tokens)
+        // Saved event passes, and a door's guest lists and kept arrivals, belong to the person who signed in, not to
+        // the phone (item 235 phase 14).
+        self.session.onDeliberateSignOut = {
+            PassCache.applicationSupport().removeAll()
+            DoorCache.applicationSupport().removeAll()
+            // Photos waiting to send, and what the Share Extension offers, are the person's who signed out.
+            RoomOutbox.shared().removeAll()
+            RoomCache.applicationSupport().removeAll()
+            ShareableEvents.shared().removeAll()
+        }
 // The instruments are built ONCE, here on the main actor, because CoreMotion and UIDevice
         // want it — then handed to the store as a value it can hold. A simulator has no
         // magnetometer, so a debug build with `-fieldKitFakeSensors` gets scripted ones instead;

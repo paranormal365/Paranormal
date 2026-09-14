@@ -536,7 +536,7 @@ public sealed class AdminStatsController : BenControllerBase
     /// three on Friday draw as a flat line unless the four quiet days in between are present as
     /// zeroes.
     /// </remarks>
-    private static IReadOnlyList<StatPoint> FillDays(
+    internal static IReadOnlyList<StatPoint> FillDays(
         IEnumerable<(DateTime Day, int Count)> rows, DateTime since, int days)
     {
         var byDay = rows.ToDictionary(r => DateOnly.FromDateTime(r.Day), r => r.Count);

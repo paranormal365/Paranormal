@@ -1,0 +1,130 @@
+@namespace Ben.Web.Website.Library.Manage.Venue
+
+@inject IBenAdminClient AdminClient
+@inject IMediaUrlBuilder MediaUrls
+
+@using Ben.Service.Models.Entities
+@using Ben.Web.Services.WebApi
+
+@* A venue's photo library (item 235 phase 12).
+
+   Ben: "Images of the venue should also be saved, either ones taken by the venue owner / employee, or ones
+   shared with the venue by an organizer."
+
+   Offers come first, because they are the ones waiting on somebody. Pictures the venue keeps appear on its
+   public page once the page is published. *@
+
+<div class="venue-photos mt-4" id="@($"venue-photos-{ProfileId:N}")">
+    <div class="fw-semibold mb-2">Photos of the venue</div>
+
+    @if (_note is { Length: > 0 }) { <div class="alert alert-success py-2" role="status">@_note</div> }
+    @if (_error is { Length: > 0 }) { <div class="alert alert-danger py-2" role="alert">@_error</div> }
+
+    <div class="row g-2 align-items-end mb-3">
+        <div class="col-12 col-md-6">
+            <label class="form-label small mb-1" for="@($"venue-photo-input-{ProfileId:N}")">Add a picture</label>
+            <InputFile id="@($"venue-photo-input-{ProfileId:N}")" class="form-control" accept="image/*" OnChange="Picked" />
+        </div>
+        <div class="col-12 col-md-4">
+            <label class="form-label small mb-1" for="@($"venue-photo-caption-{ProfileId:N}")">Caption</label>
+            <input class="form-control" id="@($"venue-photo-caption-{ProfileId:N}")" maxlength="300" @bind="_caption" />
+        </div>
+        <div class="col-12 col-md-2">
+            <button type="button" class="btn btn-outline-primary w-100" id="@($"venue-photo-add-{ProfileId:N}")"
+                    disabled="@(_busy || _picked is null)" @onclick="AddAsync">@(_busy ? "Adding…" : "Add")</button>
+        </div>
+    </div>
+
+    @if (_rows.Count == 0)
+    {
+        <p class="text-secondary small mb-0">No pictures yet. Organizers who hold events here can offer theirs too.</p>
+    }
+    else
+    {
+        <div class="row g-2">
+            @foreach (var photo in _rows)
+            {
+                var thisOne = photo;
+                <div class="col-6 col-md-4 col-lg-3 venue-photo" data-photo="@thisOne.Id">
+                    <div class="card h-100 @(thisOne.AcceptedUtc is null ? "border-warning" : "")">
+                        <img class="card-img-top" style="aspect-ratio:3/2;object-fit:cover;" loading="lazy"
+                             src="@MediaUrls.Download(thisOne.UploadFileId)" alt="@(thisOne.Caption ?? "A picture of the venue")" />
+                        <div class="card-body p-2 small">
+                            @if (thisOne.Caption is { Length: > 0 } caption) { <div>@caption</div> }
+                            @if (thisOne.AcceptedUtc is null)
+                            {
+                                <div class="text-secondary mb-1">
+                                    Offered by @thisOne.OfferedByOrganizationName@(thisOne.OfferedFromEventName is { } from ? $", from {from}" : "")
+                                </div>
+                                <div class="d-flex gap-1 flex-wrap">
+                                    <button type="button" class="btn btn-sm btn-primary" disabled="@_busy"
+                                            @onclick="() => AcceptAsync(thisOne)">Keep it</button>
+                                    <button type="button" class="btn btn-sm btn-outline-secondary" disabled="@_busy"
+                                            @onclick="() => RemoveAsync(thisOne)">No thanks</button>
+                                </div>
+                            }
+                            else
+                            {
+                                @if (thisOne.OfferedByOrganizationName is { } by) { <div class="text-secondary">From @by</div> }
+                                <button type="button" class="btn btn-sm btn-outline-danger mt-1" disabled="@_busy"
+                                        @onclick="() => RemoveAsync(thisOne)">Remove</button>
+                            }
+                        </div>
+                    </div>
+                </div>
+            }
+        </div>
+    }
+</div>
+
+@code {
+    [Parameter, EditorRequired] public Guid OrgId { get; set; }
+    [Parameter, EditorRequired] public Guid ProfileId { get; set; }
+
+    private List<VenuePhotoRecord> _rows = [];
+    private bool _busy;
+    private string? _note, _error, _caption;
+    private IBrowserFile? _picked;
+
+    protected override async Task OnParametersSetAsync()
+    {
+        var loaded = await AdminClient.GetVenuePhotosAsync(OrgId, ProfileId);
+        _rows = [.. loaded.Items];
+    }
+
+    private void Picked(InputFileChangeEventArgs e) => _picked = e.File;
+
+    private async Task AddAsync()
+    {
+        if (_picked is null) return;
+        var file = _picked;
+        await Send(async () =>
+        {
+            using var content = new MultipartFormDataContent();
+            var stream = new StreamContent(file.OpenReadStream(50L * 1024 * 1024));
+            stream.Headers.ContentType = new System.Net.Http.Headers.MediaTypeHeaderValue(
+                string.IsNullOrWhiteSpace(file.ContentType) ? "image/jpeg" : file.ContentType);
+            content.Add(stream, "file", file.Name);
+            content.Add(new StringContent(_caption ?? ""), "caption");
+            return await AdminClient.AddVenuePhotoAsync(OrgId, ProfileId, content);
+        }, "Added.");
+        if (_error is null) { _picked = null; _caption = null; }
+    }
+
+    private Task AcceptAsync(VenuePhotoRecord photo)
+        => Send(() => AdminClient.AcceptVenuePhotoAsync(OrgId, ProfileId, photo.Id), "Kept. It shows on your venue page.");
+
+    private Task RemoveAsync(VenuePhotoRecord photo)
+        => Send(() => AdminClient.DeleteVenuePhotoAsync(OrgId, ProfileId, photo.Id),
+                photo.AcceptedUtc is null ? "Declined." : "Removed.");
+
+    private async Task Send(Func<Task<(List<VenuePhotoRecord>? Result, string? Error)>> send, string said)
+    {
+        _busy = true; _note = null; _error = null;
+        var (rows, error) = await send();
+        _busy = false;
+        if (rows is null) { _error = error ?? "That couldn't be saved just now."; return; }
+        _rows = rows;
+        _note = said;
+    }
+}

@@ -109,6 +109,45 @@ namespace Ben.Data.Source.Context
         public virtual DbSet<OrgCalendarEventType> OrgCalendarEventTypes { get; set; }
         public virtual DbSet<OrgCalendarEvent> OrgCalendarEvents { get; set; }
         public virtual DbSet<Tour> Tours { get; set; }
+
+        // ── Hosted events (item 235) ────────────────────────────────────────
+        public virtual DbSet<HostedEvent> HostedEvents { get; set; }
+        public virtual DbSet<HostedEventNight> HostedEventNights { get; set; }
+        public virtual DbSet<HostedEventLayoutUnit> HostedEventLayoutUnits { get; set; }
+        public virtual DbSet<HostedEventUnitBlock> HostedEventUnitBlocks { get; set; }
+        public virtual DbSet<HostedEventBooking> HostedEventBookings { get; set; }
+        public virtual DbSet<HostedEventEmailPick> HostedEventEmailPicks { get; set; }
+        public virtual DbSet<HostedEventEmailPickPlace> HostedEventEmailPickPlaces { get; set; }
+        public virtual DbSet<HostedEventBookingNight> HostedEventBookingNights { get; set; }
+        public virtual DbSet<HostedEventBookingGuest> HostedEventBookingGuests { get; set; }
+        public virtual DbSet<HostedEventMenu> HostedEventMenus { get; set; }
+        public virtual DbSet<HostedEventMenuItem> HostedEventMenuItems { get; set; }
+        public virtual DbSet<HostedEventPass> HostedEventPasses { get; set; }
+        public virtual DbSet<HostedEventStaff> HostedEventStaff { get; set; }
+        public virtual DbSet<HostedEventCheckIn> HostedEventCheckIns { get; set; }
+        public virtual DbSet<HostedEventWalkUp> HostedEventWalkUps { get; set; }
+        public virtual DbSet<HostedEventAnnouncement> HostedEventAnnouncements { get; set; }
+        public virtual DbSet<HostedEventRemoval> HostedEventRemovals { get; set; }
+        public virtual DbSet<HostedEventBand> HostedEventBands { get; set; }
+        public virtual DbSet<EventBookingAlertPreference> EventBookingAlertPreferences { get; set; }
+        public virtual DbSet<EventBookingAlertState> EventBookingAlertStates { get; set; }
+        public virtual DbSet<OrganizationVenueProfile> OrganizationVenueProfiles { get; set; }
+        public virtual DbSet<VenueHostingRequest> VenueHostingRequests { get; set; }
+        public virtual DbSet<OrganizationVenueGrant> OrganizationVenueGrants { get; set; }
+        public virtual DbSet<PlaceContact> PlaceContacts { get; set; }
+        public virtual DbSet<VenuePlaceClaim> VenuePlaceClaims { get; set; }
+        public virtual DbSet<HostedEventSession> HostedEventSessions { get; set; }
+        public virtual DbSet<HostedEventSessionSignUp> HostedEventSessionSignUps { get; set; }
+        public virtual DbSet<HostedEventFile> HostedEventFiles { get; set; }
+        public virtual DbSet<HostedEventGalleryImage> HostedEventGalleryImages { get; set; }
+        public virtual DbSet<HostedEventReview> HostedEventReviews { get; set; }
+        public virtual DbSet<VenuePhoto> VenuePhotos { get; set; }
+        public virtual DbSet<HostedEventDiningTable> HostedEventDiningTables { get; set; }
+        public virtual DbSet<HostedEventDiningSeat> HostedEventDiningSeats { get; set; }
+        public virtual DbSet<EventPhotoConsent> EventPhotoConsents { get; set; }
+        public virtual DbSet<OutboxEmail> OutboxEmails { get; set; }
+        public virtual DbSet<OutboxEmailAttachment> OutboxEmailAttachments { get; set; }
+        public virtual DbSet<EventCredit> EventCredits { get; set; }
         public virtual DbSet<TourGuide> TourGuides { get; set; }
         public virtual DbSet<TourSocialLink> TourSocialLinks { get; set; }
         public virtual DbSet<MessagePoll> MessagePolls { get; set; }
@@ -514,6 +553,9 @@ namespace Ben.Data.Source.Context
                 .HasForeignKey(e => e.InvitedByAppUserId).IsRequired(false).OnDelete(DeleteBehavior.NoAction);
             modelBuilder.Entity<EventAttendanceInvite>().Property(e => e.Email).HasMaxLength(320);
             modelBuilder.Entity<EventAttendanceInvite>().Property(e => e.DisplayName).HasMaxLength(200);
+            modelBuilder.Entity<EventAttendanceInvite>().Property(e => e.FirstName).HasMaxLength(100);
+            modelBuilder.Entity<EventAttendanceInvite>().Property(e => e.LastName).HasMaxLength(100);
+            modelBuilder.Entity<EventAttendanceInvite>().Property(e => e.Phone).HasMaxLength(40);
             modelBuilder.Entity<EventAttendanceInvite>().Property(e => e.Token).HasMaxLength(128);
             // The token is how the link is resolved, and it must be unique while it exists. Filtered
             // because it is cleared on confirmation and a pile of nulls would collide.
@@ -718,6 +760,955 @@ namespace Ben.Data.Source.Context
                 .Property(t => t.ContactLine).HasMaxLength(500);
             modelBuilder.Entity<Tour>()
                 .Property(t => t.MailSubjectTemplate).HasMaxLength(200);
+
+            // ── Hosted events (item 235) ────────────────────────────────────
+            // The same shape as Tour above, for the same reasons. The name is unique per
+            // organization because it is what tells two of them apart — "Murder at the Manor" is
+            // one production however many times it is performed. Organization and Place are
+            // NoAction: a place in use by an event must be re-pointed rather than silently
+            // orphaned, and deleting an organization goes through its own purge.
+            modelBuilder.Entity<HostedEvent>()
+                .HasIndex(e => new { e.OrganizationId, e.Name }).IsUnique();
+            modelBuilder.Entity<HostedEvent>()
+                .HasIndex(e => new { e.OrganizationId, e.UrlName }).IsUnique();
+            modelBuilder.Entity<HostedEvent>()
+                .Property(e => e.Name).HasMaxLength(160);
+            modelBuilder.Entity<HostedEvent>()
+                .Property(e => e.UrlName).HasMaxLength(160);
+            modelBuilder.Entity<HostedEvent>()
+                .Property(e => e.Tagline).HasMaxLength(300);
+            modelBuilder.Entity<HostedEvent>()
+                .Property(e => e.TimeZoneId).HasMaxLength(100);
+            modelBuilder.Entity<HostedEvent>()
+                .Property(e => e.ContactLine).HasMaxLength(500);
+            modelBuilder.Entity<HostedEvent>()
+                .Property(e => e.AccessNotes).HasMaxLength(2000);
+            modelBuilder.Entity<HostedEvent>()
+                .Property(e => e.MailSubjectTemplate).HasMaxLength(200);
+            modelBuilder.Entity<HostedEvent>()
+                .Property(e => e.CancelledReason).HasMaxLength(500);
+            modelBuilder.Entity<HostedEvent>()
+                .Property(e => e.VenueContactName).HasMaxLength(160);
+            modelBuilder.Entity<HostedEvent>()
+                .Property(e => e.VenueReference).HasMaxLength(120);
+            // What the billing question asks — "which are live right now" — so it is the shape the
+            // index has. One state column where there were two flags, which is also why the old
+            // index had to go: it could not answer the question it was built for.
+            modelBuilder.Entity<HostedEvent>()
+                .HasIndex(e => new { e.OrganizationId, e.LifecycleState });
+            // What the lifecycle job asks, every five minutes, across every group on the site.
+            modelBuilder.Entity<HostedEvent>()
+                .HasIndex(e => new { e.LifecycleState, e.StartsOn });
+            // A hold shorter than a quarter of an hour is not long enough to type a party's names
+            // into; one longer than a fortnight is a booking nobody has confirmed. Enforced in the
+            // database because the value reaches it from three places.
+            modelBuilder.Entity<HostedEvent>()
+                .ToTable(t => t.HasCheckConstraint(
+                    "CK_HostedEvents_HoldMinutes", "[HoldMinutes] BETWEEN 15 AND 20160"));
+            modelBuilder.Entity<HostedEvent>()
+                .HasOne(e => e.Organization).WithMany()
+                .HasForeignKey(e => e.OrganizationId).OnDelete(DeleteBehavior.NoAction);
+            modelBuilder.Entity<HostedEvent>()
+                .HasOne(e => e.Place).WithMany()
+                .HasForeignKey(e => e.PlaceId).OnDelete(DeleteBehavior.NoAction);
+            modelBuilder.Entity<HostedEvent>()
+                .HasOne(e => e.CreatedByAppUser).WithMany()
+                .HasForeignKey(e => e.CreatedByAppUserId).OnDelete(DeleteBehavior.NoAction);
+            modelBuilder.Entity<HostedEvent>()
+                .HasOne(e => e.UpdatedByAppUser).WithMany()
+                .HasForeignKey(e => e.UpdatedByAppUserId).OnDelete(DeleteBehavior.NoAction);
+            modelBuilder.Entity<HostedEvent>()
+                .HasOne(e => e.GoNoGoDecidedByAppUser).WithMany()
+                .HasForeignKey(e => e.GoNoGoDecidedByAppUserId)
+                .IsRequired(false).OnDelete(DeleteBehavior.NoAction);
+
+            // ── who is helping, and what they may do (phase 7) ────────────────
+            //
+            // Cascade from the event: a helper at an event that no longer exists is nothing at
+            // all, and there is no history worth keeping in a row that says somebody could once
+            // have scanned a pass. The AppUser links are NoAction like every other one here —
+            // deleting a person goes through its own purge, which must SEE these rows rather than
+            // have them vanish underneath it.
+            modelBuilder.Entity<HostedEventStaff>()
+                .HasOne(s => s.HostedEvent).WithMany()
+                .HasForeignKey(s => s.HostedEventId).OnDelete(DeleteBehavior.Cascade);
+            modelBuilder.Entity<HostedEventStaff>()
+                .HasOne(s => s.AppUser).WithMany()
+                .HasForeignKey(s => s.AppUserId).IsRequired(false).OnDelete(DeleteBehavior.NoAction);
+            modelBuilder.Entity<HostedEventStaff>()
+                .HasOne(s => s.CreatedByAppUser).WithMany()
+                .HasForeignKey(s => s.CreatedByAppUserId).OnDelete(DeleteBehavior.NoAction);
+            modelBuilder.Entity<HostedEventStaff>()
+                .HasOne(s => s.UpdatedByAppUser).WithMany()
+                .HasForeignKey(s => s.UpdatedByAppUserId).IsRequired(false).OnDelete(DeleteBehavior.NoAction);
+
+            modelBuilder.Entity<HostedEventStaff>().Property(s => s.Email).HasMaxLength(320);
+            modelBuilder.Entity<HostedEventStaff>().Property(s => s.DisplayName).HasMaxLength(200);
+            modelBuilder.Entity<HostedEventStaff>().Property(s => s.RoleLabel).HasMaxLength(80);
+            modelBuilder.Entity<HostedEventStaff>().Property(s => s.Token).HasMaxLength(200);
+
+            // One row per person per event, and one per invited address per event. Two filtered
+            // indexes because a row has one or the other and never both: without them, inviting
+            // the same helper twice would leave two rows and revoking one would look like it had
+            // worked.
+            modelBuilder.Entity<HostedEventStaff>()
+                .HasIndex(s => new { s.HostedEventId, s.AppUserId })
+                .IsUnique()
+                .HasFilter("[AppUserId] IS NOT NULL");
+            modelBuilder.Entity<HostedEventStaff>()
+                .HasIndex(s => new { s.HostedEventId, s.Email })
+                .IsUnique()
+                .HasFilter("[Email] IS NOT NULL AND [AppUserId] IS NULL");
+
+            // What the acceptance page looks up, once, from a link in somebody's mail.
+            modelBuilder.Entity<HostedEventStaff>()
+                .HasIndex(s => s.Token)
+                .HasFilter("[Token] IS NOT NULL");
+
+            // ── who actually walked in, night by night (phase 7) ──────────────
+            //
+            // One row per booking per night, enforced: a second scan of the same party on the same
+            // night is the same arrival, and a door that recorded two would double every count it
+            // fed. The booking cascades — an arrival at a booking that no longer exists is
+            // nothing — and the night does not, because a night is deleted only by editing the
+            // event and doing that silently under a recorded arrival should be refused.
+            modelBuilder.Entity<HostedEventCheckIn>()
+                .HasOne(c => c.HostedEventBooking).WithMany()
+                .HasForeignKey(c => c.HostedEventBookingId).OnDelete(DeleteBehavior.Cascade);
+            modelBuilder.Entity<HostedEventCheckIn>()
+                .HasOne(c => c.HostedEventNight).WithMany()
+                .HasForeignKey(c => c.HostedEventNightId).OnDelete(DeleteBehavior.NoAction);
+            modelBuilder.Entity<HostedEventCheckIn>()
+                .HasOne(c => c.RecordedByAppUser).WithMany()
+                .HasForeignKey(c => c.RecordedByAppUserId).OnDelete(DeleteBehavior.NoAction);
+            modelBuilder.Entity<HostedEventCheckIn>()
+                .HasOne(c => c.CreatedByAppUser).WithMany()
+                .HasForeignKey(c => c.CreatedByAppUserId).OnDelete(DeleteBehavior.NoAction);
+            modelBuilder.Entity<HostedEventCheckIn>()
+                .HasOne(c => c.UpdatedByAppUser).WithMany()
+                .HasForeignKey(c => c.UpdatedByAppUserId).IsRequired(false).OnDelete(DeleteBehavior.NoAction);
+
+            modelBuilder.Entity<HostedEventCheckIn>()
+                .HasIndex(c => new { c.HostedEventBookingId, c.HostedEventNightId })
+                .IsUnique();
+
+            // What the door asks every few seconds all evening: everybody in tonight.
+            modelBuilder.Entity<HostedEventCheckIn>()
+                .HasIndex(c => c.HostedEventNightId);
+
+            // ── and people who simply turned up (phase 7) ─────────────────────
+            //
+            // No booking, no pass, nothing to confirm — a head count with a name on it when
+            // somebody gave one. NoAction on the night for the same reason as an arrival: a night
+            // deleted out from under a recorded walk-up should be refused rather than silently
+            // taking the count with it.
+            modelBuilder.Entity<HostedEventWalkUp>()
+                .HasOne(w => w.HostedEventNight).WithMany()
+                .HasForeignKey(w => w.HostedEventNightId).OnDelete(DeleteBehavior.NoAction);
+            modelBuilder.Entity<HostedEventWalkUp>()
+                .HasOne(w => w.RecordedByAppUser).WithMany()
+                .HasForeignKey(w => w.RecordedByAppUserId).OnDelete(DeleteBehavior.NoAction);
+            modelBuilder.Entity<HostedEventWalkUp>()
+                .HasOne(w => w.CreatedByAppUser).WithMany()
+                .HasForeignKey(w => w.CreatedByAppUserId).OnDelete(DeleteBehavior.NoAction);
+            modelBuilder.Entity<HostedEventWalkUp>()
+                .HasOne(w => w.UpdatedByAppUser).WithMany()
+                .HasForeignKey(w => w.UpdatedByAppUserId).IsRequired(false).OnDelete(DeleteBehavior.NoAction);
+
+            modelBuilder.Entity<HostedEventWalkUp>().Property(w => w.Name).HasMaxLength(200);
+            modelBuilder.Entity<HostedEventWalkUp>().Property(w => w.Note).HasMaxLength(500);
+
+            modelBuilder.Entity<HostedEventWalkUp>()
+                .HasIndex(w => w.HostedEventNightId);
+
+            // ── letters to the guests (phase 17a) ─────────────────────────────
+            //
+            // Cascade from the event only. The night's link is NoAction because nights already cascade from the
+            // same event (one cascade path per table); a night removed from the dates clears its announcements'
+            // link in code, and the event's purge deletes them.
+            modelBuilder.Entity<HostedEventAnnouncement>()
+                .HasOne(a => a.HostedEvent).WithMany()
+                .HasForeignKey(a => a.HostedEventId).OnDelete(DeleteBehavior.Cascade);
+            modelBuilder.Entity<HostedEventAnnouncement>()
+                .HasOne(a => a.HostedEventNight).WithMany()
+                .HasForeignKey(a => a.HostedEventNightId).IsRequired(false).OnDelete(DeleteBehavior.NoAction);
+            modelBuilder.Entity<HostedEventAnnouncement>()
+                .HasOne(a => a.SentByAppUser).WithMany()
+                .HasForeignKey(a => a.SentByAppUserId).OnDelete(DeleteBehavior.NoAction);
+            modelBuilder.Entity<HostedEventAnnouncement>()
+                .HasOne(a => a.CreatedByAppUser).WithMany()
+                .HasForeignKey(a => a.CreatedByAppUserId).OnDelete(DeleteBehavior.NoAction);
+            modelBuilder.Entity<HostedEventAnnouncement>()
+                .HasOne(a => a.UpdatedByAppUser).WithMany()
+                .HasForeignKey(a => a.UpdatedByAppUserId).IsRequired(false).OnDelete(DeleteBehavior.NoAction);
+            modelBuilder.Entity<HostedEventAnnouncement>().Property(a => a.Subject).HasMaxLength(160);
+            modelBuilder.Entity<HostedEventAnnouncement>().Property(a => a.Body).HasMaxLength(4000);
+            modelBuilder.Entity<HostedEventAnnouncement>().HasIndex(a => new { a.HostedEventId, a.SentUtc });
+
+            // ── IsHaunted removing an event, and the appeal (phase 17b) ───────
+            //
+            // Cascade from the event; every person on it is NoAction, so removing an account is refused by the
+            // purge census rather than silently erasing who removed or appealed.
+            modelBuilder.Entity<HostedEventRemoval>()
+                .HasOne(r => r.HostedEvent).WithMany()
+                .HasForeignKey(r => r.HostedEventId).OnDelete(DeleteBehavior.Cascade);
+            modelBuilder.Entity<HostedEventRemoval>()
+                .HasOne(r => r.RemovedByAppUser).WithMany()
+                .HasForeignKey(r => r.RemovedByAppUserId).OnDelete(DeleteBehavior.NoAction);
+            modelBuilder.Entity<HostedEventRemoval>()
+                .HasOne(r => r.AppealedByAppUser).WithMany()
+                .HasForeignKey(r => r.AppealedByAppUserId).IsRequired(false).OnDelete(DeleteBehavior.NoAction);
+            modelBuilder.Entity<HostedEventRemoval>()
+                .HasOne(r => r.DecidedByAppUser).WithMany()
+                .HasForeignKey(r => r.DecidedByAppUserId).IsRequired(false).OnDelete(DeleteBehavior.NoAction);
+            modelBuilder.Entity<HostedEventRemoval>()
+                .HasOne(r => r.CreatedByAppUser).WithMany()
+                .HasForeignKey(r => r.CreatedByAppUserId).OnDelete(DeleteBehavior.NoAction);
+            modelBuilder.Entity<HostedEventRemoval>()
+                .HasOne(r => r.UpdatedByAppUser).WithMany()
+                .HasForeignKey(r => r.UpdatedByAppUserId).IsRequired(false).OnDelete(DeleteBehavior.NoAction);
+            modelBuilder.Entity<HostedEventRemoval>().Property(r => r.Note).HasMaxLength(2000);
+            modelBuilder.Entity<HostedEventRemoval>().Property(r => r.AppealMessage).HasMaxLength(4000);
+            modelBuilder.Entity<HostedEventRemoval>().Property(r => r.DecisionNote).HasMaxLength(2000);
+            modelBuilder.Entity<HostedEventRemoval>().HasIndex(r => new { r.HostedEventId, r.RemovedUtc });
+            modelBuilder.Entity<HostedEventRemoval>().HasIndex(r => r.AppealState);
+
+            // ── what a party wears (phase 7) ──────────────────────────────────
+            //
+            // Cascade from the event, because a band belongs to one weekend's box of wristbands.
+            // The booking's own link is SetNull: deleting a band the venue has stopped using must
+            // not take a booking with it, and a party whose hand-picked band has gone simply falls
+            // back to the rules like everybody else.
+            modelBuilder.Entity<HostedEventBand>()
+                .HasOne(b => b.HostedEvent).WithMany()
+                .HasForeignKey(b => b.HostedEventId).OnDelete(DeleteBehavior.Cascade);
+            modelBuilder.Entity<HostedEventBand>()
+                .HasOne(b => b.CreatedByAppUser).WithMany()
+                .HasForeignKey(b => b.CreatedByAppUserId).OnDelete(DeleteBehavior.NoAction);
+            modelBuilder.Entity<HostedEventBand>()
+                .HasOne(b => b.UpdatedByAppUser).WithMany()
+                .HasForeignKey(b => b.UpdatedByAppUserId).IsRequired(false).OnDelete(DeleteBehavior.NoAction);
+
+            modelBuilder.Entity<HostedEventBand>().Property(b => b.Colour).HasMaxLength(60);
+            modelBuilder.Entity<HostedEventBand>().Property(b => b.Meaning).HasMaxLength(160);
+            modelBuilder.Entity<HostedEventBand>().Property(b => b.Hex).HasMaxLength(9);
+
+            // NoAction, and not SetNull, because SQL Server will not have it: bands cascade from
+            // the event and so do bookings, so a SetNull here is a second path to the same rows
+            // and the server refuses the constraint outright ("may cause cycles or multiple
+            // cascade paths"). The endpoint clears the column off every booking before it deletes
+            // a band, which is the same shape every other NoAction reference here is handled with.
+            modelBuilder.Entity<HostedEventBooking>()
+                .HasOne(b => b.HostedEventBand).WithMany()
+                .HasForeignKey(b => b.HostedEventBandId)
+                .IsRequired(false).OnDelete(DeleteBehavior.NoAction);
+
+            // ── who is told about bookings, and how far they have been told (phase 8) ──
+            //
+            // Both hang off a person, NoAction, because deleting a person goes through its own
+            // purge and must see these rows. The preference cascades from the group — a preference
+            // about a group that no longer exists is about nothing — and the state from the event.
+            modelBuilder.Entity<EventBookingAlertPreference>()
+                .HasOne(p => p.AppUser).WithMany()
+                .HasForeignKey(p => p.AppUserId).OnDelete(DeleteBehavior.NoAction);
+            modelBuilder.Entity<EventBookingAlertPreference>()
+                .HasOne(p => p.Organization).WithMany()
+                .HasForeignKey(p => p.OrganizationId).OnDelete(DeleteBehavior.Cascade);
+            modelBuilder.Entity<EventBookingAlertPreference>()
+                .HasIndex(p => new { p.AppUserId, p.OrganizationId }).IsUnique();
+
+            modelBuilder.Entity<EventBookingAlertState>()
+                .HasOne(s => s.AppUser).WithMany()
+                .HasForeignKey(s => s.AppUserId).OnDelete(DeleteBehavior.NoAction);
+            modelBuilder.Entity<EventBookingAlertState>()
+                .HasOne(s => s.HostedEvent).WithMany()
+                .HasForeignKey(s => s.HostedEventId).OnDelete(DeleteBehavior.Cascade);
+            modelBuilder.Entity<EventBookingAlertState>()
+                .HasIndex(s => new { s.AppUserId, s.HostedEventId }).IsUnique();
+
+            // ── venues, their requests and their grants (item 235 phase 9) ─────────────
+            // NoAction everywhere a second path to the same table exists — a request points at two
+            // groups and an event that points at a group, and SQL Server refuses a table that two
+            // cascades can reach. The purges take these rows by hand, in order.
+            modelBuilder.Entity<OrganizationVenueProfile>()
+                .HasOne(v => v.Organization).WithMany()
+                .HasForeignKey(v => v.OrganizationId).OnDelete(DeleteBehavior.NoAction);
+            modelBuilder.Entity<OrganizationVenueProfile>()
+                .HasOne(v => v.Place).WithMany()
+                .HasForeignKey(v => v.PlaceId).OnDelete(DeleteBehavior.NoAction);
+            modelBuilder.Entity<OrganizationVenueProfile>()
+                .HasOne(v => v.CreatedByAppUser).WithMany()
+                .HasForeignKey(v => v.CreatedByAppUserId).OnDelete(DeleteBehavior.NoAction);
+            modelBuilder.Entity<OrganizationVenueProfile>()
+                .HasOne(v => v.UpdatedByAppUser).WithMany()
+                .HasForeignKey(v => v.UpdatedByAppUserId).IsRequired(false).OnDelete(DeleteBehavior.NoAction);
+            modelBuilder.Entity<OrganizationVenueProfile>()
+                .HasIndex(v => new { v.OrganizationId, v.PlaceId }).IsUnique();
+            // One verified venue per place. Two groups each proved to be the Thomas House is a
+            // contradiction the database should refuse rather than a screen should explain.
+            modelBuilder.Entity<OrganizationVenueProfile>()
+                .HasIndex(v => v.PlaceId).IsUnique()
+                .HasDatabaseName("IX_OrganizationVenueProfiles_PlaceId_Verified")
+                .HasFilter("[VerifiedUtc] IS NOT NULL");
+            modelBuilder.Entity<OrganizationVenueProfile>().Property(v => v.History).HasMaxLength(8000);
+            modelBuilder.Entity<OrganizationVenueProfile>().Property(v => v.HouseRules).HasMaxLength(4000);
+
+            modelBuilder.Entity<VenueHostingRequest>()
+                .HasOne(r => r.HostedEvent).WithMany()
+                .HasForeignKey(r => r.HostedEventId).OnDelete(DeleteBehavior.NoAction);
+            modelBuilder.Entity<VenueHostingRequest>()
+                .HasOne(r => r.RequestingOrganization).WithMany()
+                .HasForeignKey(r => r.RequestingOrganizationId).OnDelete(DeleteBehavior.NoAction);
+            modelBuilder.Entity<VenueHostingRequest>()
+                .HasOne(r => r.VenueOrganization).WithMany()
+                .HasForeignKey(r => r.VenueOrganizationId).OnDelete(DeleteBehavior.NoAction);
+            modelBuilder.Entity<VenueHostingRequest>()
+                .HasOne(r => r.OrganizationVenueGrant).WithMany()
+                .HasForeignKey(r => r.OrganizationVenueGrantId).IsRequired(false).OnDelete(DeleteBehavior.NoAction);
+            modelBuilder.Entity<VenueHostingRequest>()
+                .HasOne(r => r.DecidedByAppUser).WithMany()
+                .HasForeignKey(r => r.DecidedByAppUserId).IsRequired(false).OnDelete(DeleteBehavior.NoAction);
+            modelBuilder.Entity<VenueHostingRequest>()
+                .HasOne(r => r.CreatedByAppUser).WithMany()
+                .HasForeignKey(r => r.CreatedByAppUserId).OnDelete(DeleteBehavior.NoAction);
+            modelBuilder.Entity<VenueHostingRequest>()
+                .HasOne(r => r.UpdatedByAppUser).WithMany()
+                .HasForeignKey(r => r.UpdatedByAppUserId).IsRequired(false).OnDelete(DeleteBehavior.NoAction);
+            modelBuilder.Entity<VenueHostingRequest>().Property(r => r.Message).HasMaxLength(2000);
+            modelBuilder.Entity<VenueHostingRequest>().Property(r => r.DecisionNote).HasMaxLength(2000);
+            // One open question per event. Asking twice while the first is unanswered is a second
+            // letter to a venue that has not had time to read the first.
+            modelBuilder.Entity<VenueHostingRequest>()
+                .HasIndex(r => r.HostedEventId).IsUnique()
+                .HasDatabaseName("IX_VenueHostingRequests_HostedEventId_Pending")
+                .HasFilter("[Status] = 0");
+            modelBuilder.Entity<VenueHostingRequest>()
+                .HasIndex(r => new { r.VenueOrganizationId, r.Status });
+
+            modelBuilder.Entity<OrganizationVenueGrant>()
+                .HasOne(g => g.VenueOrganization).WithMany()
+                .HasForeignKey(g => g.VenueOrganizationId).OnDelete(DeleteBehavior.NoAction);
+            modelBuilder.Entity<OrganizationVenueGrant>()
+                .HasOne(g => g.GranteeOrganization).WithMany()
+                .HasForeignKey(g => g.GranteeOrganizationId).OnDelete(DeleteBehavior.NoAction);
+            modelBuilder.Entity<OrganizationVenueGrant>()
+                .HasOne(g => g.Place).WithMany()
+                .HasForeignKey(g => g.PlaceId).OnDelete(DeleteBehavior.NoAction);
+            modelBuilder.Entity<OrganizationVenueGrant>()
+                .HasOne(g => g.RevokedByAppUser).WithMany()
+                .HasForeignKey(g => g.RevokedByAppUserId).IsRequired(false).OnDelete(DeleteBehavior.NoAction);
+            modelBuilder.Entity<OrganizationVenueGrant>()
+                .HasOne(g => g.CreatedByAppUser).WithMany()
+                .HasForeignKey(g => g.CreatedByAppUserId).OnDelete(DeleteBehavior.NoAction);
+            modelBuilder.Entity<OrganizationVenueGrant>()
+                .HasOne(g => g.UpdatedByAppUser).WithMany()
+                .HasForeignKey(g => g.UpdatedByAppUserId).IsRequired(false).OnDelete(DeleteBehavior.NoAction);
+            modelBuilder.Entity<OrganizationVenueGrant>().Property(g => g.RevokedReason).HasMaxLength(2000);
+
+            // ── a place's contact details and claims to run it (phase 9) ─────────────
+            modelBuilder.Entity<PlaceContact>()
+                .HasOne(c => c.Place).WithMany()
+                .HasForeignKey(c => c.PlaceId).OnDelete(DeleteBehavior.NoAction);
+            modelBuilder.Entity<PlaceContact>()
+                .HasOne(c => c.Organization).WithMany()
+                .HasForeignKey(c => c.OrganizationId).IsRequired(false).OnDelete(DeleteBehavior.NoAction);
+            modelBuilder.Entity<PlaceContact>()
+                .HasOne(c => c.CreatedByAppUser).WithMany()
+                .HasForeignKey(c => c.CreatedByAppUserId).OnDelete(DeleteBehavior.NoAction);
+            modelBuilder.Entity<PlaceContact>()
+                .HasOne(c => c.UpdatedByAppUser).WithMany()
+                .HasForeignKey(c => c.UpdatedByAppUserId).IsRequired(false).OnDelete(DeleteBehavior.NoAction);
+            modelBuilder.Entity<PlaceContact>().Property(c => c.Value).HasMaxLength(320);
+            modelBuilder.Entity<PlaceContact>().Property(c => c.Label).HasMaxLength(120);
+            modelBuilder.Entity<PlaceContact>().HasIndex(c => new { c.PlaceId, c.IsPublic });
+
+            modelBuilder.Entity<VenuePlaceClaim>()
+                .HasOne(c => c.Place).WithMany()
+                .HasForeignKey(c => c.PlaceId).OnDelete(DeleteBehavior.NoAction);
+            modelBuilder.Entity<VenuePlaceClaim>()
+                .HasOne(c => c.Organization).WithMany()
+                .HasForeignKey(c => c.OrganizationId).OnDelete(DeleteBehavior.NoAction);
+            modelBuilder.Entity<VenuePlaceClaim>()
+                .HasOne(c => c.ClaimantAppUser).WithMany()
+                .HasForeignKey(c => c.ClaimantAppUserId).OnDelete(DeleteBehavior.NoAction);
+            modelBuilder.Entity<VenuePlaceClaim>()
+                .HasOne(c => c.PlaceContact).WithMany()
+                .HasForeignKey(c => c.PlaceContactId).IsRequired(false).OnDelete(DeleteBehavior.NoAction);
+            modelBuilder.Entity<VenuePlaceClaim>()
+                .HasOne(c => c.ObjectedByAppUser).WithMany()
+                .HasForeignKey(c => c.ObjectedByAppUserId).IsRequired(false).OnDelete(DeleteBehavior.NoAction);
+            modelBuilder.Entity<VenuePlaceClaim>()
+                .HasOne(c => c.ObjectingOrganization).WithMany()
+                .HasForeignKey(c => c.ObjectingOrganizationId).IsRequired(false).OnDelete(DeleteBehavior.NoAction);
+            modelBuilder.Entity<VenuePlaceClaim>()
+                .HasOne(c => c.DecidedByAppUser).WithMany()
+                .HasForeignKey(c => c.DecidedByAppUserId).IsRequired(false).OnDelete(DeleteBehavior.NoAction);
+            modelBuilder.Entity<VenuePlaceClaim>()
+                .HasOne(c => c.CreatedByAppUser).WithMany()
+                .HasForeignKey(c => c.CreatedByAppUserId).OnDelete(DeleteBehavior.NoAction);
+            modelBuilder.Entity<VenuePlaceClaim>()
+                .HasOne(c => c.UpdatedByAppUser).WithMany()
+                .HasForeignKey(c => c.UpdatedByAppUserId).IsRequired(false).OnDelete(DeleteBehavior.NoAction);
+            modelBuilder.Entity<VenuePlaceClaim>().Property(c => c.Evidence).HasMaxLength(4000);
+            modelBuilder.Entity<VenuePlaceClaim>().Property(c => c.ObjectionText).HasMaxLength(4000);
+            modelBuilder.Entity<VenuePlaceClaim>().Property(c => c.DecisionNote).HasMaxLength(2000);
+            modelBuilder.Entity<VenuePlaceClaim>().Property(c => c.CodeHash).HasMaxLength(64);
+            // One open claim per group per place. A second while the first is standing is a second
+            // code to the venue's inbox and a second letter to every group that knows the place.
+            modelBuilder.Entity<VenuePlaceClaim>()
+                .HasIndex(c => new { c.PlaceId, c.OrganizationId }).IsUnique()
+                .HasDatabaseName("IX_VenuePlaceClaims_PlaceId_OrganizationId_Open")
+                .HasFilter("[State] IN (0, 1, 5)");
+            modelBuilder.Entity<VenuePlaceClaim>().HasIndex(c => new { c.State, c.ObjectionsCloseUtc });
+
+            // ── the programme: sessions and who signed up (phase 10) ─────────────────
+            modelBuilder.Entity<HostedEventSession>()
+                .HasOne(x => x.HostedEvent).WithMany()
+                .HasForeignKey(x => x.HostedEventId).OnDelete(DeleteBehavior.Cascade);
+            modelBuilder.Entity<HostedEventSession>()
+                .HasOne(x => x.PlaceRoom).WithMany()
+                .HasForeignKey(x => x.PlaceRoomId).IsRequired(false).OnDelete(DeleteBehavior.NoAction);
+            modelBuilder.Entity<HostedEventSession>()
+                .HasOne(x => x.CreatedByAppUser).WithMany()
+                .HasForeignKey(x => x.CreatedByAppUserId).OnDelete(DeleteBehavior.NoAction);
+            modelBuilder.Entity<HostedEventSession>()
+                .HasOne(x => x.UpdatedByAppUser).WithMany()
+                .HasForeignKey(x => x.UpdatedByAppUserId).IsRequired(false).OnDelete(DeleteBehavior.NoAction);
+            modelBuilder.Entity<HostedEventSession>().Property(x => x.Title).HasMaxLength(200);
+            modelBuilder.Entity<HostedEventSession>().Property(x => x.Description).HasMaxLength(4000);
+            modelBuilder.Entity<HostedEventSession>().Property(x => x.LocationText).HasMaxLength(200);
+            modelBuilder.Entity<HostedEventSession>().Property(x => x.LedBy).HasMaxLength(200);
+            modelBuilder.Entity<HostedEventSession>().Property(x => x.CancelledReason).HasMaxLength(1000);
+            modelBuilder.Entity<HostedEventSession>().Property(x => x.PlacesTaken).IsConcurrencyToken();
+            modelBuilder.Entity<HostedEventSession>().HasIndex(x => new { x.HostedEventId, x.StartsAtUtc });
+
+            modelBuilder.Entity<HostedEventSessionSignUp>()
+                .HasOne(x => x.HostedEventSession).WithMany(s => s.SignUps)
+                .HasForeignKey(x => x.HostedEventSessionId).OnDelete(DeleteBehavior.Cascade);
+            modelBuilder.Entity<HostedEventSessionSignUp>()
+                .HasOne(x => x.AppUser).WithMany()
+                .HasForeignKey(x => x.AppUserId).OnDelete(DeleteBehavior.NoAction);
+            modelBuilder.Entity<HostedEventSessionSignUp>()
+                .HasOne(x => x.HostedEventBooking).WithMany()
+                .HasForeignKey(x => x.HostedEventBookingId).IsRequired(false).OnDelete(DeleteBehavior.NoAction);
+            modelBuilder.Entity<HostedEventSessionSignUp>()
+                .HasOne(x => x.CreatedByAppUser).WithMany()
+                .HasForeignKey(x => x.CreatedByAppUserId).OnDelete(DeleteBehavior.NoAction);
+            modelBuilder.Entity<HostedEventSessionSignUp>()
+                .HasOne(x => x.UpdatedByAppUser).WithMany()
+                .HasForeignKey(x => x.UpdatedByAppUserId).IsRequired(false).OnDelete(DeleteBehavior.NoAction);
+            // One sign-up per person per session. A second press is the first sign-up, not a second place.
+            modelBuilder.Entity<HostedEventSessionSignUp>()
+                .HasIndex(x => new { x.HostedEventSessionId, x.AppUserId }).IsUnique();
+
+            // ── an event's files (phase 11) ─────────────────────────────────────────
+            modelBuilder.Entity<HostedEventFile>()
+                .HasOne(x => x.HostedEvent).WithMany()
+                .HasForeignKey(x => x.HostedEventId).OnDelete(DeleteBehavior.Cascade);
+            modelBuilder.Entity<HostedEventFile>()
+                .HasOne(x => x.UploadFile).WithMany()
+                .HasForeignKey(x => x.UploadFileId).OnDelete(DeleteBehavior.NoAction);
+            modelBuilder.Entity<HostedEventFile>()
+                .HasOne(x => x.CreatedByAppUser).WithMany()
+                .HasForeignKey(x => x.CreatedByAppUserId).OnDelete(DeleteBehavior.NoAction);
+            modelBuilder.Entity<HostedEventFile>()
+                .HasOne(x => x.UpdatedByAppUser).WithMany()
+                .HasForeignKey(x => x.UpdatedByAppUserId).IsRequired(false).OnDelete(DeleteBehavior.NoAction);
+            modelBuilder.Entity<HostedEventFile>().Property(x => x.Folder).HasMaxLength(80);
+            modelBuilder.Entity<HostedEventFile>().Property(x => x.Description).HasMaxLength(500);
+            modelBuilder.Entity<HostedEventFile>().HasIndex(x => new { x.HostedEventId, x.Audience });
+            modelBuilder.Entity<HostedEventFile>().HasIndex(x => x.UploadFileId).IsUnique();
+
+            // ── the event's room (phase 11) ─────────────────────────────────────────
+            modelBuilder.Entity<OrgMessage>()
+                .HasOne(m => m.HostedEvent).WithMany()
+                .HasForeignKey(m => m.HostedEventId).IsRequired(false).OnDelete(DeleteBehavior.NoAction);
+            modelBuilder.Entity<OrgMessage>()
+                .HasIndex(m => new { m.HostedEventId, m.DateCreated })
+                .HasFilter("[HostedEventId] IS NOT NULL");
+
+            // ── the event's public gallery (phase 11) ──────────────────────────────
+            modelBuilder.Entity<HostedEventGalleryImage>()
+                .HasOne(x => x.HostedEvent).WithMany()
+                .HasForeignKey(x => x.HostedEventId).OnDelete(DeleteBehavior.Cascade);
+            modelBuilder.Entity<HostedEventGalleryImage>()
+                .HasOne(x => x.UploadFile).WithMany()
+                .HasForeignKey(x => x.UploadFileId).OnDelete(DeleteBehavior.NoAction);
+            modelBuilder.Entity<HostedEventGalleryImage>()
+                .HasOne(x => x.CreatedByAppUser).WithMany()
+                .HasForeignKey(x => x.CreatedByAppUserId).OnDelete(DeleteBehavior.NoAction);
+            modelBuilder.Entity<HostedEventGalleryImage>()
+                .HasOne(x => x.UpdatedByAppUser).WithMany()
+                .HasForeignKey(x => x.UpdatedByAppUserId).IsRequired(false).OnDelete(DeleteBehavior.NoAction);
+            modelBuilder.Entity<HostedEventGalleryImage>().Property(x => x.Caption).HasMaxLength(300);
+            modelBuilder.Entity<HostedEventGalleryImage>().HasIndex(x => new { x.HostedEventId, x.SortOrder });
+            modelBuilder.Entity<HostedEventGalleryImage>().HasIndex(x => x.UploadFileId).IsUnique();
+
+            // ── an ad that leads to an event (phase 11) ─────────────────────────────
+            modelBuilder.Entity<OrganizationAd>()
+                .HasOne(a => a.HostedEvent).WithMany()
+                .HasForeignKey(a => a.HostedEventId).IsRequired(false).OnDelete(DeleteBehavior.NoAction);
+
+            // ── a guest's agreement to their photos being shown (phase 11) ─────────
+            modelBuilder.Entity<EventPhotoConsent>()
+                .HasOne(x => x.HostedEvent).WithMany()
+                .HasForeignKey(x => x.HostedEventId).OnDelete(DeleteBehavior.Cascade);
+            modelBuilder.Entity<EventPhotoConsent>()
+                .HasOne(x => x.AppUser).WithMany()
+                .HasForeignKey(x => x.AppUserId).OnDelete(DeleteBehavior.NoAction);
+            modelBuilder.Entity<EventPhotoConsent>().Property(x => x.Wording).HasMaxLength(1000);
+            modelBuilder.Entity<EventPhotoConsent>().HasIndex(x => new { x.HostedEventId, x.AppUserId }).IsUnique();
+
+            modelBuilder.Entity<HostedEvent>()
+                .HasOne(e => e.VenueGrant).WithMany()
+                .HasForeignKey(e => e.VenueGrantId).IsRequired(false).OnDelete(DeleteBehavior.NoAction);
+
+            // ── what the venue is holding back ────────────────────────────────
+            //
+            // Two filtered unique indexes rather than one, because "this night" and "every night"
+            // are two different rows and each may exist once. Without the second, a unit could be
+            // blocked for the whole run twice over and unblocking it once would look like it had
+            // worked.
+            modelBuilder.Entity<HostedEventUnitBlock>()
+                .HasIndex(b => new { b.HostedEventLayoutUnitId, b.HostedEventNightId })
+                .IsUnique()
+                .HasFilter("[HostedEventNightId] IS NOT NULL");
+            modelBuilder.Entity<HostedEventUnitBlock>()
+                .HasIndex(b => b.HostedEventLayoutUnitId)
+                .IsUnique()
+                .HasFilter("[HostedEventNightId] IS NULL");
+            modelBuilder.Entity<HostedEventUnitBlock>()
+                .Property(b => b.Note).HasMaxLength(500);
+            // Cascade from the unit: a block IS a fact about that square, and a square that no
+            // longer exists cannot be held back.
+            modelBuilder.Entity<HostedEventUnitBlock>()
+                .HasOne(b => b.HostedEventLayoutUnit).WithMany()
+                .HasForeignKey(b => b.HostedEventLayoutUnitId).OnDelete(DeleteBehavior.Cascade);
+            // But NOT from the night, or deleting a date would cascade through two paths into the
+            // same rows and SQL Server refuses the whole schema.
+            modelBuilder.Entity<HostedEventUnitBlock>()
+                .HasOne(b => b.HostedEventNight).WithMany()
+                .HasForeignKey(b => b.HostedEventNightId).OnDelete(DeleteBehavior.NoAction);
+            modelBuilder.Entity<HostedEventUnitBlock>()
+                .HasOne(b => b.CreatedByAppUser).WithMany()
+                .HasForeignKey(b => b.CreatedByAppUserId).OnDelete(DeleteBehavior.NoAction);
+            modelBuilder.Entity<HostedEventUnitBlock>()
+                .HasOne(b => b.UpdatedByAppUser).WithMany()
+                .HasForeignKey(b => b.UpdatedByAppUserId).OnDelete(DeleteBehavior.NoAction);
+
+            // One night per date per event; the dates of a run may be months apart, but two rows
+            // for the same day are always a mistake. Cascade from the event: the nights ARE the
+            // event, not records of their own.
+            modelBuilder.Entity<HostedEventNight>()
+                .HasIndex(n => new { n.HostedEventId, n.Date }).IsUnique();
+            modelBuilder.Entity<HostedEventNight>()
+                .Property(n => n.Title).HasMaxLength(120);
+            modelBuilder.Entity<HostedEventNight>()
+                .HasOne(n => n.HostedEvent).WithMany(e => e.Nights)
+                .HasForeignKey(n => n.HostedEventId).OnDelete(DeleteBehavior.Cascade);
+            modelBuilder.Entity<HostedEventNight>()
+                .HasOne(n => n.CreatedByAppUser).WithMany()
+                .HasForeignKey(n => n.CreatedByAppUserId).OnDelete(DeleteBehavior.NoAction);
+            modelBuilder.Entity<HostedEventNight>()
+                .HasOne(n => n.UpdatedByAppUser).WithMany()
+                .HasForeignKey(n => n.UpdatedByAppUserId).OnDelete(DeleteBehavior.NoAction);
+
+            // ── The layout: rooms or seats, parties, nights, guests (item 235 phase 2) ──
+            // A venue's room may be offered once per event. Offering it twice is always a mistake,
+            // and it would make "is the Blue Room free" a question with two answers.
+            //
+            // Filtered, because the uniqueness is only about rooms: a Seats layout has hundreds of
+            // units with no PlaceRoomId at all, and an unfiltered unique index would let exactly
+            // one of them exist. SQL Server treats every NULL as distinct in a UNIQUE index, but
+            // the filter says the rule out loud rather than relying on that.
+            modelBuilder.Entity<HostedEventLayoutUnit>()
+                .HasIndex(u => new { u.HostedEventId, u.PlaceRoomId }).IsUnique()
+                .HasFilter("[PlaceRoomId] IS NOT NULL");
+            // The designer's own question: what is on this plan, in what order.
+            modelBuilder.Entity<HostedEventLayoutUnit>()
+                .HasIndex(u => new { u.HostedEventId, u.SortOrder });
+            modelBuilder.Entity<HostedEventLayoutUnit>()
+                .Property(u => u.Note).HasMaxLength(500);
+            modelBuilder.Entity<HostedEventLayoutUnit>()
+                .Property(u => u.Label).HasMaxLength(80);
+            modelBuilder.Entity<HostedEventLayoutUnit>()
+                .Property(u => u.Section).HasMaxLength(80);
+            // Displayed, never taken. Same precision as every other price on the site, so a figure
+            // never reads differently depending on which screen printed it.
+            modelBuilder.Entity<HostedEventLayoutUnit>()
+                .Property(u => u.Price).HasPrecision(18, 2);
+            modelBuilder.Entity<HostedEvent>()
+                .Property(e => e.DayPassPrice).HasPrecision(18, 2);
+            modelBuilder.Entity<HostedEventLayoutUnit>()
+                .HasOne(u => u.HostedEvent).WithMany(e => e.LayoutUnits)
+                .HasForeignKey(u => u.HostedEventId).OnDelete(DeleteBehavior.Cascade);
+            // NoAction to the room itself: a PlaceRoom is the venue's own description of its
+            // building and outlives the event, so deleting an event must not reach into it.
+            modelBuilder.Entity<HostedEventLayoutUnit>()
+                .HasOne(u => u.PlaceRoom).WithMany()
+                .HasForeignKey(u => u.PlaceRoomId).OnDelete(DeleteBehavior.NoAction);
+            modelBuilder.Entity<HostedEventLayoutUnit>()
+                .HasOne(u => u.CreatedByAppUser).WithMany()
+                .HasForeignKey(u => u.CreatedByAppUserId).OnDelete(DeleteBehavior.NoAction);
+            modelBuilder.Entity<HostedEventLayoutUnit>()
+                .HasOne(u => u.UpdatedByAppUser).WithMany()
+                .HasForeignKey(u => u.UpdatedByAppUserId).OnDelete(DeleteBehavior.NoAction);
+
+            // The grid the venue reads every morning: this event's bookings by state.
+            modelBuilder.Entity<HostedEventBooking>()
+                .HasIndex(b => new { b.HostedEventId, b.Status });
+            // And the guest's own: "what have I asked for".
+            modelBuilder.Entity<HostedEventBooking>()
+                .HasIndex(b => new { b.LeadAppUserId, b.Status });
+            modelBuilder.Entity<HostedEventBooking>()
+                .Property(b => b.Note).HasMaxLength(2000);
+            modelBuilder.Entity<HostedEventBooking>()
+                .Property(b => b.DecisionNote).HasMaxLength(1000);
+            modelBuilder.Entity<HostedEventBooking>()
+                .Property(b => b.CancellationReason).HasMaxLength(1000);
+            modelBuilder.Entity<HostedEventBooking>()
+                .Property(b => b.ContactPhone).HasMaxLength(40);
+
+            // ── reviews and the thank-you (phase 12) ──────────────────────────────
+            // No HasDefaultValue(true) on the two switches: EF would then omit a false on insert and the
+            // database would store true. The migration gives existing rows true by hand instead.
+            modelBuilder.Entity<HostedEvent>().Property(e => e.ThankYouNote).HasMaxLength(2000);
+            modelBuilder.Entity<HostedEventReview>()
+                .HasOne(r => r.HostedEvent).WithMany()
+                .HasForeignKey(r => r.HostedEventId).OnDelete(DeleteBehavior.Cascade);
+            // NoAction: deleting a person goes through its own purge, which must see these rows.
+            modelBuilder.Entity<HostedEventReview>()
+                .HasOne(r => r.AppUser).WithMany()
+                .HasForeignKey(r => r.AppUserId).OnDelete(DeleteBehavior.NoAction);
+            modelBuilder.Entity<HostedEventReview>().Property(r => r.Comment).HasMaxLength(1000);
+            // One opinion per person per event.
+            modelBuilder.Entity<HostedEventReview>().HasIndex(r => new { r.HostedEventId, r.AppUserId }).IsUnique();
+
+            // ── dining tables (phase 13) ──────────────────────────────────────────
+            modelBuilder.Entity<HostedEventDiningTable>()
+                .HasOne(t => t.HostedEvent).WithMany()
+                .HasForeignKey(t => t.HostedEventId).OnDelete(DeleteBehavior.Cascade);
+            modelBuilder.Entity<HostedEventDiningTable>().Property(t => t.Name).HasMaxLength(60);
+            modelBuilder.Entity<HostedEventDiningTable>().HasIndex(t => new { t.HostedEventId, t.SortOrder });
+            // One cascade path only (the sitting, through its night, from the event). The table and the booking
+            // also hang off the event, so their links are NoAction and the code that removes a table removes its
+            // seats first.
+            modelBuilder.Entity<HostedEventDiningSeat>()
+                .HasOne(s => s.HostedEventMenu).WithMany()
+                .HasForeignKey(s => s.HostedEventMenuId).OnDelete(DeleteBehavior.Cascade);
+            modelBuilder.Entity<HostedEventDiningSeat>()
+                .HasOne(s => s.HostedEventDiningTable).WithMany()
+                .HasForeignKey(s => s.HostedEventDiningTableId).OnDelete(DeleteBehavior.NoAction);
+            modelBuilder.Entity<HostedEventDiningSeat>()
+                .HasOne(s => s.HostedEventBooking).WithMany()
+                .HasForeignKey(s => s.HostedEventBookingId).OnDelete(DeleteBehavior.NoAction);
+            modelBuilder.Entity<HostedEventDiningSeat>()
+                .HasIndex(s => new { s.HostedEventMenuId, s.HostedEventBookingId, s.HostedEventDiningTableId }).IsUnique();
+
+            // ── the venue's photo library (phase 12) ──────────────────────────────
+            modelBuilder.Entity<VenuePhoto>()
+                .HasOne(p => p.OrganizationVenueProfile).WithMany()
+                .HasForeignKey(p => p.OrganizationVenueProfileId).OnDelete(DeleteBehavior.Cascade);
+            modelBuilder.Entity<VenuePhoto>()
+                .HasOne(p => p.UploadFile).WithMany()
+                .HasForeignKey(p => p.UploadFileId).OnDelete(DeleteBehavior.NoAction);
+            modelBuilder.Entity<VenuePhoto>()
+                .HasOne(p => p.OfferedByOrganization).WithMany()
+                .HasForeignKey(p => p.OfferedByOrganizationId).IsRequired(false).OnDelete(DeleteBehavior.NoAction);
+            modelBuilder.Entity<VenuePhoto>()
+                .HasOne(p => p.OfferedFromHostedEvent).WithMany()
+                .HasForeignKey(p => p.OfferedFromHostedEventId).IsRequired(false).OnDelete(DeleteBehavior.NoAction);
+            modelBuilder.Entity<VenuePhoto>().Property(p => p.Caption).HasMaxLength(300);
+            modelBuilder.Entity<VenuePhoto>().HasIndex(p => new { p.OrganizationVenueProfileId, p.UploadFileId }).IsUnique();
+
+            // ── places picked by somebody not signed in (slice 11d) ────────────────
+            modelBuilder.Entity<HostedEventEmailPick>()
+                .HasOne(p => p.HostedEvent).WithMany()
+                .HasForeignKey(p => p.HostedEventId).OnDelete(DeleteBehavior.Cascade);
+            // SetNull is not allowed beside the event's cascade (two paths), so NoAction; a booking
+            // is never deleted while its event exists except by a guest withdrawing a request, which
+            // a pick never becomes.
+            modelBuilder.Entity<HostedEventEmailPick>()
+                .HasOne(p => p.HostedEventBooking).WithMany()
+                .HasForeignKey(p => p.HostedEventBookingId).OnDelete(DeleteBehavior.NoAction);
+            modelBuilder.Entity<HostedEventEmailPick>().Property(p => p.FirstName).HasMaxLength(100);
+            modelBuilder.Entity<HostedEventEmailPick>().Property(p => p.LastName).HasMaxLength(100);
+            modelBuilder.Entity<HostedEventEmailPick>().Property(p => p.Email).HasMaxLength(320);
+            modelBuilder.Entity<HostedEventEmailPick>().Property(p => p.Phone).HasMaxLength(40);
+            modelBuilder.Entity<HostedEventEmailPick>().Property(p => p.Note).HasMaxLength(2000);
+            modelBuilder.Entity<HostedEventEmailPick>().Property(p => p.RefusedSentence).HasMaxLength(500);
+            modelBuilder.Entity<HostedEventEmailPick>().Property(p => p.TokenHash).HasMaxLength(64);
+            modelBuilder.Entity<HostedEventEmailPick>().HasIndex(p => p.TokenHash).IsUnique();
+            // ONE LIVE PICK PER ADDRESS PER EVENT. Picking again replaces the first, which is what a
+            // person whose letter went to spam does; the index makes a second live one impossible.
+            modelBuilder.Entity<HostedEventEmailPick>()
+                .HasIndex(p => new { p.HostedEventId, p.Email })
+                .IsUnique()
+                .HasFilter("[IsLive] = 1")
+                .HasDatabaseName("UX_HostedEventEmailPicks_OneLivePerAddress");
+            // What the lapse sweep asks for.
+            modelBuilder.Entity<HostedEventEmailPick>().HasIndex(p => new { p.IsLive, p.ExpiresUtc });
+
+            modelBuilder.Entity<HostedEventEmailPickPlace>()
+                .HasOne(p => p.HostedEventEmailPick).WithMany(p => p.Places)
+                .HasForeignKey(p => p.HostedEventEmailPickId).OnDelete(DeleteBehavior.Cascade);
+            modelBuilder.Entity<HostedEventEmailPickPlace>()
+                .HasOne(p => p.HostedEventNight).WithMany()
+                .HasForeignKey(p => p.HostedEventNightId).OnDelete(DeleteBehavior.NoAction);
+            modelBuilder.Entity<HostedEventEmailPickPlace>()
+                .HasOne(p => p.HostedEventLayoutUnit).WithMany()
+                .HasForeignKey(p => p.HostedEventLayoutUnitId).OnDelete(DeleteBehavior.NoAction);
+            // THE ARBITER BETWEEN PICKS, as the bookings' own is between holds: two strangers pressing
+            // "hold these seats" in the same instant cannot both have seat H9 pending.
+            modelBuilder.Entity<HostedEventEmailPickPlace>()
+                .HasIndex(p => new { p.HostedEventNightId, p.HostedEventLayoutUnitId })
+                .IsUnique()
+                .HasFilter("[IsLive] = 1 AND [HostedEventLayoutUnitId] IS NOT NULL")
+                .HasDatabaseName("UX_HostedEventEmailPickPlaces_LiveUnitNight");
+            modelBuilder.Entity<HostedEventBooking>()
+                .HasOne(b => b.HostedEvent).WithMany(e => e.Bookings)
+                .HasForeignKey(b => b.HostedEventId).OnDelete(DeleteBehavior.Cascade);
+            modelBuilder.Entity<HostedEventBooking>()
+                .HasOne(b => b.LeadAppUser).WithMany()
+                .HasForeignKey(b => b.LeadAppUserId).OnDelete(DeleteBehavior.NoAction);
+            modelBuilder.Entity<HostedEventBooking>()
+                .HasOne(b => b.DecidedByAppUser).WithMany()
+                .HasForeignKey(b => b.DecidedByAppUserId).OnDelete(DeleteBehavior.NoAction);
+            modelBuilder.Entity<HostedEventBooking>()
+                .HasOne(b => b.CreatedByAppUser).WithMany()
+                .HasForeignKey(b => b.CreatedByAppUserId).OnDelete(DeleteBehavior.NoAction);
+            modelBuilder.Entity<HostedEventBooking>()
+                .HasOne(b => b.UpdatedByAppUser).WithMany()
+                .HasForeignKey(b => b.UpdatedByAppUserId).OnDelete(DeleteBehavior.NoAction);
+
+            // ONE LIVE BOOKING PER PERSON PER EVENT. Somebody who asks twice is one party asking
+            // twice, and two rows would have the venue decide the same people's weekend separately
+            // — confirming one and turning down the other, with no way to tell which is real.
+            // Filtered so that a turned-down party may ask again, which is an ordinary thing.
+            modelBuilder.Entity<HostedEventBooking>()
+                .HasIndex(b => new { b.HostedEventId, b.LeadAppUserId })
+                .IsUnique()
+                .HasFilter("[Status] IN (0, 1, 4)")
+                .HasDatabaseName("UX_HostedEventBookings_OneLivePerLead");
+
+            // ONE ROW PER BOOKING PER NIGHT PER UNIT, and the unit is the part that was missing.
+            //
+            // It used to be unique on (booking, night) alone, which said a party could hold only
+            // one thing on any night. That is wrong twice over: a family of five takes a double AND
+            // a twin, and a party of three at the theatre takes three seats. Every group-by that
+            // trusted the old shape collapsed a party's three seats into one, so the house looked
+            // two-thirds empty while it was sold out.
+            modelBuilder.Entity<HostedEventBookingNight>()
+                .HasIndex(n => new
+                {
+                    n.HostedEventBookingId, n.HostedEventNightId, n.HostedEventLayoutUnitId,
+                })
+                .IsUnique();
+
+            // THE ARBITER. One live party per unit per night, enforced by the database.
+            //
+            // Two guests pressing "hold these seats" a millisecond apart both pass any check
+            // written in C#: each reads the seat as free before the other writes. Nothing in the
+            // application layer can fix that — not a transaction, not a re-read, not a lock the
+            // second worker cannot see. A unique index can, because one of the two inserts fails
+            // and the loser is told which seat went, in words, with the plan repainted.
+            //
+            // Filtered on three things, and each earns its place. A day pass holds no unit (null)
+            // and any number of parties may have one. A released night is history. And a REQUEST
+            // merely names a preferred room — twelve parties may all ask for the Blue Room and the
+            // venue picks one, so an index that could not tell a preference from a holding would
+            // refuse the second request and close the waiting list Ask mode exists for.
+            modelBuilder.Entity<HostedEventBookingNight>()
+                .HasIndex(n => new { n.HostedEventNightId, n.HostedEventLayoutUnitId })
+                .IsUnique()
+                .HasFilter("[IsHolding] = 1 AND [HostedEventLayoutUnitId] IS NOT NULL AND [ReleasedUtc] IS NULL")
+                .HasDatabaseName("UX_HostedEventBookingNights_LiveUnitNight");
+
+            // And the unfiltered one the board reads: who is in this unit on this night, including
+            // the ones that have been released.
+            modelBuilder.Entity<HostedEventBookingNight>()
+                .HasIndex(n => new { n.HostedEventNightId, n.HostedEventLayoutUnitId, n.ReleasedUtc })
+                .HasDatabaseName("IX_HostedEventBookingNights_UnitNightHistory");
+            modelBuilder.Entity<HostedEventBookingNight>()
+                .HasOne(n => n.HostedEventBooking).WithMany(b => b.Nights)
+                .HasForeignKey(n => n.HostedEventBookingId).OnDelete(DeleteBehavior.Cascade);
+            // NoAction on both of the others: SQL Server refuses multiple cascade paths into the
+            // same table, and the booking's cascade already clears these rows.
+            modelBuilder.Entity<HostedEventBookingNight>()
+                .HasOne(n => n.HostedEventNight).WithMany()
+                .HasForeignKey(n => n.HostedEventNightId).OnDelete(DeleteBehavior.NoAction);
+            modelBuilder.Entity<HostedEventBookingNight>()
+                .HasOne(n => n.HostedEventLayoutUnit).WithMany()
+                .HasForeignKey(n => n.HostedEventLayoutUnitId).OnDelete(DeleteBehavior.NoAction);
+
+            modelBuilder.Entity<HostedEventBookingGuest>()
+                .Property(g => g.DisplayName).HasMaxLength(160).IsRequired();
+            modelBuilder.Entity<HostedEventBookingGuest>()
+                .Property(g => g.DietaryNotes).HasMaxLength(1000);
+            modelBuilder.Entity<HostedEventBookingGuest>()
+                .HasOne(g => g.HostedEventBooking).WithMany(b => b.Guests)
+                .HasForeignKey(g => g.HostedEventBookingId).OnDelete(DeleteBehavior.Cascade);
+            modelBuilder.Entity<HostedEventBookingGuest>()
+                .HasOne(g => g.AppUser).WithMany()
+                .HasForeignKey(g => g.AppUserId).OnDelete(DeleteBehavior.NoAction);
+
+            // ── Menus (item 235 phase 2) ─────────────────────────────────────
+            modelBuilder.Entity<HostedEventMenu>()
+                .Property(m => m.Title).HasMaxLength(120).IsRequired();
+            modelBuilder.Entity<HostedEventMenu>()
+                .Property(m => m.Notes).HasMaxLength(2000);
+            modelBuilder.Entity<HostedEventMenu>()
+                .HasIndex(m => m.HostedEventNightId);
+            modelBuilder.Entity<HostedEventMenu>()
+                .HasOne(m => m.HostedEventNight).WithMany()
+                .HasForeignKey(m => m.HostedEventNightId).OnDelete(DeleteBehavior.Cascade);
+            modelBuilder.Entity<HostedEventMenu>()
+                .HasOne(m => m.CreatedByAppUser).WithMany()
+                .HasForeignKey(m => m.CreatedByAppUserId).OnDelete(DeleteBehavior.NoAction);
+            modelBuilder.Entity<HostedEventMenu>()
+                .HasOne(m => m.UpdatedByAppUser).WithMany()
+                .HasForeignKey(m => m.UpdatedByAppUserId).OnDelete(DeleteBehavior.NoAction);
+
+            modelBuilder.Entity<HostedEventMenuItem>()
+                .Property(i => i.Name).HasMaxLength(200).IsRequired();
+            modelBuilder.Entity<HostedEventMenuItem>()
+                .Property(i => i.Course).HasMaxLength(60);
+            modelBuilder.Entity<HostedEventMenuItem>()
+                .Property(i => i.Description).HasMaxLength(1000);
+            modelBuilder.Entity<HostedEventMenuItem>()
+                .Property(i => i.DietaryTags).HasMaxLength(300);
+            modelBuilder.Entity<HostedEventMenuItem>()
+                .HasOne(i => i.HostedEventMenu).WithMany(m => m.Items)
+                .HasForeignKey(i => i.HostedEventMenuId).OnDelete(DeleteBehavior.Cascade);
+
+            // ── The pass a door scans (item 235 phase 3) ────────────────────
+            // The token is the whole of the secret and it is looked up rather than decoded, so the
+            // unique index is not an optimisation — it is what makes "this code is that party"
+            // a fact the database enforces rather than a hope.
+            modelBuilder.Entity<HostedEventPass>()
+                .Property(p => p.Token).HasMaxLength(128).IsRequired();
+            modelBuilder.Entity<HostedEventPass>()
+                .HasIndex(p => p.Token).IsUnique();
+            // "Show me this booking's passes, newest first" — the organiser's row, and the guest's.
+            modelBuilder.Entity<HostedEventPass>()
+                .HasIndex(p => new { p.HostedEventBookingId, p.IssuedUtc });
+            modelBuilder.Entity<HostedEventPass>()
+                .Property(p => p.RevokedReason).HasMaxLength(500);
+            modelBuilder.Entity<HostedEventPass>()
+                .HasOne(p => p.HostedEventBooking).WithMany(b => b.Passes)
+                .HasForeignKey(p => p.HostedEventBookingId).OnDelete(DeleteBehavior.Cascade);
+            modelBuilder.Entity<HostedEventPass>()
+                .HasOne(p => p.CreatedByAppUser).WithMany()
+                .HasForeignKey(p => p.CreatedByAppUserId).OnDelete(DeleteBehavior.NoAction);
+            modelBuilder.Entity<HostedEventPass>()
+                .HasOne(p => p.UpdatedByAppUser).WithMany()
+                .HasForeignKey(p => p.UpdatedByAppUserId).OnDelete(DeleteBehavior.NoAction);
+            modelBuilder.Entity<HostedEventPass>()
+                .HasOne(p => p.CheckedInByAppUser).WithMany()
+                .HasForeignKey(p => p.CheckedInByAppUserId).OnDelete(DeleteBehavior.NoAction);
+
+            // PlaceRoom gains what a booking needs to know about it (item 235 phase 2).
+            modelBuilder.Entity<PlaceRoom>().Property(e => e.BedNote).HasMaxLength(200);
+
+            // ── The mail outbox (item 239) ──────────────────────────────────
+            // One index, and it is the only query the sender makes: the next few letters due,
+            // oldest first. Filtered to rows still in play, because an outbox that has been
+            // working for a year is almost entirely rows nobody will look at again and a full
+            // index over them would be paid for on every pass.
+            modelBuilder.Entity<OutboxEmail>()
+                .HasIndex(e => e.NextAttemptUtc)
+                .HasFilter("[AcceptedBySmtpUtc] IS NULL AND [FailedUtc] IS NULL");
+            // The screen's query: newest first, and by kind when somebody is chasing one sort of
+            // letter.
+            modelBuilder.Entity<OutboxEmail>()
+                .HasIndex(e => e.CreatedUtc);
+            modelBuilder.Entity<OutboxEmail>()
+                .HasIndex(e => new { e.Kind, e.CreatedUtc });
+            modelBuilder.Entity<OutboxEmail>()
+                .Property(e => e.To).HasMaxLength(320).IsRequired();
+            modelBuilder.Entity<OutboxEmail>()
+                .Property(e => e.Subject).HasMaxLength(400).IsRequired();
+            modelBuilder.Entity<OutboxEmail>()
+                .Property(e => e.ReplyTo).HasMaxLength(320);
+            modelBuilder.Entity<OutboxEmail>()
+                .Property(e => e.Kind).HasMaxLength(60).IsRequired();
+            modelBuilder.Entity<OutboxEmail>()
+                .Property(e => e.ClaimedBy).HasMaxLength(100);
+            modelBuilder.Entity<OutboxEmail>()
+                .Property(e => e.LastError).HasMaxLength(1000);
+            // No foreign keys to the organization or the person on purpose. They are here so a
+            // screen can link back, not so the database can enforce anything, and a letter must
+            // outlive the thing it was about — telling somebody their group was deleted is exactly
+            // the letter a cascade would take away.
+            modelBuilder.Entity<OutboxEmailAttachment>()
+                .Property(a => a.FileName).HasMaxLength(260).IsRequired();
+            modelBuilder.Entity<OutboxEmailAttachment>()
+                .Property(a => a.ContentType).HasMaxLength(200).IsRequired();
+            modelBuilder.Entity<OutboxEmailAttachment>()
+                .HasOne(a => a.OutboxEmail).WithMany(e => e.Attachments)
+                .HasForeignKey(a => a.OutboxEmailId).OnDelete(DeleteBehavior.Cascade);
+
+            // ── Event credits (item 235) ────────────────────────────────────
+            // One credit, one event. Owned by a group OR a person — Ben said "the member or group"
+            // — and never both, which the check constraint says rather than leaving it to every
+            // query to remember. A credit owned by nobody is unspendable, and one owned twice is a
+            // question nothing could answer.
+            modelBuilder.Entity<EventCredit>()
+                .ToTable(t => t.HasCheckConstraint(
+                    "CK_EventCredits_OneOwner",
+                    "([OwnerOrganizationId] IS NOT NULL AND [OwnerAppUserId] IS NULL) OR "
+                  + "([OwnerOrganizationId] IS NULL AND [OwnerAppUserId] IS NOT NULL)"));
+            modelBuilder.Entity<EventCredit>()
+                .Property(c => c.PriceAtPurchase).HasPrecision(18, 2);
+            modelBuilder.Entity<EventCredit>()
+                .Property(c => c.Currency).HasMaxLength(3);
+            modelBuilder.Entity<EventCredit>()
+                .Property(c => c.ProviderCheckoutRef).HasMaxLength(200);
+            modelBuilder.Entity<EventCredit>()
+                .Property(c => c.ProviderPaymentRef).HasMaxLength(200);
+            modelBuilder.Entity<EventCredit>()
+                .Property(c => c.ReceiptNumber).HasMaxLength(40);
+            modelBuilder.Entity<EventCredit>()
+                .Property(c => c.RefundedReason).HasMaxLength(500);
+            modelBuilder.Entity<EventCredit>()
+                .Property(c => c.GrantedReason).HasMaxLength(500);
+            // Fulfilment is idempotent on the payment: a webhook Stripe sends twice must not hand
+            // somebody two credits. Filtered because everything before a payment has none.
+            modelBuilder.Entity<EventCredit>()
+                .HasIndex(c => c.ProviderPaymentRef)
+                .HasFilter("[ProviderPaymentRef] IS NOT NULL");
+            // The question spending asks: "the oldest one this owner can still use".
+            modelBuilder.Entity<EventCredit>()
+                .HasIndex(c => new { c.OwnerOrganizationId, c.SpentUtc, c.ExpiresUtc });
+            modelBuilder.Entity<EventCredit>()
+                .HasIndex(c => new { c.OwnerAppUserId, c.SpentUtc, c.ExpiresUtc });
+            modelBuilder.Entity<EventCredit>()
+                .HasOne(c => c.OwnerOrganization).WithMany()
+                .HasForeignKey(c => c.OwnerOrganizationId).OnDelete(DeleteBehavior.NoAction);
+            modelBuilder.Entity<EventCredit>()
+                .HasOne(c => c.OwnerAppUser).WithMany()
+                .HasForeignKey(c => c.OwnerAppUserId).OnDelete(DeleteBehavior.NoAction);
+            // The event it was spent on may be archived or purged; the credit stays as the record
+            // that it was spent, because "have we paid for this?" must not become unanswerable.
+            modelBuilder.Entity<EventCredit>()
+                .HasOne(c => c.SpentOnHostedEvent).WithMany()
+                .HasForeignKey(c => c.SpentOnHostedEventId).OnDelete(DeleteBehavior.SetNull);
+            modelBuilder.Entity<EventCredit>()
+                .HasOne(c => c.CreatedByAppUser).WithMany()
+                .HasForeignKey(c => c.CreatedByAppUserId).OnDelete(DeleteBehavior.NoAction);
+            modelBuilder.Entity<EventCredit>()
+                .HasOne(c => c.UpdatedByAppUser).WithMany()
+                .HasForeignKey(c => c.UpdatedByAppUserId).OnDelete(DeleteBehavior.NoAction);
+
+            // ONE umbrella row per event, said by the database rather than by a convention
+            // somebody has to remember. Filtered so the thousands of ordinary calendar rows, which
+            // all have a null here, do not collide with each other.
+            modelBuilder.Entity<OrgCalendarEvent>()
+                .HasIndex(e => e.HostedEventId).IsUnique()
+                .HasFilter("[HostedEventId] IS NOT NULL");
+            modelBuilder.Entity<OrgCalendarEvent>()
+                .HasOne(e => e.HostedEvent).WithMany(h => h.CalendarRows)
+                .HasForeignKey(e => e.HostedEventId).OnDelete(DeleteBehavior.SetNull);
 
             // Guides: one row per person per tour, and per person per date. Cascade from the
             // thing they guide, NoAction on the person — deleting an account must not cascade

@@ -354,6 +354,141 @@ public sealed class OrganizationPurge
             // they block the group's deletion twice over. They go after the dates that name them,
             // which the line above has just taken, and before the addresses further down.
             await db.Tours.Where(x => x.OrganizationId == organizationId).ExecuteDeleteAsync(ct);
+            // Event credits name the group that bought them and the event they were spent on, so
+            // they go before both. The money they represent survives in the ledger rows below,
+            // which is where a purged group's history is supposed to live.
+            await db.EventCredits.Where(x => x.OwnerOrganizationId == organizationId).ExecuteDeleteAsync(ct);
+            // Hosted events (item 235) block the deletion the same way a tour does: they point at
+            // the group and at a place, both NoAction. They go after the calendar rows above,
+            // because the umbrella row names its event. The nights cascade from the event, so
+            // taking the events takes them.
+            // A booking's nights and an event's offered rooms both point at a PlaceRoom with
+            // NoAction, so they have to go before the rooms further down. They are taken here
+            // rather than there because they also hang off the event, and deleting the event
+            // first would be refused by these same rows (item 235 phase 2).
+            // Dining seats (phase 13) point at a table and a booking with NoAction; they cascade only from their
+            // sitting, so they go first and the tables and bookings can follow.
+            // Letters to the guests (phase 17a) point at a night with NoAction and a sender with NoAction; they
+            // cascade only from their event, so they go before the nights and the people.
+            await db.HostedEventAnnouncements
+                .Where(x => x.HostedEvent.OrganizationId == organizationId)
+                .ExecuteDeleteAsync(ct);
+            // IsHaunted's removals of an event (phase 17b) cascade from it but name people with NoAction.
+            await db.HostedEventRemovals
+                .Where(x => x.HostedEvent.OrganizationId == organizationId)
+                .ExecuteDeleteAsync(ct);
+            await db.HostedEventDiningSeats
+                .Where(x => x.HostedEventDiningTable.HostedEvent.OrganizationId == organizationId
+                         || x.HostedEventBooking.HostedEvent.OrganizationId == organizationId)
+                .ExecuteDeleteAsync(ct);
+            // A venue's photo library (phase 12): a row may name the group that offered it, the event it
+            // came from, or a file this group owns — each NoAction. The venue's own profile rows cascade.
+            await db.VenuePhotos
+                .Where(x => x.OfferedByOrganizationId == organizationId
+                         || (x.OfferedFromHostedEventId != null && x.OfferedFromHostedEvent!.OrganizationId == organizationId)
+                         || x.UploadFile.OwnerOrganizationId == organizationId)
+                .ExecuteDeleteAsync(ct);
+            // Places picked by email (slice 11d) point at nights and units with NoAction, and a pick
+            // points at the booking it became. Taken whole — the pick's places cascade from it — by
+            // the event, and by the reference, for the same reason as the nights below.
+            await db.HostedEventEmailPicks
+                .Where(x => x.HostedEvent.OrganizationId == organizationId
+                         || (x.HostedEventBookingId != null
+                             && x.HostedEventBooking!.HostedEvent.OrganizationId == organizationId))
+                .ExecuteDeleteAsync(ct);
+            await db.HostedEventEmailPickPlaces
+                .Where(x => x.HostedEventLayoutUnitId != null
+                         && x.HostedEventLayoutUnit!.HostedEvent.OrganizationId == organizationId)
+                .ExecuteDeleteAsync(ct);
+            await db.HostedEventBookingNights
+                .Where(x => x.HostedEventBooking.HostedEvent.OrganizationId == organizationId)
+                .ExecuteDeleteAsync(ct);
+            // Both of these keys became NULLABLE in phase 2.4 — a night can be attendance with no
+            // room, and a unit can be a seat with no room behind it — and an optional reference is
+            // exactly the shape that has refused a deletion here before (BenCo, 2026-09-03, on
+            // OrgMessages.CaseId while OrgMessages was "purged" by OrganizationId). So each is also
+            // swept BY THE REFERENCE, not only by the owner: a night pointing at one of this
+            // group's units, and a unit pointing at one of this group's rooms, whoever's event
+            // they happen to belong to. If another group's event were offering our room, our
+            // deletion taking that offer with it is the correct outcome — the room is going away.
+            await db.HostedEventBookingNights
+                .Where(x => x.HostedEventLayoutUnitId != null
+                         && x.HostedEventLayoutUnit!.HostedEvent.OrganizationId == organizationId)
+                .ExecuteDeleteAsync(ct);
+            await db.HostedEventLayoutUnits
+                .Where(x => x.HostedEvent.OrganizationId == organizationId)
+                .ExecuteDeleteAsync(ct);
+            await db.HostedEventLayoutUnits
+                .Where(x => x.PlaceRoomId != null && x.PlaceRoom!.OrganizationId == organizationId)
+                .ExecuteDeleteAsync(ct);
+            // Venues (item 235 phase 9). Every key here is NoAction, because a request names two
+            // groups and an event, and a grant is pointed at by events of OTHER groups. So: loosen
+            // what points at this group's grants and requests first — another group's event keeps
+            // existing, it just no longer rests on a yes from a group that is gone, and its
+            // readiness list says so — then take the rows.
+            var goingGrantIds = db.OrganizationVenueGrants
+                .Where(g => g.VenueOrganizationId == organizationId || g.GranteeOrganizationId == organizationId)
+                .Select(g => g.Id);
+            await db.HostedEvents
+                .Where(e => e.VenueGrantId != null && goingGrantIds.Contains(e.VenueGrantId.Value))
+                .ExecuteUpdateAsync(u => u.SetProperty(e => e.VenueGrantId, (Guid?)null), ct);
+            await db.VenueHostingRequests
+                .Where(r => r.VenueOrganizationId == organizationId
+                         || r.RequestingOrganizationId == organizationId
+                         || r.HostedEvent.OrganizationId == organizationId)
+                .ExecuteDeleteAsync(ct);
+            await db.VenueHostingRequests
+                .Where(r => r.OrganizationVenueGrantId != null && goingGrantIds.Contains(r.OrganizationVenueGrantId.Value))
+                .ExecuteUpdateAsync(u => u.SetProperty(r => r.OrganizationVenueGrantId, (Guid?)null), ct);
+            await db.OrganizationVenueGrants
+                .Where(g => g.VenueOrganizationId == organizationId || g.GranteeOrganizationId == organizationId)
+                .ExecuteDeleteAsync(ct);
+            await db.OrganizationVenueProfiles.Where(v => v.OrganizationId == organizationId).ExecuteDeleteAsync(ct);
+            // Claims this group made go; an objection it made to somebody else's claim stays as a
+            // record of the dispute, with the objector's name cleared.
+            await db.VenuePlaceClaims.Where(c => c.OrganizationId == organizationId).ExecuteDeleteAsync(ct);
+            await db.VenuePlaceClaims.Where(c => c.ObjectingOrganizationId == organizationId)
+                .ExecuteUpdateAsync(u => u.SetProperty(c => c.ObjectingOrganizationId, (Guid?)null), ct);
+            // Contact details this group recorded: its private notes go with it. Its PUBLIC ones are
+            // the place's front door, recorded for everybody, so they stay — unless a claim still
+            // names one as where its code went, which the line above has just removed.
+            await db.VenuePlaceClaims
+                .Where(c => c.PlaceContactId != null && c.PlaceContact!.OrganizationId == organizationId && !c.PlaceContact.IsPublic)
+                .ExecuteUpdateAsync(u => u.SetProperty(c => c.PlaceContactId, (Guid?)null), ct);
+            await db.PlaceContacts.Where(c => c.OrganizationId == organizationId && !c.IsPublic).ExecuteDeleteAsync(ct);
+            await db.PlaceContacts.Where(c => c.OrganizationId == organizationId && c.IsPublic)
+                .ExecuteUpdateAsync(u => u.SetProperty(c => c.OrganizationId, (Guid?)null), ct);
+
+            // How often each person hears about this group's bookings (item 235 phase 8). It would
+            // cascade with the group; it is named here so the next reader does not have to know that.
+            // The per-event cursors cascade from the events on the line below.
+            await db.EventBookingAlertPreferences.Where(x => x.OrganizationId == organizationId).ExecuteDeleteAsync(ct);
+            // An ad leads to one of this group's events (phase 11). Ads are the group's own and go
+            // further down; the link is cleared here so the events below can go first.
+            await db.OrganizationAds.Where(x => x.HostedEventId != null && x.HostedEvent!.OrganizationId == organizationId)
+                .ExecuteUpdateAsync(u => u.SetProperty(x => x.HostedEventId, (Guid?)null), ct);
+            // The rooms of this group's events go with the events (phase 11). The posts were guests'
+            // writing in a space the event provided; the files on them are the guests' own and stay in
+            // their libraries — only the posts and the reports about them go.
+            await db.OrgMessageReports
+                .Where(x => x.OrgMessageId != null && x.OrgMessage!.HostedEventId != null
+                         && x.OrgMessage.HostedEvent!.OrganizationId == organizationId)
+                .ExecuteDeleteAsync(ct);
+            await db.OrgMessages
+                .Where(x => x.HostedEventId != null && x.HostedEvent!.OrganizationId == organizationId)
+                .ExecuteDeleteAsync(ct);
+            await db.HostedEvents.Where(x => x.OrganizationId == organizationId).ExecuteDeleteAsync(ct);
+
+            // The outbox is CLEARED of its link, never emptied (item 239). A queued letter is not
+            // the group's property — it is a letter to a person, and the most important one a
+            // purge can produce is the one telling somebody the group they belonged to is gone.
+            // Deleting the rows would take that letter away at the moment it was most needed, and
+            // would also erase the record of every letter the group ever caused, which is the
+            // thing the outbox exists to keep. Only the pointer goes, because after this it points
+            // at nothing.
+            await db.OutboxEmails
+                .Where(x => x.OrganizationId == organizationId)
+                .ExecuteUpdateAsync(u => u.SetProperty(x => x.OrganizationId, (Guid?)null), ct);
             await db.Cases.Where(x => x.OrganizationId == organizationId).ExecuteDeleteAsync(ct);
 
             await db.BillingLedgerEntries.Where(x => x.OrganizationId == organizationId).ExecuteDeleteAsync(ct);
@@ -407,6 +542,11 @@ public sealed class OrganizationPurge
             await db.OrganizationPhones.Where(x => x.OrganizationId == organizationId).ExecuteDeleteAsync(ct);
             await db.OrganizationSubscriptions.Where(x => x.OrganizationId == organizationId).ExecuteDeleteAsync(ct);
             await db.OrganizationUrlNameAliases.Where(x => x.OrganizationId == organizationId).ExecuteDeleteAsync(ct);
+            // A session at another group's event can be in one of this group's rooms, when this group
+            // was the venue and lent them (item 235 phase 10). The session stays; it loses the room.
+            await db.HostedEventSessions
+                .Where(x => x.PlaceRoomId != null && x.PlaceRoom!.OrganizationId == organizationId)
+                .ExecuteUpdateAsync(u => u.SetProperty(x => x.PlaceRoomId, (Guid?)null), ct);
             await db.PlaceRooms.Where(x => x.OrganizationId == organizationId).ExecuteDeleteAsync(ct);
             await db.Publications.Where(x => x.OrganizationId == organizationId).ExecuteDeleteAsync(ct);
             await db.TierChangeNotices.Where(x => x.OrganizationId == organizationId).ExecuteDeleteAsync(ct);

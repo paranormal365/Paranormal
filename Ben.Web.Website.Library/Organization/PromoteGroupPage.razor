@@ -1,4 +1,5 @@
 @page "/organizations/{OrgId:guid}/promote"
+@using Ben.Data.Common.Enums
 
 @inject IBenAdminClient AdminClient
 @inject IBenUserState UserState
@@ -41,7 +42,7 @@
                 </div>
                 <p class="card-text">@_current.Body</p>
                 <p class="small text-secondary mb-2">
-                    Leads to: @(_current.TargetKind == "find" ? "the group finder" : "your public page")
+                    Leads to: @(_current.TargetKind switch { "find" => "the group finder", "event" => _events.FirstOrDefault(e => e.Id == _current.HostedEventId)?.Name ?? "one of your events", _ => "your public page" })
                 </p>
                 @if (_current.Status == Ben.Data.Common.Enums.OrganizationAdStatus.Rejected)
                 {
@@ -169,6 +170,28 @@
                             <span><span class="fw-semibold d-block">The group finder</span>
                             <span class="small text-secondary">Sends people to search near them — useful while your page is still thin.</span></span>
                         </label>
+                        @* Item 235 phase 11: one of the group's events. Only published events still to come are
+                           offered, and the ad stops being shown by itself once the event is over. *@
+                        @if (_events.Count > 0)
+                        {
+                            <label class="list-group-item d-flex gap-2">
+                                <input class="form-check-input mt-1" type="radio" name="ad-target" id="ad-target-event"
+                                       checked="@(_targetKind == "event")"
+                                       @onchange="@(() => { _targetKind = "event"; _eventId ??= _events[0].Id; })" />
+                                <span class="flex-grow-1"><span class="fw-semibold d-block">One of your events</span>
+                                <span class="small text-secondary">Sends people straight to the event's page. The card stops showing when the event is over.</span>
+                                @if (_targetKind == "event")
+                                {
+                                    <select class="form-select form-select-sm mt-2" id="ad-event" aria-label="Which event" @bind="_eventId">
+                                        @foreach (var ev in _events)
+                                        {
+                                            <option value="@ev.Id">@ev.Name · @ev.StartsOn.ToString("MM/dd/yyyy")</option>
+                                        }
+                                    </select>
+                                }
+                                </span>
+                            </label>
+                        }
                     </div>
                     <p class="small text-secondary mb-0">
                         The card's success rides on where it lands: a striking headline over an empty
@@ -186,7 +209,7 @@
                             <p class="card-text mb-1">@_body</p>
                             <p class="small text-secondary mb-0">
                                 @(_imageId is null ? "No picture" : "With your chosen picture") ·
-                                leads to @(_targetKind == "find" ? "the group finder" : "your public page")
+                                leads to @LeadsTo
                             </p>
                         </div>
                     </div>
@@ -229,6 +252,18 @@
     private Guid?  _imageId;
     private string? _imageName;
     private string _targetKind = "org";
+    private Guid? _eventId;
+    private IReadOnlyList<HostedEventRecord> _events = [];
+
+    /// <summary>Opened from an event's page with ?event=, which starts the ad pointing at it.</summary>
+    [SupplyParameterFromQuery(Name = "event")] public Guid? Event { get; set; }
+
+    private string LeadsTo => _targetKind switch
+    {
+        "find" => "the group finder",
+        "event" => _events.FirstOrDefault(e => e.Id == _eventId)?.Name ?? "one of your events",
+        _ => "your public page",
+    };
     private bool _showImagePicker;
 
     public PromoteGroupPage()
@@ -247,7 +282,22 @@
     {
         if (!await UserState.WaitUntilAuthReadyAsync(RendererInfo.IsInteractive)) return;
         if (!UserState.IsAuthenticated) { NavManager.NavigateTo("/login"); return; }
+
+        // The group's events an ad may lead to: published and still to come.
+        var events = await AdminClient.GetHostedEventsAsync(OrgId);
+        _events = [.. events.Items
+            .Where(e => e.LifecycleState is HostedEventLifecycleState.Published or HostedEventLifecycleState.Live
+                     && e.EndsOn.Date >= DateTime.UtcNow.Date)
+            .OrderBy(e => e.StartsOn)];
+
         await ReloadAsync();
+
+        if (Event is Guid wanted && _events.Any(e => e.Id == wanted))
+        {
+            BeginEdit();
+            _targetKind = "event";
+            _eventId = wanted;
+        }
     }
 
     private async Task ReloadAsync()
@@ -290,6 +340,7 @@
             _imageId    = _current.ImageUploadFileId;
             _imageName  = _current.ImageUploadFileId is null ? null : "Current picture";
             _targetKind = _current.TargetKind;
+            _eventId    = _current.HostedEventId;
         }
         _wizard.Restore(0);
         _editing = true;
@@ -297,10 +348,10 @@
 
     // ── Draft round-trip ──────────────────────────────────────────────────────
 
-    private sealed record Draft(string Headline, string Body, Guid? ImageId, string? ImageName, string TargetKind);
+    private sealed record Draft(string Headline, string Body, Guid? ImageId, string? ImageName, string TargetKind, Guid? EventId = null);
 
     private string? CaptureDraft()
-        => JsonSerializer.Serialize(new Draft(_headline, _body, _imageId, _imageName, _targetKind));
+        => JsonSerializer.Serialize(new Draft(_headline, _body, _imageId, _imageName, _targetKind, _eventId));
 
     private void RestoreDraft(string data)
     {
@@ -308,10 +359,13 @@
         {
             if (JsonSerializer.Deserialize<Draft>(data) is not { } d) return;
             _headline = d.Headline; _body = d.Body; _imageId = d.ImageId;
-            _imageName = d.ImageName; _targetKind = d.TargetKind;
+            _imageName = d.ImageName; _targetKind = d.TargetKind; _eventId = d.EventId;
             _editing = true;
         }
-        catch { }
+        catch (JsonException)
+        {
+            // A draft saved by an older version of this page, or a hand-edited one: start fresh rather than fail.
+        }
     }
 
     // ── The picker's second consumer: the caller's own images ────────────────
@@ -347,7 +401,8 @@
     private async Task FinishAsync()
     {
         _error = null;
-        var request = new SaveOrganizationAdRequest(_headline.Trim(), _body.Trim(), _imageId, _targetKind);
+        var request = new SaveOrganizationAdRequest(_headline.Trim(), _body.Trim(), _imageId, _targetKind,
+            _targetKind == "event" ? _eventId : null);
 
         var (saved, error) = _current is null
             ? await AdminClient.CreateOrgAdAsync(OrgId, request)

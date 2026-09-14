@@ -22,6 +22,10 @@
                 <h6 class="card-title mb-1">@_card.Headline</h6>
                 <span class="badge bg-info" title="This group promotes itself here">Promoted</span>
             </div>
+            @if (_card.EventName is { Length: > 0 } eventName)
+            {
+                <p class="small fw-semibold mb-1">@eventName@(_card.EventStartsOn is { } starts ? $" · {starts:ddd MM/dd}" : "")</p>
+            }
             <p class="card-text small mb-2">@_card.Body</p>
             @* Through /go so the click is counted (item 186 F8) — the website route bumps the
                counter and forwards to the same two destinations this link used to point at. *@

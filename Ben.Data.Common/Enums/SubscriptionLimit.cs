@@ -123,4 +123,26 @@ public enum SubscriptionLimit
     /// A row nobody writes is exactly what the no-row-no-cap default is for.
     /// </remarks>
     CustomRoles = 8,
+
+
+    /// <summary>Hosted events a group may have on the go at once (item 235).</summary>
+    /// <remarks>
+    /// Read only for a group on the member ladder. A business kind pays per active event instead,
+    /// so no cap applies to it — the price is the cap.
+    /// </remarks>
+    ActiveHostedEvents = 14,
+
+    /// <summary>Sessions and classes one event's programme may hold.</summary>
+    EventSessions = 15,
+
+    /// <summary>People one event may have on its staff, members and helpers alike.</summary>
+    EventStaff = 16,
+
+    /// <summary>Megabytes of files one event may keep.</summary>
+    /// <remarks>
+    /// Beside the account-wide <see cref="StorageMegabytes"/>, not instead of it: a slide deck for
+    /// one weekend is a different thing from a group's whole archive, and a venue that runs twelve
+    /// events a year would otherwise spend its storage on last spring.
+    /// </remarks>
+    EventFilesMegabytes = 17,
 }

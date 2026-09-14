@@ -1,0 +1,209 @@
+@page "/organizations/{OrgId:guid}/events/{EventId:guid}/after"
+@namespace Ben.Web.Website.Library.Manage.Events
+
+@inject IBenAdminClient AdminClient
+@inject IBenUserState UserState
+@inject IJSRuntime JS
+
+@using Ben.Data.Common.Enums
+@using Ben.Service.Models.Entities
+@using Ben.Web.Services.WebApi
+@using Ben.Web.Website.Library.Kit
+
+@* After the event (item 235 phase 12): the thank-you, what guests said, and the two things an organizer
+   takes away — the next event started from this one, and the list of who came.
+
+   THE THANK-YOU IS ON BY DEFAULT. Ben: "If we generate a gallery, we can send that link in a thank you
+   link including any upcoming events hosted by the organizer." It goes the morning after the last
+   night to everybody with a confirmed place, once each. The page says exactly what it will contain.
+
+   HIDE, NEVER EDIT. A review the organizer disagrees with can be hidden from the page; the words stay
+   where the person who wrote them can still see them. *@
+
+<PageTitle>@(_after?.Name is { Length: > 0 } n ? $"After the event — {n}" : "After the event")</PageTitle>
+
+<div class="container-fluid py-3" style="max-width:900px;">
+    <div class="text-secondary small">
+        <a href="@($"/organizations/{OrgId}/events")">Events</a>
+        @if (_after is { } crumb)
+        {
+            <text> · </text><a href="@($"/organizations/{OrgId}/events/{EventId}")">@crumb.Name</a>
+        }
+    </div>
+
+    <h1 class="h3 mb-3">After the event <HelpLink Slug="organization-administration" Anchor="hosted-events" /></h1>
+
+    @if (_note is { Length: > 0 }) { <div class="alert alert-success py-2" id="after-note" role="status">@_note</div> }
+    @if (_error is { Length: > 0 }) { <div class="alert alert-danger py-2" id="after-error" role="alert">@_error</div> }
+
+    @if (_loading)
+    {
+        <BenLoaderOverlay Visible="true" Text="Reading the event…" />
+    }
+    else if (_after is null)
+    {
+        <div class="alert alert-warning" id="after-missing">This event couldn't be read, or you can't change it.</div>
+    }
+    else
+    {
+        var a = _after;
+
+        <div class="d-flex flex-wrap gap-2 mb-3">
+            <a class="btn btn-outline-secondary btn-sm" id="after-copy" href="@($"/organizations/{OrgId}/events/{EventId}/copy")">
+                Copy this event for next time
+            </a>
+            <button type="button" class="btn btn-outline-secondary btn-sm" id="after-export" disabled="@_busy" @onclick="ExportAsync">
+                Download bookings as a spreadsheet
+            </button>
+            <a class="btn btn-outline-secondary btn-sm" id="after-keep" href="@($"/organizations/{OrgId}/events/{EventId}/keep")">
+                Keep the files
+            </a>
+        </div>
+
+        <div class="card mb-3" id="after-thank-you">
+            <div class="card-header fw-semibold">Thank-you email</div>
+            <div class="card-body">
+                @if (a.ThankYouSentUtc is { } sent)
+                {
+                    <p class="mb-2" id="after-thanked">
+                        Sent @sent.ToViewerLocalTime(UserState).ToString("MM/dd/yyyy") to
+                        @(a.GuestsThanked == 1 ? "1 confirmed booking" : $"{a.GuestsThanked} confirmed bookings").
+                    </p>
+                }
+                else
+                {
+                    <div class="form-check form-switch mb-2">
+                        <input class="form-check-input" type="checkbox" id="after-send" @bind="_send" />
+                        <label class="form-check-label" for="after-send">
+                            Email a thank-you to everyone who attended
+                        </label>
+                    </div>
+                    <p class="small text-secondary" id="after-send-hint">
+                        It is sent automatically the morning after the event ends, to
+                        @(a.GuestsToThank == 1 ? "the 1 confirmed booking" : $"the {a.GuestsToThank} confirmed bookings").
+                        It includes your note below@(_reviews ? ", a link to leave a review" : "")@(a.HasGallery ? ", a link to the gallery" : ""),
+                        and up to three of your upcoming events.
+                    </p>
+                    <label class="form-label small mb-1" for="after-thank-you-note">Your note (appears at the top of the email)</label>
+                    <textarea class="form-control mb-2" id="after-thank-you-note" rows="4" maxlength="2000"
+                              placeholder="Thank you for spending Halloween with us. We'll be back in March."
+                              @bind="_thankYouNote" @bind:event="oninput"></textarea>
+                }
+
+                <div class="form-check form-switch mt-2">
+                    <input class="form-check-input" type="checkbox" id="after-allow-reviews" @bind="_reviews" />
+                    <label class="form-check-label" for="after-allow-reviews">Let attendees leave a review</label>
+                </div>
+
+                <button type="button" class="btn btn-primary btn-sm mt-3" id="after-save" disabled="@_busy" @onclick="SaveAsync">
+                    @(_busy ? "Saving…" : "Save")
+                </button>
+            </div>
+        </div>
+
+        <div class="card mb-3" id="after-reviews">
+            <div class="card-header fw-semibold d-flex justify-content-between flex-wrap gap-2">
+                <span>Reviews</span>
+                @if (a.Average is { } avg)
+                {
+                    <span class="text-secondary small">@avg.ToString("0.0") ★ from @a.Count</span>
+                }
+            </div>
+            @if (a.Reviews.Count == 0)
+            {
+                <div class="card-body text-secondary" id="after-no-reviews">
+                    No reviews yet. Anyone with a confirmed booking can leave one once the event is over.
+                </div>
+            }
+            else
+            {
+                <ul class="list-group list-group-flush">
+                    @foreach (var review in a.Reviews)
+                    {
+                        var thisOne = review;
+                        <li class="list-group-item after-review" data-review="@thisOne.Id">
+                            <div class="d-flex justify-content-between flex-wrap gap-2 align-items-baseline">
+                                <div>
+                                    <span class="text-warning">@(new string('★', thisOne.Stars))</span>
+                                    <span class="fw-semibold ms-1">@thisOne.By</span>
+                                    @if (thisOne.IsHidden)
+                                    {
+                                        <span class="badge text-bg-secondary ms-1">Hidden</span>
+                                    }
+                                </div>
+                                <button type="button" class="btn btn-sm btn-outline-secondary text-nowrap" disabled="@_busy"
+                                        @onclick="() => HideAsync(thisOne, !thisOne.IsHidden)">
+                                    @(thisOne.IsHidden ? "Show it again" : "Hide it")
+                                </button>
+                            </div>
+                            @if (!string.IsNullOrWhiteSpace(thisOne.Comment))
+                            {
+                                <p class="mb-0 mt-1 small" style="overflow-wrap:anywhere;">@thisOne.Comment</p>
+                            }
+                        </li>
+                    }
+                </ul>
+            }
+        </div>
+    }
+</div>
+
+@code {
+    [Parameter] public Guid OrgId { get; set; }
+    [Parameter] public Guid EventId { get; set; }
+
+    private HostedEventAfterRecord? _after;
+    private bool _loading = true, _busy;
+    private string? _note, _error;
+    private bool _send, _reviews;
+    private string? _thankYouNote;
+
+    protected override async Task OnAfterRenderAsync(bool firstRender)
+    {
+        if (!firstRender) return;
+        if (!await UserState.WaitUntilAuthReadyAsync(RendererInfo.IsInteractive)) return;
+
+        Take((await AdminClient.GetHostedEventAfterAsync(OrgId, EventId)).Item);
+        _loading = false;
+        StateHasChanged();
+    }
+
+    private void Take(HostedEventAfterRecord? after)
+    {
+        _after = after;
+        if (after is null) return;
+        _send = after.SendThankYou;
+        _reviews = after.AllowReviews;
+        _thankYouNote = after.ThankYouNote;
+    }
+
+    private async Task SaveAsync()
+    {
+        _busy = true; _note = null; _error = null;
+        var (saved, error) = await AdminClient.SetHostedEventAfterAsync(OrgId, EventId,
+            new SetHostedEventAfterRequest(_reviews, _send, _thankYouNote));
+        _busy = false;
+        if (saved is null) { _error = error ?? "That couldn't be saved just now."; return; }
+        Take(saved);
+        _note = "Saved.";
+    }
+
+    private async Task HideAsync(TourReviewRecord review, bool hide)
+    {
+        _busy = true; _note = null; _error = null;
+        var (saved, error) = await AdminClient.SetHostedEventReviewHiddenAsync(OrgId, EventId, review.Id, hide);
+        _busy = false;
+        if (saved is null) { _error = error ?? "That couldn't be changed just now."; return; }
+        _after = saved;
+        _note = hide ? "Hidden from the event's page." : "Shown again.";
+    }
+
+    private async Task ExportAsync()
+    {
+        _busy = true;
+        var file = await AdminClient.DownloadHostedEventBookingsCsvAsync(OrgId, EventId);
+        _busy = false;
+        if (file is null) { _error = "The spreadsheet couldn't be made just now."; return; }
+        await JS.InvokeVoidAsync("downloadFileFromBase64", Convert.ToBase64String(file.Value.Data), "text/csv", file.Value.FileName);
+    }
+}

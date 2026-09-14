@@ -52,6 +52,50 @@ public static class SiteSettingKeys
     /// </remarks>
     public const string AllowTourBusinessSignUps = "org.allow-tour-signups";
 
+    /// <summary>Whether event credits are on sale at all (item 235).</summary>
+    /// <remarks>
+    /// Unset reads as ON, like every other policy switch here: introducing a check must never
+    /// close a door for a site that has not touched the setting.
+    /// </remarks>
+    public const string EventCreditsEnabled = "events.credits-enabled";
+
+    /// <summary>What one event credit costs, in dollars (item 235).</summary>
+    /// <remarks>
+    /// Ben set it at 99 on 2026-09-11. A setting rather than a constant so the price moves without
+    /// a deployment — and because each credit freezes what was paid for it, moving it never
+    /// reaches one somebody already holds.
+    /// </remarks>
+    public const string EventCreditPriceUsd = "events.credit-price-usd";
+
+    /// <summary>
+    /// How long before an event starts a cancellation still returns its credit, in hours.
+    /// </summary>
+    /// <remarks>
+    /// Ben, 2026-09-12: <i>"Maybe up to 48 hours before event?"</i> A setting rather than a constant
+    /// because it is a policy about somebody's ninety-nine dollars, and the right number is the
+    /// kind of thing that changes once real hosts have used it. Unset reads as 48.
+    /// </remarks>
+    public const string EventCancellationCreditWindowHours = "events.cancellation-credit-window-hours";
+
+    /// <summary>
+    /// How much one hosted event may hold, in megabytes: its files, its gallery and the photos posted in
+    /// its room (item 235 phase 11).
+    /// </summary>
+    /// <remarks>
+    /// Ben, 2026-09-13: "We should set up a max storage size for an event like 2,000 mb." Unset reads as
+    /// 2000. A setting, because the right number depends on what storage costs and how events use it.
+    /// </remarks>
+    public const string EventStorageMegabytes = "events.storage-megabytes";
+
+    /// <summary>
+    /// How many days after an event's last date its files, gallery and room photo links are kept (item 235
+    /// phase 12).
+    /// </summary>
+    /// <remarks>
+    /// Ben, 2026-09-13: "90 days is fine." Unset reads as 90. The organizer is written to 30 and 7 days before.
+    /// </remarks>
+    public const string EventRetentionDays = "events.retention-days";
+
     /// <summary>Short notice shown site-wide — maintenance windows, outages. Empty = nothing shown.</summary>
     public const string SiteAnnouncement = "site.announcement";
 
@@ -167,6 +211,13 @@ public static class SiteSettingKeys
             + "new ones may be started and no existing group may start running tours — but every "
             + "tour business already signed up carries on exactly as it is: its tours, dates, "
             + "sign-ups and billing are untouched. Paranormal events businesses are not affected."),
+        (EventCreditsEnabled, "Sell event credits",
+            "When on, a group whose plan does not include hosting events can buy a credit to publish "
+            + "one. One credit covers one event, and it lapses a year after it is bought. Turning "
+            + "this off stops new purchases; credits already held are unaffected."),
+        (EventCreditPriceUsd, "Event credit price ($)",
+            "What one event credit costs. Leave empty for the standard $99. Changing it never "
+            + "affects a credit somebody already bought — each one remembers what was paid."),
         (SiteAnnouncement, "Site-wide announcement",
             "A short notice shown across the site — planned maintenance, known issues. Leave empty to show nothing."),
         (PublicContactEmail, "Public contact email",
@@ -191,6 +242,10 @@ public static class SiteSettingKeys
 
         (FreeAccountStorageMegabytes, "Free account storage (MB)",
             "How much somebody with no paid group may store in their own field sessions. Members of a group on a paid plan are not counted against this. Leave empty for the built-in default of 2048 MB."),
+        (EventRetentionDays, "How long an event's files are kept (days)",
+            "Days after an event's last date before its files, gallery pictures and the links to photos in its room are removed. The organizer is written to 30 and 7 days before. Guests' own photos stay in their libraries. Leave empty for the built-in default of 90 days."),
+        (EventStorageMegabytes, "Storage for one event (MB)",
+            "How much one hosted event may hold: its files, its gallery and the photos posted in its room. An upload past it is refused with how much is left. Leave empty for the built-in default of 2000 MB."),
         (UploadMaxFileBytes, "Upload limit — one file (bytes)",
             "The largest file anyone may upload, in bytes. Applies to every upload path — the classic form and the chunked uploader alike. Leave empty for the built-in default of 2 GiB (2147483648)."),
         (UploadChunkMaxBytes, "Upload limit — one chunk (bytes)",
@@ -242,6 +297,10 @@ public static class SiteSettingKeys
          "Which doors into the site are open. Closing one never affects anybody already through it.",
          [AllowOrganizationSelfRegistration, AllowTourBusinessSignUps]),
 
+        ("Events",
+         "What it costs a group to put an event on, when their plan does not already include it.",
+         [EventCreditsEnabled, EventCreditPriceUsd]),
+
         ("Default profile pictures",
          "Shown when somebody has no photo the viewer is allowed to see.",
          [DefaultAvatarUploadFileId, DefaultAvatarManUploadFileId, DefaultAvatarWomanUploadFileId]),
@@ -249,7 +308,7 @@ public static class SiteSettingKeys
         ("Limits",
          "Ceilings on what one caller or one account may use. Every one of these has a built-in "
          + "default, so leaving a box empty is safe.",
-         [FreeAccountStorageMegabytes, UploadMaxFileBytes, UploadChunkMaxBytes,
+         [FreeAccountStorageMegabytes, EventStorageMegabytes, EventRetentionDays, UploadMaxFileBytes, UploadChunkMaxBytes,
           RateLimitGlobalPerMinute, RateLimitAuthPerMinute, RateLimitGeocodingPerMinute,
           RateLimitEventAttendancePerMinute, RateLimitAudioProcessingPerMinute]),
 
@@ -349,7 +408,8 @@ public static class SiteSettingKeys
         new HashSet<string>(
             FeatureDefaults.Select(f => f.Key)
                 .Append(AllowOrganizationSelfRegistration)
-                .Append(AllowTourBusinessSignUps),
+                .Append(AllowTourBusinessSignUps)
+                .Append(EventCreditsEnabled),
             StringComparer.Ordinal);
 
 }
@@ -407,6 +467,26 @@ public sealed class SiteSettingsService
 
     /// <summary>Instance overload for callers that have no context of their own — a controller
     /// enforcing a policy setting, typically.</summary>
+    /// <summary>
+    /// A setting read as an amount of money, or the fallback when it is unset or nonsense.
+    /// </summary>
+    /// <remarks>
+    /// Falls back rather than throwing, and refuses a negative: a mistyped price must not take a
+    /// purchase page down, and it must certainly not pay somebody to buy something.
+    /// </remarks>
+    public async Task<decimal> GetDecimalAsync(
+        string key, decimal whenUnset, CancellationToken ct = default)
+    {
+        var raw = await GetAsync(key, ct);
+        if (string.IsNullOrWhiteSpace(raw)) return whenUnset;
+
+        return decimal.TryParse(raw, System.Globalization.NumberStyles.Any,
+                                System.Globalization.CultureInfo.InvariantCulture, out var parsed)
+            && parsed > 0m
+            ? parsed
+            : whenUnset;
+    }
+
     public async Task<bool> GetBoolAsync(string key, bool whenUnset, CancellationToken ct = default)
     {
         await using var db = await _dbContextFactory.CreateDbContextAsync(ct);

@@ -1,0 +1,196 @@
+@page "/helping/{Token}"
+@namespace Ben.Web.Website.Library.Organization.Public
+
+@inject IBenAdminClient AdminClient
+
+@using Ben.Service.Models.Entities
+@using Ben.Web.Services.WebApi
+@using Ben.Web.Website.Library.Kit
+@using Ben.Web.Website.Library.Manage.Icon
+
+@* Somebody saying yes to helping at an event (item 235 phase 7).
+
+   THE PERSON READING THIS MAY NEVER HAVE HEARD OF THIS SITE. A hotel's weekend steward was asked
+   by the venue they already work for, in person, and this page is the first they have seen of us.
+   So it says which event, which venue, which group, and exactly what they are being trusted with —
+   then asks.
+
+   IT NEVER ACCEPTS ON LOAD. A mail client that prefetches links, or a scanner opening every URL in
+   an inbox, would otherwise enrol somebody who never read a word of it. *@
+
+<PageTitle>Helping at an event</PageTitle>
+
+<div class="container py-5" style="max-width:640px;">
+
+    @if (_loading)
+    {
+        <div class="d-flex justify-content-center py-5">
+            <BenLoaderOverlay Visible="true" Text="Checking your link…" />
+        </div>
+    }
+    else if (_invite is not { } invite)
+    {
+        <div class="card">
+            <div class="card-body py-5 text-center" id="helping-gone">
+                <h3 class="mb-3">This link has expired</h3>
+                <p class="text-secondary mb-0">
+                    Invitations last a fortnight and work once. Ask whoever invited you to send
+                    another — it takes them a moment.
+                </p>
+            </div>
+        </div>
+    }
+    else if (_accepted)
+    {
+        <div class="card">
+            <div class="card-body py-5 text-center" id="helping-yes">
+                <h3 class="mb-3">You're helping</h3>
+                <p class="mb-1"><strong>@invite.EventName</strong></p>
+                <p class="text-secondary mb-4">@When(invite)</p>
+
+                <p>
+                    Everything you need is on the event's own screens, and you'll find them under
+                    @invite.OrganizationName when you sign in.
+                </p>
+
+                @if (_needsAWayIn)
+                {
+                    @* An account made by clicking a link has no password, and the door screen is
+                       behind signing in. Saying so here — with the way to fix it — is the
+                       difference between a steward who can work on the night and one standing at
+                       a door with a phone that will not let them in. *@
+                    <div class="alert alert-light text-start">
+                        <strong>One more thing.</strong>
+                        <p class="small mb-2">
+                            We've made you an account with the address this was sent to. Set a
+                            password on it so you can sign in on the night — the door needs you
+                            signed in.
+                        </p>
+                        <a class="btn btn-sm btn-primary" href="/forgot-password">Set a password</a>
+                    </div>
+                }
+                else
+                {
+                    <a class="btn btn-primary" href="/organizations">Open your groups</a>
+                }
+            </div>
+        </div>
+    }
+    else
+    {
+        <div class="card">
+            <div class="card-body py-5" id="helping-ask">
+                <h3 class="mb-3 text-center">Can you help?</h3>
+
+                <p class="mb-1 text-center">
+                    <strong>@invite.OrganizationName</strong> has asked you to help at
+                </p>
+                <p class="h5 text-center mb-1">@invite.EventName</p>
+                <p class="text-secondary text-center mb-4">
+                    @When(invite)
+                    @if (invite.VenueName is { Length: > 0 } venue)
+                    {
+                        <text> · @venue</text>
+                    }
+                </p>
+
+                @if (invite.RoleLabel is { Length: > 0 } role)
+                {
+                    <p class="text-center">
+                        They have you down as <strong>@role</strong>.
+                    </p>
+                }
+
+                @* Said before the button and not after. Somebody accepting this is accepting
+                   access to other people's names and, sometimes, their allergies. *@
+                <div class="alert alert-light">
+                    <strong>Saying yes lets you:</strong>
+                    <ul class="mb-0">
+                        @foreach (var thing in invite.WhatTheyCanDo)
+                        {
+                            <li>@thing</li>
+                        }
+                    </ul>
+                </div>
+
+                @if (_error is { Length: > 0 })
+                {
+                    <div class="alert alert-danger py-2" id="helping-error" role="alert">@_error</div>
+                }
+
+                <div class="d-flex flex-wrap gap-2 justify-content-center">
+                    <button type="button" class="btn btn-primary" id="helping-accept"
+                            disabled="@_busy" @onclick="AcceptAsync">
+                        @(_busy ? "Just a moment…" : "Yes, I'll help")
+                    </button>
+                    <a class="btn btn-outline-secondary" href="/">Not this time</a>
+                </div>
+
+                <p class="text-secondary small text-center mt-3 mb-0">
+                    Nothing happens until you press it. If you weren't expecting this, close the
+                    page — the link expires on its own.
+                </p>
+            </div>
+        </div>
+    }
+</div>
+
+@code {
+    [Parameter] public string Token { get; set; } = "";
+
+    private HostedEventStaffInviteRecord? _invite;
+    private bool _loading = true;
+    private bool _busy;
+    private bool _accepted;
+    private bool _needsAWayIn;
+    private string? _error;
+
+    /// <summary>
+    /// Reads the invitation, and changes nothing.
+    /// </summary>
+    /// <remarks>
+    /// No auth wait: this door is anonymous on purpose, because the person invited usually has no
+    /// account at all. Whoever IS signed in is preferred by the server when they accept.
+    /// </remarks>
+    protected override async Task OnAfterRenderAsync(bool firstRender)
+    {
+        if (!firstRender) return;
+
+        var invite = await AdminClient.GetStaffInviteAsync(Token);
+        _invite = invite.Item;
+        _accepted = invite.Item?.AlreadyAccepted ?? false;
+        _loading = false;
+
+        StateHasChanged();
+    }
+
+    private async Task AcceptAsync()
+    {
+        _busy = true;
+        _error = null;
+
+        var (accepted, error) = await AdminClient.AcceptStaffInviteAsync(Token);
+
+        _busy = false;
+
+        if (accepted is null)
+        {
+            _error = error ?? "That couldn't be accepted just now. Try the link again.";
+            return;
+        }
+
+        _invite = accepted;
+        _accepted = true;
+
+        // THE SERVER'S ANSWER, NOT THIS PAGE'S GUESS. An account made by this very click has no
+        // password and the door is behind signing in; asking the account is right where reading
+        // our own auth state would be a different question that happens to agree most of the
+        // time. It also keeps this page out of auth state it never waited to resolve.
+        _needsAWayIn = accepted.AccountHasNoPassword;
+    }
+
+    private static string When(HostedEventStaffInviteRecord invite)
+        => invite.StartsOn.Date == invite.EndsOn.Date
+            ? invite.StartsOn.ToString("dddd MM/dd/yyyy")
+            : $"{invite.StartsOn:MM/dd/yyyy} – {invite.EndsOn:MM/dd/yyyy}";
+}

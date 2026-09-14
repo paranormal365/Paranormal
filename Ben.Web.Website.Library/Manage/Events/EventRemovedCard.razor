@@ -1,0 +1,109 @@
+@namespace Ben.Web.Website.Library.Manage.Events
+
+@inject IBenAdminClient AdminClient
+@inject IBenUserState UserState
+
+@using Ben.Data.Common.Enums
+@using Ben.Service.Models.Admin
+@using Ben.Web.Services.WebApi
+
+@* IsHaunted removed this event, and the organizer's appeal (item 235 phase 17b).
+
+   The removal letter links here. The card says what happened in the same generic words as the letter, what
+   became of the credit, and — until the appeal is made — a form to make it. After that it says where the appeal
+   stands, and the reviewer's answer once there is one. *@
+
+<div class="card border-dark mb-3" id="event-removed">
+    <div class="card-header fw-semibold">Removed by IsHaunted</div>
+    <div class="card-body">
+        @if (_removal.Failed)
+        {
+            <p class="text-danger mb-0" id="removal-error">
+                The details of the removal couldn't be loaded.
+                <button type="button" class="btn btn-link btn-sm p-0 align-baseline" @onclick="LoadAsync">Try again</button>
+            </p>
+        }
+        else if (_removal.Item is { } r)
+        {
+            <p>
+                This event was removed on @r.RemovedUtc.ToViewerLocalTime(UserState).ToDisplayDate() because it doesn't meet
+                our guidelines for hosted events. It isn't on the site and can't take bookings, and everybody who had a
+                place or had asked for one was told it is not going ahead.
+            </p>
+            @if (r.CreditReturned)
+            {
+                <p class="text-success">The event credit spent on it was returned, and can be used for another event.</p>
+            }
+
+            @switch (r.AppealState)
+            {
+                case HostedEventAppealState.NotAppealed:
+                    <h2 class="h6 mt-3">Appeal</h2>
+                    <p class="small text-secondary">
+                        If you think this was a mistake, say what the event is and anything you've changed. A person reviews
+                        every appeal. If it is upheld, the event comes back as a draft for you to publish again.
+                    </p>
+                    @if (_error is { Length: > 0 })
+                    {
+                        <div class="alert alert-danger py-2" id="appeal-error" role="alert">@_error</div>
+                    }
+                    <label class="form-label small mb-1" for="appeal-message">Why it should come back</label>
+                    <textarea class="form-control mb-2" id="appeal-message" rows="5" maxlength="4000"
+                              @bind="_message" @bind:event="oninput"></textarea>
+                    <button type="button" class="btn btn-primary" id="appeal-send" disabled="@_busy" @onclick="AppealAsync">
+                        @(_busy ? "Sending…" : "Send the appeal")
+                    </button>
+                    break;
+
+                case HostedEventAppealState.Waiting:
+                    <div class="alert alert-info mb-0" id="appeal-waiting">
+                        <strong>Your appeal is with us.</strong> You sent it on
+                        @r.AppealedUtc?.ToViewerLocalTime(UserState).ToDisplayDate(), and you'll hear back by email and in
+                        your messages.
+                    </div>
+                    break;
+
+                case HostedEventAppealState.Declined:
+                    <div class="alert alert-secondary mb-0" id="appeal-declined">
+                        <strong>Your appeal was reviewed, and the event stays removed.</strong>
+                        @if (r.DecisionNote is { Length: > 0 } said)
+                        {
+                            <div class="mt-1">The reviewer said: “@said”</div>
+                        }
+                    </div>
+                    break;
+            }
+        }
+    </div>
+</div>
+
+@code {
+    [Parameter, EditorRequired] public Guid OrgId { get; set; }
+    [Parameter, EditorRequired] public Guid EventId { get; set; }
+
+    private ItemResult<HostedEventRemovalRecord> _removal;
+    private string _message = "";
+    private bool _busy;
+    private string? _error;
+
+    // Rendered only once the event page has loaded, so the circuit is interactive and signed in by now.
+    protected override async Task OnInitializedAsync() => await LoadAsync();
+
+    private async Task LoadAsync() => _removal = await AdminClient.GetHostedEventRemovalAsync(OrgId, EventId);
+
+    private async Task AppealAsync()
+    {
+        _busy = true;
+        _error = null;
+        var (saved, error) = await AdminClient.AppealHostedEventRemovalAsync(OrgId, EventId,
+            new AppealHostedEventRemovalRequest(_message));
+        _busy = false;
+
+        if (saved is null)
+        {
+            _error = error ?? "The appeal couldn't be sent just now. Try again in a minute.";
+            return;
+        }
+        _removal = ItemResult<HostedEventRemovalRecord>.Ok(saved);
+    }
+}

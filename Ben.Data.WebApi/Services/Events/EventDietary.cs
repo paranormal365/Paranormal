@@ -1,0 +1,120 @@
+using Ben.Data.Common.Enums;
+using Ben.Data.Source.Entities;
+using Ben.Service.Models.Entities;
+
+namespace Ben.Data.WebApi.Services.Events;
+
+/// <summary>
+/// What the kitchen has to cook differently at a hosted event (item 235 phase 2).
+/// </summary>
+/// <remarks>
+/// <para><b>Pure, and separate from the controller, for the same reason <see cref="EventCapacity"/>
+/// is.</b> The counting is the part worth being sure about, and it is worth being sure about
+/// without a web request around it.</para>
+///
+/// <para><b>The tally groups on the note as typed</b>, lower-cased and with its spacing tidied, and
+/// on nothing cleverer. "No nuts" and "nut allergy" are one requirement to a cook and two strings
+/// here; a tally that guessed they were the same thing would sooner or later merge two that are
+/// not, and a cook acting on a wrong merge poisons somebody. Two people who typed the same words
+/// count as two, which is the only claim this makes.</para>
+///
+/// <para><b>The unnamed count is the number that matters most.</b> A party of four who listed two
+/// names leaves two people the kitchen knows nothing about, and a sheet showing only the notes
+/// would read as complete when it was half a weekend's guests.</para>
+/// </remarks>
+public static class EventDietary
+{
+    /// <summary>
+    /// Reads a set of bookings into the kitchen's sheet.
+    /// </summary>
+    /// <param name="bookings">
+    /// Every booking for the event, with guests and nights loaded. Which of them count is decided
+    /// here rather than by the caller's query, so the rule lives in one place.
+    /// </param>
+    /// <param name="includeUnconfirmed">
+    /// <para>Folds in every party the venue has not decided on — the ones who asked AND the ones
+    /// holding places they picked — for a host ordering ahead of a weekend that is not settled. The
+    /// answer carries this back, so a cook cannot read a provisional number as a settled one.</para>
+    ///
+    /// <para>It was called <c>includeRequests</c> and counted only the ones who asked, which was
+    /// right when a request was the only way to be undecided. Since guests can pick their own
+    /// places, a held party is just as undecided and just as hungry, and leaving them out would
+    /// have under-catered exactly the events that fill up fastest.</para>
+    /// </param>
+    public static HostedEventDietaryRecord Summarise(
+        Guid eventId, IEnumerable<HostedEventBooking> bookings, bool includeUnconfirmed)
+    {
+        var counted = bookings
+            .Where(b => b.Status == HostedEventBookingStatus.Confirmed
+                     || (includeUnconfirmed && BookingTransitions.Waiting.Contains(b.Status)))
+            .OrderBy(b => b.DateCreated)
+            .ToList();
+
+        var lines = new List<HostedEventDietaryLineRecord>();
+        var expected = 0;
+        var unnamed = 0;
+
+        foreach (var booking in counted)
+        {
+            var party = EventCapacity.ClampPartySize(booking.PartySize);
+            expected += party;
+
+            // A party that named MORE people than it booked for is somebody's typing, not eight
+            // extra dinners; the shortfall never goes negative.
+            unnamed += Math.Max(0, party - booking.Guests.Count);
+
+            var nights = booking.Nights
+                .Select(n => n.HostedEventNight?.Date ?? default)
+                .Where(d => d != default)
+                .OrderBy(d => d)
+                .ToList();
+
+            foreach (var guest in booking.Guests.OrderBy(g => g.SortOrder))
+            {
+                if (guest.DietaryNotes?.Trim() is not { Length: > 0 } notes) continue;
+
+                lines.Add(new HostedEventDietaryLineRecord(
+                    booking.Id,
+                    booking.LeadAppUser?.DisplayName ?? "Somebody",
+                    booking.Status,
+                    guest.DisplayName,
+                    notes,
+                    nights));
+            }
+        }
+
+        var tally = lines
+            .GroupBy(l => Tidied(l.Notes), StringComparer.OrdinalIgnoreCase)
+            .Select(g => new HostedEventDietaryTallyRecord(g.First().Notes, g.Count()))
+            .OrderByDescending(t => t.People)
+            .ThenBy(t => t.Notes, StringComparer.OrdinalIgnoreCase)
+            .ToList();
+
+        return new HostedEventDietaryRecord(
+            eventId, includeUnconfirmed, expected, lines.Count, unnamed, tally, lines);
+    }
+
+    /// <summary>
+    /// Narrows a set of bookings to the parties who are there on one night.
+    /// </summary>
+    /// <remarks>
+    /// <para><b>Because a cook works one service at a time.</b> A host catering Saturday needs
+    /// Saturday's people; handing them the weekend's total over-caters Friday and under-caters
+    /// nothing, which sounds harmless until it is two hundred dinners.</para>
+    ///
+    /// <para><b>A party with no live night of its own counts on every night.</b> That is a pass
+    /// for the whole event rather than for a day, so those people are there on Saturday as much as
+    /// on Friday, and dropping them would quietly under-cater every night of the run. A party
+    /// whose nights have all been released is not one of those — it has been let go, and
+    /// <see cref="Summarise"/> drops it by status anyway.</para>
+    /// </remarks>
+    public static IReadOnlyList<HostedEventBooking> OnNight(
+        IEnumerable<HostedEventBooking> bookings, Guid nightId)
+        => [.. bookings.Where(b =>
+                b.Nights.Count == 0
+             || b.Nights.Any(n => n.HostedEventNightId == nightId && n.ReleasedUtc is null))];
+
+    /// <summary>The same words written the same way, so two people saying one thing count as two.</summary>
+    private static string Tidied(string notes)
+        => string.Join(' ', notes.Split((char[]?)null, StringSplitOptions.RemoveEmptyEntries));
+}

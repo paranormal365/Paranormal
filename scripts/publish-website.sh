@@ -57,7 +57,11 @@ cfg = {
 }
 
 if sql:
-    cfg["ConnectionStrings"] = {"BenDbConnectionString": sql}
+    # The website reads no database of its own — everything goes through the API — so the only
+    # connection string it uses is the error-log sink's. Index 0 of WriteTo is that sink in
+    # appsettings.json; configuration merges arrays by index, so this replaces its connection
+    # string and keeps its table and column options.
+    cfg["Serilog"] = {"WriteTo": [{"Args": {"connectionString": sql}}]}
 else:
     # appsettings.json configures Serilog's MSSqlServer sink against a localhost database. On the
     # server that address is something else's SQL, or nothing — and the sink creates its table on

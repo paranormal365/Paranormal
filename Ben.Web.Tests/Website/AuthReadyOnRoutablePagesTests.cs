@@ -65,6 +65,8 @@ public sealed class AuthReadyOnRoutablePagesTests
         // Both found by this test on its first run, and both checked rather than assumed:
         ["EquipmentModelPage.razor"]    = "The public equipment catalogue — /api/equipment-catalog/models answers "
                                         + "200 with no token, and the help states anyone may browse it signed out.",
+        ["EventPickConfirm.razor"] = "Reached from an emailed link at /event-picks/{Token}; the token is the "
+            + "only credential and nobody is signed in (item 235 slice 11d).",
         ["EventAttendanceConfirm.razor"] = "Reached from an emailed link at /attending/{Token}; the token is the "
                                         + "credential, and the recipient may well have no account.",
 

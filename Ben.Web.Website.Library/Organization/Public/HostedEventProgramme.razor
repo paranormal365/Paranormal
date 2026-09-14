@@ -1,0 +1,180 @@
+@namespace Ben.Web.Website.Library.Organization.Public
+@using Ben.Service.Models.Entities
+@using Ben.Web.Services
+@using Ben.Web.Services.WebApi
+@using Ben.Web.Website.Library.Kit
+@using Ben.Web.Website.Library.Manage.Events
+@inject IBenAdminClient AdminClient
+
+@* An event's programme, for a guest or a visitor (item 235 phase 10).
+
+   THE MOST-LOOKED-AT THING DURING AN EVENT. By night, in order, on the venue's clock, with where it
+   is and who leads it; "Now" and "Next" while the event is on, because at 8:55 PM in a hotel
+   corridor that is the only question.
+
+   COUNTS, NEVER NAMES. A visitor sees "12 of 15"; who the twelve are is the host's.
+
+   A guest's own place says which of three it is — in, waiting (and where in the queue), or not
+   signed up — and a session that moved since they last looked says so in words. *@
+
+@if (_programme.Item is { } programme && programme.Sessions.Count > 0)
+{
+    <section class="mb-4" id="hosted-programme">
+        <BenSectionHeading Text="Programme" />
+
+        @if (programme.ChangedSinceSeen)
+        {
+            <div class="alert alert-warning py-2" id="programme-changed">
+                Something on the programme has changed since you last looked — it's marked below.
+            </div>
+        }
+        @if (_error is { Length: > 0 })
+        {
+            <div class="alert alert-danger py-2" role="alert" id="programme-signup-error">@_error</div>
+        }
+
+        @foreach (var night in programme.Sessions.GroupBy(s => VenueClock.Local(s.StartsAtUtc, programme.TimeZoneId).Date).OrderBy(g => g.Key))
+        {
+            <h3 class="h6 text-secondary text-uppercase small mt-3 mb-2">@night.Key.ToString("dddd, MMMM d")</h3>
+            <div class="list-group">
+                @foreach (var session in night)
+                {
+                    var s = session;
+                    var now = DateTime.UtcNow;
+                    var isNow = !s.IsCancelled && Utc(s.StartsAtUtc) <= now && Utc(s.EndsAtUtc) > now;
+                    var isNext = !s.IsCancelled && !isNow && s.Id == NextId(programme, now);
+                    <div class="list-group-item public-session @(s.IsCancelled ? "opacity-75" : "")" data-session="@s.Id">
+                        <div class="d-flex flex-column flex-sm-row gap-2">
+                            <div class="text-nowrap fw-semibold" style="min-width:9.5rem;">
+                                @VenueClock.Span(s.StartsAtUtc, s.EndsAtUtc, programme.TimeZoneId)
+                                @if (isNow) { <span class="badge bg-success ms-1">Now</span> }
+                                else if (isNext) { <span class="badge bg-info text-dark ms-1">Next</span> }
+                            </div>
+                            <div class="flex-grow-1">
+                                <div class="@(s.IsCancelled ? "text-decoration-line-through" : "")">
+                                    @s.Title
+                                    @if (s.Changed && !s.IsCancelled) { <span class="badge bg-warning text-dark ms-1">Changed</span> }
+                                </div>
+                                <div class="small text-secondary">
+                                    @string.Join(" · ", new[] { s.Where, s.LedBy is { Length: > 0 } leader ? $"with {leader}" : null }.Where(x => !string.IsNullOrWhiteSpace(x)))
+                                </div>
+                                @if (s.Description is { Length: > 0 } about)
+                                {
+                                    <div class="small mt-1">@about</div>
+                                }
+                                @if (s.IsCancelled)
+                                {
+                                    <div class="small text-danger">Cancelled@(s.CancelledReason is { Length: > 0 } why ? $": {why}" : "")</div>
+                                }
+                            </div>
+                            <div class="d-flex flex-column align-items-sm-end gap-1 small text-nowrap">
+                                @if (!s.IsCancelled && !s.RequiresSignUp)
+                                {
+                                    <span class="text-secondary">Just come</span>
+                                }
+                                else if (!s.IsCancelled)
+                                {
+                                    <span class="session-count">@(s.Capacity is int cap ? $"{s.PlacesTaken} of {cap}" : $"{s.PlacesTaken} going")</span>
+                                    @if (s.Mine is { Waiting: false } mine)
+                                    {
+                                        <span class="badge bg-success session-mine">You're in@(mine.People > 1 ? $" × {mine.People}" : "")</span>
+                                        <button type="button" class="btn btn-link btn-sm p-0" disabled="@_busy" @onclick="() => LeaveAsync(s)">Leave</button>
+                                    }
+                                    else if (s.Mine is { Waiting: true } waiting)
+                                    {
+                                        <span class="badge bg-secondary session-mine">Waiting — @Ordinal(waiting.Position ?? 1) in line</span>
+                                        <button type="button" class="btn btn-link btn-sm p-0" disabled="@_busy" @onclick="() => LeaveAsync(s)">Leave the queue</button>
+                                    }
+                                    else if (programme.CanSignUp && Utc(s.StartsAtUtc) > now)
+                                    {
+                                        <div class="d-flex gap-1">
+                                            @if (programme.MaxPeople > 1)
+                                            {
+                                                <select class="form-select form-select-sm" style="width:auto;" aria-label="How many of your party"
+                                                        @bind="_people[s.Id]">
+                                                    @for (var n = 1; n <= programme.MaxPeople; n++)
+                                                    {
+                                                        <option value="@n">@n</option>
+                                                    }
+                                                </select>
+                                            }
+                                            <button type="button" class="btn btn-primary btn-sm session-signup" disabled="@_busy" @onclick="() => SignUpAsync(s)">
+                                                @(s.Capacity is int c && s.PlacesTaken >= c ? "Join the queue" : "Sign up")
+                                            </button>
+                                        </div>
+                                    }
+                                }
+                                @if (!s.IsCancelled)
+                                {
+                                    <a class="text-secondary" href="@CalendarUrl(s)" download>Add to calendar</a>
+                                }
+                            </div>
+                        </div>
+                    </div>
+                }
+            </div>
+        }
+
+        @if (IsAuthenticated && programme.WhyNotSignUp is { Length: > 0 } whyNot && programme.Sessions.Any(s => s.RequiresSignUp && !s.IsCancelled))
+        {
+            <p class="small text-secondary mt-2 mb-0" id="programme-why-not">@whyNot</p>
+        }
+    </section>
+}
+
+@code {
+    [Parameter, EditorRequired] public Guid HostedEventId { get; set; }
+    [Parameter] public bool IsAuthenticated { get; set; }
+
+    private ItemResult<PublicProgrammeRecord> _programme;
+    private bool _busy;
+    private string? _error;
+    private readonly PeopleBySession _people = new();
+
+    private sealed class PeopleBySession : Dictionary<Guid, int>
+    {
+        public new int this[Guid key]
+        {
+            get => TryGetValue(key, out var v) ? v : 1;
+            set => base[key] = value;
+        }
+    }
+
+    protected override async Task OnParametersSetAsync()
+    {
+        _programme = await AdminClient.GetPublicProgrammeAsync(HostedEventId, IsAuthenticated);
+
+        // Looking at the programme is what clears the bell's "it changed" row.
+        if (IsAuthenticated && _programme.Item is { ChangedSinceSeen: true })
+            await AdminClient.MarkProgrammeSeenAsync(HostedEventId);
+    }
+
+    private async Task SignUpAsync(PublicSessionRecord s)
+        => await SendAsync(() => AdminClient.SignUpForSessionAsync(HostedEventId, s.Id, new SessionSignUpRequest(_people[s.Id])));
+
+    private async Task LeaveAsync(PublicSessionRecord s)
+        => await SendAsync(() => AdminClient.LeaveSessionAsync(HostedEventId, s.Id));
+
+    private async Task SendAsync(Func<Task<(PublicProgrammeRecord? Result, string? Error)>> send)
+    {
+        _busy = true;
+        _error = null;
+        var (programme, error) = await send();
+        _busy = false;
+        if (programme is null) { _error = error ?? "That couldn't be saved just now."; return; }
+        _programme = ItemResult<PublicProgrammeRecord>.Ok(programme);
+    }
+
+    private static DateTime Utc(DateTime value) => DateTime.SpecifyKind(value, DateTimeKind.Utc);
+
+    private static Guid? NextId(PublicProgrammeRecord programme, DateTime now)
+        => programme.Sessions.Where(s => !s.IsCancelled && Utc(s.StartsAtUtc) > now)
+            .OrderBy(s => s.StartsAtUtc).Select(s => (Guid?)s.Id).FirstOrDefault();
+
+    /// <summary>Through the site's own relay, which is reachable wherever the page is.</summary>
+    private string CalendarUrl(PublicSessionRecord s)
+        => $"/calendar/hosted-events/{HostedEventId}/sessions/{s.Id}.ics";
+
+    private static string Ordinal(int n) => (n % 100) is 11 or 12 or 13 ? $"{n}th"
+        : (n % 10) switch { 1 => $"{n}st", 2 => $"{n}nd", 3 => $"{n}rd", _ => $"{n}th" };
+}

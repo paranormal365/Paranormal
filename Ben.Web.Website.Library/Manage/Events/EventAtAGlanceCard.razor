@@ -1,0 +1,111 @@
+@namespace Ben.Web.Website.Library.Manage.Events
+
+@inject IBenAdminClient AdminClient
+
+@using Ben.Service.Models.Entities
+@using Ben.Web.Services.WebApi
+@using Ben.Web.Website.Library.Manage.Icon
+
+@* The host's numbers on one card (item 235 phase 17a, audit finding A5).
+
+   Before this, "how many are coming and what's left" took the board, the plan, the door and the
+   reviews — four screens. Each number here links to the screen that explains it.
+
+   A FAILURE HIDES THE CARD, IT DOES NOT ZERO IT. Somebody allowed to edit the event but not to read
+   its bookings would otherwise see "0 coming" on a sold-out weekend. A refusal and a server having a
+   bad minute look the same from here, and the page below still works without the card, so neither
+   draws anything. *@
+
+@if (_summary.Item is { } s)
+{
+    <div class="card mb-3" id="event-glance">
+        <div class="card-header fw-semibold">At a glance <HelpLink Slug="organization-administration" Anchor="hosted-events" /></div>
+        <div class="card-body">
+            <div class="glance-grid">
+                <a class="glance-tile" id="glance-coming" href="@Bookings">
+                    <div class="glance-number">@s.ConfirmedPeople</div>
+                    <div class="glance-label">
+                        coming, in @Plural(s.ConfirmedParties, "party", "parties")
+                        @if (s.MinimumGuests is { } minimum)
+                        {
+                            <span class="d-block @(s.ConfirmedPeople >= minimum ? "text-success" : "text-warning")">
+                                @(s.ConfirmedPeople >= minimum ? $"past the {minimum} you need" : $"{minimum - s.ConfirmedPeople} short of {minimum}")
+                            </span>
+                        }
+                    </div>
+                </a>
+                <a class="glance-tile @(s.Asking + s.Holding > 0 ? "glance-tile--attention" : null)" id="glance-waiting" href="@Bookings">
+                    <div class="glance-number">@(s.Asking + s.Holding)</div>
+                    <div class="glance-label">
+                        waiting on you
+                        @if (s.Holding > 0)
+                        {
+                            <span class="d-block">@(s.Holding == 1 ? "1 is holding places" : $"{s.Holding} are holding places")</span>
+                        }
+                    </div>
+                </a>
+                @if (s.PlacesOffered > 0)
+                {
+                    <a class="glance-tile" id="glance-places" href="@($"/organizations/{OrgId}/events/{EventId}/layout")">
+                        <div class="glance-number">@Math.Max(0, s.PlacesOffered - s.PlacesTaken)</div>
+                        <div class="glance-label">
+                            places left of @s.PlacesOffered
+                            <span class="d-block">counted night by night</span>
+                        </div>
+                    </a>
+                }
+                @if (s.DayPassCapacity is not null || s.DayPassPeople > 0)
+                {
+                    <a class="glance-tile" id="glance-day-passes" href="@Bookings">
+                        <div class="glance-number">@s.DayPassPeople</div>
+                        <div class="glance-label">
+                            on day passes@(s.DayPassCapacity is { } cap ? $" of {cap}" : "")
+                        </div>
+                    </a>
+                }
+                <a class="glance-tile" id="glance-arrived" href="@($"/organizations/{OrgId}/events/{EventId}/door")">
+                    <div class="glance-number">@s.ArrivedParties</div>
+                    <div class="glance-label">
+                        @(s.ArrivedParties == 1 ? "party" : "parties") through the door
+                        @if (s.WalkUpPeople > 0)
+                        {
+                            <span class="d-block">and @s.WalkUpPeople walked up</span>
+                        }
+                    </div>
+                </a>
+                <a class="glance-tile" id="glance-reviews" href="@($"/organizations/{OrgId}/events/{EventId}/after")">
+                    <div class="glance-number">
+                        @(s.ReviewAverage is { } avg ? avg.ToString("0.0") : "—")
+                        @if (s.ReviewAverage is not null)
+                        {
+                            <BenIcon Name="star" Class="glance-star" Title="out of five" />
+                        }
+                    </div>
+                    <div class="glance-label">
+                        @(s.ReviewCount == 0 ? "no reviews yet" : Plural(s.ReviewCount, "review", "reviews"))
+                    </div>
+                </a>
+            </div>
+            <p class="small text-secondary mb-0 mt-2">
+                @Plural(s.NotComing, "party", "parties") turned down, lapsed or cancelled ·
+                @Plural(s.LettersSent, "letter", "letters") sent to guests
+            </p>
+        </div>
+    </div>
+}
+
+@code {
+    [Parameter, EditorRequired] public Guid OrgId { get; set; }
+    [Parameter, EditorRequired] public Guid EventId { get; set; }
+
+    private ItemResult<HostedEventSummaryRecord> _summary;
+
+    private string Bookings => $"/organizations/{OrgId}/events/{EventId}/bookings";
+
+    // Rendered only once the event page has loaded, so the circuit is interactive and signed in by now.
+    protected override async Task OnInitializedAsync() => await LoadAsync();
+
+    private async Task LoadAsync() => _summary = await AdminClient.GetEventSummaryAsync(OrgId, EventId);
+
+    private static string Plural(int n, string one, string many) => $"{n} {(n == 1 ? one : many)}";
+}

@@ -1,0 +1,176 @@
+@page "/organizations/{OrgId:guid}/events/{EventId:guid}/copy"
+@namespace Ben.Web.Website.Library.Manage.Events
+
+@inject IBenAdminClient AdminClient
+@inject IBenUserState UserState
+@inject NavigationManager Nav
+
+@using Ben.Data.Common.Enums
+@using Ben.Service.Models.Entities
+@using Ben.Web.Services.WebApi
+@using Ben.Web.Website.Library.Kit
+
+@* Starting the next event from this one (item 235 phase 12).
+
+   Ben: "we might ask if they want to save the ads, menu whatever they have created for the event — so
+   they can use it again."
+
+   WHAT THEY MADE, NOT WHAT HAPPENED. Every part the organizer built is offered with its size, ticked;
+   bookings, passes, the room and the photos never come across, and the page says so rather than leaving
+   somebody to wonder. The copy is a draft: nothing is spent and nothing is published. *@
+
+<PageTitle>@(_preview?.Name is { Length: > 0 } n ? $"Copy — {n}" : "Copy this event")</PageTitle>
+
+<div class="container-fluid py-3" style="max-width:760px;">
+    <div class="text-secondary small">
+        <a href="@($"/organizations/{OrgId}/events")">Events</a>
+        @if (_preview is { } crumb)
+        {
+            <text> · </text><a href="@($"/organizations/{OrgId}/events/{EventId}")">@crumb.Name</a>
+        }
+    </div>
+
+    <h1 class="h3 mb-1">Copy this event <HelpLink Slug="organization-administration" Anchor="hosted-events" /></h1>
+    <p class="text-secondary small mb-3">
+        Start the next one from this one. It is made as a draft on the dates you choose, so nothing is spent and
+        nothing is published until you say.
+    </p>
+
+    @if (_error is { Length: > 0 })
+    {
+        <div class="alert alert-danger py-2" id="copy-error" role="alert">@_error</div>
+    }
+
+    @if (_loading)
+    {
+        <BenLoaderOverlay Visible="true" Text="Reading the event…" />
+    }
+    else if (_preview is null)
+    {
+        <div class="alert alert-warning" id="copy-missing">This event couldn't be read, or you can't copy it.</div>
+    }
+    else
+    {
+        var p = _preview;
+        <div class="card mb-3">
+            <div class="card-body">
+                <div class="row g-3">
+                    <div class="col-12 col-md-7">
+                        <label class="form-label" for="copy-name">Name</label>
+                        <input class="form-control" id="copy-name" maxlength="200" @bind="_name" @bind:event="oninput" />
+                    </div>
+                    <div class="col-12 col-md-5">
+                        <label class="form-label" for="copy-starts">First date</label>
+                        <input class="form-control" id="copy-starts" type="date" @bind="_startsOn" />
+                        <div class="form-text">
+                            @(p.Nights == 1 ? "One date" : $"All {p.Nights} dates") move with it, keeping their gaps.
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <div class="card mb-3" id="copy-parts">
+            <div class="card-header fw-semibold">What to bring</div>
+            <div class="card-body">
+                @Part("copy-plan", "The plan", PlanWords(p), p.Units > 0, () => _plan, v => _plan = v)
+                @Part("copy-menus", "Menus", Count(p.Menus, "menu", "menus"), p.Menus > 0, () => _menus, v => _menus = v)
+                @Part("copy-programme", "Programme", Count(p.Sessions, "session", "sessions") + " at the same times, not yet published",
+                      p.Sessions > 0, () => _programme, v => _programme = v)
+                @Part("copy-bands", "Bands", Count(p.Bands, "colour", "colours"), p.Bands > 0, () => _bands, v => _bands = v)
+                @Part("copy-helpers", "Helpers", HelperWords(p), p.Helpers > 0, () => _helpers, v => _helpers = v)
+                @Part("copy-adverts", "Advert", Count(p.Adverts, "advert", "adverts") + " as a draft, reviewed again before it shows",
+                      p.Adverts > 0, () => _adverts, v => _adverts = v)
+                @Part("copy-files", "Files", FileWords(p), p.Files > 0, () => _files, v => _files = v)
+
+                <p class="small text-secondary mt-3 mb-1" id="copy-venue">@p.VenueSentence</p>
+                <p class="small text-secondary mb-0">
+                    Bookings, passes, arrivals, the room, its photos and the gallery stay with this event.
+                </p>
+            </div>
+        </div>
+
+        <button type="button" class="btn btn-primary" id="copy-go" disabled="@(_busy || string.IsNullOrWhiteSpace(_name) || _startsOn is null)"
+                @onclick="CopyAsync">
+            @(_busy ? "Copying…" : "Make the draft")
+        </button>
+    }
+</div>
+
+@code {
+    [Parameter] public Guid OrgId { get; set; }
+    [Parameter] public Guid EventId { get; set; }
+
+    private HostedEventCopyPreviewRecord? _preview;
+    private bool _loading = true, _busy;
+    private string? _error;
+
+    private string _name = "";
+    private DateTime? _startsOn;
+    private bool _plan = true, _menus = true, _programme = true, _bands = true, _helpers = true, _adverts = true, _files;
+
+    protected override async Task OnAfterRenderAsync(bool firstRender)
+    {
+        if (!firstRender) return;
+        if (!await UserState.WaitUntilAuthReadyAsync(RendererInfo.IsInteractive)) return;
+
+        var loaded = await AdminClient.GetHostedEventCopyPreviewAsync(OrgId, EventId);
+        _preview = loaded.Item;
+        if (_preview is { } p)
+        {
+            // A year on is the commonest next one; the date box is there to change it. The name has to
+            // differ — two events are told apart by their names — so the year goes on the end.
+            _startsOn = p.StartsOn.Date.AddYears(1);
+            _name = NextName(p.Name, _startsOn.Value.Year);
+        }
+        _loading = false;
+        StateHasChanged();
+    }
+
+    private async Task CopyAsync()
+    {
+        if (_startsOn is not { } starts) return;
+        _busy = true;
+        _error = null;
+
+        var (made, error) = await AdminClient.CopyHostedEventAsync(OrgId, EventId,
+            new CopyHostedEventRequest(_name.Trim(), starts, _plan, _menus, _programme, _bands, _helpers, _adverts, _files));
+
+        _busy = false;
+        if (made is null) { _error = error ?? "The copy couldn't be made just now."; return; }
+
+        var note = made.FilesSentence is { Length: > 0 } files ? $"&note={Uri.EscapeDataString(files)}" : "";
+        Nav.NavigateTo($"/organizations/{OrgId}/events/{made.HostedEventId}?copied=1{note}");
+    }
+
+    private RenderFragment Part(string id, string label, string words, bool any, Func<bool> get, Action<bool> set) => @<div class="form-check mb-2">
+        <input class="form-check-input" type="checkbox" id="@id" checked="@(any && get())" disabled="@(!any)"
+               @onchange="e => set(e.Value is true)" />
+        <label class="form-check-label" for="@id">
+            <span class="fw-semibold">@label</span>
+            <span class="text-secondary small"> — @(any ? words : "nothing to bring")</span>
+        </label>
+    </div>;
+
+    /// <summary>"Séance Weekend 2026" becomes "Séance Weekend 2027"; anything else gains the year.</summary>
+    internal static string NextName(string name, int year)
+    {
+        var trimmed = name.Trim();
+        var match = System.Text.RegularExpressions.Regex.Match(trimmed, @"^(.*\S)\s+(19|20)\d\d$");
+        return match.Success ? $"{match.Groups[1].Value} {year}" : $"{trimmed} {year}";
+    }
+
+    private static string Count(int n, string one, string many) => $"{n} {(n == 1 ? one : many)}";
+
+    private static string PlanWords(HostedEventCopyPreviewRecord p)
+        => p.LayoutKind == HostedEventLayoutKind.Seats
+            ? $"{Count(p.Units, "seat", "seats")} with their sections, prices and what is held back"
+            : $"{Count(p.Units, "room", "rooms")} with their prices and what is held back";
+
+    private static string HelperWords(HostedEventCopyPreviewRecord p)
+        => Count(p.Helpers, "person", "people") + " with what they may do"
+         + (p.PendingInvitations > 0 ? $"; {Count(p.PendingInvitations, "invitation", "invitations")} nobody answered stay behind" : "");
+
+    private static string FileWords(HostedEventCopyPreviewRecord p)
+        => $"{Count(p.Files, "file", "files")}, {p.FileBytes / (1024.0 * 1024.0):0.#} MB, copied into the new event's own space";
+}

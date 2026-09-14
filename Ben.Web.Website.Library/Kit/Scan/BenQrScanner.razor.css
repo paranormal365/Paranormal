@@ -1,0 +1,29 @@
+/* The camera at a door (item 235 phase 7).
+
+   BIG, BECAUSE IT IS HELD AT ARM'S LENGTH IN THE DARK. A viewfinder somebody has to squint at is a
+   viewfinder they give up on and start typing codes into instead. */
+
+.scanner__frame {
+    position: relative;
+    margin-bottom: .5rem;
+    border-radius: var(--bs-border-radius);
+    overflow: hidden;
+    background: #000;
+}
+
+.scanner__video {
+    display: block;
+    width: 100%;
+    max-height: 45vh;
+    object-fit: cover;
+}
+
+/* Where a frame is copied for the fallback decoder. Never seen — but not display:none, because a
+   canvas that is not laid out cannot be drawn to reliably in every browser. */
+.scanner__canvas {
+    position: absolute;
+    width: 1px;
+    height: 1px;
+    opacity: 0;
+    pointer-events: none;
+}

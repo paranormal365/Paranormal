@@ -200,7 +200,13 @@ public sealed class MediaIngestService(
     {
         var thumbnailPath = sanitizer.ThumbnailPathFor(storagePath);
         if (fileStorage.Exists(thumbnailPath))
-            return await fileStorage.OpenReadAsync(thumbnailPath, ct);
+        {
+            // An empty thumbnail is not a thumbnail. Storage used to be able to leave one behind when a write was cut
+            // short, and one served as a finished image stays blank forever; it is made again instead.
+            var cached = await fileStorage.OpenReadAsync(thumbnailPath, ct);
+            if (!cached.CanSeek || cached.Length > 0) return cached;
+            await cached.DisposeAsync();
+        }
 
         // Missing — either this file predates the pipeline, or its thumbnail failed at upload.
         // Generate from whatever we still have rather than making the caller care which.
@@ -224,8 +230,18 @@ public sealed class MediaIngestService(
             return null;   // not an image — nothing to shrink
         }
 
-        await using (var toStore = new MemoryStream(thumbnail, writable: false))
-            await fileStorage.WriteAsync(thumbnailPath, toStore, ct);
+        // Keeping a copy saves the next request the work; failing to keep one costs this request nothing, so it is not
+        // allowed to. Written without the request's token: a person leaving the page is no reason to throw away a
+        // thumbnail that has already been made.
+        try
+        {
+            await using var toStore = new MemoryStream(thumbnail, writable: false);
+            await fileStorage.WriteAsync(thumbnailPath, toStore, CancellationToken.None);
+        }
+        catch (IOException ex)
+        {
+            logger.LogWarning(ex, "Could not keep the thumbnail for {Path}; it was served and will be made again.", storagePath);
+        }
 
         return new MemoryStream(thumbnail, writable: false);
     }

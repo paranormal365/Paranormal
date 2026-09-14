@@ -99,7 +99,15 @@ public class FieldSessionMediaClockTests : BenTestBase
         var audioTime = await Page.EvaluateAsync<double>("() => document.querySelector('audio').currentTime");
         var elapsed = (await Page.Locator("[data-testid='elapsed']").InnerTextAsync()).Trim();
         TestContext.Out.WriteLine($"audio at {audioTime:0.0}s, page shows {elapsed}");
-        Assert.That(audioTime, Is.GreaterThan(1.0), "the recording should actually be playing");
+        // What the element itself says, so a recording that stopped says why: paused by the page,
+        // starved of data (readyState, buffered), or refused by the decoder (error).
+        var element = await Page.EvaluateAsync<string>(@"() => {
+            const a = document.querySelector('audio');
+            const b = [...Array(a.buffered.length).keys()].map(i => a.buffered.start(i).toFixed(2) + '-' + a.buffered.end(i).toFixed(2));
+            return `paused=${a.paused} ended=${a.ended} readyState=${a.readyState} networkState=${a.networkState} `
+                 + `duration=${a.duration} buffered=[${b}] error=${a.error ? a.error.code + ' ' + a.error.message : 'none'} src=${a.currentSrc.replace(/[?].*/, '')}`;
+        }");
+        Assert.That(audioTime, Is.GreaterThan(1.0), $"the recording should actually be playing — {element}");
         // Page time = 4 s (audio start) + audio time; allow the two clocks a second of slack.
         // "m:ss" or "mm:ss" or "h:mm:ss" — read it as parts rather than guessing the format.
         var parts = elapsed.Split(':').Select(int.Parse).ToArray();

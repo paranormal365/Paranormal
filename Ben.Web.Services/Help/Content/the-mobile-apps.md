@@ -44,7 +44,7 @@ show them to you again.
 | **Your cases** | Your cases and their timelines — what happened, what the group has written back, and photos attached to either. **Log something that happened** right from the case, with photos from your library or one you take there and then; say when it happened, or say that you don't know rather than guessing. **Reports** your group has published are there to read in full, and to share or save, and you can **message your group** about the case — what you send and what they send back, in one conversation. Who to contact is a tap away: their email opens Mail, their number dials. |
 | **Investigations** | The ones you're on, split into what's coming and what's been, with your assigned role and any evidence deadline. **Where you've been** draws the places you've investigated on a map. |
 | **Haunted Tours** | Ghost walks near you, or near a place you look up, with how far away they are and when they next run. No account needed. Tapping one opens the walk — where you meet, how long it runs, who leads it and the nights coming up — and a night opens that night. Asking for a place is done there. **Location is asked for, never taken**: the tab opens on a list, and if you would rather not share where you are, type a city instead. |
-| **Events** | Public events, readable without an account, and you can reserve a place. A night that belongs to a **walking tour** carries the tour's name under its title, because a walk is booked by its name and a business with three of them would otherwise show three rows reading "Saturday walk". Times are the **clock of the place the night happens in**, named beside them — a Nashville walk says 3:08 PM CDT whether you read it in Nashville, Tokyo or London — and an event whose organiser never said which zone it is in reads in UTC and says so. **Add to calendar** puts one straight into your own calendar. Tapping a night opens it, with your seat on it, directions to the meeting point and who is guiding. |
+| **Events** | Public events, readable without an account, and you can reserve a place. A night that belongs to a **walking tour** carries the tour's name under its title, because a walk is booked by its name and a business with three of them would otherwise show three rows reading "Saturday walk". Times are the **clock of the place the night happens in**, named beside them — a Nashville walk says 3:08 PM CDT whether you read it in Nashville, Tokyo or London — and an event whose organiser never said which zone it is in reads in UTC and says so. **Add to calendar** puts one straight into your own calendar. Tapping a night opens it, with your seat on it, directions to the meeting point and who is guiding. A night that belongs to a **hosted event** — a weekend at a venue, a dinner and a show — shows where your booking stands and your pass instead; see below. |
 | **Field Kit** | The phone as an instrument during an investigation — see below. |
 | **My evidence** | What you have offered at other people's public events — yours to open whatever they decided, and yours to add to the archive of the place it was taken at. |
 | **Your account** | Sign in and out, create an account, confirm your email, change your password, and turn two-step sign-in on or off. |
@@ -419,6 +419,142 @@ everything else goes on working.
 A seat that is turned down, or a walk you cancel, takes its reminders with it.
 
 **Money is arranged with the business.** Nothing is taken through the app.
+
+## An event you've booked
+
+Some events are run by a venue or a group through this site — a séance weekend at a hotel, a dinner
+and a play over three nights. Places at those are asked for, or chosen on a seating plan, on the
+event's own page, and the app shows you where that stands.
+
+**On the event.** Open the night from Events and the booking panel says it in a word — *Waiting for
+the venue*, *Held for you*, *Confirmed*, *Turned down* — with what you asked for underneath. A request
+or a hold you no longer want can be let go from there. If you have no booking yet, **Ask for a place**
+(or **Choose your places**, where the venue uses a seating plan) opens the event's page inside the
+app; when you close it, the panel reads your booking again.
+
+**What I'm going to.** Under **Profile**, every hosted event you have asked for, one row each, with
+its dates, the venue, what you have and a way to your pass.
+
+![What I'm going to: each event once, with where the booking stands](/help/media/the-mobile-apps/iphone-my-events.png)
+
+**Your pass.** Once the venue confirms you and issues it, **Your pass** shows the code the door scans,
+the short code to read out when a camera will not focus, how many it admits, and the nights and rooms
+or seats. The screen turns itself up to full brightness while it is open and goes back when you leave.
+
+![A pass on the phone: the code, the short code and what it admits](/help/media/the-mobile-apps/iphone-event-pass.png)
+
+- **It works with no signal.** The last pass the app saw is kept on the phone, so a basement bar or a
+  hotel with no reception still gets you in. When it is showing the kept copy it says so, and when.
+- **A withdrawn pass is shown as withdrawn**, faded and banded, never quietly left looking valid.
+  If the venue withdraws it while you are online, the kept copy goes too.
+- **Opening the app with no signal does not sign you out.** It stays signed in and catches up when
+  the phone is back online.
+- **Signing out removes the kept passes**, so the next person to pick up the phone never sees yours.
+
+Choosing seats on a plan stays on the website for now; everything you choose there shows here.
+
+### During the event
+
+**The event** on What I'm going to (or **Programme and room** on a confirmed booking) opens everything
+for that event in one place. A row appears only when there is something behind it: no programme yet,
+or menus the venue hasn't shared with you, simply aren't listed. When the hosts have said how to get in
+and around — stairs, a step-free door, parking, low light — it is under **Getting in and getting around**.
+
+![The event's own screen: pass, programme, menus, downloads and the room](/help/media/the-mobile-apps/iphone-event-hub.png)
+
+- **Programme** — night by night, **on the venue's clock** with the zone named, so 9:00 PM CDT is the
+  same wherever you read it. **Sign up** asks how many of your party are coming. A full session puts you
+  on its waiting list and says where you are in line, and when there aren't enough places left for your
+  whole party it says that too. **Give up** or **Leave** hands your place to the next person. The
+  calendar button at the top adds the whole programme to your calendar.
+- **Menus** — each meal with its time, course by course, with the venue's dietary labels.
+- **Downloads** — the files the organizers share with guests. Tap one to open it, and share it on from
+  there.
+- **The room** — what the people at the event are posting. Press the pencil to write, or to add photos
+  and video from your library or the camera. Several at once go in as one post each, with your words on
+  the first. The first photo you add at an event asks you to agree, in the organizers' words, to it being
+  shown in the room and on their photo wall. **Also send to…** gives the organizers a copy. Press and hold
+  your own post to send it on later or take it down; press and hold somebody else's to report it. Your
+  photos stay yours whichever you choose.
+
+![The programme, with a place signed up for and a party waiting](/help/media/the-mobile-apps/iphone-event-programme.png)
+
+![A menu, course by course](/help/media/the-mobile-apps/iphone-event-menus.png)
+
+![The room, with a photo posted from the phone](/help/media/the-mobile-apps/iphone-event-room.png)
+
+Hiding posts and closing the room stay on the website, where an organizer can see the whole room.
+
+### Photos with no signal
+
+A cellar, a hotel with one bar, a field: post anyway. When the room can't be reached, what you wrote and
+every photo not yet sent are **kept on the phone** and sent as soon as there's signal — when you come
+back to the app, when the network comes back while it's open, or when you open the room. The room opens
+with no signal too, showing it as it was last time, so you can still add to it.
+
+![The room with two posts waiting to send](/help/media/the-mobile-apps/iphone-room-waiting.png)
+
+- **Waiting to send** lists them, in the order you took them. **Send now** tries straight away.
+- If the room won't take one when it gets there — it closed, or the organizers kept photos to their team —
+  it moves to **Couldn't be sent** with the reason. Swipe it to remove it from the phone.
+- Photos are sent as JPEG, whatever the camera saved them as. A video can be up to 95 MB in one post.
+- Signing out removes anything still waiting.
+
+### Sharing photos from the Photos app
+
+Choose photos or videos in the Photos app, press **Share**, and pick **IsHaunted**. Choose which of your
+events they're for, add a caption, agree to the photo notice if that event asks, and choose whether to
+send the organizers a copy. **Add** keeps them on the phone; IsHaunted sends them the next time it's open
+with signal — open it straight away to send them at once.
+
+![Sharing a photo to an event from the Photos app](/help/media/the-mobile-apps/iphone-share-to-event.png)
+
+The events offered are the ones you're confirmed at and the ones you're helping at. Open an event's room in
+the app once and the share sheet also knows that room's rules — whether it takes your photos, and who a
+copy goes to.
+
+## Running the door
+
+If an event's organizers have asked you to help at the door — or you are one of the group with that
+job — **Doors I'm running** appears under **Profile**. For everybody else it simply isn't there.
+
+![Tonight's door: the count, the scan button and who is still to come](/help/media/the-mobile-apps/iphone-door.png)
+
+- **The count comes first**: how many are in, how many are expected, and how many more could come in
+  tonight.
+- **Scan a pass** opens the camera. It reads the guest's code and closes, and the door screen shows the
+  **reservation** that pass belongs to. Nobody is checked in by scanning alone.
+- **Tap the reservation** to open it: the name, how many are in the party, the nights and the room or
+  seat, the colour they wear, anybody with them, and anything the kitchen needs to know. **Check in as
+  arrived** records them — set how many are actually here first if the whole party hasn't come.
+- A pass that isn't for this event, was withdrawn, or isn't expected tonight is said in words on the door
+  screen instead.
+- **Name or pass code** at the top finds a reservation by name, or by the six characters under the code
+  when the camera won't focus. Tap it to open it, or press **Check in** beside it.
+- **Undo** takes an arrival back; **Somebody without a booking** writes down a walk-up — how many, and a
+  name if they give one.
+- Nobody's address or phone number is on these screens, and the screen stays awake while the door is open.
+
+![A scanned pass, showing its reservation](/help/media/the-mobile-apps/iphone-door-scanned.png)
+
+![The reservation, ready to check in](/help/media/the-mobile-apps/iphone-door-reservation.png)
+
+### With no signal
+
+Open the door once while you have signal — before the doors open is ideal — and tonight's list is kept
+on the phone.
+
+- The door then opens with **no signal** and says when the list was kept. The camera still reads codes,
+  and a scanned pass finds its reservation on the kept list.
+- Everybody you check in is kept on the phone **with the time they came in**, and **N arrivals waiting
+  to send** goes as soon as there's signal (or press **Send now**). The server checks each pass again
+  when it arrives.
+- If the organizers withdrew a pass in the meantime, the phone tells you who, once it catches up.
+- Writing down a walk-up, and taking back an arrival that has already gone through, wait for a signal —
+  both have to be checked first.
+
+Opening the app with no signal keeps you signed in as you, so your doors and your passes are all there.
+Signing out removes the kept lists from the phone.
 
 ## What you photographed on somebody else's event
 

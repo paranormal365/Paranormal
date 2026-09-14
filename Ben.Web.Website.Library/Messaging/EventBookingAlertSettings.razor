@@ -1,0 +1,124 @@
+@using Ben.Data.Common.Enums
+@using Ben.Service.Models.Entities
+@using Ben.Web.Services
+@using Ben.Web.Services.WebApi
+@using Ben.Web.Website.Library.Kit
+@inject IBenAdminClient AdminClient
+@inject IBenUserState UserState
+
+@* How often somebody hears about a group's bookings (item 235 phase 8). Renders nothing at all for
+   the many people who decide nobody's bookings: a settings card for letters that will never come is
+   a control that does nothing. *@
+
+@if (_result is { Failed: true } failed)
+{
+    <h6 class="text-secondary text-uppercase small mb-2 mt-4">Letters about bookings</h6>
+    <div class="alert alert-warning" id="booking-letters-error">
+        @(failed.Reason ?? "We couldn't load how often you hear about bookings.")
+        <button type="button" class="btn btn-link btn-sm p-0 ms-1 align-baseline" @onclick="LoadAsync">Try again</button>
+    </div>
+}
+else if (_groups.Count > 0)
+{
+    <h6 class="text-secondary text-uppercase small mb-2 mt-4" id="booking-letters">
+        Letters about bookings<HelpLink Slug="organization-administration" Anchor="hosted-events" />
+    </h6>
+    <div class="card mb-4">
+        <div class="list-group list-group-flush">
+            @foreach (var group in _groups)
+            {
+                var g = group;
+                <div class="list-group-item booking-letters-group" data-org="@g.OrganizationId">
+                    <div class="d-flex flex-column flex-md-row gap-2 align-items-md-center">
+                        <div class="flex-grow-1">
+                            <div class="fw-semibold">@g.OrganizationName</div>
+                            <div class="text-secondary small">@g.Why</div>
+                        </div>
+                        <div class="btn-group flex-wrap" role="radiogroup" aria-label="How often for @g.OrganizationName">
+                            @foreach (var (mode, label) in Choices)
+                            {
+                                var m = mode;
+                                var id = $"letters-{g.OrganizationId:N}-{(int)m}";
+                                <input type="radio" class="btn-check" name="letters-@g.OrganizationId.ToString("N")"
+                                       id="@id" autocomplete="off"
+                                       checked="@(g.Mode == m)"
+                                       disabled="@(_savingOrg is not null)"
+                                       @onchange="@(() => SetAsync(g, m))" />
+                                <label class="btn btn-outline-secondary" for="@id">@label</label>
+                            }
+                        </div>
+                    </div>
+                    @if (_noteOrg == g.OrganizationId && _note is not null)
+                    {
+                        <div class="small mt-2 @(_noteIsError ? "text-danger" : "text-success")" role="status">@_note</div>
+                    }
+                </div>
+            }
+        </div>
+    </div>
+}
+
+@code {
+    private static readonly (EventBookingAlertMode Mode, string Label)[] Choices =
+    [
+        (EventBookingAlertMode.AsItHappens, "As they arrive"),
+        (EventBookingAlertMode.DigestOnly, "A daily letter"),
+        (EventBookingAlertMode.Off, "Nothing"),
+    ];
+
+    private ItemResult<EventBookingAlertSettingsRecord>? _result;
+    private IReadOnlyList<EventBookingAlertGroupRecord> _groups = [];
+    private Guid? _savingOrg;
+    private Guid? _noteOrg;
+    private string? _note;
+    private bool _noteIsError;
+
+    protected override async Task OnAfterRenderAsync(bool firstRender)
+    {
+        if (!firstRender) return;
+        if (!await UserState.WaitUntilAuthReadyAsync(RendererInfo.IsInteractive)) return;
+        if (!UserState.IsAuthenticated) return;
+
+        await LoadAsync();
+    }
+
+    private async Task LoadAsync()
+    {
+        var result = await AdminClient.GetEventBookingAlertSettingsAsync();
+        _result = result;
+        _groups = result.Item?.Groups ?? [];
+        StateHasChanged();
+    }
+
+    private async Task SetAsync(EventBookingAlertGroupRecord group, EventBookingAlertMode mode)
+    {
+        _savingOrg = group.OrganizationId;
+        _noteOrg = group.OrganizationId;
+        _note = null;
+        try
+        {
+            var (saved, error) = await AdminClient.SetEventBookingAlertModeAsync(
+                group.OrganizationId, new SetEventBookingAlertModeRequest(mode));
+
+            if (saved is null)
+            {
+                _note = error ?? "That didn't save. Try again.";
+                _noteIsError = true;
+                return;
+            }
+
+            _groups = saved.Groups;
+            _noteIsError = false;
+            _note = mode switch
+            {
+                EventBookingAlertMode.AsItHappens =>
+                    "Saved. You'll hear as requests arrive, a busy hour collected into one letter, and get the daily letter too.",
+                EventBookingAlertMode.DigestOnly =>
+                    "Saved. One letter a day while bookings are open, once a week otherwise, and never an empty one.",
+                _ =>
+                    "Saved. No letters from this group about bookings. The bell still shows what is waiting.",
+            };
+        }
+        finally { _savingOrg = null; }
+    }
+}

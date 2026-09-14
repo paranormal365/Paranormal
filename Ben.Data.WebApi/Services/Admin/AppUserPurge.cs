@@ -248,6 +248,13 @@ public sealed class AppUserPurge
             await db.OrganizationMembershipRequests.Where(r => r.AppUserId == userId).ExecuteDeleteAsync(ct);
             await db.OrganizationAccessGrants.Where(g => g.AppUserId == userId).ExecuteDeleteAsync(ct);
             await db.OrganizationUserMemberships.Where(m => m.AppUserId == userId).ExecuteDeleteAsync(ct);
+            // How often they heard about a group's bookings, and how far they had been told (item
+            // 235 phase 8): settings about a person, of use to nobody once the person is gone.
+            await db.EventBookingAlertPreferences.Where(p => p.AppUserId == userId).ExecuteDeleteAsync(ct);
+            await db.EventBookingAlertStates.Where(s => s.AppUserId == userId).ExecuteDeleteAsync(ct);
+            // Their agreement to event photos being shown (phase 11): about photos that are theirs, which the
+            // purge's own rules decide; the agreement means nothing once the person is gone.
+            await db.EventPhotoConsents.Where(c => c.AppUserId == userId).ExecuteDeleteAsync(ct);
 
             // ── the person ────────────────────────────────────────────────────
             // Shared with self-service closure rather than restated. Two copies of these rules
@@ -423,6 +430,7 @@ public sealed class AppUserPurge
             nameof(UserBlock), nameof(OrganizationMembershipRequest), nameof(OrganizationAccessGrant),
             nameof(OrganizationUserMembership), nameof(UserAddress), nameof(UserEmail),
             nameof(UserPhone), nameof(UserLink), nameof(AppUserPhoto),
+            nameof(EventBookingAlertPreference), nameof(EventBookingAlertState), nameof(EventPhotoConsent),
         };
 
         var total = 0;

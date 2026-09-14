@@ -16,6 +16,8 @@
     <IsTestProject>false</IsTestProject>
     <!-- PowerShell is not available on macOS — use bash to install browsers -->
     <PlaywrightCliInstallBrowsers>false</PlaywrightCliInstallBrowsers>
+    <!-- The suite's browser launch options; read by `dotnet test` and the IDE alike. -->
+    <RunSettingsFilePath>$(MSBuildProjectDirectory)/playwright.runsettings</RunSettingsFilePath>
   </PropertyGroup>
 
   <ItemGroup>

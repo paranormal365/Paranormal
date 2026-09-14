@@ -89,5 +89,9 @@ public sealed class AdminSiteSettingController : BenControllerBase
         // Item 233: the same reasoning. Tour businesses could sign up before the switch existed,
         // so a site that never touches it must keep letting them.
         || key == SiteSettingKeys.AllowTourBusinessSignUps
+        // Item 235: same reasoning again. A site that has never touched this setting must keep
+        // selling credits, or introducing the switch would close the only door a group without a
+        // plan has.
+        || key == SiteSettingKeys.EventCreditsEnabled
         || SiteSettingKeys.FeatureDefaults.Any(f => f.Key == key && f.DefaultWhenUnset);
 }

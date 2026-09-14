@@ -57,8 +57,7 @@
                                 <strong>@i.Title</strong>
                             </div>
                             <div class="text-secondary small">
-                                @i.ScheduledDateTime.ToViewerLocalTime(UserState)
-                                  .ToDisplaySpan(i.EndDateTime?.ToViewerLocalTime(UserState))
+                                @(i.ScheduledDateTime.ToViewerLocalTime(UserState).ToDisplaySpan(i.EndDateTime?.ToViewerLocalTime(UserState)))
                                 @if (!string.IsNullOrEmpty(i.Location))
                                 { <span> · @i.Location</span> }
                             </div>

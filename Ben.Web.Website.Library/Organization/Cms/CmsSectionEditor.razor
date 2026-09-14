@@ -125,6 +125,36 @@ else if (SectionType == CmsSectionType.ImageBanner)
                       Loader="@LoadBannerImagesAsync"
                       OnSelected="@OnBannerImageChosen" />
 }
+else if (SectionType is CmsSectionType.EventProgramme or CmsSectionType.EventBooking
+                     or CmsSectionType.EventGallery or CmsSectionType.EventVenue)
+{
+    @* Item 235 phase 11: one of the group's events. Only events on the public site are offered — a page
+       showing a draft would publish it — and the section keeps up with the event by itself. *@
+    <div class="mb-3">
+        <label class="form-label fw-semibold" for="cms-event-choice">Which event?</label>
+        @if (_eventsResult.Failed)
+        {
+            <BenListState TItem="Ben.Service.Models.Entities.HostedEventRecord" Result="@_eventsResult" />
+        }
+        else if (_events.Count == 0)
+        {
+            <div class="alert alert-light py-2 mb-0" id="cms-event-none">
+                Your group has no published events yet. Publish one, then come back to add it here.
+            </div>
+        }
+        else
+        {
+            <select class="form-select" id="cms-event-choice" value="@_eventId" @onchange="OnEventChosen">
+                <option value="">Choose an event</option>
+                @foreach (var ev in _events)
+                {
+                    <option value="@ev.Id">@ev.Name · @ev.StartsOn.ToString("MM/dd/yyyy")</option>
+                }
+            </select>
+            <div class="form-text">What visitors see changes with the event: a moved session, a new picture, bookings closing.</div>
+        }
+    </div>
+}
 else if (SectionType is CmsSectionType.EmbeddedInvestigations or CmsSectionType.EmbeddedCases)
 {
     @* Ben's order, kept deliberately: warn on adding something not already public, THEN ask about
@@ -607,6 +637,27 @@ else
     // The editor only ever offers this group's own work, and the server re-checks that on read.
     // Nothing here is a control; it is the place where the group is told what publishing means.
 
+    private List<Ben.Service.Models.Entities.HostedEventRecord> _events = [];
+    private LoadResult<Ben.Service.Models.Entities.HostedEventRecord> _eventsResult;
+    private bool _eventsLoaded;
+    private string _eventId = "";
+
+    private async Task LoadEventsAsync()
+    {
+        if (OrgId is not Guid orgId || _eventsLoaded) return;
+        _eventsLoaded = true;
+        _eventsResult = await AdminClient.GetHostedEventsAsync(orgId);
+        _events = [.. _eventsResult.Items
+            .Where(e => e.LifecycleState is HostedEventLifecycleState.Published or HostedEventLifecycleState.Live or HostedEventLifecycleState.Ended)
+            .OrderByDescending(e => e.StartsOn)];
+    }
+
+    private async Task OnEventChosen(ChangeEventArgs e)
+    {
+        _eventId = e.Value?.ToString() ?? "";
+        await ContentJsonChanged.InvokeAsync(JsonSerializer.Serialize(new { eventId = _eventId }));
+    }
+
     private List<EmbeddableRecord> _embedChoices = [];
     private LoadResult<EmbeddableRecord> _embedChoicesResult;
     private bool _embedLoading;
@@ -815,6 +866,10 @@ else
     {
         ParseContentJson();
 
+        if (SectionType is CmsSectionType.EventProgramme or CmsSectionType.EventBooking
+                        or CmsSectionType.EventGallery or CmsSectionType.EventVenue)
+            await LoadEventsAsync();
+
         if (SectionType is CmsSectionType.EmbeddedInvestigations or CmsSectionType.EmbeddedCases
                         or CmsSectionType.CaseMedia
             && _embedChoices.Count == 0 && !_embedLoading)
@@ -870,6 +925,11 @@ else
             else if (SectionType == CmsSectionType.CaseMedia)
             {
                 ParseCaseMedia(root);
+            }
+            else if (SectionType is CmsSectionType.EventProgramme or CmsSectionType.EventBooking
+                              or CmsSectionType.EventGallery or CmsSectionType.EventVenue)
+            {
+                _eventId = root.TryGetProperty("eventId", out var ev) ? ev.GetString() ?? "" : "";
             }
             else if (SectionType == CmsSectionType.ContactInfo)
             {

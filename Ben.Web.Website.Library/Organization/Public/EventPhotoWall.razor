@@ -1,0 +1,162 @@
+@page "/events/{EventId:guid}/wall"
+@namespace Ben.Web.Website.Library.Organization.Public
+@using Ben.Service.Models.Entities
+@using Ben.Web.Services
+@using Ben.Web.Services.WebApi
+@using Ben.Web.Website.Library.Kit
+@inject IBenAdminClient AdminClient
+@inject IBenUserState UserState
+@inject IMediaUrlBuilder MediaUrls
+@inject NavigationManager Nav
+@inject IJSRuntime JS
+@implements IAsyncDisposable
+
+@* The photo wall: the event's photos, one at a time, full screen, for the TV in the ballroom
+   (item 235 phase 11 — Ben's idea, 2026-09-13).
+
+   BEHIND THE ORGANIZER'S OR THE VENUE'S ACCOUNT, and nobody else's (Ben, 2026-09-13): a slideshow is
+   put on a screen, a screen is seen by whoever walks past, and some of the people in the photos do not
+   want their faces out in public. Guests see the photos in the room; the wall is for the accounts
+   responsible for where it is shown.
+
+   NEW PHOTOS ARRIVE ON THEIR OWN. The list is fetched again every half-minute and the newest go to
+   the front of the cycle, so a picture taken at 9 PM is up by 9:01.
+
+   WHEN THERE ARE NONE, the wall says how to add one and shows a code to scan, because an empty black
+   screen in a ballroom is the moment nobody knows where to send their photos. *@
+
+<PageTitle>@(_wall.Item?.EventName ?? "Photo wall")</PageTitle>
+
+<div class="photo-wall" id="photo-wall">
+    @if (_loading)
+    {
+        <div class="photo-wall-stage"><span class="text-secondary">Loading…</span></div>
+    }
+    else if (_wall.Failed)
+    {
+        <div class="photo-wall-stage flex-column gap-3 p-4 text-center" id="photo-wall-refused">
+            <div class="fs-4">This photo wall is for the people running the event.</div>
+            <div class="text-secondary">Sign in with the organizer's or the venue's account. Guests can see the photos in the event's room.</div>
+            <a class="btn btn-light" href="@($"/login?returnUrl=/events/{EventId}/wall")">Sign in</a>
+        </div>
+    }
+    else if (_photos.Count == 0)
+    {
+        <div class="photo-wall-stage flex-column gap-3 p-4 text-center" id="photo-wall-empty">
+            <div class="fs-3">@_wall.Item?.EventName</div>
+            <div class="fs-5">No photos yet. Add yours:</div>
+            <BenQrPlate Value="@AddPhotosUrl" Size="240px" />
+            <div class="text-secondary">@AddPhotosUrl</div>
+        </div>
+    }
+    else
+    {
+        var photo = _photos[_index % _photos.Count];
+        <div class="photo-wall-stage" @key="photo.MessageId">
+            @if (photo.ContentType.StartsWith("video/"))
+            {
+                <video src="@MediaUrls.EventRoomMedia(EventId, photo.MessageId)" autoplay muted playsinline></video>
+            }
+            else
+            {
+                <img src="@MediaUrls.EventRoomMedia(EventId, photo.MessageId)" alt="@(photo.Caption ?? $"Photo from {photo.AuthorName}")" />
+            }
+        </div>
+        <div class="photo-wall-caption">
+            <div class="flex-grow-1">
+                @if (photo.Caption is { Length: > 0 } caption)
+                {
+                    <div class="fs-5">@caption</div>
+                }
+                <div class="small text-white-50">@photo.AuthorName</div>
+            </div>
+            <div class="text-end small text-white-50 d-none d-md-block">
+                Add yours: @AddPhotosUrl
+            </div>
+        </div>
+    }
+
+    <div class="photo-wall-controls">
+        <button type="button" class="btn btn-sm btn-outline-light" id="photo-wall-fullscreen" @onclick="FullScreenAsync">Full screen</button>
+        <a class="btn btn-sm btn-outline-light" href="@($"/events/{EventId}/photos")">Add photos</a>
+        <button type="button" class="btn btn-sm btn-outline-light" @onclick="GoBack">Close</button>
+    </div>
+</div>
+
+@code {
+    [Parameter] public Guid EventId { get; set; }
+
+    /// <summary>How long each photo stays up. Long enough to find yourself in it.</summary>
+    private static readonly TimeSpan PerPhoto = TimeSpan.FromSeconds(8);
+
+    private ItemResult<EventWallRecord> _wall;
+    private List<EventWallPhotoRecord> _photos = [];
+    private int _index;
+    private bool _loading = true;
+    private System.Threading.Timer? _advance;
+    private System.Threading.Timer? _refresh;
+    private IJSObjectReference? _module;
+
+    private string AddPhotosUrl => Nav.ToAbsoluteUri($"/events/{EventId}/photos").ToString();
+
+    protected override async Task OnAfterRenderAsync(bool firstRender)
+    {
+        if (!firstRender) return;
+        if (!await UserState.WaitUntilAuthReadyAsync(RendererInfo.IsInteractive)) return;
+
+        await LoadAsync();
+        _loading = false;
+        StateHasChanged();
+
+        _advance = new System.Threading.Timer(_ => Tick(() => { if (_photos.Count > 0) _index = (_index + 1) % _photos.Count; }),
+            null, PerPhoto, PerPhoto);
+        _refresh = new System.Threading.Timer(_ => Tick(async () => await LoadAsync()),
+            null, TimeSpan.FromSeconds(30), TimeSpan.FromSeconds(30));
+    }
+
+    private async Task LoadAsync()
+    {
+        _wall = await AdminClient.GetEventWallAsync(EventId);
+        if (_wall.Item is not { } wall) return;
+
+        // Anything new goes to the front, so it is the next thing on the screen rather than the
+        // two-hundredth.
+        var known = _photos.Select(p => p.MessageId).ToHashSet();
+        var fresh = wall.Photos.Where(p => !known.Contains(p.MessageId)).ToList();
+        var stillThere = wall.Photos.Select(p => p.MessageId).ToHashSet();
+
+        var current = _photos.Count > 0 ? _photos[_index % _photos.Count].MessageId : (Guid?)null;
+        _photos = [.. _photos.Where(p => stillThere.Contains(p.MessageId))];
+
+        if (fresh.Count > 0)
+        {
+            var at = current is Guid id ? _photos.FindIndex(p => p.MessageId == id) + 1 : 0;
+            _photos.InsertRange(Math.Clamp(at, 0, _photos.Count), fresh);
+        }
+
+        if (current is Guid shown && _photos.FindIndex(p => p.MessageId == shown) is var i && i >= 0) _index = i;
+    }
+
+    private void Tick(Action change) => _ = InvokeAsync(() => { change(); StateHasChanged(); });
+
+    private void Tick(Func<Task> change) => _ = InvokeAsync(async () => { await change(); StateHasChanged(); });
+
+    private async Task FullScreenAsync()
+    {
+        _module ??= await JS.InvokeAsync<IJSObjectReference>(
+            "import", "/_content/Ben.Web.Website.Library/Organization/Public/EventPhotoWall.razor.js");
+        await _module.InvokeVoidAsync("goFullScreen");
+    }
+
+    private void GoBack() => Nav.NavigateTo("/my-events");
+
+    public async ValueTask DisposeAsync()
+    {
+        _advance?.Dispose();
+        _refresh?.Dispose();
+        if (_module is not null)
+        {
+            try { await _module.DisposeAsync(); } catch (JSDisconnectedException) { }
+        }
+    }
+}

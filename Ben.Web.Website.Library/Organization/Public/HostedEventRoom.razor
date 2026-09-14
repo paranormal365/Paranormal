@@ -1,0 +1,251 @@
+@namespace Ben.Web.Website.Library.Organization.Public
+@using Ben.Data.Common.Enums
+@using Ben.Service.Models.Entities
+@using Ben.Web.Services
+@using Ben.Web.Services.WebApi
+@using Ben.Web.Website.Library.Kit
+@using Microsoft.AspNetCore.Components.Forms
+@inject IBenAdminClient AdminClient
+@inject IMediaUrlBuilder MediaUrls
+@inject IBenUserState UserState
+@implements IDisposable
+
+@* The event's room, for the people at the event (item 235 phase 11).
+
+   RENDERS NOTHING FOR ANYBODY ELSE. The server answers "not in this room" for a stranger or a guest
+   still waiting on the venue, and the page does not advertise a room somebody cannot enter.
+
+   WHAT IS POSTED STAYS THE POSTER'S. The composer says so beside the one switch that sends a photo
+   on to the organizers and the venue, and a post's own "Send to…" does the same later — so nobody
+   hands a picture over without seeing that it is a choice.
+
+   PHOTOS CAN BE KEPT TO THE TEAM by the organizers; a guest then sees why there is no photo button
+   rather than hunting for it. *@
+
+@if (_room.Item is { } room)
+{
+    <section class="mb-4" id="hosted-room">
+        <BenSectionHeading Text="The room" />
+        <p class="small text-secondary mb-2">
+            For the people at this event. What you post here stays yours.
+            @if (room.CanSeeWall)
+            {
+                <a class="ms-1" href="@($"/events/{HostedEventId}/wall")" id="room-wall-link">Photo wall</a>
+            }
+            @if (room.CanAddPhotos)
+            {
+                @if (room.CanSeeWall) { <text> · </text> }
+                <a class="ms-1" href="@($"/events/{HostedEventId}/photos")" id="room-add-photos-link">Add photos from your phone</a>
+            }
+        </p>
+
+        @if (_note is { Length: > 0 })
+        {
+            <div class="alert alert-success py-2" role="status" id="room-note">@_note</div>
+        }
+        @if (_error is { Length: > 0 })
+        {
+            <div class="alert alert-danger py-2" role="alert" id="room-error">@_error</div>
+        }
+
+        @if (room.CanModerate)
+        {
+            <div class="d-flex flex-wrap align-items-center gap-2 mb-3 small" id="room-moderation">
+                <label class="form-label mb-0" for="room-photo-posting">Who can add photos</label>
+                <select class="form-select form-select-sm" style="width:auto;" id="room-photo-posting"
+                        value="@room.PhotoPosting" @onchange="ChangePostingAsync">
+                    <option value="@EventPhotoPosting.TeamAndGuests">The team and confirmed guests</option>
+                    <option value="@EventPhotoPosting.TeamOnly">The event's team only</option>
+                </select>
+                <button type="button" class="btn btn-outline-secondary btn-sm" disabled="@_busy"
+                        @onclick="() => SendAsync(() => AdminClient.SetEventRoomClosedAsync(HostedEventId, room.CanPost))">
+                    @(room.CanPost ? "Close the room" : "Reopen the room")
+                </button>
+            </div>
+        }
+
+        @if (room.CanPost)
+        {
+            <div class="card mb-3" id="room-composer">
+                <div class="card-body">
+                    <label class="visually-hidden" for="room-body">Write something</label>
+                    <textarea class="form-control mb-2" id="room-body" rows="2" maxlength="1000"
+                              placeholder="What's happening?" @bind="_body" @bind:event="oninput"></textarea>
+                    @if (room.CanAddPhotos)
+                    {
+                        <label class="form-label small mb-1" for="room-media">A photo or video</label>
+                        <InputFile id="room-media" class="form-control form-control-sm mb-2" accept="image/*,video/*" OnChange="Picked" />
+                        @if (_media is not null && room.NeedsPhotoConsent)
+                        {
+                            <div class="border rounded p-2 mb-2 small" id="room-photo-notice">
+                                <p class="mb-2">@room.PhotoNotice</p>
+                                <div class="form-check mb-0">
+                                    <input class="form-check-input" type="checkbox" id="room-agree" @bind="_agree" />
+                                    <label class="form-check-label" for="room-agree">I agree</label>
+                                </div>
+                            </div>
+                        }
+                        @if (_media is not null && room.HostNames.Count > 0)
+                        {
+                            <div class="form-check small mb-2">
+                                <input class="form-check-input" type="checkbox" id="room-send-to-hosts" @bind="_sendToHosts" />
+                                <label class="form-check-label" for="room-send-to-hosts">
+                                    Also send it to @string.Join(" and ", room.HostNames) — it stays yours
+                                </label>
+                            </div>
+                        }
+                    }
+                    else
+                    {
+                        <p class="small text-secondary mb-2" id="room-photos-team-only">The organizers have kept photos to the event's team.</p>
+                    }
+                    <button type="button" class="btn btn-primary btn-sm" id="room-post"
+                            disabled="@(_busy || (_media is not null && room.NeedsPhotoConsent && !_agree))" @onclick="PostAsync">Post</button>
+                </div>
+            </div>
+        }
+        else if (room.WhyNotPost is { Length: > 0 } why)
+        {
+            <p class="small text-secondary" id="room-closed">@why</p>
+        }
+
+        @if (room.Messages.Count == 0)
+        {
+            <div class="text-secondary small" id="room-empty">Nothing here yet.</div>
+        }
+        <div class="list-group">
+            @foreach (var message in room.Messages)
+            {
+                var m = message;
+                <div class="list-group-item room-message @(m.IsHidden ? "opacity-50" : "")" data-message="@m.Id">
+                    <div class="d-flex flex-wrap gap-2 small text-secondary">
+                        <strong class="text-body">@m.AuthorName</strong>
+                        <span>@m.PostedUtc.ToViewerLocalTime(UserState).ToDisplayDateTime()</span>
+                        @if (m.IsHidden) { <span class="badge bg-secondary">Hidden</span> }
+                        @if (m.MediaWaiting) { <span class="badge bg-secondary">Photo waiting for a check</span> }
+                        @if (m.Reports > 0) { <span class="badge bg-danger">Reported × @m.Reports</span> }
+                    </div>
+                    @if (m.Body is { Length: > 0 } text)
+                    {
+                        <div class="mt-1" style="white-space:pre-line;">@text</div>
+                    }
+                    @if (m.HasMedia)
+                    {
+                        @if (m.MediaContentType?.StartsWith("video/") == true)
+                        {
+                            <video class="mt-2 rounded" style="max-width:100%;max-height:420px;" controls preload="metadata"
+                                   src="@MediaUrls.EventRoomMedia(HostedEventId, m.Id)"></video>
+                        }
+                        else
+                        {
+                            <img class="mt-2 rounded" style="max-width:100%;max-height:420px;" loading="lazy"
+                                 alt="@($"Photo from {m.AuthorName}")" src="@MediaUrls.EventRoomMedia(HostedEventId, m.Id)" />
+                        }
+                    }
+                    <div class="d-flex flex-wrap gap-3 mt-2 small">
+                        @if (m.IsMine && m.HasMedia && !m.SentToHosts && room.HostNames.Count > 0)
+                        {
+                            <button type="button" class="btn btn-link btn-sm p-0" disabled="@_busy"
+                                    @onclick="() => SendAsync(() => AdminClient.SendEventRoomPhotoToHostsAsync(HostedEventId, m.Id))">
+                                Send to @string.Join(" and ", room.HostNames)
+                            </button>
+                        }
+                        @if (m.IsMine && m.SentToHosts)
+                        {
+                            <span class="text-secondary">Sent to @string.Join(" and ", room.HostNames)</span>
+                        }
+                        @if (m.IsMine)
+                        {
+                            <button type="button" class="btn btn-link btn-sm p-0 text-danger" disabled="@_busy"
+                                    @onclick="() => SendAsync(() => AdminClient.RemoveEventRoomMessageAsync(HostedEventId, m.Id))">Take down</button>
+                        }
+                        else
+                        {
+                            <button type="button" class="btn btn-link btn-sm p-0 text-secondary" disabled="@_busy"
+                                    @onclick="() => SendAsync(() => AdminClient.ReportEventRoomMessageAsync(HostedEventId, m.Id, new ReportEventRoomMessageRequest(null)))">Report</button>
+                        }
+                        @if (room.CanModerate)
+                        {
+                            <button type="button" class="btn btn-link btn-sm p-0" disabled="@_busy"
+                                    @onclick="() => SendAsync(() => AdminClient.HideEventRoomMessageAsync(HostedEventId, m.Id, !m.IsHidden))">
+                                @(m.IsHidden ? "Show again" : "Hide")
+                            </button>
+                        }
+                    </div>
+                </div>
+            }
+        </div>
+    </section>
+}
+
+@code {
+    [Parameter, EditorRequired] public Guid HostedEventId { get; set; }
+
+    private ItemResult<EventRoomRecord> _room;
+    private bool _busy;
+    private string? _note;
+    private string? _error;
+    private string? _body;
+    private IBrowserFile? _media;
+    private bool _sendToHosts;
+    private bool _agree;
+    private System.Threading.Timer? _poll;
+
+    protected override async Task OnParametersSetAsync()
+    {
+        await LoadAsync();
+
+        // Every half-minute while somebody is looking: a room is a conversation, and a photo posted
+        // from the ballroom should reach the bar without anybody pressing anything.
+        _poll ??= new System.Threading.Timer(async _ =>
+        {
+            if (_busy) return;
+            try { await InvokeAsync(async () => { await LoadAsync(); StateHasChanged(); }); }
+            catch (ObjectDisposedException) { }
+        }, null, TimeSpan.FromSeconds(30), TimeSpan.FromSeconds(30));
+    }
+
+    private async Task LoadAsync() => _room = await AdminClient.GetEventRoomAsync(HostedEventId);
+
+    private void Picked(InputFileChangeEventArgs e) => _media = e.File;
+
+    private async Task PostAsync()
+    {
+        await SendAsync(async () =>
+        {
+            using var content = new MultipartFormDataContent();
+            content.Add(new StringContent(_body ?? ""), "body");
+            content.Add(new StringContent(_sendToHosts ? "true" : "false"), "sendToHosts");
+            content.Add(new StringContent(_agree ? "true" : "false"), "agreeToShow");
+            if (_media is not null)
+            {
+                var stream = new StreamContent(_media.OpenReadStream(200L * 1024 * 1024));
+                stream.Headers.ContentType = new System.Net.Http.Headers.MediaTypeHeaderValue(
+                    string.IsNullOrWhiteSpace(_media.ContentType) ? "application/octet-stream" : _media.ContentType);
+                content.Add(stream, "media", _media.Name);
+            }
+            return await AdminClient.PostToEventRoomAsync(HostedEventId, content);
+        });
+
+        if (_error is null) { _body = null; _media = null; _sendToHosts = false; }
+    }
+
+    private Task ChangePostingAsync(ChangeEventArgs e)
+        => Enum.TryParse<EventPhotoPosting>(e.Value?.ToString(), out var posting)
+            ? SendAsync(() => AdminClient.SetEventRoomSettingsAsync(HostedEventId, new EventRoomSettingsRequest(posting)))
+            : Task.CompletedTask;
+
+    private async Task SendAsync(Func<Task<(EventRoomRecord? Result, string? Error)>> send)
+    {
+        _busy = true;
+        _note = null;
+        _error = null;
+        var (room, error) = await send();
+        _busy = false;
+        if (room is null) { _error = error ?? "That couldn't be sent just now."; return; }
+        _room = ItemResult<EventRoomRecord>.Ok(room);
+        _note = room.Note;
+    }
+
+    public void Dispose() => _poll?.Dispose();
+}

@@ -47,8 +47,9 @@ public class OrgSearchTests : BenTestBase
                       .Or(Page.GetByRole(AriaRole.Button, new() { Name = "Search" }))
                       .First;
         await btn.ClickAsync();
-        // Wait for result cards or a "no results" message
-        await Page.WaitForSelectorAsync(".card, .alert", new() { Timeout = 15_000 });
+        // A group card (the whole card is the link since item 233), the "none near you" note, or
+        // the geocoder's refusal — any of the three is the search having answered.
+        await Page.WaitForSelectorAsync("a.org-card, .alert", new() { Timeout = 15_000 });
         var body = await Page.InnerTextAsync("body");
         Assert.That(body, Does.Not.Contain("An unhandled error has occurred"));
     }
