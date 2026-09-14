@@ -64,15 +64,24 @@ public static class BlockDocumentSerializer
     /// there are none — its captions, link titles and map labels. Cut at a word, with an ellipsis, within
     /// <paramref name="maxLength"/>.
     /// </summary>
+    /// <remarks>
+    /// Each line of the page — a heading, a paragraph, a list item — stays its own piece. One that ends a sentence is
+    /// followed by a space; one that does not (a heading, a list item) by a middle dot, so "Who lived here before" and
+    /// "The county deed index…" do not run together into one sentence that was never written (found on the timeline
+    /// by the product walk, 2026-09-14).
+    /// </remarks>
     public static string PlainTextExcerpt(BlockDocument doc, int maxLength = 300)
     {
         var words = new StringBuilder();
         foreach (var block in doc.Blocks.Where(b => b.Kind == BlockKinds.Text))
         {
-            var text = PlainTextHtml.ToText(block.Html).Replace('\n', ' ').Trim();
-            if (text.Length == 0) continue;
-            if (words.Length > 0) words.Append(' ');
-            words.Append(text);
+            foreach (var line in PlainTextHtml.ToText(block.Html).Split('\n'))
+            {
+                var piece = string.Join(' ', line.Split(' ', StringSplitOptions.RemoveEmptyEntries));
+                if (piece.Length == 0) continue;
+                if (words.Length > 0) words.Append(EndsASentence(words[^1]) ? " " : " · ");
+                words.Append(piece);
+            }
             if (words.Length > maxLength) break;
         }
 
@@ -91,6 +100,8 @@ public static class BlockDocumentSerializer
         if (all.Length <= maxLength) return all;
 
         var cut = all.LastIndexOf(' ', maxLength - 1);
-        return (cut > maxLength / 2 ? all[..cut] : all[..(maxLength - 1)]).TrimEnd(',', ';', ':', '.', ' ') + "…";
+        return (cut > maxLength / 2 ? all[..cut] : all[..(maxLength - 1)]).TrimEnd(',', ';', ':', '.', '·', ' ') + "…";
     }
+
+    private static bool EndsASentence(char last) => last is '.' or '!' or '?' or ':' or ';' or '…';
 }

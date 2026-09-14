@@ -93,7 +93,21 @@ public sealed class BlockDocumentSerializerTests
                 new Block { Id = "c", Html = "<ul><li>1911 owner</li><li>1932 owner</li></ul>" },
             ],
         };
-        Assert.Equal("Deed search at the county office. 1911 owner 1932 owner", BlockDocumentSerializer.PlainTextExcerpt(doc));
+        Assert.Equal("Deed search at the county office. 1911 owner · 1932 owner", BlockDocumentSerializer.PlainTextExcerpt(doc));
+    }
+
+    [Fact]
+    public void A_heading_and_list_items_do_not_run_into_the_words_after_them()
+    {
+        var doc = new BlockDocument
+        {
+            Blocks =
+            [
+                new Block { Id = "a", Html = "<h3>Who lived here before</h3><p>Four owners since 1924.</p><ul><li>Deed book 1162</li><li>Obituary, March 1982</li></ul>" },
+            ],
+        };
+        Assert.Equal("Who lived here before · Four owners since 1924. Deed book 1162 · Obituary, March 1982",
+            BlockDocumentSerializer.PlainTextExcerpt(doc));
     }
 
     [Fact]
