@@ -724,6 +724,13 @@ it has no public page, it takes no bookings and it sends nothing. Build all of i
 programme, the rooms, the files, the page — and change your mind as often as you like. Nothing is
 charged and nothing is announced until you press **Publish**.
 
+### Who can build and change one
+
+Adding an event and changing one are for the people who can manage your group's settings — the owner,
+administrators, and anybody whose role includes the group's settings. Every other member can still open
+**Events**, read each event and follow its pages; the page tells them who can change it, and its controls
+are shown but can't be pressed.
+
 ### A venue we haven't listed
 
 Search for the venue by name, and if we have it already, use the one we have. We share venues across

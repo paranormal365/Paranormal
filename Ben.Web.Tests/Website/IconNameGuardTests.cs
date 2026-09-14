@@ -1,3 +1,4 @@
+using Ben.Web.Tests.Support;
 using System.Text.RegularExpressions;
 using Xunit;
 
@@ -25,19 +26,11 @@ namespace Ben.Web.Tests.Website;
 /// </remarks>
 public sealed class IconNameGuardTests
 {
-    private static DirectoryInfo RepoRoot()
-    {
-        var dir = new DirectoryInfo(AppContext.BaseDirectory);
-        while (dir is not null && !File.Exists(Path.Combine(dir.FullName, "Ben.slnx")))
-            dir = dir.Parent;
-        return dir ?? throw new InvalidOperationException("repo root not found");
-    }
-
     /// <summary>Every symbol id in the shipped sprite.</summary>
     private static HashSet<string> SpriteSymbols()
     {
         var sprite = Path.Combine(
-            RepoRoot().FullName, "Ben.Web.Website", "wwwroot", "icons", "sprite.svg");
+            RepoFiles.Root().FullName, "Ben.Web.Website", "wwwroot", "icons", "sprite.svg");
 
         Assert.True(File.Exists(sprite), $"the icon sprite is missing: {sprite}");
 
@@ -56,19 +49,19 @@ public sealed class IconNameGuardTests
         // ordinary code with ordinary tests.
         var named = new Regex("<BenIcon\\b[^>]*\\bName=\"([^\"@][^\"]*)\"");
 
-        foreach (var file in RepoRoot().EnumerateFiles("*.razor", SearchOption.AllDirectories))
+        // RepoFiles, not a walk of its own: the walk this used to do also read the other branches
+        // checked out under .claude/worktrees, and failed this branch for icons a stale copy of
+        // another one still named.
+        var files = RepoFiles.Paths("*.razor");
+        Assert.True(files.Length > 100, $"only {files.Length} .razor files were found — a guard that reads nothing proves nothing");
+
+        foreach (var path in files)
         {
-            if (file.FullName.Contains($"{Path.DirectorySeparatorChar}obj{Path.DirectorySeparatorChar}")
-             || file.FullName.Contains($"{Path.DirectorySeparatorChar}bin{Path.DirectorySeparatorChar}"))
-                continue;
-
-            var text = File.ReadAllText(file.FullName);
-
-            foreach (Match match in named.Matches(text))
+            foreach (Match match in named.Matches(File.ReadAllText(path)))
             {
                 var name = match.Groups[1].Value;
                 if (!symbols.Contains(name))
-                    missing.Add($"{file.Name}: \"{name}\"");
+                    missing.Add($"{Path.GetFileName(path)}: \"{name}\"");
             }
         }
 

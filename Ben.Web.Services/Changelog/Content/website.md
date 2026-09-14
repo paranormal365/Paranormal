@@ -16,6 +16,17 @@ read. Add today's heading at the top when you ship something people can see.
 The history before 2026-08-22 is summarised rather than listed: the site was not yet open, and a
 day-by-day account of building it would say nothing to anyone using it now.
 
+## 2026-09-14
+
+- A client's own case page and investigation list show when a visit starts and ends, instead of a line of
+  program text after the start time. The same fix reaches a group's investigation panel and its scheduling
+  proposals.
+- A member who can read a group's events but not change them now sees them to read: the form to add an event
+  is not offered, an event's page says who can change it, and nothing on it can be pressed by mistake.
+- The list of people on the site no longer says there are no accounts while it is still loading.
+- A photo whose thumbnail was interrupted while it was being made no longer shows as a blank square; the
+  thumbnail is made again.
+
 ## 2026-09-13
 
 - A guest who asks to stay with no room preference now sees "Waiting to be placed" for each night until the
