@@ -18,6 +18,15 @@ read.
 This stream deliberately does not repeat the website's list. A change people meet as a page
 belongs there; this is for the part underneath.
 
+## 2026-09-13
+
+- Fixed: the warning that a file is about to come off the site was never sent. Since files on a
+  plan with an expiry date began carrying one, on 2026-09-10, the check that finds them failed
+  every time it ran, so nobody was told — and because the warning comes before the removal, no
+  file was removed either. Warnings now go out before a file comes down, as intended.
+- A file whose date has passed without its owner being told is no longer removed. It gets a
+  day's warning first, and goes only after that.
+
 ## 2026-09-12
 
 - One upload now carries up to 5 minutes of video and 500 MB in total. Recording on the phone is

@@ -1,5 +1,7 @@
 using Ben.Data.Common.Interfaces;
+using System.Linq.Expressions;
 using Ben.Data.Source.Context;
+using Ben.Data.Source.Entities;
 using Ben.Data.WebApi.Services.Media;
 using Microsoft.EntityFrameworkCore;
 
@@ -70,11 +72,61 @@ public sealed class MediaRetentionJob : IScheduledJob
         if (DateTime.UtcNow - _lastSweptUtc < MinimumSweepAge) return;
         _lastSweptUtc = DateTime.UtcNow;
 
+        await PassAsync(ct);
+    }
+
+    /// <summary>One warning pass and one sweep, without the six-hour gate.</summary>
+    /// <remarks>
+    /// Separate from <see cref="RunAsync"/> because the gate is static: a test that went through it
+    /// would silence every other test in the same process for six hours.
+    /// </remarks>
+    public async Task PassAsync(CancellationToken ct)
+    {
         await using var db = await _dbFactory.CreateDbContextAsync(ct);
 
         await WarnAsync(db, ct);
         await SweepAsync(db, ct);
     }
+
+    /// <summary>The files owed a warning at <paramref name="now"/>.</summary>
+    /// <remarks>
+    /// <para>Told once per window: a file warned a week out is warned again a day out, and never
+    /// twice inside the same window.</para>
+    ///
+    /// <para><b>The last-window test is written with the arithmetic on the notice, not the
+    /// expiry.</b> It used to read <c>ExpiryNoticeSentAtUtc &lt; ExpiresAtUtc.Value - LastNotice</c>,
+    /// which means the same thing, but EF cannot turn a column minus a <see cref="TimeSpan"/> into
+    /// SQL Server SQL. Wherever mail was set up the query threw on every pass from the day it
+    /// shipped (2026-09-10) until 2026-09-13, so no notice was ever sent — and because the warning
+    /// runs first, the sweep never ran there either. <c>AddDays</c> becomes <c>DATEADD</c>. Pinned
+    /// against the SQL Server provider in <c>MediaRetentionJobTests</c>.</para>
+    /// </remarks>
+    public static Expression<Func<UploadFile, bool>> DueForNotice(DateTime now)
+    {
+        var horizon = now + FirstNotice;
+        var lastWindow = now + LastNotice;
+        var lastNoticeDays = LastNotice.TotalDays;
+
+        return f => f.ExpiresAtUtc != null
+                 && f.KeptAtUtc == null
+                 && f.ExpiresAtUtc > now
+                 && f.ExpiresAtUtc <= horizon
+                 && (f.ExpiryNoticeSentAtUtc == null
+                     || (f.ExpiresAtUtc <= lastWindow
+                         && f.ExpiryNoticeSentAtUtc.Value.AddDays(lastNoticeDays) < f.ExpiresAtUtc));
+    }
+
+    /// <summary>The files whose time is up at <paramref name="now"/>.</summary>
+    /// <param name="canWarn">
+    /// Whether mail can go out. When it cannot, a file nobody was told about is not even read: it
+    /// cannot be taken, and there is nobody to tell, so it would only crowd warned files out of the
+    /// batch.
+    /// </param>
+    public static Expression<Func<UploadFile, bool>> DueForSweep(DateTime now, bool canWarn)
+        => f => f.ExpiresAtUtc != null
+             && f.KeptAtUtc == null
+             && f.ExpiresAtUtc <= now
+             && (canWarn || f.ExpiryNoticeSentAtUtc != null);
 
     // ── the warning ──────────────────────────────────────────────────────────
 
@@ -83,18 +135,9 @@ public sealed class MediaRetentionJob : IScheduledJob
         if (!_email.IsConfigured) return;
 
         var now = DateTime.UtcNow;
-        var horizon = now + FirstNotice;
 
         var due = await db.UploadFiles
-            .Where(f => f.ExpiresAtUtc != null
-                     && f.KeptAtUtc == null
-                     && f.ExpiresAtUtc > now
-                     && f.ExpiresAtUtc <= horizon
-                     // Told once per window: a file warned a week out is warned again a day out,
-                     // and never twice inside the same window.
-                     && (f.ExpiryNoticeSentAtUtc == null
-                         || (f.ExpiresAtUtc <= now + LastNotice
-                             && f.ExpiryNoticeSentAtUtc < f.ExpiresAtUtc!.Value - LastNotice)))
+            .Where(DueForNotice(now))
             .OrderBy(f => f.ExpiresAtUtc)
             .Take(Batch)
             .ToListAsync(ct);
@@ -135,10 +178,10 @@ public sealed class MediaRetentionJob : IScheduledJob
         if (warned > 0) _log.LogInformation("Warned {Count} people about expiring media.", warned);
     }
 
-    private string SubjectFor(Ben.Data.Source.Entities.UploadFile file)
+    private string SubjectFor(UploadFile file)
         => $"Your file \"{file.FileName}\" comes down on {file.ExpiresAtUtc:MM/dd/yyyy}";
 
-    private string BodyFor(Ben.Data.Source.Entities.UploadFile file, string? name)
+    private string BodyFor(UploadFile file, string? name)
     {
         var greeting = string.IsNullOrWhiteSpace(name) ? "Hello" : $"Hello {NotificationText.Safe(name)}";
         var mine = _site.AbsoluteUrl("/my-evidence");
@@ -157,8 +200,10 @@ public sealed class MediaRetentionJob : IScheduledJob
     {
         var now = DateTime.UtcNow;
 
+        var canWarn = _email.IsConfigured;
+
         var expired = await db.UploadFiles
-            .Where(f => f.ExpiresAtUtc != null && f.KeptAtUtc == null && f.ExpiresAtUtc <= now)
+            .Where(DueForSweep(now, canWarn))
             .OrderBy(f => f.ExpiresAtUtc)
             .Take(Batch)
             .ToListAsync(ct);
@@ -183,6 +228,16 @@ public sealed class MediaRetentionJob : IScheduledJob
             if (await db.TourGalleryImages.AnyAsync(g => g.UploadFileId == file.Id, ct))
             {
                 file.KeptAtUtc = now;
+                continue;
+            }
+
+            // Never taken unannounced. A file can reach its date with no notice — mail was not set
+            // up when its week began, or the warning query was broken, as it was until 2026-09-13
+            // — and deleting it then is exactly what the warning exists to prevent. It gets the
+            // last window afresh: warned on the next pass, taken a day after that.
+            if (file.ExpiryNoticeSentAtUtc is null)
+            {
+                file.ExpiresAtUtc = now + LastNotice;
                 continue;
             }
 
