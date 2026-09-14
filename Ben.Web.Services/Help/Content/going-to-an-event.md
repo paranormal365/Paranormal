@@ -47,6 +47,9 @@ places**.
 ![Three seats chosen, with the summary underneath](/help/media/going-to-an-event/choosing-seats.png)
 *The summary adds up what you have chosen before you commit to any of it.*
 
+![Tapping three seats, one after another](/help/media/going-to-an-event/picking-seats.gif)
+*Tap a seat to choose it and tap it again to let it go. Nothing is held yet.*
+
 - **What you pick is the size of your party.** Three seats is three people. If you are four, pick
   four squares — a party that does not fit its places is one the venue cannot confirm.
 - **Nothing is held until you press the button.** Every tap before that is a choice you can
