@@ -15,7 +15,7 @@
 }
 
 .research-rail__touch {
-    min-height: 2.75rem;
+    min-height: 44px;
     display: inline-flex;
     align-items: center;
 }

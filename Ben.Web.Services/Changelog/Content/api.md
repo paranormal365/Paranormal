@@ -29,6 +29,16 @@ belongs there; this is for the part underneath.
 - Case messages accept a formatted copy as well as plain text. A message sent formatted is stored with its plain
   text written from it, so every message still has a plain-text body; messages now return the formatted copy
   when there is one.
+- Research notes can be pages made of blocks, with a private draft, publishing, and files and links kept beside
+  them. Every block is cleaned before it is stored, a draft saved twice by the same request is stored once, and
+  a save from an out-of-date copy, or over somebody else's unpublished changes, is refused with a sentence
+  instead of overwriting.
+- The case timeline includes published, dated research pages, marked as read-only with a way to open the page.
+  Older apps see them as research entries.
+- Link cards are made by reading the linked page once, only when a signed-in person posts or adds the link, never
+  when somebody reads it. The page's picture is copied small onto our own storage so readers never load it from
+  the other site, and a card no research page keeps is removed after seven days. Each person may ask for a limited
+  number of new cards a minute, and addresses that cannot be read safely get a plain card with the address.
 - A new site setting takes plans and member seats off sale. While it is off, starting a checkout for either is
   refused with a short sentence, and the public features answer says so.
 

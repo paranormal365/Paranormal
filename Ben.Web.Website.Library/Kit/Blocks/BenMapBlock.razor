@@ -121,7 +121,7 @@
                 </li>
                 @if (index + 1 < Stops.Count && LegFrom(index) is { } leg)
                 {
-                    <li class="ben-map-block__leg" aria-label="@($"From place {index + 1} to place {index + 2}")">
+                    <li class="ben-map-block__leg" data-testid="map-block-leg" aria-label="@($"From place {index + 1} to place {index + 2}")">
                         <BenIcon Name="@(leg.FollowsPaths ? (Route == BlockMapRoutes.Driving ? "truck" : "navigation") : "minus")" Class="me-1" />
                         @BlockMapLinks.LegText(leg, Route)
                         @if (leg.Note is not null) { <span class="text-secondary"> — @leg.Note</span> }

@@ -25,8 +25,8 @@
 <PageTitle>@(_title.Length > 0 ? _title : "Research page")</PageTitle>
 
 <div class="container-fluid py-3 research-page" style="max-width:1320px;" data-testid="research-page">
-    <nav class="mb-2 small" aria-label="breadcrumb">
-        <a href="@($"/organizations/{OrgId}/cases/{CaseId}?tab=research")"><BenIcon Name="chevron-left" Class="me-1" />Research on this case</a>
+    <nav class="mb-3" aria-label="breadcrumb">
+        <a class="btn btn-sm btn-outline-secondary" href="@($"/organizations/{OrgId}/cases/{CaseId}?tab=research")"><BenIcon Name="chevron-left" Class="me-1" />Research on this case</a>
     </nav>
 
     @if (!_loaded)
@@ -181,7 +181,8 @@
         if (!await UserState.WaitUntilAuthReadyAsync(RendererInfo.IsInteractive)) return;
 
         _mapHost = new BlockMapHost(SearchPlaceAsync, ReversePlaceAsync, placeId => $"/places/{placeId}");
-        _autosave = new BlockAutosave(SaveDraftAsync, TimeSpan.FromSeconds(60), InvokeAsync, () => InvokeAsync(StateHasChanged));
+        _autosave = new BlockAutosave(SaveDraftAsync, TimeSpan.FromSeconds(60), InvokeAsync, () => InvokeAsync(StateHasChanged),
+            collect: () => _editor?.CommitAsync() ?? Task.CompletedTask);
         await LoadAsync();
         StateHasChanged();
     }
@@ -226,7 +227,6 @@
 
     private async Task<AutosaveOutcome> SaveDraftAsync(CancellationToken ct)
     {
-        if (_editor is not null) await _editor.CommitAsync();
         if (_title.Length == 0) return new AutosaveOutcome(AutosaveResult.Failed, "Give the page a title to save it.");
 
         var outcome = await AdminClient.SaveCaseResearchDraftAsync(OrgId, CaseId, EntryId, new SaveResearchDraftRequest(
@@ -245,9 +245,7 @@
     private async Task SaveNowAsync()
     {
         if (_autosave is null) return;
-        // A change that has not been counted yet — the text block being typed in — is counted now, so there is something to save.
-        _autosave.Touch();
-        await _autosave.FlushAsync();
+        await _autosave.FlushAsync();   // the text block being typed in reports its last keystrokes as the save begins
     }
 
     private async Task PublishAsync()
@@ -257,7 +255,6 @@
         _notice = null;
         try
         {
-            _autosave.Touch();
             if (!await _autosave.FlushAsync())
             {
                 _notice = _autosave.Message ?? "The page could not be saved, so it was not published.";

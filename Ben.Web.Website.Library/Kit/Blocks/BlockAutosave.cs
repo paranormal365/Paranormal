@@ -38,10 +38,15 @@ public enum AutosaveState
 /// <para>Saves run through <c>dispatch</c> — a component's <c>InvokeAsync</c> — so the save sees the component's state on
 /// the renderer's own context, never from a timer's thread. Time comes from a <see cref="TimeProvider"/> so the waiting
 /// is testable without waiting.</para>
+/// <para><c>collect</c> runs before each save decides what it is saving: a text editor holds its latest keystrokes until
+/// asked, and asking may report a change. Counted there, that change belongs to the save that carries it; counted inside
+/// the save, it looked like work arriving during the save, and a page that had just saved everything said "Unsaved
+/// changes" (found by CaseResearchPageTests, 2026-09-14).</para>
 /// </remarks>
 public sealed class BlockAutosave : IAsyncDisposable
 {
     private readonly Func<CancellationToken, Task<AutosaveOutcome>> _save;
+    private readonly Func<Task>? _collect;
     private readonly Func<Func<Task>, Task> _dispatch;
     private readonly Action _changed;
     private readonly TimeSpan _idle;
@@ -53,9 +58,10 @@ public sealed class BlockAutosave : IAsyncDisposable
     private bool _disposed;
 
     public BlockAutosave(Func<CancellationToken, Task<AutosaveOutcome>> save, TimeSpan idle,
-        Func<Func<Task>, Task> dispatch, Action changed, TimeProvider? clock = null)
+        Func<Func<Task>, Task> dispatch, Action changed, TimeProvider? clock = null, Func<Task>? collect = null)
     {
         _save = save;
+        _collect = collect;
         _idle = idle;
         _dispatch = dispatch;
         _changed = changed;
@@ -115,7 +121,9 @@ public sealed class BlockAutosave : IAsyncDisposable
         await _one.WaitAsync(ct);
         try
         {
-            if (!HasUnsavedChanges || State == AutosaveState.Conflict) return;
+            if (State == AutosaveState.Conflict) return;
+            if (_collect is not null) await _collect();
+            if (!HasUnsavedChanges) return;
 
             var saving = _changeCount;
             State = AutosaveState.Saving;

@@ -37,6 +37,16 @@ day-by-day account of building it would say nothing to anyone using it now.
   billing period selected.
 - The pricing page's plans are redrawn: each has its own colour, an icon, the price large, its limits as a
   checklist, and the plan most groups start on is marked.
+- Research on a case is written as pages. New page on the Research tab opens one: a stack of text, pictures,
+  files, link cards and maps that can be pasted or dropped in anywhere and dragged into order. A page saves
+  itself, stays a draft only its author can see until it is published, and later changes stay a draft until
+  published again. On a phone, pictures can be taken with the camera.
+- A research page keeps everything added to it under Files and links, where any of it can be put back on the page.
+- A research page with a date appears on the case's timeline once it is published, and opens from there.
+- A map on a research page shows up to ten places you choose, numbered, with straight lines, a walking route or a
+  driving route between them. Each leg shows its distance and time, with a total, and the route opens in Maps.
+- Links in group messages, case messages, feed posts and research pages show a card with the page's title,
+  description and picture. While you write, the card appears once the address is finished.
 - SuperAdmins have an Event health tab on the dashboard. It shows holds and how long parties wait for an answer,
   letters going out, errors on event pages, requests turned away by the booking limits, and when each
   background job last ran and whether it failed.

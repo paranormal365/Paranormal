@@ -64,8 +64,8 @@
 }
 
 .ben-map-block ::deep .ben-touch {
-    min-width: 2.75rem;
-    min-height: 2.75rem;
+    min-width: 44px;
+    min-height: 44px;
     display: inline-flex;
     align-items: center;
     justify-content: center;

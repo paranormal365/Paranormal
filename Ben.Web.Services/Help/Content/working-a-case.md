@@ -67,6 +67,9 @@ the case manager sit beside it. On a phone they follow it, below. If you have ma
 to leave another way, the page asks first; **Cancel** leaves without saving. **New Case** uses the
 same editor for its description.
 
+![The Edit Case page](/help/media/working-a-case/edit-case.png)
+*Edit Case: the description in the wide column, status and publishing beside it.*
+
 **Timeline** is the working record. Entries are client reports, investigator notes, evidence and
 instrument readings; research is written on the case's **Research** tab instead, where each page
 carries its own date and time. Research entries written on the timeline before that change are
@@ -98,6 +101,12 @@ document. **New page** asks for a title, then opens a research page of its own: 
 an obituary, a newspaper archive or a walk round a cemetery told you, with the pictures, files, links and places
 beside the words.
 
+![A research page with words, a link and a map](/help/media/working-a-case/research-page.png)
+*A published research page, as its author sees it: the page on the left, its files and links beside it.*
+
+![Building a research page](/help/media/working-a-case/research-page.gif)
+*A new page: a title, a few words, a map with two places joined by a straight line, then Publish.*
+
 A page is a stack of blocks. **Add** at the foot of the page offers five kinds:
 
 | Block | What it holds |
@@ -111,6 +120,9 @@ A page is a stack of blocks. **Add** at the foot of the page offers five kinds:
 Paste works anywhere on the page. A picture or file you paste becomes its own block, a web address becomes a link
 card, and text becomes a text block — or, inside a text block, goes where the cursor is. Dropping files onto the page
 does the same. On a phone, **Picture** offers the camera.
+
+![A research page on a phone](/help/media/working-a-case/research-page-phone.png)
+*On a phone the page is one column, and Files and links folds behind a button above it.*
 
 Drag a block by its handle to move it; on a touch screen, press and hold the handle first. The handle's menu also has
 **Move up**, **Move down**, **Add text below** and **Delete block**, and with the handle focused, Alt and the arrow
@@ -165,6 +177,9 @@ route through them, in order. Below the map, each leg shows its distance and, fo
 total underneath. Where no walking or driving path exists between two places — through woods, across a cemetery — that
 leg is drawn as a dashed straight line and says so. Routes are worked out each time the page is read, so they follow
 the roads as they are. **Open in Maps** opens the places, or the route from the first to the last, in Apple Maps.
+
+![A map block with two numbered places and a driving route](/help/media/working-a-case/research-map.png)
+*Two places the author chose, with the driving route between them and its distance and time.*
 
 ## Showing your finding on your public page
 

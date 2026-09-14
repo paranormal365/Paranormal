@@ -227,10 +227,11 @@ public sealed class CaseResearchController : BenControllerBase
         if (!await CaseOrgAccess.CaseBelongsToOrgAsync(db, caseId, orgId, ct)) return NotFound();
 
         var entry = await LoadPageEntryAsync(db, caseId, entryId, ct);
-        if (entry is null) return NotFound();
+        if (entry is null) return NotFound("This research page isn't there. It may have been deleted.");
 
+        // Somebody else's draft is not shown and not described: the sentence is the same whoever wrote it.
         var mine = ResearchPages.HasUnpublishedDraft(entry) && entry.DraftAuthorAppUserId == userId;
-        if (!mine && !ResearchPages.IsPublished(entry)) return NotFound();
+        if (!mine && !ResearchPages.IsPublished(entry)) return NotFound("This research page hasn't been published yet.");
 
         try
         {

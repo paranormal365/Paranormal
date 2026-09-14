@@ -104,7 +104,8 @@ public sealed class ResearchPageTests : IAsyncLifetime
         Assert.Contains(authorsList, e => e.Id == page && e.HasUnpublishedDraft && e.DraftIsMine);
 
         Assert.DoesNotContain(Value(await As(_colleague).GetAll(_orgId, _caseId, default)), e => e.Id == page);
-        Assert.IsType<NotFoundResult>((await As(_colleague).GetPage(_orgId, _caseId, page, default)).Result);
+        var refused = Assert.IsType<NotFoundObjectResult>((await As(_colleague).GetPage(_orgId, _caseId, page, default)).Result);
+        Assert.Equal("This research page hasn't been published yet.", refused.Value);
     }
 
     [Fact]

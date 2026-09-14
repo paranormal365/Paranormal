@@ -41,3 +41,12 @@ product walk as every persona, and the full e2e run.
 ## Status
 
 - 2026-09-14: branch opened; `CaseEditorTools.Prose` (the shared toolbar) committed first.
+- Mid-build asks folded in: grid row buttons became icons with a tooltip (A2); Edit Case became a page, not a larger
+  dialog (D); link cards in composers are fetched only once an address is finished or the box is left with one.
+- Parts A–G committed with their unit and Playwright tests green.
+- H1–H7 committed: block model, schema (`ResearchPages`, applied to the player copy), API, client, link previews,
+  Kit/Blocks with the map block and routes, the research page and rail, and dated research pages on the timeline.
+- H8 in progress: help "Research pages", changelog lines, deploy-runbook entry, a seeded research page on the
+  Belmont case, and the research Playwright fixtures (page, map block, viewports). The first run of those fixtures
+  found a real autosave defect — a save that carried the editor's last keystrokes still said "Unsaved changes" and
+  refused to publish — and 38.5px touch targets on wide screens; both fixed.

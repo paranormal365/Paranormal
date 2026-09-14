@@ -28,7 +28,7 @@
 .ben-block {
     position: relative;
     display: grid;
-    grid-template-columns: 2.75rem minmax(0, 1fr);
+    grid-template-columns: 44px minmax(0, 1fr);
     gap: .25rem;
     margin: 0 0 .5rem;
     padding: .35rem .5rem .35rem 0;
@@ -66,14 +66,15 @@
     gap: .15rem;
 }
 
-/* 44px targets: a thumb on a phone has to be able to take hold of a block. */
+/* 44px targets: a thumb on a phone has to be able to take hold of a block. In px, not rem: the site's root font
+   shrinks on wide screens, and 2.75rem came out at 38.5px there (CaseResearchPageViewportTests, 2026-09-14). */
 .ben-block__handle,
 .ben-block__menu-toggle {
     display: inline-flex;
     align-items: center;
     justify-content: center;
-    width: 2.75rem;
-    height: 2.75rem;
+    width: 44px;
+    height: 44px;
     padding: 0;
     border: 0;
     border-radius: .4rem;
@@ -113,7 +114,7 @@
 .ben-block__menu {
     position: absolute;
     top: 3rem;
-    left: 2.75rem;
+    left: 44px;
     z-index: 20;
     display: flex;
     flex-direction: column;
@@ -128,7 +129,7 @@
 .ben-block__menu button {
     display: flex;
     align-items: center;
-    min-height: 2.75rem;
+    min-height: 44px;
     padding: 0 .75rem;
     border: 0;
     border-radius: .35rem;
@@ -165,12 +166,13 @@
 }
 
 .ben-blocks__page ::deep .ben-touch {
-    min-height: 2.75rem;
+    min-height: 44px;
     display: inline-flex;
     align-items: center;
 }
 
-/* The rail: folded above the page on a phone, beside it and staying in view from 992px. */
+/* The rail: folded above the page on a phone, beside it from 992px. Not sticky: the site's content wrapper clips
+   overflow, which makes it the scroll container sticky measures against, and it never scrolls — so sticky did nothing. */
 .ben-blocks__rail {
     display: none;
     margin-top: .5rem;
@@ -183,8 +185,6 @@
 @media (min-width: 992px) {
     .ben-blocks__rail {
         display: block;
-        position: sticky;
-        top: 1rem;
         margin-top: 0;
     }
 }

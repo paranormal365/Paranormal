@@ -111,7 +111,7 @@ else
                             }
                             @if (May(Ben.Data.Common.Enums.OrganizationSecurityAction.Delete))
                             {
-                                <button type="button" class="btn btn-secondary btn-sm" @onclick="@(() => DeleteEntry(e.Id))"><BenIcon Name="trash-2" /></button>
+                                <button type="button" class="btn btn-secondary btn-sm" title="Delete" aria-label="@($"Delete {e.Title}")" @onclick="@(() => AskDelete(e))"><BenIcon Name="trash-2" /></button>
                             }
                         </div>
                     </div>
@@ -120,6 +120,14 @@ else
         }
     </div>
 }
+
+@* A research page can hold hours of work and its files, so deleting one asks first. *@
+<BenConfirmDialog @bind-Visible="@_showDeleteConfirm" Title="Delete research" Width="420px"
+                  Busy="@_deleting" BusyText="Deleting…" OnConfirm="DeleteConfirmedAsync">
+    <p class="mb-0" data-testid="research-delete-message">
+        Delete <strong>@_deleteTarget?.Title</strong>@(_deleteTarget?.ResearchType == CaseResearchType.Note ? ", with its files and links" : "")? This cannot be undone.
+    </p>
+</BenConfirmDialog>
 
 @* ── A new research page: just its title ─────────────────────────────────────── *@
 <BenModal @bind-Visible="@_showNewPage" Title="New research page" Size="sm">
@@ -262,11 +270,34 @@ else
         finally { _saving = false; StateHasChanged(); }
     }
 
-    private async Task DeleteEntry(Guid entryId)
+    private CaseResearchEntryDto? _deleteTarget;
+    private bool _showDeleteConfirm;
+    private bool _deleting;
+
+    private void AskDelete(CaseResearchEntryDto entry)
     {
-        await AdminClient.DeleteCaseResearchAsync(OrgId, CaseId, entryId);
-        _entries.RemoveAll(e => e.Id == entryId);
-        StateHasChanged();
+        _deleteTarget = entry;
+        _showDeleteConfirm = true;
+    }
+
+    private async Task DeleteConfirmedAsync()
+    {
+        if (_deleteTarget is not { } target) return;
+        _deleting = true;
+        _error = null;
+        try
+        {
+            if (await AdminClient.DeleteCaseResearchAsync(OrgId, CaseId, target.Id))
+                _entries.RemoveAll(e => e.Id == target.Id);
+            else
+                _error = $"\"{target.Title}\" could not be deleted.";
+        }
+        finally
+        {
+            _deleting = false;
+            _showDeleteConfirm = false;
+            _deleteTarget = null;
+        }
     }
 
     private async Task OnFileSelected(InputFileChangeEventArgs e)

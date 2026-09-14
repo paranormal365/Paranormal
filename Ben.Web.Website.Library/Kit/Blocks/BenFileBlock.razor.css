@@ -37,7 +37,7 @@
 }
 
 .ben-file-block__download {
-    min-height: 2.75rem;
+    min-height: 44px;
     display: inline-flex;
     align-items: center;
 }

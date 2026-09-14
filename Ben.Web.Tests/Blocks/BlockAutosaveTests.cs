@@ -59,6 +59,40 @@ public sealed class BlockAutosaveTests
     }
 
     [Fact]
+    public async Task A_change_reported_as_the_save_begins_is_saved_by_that_save()
+    {
+        // The text editor's last keystrokes are only reported when the save asks for them. They go into that save, so the
+        // page must come out clean — not "Unsaved changes" with nothing left to save.
+        BlockAutosave? autosave = null;
+        autosave = new BlockAutosave(
+            _ => { var tcs = new TaskCompletionSource<AutosaveOutcome>(TaskCreationOptions.RunContinuationsAsynchronously); lock (_saves) _saves.Add(tcs); return tcs.Task; },
+            TimeSpan.FromSeconds(60), work => work(), () => Interlocked.Increment(ref _changedCount), _clock,
+            collect: () => { autosave!.Touch(); return Task.CompletedTask; });
+
+        var flush = autosave.FlushAsync();
+        await SavesAskedAsync(1);
+        _saves[0].SetResult(AutosaveOutcome.Saved);
+
+        Assert.True(await flush);
+        Assert.Equal(AutosaveState.Clean, autosave.State);
+        Assert.False(autosave.HasUnsavedChanges);
+    }
+
+    [Fact]
+    public async Task Collecting_nothing_new_saves_nothing()
+    {
+        var collected = 0;
+        var autosave = new BlockAutosave(
+            _ => { lock (_saves) _saves.Add(new TaskCompletionSource<AutosaveOutcome>()); return Task.FromResult(AutosaveOutcome.Saved); },
+            TimeSpan.FromSeconds(60), work => work(), () => { }, _clock,
+            collect: () => { collected++; return Task.CompletedTask; });
+
+        Assert.True(await autosave.FlushAsync());
+        Assert.Equal(1, collected);
+        lock (_saves) Assert.Empty(_saves);
+    }
+
+    [Fact]
     public async Task Flushing_with_nothing_changed_saves_nothing()
     {
         var autosave = Build();
