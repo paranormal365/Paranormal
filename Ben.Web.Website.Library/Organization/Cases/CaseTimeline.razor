@@ -63,7 +63,9 @@
             </div>
         }
 
-        <div class="timeline d-flex flex-column gap-3">
+        @* Not the template's "timeline" class: SmartAdmin draws a 2px rule down .timeline::before, which showed only in the
+           gaps between these cards — a column of stray marks like text cursors (UI test pass, 2026-09-14). *@
+        <div class="case-timeline d-flex flex-column gap-3">
             @foreach (var row in RenderedRows())
             {
                 var e = row.Entry;
@@ -496,7 +498,10 @@
     private void OpenAddDialog()
     {
         _editEntry = null;
-        _form      = new();
+        // A new entry starts at the current minute, the viewer's own time: an empty Telerik date box rebuilds the whole
+        // date the first time a segment is stepped (2026-09-09). It stays optional — clearing it is still allowed.
+        var now = UserState.NowInViewerTimeZone();
+        _form      = new() { EventDateTime = new DateTime(now.Year, now.Month, now.Day, now.Hour, now.Minute, 0) };
         _dialogError = null;
         _showDialog  = true;
     }
@@ -507,7 +512,10 @@
         _form        = new EntryFormModel
         {
             EntryType          = entry.EntryType,
-            EventDateTime      = entry.EventDateTime,
+            // Stored in UTC, shown on the cards in the viewer's time — so the picker is filled in the viewer's time too, and
+            // saving converts back. The dialog used to show and save UTC: an entry typed as 9:00 PM appeared on its card as
+            // 4:00 PM, and editing one showed a time five hours from the card beside it (UI test pass, 2026-09-14).
+            EventDateTime      = entry.EventDateTime?.ToViewerLocalTime(UserState),
             Title              = entry.Title ?? "",
             Body               = entry.Body ?? "",
             Visibility         = entry.Visibility,
@@ -635,7 +643,7 @@
         {
             var req = new UpsertTimelineEntryRequest(
                 EntryType:         _form.EntryType,
-                EventDateTime:     _form.EventDateTime,
+                EventDateTime:     _form.EventDateTime?.ToUtcFromViewerLocal(UserState),
                 Title:             string.IsNullOrWhiteSpace(_form.Title) ? null : _form.Title.Trim(),
                 Body:              string.IsNullOrWhiteSpace(_form.Body) ? null : _form.Body.Trim(),
                 Visibility:        _form.Visibility,

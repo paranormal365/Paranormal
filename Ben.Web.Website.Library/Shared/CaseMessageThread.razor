@@ -5,6 +5,8 @@
 @using Ben.Web.Website.Library.Kit
 @using Ben.Web.Website.Library.Messaging
 @inject IBenUserState UserState
+@inject IJSRuntime JS
+@implements IAsyncDisposable
 
 @* ── Thread display ──────────────────────────────────────────────────────────── *@
 @if (_messages is null)
@@ -113,6 +115,39 @@ else
     private bool _sending;
     private string? _error;
     private ElementReference _scrollRef;
+    private IJSObjectReference? _module;
+
+    /// <summary>Set after a load or a send: the next render brings the newest message into view.</summary>
+    /// <remarks>
+    /// A thread reads upward from its newest message, but this list opened at its oldest and never moved — after Send the
+    /// message you had just written was below the fold, and its link card grew it further once it loaded (UI test pass,
+    /// 2026-09-14). CaseMessageThread.razor.js keeps the list at its end while content arrives, unless the reader has
+    /// scrolled up to read something older.
+    /// </remarks>
+    private bool _toEndPending;
+
+    protected override async Task OnAfterRenderAsync(bool firstRender)
+    {
+        if (!_toEndPending || _messages is null) return;
+        _toEndPending = false;
+        try
+        {
+            _module ??= await JS.InvokeAsync<IJSObjectReference>("import", "/_content/Ben.Web.Website.Library/Shared/CaseMessageThread.razor.js");
+            await _module.InvokeVoidAsync("toEnd", _scrollRef);
+        }
+        catch (JSDisconnectedException) { }
+    }
+
+    public async ValueTask DisposeAsync()
+    {
+        if (_module is null) return;
+        try
+        {
+            await _module.InvokeVoidAsync("release", _scrollRef);
+            await _module.DisposeAsync();
+        }
+        catch (JSDisconnectedException) { }
+    }
 
     /// <summary>
     /// Bumped whenever the local list is changed by something other than the initial load. A load
@@ -133,6 +168,7 @@ else
             if (revision != _revision) return;   // superseded by a send
             _result   = loaded;
             _messages = loaded.Items.ToList();
+            _toEndPending = true;
         }
         catch
         {
@@ -178,6 +214,7 @@ else
             // panel up beside a message the person can see would be its own untruth.
             _result = LoadResult<CaseMessageRecord>.Ok(_messages);
             _revision++;   // any load still in flight is now stale
+            _toEndPending = true;
         }
         catch
         {

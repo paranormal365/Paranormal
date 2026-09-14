@@ -104,6 +104,35 @@ equipment, settings links, the tablet layout.
 
 ## Layer 4 — A case
 
+Walked the Belmont case as the SuperAdmin: overview, timeline (edit an entry), investigations, files, transfers, messages
+(a formatted message with a link), reports, notes (a formatted note), Edit Case, New Case.
+
+- [x] **4.1 A column of stray marks ran between timeline cards**, like text cursors: the template draws a 2px rule down
+  `.timeline::before`, and the case timeline used that class. → its own class.
+- [x] **4.2 Timeline times were five hours out in the dialog.** It filled the picker with the stored UTC and saved what
+  was typed as UTC while the cards show local time: an entry typed as 9:00 PM showed on its card as 4:00 PM. → filled and
+  saved in the viewer's time.
+- [x] **4.3 Add Entry opened an empty date box** (an empty Telerik date field rewrites itself — 2026-09-09). → starts at
+  the current minute; still optional.
+- [x] **4.4 The client's "Suggest a different date" sent local time as UTC** (arriving five hours early on the group's
+  panel), from an empty date box. → sent in UTC, and it opens on tomorrow at 7 PM.
+- [ ] **4.5 Clicking B and typing at once is not bold**: toolbar tools are a server round trip in the Telerik editor, and
+  keys typed inside it go in unformatted. With a pause it works; Ctrl+B is instant. → *Not changed* (Telerik's).
+- [x] **4.6 Bold in what people write was all but invisible**: the template sets b/strong to weight 500 beside 400 text —
+  notes, messages, timeline entries, descriptions, research pages, and the editor while typing. → 700 inside running
+  text (p, li, blockquote, the editor).
+- [x] **4.7 After Send, the message you had written was below the fold** — the thread opens at its oldest and never
+  scrolls, and a link card grows the new message after it lands. → the thread opens at its newest, goes there on Send,
+  and stays there while content arrives unless the reader has scrolled up.
+- [x] **4.8 "Date Proposals to Client" looked broken**: a loose calendar icon above a grey caption, with no sign it opens.
+  → drawn as a small button.
+- [x] **4.9 New Case suggested "e.g. Smith, Nashville TN" and Edit Case said "(surname, city state)"** — teaching the
+  client-surname title the publish check warns about. → "e.g. Belmont Boulevard house, Nashville TN", "(the place, not
+  the client's name)". New Case's State example starts "e.g." too.
+
+Seen and fine: notes save formatted; the composer's link card appears once the address is finished and stays on the
+sent message; transfers; the case header.
+
 ## Layer 5 — Research pages and the block editor
 
 Found before the visual pass, by the new CaseResearchEditorTests (to be confirmed by eye when this layer is reached):

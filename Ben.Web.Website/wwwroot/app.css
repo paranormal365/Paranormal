@@ -420,6 +420,18 @@ html[data-bs-theme="dark"] {
     --app-nav-bg: color-mix(in srgb, var(--primary-900) 55%, var(--secondary-800) 45%);
 }
 
+/* ── Bold in running text ────────────────────────────────────────────────────
+   The template sets b and strong to weight 500 everywhere, a notch above the 400 around them — right for its own
+   interface labels, but the bold somebody puts in a case note, a message, a timeline entry, a description or a research
+   page was all but invisible, and so was the B button's effect while typing (UI test pass, 2026-09-14). Inside running
+   text — a paragraph, a list item, a quotation, or the editor itself — bold is bold. */
+p strong, p b,
+li strong, li b,
+blockquote strong, blockquote b,
+.ProseMirror strong, .ProseMirror b {
+    font-weight: 700 !important;   /* the template's rule is itself !important; this one is more specific */
+}
+
 /* ── The bell's count ────────────────────────────────────────────────────────
    The template caps .badge-icon at 28px with an ellipsis, sized for one or two digits. The bell shows "99+", which the
    cap cut to "9…" — a count that reads as nine (UI test pass, 2026-09-14). */

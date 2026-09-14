@@ -12,7 +12,9 @@
 <div>
     @* ── Date negotiation with client ─────────────────────────────────────────── *@
     <details class="mb-3">
-        <summary class="fw-semibold small text-secondary" style="cursor:pointer;">
+        @* Drawn as a button: the template removes the disclosure triangle and the icon broke onto its own line, so the
+           summary read as a loose icon over a caption, not something to open (UI test pass, 2026-09-14). *@
+        <summary class="btn btn-sm btn-outline-secondary d-inline-flex align-items-center gap-1">
             <BenIcon Name="calendar" /> Date Proposals to Client
         </summary>
         <div class="mt-2">

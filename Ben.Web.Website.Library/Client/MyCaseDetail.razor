@@ -358,7 +358,7 @@
                             }
                         </div>
                         <div class="d-flex gap-2 flex-wrap">
-                            <button type="button" class="btn btn-outline-secondary btn-sm" @onclick="@(() => { _counterProposalId = p.Id; _showCounterDialog = true; })" disabled="@(!(!_respondingProposal))">Suggest Different Date</button>
+                            <button type="button" class="btn btn-outline-secondary btn-sm" @onclick="@(() => OpenCounter(p.Id))" disabled="@(!(!_respondingProposal))">Suggest Different Date</button>
                             <button type="button" class="btn btn-danger btn-sm" @onclick="@(async () => await DeclineProposal(p.Id))" disabled="@(!(!_respondingProposal))">Decline All</button>
                         </div>
                     </div>
@@ -1415,13 +1415,28 @@
         finally { _cancelling = false; StateHasChanged(); }
     }
 
+    /// <summary>
+    /// Opens "Suggest a different date" on a real date: tomorrow at seven in the evening, the viewer's own time.
+    /// </summary>
+    /// <remarks>
+    /// An empty Telerik date box rebuilds the whole date the first time a segment is stepped (2026-09-09), and this one
+    /// opened empty. It also sent what was picked as if it were UTC while the group's panel reads it as UTC and shows it in
+    /// local time — so "Friday 7 PM" arrived as Friday 2 PM (UI test pass, 2026-09-14). Picked in local, sent in UTC.
+    /// </remarks>
+    private void OpenCounter(Guid proposalId)
+    {
+        _counterProposalId = proposalId;
+        _counterDateTime ??= UserState.NowInViewerTimeZone().Date.AddDays(1).AddHours(19);
+        _showCounterDialog = true;
+    }
+
     private async Task SendCounter()
     {
         if (!_counterDateTime.HasValue) return;
         _respondingProposal = true;
         try
         {
-            await AdminClient.CounterScheduleProposalAsync(CaseId, _counterProposalId, _counterDateTime.Value, _counterNotes);
+            await AdminClient.CounterScheduleProposalAsync(CaseId, _counterProposalId, _counterDateTime.Value.ToUtcFromViewerLocal(UserState), _counterNotes);
             _pendingProposals.RemoveAll(p => p.Id == _counterProposalId);
             _showCounterDialog = false;
         }

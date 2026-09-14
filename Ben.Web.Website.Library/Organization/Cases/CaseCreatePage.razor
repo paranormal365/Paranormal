@@ -22,8 +22,10 @@
             <div class="row g-3">
                 <div class="col-12">
                     <label class="form-label fw-semibold" for="casecreatepage-case-title-b1b1">Case Title <span class="text-danger">*</span></label>
-                    <input id="casecreatepage-case-title-b1b1" type="text" class="form-control" placeholder="e.g. Smith, Nashville TN" @bind="@_form.Title" @bind:event="oninput" />
-                    <div class="form-text">A brief label identifying this case.</div>
+                    <input id="casecreatepage-case-title-b1b1" type="text" class="form-control" placeholder="e.g. Belmont Boulevard house, Nashville TN" @bind="@_form.Title" @bind:event="oninput" />
+                    @* The example was "Smith, Nashville TN" — a client's surname, the very leak the publish check warns about
+                       and the seed data names cases to avoid (UI test pass, 2026-09-14). A case is named for the place. *@
+                    <div class="form-text">A brief label for the place — not the client's name, which can end up on a public page.</div>
                 </div>
                 <div class="col-12">
                     @* A formatting editor, the same short toolbar as Edit Case (beta feedback, 2026-09-14): the
@@ -54,7 +56,7 @@
                 </div>
                 <div class="col-md-3">
                     <label class="form-label fw-semibold" for="casecreatepage-state-7b45">State <span class="text-danger">*</span></label>
-                    <input id="casecreatepage-state-7b45" type="text" class="form-control" placeholder="TN" @bind="@_form.State" @bind:event="oninput" />
+                    <input id="casecreatepage-state-7b45" type="text" class="form-control" placeholder="e.g. TN" @bind="@_form.State" @bind:event="oninput" />
                 </div>
                 <div class="col-md-4">
                     <label class="form-label fw-semibold" for="casecreatepage-zip-code-ba79">ZIP Code <span class="text-danger">*</span></label>
