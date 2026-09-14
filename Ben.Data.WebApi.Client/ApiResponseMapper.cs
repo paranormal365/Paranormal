@@ -134,6 +134,27 @@ public static class ApiResponseMapper
             : $"The server answered {(int)response.StatusCode} ({response.ReasonPhrase}).";
     }
 
+    /// <summary>The opening of the sentence <see cref="RefusalAsync"/> writes when there is no prose.</summary>
+    private const string StatusSentenceOpening = "The server answered ";
+
+    /// <summary>
+    /// Whether a reason is the status sentence this class generated rather than something a
+    /// person wrote.
+    /// </summary>
+    /// <remarks>
+    /// <para>The distinction is invisible by the time a caller holds a <c>Reason</c>, and it
+    /// matters most on a PUBLIC page: "The server answered 404 (Not Found)." is the most useful
+    /// thing a person debugging a deployment can read and the least useful thing a visitor can,
+    /// and putting it in a red alert on a page a stranger came to read about a ghost walk is worse
+    /// than saying nothing.</para>
+    ///
+    /// <para>Comparing against our own generated shape rather than inferring from a status code,
+    /// because <see cref="ItemResult{T}"/> and <see cref="LoadResult{T}"/> deliberately do not
+    /// carry one — a screen is meant to act on the sentence, not on the number.</para>
+    /// </remarks>
+    public static bool IsGeneratedStatusSentence(string? reason)
+        => reason is not null && reason.StartsWith(StatusSentenceOpening, StringComparison.Ordinal);
+
     /// <summary>
     /// Whether a response body is a sentence we wrote rather than machinery.
     /// </summary>

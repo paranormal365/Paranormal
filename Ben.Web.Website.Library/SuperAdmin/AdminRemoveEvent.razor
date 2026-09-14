@@ -1,0 +1,138 @@
+@page "/admin/events/{EventId:guid}/remove"
+@namespace Ben.Web.Website.Library.SuperAdmin
+
+@inject IBenAdminClient AdminClient
+@inject IBenUserState UserState
+@inject NavigationManager NavManager
+
+@using Ben.Web.Website.Library.Manage.Events
+
+<PageTitle>SuperAdmin — Remove an event</PageTitle>
+
+@* Removing a hosted event (item 235 phase 17b).
+
+   A page, like deleting a person, because what it does has to be said before it is done: the event comes off the
+   site, its credit goes back, everybody with a place is told it is not going ahead, and the organizer is sent a
+   generic letter with a way to appeal. Nothing is destroyed, and an upheld appeal brings the event back as a draft. *@
+
+<div class="container-fluid px-3" style="max-width:52rem;" id="remove-event">
+    <div class="text-secondary small mb-2"><a href="/admin/events">All events</a></div>
+    <h3 class="mb-3">Remove an event</h3>
+
+    @if (_removed is { Length: > 0 })
+    {
+        <div class="alert alert-success" id="remove-done">@_removed</div>
+        <a class="btn btn-primary" href="/admin/events" id="remove-back">Back to all events</a>
+    }
+    else if (_loading)
+    {
+        <p class="text-secondary">Loading…</p>
+    }
+    else if (_row is null || _effect.Failed)
+    {
+        <div class="alert alert-danger" id="remove-missing">
+            That event couldn't be found, or its details couldn't be loaded.
+            <a href="/admin/events">Back to all events</a>
+        </div>
+    }
+    else if (_effect.Item is { AlreadyRemoved: true })
+    {
+        <div class="alert alert-secondary" id="remove-already">@_row.EventName has already been removed.</div>
+    }
+    else if (_effect.Item is { } effect)
+    {
+        <div class="card mb-3">
+            <div class="card-body">
+                <div class="fw-semibold fs-5">@_row.EventName</div>
+                <div class="text-secondary">
+                    @_row.OrganizationName · organized by @(_row.CreatedByName ?? "—") ·
+                    @_row.StartsOn.ToDisplayDate()@(_row.EndsOn.Date != _row.StartsOn.Date ? $" – {_row.EndsOn.ToDisplayDate()}" : "")
+                </div>
+                <div class="mt-1"><EventStateBadge State="@_row.State" /></div>
+            </div>
+        </div>
+
+        <h2 class="h6">What removing it does</h2>
+        <ul id="remove-effect">
+            <li>It comes off the site and can't take bookings. Nothing is deleted.</li>
+            <li>
+                @if (effect.PartiesWithPlaces == 0)
+                {
+                    <text>Nobody has a place or has asked for one, so no guest is written to.</text>
+                }
+                else
+                {
+                    <text>@effect.PartiesWithPlaces @(effect.PartiesWithPlaces == 1 ? "party" : "parties") (@effect.PeopleWithPlaces
+                    @(effect.PeopleWithPlaces == 1 ? "person" : "people")) with a place or waiting for one are told it is not
+                    going ahead, with no reason given, and their passes stop working.</text>
+                }
+            </li>
+            <li>
+                @(effect.CreditReturns
+                    ? "The event credit spent on it goes back to the organizer, whatever the timing."
+                    : "No event credit was spent on it, so there is none to return.")
+            </li>
+            <li>
+                The organizer is emailed that it doesn't meet our guidelines for hosted events, with a link to appeal. An
+                upheld appeal brings it back as a draft.
+            </li>
+        </ul>
+
+        @if (_error is { Length: > 0 })
+        {
+            <div class="alert alert-danger py-2" id="remove-error" role="alert">@_error</div>
+        }
+
+        <label class="form-label" for="remove-note">Note for the record (never sent to anyone)</label>
+        <textarea class="form-control mb-3" id="remove-note" rows="3" maxlength="2000"
+                  placeholder="What was wrong with it, for whoever reviews an appeal."
+                  @bind="_notes" @bind:event="oninput"></textarea>
+
+        <div class="d-flex gap-2">
+            <button type="button" class="btn btn-danger" id="remove-confirm" disabled="@_busy" @onclick="RemoveAsync">
+                @(_busy ? "Removing…" : "Remove this event")
+            </button>
+            <a class="btn btn-outline-secondary" href="/admin/events">Not now</a>
+        </div>
+    }
+</div>
+
+@code {
+    [Parameter] public Guid EventId { get; set; }
+
+    private AdminHostedEventRow? _row;
+    private ItemResult<AdminHostedEventRemovalEffect> _effect;
+    private bool _loading = true;
+    private bool _busy;
+    private string _notes = "";
+    private string? _error;
+    private string? _removed;
+
+    protected override async Task OnAfterRenderAsync(bool firstRender)
+    {
+        if (!firstRender) return;
+        if (!await UserState.WaitUntilAuthReadyAsync(RendererInfo.IsInteractive)) return;
+        if (!UserState.IsSuperAdmin || UserState.IsImpersonating) { NavManager.NavigateTo("/"); return; }
+
+        var all = await AdminClient.GetAdminHostedEventsAsync();
+        _row = all.Item?.Events.FirstOrDefault(e => e.Id == EventId);
+        _effect = await AdminClient.GetHostedEventRemovalEffectAsync(EventId);
+        _loading = false;
+        StateHasChanged();
+    }
+
+    private async Task RemoveAsync()
+    {
+        _busy = true;
+        _error = null;
+        var (all, error) = await AdminClient.RemoveHostedEventAsync(EventId, new RemoveHostedEventRequest(_notes));
+        _busy = false;
+
+        if (all is null)
+        {
+            _error = error ?? "The event couldn't be removed just now. Nothing was changed.";
+            return;
+        }
+        _removed = all.Note ?? "Removed.";
+    }
+}

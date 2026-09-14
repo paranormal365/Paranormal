@@ -67,9 +67,50 @@
                             <span class="text-secondary">· @org.Name</span>
                         }
                     </a>
+                    @* Item 235 phase 9: where a group notices "this place is ours". *@
+                    <a class="btn btn-sm btn-outline-secondary me-1 mb-1 place-our-venue"
+                       href="@($"/organizations/{org.OrganizationId}/venue?place={PlaceId}")">
+                        <BenIcon Name="map-pin" Class="me-1" />Our venue
+                        @if (_myOrgs.Count > 1)
+                        {
+                            <span class="text-secondary">· @org.Name</span>
+                        }
+                    </a>
                 }
             </p>
         }
+
+        @* Who runs this place as its venue, when somebody has been confirmed as it (item 235 phase 9).
+           For everybody: which hotel this is, and where its own page is, is not a members' secret. *@
+        @if (_venue is { } venue)
+        {
+            <p class="mb-3" id="place-venue-line">
+                Run as a venue by <strong>@venue.OrganizationName</strong>
+                @if (venue.VenuePageUrl is { Length: > 0 } url)
+                {
+                    <text> · </text><a href="@url">Venue page</a>
+                }
+            </p>
+        }
+
+        @* How to reach the place, and — for a signed-in member of a group, when nobody runs it as a
+           venue yet — the question that starts a claim (item 235 phase 9). Asked here because this
+           is where somebody notices "this is ours". *@
+        @if (_venue is null && _myOrgs.Count > 0)
+        {
+            <p class="small mb-2" id="place-claim-line">
+                Is this your venue?
+                @foreach (var org in _myOrgs)
+                {
+                    <a class="ms-1 place-claim-link" href="@($"/organizations/{org.OrganizationId}/venue/claim?place={PlaceId}")">
+                        Claim it for @org.Name
+                    </a>
+                }
+            </p>
+        }
+        <Ben.Web.Website.Library.Manage.Venue.PlaceContactsCard PlaceId="PlaceId"
+                                                               SignedIn="UserState.IsAuthenticated"
+                                                               MyOrgs="_myOrgs" />
 
         @* The line that turns a list into a history. Counted over what this viewer may see, so it
            never advertises how much is being withheld. *@
@@ -379,6 +420,9 @@
     /// <summary>Guest evidence published to this place from public events held here.</summary>
     private List<PlaceEvidenceRow>? _evidence;
 
+    /// <summary>The verified venue here, when there is one.</summary>
+    private PlaceVenueRecord? _venue;
+
     private string Title => string.IsNullOrWhiteSpace(_place?.Name)
         ? (string.IsNullOrWhiteSpace(_place?.StreetAddress1) ? "Place" : _place!.StreetAddress1!)
         : _place!.Name!;
@@ -396,6 +440,9 @@
 
         if (UserState.IsAuthenticated) await LoadSignedInAsync();
         else await LoadVisitorAsync();
+
+        // A failure here costs one line, not the page.
+        _venue = (await AdminClient.GetPlaceVenueAsync(PlaceId)).Item;
 
         _loading = false;
         StateHasChanged();

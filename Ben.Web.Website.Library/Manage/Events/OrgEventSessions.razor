@@ -1,0 +1,408 @@
+@page "/organizations/{OrgId:guid}/events/{EventId:guid}/sessions"
+@namespace Ben.Web.Website.Library.Manage.Events
+
+@inject IBenAdminClient AdminClient
+@inject IBenUserState UserState
+
+@using Ben.Service.Models.Entities
+@using Ben.Web.Services.WebApi
+@using Ben.Web.Website.Library.Kit
+@using Ben.Web.Website.Library.Manage.Icon
+
+@* An event's programme, for its host (item 235 phase 10).
+
+   BY NIGHT, IN ORDER, ON THE VENUE'S CLOCK. The programme is the most-looked-at thing during an
+   event, and the host builds it the way guests will read it.
+
+   DRAFT, THEN PUBLISHED. Nothing here is visible to a guest until the host publishes it, and once
+   it is, the page says what each change will do before it does it: a moved session writes to
+   everybody with a place, a cancelled one to everybody queued as well. *@
+
+<PageTitle>@(_event?.Name is { Length: > 0 } n ? $"Programme — {n}" : "Programme")</PageTitle>
+
+<div class="container-fluid py-3" style="max-width:1000px;">
+
+    <div class="text-secondary small">
+        <a href="@($"/organizations/{OrgId}/events")">Events</a>
+        @if (_event is { } crumb)
+        {
+            <text> · </text><a href="@($"/organizations/{OrgId}/events/{EventId}")">@crumb.Name</a>
+        }
+    </div>
+
+    <h1 class="h3 mb-1">
+        Programme
+        <HelpLink Slug="organization-administration" Anchor="hosted-events" />
+    </h1>
+
+    @if (_note is { Length: > 0 })
+    {
+        <div class="alert alert-success py-2" id="programme-note" role="status">@_note</div>
+    }
+    @if (_error is { Length: > 0 })
+    {
+        <div class="alert alert-danger py-2" id="programme-error" role="alert">@_error</div>
+    }
+
+    <BenItemState TItem="HostedEventProgrammeRecord" Result="_programme" Loading="_loading"
+                  LoadingText="Loading the programme…" OnRetry="LoadAsync">
+        <ChildContent Context="programme">
+
+            <div class="d-flex flex-wrap align-items-center gap-2 mb-3" id="programme-state">
+                @if (programme.PublishedUtc is null)
+                {
+                    <span class="badge bg-secondary">Draft — only your group sees it</span>
+                    <button type="button" class="btn btn-primary btn-sm" id="programme-publish"
+                            disabled="@_busy" @onclick="PublishAsync">Publish the programme</button>
+                }
+                else
+                {
+                    <span class="badge bg-success">On the event's page</span>
+                    <button type="button" class="btn btn-outline-secondary btn-sm" id="programme-unpublish"
+                            disabled="@_busy" @onclick="UnpublishAsync">Back to draft</button>
+                    <span class="small text-secondary">Changes from here are written to the people signed up.</span>
+                }
+            </div>
+
+            @* ── adding or changing a session ─────────────────────────────── *@
+            <div class="card mb-4" id="session-form">
+                <div class="card-header fw-semibold">@(_editing is null ? "Add a session" : $"Change {_form.Title}")</div>
+                <div class="card-body">
+                    <div class="row g-2">
+                        <div class="col-12 col-md-6">
+                            <label class="form-label small mb-1" for="session-title">What</label>
+                            <input class="form-control" id="session-title" maxlength="200"
+                                   placeholder="Operating the Ovilus" @bind="_form.Title" @bind:event="oninput" />
+                        </div>
+                        <div class="col-12 col-md-6">
+                            <label class="form-label small mb-1" for="session-led-by">Led by</label>
+                            <input class="form-control" id="session-led-by" maxlength="200" @bind="_form.LedBy" />
+                        </div>
+                        <div class="col-12 col-sm-4">
+                            <label class="form-label small mb-1" for="session-date">Night</label>
+                            <select class="form-select" id="session-date" @bind="_form.DateKey">
+                                @foreach (var night in programme.Nights)
+                                {
+                                    <option value="@night.ToString("yyyy-MM-dd")">@night.ToString("ddd MM/dd/yyyy")</option>
+                                }
+                            </select>
+                        </div>
+                        <div class="col-6 col-sm-4">
+                            <label class="form-label small mb-1" for="session-starts">Starts</label>
+                            <input type="time" class="form-control" id="session-starts" @bind="_form.Starts" />
+                        </div>
+                        <div class="col-6 col-sm-4">
+                            <label class="form-label small mb-1" for="session-ends">Ends</label>
+                            <input type="time" class="form-control" id="session-ends" @bind="_form.Ends" />
+                        </div>
+                        <div class="col-12 col-md-6">
+                            <label class="form-label small mb-1" for="session-room">Where</label>
+                            <select class="form-select" id="session-room" @bind="_form.RoomKey">
+                                <option value="">Somewhere else (say where)</option>
+                                @foreach (var room in _rooms)
+                                {
+                                    <option value="@room.Id">@room.Name</option>
+                                }
+                            </select>
+                        </div>
+                        @if (string.IsNullOrEmpty(_form.RoomKey))
+                        {
+                            <div class="col-12 col-md-6">
+                                <label class="form-label small mb-1" for="session-location">Say where</label>
+                                <input class="form-control" id="session-location" maxlength="200"
+                                       placeholder="Meet at reception" @bind="_form.LocationText" />
+                            </div>
+                        }
+                        <div class="col-12">
+                            <label class="form-label small mb-1" for="session-description">About it</label>
+                            <textarea class="form-control" id="session-description" rows="2" maxlength="4000"
+                                      @bind="_form.Description"></textarea>
+                        </div>
+                        <div class="col-12 col-sm-6">
+                            <div class="form-check form-switch mt-2">
+                                <input class="form-check-input" type="checkbox" role="switch" id="session-signup"
+                                       @bind="_form.RequiresSignUp" />
+                                <label class="form-check-label" for="session-signup">Guests sign up for a place</label>
+                            </div>
+                        </div>
+                        @if (_form.RequiresSignUp)
+                        {
+                            <div class="col-12 col-sm-6">
+                                <label class="form-label small mb-1" for="session-capacity">How many it holds</label>
+                                <input type="number" min="1" class="form-control" id="session-capacity"
+                                       placeholder="No limit" @bind="_form.Capacity" />
+                            </div>
+                        }
+                    </div>
+                    <div class="d-flex flex-wrap gap-2 mt-3">
+                        <button type="button" class="btn btn-primary" id="session-save" disabled="@_busy" @onclick="SaveAsync">
+                            @(_editing is null ? "Add it" : "Save the change")
+                        </button>
+                        @if (_editing is not null)
+                        {
+                            <button type="button" class="btn btn-outline-secondary" @onclick="StartNew">Cancel editing</button>
+                        }
+                    </div>
+                </div>
+            </div>
+
+            @* ── the programme, night by night ────────────────────────────── *@
+            <div id="programme-list">
+            @if (programme.Sessions.Count == 0)
+            {
+                <div class="alert alert-light border" id="programme-empty">Nothing on the programme yet.</div>
+            }
+            @foreach (var night in programme.Sessions.GroupBy(s => VenueClock.Local(s.StartsAtUtc, programme.TimeZoneId).Date).OrderBy(g => g.Key))
+            {
+                <h2 class="h6 text-secondary text-uppercase small mt-3 mb-2">@night.Key.ToString("dddd MM/dd/yyyy")</h2>
+                <div class="list-group mb-2">
+                    @foreach (var session in night)
+                    {
+                        var s = session;
+                        <div class="list-group-item programme-session @(s.IsCancelled ? "opacity-75" : "")" data-session="@s.Id">
+                            <div class="d-flex flex-column flex-md-row gap-2">
+                                <div class="text-nowrap fw-semibold" style="min-width:10rem;">
+                                    @VenueClock.Span(s.StartsAtUtc, s.EndsAtUtc, programme.TimeZoneId)
+                                </div>
+                                <div class="flex-grow-1">
+                                    <div class="@(s.IsCancelled ? "text-decoration-line-through" : "")">@s.Title</div>
+                                    <div class="small text-secondary">
+                                        @string.Join(" · ", new[] { s.Where, s.LedBy is { Length: > 0 } leader ? $"with {leader}" : null }.Where(x => !string.IsNullOrWhiteSpace(x)))
+                                    </div>
+                                    <div class="small">
+                                        @if (s.IsCancelled)
+                                        {
+                                            <span class="badge bg-danger">Cancelled</span>
+                                            @if (s.CancelledReason is { Length: > 0 } why) { <span class="text-secondary ms-1">“@why”</span> }
+                                        }
+                                        else if (!s.RequiresSignUp)
+                                        {
+                                            <span class="text-secondary">Just come — no sign-up</span>
+                                        }
+                                        else
+                                        {
+                                            <span class="session-count">@(s.Capacity is int cap ? $"{s.PlacesTaken} of {cap}" : $"{s.PlacesTaken} signed up")</span>
+                                            @if (s.Waiting > 0) { <span class="text-secondary"> · @s.Waiting waiting</span> }
+                                        }
+                                    </div>
+                                </div>
+                                @if (!s.IsCancelled)
+                                {
+                                    <div class="d-flex flex-wrap gap-1 align-items-start">
+                                        @if (s.RequiresSignUp)
+                                        {
+                                            <button type="button" class="btn btn-outline-secondary btn-sm" @onclick="() => ToggleRosterAsync(s)">Who's coming</button>
+                                        }
+                                        <button type="button" class="btn btn-outline-secondary btn-sm" @onclick="() => Edit(s, programme)">Change</button>
+                                        <button type="button" class="btn btn-outline-danger btn-sm" @onclick="() => { _cancelling = s.Id; _cancelReason = null; }">Cancel…</button>
+                                    </div>
+                                }
+                            </div>
+
+                            @if (_cancelling == s.Id)
+                            {
+                                <div class="border rounded p-2 mt-2">
+                                    <label class="form-label small mb-1" for="@($"cancel-reason-{s.Id:N}")">
+                                        Why — @(s.PlacesTaken + s.Waiting > 0 ? "everybody signed up or waiting is told" : "nobody has signed up yet")
+                                    </label>
+                                    <input class="form-control mb-2" id="@($"cancel-reason-{s.Id:N}")" maxlength="1000" @bind="_cancelReason" />
+                                    <div class="d-flex gap-2">
+                                        <button type="button" class="btn btn-danger btn-sm" disabled="@_busy" @onclick="() => CancelAsync(s)">Cancel the session</button>
+                                        @if (s.PlacesTaken + s.Waiting == 0)
+                                        {
+                                            <button type="button" class="btn btn-outline-danger btn-sm" disabled="@_busy" @onclick="() => DeleteAsync(s)">Remove it instead</button>
+                                        }
+                                        <button type="button" class="btn btn-outline-secondary btn-sm" @onclick="() => _cancelling = null">Keep it</button>
+                                    </div>
+                                </div>
+                            }
+
+                            @if (_rosterFor == s.Id)
+                            {
+                                <div class="mt-2 small" id="@($"roster-{s.Id:N}")">
+                                    @if (_roster.Failed)
+                                    {
+                                        <div class="text-danger">@(_roster.Reason ?? "You can't see who's coming.")</div>
+                                    }
+                                    else if (_roster.Item is { } roster)
+                                    {
+                                        @if (roster.In.Count == 0 && roster.Waiting.Count == 0)
+                                        {
+                                            <div class="text-secondary">Nobody yet.</div>
+                                        }
+                                        @foreach (var (label, lines) in new[] { ("In", roster.In), ("Waiting", roster.Waiting) })
+                                        {
+                                            @if (lines.Count > 0)
+                                            {
+                                                <div class="fw-semibold mt-1">@label</div>
+                                                <ol class="mb-1">
+                                                    @foreach (var line in lines)
+                                                    {
+                                                        var l = line;
+                                                        <li>
+                                                            @l.Name @(l.People > 1 ? $"× {l.People}" : "") @(l.IsHelping ? "(helping)" : "")
+                                                            <button type="button" class="btn btn-link btn-sm p-0 ms-1 text-danger" disabled="@_busy"
+                                                                    @onclick="() => RemoveAsync(s, l)">Remove</button>
+                                                        </li>
+                                                    }
+                                                </ol>
+                                            }
+                                        }
+                                    }
+                                </div>
+                            }
+                        </div>
+                    }
+                </div>
+            }
+            </div>
+        </ChildContent>
+    </BenItemState>
+</div>
+
+@code {
+    [Parameter] public Guid OrgId { get; set; }
+    [Parameter] public Guid EventId { get; set; }
+
+    private HostedEventRecord? _event;
+    private ItemResult<HostedEventProgrammeRecord> _programme;
+    private IReadOnlyList<PlaceRoomRecord> _rooms = [];
+    private bool _loading = true;
+    private bool _busy;
+    private string? _note;
+    private string? _error;
+
+    private Guid? _editing;
+    private readonly SessionForm _form = new();
+    private Guid? _cancelling;
+    private string? _cancelReason;
+    private Guid? _rosterFor;
+    private ItemResult<HostedEventSessionRosterRecord> _roster;
+
+    private sealed class SessionForm
+    {
+        public string Title { get; set; } = "";
+        public string? LedBy { get; set; }
+        public string? DateKey { get; set; }
+        public TimeOnly Starts { get; set; } = new(21, 0);
+        public TimeOnly Ends { get; set; } = new(22, 0);
+        public string? RoomKey { get; set; }
+        public string? LocationText { get; set; }
+        public string? Description { get; set; }
+        public bool RequiresSignUp { get; set; } = true;
+        public int? Capacity { get; set; }
+    }
+
+    protected override async Task OnAfterRenderAsync(bool firstRender)
+    {
+        if (!firstRender) return;
+        if (!await UserState.WaitUntilAuthReadyAsync(RendererInfo.IsInteractive)) return;
+
+        await LoadAsync();
+        StateHasChanged();
+    }
+
+    private async Task LoadAsync()
+    {
+        _loading = true;
+        _event ??= await AdminClient.GetHostedEventAsync(OrgId, EventId);
+        _programme = await AdminClient.GetEventProgrammeAsync(OrgId, EventId);
+        var rooms = await AdminClient.GetOfferableRoomsAsync(OrgId, EventId);
+        _rooms = rooms.Failed ? [] : [.. rooms.Items.Where(r => r.IsActive)];
+        _form.DateKey ??= _programme.Item?.Nights.FirstOrDefault().ToString("yyyy-MM-dd");
+        _loading = false;
+    }
+
+    private void StartNew()
+    {
+        _editing = null;
+        var date = _form.DateKey;
+        _form.Title = "";
+        _form.LedBy = null;
+        _form.Description = null;
+        _form.LocationText = null;
+        _form.RoomKey = null;
+        _form.Capacity = null;
+        _form.RequiresSignUp = true;
+        _form.DateKey = date;
+    }
+
+    private void Edit(HostedEventSessionRecord s, HostedEventProgrammeRecord programme)
+    {
+        _editing = s.Id;
+        var start = VenueClock.Local(s.StartsAtUtc, programme.TimeZoneId);
+        var end = VenueClock.Local(s.EndsAtUtc, programme.TimeZoneId);
+        _form.Title = s.Title;
+        _form.LedBy = s.LedBy;
+        _form.Description = s.Description;
+        _form.DateKey = start.ToString("yyyy-MM-dd");
+        _form.Starts = TimeOnly.FromDateTime(start);
+        _form.Ends = TimeOnly.FromDateTime(end);
+        _form.RoomKey = s.PlaceRoomId?.ToString();
+        _form.LocationText = s.LocationText;
+        _form.RequiresSignUp = s.RequiresSignUp;
+        _form.Capacity = s.Capacity;
+    }
+
+    private async Task SaveAsync()
+    {
+        if (!DateTime.TryParse(_form.DateKey, out var date)) { _error = "Choose which night."; return; }
+
+        var request = new SaveHostedEventSessionRequest(
+            _form.Title, _form.Description, date, _form.Starts.ToTimeSpan(), _form.Ends.ToTimeSpan(),
+            Guid.TryParse(_form.RoomKey, out var room) ? room : null,
+            _form.LocationText, _form.LedBy,
+            _form.RequiresSignUp ? _form.Capacity : null, _form.RequiresSignUp);
+
+        await SendAsync(() => _editing is Guid id
+            ? AdminClient.SaveEventSessionAsync(OrgId, EventId, id, request)
+            : AdminClient.AddEventSessionAsync(OrgId, EventId, request));
+        if (_error is null) StartNew();
+    }
+
+    private Task PublishAsync() => SendAsync(() => AdminClient.PublishEventProgrammeAsync(OrgId, EventId));
+    private Task UnpublishAsync() => SendAsync(() => AdminClient.UnpublishEventProgrammeAsync(OrgId, EventId));
+
+    private async Task CancelAsync(HostedEventSessionRecord s)
+    {
+        await SendAsync(() => AdminClient.CancelEventSessionAsync(OrgId, EventId, s.Id, new CancelHostedEventSessionRequest(_cancelReason)));
+        if (_error is null) _cancelling = null;
+    }
+
+    private async Task DeleteAsync(HostedEventSessionRecord s)
+    {
+        await SendAsync(() => AdminClient.DeleteEventSessionAsync(OrgId, EventId, s.Id));
+        if (_error is null) _cancelling = null;
+    }
+
+    private async Task ToggleRosterAsync(HostedEventSessionRecord s)
+    {
+        if (_rosterFor == s.Id) { _rosterFor = null; return; }
+        _rosterFor = s.Id;
+        _roster = await AdminClient.GetEventSessionRosterAsync(OrgId, EventId, s.Id);
+    }
+
+    private async Task RemoveAsync(HostedEventSessionRecord s, HostedEventSessionRosterLine line)
+    {
+        _busy = true;
+        _error = null;
+        var (roster, error) = await AdminClient.RemoveEventSessionSignUpAsync(OrgId, EventId, s.Id, line.SignUpId);
+        _busy = false;
+        if (roster is null) { _error = error ?? "That couldn't be removed just now."; return; }
+        _roster = ItemResult<HostedEventSessionRosterRecord>.Ok(roster);
+        _note = $"{line.Name} is off {s.Title}. Anybody waiting who now fits has been moved up and told.";
+        _programme = await AdminClient.GetEventProgrammeAsync(OrgId, EventId);
+    }
+
+    private async Task SendAsync(Func<Task<(HostedEventProgrammeRecord? Result, string? Error)>> send)
+    {
+        _busy = true;
+        _note = null;
+        _error = null;
+        var (programme, error) = await send();
+        _busy = false;
+        if (programme is null) { _error = error ?? "That couldn't be saved just now."; return; }
+        _programme = ItemResult<HostedEventProgrammeRecord>.Ok(programme);
+        _note = programme.Note;
+    }
+}

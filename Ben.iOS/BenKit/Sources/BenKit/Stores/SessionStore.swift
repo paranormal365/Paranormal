@@ -32,6 +32,11 @@ public final class SessionStore {
     private let auth: IdentityAuthClient
     private let tokens: TokenSession
     private let api: APIClient
+    private let identity: IdentityStorage
+
+    /// Signed in from the identity kept on the phone, because the server couldn't be reached at launch. The next
+    /// `restore()` asks the server again.
+    public private(set) var identityIsKept = false
 
     // Held only between the password step and the 2FA retry.
     private var pendingEmail: String?
@@ -46,10 +51,11 @@ public final class SessionStore {
         return nil
     }
 
-    public init(auth: IdentityAuthClient, tokens: TokenSession, api: APIClient) {
+    public init(auth: IdentityAuthClient, tokens: TokenSession, api: APIClient, identity: IdentityStorage = InMemoryIdentityStorage()) {
         self.auth = auth
         self.tokens = tokens
         self.api = api
+        self.identity = identity
         // Surface refresh failures from anywhere in the app as the interrupt.
         eventTask = Task { [weak self] in
             let stream = await tokens.events()
@@ -63,8 +69,16 @@ public final class SessionStore {
     /// Cold start: tokens in the Keychain mean optimistic sign-in pending
     /// `api/me`. A stale token (reinstall, revocation) lands QUIETLY in
     /// signed-out — no error dialog on first launch.
+    ///
+    /// With no signal, a person whose identity is kept on the phone is signed in as that person, and a later
+    /// `restore()` (the app coming back to the foreground) confirms it with the server.
     public func restore() async {
-        guard await tokens.isSignedIn, state == .signedOut else { return }
+        guard await tokens.isSignedIn else { return }
+        if identityIsKept, case .signedIn = state {
+            await fetchIdentity(quietOnFailure: true)
+            return
+        }
+        guard state == .signedOut else { return }
         state = .fetchingIdentity
         await fetchIdentity(quietOnFailure: true)
     }
@@ -101,12 +115,18 @@ public final class SessionStore {
         errorMessage = nil
     }
 
+    /// Called when somebody signs out on purpose — not when a session merely expires — so what the app keeps on the
+    /// phone for them (saved event passes) goes before the next person picks the phone up.
+    public var onDeliberateSignOut: (@MainActor () -> Void)?
+
     public func signOut() async {
+        onDeliberateSignOut?()
         clearPending()
         // Signing out on purpose is not an interrupt — the event this emits
         // must not raise the banner.
         expectingDeliberateEnd = true
         await tokens.endSession()
+        forgetIdentity()
         sessionEndedBanner = false
         state = .signedOut
         errorMessage = nil
@@ -166,25 +186,55 @@ public final class SessionStore {
         let result = await api.load(Endpoint(.get, "api/me"), as: MeResponse.self)
         switch result {
         case .ok(let me):
+            identity.save(me)
+            identityIsKept = false
             state = .signedIn(me)
         case .sessionEnded:
             // The token died between adoption and /me (or was stale on restore).
+            forgetIdentity()
             state = .signedOut
             if !quietOnFailure { errorMessage = "The session ended before it began — try again." }
+        case .failed(_, let status) where quietOnFailure && (status == nil || status! >= 500):
+            // A cold start with no signal, or a server having a bad minute, is not a dead session:
+            // keep the tokens, so a saved event pass opened at a door with no bars does not sign
+            // the person out behind it — and be the person kept on the phone, so tonight's door
+            // and the programme are still theirs. The next restore tries the server again.
+            keepGoingOffline()
         case .failed(let reason, _):
             // A sign-in that can't resolve /me is reported on the form, not
             // as the session-ended interrupt.
             expectingDeliberateEnd = true
             await tokens.endSession()
+            forgetIdentity()
             state = .signedOut
             if !quietOnFailure { errorMessage = reason ?? "The server couldn't be reached." }
         case .rateLimited(let after):
-            state = .signedOut
-            if !quietOnFailure { retryAfter = after ?? 60 }
+            if quietOnFailure {
+                keepGoingOffline()
+            } else {
+                state = .signedOut
+                retryAfter = after ?? 60
+            }
         }
     }
 
+    /// The server couldn't be asked: stay the person kept on the phone if there is one, anonymous otherwise.
+    private func keepGoingOffline() {
+        if let kept = identity.load() {
+            identityIsKept = true
+            state = .signedIn(kept)
+        } else {
+            state = .signedOut
+        }
+    }
+
+    private func forgetIdentity() {
+        identity.clear()
+        identityIsKept = false
+    }
+
     private func handleSessionEnded() {
+        forgetIdentity()
         if expectingDeliberateEnd {
             expectingDeliberateEnd = false
             return

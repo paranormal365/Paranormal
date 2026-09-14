@@ -1,0 +1,464 @@
+@page "/organizations/{OrgId:guid}/events/{EventId:guid}/door"
+@namespace Ben.Web.Website.Library.Manage.Events
+
+@inject IBenAdminClient AdminClient
+@inject IBenUserState UserState
+
+@using Ben.Data.Common.Enums
+@using Ben.Service.Models.Entities
+@using Ben.Web.Services.WebApi
+@using Ben.Web.Website.Library.Kit
+@using Ben.Web.Website.Library.Kit.Scan
+@using Ben.Web.Website.Library.Manage.Icon
+
+@* The door, on the night (item 235 phase 7).
+
+   A PHONE IN THE DARK, HELD IN ONE HAND, with somebody standing in front of it. Everything here is
+   sized for a thumb, the camera is the first thing on the screen, and every fallback a steward
+   needs when the camera fails is one scroll away rather than behind a menu.
+
+   THE COUNT IS AT THE TOP because it answers the question a steward is asked most: "is there
+   room?" (Ben, 2026-09-13). It counts everything that takes a place — parties expected tonight and
+   walk-ups already in — against whichever ceiling this event has, and says it in words as well as
+   a number.
+
+   IT NEVER SHOWS AN ADDRESS. Dietary flags for tonight, a name, how many, and where they are
+   staying. Whose allergy it is, and everything else about them, is the kitchen's sheet and the
+   board — different screens, different permissions. *@
+
+<PageTitle>@(_door?.EventName is { Length: > 0 } n ? $"Door — {n}" : "The door")</PageTitle>
+
+<div class="container-fluid py-3 door" style="max-width:820px;">
+
+    <div class="text-secondary small">
+        <a href="@($"/organizations/{OrgId}/events/{EventId}")">Back to the event</a>
+    </div>
+
+    <h1 class="h4 mb-2">
+        On the door
+        <HelpLink Slug="organization-administration" Anchor="hosted-events" />
+    </h1>
+
+    @if (_note is { Length: > 0 })
+    {
+        <div class="alert alert-success py-2" id="door-note">@_note</div>
+    }
+    @if (_error is { Length: > 0 })
+    {
+        <div class="alert alert-danger py-2" id="door-error" role="alert">@_error</div>
+    }
+
+    <BenItemState TItem="HostedEventDoorRecord" Result="_result" Loading="_loading"
+                  LoadingText="Opening the door…" OnRetry="LoadAsync">
+        <ChildContent Context="door">
+
+            @* ── which night, and how the evening stands ─────────────────── *@
+            @if (door.Nights.Count > 1)
+            {
+                <div class="btn-group btn-group-sm mb-2 flex-wrap" role="group" aria-label="Which night">
+                    @foreach (var night in door.Nights)
+                    {
+                        var thisNight = night;
+                        <button type="button" id="@($"door-night-{thisNight.Id}")"
+                                class="btn @(door.NightId == thisNight.Id ? "btn-primary" : "btn-outline-primary")"
+                                disabled="@_busy" @onclick="() => ChooseAsync(thisNight.Id)">
+                            @thisNight.Date.ToString("ddd MM/dd")
+                        </button>
+                    }
+                </div>
+            }
+
+            <div class="door__count" id="door-count">
+                <div>
+                    <span class="door__in">@door.PeopleIn</span>
+                    <span class="text-secondary">in of @door.PeopleExpected expected</span>
+                </div>
+                <div class="@(door.PlacesLeft is 0 ? "text-danger" : "text-secondary")" id="door-room">
+                    @(door.PlacesLeftSentence ?? "No limit set for tonight.")
+                </div>
+            </div>
+
+            @* ── the camera, and everything for when it fails ────────────── *@
+            <BenQrScanner OnScanned="OnScannedAsync" Class="mb-2 d-print-none" />
+
+            @if (_scan is { } scan)
+            {
+                <div class="card mb-2 d-print-none @(scan.Admitted ? "border-success" : "border-danger")"
+                     id="door-scan">
+                    <div class="card-body py-2">
+                        @if (scan.Admitted)
+                        {
+                            <div class="fw-semibold">
+                                <BenIcon Name="check" Class="me-1" />@scan.LeadName
+                            </div>
+                            <div>
+                                @scan.PartySize @(scan.PartySize == 1 ? "person" : "people")
+                                @if (scan.Nights is { Count: > 0 } nights)
+                                {
+                                    <text> · @string.Join(", ", nights.Select(n => n.UnitName))</text>
+                                }
+                            </div>
+                            @if (scan.GuestNames is { Count: > 0 } named)
+                            {
+                                <div class="small text-secondary">
+                                    @scan.PartySize @(scan.PartySize == 1 ? "person" : "people") —
+                                    @named.Count named: @string.Join(", ", named)
+                                </div>
+                            }
+                            @if (scan.AlreadyCheckedInUtc is { } when)
+                            {
+                                <div class="small text-warning">
+                                    Already in since @when.ToLocalTime().ToString("h:mm tt").
+                                </div>
+                            }
+                        }
+                        else
+                        {
+                            @* The server's own sentence, which says what to do about it. "Invalid"
+                               does not tell a steward whether to send somebody to the desk, wait,
+                               or turn them away. *@
+                            <div class="fw-semibold text-danger">
+                                <BenIcon Name="x" Class="me-1" />@scan.Refusal
+                            </div>
+                        }
+                    </div>
+                </div>
+            }
+
+            <div class="row g-2 mb-3 d-print-none">
+                <div class="col-7 col-sm-8">
+                    <label class="form-label small mb-1" for="door-code">
+                        Or type the code from their pass
+                    </label>
+                    <input id="door-code" class="form-control" maxlength="12"
+                           placeholder="CF6F35" @bind="_code" @bind:event="oninput" />
+                </div>
+                <div class="col-5 col-sm-4 d-flex align-items-end">
+                    <button type="button" class="btn btn-outline-primary w-100" id="door-code-go"
+                            disabled="@(_busy || string.IsNullOrWhiteSpace(_code))"
+                            @onclick="() => OnScannedAsync(_code!)">
+                        Look it up
+                    </button>
+                </div>
+            </div>
+
+            @* ── everybody expected tonight ──────────────────────────────── *@
+            <div class="row g-2 mb-2 d-print-none">
+                <div class="col-12">
+                    <label class="form-label small mb-1" for="door-search">Find somebody by name</label>
+                    <input id="door-search" class="form-control" maxlength="120"
+                           placeholder="Start typing a name"
+                           @bind="_search" @bind:event="oninput" />
+                </div>
+            </div>
+
+            <ul class="list-group mb-3" id="door-expected">
+                @foreach (var party in Matching(door))
+                {
+                    var them = party;
+                    <li class="list-group-item door-row @(them.ArrivedUtc is not null ? "door-row--in" : null)">
+                        <div class="door-row__who">
+                            <div class="fw-semibold">
+                                @them.LeadName
+                                <span class="text-secondary fw-normal">
+                                    · @them.PartySize @(them.PartySize == 1 ? "person" : "people")
+                                </span>
+                                @* Beside the name, which is where Ben asked for it: a steward
+                                   handing out wristbands should not have to work out which one
+                                   from a list of nights. *@
+                                <BenBandChip Band="@them.Band" Class="ms-1" />
+                            </div>
+                            <div class="small text-secondary">
+                                @(them.Where ?? "Here tonight")
+                                @if (them.Code is { Length: > 0 } shortCode)
+                                {
+                                    <text> · @shortCode</text>
+                                }
+                            </div>
+                            @if (them.Dietary.Count > 0)
+                            {
+                                @* Flags, not notes: what the party between them cannot eat, with
+                                   nobody's name against it. *@
+                                <div class="small text-warning">
+                                    <BenIcon Name="alert-circle" Class="me-1" />
+                                    @string.Join(" · ", them.Dietary)
+                                </div>
+                            }
+                            @if (them.ArrivedUtc is { } arrived)
+                            {
+                                <div class="small text-success">
+                                    In since @arrived.ToLocalTime().ToString("h:mm tt")
+                                    @if (them.LeftUtc is { } left)
+                                    {
+                                        <text> · left @left.ToLocalTime().ToString("h:mm tt")</text>
+                                    }
+                                </div>
+                            }
+                        </div>
+
+                        <div class="door-row__acts d-print-none">
+                            @if (them.ArrivedUtc is null)
+                            {
+                                <button type="button" class="btn btn-primary door__big"
+                                        id="@($"door-arrive-{them.HostedEventBookingId}")"
+                                        disabled="@_busy"
+                                        @onclick="() => ArriveAsync(door, them)">
+                                    They're here
+                                </button>
+                            }
+                            else
+                            {
+                                @if (them.LeftUtc is null)
+                                {
+                                    <button type="button" class="btn btn-outline-secondary door__big"
+                                            id="@($"door-leave-{them.HostedEventBookingId}")"
+                                            disabled="@_busy"
+                                            @onclick="() => LeaveAsync(door, them)">
+                                        Left
+                                    </button>
+                                }
+                                <button type="button" class="btn btn-outline-danger door__big"
+                                        id="@($"door-undo-{them.HostedEventBookingId}")"
+                                        disabled="@_busy"
+                                        @onclick="() => UndoAsync(door, them)">
+                                    Not them
+                                </button>
+                            }
+                        </div>
+                    </li>
+                }
+            </ul>
+
+            @* ── somebody who just turned up ─────────────────────────────── *@
+            <div class="card mb-3 d-print-none" id="door-walk-up">
+                <div class="card-header fw-semibold d-flex justify-content-between align-items-center">
+                    <span>Turned up without a booking</span>
+                    @if (door.WalkUps.Count > 0)
+                    {
+                        <span class="badge bg-body-secondary text-body-emphasis">
+                            @door.WalkUps.Sum(w => w.People) in
+                        </span>
+                    }
+                </div>
+                <div class="card-body">
+                    <div class="row g-2 align-items-end">
+                        <div class="col-4 col-sm-3">
+                            <label class="form-label small mb-1" for="walk-up-people">How many</label>
+                            <input id="walk-up-people" type="number" class="form-control" min="1"
+                                   value="@_walkUpPeople"
+                                   @onchange="e => _walkUpPeople = Clamp(e.Value?.ToString())" />
+                        </div>
+                        <div class="col-8 col-sm-5">
+                            <label class="form-label small mb-1" for="walk-up-name">
+                                Name, if they gave one
+                            </label>
+                            <input id="walk-up-name" class="form-control" maxlength="200"
+                                   placeholder="Optional" @bind="_walkUpName" @bind:event="oninput" />
+                        </div>
+                        <div class="col-12 col-sm-4">
+                            <button type="button" class="btn btn-primary w-100 door__big"
+                                    id="walk-up-add" disabled="@(_busy || door.PlacesLeft is 0)"
+                                    @onclick="() => WalkUpAsync(door)">
+                                Let them in
+                            </button>
+                        </div>
+                    </div>
+
+                    <p class="text-secondary small mt-2 mb-0">
+                        This writes down that they came, so the count is right. They get no pass —
+                        if they want a booking, they can ask for one on the event's page.
+                    </p>
+
+                    @if (door.WalkUps.Count > 0)
+                    {
+                        <ul class="list-group list-group-flush mt-2" id="walk-up-list">
+                            @foreach (var walkUp in door.WalkUps)
+                            {
+                                var it = walkUp;
+                                <li class="list-group-item px-0 door-row">
+                                    <div class="door-row__who">
+                                        <span class="fw-semibold">
+                                            @it.People @(it.People == 1 ? "person" : "people")
+                                        </span>
+                                        @if (it.Name is { Length: > 0 } name)
+                                        {
+                                            <span class="text-secondary"> · @name</span>
+                                        }
+                                        <span class="text-secondary small">
+                                            · @it.ArrivedUtc.ToLocalTime().ToString("h:mm tt")
+                                        </span>
+                                    </div>
+                                    <button type="button" class="btn btn-sm btn-outline-danger"
+                                            id="@($"walk-up-undo-{it.Id}")" disabled="@_busy"
+                                            @onclick="() => UndoWalkUpAsync(it)">
+                                        Undo
+                                    </button>
+                                </li>
+                            }
+                        </ul>
+                    }
+                </div>
+            </div>
+
+            <p class="text-secondary small d-print-none">
+                Print this page for a paper list. A browser cannot scan a code with no signal, so a
+                venue that expects none should print before the doors open.
+            </p>
+        </ChildContent>
+    </BenItemState>
+</div>
+
+@code {
+    [Parameter] public Guid OrgId { get; set; }
+    [Parameter] public Guid EventId { get; set; }
+
+    private ItemResult<HostedEventDoorRecord> _result;
+    private HostedEventDoorRecord? _door;
+    private HostedEventScanResult? _scan;
+    private Guid? _night;
+    private bool _loading = true;
+    private bool _busy;
+    private string? _note;
+    private string? _error;
+
+    private string? _code;
+    private string? _search;
+    private int _walkUpPeople = 1;
+    private string? _walkUpName;
+
+    protected override async Task OnAfterRenderAsync(bool firstRender)
+    {
+        if (!firstRender) return;
+
+        // Auth resolves after the circuit attaches. A door that asked as nobody would tell a
+        // steward they are not allowed at the moment the first guest arrives.
+        if (!await UserState.WaitUntilAuthReadyAsync(RendererInfo.IsInteractive)) return;
+
+        await LoadAsync();
+        StateHasChanged();
+    }
+
+    private async Task LoadAsync()
+    {
+        _loading = true;
+        _result = await AdminClient.GetEventDoorAsync(OrgId, EventId, _night);
+        _door = _result.Item;
+        _night ??= _door?.NightId;
+        _loading = false;
+    }
+
+    private async Task ChooseAsync(Guid nightId)
+    {
+        _night = nightId;
+        _scan = null;
+        await LoadAsync();
+    }
+
+    // ── the camera and the code box ──────────────────────────────────────────
+
+    /// <summary>
+    /// What a scanned code, or a typed one, means.
+    /// </summary>
+    /// <remarks>
+    /// One method for both, because they are the same act with different certainty and the server
+    /// records which it was. The night goes with it, so the arrival is written against tonight
+    /// rather than as a single stamp on the pass — the whole point of phase 7.
+    /// </remarks>
+    private async Task OnScannedAsync(string code)
+    {
+        if (_door is not { } door || string.IsNullOrWhiteSpace(code)) return;
+
+        _busy = true;
+        _error = null;
+        _note = null;
+
+        var (scan, error) = await AdminClient.ScanEventPassAsync(
+            OrgId, EventId, code.Trim(), checkIn: true, nightId: door.NightId);
+
+        _busy = false;
+
+        if (scan is null) { _error = error ?? "That couldn't be read just now."; return; }
+
+        _scan = scan;
+        _code = null;
+
+        // Read again, because the arrival that scan just wrote is what the list and the count are
+        // for. Cheap: one night's parties.
+        await LoadAsync();
+    }
+
+    // ── the list ─────────────────────────────────────────────────────────────
+
+    /// <summary>
+    /// Everybody expected, narrowed by what has been typed.
+    /// </summary>
+    /// <remarks>
+    /// Name or code, because a steward with a pass in front of them may have either, and matching
+    /// anywhere in the name rather than at the start — half the people at a door give a surname.
+    /// </remarks>
+    private IReadOnlyList<HostedEventDoorPartyRecord> Matching(HostedEventDoorRecord door)
+        => _search?.Trim() is not { Length: > 0 } typed
+            ? door.Expected
+            : [.. door.Expected.Where(p =>
+                p.LeadName.Contains(typed, StringComparison.OrdinalIgnoreCase)
+             || (p.Code?.Contains(typed, StringComparison.OrdinalIgnoreCase) ?? false))];
+
+    private Task ArriveAsync(HostedEventDoorRecord door, HostedEventDoorPartyRecord them)
+        => MoveAsync(() => AdminClient.DoorArriveAsync(OrgId, EventId,
+               new HostedEventDoorMoveRequest(them.HostedEventBookingId, door.NightId)),
+           $"{them.LeadName} is in.");
+
+    private Task LeaveAsync(HostedEventDoorRecord door, HostedEventDoorPartyRecord them)
+        => MoveAsync(() => AdminClient.DoorLeaveAsync(OrgId, EventId,
+               new HostedEventDoorMoveRequest(them.HostedEventBookingId, door.NightId)),
+           $"{them.LeadName} has left.");
+
+    private Task UndoAsync(HostedEventDoorRecord door, HostedEventDoorPartyRecord them)
+        => MoveAsync(() => AdminClient.DoorUndoAsync(OrgId, EventId,
+               new HostedEventDoorMoveRequest(them.HostedEventBookingId, door.NightId)),
+           $"{them.LeadName} is not in after all.");
+
+    private Task WalkUpAsync(HostedEventDoorRecord door)
+        => MoveAsync(() => AdminClient.DoorWalkUpAsync(OrgId, EventId,
+               new HostedEventWalkUpRequest(door.NightId, _walkUpPeople, Trimmed(_walkUpName))),
+           _walkUpPeople == 1 ? "One more in." : $"{_walkUpPeople} more in.",
+           after: () => { _walkUpPeople = 1; _walkUpName = null; });
+
+    private Task UndoWalkUpAsync(HostedEventWalkUpRecord walkUp)
+        => MoveAsync(() => AdminClient.DoorUndoWalkUpAsync(OrgId, EventId, walkUp.Id),
+           "Taken back off tonight's count.");
+
+    /// <summary>
+    /// One shape for every button on this screen: press, say what happened, redraw.
+    /// </summary>
+    /// <remarks>
+    /// The server answers every one of these with the whole door, so nothing here has to work out
+    /// what changed — which is what stops the count and the list drifting apart in a room where
+    /// somebody is pressing buttons faster than the page can think.
+    /// </remarks>
+    private async Task MoveAsync(
+        Func<Task<(HostedEventDoorRecord? Result, string? Error)>> press,
+        string said, Action? after = null)
+    {
+        _busy = true;
+        _error = null;
+        _note = null;
+
+        var (door, error) = await press();
+
+        _busy = false;
+
+        if (door is null) { _error = error ?? "That couldn't be saved just now."; return; }
+
+        _result = ItemResult<HostedEventDoorRecord>.Ok(door);
+        _door = door;
+        _note = said;
+        after?.Invoke();
+    }
+
+    private static int Clamp(string? typed)
+        => int.TryParse(typed, out var n) ? Math.Clamp(n, 1, 40) : 1;
+
+    private static string? Trimmed(string? value)
+        => value?.Trim() is { Length: > 0 } v ? v : null;
+}

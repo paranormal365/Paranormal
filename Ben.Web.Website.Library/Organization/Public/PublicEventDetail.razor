@@ -20,6 +20,7 @@
     <Ben.Web.Website.Library.Shared.SocialCard Title="@($"{_event.Title} — {_event.OrganizationName}")"
                                        Description="@SocialSummary"
                                        RelativeUrl="@($"/o/{UrlName}/events/{EventSlug}")"
+                                       ImageUrl="@(_hosted?.Gallery is { Count: > 0 } cardGallery ? MediaUrls.EventPhoto(cardGallery[0].UploadFileId) : null)"
                                        Type="article" />
 }
 
@@ -90,6 +91,12 @@ else
             </div>
         </div>
 
+        @* Item 235 phase 11: the host's pictures, the countdown, and the phone's ask button. *@
+        @if (_hosted is { } showcase)
+        {
+            <HostedEventShowcase Hosted="showcase" />
+        }
+
         @if (_error is not null)
         {
             <div class="alert alert-danger py-2">@_error</div>
@@ -98,6 +105,72 @@ else
         @* The facts of the night, stated the way the tour's own page states them. *@
         <BenFactRail Facts="@Facts" Class="mb-4" />
 
+        @* A hosted event is more than one evening (item 235), and the umbrella row this page is
+           built on can only say when the whole thing starts and stops. The dates come from the
+           event itself — a weekend's nights, or a production's performances — because "three
+           nights" and "on until November" are different sentences and a visitor deciding whether
+           to come needs the right one. *@
+        @if (_hosted is { } hosted)
+        {
+            @if (hosted.IsCancelled)
+            {
+                <div class="alert alert-danger" id="hosted-cancelled">
+                    <strong>This has been called off.</strong>
+                    @if (hosted.CancelledReason is { Length: > 0 } why)
+                    {
+                        <span> @why</span>
+                    }
+                </div>
+            }
+
+            <section class="mb-4" id="hosted-nights">
+                <BenSectionHeading Text="@NightsHeading(hosted)" />
+                @if (!string.IsNullOrWhiteSpace(hosted.Tagline))
+                {
+                    <p class="text-secondary">@hosted.Tagline</p>
+                }
+                <div class="list-group">
+                    @foreach (var night in hosted.Nights)
+                    {
+                        <div class="list-group-item d-flex flex-wrap gap-3 align-items-baseline">
+                            <span class="fw-semibold" style="min-width:11rem;">
+                                @night.Date.ToString("dddd, MMMM d")
+                            </span>
+                            <span class="text-secondary">@NightClock(night, hosted)</span>
+                            @if (night.Title is { Length: > 0 } title)
+                            {
+                                <span>@title</span>
+                            }
+                            @if (night.Notes is { Length: > 0 } notes)
+                            {
+                                <span class="text-secondary small">@notes</span>
+                            }
+                        </div>
+                    }
+                </div>
+                @if (hosted.DatesAreSeparate)
+                {
+                    <p class="text-secondary small mt-2">
+                        Each date is booked on its own.
+                    </p>
+                }
+                @if (hosted.AccessNotes is { Length: > 0 } access)
+                {
+                    <div class="mt-3" id="event-access-notes">
+                        <strong>Getting in and getting around</strong>
+                        <p class="mb-0" style="white-space:pre-line;">@access</p>
+                    </div>
+                }
+                @if (hosted.ContactLine is { Length: > 0 } contact)
+                {
+                    <p class="mt-3 mb-0"><strong>Arranging it:</strong> @contact</p>
+                    <p class="text-secondary small">
+                        IsHaunted doesn't take payment — that's between you and @hosted.OrganizationName.
+                    </p>
+                }
+            </section>
+        }
+
         @* The point of the page, put where the eye lands rather than under a paragraph of
            description. Every state of it is one card: coming, may come, cannot come and why, or
            has never been here before.
@@ -105,15 +178,37 @@ else
            A stranger giving an address is not yet coming — the link we send is what confirms
            anything, because an address typed into a box proves nothing, and an event that hides
            its street until you are coming would be protecting nothing if it did. *@
-        <div class="event-act card mb-4">
+        <div class="event-act card mb-4" id="event-act">
             <div class="card-body">
-                @* ── A seat on a walk (item 234) ───────────────────────────
-                   On a tour date a sign-up is a REQUEST until the business approves it, so the
-                   page has to say which of the three a guest is looking at. Saying "you're
-                   coming" over a request nobody has agreed to would send somebody to a meeting
-                   point with no place held for them. *@
-                @if (_event.MySeat?.Status == TourSeatStatus.Requested)
+                @* ── A place at a hosted event (item 235 phase 6) ──────────
+                   FIRST IN THE CHAIN, and the tour branches below never run for one. A hosted
+                   event's places are rooms and seats over several nights with a hold on them, and
+                   the umbrella's one-row RSVP cannot say any of that — a page that offered both
+                   would let somebody "come along" to a weekend they have no bed for.
+
+                   Everything about it lives in the component. This page has enough to do drawing
+                   a walk's seats without also knowing what a soft hold is. *@
+                @if (_hosted is { } hostedPlaces)
                 {
+                    <HostedEventPlaces Hosted="hostedPlaces" IsAuthenticated="_isAuthenticated">
+                        <SignedOut>
+                            @* The umbrella's own email flow, unchanged and passed in rather than
+                               copied: it is what issues the token, and a second copy would be a
+                               second way to reach it. *@
+                            @if (!_event.Flags.RsvpHasClosed && !_event.Flags.IsFull)
+                            {
+                                @AttendByEmail
+                            }
+                        </SignedOut>
+                    </HostedEventPlaces>
+                }
+                else if (_event.MySeat?.Status == TourSeatStatus.Requested)
+                {
+                    @* ── A seat on a walk (item 234) ───────────────────────
+                       On a tour date a sign-up is a REQUEST until the business approves it, so
+                       the page has to say which of the three a guest is looking at. Saying
+                       "you're coming" over a request nobody has agreed to would send somebody to
+                       a meeting point with no place held for them. *@
                     <div class="d-flex flex-wrap align-items-center gap-2">
                         <span class="badge text-bg-warning">Asked for</span>
                         <span class="text-secondary small flex-grow-1">
@@ -199,50 +294,7 @@ else
                 }
                 else if (!_isAuthenticated && !_event.Flags.RsvpHasClosed && !_event.Flags.IsFull)
                 {
-                    @if (_emailSent)
-                    {
-                        <div class="event-act__ask mb-1">Check your email</div>
-                        <p class="text-secondary small mb-0">
-                            If that address can come along, there's a link on its way. Click it to
-                            confirm — it works once, and it's good for two weeks.
-                        </p>
-                    }
-                    else
-                    {
-                        <div class="event-act__ask mb-1">Coming along?</div>
-                        <p class="text-secondary small">
-                            You don't need an account. Give us an email address and we'll send you a
-                            link to confirm — no password to invent.
-                        </p>
-
-                        @if (_attendError is not null)
-                        {
-                            <div class="alert alert-danger py-2">@_attendError</div>
-                        }
-
-                        <div class="row g-2">
-                            <div class="col-md-5">
-                                <input class="form-control" type="email" maxlength="320"
-                                       placeholder="you@example.com" value="@_attendEmail"
-                                       @oninput="@(e => _attendEmail = e.Value?.ToString() ?? "")" />
-                            </div>
-                            <div class="col-md-4">
-                                <input class="form-control" maxlength="200"
-                                       placeholder="Your name (optional)" value="@_attendName"
-                                       @oninput="@(e => _attendName = e.Value?.ToString() ?? "")" />
-                            </div>
-                            <div class="col-md-3">
-                                <button type="button" class="btn btn-primary w-100"
-                                        @onclick="RequestAttendanceAsync"
-                                        disabled="@(_busy || !_attendEmail.Contains('@'))">Send me the link</button>
-                            </div>
-                        </div>
-
-                        <p class="text-secondary mt-2 mb-0" style="font-size:.75rem;">
-                            Already have an account? <a href="/login">Sign in</a> and say you're
-                            coming in one click.
-                        </p>
-                    }
+                    @AttendByEmail
                 }
                 else if (_event.Flags.RsvpBlockedReason is string reason)
                 {
@@ -338,6 +390,19 @@ else
             <BenGuideStrip Guides="@guides" Role="Your guide" Class="mb-4" />
         }
 
+        @* The programme (item 235 phase 10): after the booking card, because deciding to come comes
+           first, and before the description, because once somebody is coming it is what they read. *@
+        @if (_hosted is { } withProgramme)
+        {
+            <HostedEventProgramme HostedEventId="withProgramme.Id" IsAuthenticated="_isAuthenticated" />
+            <HostedEventDownloads HostedEventId="withProgramme.Id" IsAuthenticated="_isAuthenticated" />
+            <HostedEventReviews HostedEventId="withProgramme.Id" />
+            @if (_isAuthenticated)
+            {
+                <HostedEventRoom HostedEventId="withProgramme.Id" />
+            }
+        }
+
         @if (!string.IsNullOrWhiteSpace(_event.Description))
         {
             @* The description is authored in a rich-text editor, so it IS markup and was being
@@ -346,6 +411,27 @@ else
                serves it, which is what makes the rows written before that rule safe. *@
             <BenSectionHeading Text="About the night" />
             <div class="event-description mb-4">@((MarkupString)(_event.Description ?? ""))</div>
+        }
+
+        @* The venue that said yes, when it is another group on this site (item 235 phase 9): who
+           agreed the event may happen there, their page, and the building's story when they lent
+           it. Plain text, not markup — the venue wrote it in a textarea. *@
+        @if (_hosted is { VenueOrganizationName: { Length: > 0 } venueName } withVenue)
+        {
+            <BenSectionHeading Text="The venue" />
+            <div class="mb-4" id="event-venue-section">
+                <p class="mb-2">
+                    Held at @(withVenue.VenueName ?? "the venue") with the agreement of <strong>@venueName</strong>.
+                    @if (withVenue.VenuePageUrl is { Length: > 0 } url)
+                    {
+                        <a href="@url">The venue's page</a>
+                    }
+                </p>
+                @if (withVenue.VenueHistory is { Length: > 0 } story)
+                {
+                    <div id="event-venue-history" style="white-space:pre-line;">@story</div>
+                }
+            </div>
         }
 
 
@@ -374,7 +460,10 @@ else
             </div>
         }
 
-        @if (_isAuthenticated && _event is not null)
+        @* On an ordinary public event this has always been offered, and stays so. On a hosted event
+           it is the host's switch (item 235): most events are not ghost hunts, and a venue running
+           a play does not want an evidence queue on its page. *@
+        @if (_isAuthenticated && _event is not null && (_hosted is null || _collectsEvidence))
         {
             <BenSectionHeading Text="Were you there?" />
             <div class="card mb-4">
@@ -436,6 +525,75 @@ else
 </FeatureGate>
 
 @code {
+
+    /// <summary>
+    /// "Give us an email address and we'll send you a link", for a visitor with no account.
+    /// </summary>
+    /// <remarks>
+    /// A fragment because two branches render it: an ordinary event's own sign-up, and a hosted
+    /// event's, which draws the house first and puts this underneath. A second copy would be a
+    /// second way to reach the same token, and the two would drift.
+    /// </remarks>
+    private RenderFragment AttendByEmail => @<text>
+                @if (_emailSent)
+                {
+                    <div class="event-act__ask mb-1">Check your email</div>
+                    <p class="text-secondary small mb-0">
+                        If that address can come along, there's a link on its way. Click it to
+                        confirm — it works once, and it's good for two weeks.
+                    </p>
+                }
+                else
+                {
+                    <div class="event-act__ask mb-1">Coming along?</div>
+                    <p class="text-secondary small">
+                        You don't need an account. Give us an email address and we'll send you a
+                        link to confirm — no password to invent.
+                    </p>
+
+                    @if (_attendError is not null)
+                    {
+                        <div class="alert alert-danger py-2">@_attendError</div>
+                    }
+
+                    @if (_hosted is { } askingHost)
+                    {
+                        @* A hosted event's organizer has to be able to reach whoever asks
+                           (slice 11d), so this door asks for the three and says why. *@
+                        <BookingContactFields Draft="_attendContact" IdPrefix="attend" AskEmail="true"
+                                              OrganizationName="@askingHost.OrganizationName"
+                                              Changed="StateHasChanged" />
+                        <button type="button" class="btn btn-primary mt-2" id="attend-send"
+                                @onclick="RequestAttendanceAsync"
+                                disabled="@(_busy || !_attendContact.IsEnough(withEmail: true))">Send me the link</button>
+                    }
+                    else
+                    {
+                    <div class="row g-2">
+                        <div class="col-md-5">
+                            <input class="form-control" type="email" maxlength="320"
+                                   placeholder="you@example.com" value="@_attendEmail"
+                                   @oninput="@(e => _attendEmail = e.Value?.ToString() ?? "")" />
+                        </div>
+                        <div class="col-md-4">
+                            <input class="form-control" maxlength="200"
+                                   placeholder="Your name (optional)" value="@_attendName"
+                                   @oninput="@(e => _attendName = e.Value?.ToString() ?? "")" />
+                        </div>
+                        <div class="col-md-3">
+                            <button type="button" class="btn btn-primary w-100"
+                                    @onclick="RequestAttendanceAsync"
+                                    disabled="@(_busy || !_attendEmail.Contains('@'))">Send me the link</button>
+                        </div>
+                    </div>
+                    }
+
+                    <p class="text-secondary mt-2 mb-0" style="font-size:.75rem;">
+                        Already have an account? <a href="/login">Sign in</a> and say you're
+                        coming in one click.
+                    </p>
+                }
+    </text>;
     [Parameter] public string UrlName { get; set; } = "";
     [Parameter] public string EventSlug { get; set; } = "";
 
@@ -478,6 +636,10 @@ else
         ? $"{seat.Seats} places"
         : "A place";
     private string? _error;
+    private PublicHostedEventRecord? _hosted;
+
+    /// <summary>Whether this event invites evidence — always, unless a hosted event says not.</summary>
+    private bool _collectsEvidence => _hosted?.CollectsEvidence ?? true;
 
     private DirectionsMapModal? _directions;
     private IReadOnlyList<BenMapPin> _mapPins = [];
@@ -549,7 +711,13 @@ else
             {
                 var minutes = (int)(_event.EndDateTime - _event.StartDateTime).TotalMinutes;
                 if (minutes > 0)
-                    facts.Add(new BenFactItem("How long", Duration(minutes), "on your feet"));
+                    // "On your feet" is a walk's phrase and belongs to a walk. A weekend at a
+                    // hotel, a run of performances or a talk are not things anybody stands up for
+                    // (item 235), so the note only appears where it is true.
+                    facts.Add(new BenFactItem("How long", Duration(minutes),
+                        _event.TourName is not null ? "on your feet"
+                        : _hosted is { Nights.Count: > 1 } many ? $"over {many.Nights.Count} {many.DateNoun}s"
+                        : null));
             }
 
             facts.Add(_event.AttendeeCapacity is { } cap
@@ -583,10 +751,30 @@ else
     private bool _emailSent;
     private string? _attendError;
 
+    private readonly Ben.Web.Website.Library.Organization.Public.BookingContactDraft _attendContact = new();
+
     private async Task RequestAttendanceAsync()
     {
         if (_event is null) return;
         _busy = true; _attendError = null;
+
+        if (_hosted is not null)
+        {
+            var (sent, error) = await AdminClient.RequestHostedEventAttendanceAsync(
+                _event.Id,
+                new RequestEventAttendanceRequest(
+                    _attendContact.Email.Trim(),
+                    $"{_attendContact.FirstName.Trim()} {_attendContact.LastName.Trim()}",
+                    FirstName: _attendContact.FirstName.Trim(),
+                    LastName: _attendContact.LastName.Trim(),
+                    Phone: _attendContact.Phone.Trim()));
+
+            if (sent) _emailSent = true;
+            else _attendError = error ?? "That couldn't be sent. The event may have filled up or closed.";
+
+            _busy = false;
+            return;
+        }
 
         // The server answers the same way whether or not that address is known here, so there is
         // nothing to report back beyond "we tried".
@@ -682,6 +870,27 @@ else
     {
         _event   = await AdminClient.GetPublicEventAsync(UrlName, EventSlug);
 
+        // Only when this date is a hosted event's umbrella. An ordinary public event has no such
+        // thing and the page is unchanged for it — which is the point of the umbrella.
+        _hosted = null;
+        if (_event?.HostedEventId is { } hostedId)
+        {
+            var hosted = await AdminClient.GetPublicHostedEventAsync(hostedId);
+            _hosted = hosted.Item;
+
+            // A refusal somebody WROTE is shown; the one this client generates from a status code
+            // is not. Both arrive as a Reason and only the first is meant for a visitor: "The
+            // server answered 404 (Not Found)." is the most useful line a deploy can give an
+            // operator and the least useful thing to put in a red alert on a page a stranger
+            // opened to read about a ghost walk. An umbrella whose hosted half is unpublished or
+            // gone answers exactly that 404, and it still has a calendar row worth showing, so the
+            // page carries on as it did before the dates section existed.
+            if (hosted.Failed
+                && hosted.Reason is { } why
+                && !Ben.Web.Services.WebApi.ApiResponseMapper.IsGeneratedStatusSentence(why))
+                _error = why;
+        }
+
         if (_event is not null)
         {
             // Only a tour date earns a pin — see HasMap for why.
@@ -742,5 +951,32 @@ else
 
         _busy = false;
         await LoadAsync();
+    }
+
+    // ── A hosted event's dates (item 235) ───────────────────────────────────
+
+    /// <summary>"Three nights" or "Six dates" — the sentence that fits what this actually is.</summary>
+    private static string NightsHeading(PublicHostedEventRecord hosted)
+    {
+        var count = hosted.Nights.Count;
+        var noun = count == 1 ? hosted.DateNoun : hosted.DateNoun + "s";
+        return hosted.DatesAreSeparate ? $"{count} {noun}" : $"{count} {noun}";
+    }
+
+    /// <summary>
+    /// When one date runs, on the venue's own clock.
+    /// </summary>
+    /// <remarks>
+    /// The times are local to the event and stored as such, so they are printed rather than
+    /// converted: a reader in Tokyo is being told what time to turn up in Tennessee.
+    /// </remarks>
+    private static string NightClock(HostedEventNightRecord night, PublicHostedEventRecord hosted)
+    {
+        if (night.StartsLocal is not { } from) return "";
+
+        var start = DateTime.Today.Add(from).ToString("h:mm tt");
+        return night.EndsLocal is { } to
+            ? $"{start} – {DateTime.Today.Add(to):h:mm tt}"
+            : start;
     }
 }

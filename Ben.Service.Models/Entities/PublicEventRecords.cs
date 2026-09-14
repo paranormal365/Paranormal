@@ -79,7 +79,22 @@ public sealed record PublicEventRecord(
     /// The IANA zone the event happens in, when it is recorded — today, the tour's. Null means
     /// nobody has said, and the reader is shown UTC and told so; see EventClock.
     /// </summary>
-    string? TimeZoneId = null);
+    string? TimeZoneId = null,
+    /// <summary>
+    /// The hosted event this date is the umbrella for (item 235). Null for every ordinary date.
+    /// </summary>
+    /// <remarks>
+    /// <para>Additive, and nullable, because the app already in people's pockets decodes this
+    /// record and must keep doing so unchanged while it is with Apple. A reader that does not know
+    /// what a hosted event is sees an ordinary public event, which is exactly what the umbrella
+    /// exists to give it.</para>
+    ///
+    /// <para>A page that DOES know asks for the rest — the separate dates, the venue's own name,
+    /// whether it is a stay or a run — from the public hosted-event endpoint.</para>
+    /// </remarks>
+    Guid? HostedEventId = null,
+    /// <summary>The hosted event's name, when this is an umbrella row.</summary>
+    string? HostedEventName = null);
 
 /// <summary>A guide as a guest sees them: a name, and a face when they have published one.</summary>
 public sealed record PublicGuideRecord(string DisplayName, string? Handle, Guid? PhotoUploadFileId);
@@ -149,7 +164,14 @@ public sealed record RequestEventAttendanceRequest(
     /// <summary>
     /// How many places, on a tour date (item 234). Null and 0 both mean one; the server clamps.
     /// </summary>
-    int? Seats = null);
+    int? Seats = null,
+    /// <summary>
+    /// Required on a hosted event (item 235 slice 11d), so the organizer can reach them; ignored on
+    /// every other kind, where an email is still enough.
+    /// </summary>
+    string? FirstName = null,
+    string? LastName = null,
+    string? Phone = null);
 
 /// <summary>What a confirmation link points at, shown before it is used.</summary>
 public sealed record EventAttendanceInviteInfo(
@@ -168,7 +190,30 @@ public sealed record EventAttendanceConfirmation(
     string OrganizationName,
     string OrganizationUrlName,
     string? EventUrlName,
-    DateTime StartDateTime);
+    DateTime StartDateTime,
+
+    /// <summary>
+    /// The hosted event this link led to, when it is one (item 235 phase 6).
+    /// </summary>
+    /// <remarks>
+    /// A click on a hosted event's link is a REQUEST for a day pass, not an arrival: the venue
+    /// has not looked at it yet. The page said "You're coming" to everybody, which is true of an
+    /// ordinary evening and a promise nobody made about a weekend at a hotel.
+    /// </remarks>
+    Guid? HostedEventId = null,
+
+    /// <summary>How many places the link carried, so the page can repeat it back.</summary>
+    int PartySize = 1,
+
+    /// <summary>
+    /// Whether the account this link just made or matched can sign in with a password.
+    /// </summary>
+    /// <remarks>
+    /// An email-link guest has none, which is fine until they want to pick their own seats — and
+    /// picking needs signing in. Rather than leave them to discover that, the page offers to set
+    /// one, through the ordinary forgotten-password route.
+    /// </remarks>
+    bool AccountHasNoPassword = false);
 
 
 // ── Published investigations (backlog item #89) ──────────────────────────────

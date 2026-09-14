@@ -112,6 +112,14 @@ public sealed partial class BenAdminClientAdapter
             HttpMethod.Post, $"/api/organizations/{organizationId}/subscription/checkout/my-seat",
             new { }, token);
 
+    /// <inheritdoc />
+    public Task<(StartCheckoutResponse? Result, string? Error)> StartEventCreditCheckoutAsync(
+        Guid organizationId, int quantity, CancellationToken token = default)
+        => _api.SendExpectingReasonAsync<object, StartCheckoutResponse>(
+            HttpMethod.Post,
+            $"/api/organizations/{organizationId}/subscription/checkout/event-credits?quantity={quantity}",
+            new { }, token);
+
     // ── the money trail (item 168) ────────────────────────────────────────────
 
     public Task<LoadResult<BillingLedgerEntryRecord>> GetBillingLedgerAsync(Guid? orgId = null, CancellationToken token = default)
@@ -166,6 +174,29 @@ public sealed partial class BenAdminClientAdapter
 
     public Task<LoadResult<MyMemberSeatRecord>> GetMySeatAsync(Guid organizationId, CancellationToken token = default)
         => _api.GetListAsync<MyMemberSeatRecord>($"/api/organizations/{organizationId}/billing/my-seats", token);
+
+    // ── Event credits (item 235) ──────────────────────────────────────────────
+
+    public Task<ItemResult<OrgEventCreditsView>> GetOrgEventCreditsAsync(
+        Guid organizationId, CancellationToken token = default)
+        => _api.GetItemAsync<OrgEventCreditsView>(
+            $"/api/organizations/{organizationId}/billing/event-credits", token);
+
+    public Task<LoadResult<AdminEventCreditRecord>> GetEventCreditsAsync(
+        Guid? orgId = null, CancellationToken token = default)
+        => _api.GetListAsync<AdminEventCreditRecord>(
+            orgId is { } o ? $"/api/admin/billing/event-credits?orgId={o}" : "/api/admin/billing/event-credits",
+            token);
+
+    public Task<(IReadOnlyList<AdminEventCreditRecord>? Result, string? Error)> GrantEventCreditsAsync(
+        Guid organizationId, GrantEventCreditsRequest request, CancellationToken token = default)
+        => _api.SendExpectingReasonAsync<GrantEventCreditsRequest, IReadOnlyList<AdminEventCreditRecord>>(
+            HttpMethod.Post, $"/api/admin/billing/organizations/{organizationId}/event-credits", request, token);
+
+    public Task<(AdminEventCreditRecord? Result, string? Error)> RefundEventCreditAsync(
+        Guid creditId, RefundEventCreditRequest request, CancellationToken token = default)
+        => _api.SendExpectingReasonAsync<RefundEventCreditRequest, AdminEventCreditRecord>(
+            HttpMethod.Post, $"/api/admin/billing/event-credits/{creditId}/refund", request, token);
 
     public async Task<(byte[] Data, string FileName)?> DownloadReceiptAsync(
         Guid organizationId, Guid entryId, CancellationToken token = default)

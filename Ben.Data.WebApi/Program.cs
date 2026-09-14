@@ -204,7 +204,14 @@ builder.Services.AddSingleton<Ben.Data.WebApi.Services.EditorHandoffCodeStore>()
 builder.Services.Configure<Ben.Data.WebApi.Services.SmtpOptions>(builder.Configuration.GetSection("Smtp"));
 // What the site is called, in one place — see SiteIdentity for why it is not a literal.
 builder.Services.Configure<Ben.Data.Common.SiteIdentity>(builder.Configuration.GetSection("SiteIdentity"));
-builder.Services.AddSingleton<Ben.Data.Common.Interfaces.IEmailService, Ben.Data.WebApi.Services.SmtpEmailService>();
+// Item 239, the mail outbox. SmtpEmailService is registered as ITSELF and is now reached by
+// exactly two things: the sender job, which posts what the outbox holds, and the mail diagnostics
+// screen, which must send immediately and show the raw failure — a diagnostic that queues is not a
+// diagnostic. Everything else asks for IEmailService and gets the outbox, so all twenty callers
+// were covered without one of them being edited.
+builder.Services.AddSingleton<Ben.Data.WebApi.Services.SmtpEmailService>();
+builder.Services.AddSingleton<Ben.Data.Common.Interfaces.IEmailService,
+                              Ben.Data.WebApi.Services.OutboxEmailService>();
 builder.Services.AddHostedService<Ben.Data.WebApi.Services.FileMigrationService>();
 
 // ── @names ───────────────────────────────────────────────────────────────────
@@ -212,6 +219,7 @@ builder.Services.AddHostedService<Ben.Data.WebApi.Services.FileMigrationService>
 // person. The backfill service gives one to any account that predates the column and then does
 // nothing on every subsequent start.
 builder.Services.AddScoped<Ben.Data.WebApi.Services.UserHandleService>();
+builder.Services.AddScoped<Ben.Data.WebApi.Services.EmailLinkAccounts>();
 // Every external door's decisions, once. Apple and Microsoft were two doors each hand-rolling the
 // same checks, and every defect found on one was then found on the other; a third provider would
 // have inherited none of the fixes. Controllers keep only token validation and HTTP.
@@ -273,6 +281,10 @@ builder.Services.AddScoped<Ben.Data.WebApi.Services.Scheduling.IScheduledJob,
 // the audit log, which item 191 settled is archived rather than deleted.
 builder.Services.AddScoped<Ben.Data.WebApi.Services.Scheduling.IScheduledJob,
                            Ben.Data.WebApi.Services.Scheduling.LogRetentionJob>();
+// Item 239: posts what the outbox holds, retries what did not go, and clears the words out of
+// letters that went a month ago. Nothing else sends mail any more.
+builder.Services.AddScoped<Ben.Data.WebApi.Services.Scheduling.IScheduledJob,
+                           Ben.Data.WebApi.Services.Scheduling.MailSenderJob>();
 builder.Services.AddScoped<Ben.Data.WebApi.Services.PlatformMessageService>();
 builder.Services.AddScoped<Ben.Data.WebApi.Services.RequestReviewNotifier>();
 // Item 206: mails a case's clients when the case changes state or a visit is scheduled.
@@ -300,8 +312,47 @@ builder.Services.AddScoped<Ben.Data.WebApi.Services.Billing.StripeIntegration.St
 builder.Services.AddScoped<Ben.Data.WebApi.Services.Billing.SubscriptionLimitGuard>();
 // Item 233: a tour added mid-period is charged for the days that are left.
 builder.Services.AddScoped<Ben.Data.WebApi.Services.Billing.TourAddOnService>();
+
+// Hosted events (item 235). The sync keeps each event's one umbrella calendar row saying what the
+// event says; the entitlement is the single place that answers "may this go live, and what does it
+// cost them".
+builder.Services.AddScoped<Ben.Data.WebApi.Services.Events.HostedEventCalendarSync>();
+builder.Services.AddScoped<Ben.Data.WebApi.Services.Events.HostedEventEntitlement>();
+// Item 235 phase 4: four jobs, four keys. Arranging an event is not deciding who comes, deciding
+// is not standing at the door, and none of the three is spending the group's money.
+builder.Services.AddScoped<Ben.Data.WebApi.Services.Access.HostedEventAccess>();
+// Item 235 phase 1B: warns a credit's holder thirty days before it lapses. It only speaks — an
+// unspent credit past its date is gone by the clock, so there is no state for a job to get wrong.
+builder.Services.AddScoped<Ben.Data.WebApi.Services.Scheduling.IScheduledJob,
+                           Ben.Data.WebApi.Services.Scheduling.EventCreditExpiryJob>();
+// Item 235 phase 3: moves an event from published to on-now to over to filed away, on the venue's
+// own clock, so no screen has to work it out from two dates and a time zone.
+builder.Services.AddScoped<Ben.Data.WebApi.Services.Scheduling.IScheduledJob,
+                           Ben.Data.WebApi.Services.Scheduling.HostedEventLifecycleJob>();
+// Item 235 phase 4: gives back the places nobody answered for in time. Without it a guest who
+// picked three seats and forgot would keep them out of everybody's reach for ever.
+builder.Services.AddScoped<Ben.Data.WebApi.Services.Scheduling.IScheduledJob,
+                           Ben.Data.WebApi.Services.Scheduling.HoldExpiryJob>();
+// Item 235 phase 12: the thank-you the morning after the last night, with the pictures and what is next.
+builder.Services.AddScoped<Ben.Data.WebApi.Services.Scheduling.IScheduledJob,
+                           Ben.Data.WebApi.Services.Scheduling.HostedEventThankYouJob>();
+// Item 235 phase 12: an event's files go 90 days after it ends, with warnings a month and a week before.
+builder.Services.AddScoped<Ben.Data.WebApi.Services.Scheduling.IScheduledJob,
+                           Ben.Data.WebApi.Services.Scheduling.HostedEventRetentionJob>();
 // Item 233: the mail a tour guest gets, with the walk attached as a calendar file.
 builder.Services.AddScoped<Ben.Data.WebApi.Services.Tours.TourGuestMailer>();
+builder.Services.AddScoped<Ben.Data.WebApi.Services.Events.EventGuestMailer>();
+// Item 235 phase 8: a request is answered because somebody was told. The first of a rush is written
+// about on the next pass and the rest collapse into one summary; the digest is the daily (or weekly)
+// letter for everybody who would rather not hear as it happens, and the safety net for those who do.
+builder.Services.AddScoped<Ben.Data.WebApi.Services.Events.EventOrganizerMailer>();
+builder.Services.AddScoped<Ben.Data.WebApi.Services.Scheduling.IScheduledJob,
+                           Ben.Data.WebApi.Services.Scheduling.EventBookingAlertJob>();
+builder.Services.AddScoped<Ben.Data.WebApi.Services.Scheduling.IScheduledJob,
+                           Ben.Data.WebApi.Services.Scheduling.EventBookingDigestJob>();
+// Item 235 phase 9: a proved claim to run a place takes effect once its week for objections passes.
+builder.Services.AddScoped<Ben.Data.WebApi.Services.Scheduling.IScheduledJob,
+                           Ben.Data.WebApi.Services.Scheduling.VenueClaimJob>();
 // Item 233: how long a file stays, for the plan it arrived under.
 builder.Services.AddScoped<Ben.Data.WebApi.Services.Media.MediaRetentionPolicy>();
 // Item 233: warns people what is about to go, then takes it.
@@ -684,6 +735,9 @@ if (app.Configuration.GetValue("SeedData:Enabled", true))
     await Ben.Data.WebApi.SeedData.DevelopmentRosterSeeder.SeedAsync(app.Services, app.Configuration);
     // Last: needs the tiers, the groups and the past public event all to exist already.
     await Ben.Data.WebApi.SeedData.BillingDemoSeeder.SeedAsync(app.Services, app.Configuration);
+    // Item 235's two plans. Needs the host group from the development seeders above, and makes
+    // its own venue — a hotel with described rooms is the one thing the site had no example of.
+    await Ben.Data.WebApi.SeedData.HostedEventDemoSeeder.SeedAsync(app.Services, app.Configuration);
 
     // ── The backfills run a SECOND time, and have to ─────────────────────────
     //

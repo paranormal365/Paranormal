@@ -1,0 +1,29 @@
+/* Dining tables (item 235 phase 13). */
+
+.dining-party--chosen {
+    background: var(--bs-primary-bg-subtle);
+    outline: 2px solid var(--bs-primary);
+    outline-offset: -2px;
+}
+
+.dining-table .card-header {
+    background: var(--bs-tertiary-bg);
+    color: var(--bs-body-color);
+    width: 100%;
+}
+
+.dining-table .card-header:disabled {
+    opacity: 1;
+}
+
+/* A table that can take the chosen party says so before it is tapped. */
+.dining-table--open {
+    border-color: var(--bs-primary);
+}
+
+@media print {
+    .dining-table {
+        break-inside: avoid;
+        border-color: #000;
+    }
+}

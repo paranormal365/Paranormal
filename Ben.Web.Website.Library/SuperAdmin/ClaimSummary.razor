@@ -1,0 +1,35 @@
+@namespace Ben.Web.Website.Library.SuperAdmin
+@using Ben.Data.Common.Enums
+@using Ben.Service.Models.Entities
+@using Ben.Web.Services
+@inject IBenUserState UserState
+
+@* One venue claim, as a reviewer reads it (item 235 phase 9). *@
+
+<div>
+    <div class="fw-semibold">@Claim.OrganizationName · <a href="@($"/places/{Claim.PlaceId}")">@Claim.PlaceName</a></div>
+    <div class="small text-secondary">
+        @Claim.ClaimantName, as @Claim.Role.ToString().ToLowerInvariant()
+        · asked @Claim.AskedUtc.ToViewerLocalTime(UserState).ToDisplayDate()
+        @if (Claim.CodeSentTo is { } to)
+        {
+            <text> · code to @to</text>
+        }
+        @if (Claim.State == VenueClaimState.Proved && Claim.ObjectionsCloseUtc is { } closes)
+        {
+            <text> · proved; takes effect @closes.ToViewerLocalTime(UserState).ToDisplayDate()</text>
+        }
+    </div>
+    @if (Claim.Evidence is { Length: > 0 } evidence)
+    {
+        <div class="small mt-1" style="white-space:pre-line;">“@evidence”</div>
+    }
+    @if (Claim.ObjectionText is { Length: > 0 } objection)
+    {
+        <div class="small mt-1 text-danger">Objection from @(Claim.ObjectingOrganizationName ?? "a group"): “@objection”</div>
+    }
+</div>
+
+@code {
+    [Parameter, EditorRequired] public VenueClaimRecord Claim { get; set; } = null!;
+}

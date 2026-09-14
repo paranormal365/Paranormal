@@ -378,6 +378,8 @@
             new NavItem("Group Ads",            "star",   "/admin/org-ads"),
             new NavItem("Merge Groups",         "git-merge", "/admin/merge-groups"),
             new NavItem("Duplicate Places",     "map-pin", "/admin/place-duplicates"),
+            // Item 235 phase 9: who runs a place, when a code could not settle it.
+            new NavItem("Venue Claims",         "key",    "/admin/venue-claims"),
             // Sessions whose readings are not on this server — a Playwright run against a shared
             // database leaves the row here and the bytes on the machine that ran it.
             new NavItem("Orphaned Sessions",    "slash",  "/admin/orphaned-sessions"),
@@ -404,6 +406,11 @@
             new NavItem("Tax Rates",     "percent",     "/admin/tax-rates"),
             new NavItem("Referrals",     "users",       "/admin/referrals"),
             new NavItem("Member Seats",  "user-plus",   "/admin/member-seats"),
+            // Item 235. Beside the seats, because both are things a group bought that a person
+            // sometimes has to unpick by hand.
+            new NavItem("Event Credits", "gift",        "/admin/event-credits"),
+            // Phase 17b: every hosted event, removal and appeals.
+            new NavItem("Events",        "calendar",    "/admin/events"),
         }),
         new NavItem("System", "settings", children: new[]
         {

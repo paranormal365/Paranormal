@@ -1,0 +1,57 @@
+[
+  {
+    "id": "fb8d257c-09b3-458a-adc8-30bac33e5543",
+    "hostedEventId": "40000002-0000-0000-0000-000000000002",
+    "eventName": "Thomas House S\u00E9ance Weekend",
+    "eventUrlName": "thomas-house-seance-weekend",
+    "organizationName": "Paranormal365",
+    "organizationUrlName": "paranormal365",
+    "venueName": "The Thomas House Hotel",
+    "startsOn": "2026-10-16T00:00:00",
+    "endsOn": "2026-10-17T00:00:00",
+    "partySize": 2,
+    "kind": 1,
+    "status": 1,
+    "decisionNote": null,
+    "guestAcknowledgedUtc": null,
+    "cancellationRequestedUtc": null,
+    "note": null,
+    "nights": [],
+    "guests": [],
+    "holdExpiresUtc": null,
+    "sessions": [],
+    "mayReview": false,
+    "hasReviewed": false
+  },
+  {
+    "id": "029b50a6-c0e4-4100-bf3f-5c7f5d1d2eae",
+    "hostedEventId": "40000002-0000-0000-0000-000000000003",
+    "eventName": "An Evening of Evidence",
+    "eventUrlName": "an-evening-of-evidence",
+    "organizationName": "Paranormal365",
+    "organizationUrlName": "paranormal365",
+    "venueName": "The Thomas House Hotel",
+    "startsOn": "2026-10-30T00:00:00",
+    "endsOn": "2026-10-30T00:00:00",
+    "partySize": 1,
+    "kind": 0,
+    "status": 3,
+    "decisionNote": "Clearing up after a test.",
+    "guestAcknowledgedUtc": null,
+    "cancellationRequestedUtc": null,
+    "note": null,
+    "nights": [
+      {
+        "hostedEventNightId": "7d686485-f031-4741-86ad-6bd4de212e85",
+        "date": "2026-10-30T00:00:00",
+        "hostedEventLayoutUnitId": "e925d379-f396-4453-a23a-4e08b4c22304",
+        "unitName": "A1"
+      }
+    ],
+    "guests": [],
+    "holdExpiresUtc": null,
+    "sessions": [],
+    "mayReview": false,
+    "hasReviewed": false
+  }
+]

@@ -1,0 +1,26 @@
+[
+  {
+    "hostedEventId": "40000002-0000-0000-0000-000000000002",
+    "organizationId": "afc81ae7-98fa-44b5-aa04-5ef24fe6c2d5",
+    "eventName": "Thomas House S\u00E9ance Weekend",
+    "organizationName": "Paranormal365",
+    "venueName": "The Thomas House Hotel",
+    "startsOn": "2026-10-16T00:00:00",
+    "endsOn": "2026-10-17T00:00:00",
+    "timeZoneId": "America/Chicago",
+    "roleLabel": null,
+    "tonight": false
+  },
+  {
+    "hostedEventId": "40000002-0000-0000-0000-000000000003",
+    "organizationId": "afc81ae7-98fa-44b5-aa04-5ef24fe6c2d5",
+    "eventName": "An Evening of Evidence",
+    "organizationName": "Paranormal365",
+    "venueName": "The Thomas House Hotel",
+    "startsOn": "2026-10-30T00:00:00",
+    "endsOn": "2026-10-30T00:00:00",
+    "timeZoneId": "America/Chicago",
+    "roleLabel": null,
+    "tonight": false
+  }
+]

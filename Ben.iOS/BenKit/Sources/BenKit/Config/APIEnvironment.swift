@@ -65,6 +65,25 @@ public struct APIEnvironment: Sendable, Equatable, Codable, Hashable {
         return true
     }
 
+    /// The website this API belongs to, for the pages the app sends people to rather than rebuilding
+    /// (item 235 phase 14: booking a hosted event's places).
+    ///
+    /// Production's API lives under `/webapi` on the site's own host, so the site is the base without that
+    /// segment. The local API on :5252 belongs to the local website on :5078, as `launchSettings` has them.
+    public var websiteURL: URL {
+        guard var components = URLComponents(url: baseURL, resolvingAgainstBaseURL: true) else { return baseURL }
+        if components.path.lowercased().hasSuffix("/webapi") {
+            components.path = String(components.path.dropLast("/webapi".count))
+        }
+        if components.port == 5252 { components.port = 5078 }
+        return components.url ?? baseURL
+    }
+
+    /// A website page by its path, like `o/paranormal365/events/seance-weekend`.
+    public func websiteURL(path: String) -> URL {
+        websiteURL.appending(path: path)
+    }
+
     /// Builds the absolute URL for an endpoint, preserving any base path.
     public func url(for endpoint: Endpoint) -> URL? {
         guard var components = URLComponents(url: baseURL, resolvingAgainstBaseURL: true) else { return nil }

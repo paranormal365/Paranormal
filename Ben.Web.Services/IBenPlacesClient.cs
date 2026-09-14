@@ -33,8 +33,17 @@ public interface IBenPlacesClient
     /// <summary>Edits a room.</summary>
     Task<PlaceRoomRecord?> UpdatePlaceRoomAsync(Guid orgId, Guid placeId, Guid roomId, SavePlaceRoomRequest request, CancellationToken token = default);
 
-    /// <summary>Removes a room.</summary>
-    Task<bool> DeletePlaceRoomAsync(Guid orgId, Guid placeId, Guid roomId, CancellationToken token = default);
+    /// <summary>
+    /// Removes a room, keeping the server's reason when it refuses.
+    /// </summary>
+    /// <remarks>
+    /// A bare bool used to be enough, and stopped being enough on 2026-09-12 when the server began
+    /// refusing a room that is on an event's plan by naming the event. A screen that threw that
+    /// sentence away had to guess at one, and a guess is how "an event may still be offering it"
+    /// gets shown to somebody whose room is not on any plan at all.
+    /// </remarks>
+    Task<(bool Deleted, string? Error)> DeletePlaceRoomAsync(
+        Guid orgId, Guid placeId, Guid roomId, CancellationToken token = default);
 
     /// <summary>One place, for the place page header and map.</summary>
     Task<PlaceRecord?> GetPlaceAsync(Guid placeId, CancellationToken token = default);

@@ -11709,6 +11709,57 @@ Prerequisites already true after 233: tours are public with a start address and 
 carry guides and capacity, and the guest mail knows how to say all of it.
 
 
+---
+
+## 235. Hosted events: the event creator band (IN PROGRESS, branched 2026-09-11)
+
+The third paying customer. Ben, 2026-09-11: *"In the price bands, there are personal, Ghost Tours
+and Event Creators. The one I don't think we have addressed is the Event Creator bands."*
+
+**What an event creator is.** A venue like The Thomas House Hotel, or any group that buys the right
+to hold one: multi-night events, rooms that each sleep so many, day passes sold to people not
+staying, a programme of optional classes with their own capacity, check-in and check-out, checklists,
+menus, files kept with the event, staff with different permissions, a flashy public page, ads, QR
+passes issued when a booking is confirmed, attendees sharing photos with each other on the phone,
+and one group hosting at another's venue by permission.
+
+**And it is not about ghosts.** Ben, the same day: *"The idea is to allow someone to schedule and
+track and organize an event that is not ghost hunting related."* A dinner-theatre run, a retreat and
+a Halloween lock-in are the same record. The copy stays neutral; the paranormal surfaces (evidence
+queue, archive publication) are per-event switches, off by default for an ordinary event.
+
+**Plan of record: `README-hosted-events-235.md`** on branch `feature/hosted-events-235` (from
+`develop` `d9c8a94d`). Thirteen phases, each independently shippable: the event package and its
+billing; bookings with rooms and menus; QR passes; sessions; staff, the door and checklists; files;
+the page, feed and ads; venue profiles and the site's first org-to-org grant; the attendee room; the
+phone's Event section; ticketing (design only); docs. **Event credits ship in this arc**, as phase
+1B directly after the event package — without them nobody outside a business plan could publish
+anything at all.
+
+**The model in one line:** a `HostedEvent` is the product, the way a `Tour` is, and it owns exactly
+one `OrgCalendarEvent` umbrella row — so the shipped phone, the public list, the reminder job, the
+`.ics` and the `/o/{org}/events/{slug}` URL all keep working with no change at all.
+
+**Decisions Ben took 2026-09-11:** the site takes no guest money from guests (the host confirms a
+booking; passes issue on confirmation). **An event is sold as a credit, not metered** — `$99` buys
+one event for anybody, credits expire a year after purchase with a thirty-day warning, and one is
+spent at publish behind a confirmation that says what it costs and that it does not come back.
+Metering an occasional weekend at a tour's monthly rate would have priced a hotel weekend as a walk
+round a block, earned less, and reached none of the groups that run one fundraiser a year. The flat
+business plan stays for people who run events for a living, capped by `ActiveHostedEvents` rather
+than metered; `HauntedProperty` joins the business kinds only so it resolves to that plan.
+Publishing is the single moment that spends a credit or occupies a slot, and an event stops counting
+14 days after its last night.
+
+**Open question in the README:** whether a run of separate dates (the resident play company) lands
+its `DatesAreSeparate` flag in phase 1.
+
+**Phase 0 done 2026-09-11:** every append-only value fixed before anything depends on the numbers —
+`OrganizationPermissionArea.Events`, six `OrganizationSecurityTable` values, four `SubscriptionLimit`
+values, three `TierCapability` values, four `CmsSectionType` values, `OrgMessageChannel.EventRoom`,
+and five new enums. Three guards caught what the appends broke, which is what they are for: the
+permission map, the role editor's rows, and the permissions endpoint's probe list. A new
+`TierLabelCoverageTests` refuses a cap or capability a SuperAdmin would have to set by its enum name.
 
 ---
 
@@ -11985,3 +12036,457 @@ drew, with the room named automatically and a second visit lining up with the fi
 no competitor in this space has. The photo-real walk-through is the part people will ask for and
 the part to resist promising until the plain version has proved itself on a real night in a real
 cellar.
+
+
+---
+
+## 237. The user manager: saying at a glance who somebody is, and what they do here (SUPERADMIN — open, mostly doable now)
+
+Ben, 2026-09-12, after item 236: *"more doable than what we have listed as 236 — probably."* He is
+right, and most of it is reading data the site already stores rather than collecting anything new.
+Four threads, deliberately separated because they are worth very different amounts and one of them
+is a **live defect** rather than an enhancement.
+
+**Grounding, checked against the tree the day this was written.** `SignInEvent` already records
+`AppUserId`, `Utc`, `Succeeded` and `Method` (`password`, `apple`, `handoff`, …). `UserEmail`
+already has `IsValidated`, `ValidationToken` and `DateValidated`. `/admin/users` is
+`Ben.Web.Website.Library/User/AdminUsers.razor`, a Telerik grid whose Actions column uses
+`<BenIcon Name="eye" />`. `ApexChart.razor` already themes charts to the site. So threads A, B and D
+below are mostly wiring; thread C is the only one that needs anything built from nothing.
+
+---
+
+### A. ✅ FIXED 2026-09-12 (`fix/verify-a-new-email`, merged) — and this entry had it partly wrong
+
+> **The correction, first.** This entry was written claiming the verification flow did not exist.
+> It did. `CreateEmail` already refused public, `UpdateEmail` already refused publishing an
+> unvalidated address, re-typing the address already cleared validation and unpublished it, and the
+> whole chain — `send-validation`, the emailed link, the anonymous `/validate-email/{token}` page,
+> the redeem endpoint, the seven-day expiry, the one-minute cooldown — was built, tested and
+> working. All four columns existed and three of them were being written.
+>
+> **Two things were genuinely broken, and the second is what Ben hit.**
+>
+> 1. **`IsPrimary` was governed by nothing**, on create or update. Primary is the address a person
+>    is presented by, so an unproven one taking it is the same mistake as publishing it, only
+>    quieter — the rule public already had. Said honestly: nothing today routes mail by the primary
+>    `UserEmail` (the site writes to the Identity account address, which has its own confirmation),
+>    so this was a wrong label rather than mail redirected. Fixed at the rule level anyway, because
+>    the day something reads it, it becomes the other kind of defect. Changing the address of a
+>    primary row is now refused outright, since re-typing clears validation and a row that stayed
+>    primary through that lands in exactly the state the rule prevents.
+> 2. **No confirmation was ever sent on add.** The row was created with no token, and the link only
+>    went if somebody found a button most people never press — so the address sat unconfirmed for
+>    ever and could never become primary or public. Adding an address IS the request to confirm it,
+>    so create now issues the link immediately through the same helper the resend button uses.
+>    Behaviour change pinned by its own test: asking again inside the minute is throttled.
+>
+> **On the screen:** Primary is disabled until confirmed, with the note Public already had, defined
+> once because it is one rule; and a first address no longer defaults to primary, because a tick
+> the save would refuse is a tick that lied.
+>
+> 32 controller tests, proved to discriminate. `ProfileEmailConfirmationTests` is written and
+> compiles but is **unrun** — the e2e runner refuses while the dev hosts hold port 5252.
+>
+> **Still open from this thread:** the shared verified-tick component for two-factor, phone and
+> linked providers. Email already had a *Confirmed* badge.
+
+### A (original note, kept for the record): an email set primary and public without ever being verified
+
+Ben: *"I just updated my account in the profile by adding a new e-mail. I set it as primary and
+public. Shouldn't we verify that?"*
+
+**Yes, and the columns to do it already exist and are not being used.** `UserEmail.IsValidated`,
+`ValidationToken` and `DateValidated` are on the table; the add-an-email flow writes none of them.
+So today somebody can put any address on their public profile, and make it primary, with no proof
+they can read it. That is worse than untidy:
+
+- A **public** address nobody proved they own can be used to impersonate somebody, or to put a
+  stranger's real address on a page they never asked to appear on.
+- A **primary** address is where the site writes. An unverified one silently redirects a person's
+  own mail — including anything the account recovery path ever sends there.
+
+This is the same rule the site already keeps everywhere else: *say-so before it is seen*, and the
+provider-verified-address rule in `ExternalSignInService` exists precisely because an unverified
+claim on an address is not proof of holding it.
+
+**What to build.** Adding an address sends a confirmation to it and the row stays `IsValidated =
+false` until the link is followed. Unverified means: **may not be primary, may not be public**, and
+says so on the form rather than accepting and quietly ignoring the ticks. A resend button beside it,
+because a confirmation that never arrives is the commonest failure and the profile already offers
+resend for the account address. Existing rows are grandfathered as-is rather than mass-invalidated —
+telling everybody their address is suddenly unverified would be a support day for a problem nobody
+has yet — but a row that has never been validated cannot become primary or public from now on.
+
+**Then the tick.** A small check beside a verified address with a *Verified email* tooltip, and the
+same treatment wherever a fact about an account is proved rather than asserted: two-factor on,
+Apple or Microsoft linked, phone verified. One shared component, because four screens inventing four
+ticks is how they end up meaning four different things.
+
+### A2. ✅ FIXED 2026-09-12 — the profile did not say it had saved
+
+Ben: *"when I returned to my profile page, it didn't say that it was updated."* Adding an email
+succeeded and the screen said nothing. Whatever the enhancements below come to, **a save that
+reports nothing is the bug**: the person cannot tell the difference between "saved" and "silently
+refused", and this codebase has a standing rule that a refusal the UI discards is worse than no
+rule. Fix with the toast the rest of the site uses, naming what changed.
+
+---
+
+### B. Icons that say what somebody is
+
+Ben wants the user manager to show, at a glance: who is paying, who is verified, who is a personal
+account, who owns a ghost tour, who is an employee of one, and so on — with a popover for anybody
+who is several of those at once.
+
+**One correction, and it is small.** The site's icons are `BenIcon`, a sprite of the **Feather** set
+(575 symbols) that replaced `TelerikSvgIcon`; Bootstrap Icons is not loaded and switching sets
+wholesale would restyle every screen. But Ben's actual vocabulary is nearly all there already:
+
+| Ben asked for | Feather has |
+|---|---|
+| `person-fill-add` | `user-plus` |
+| `person-fill-check` | `user-check` |
+| `person-fill-x` | `user-x` |
+| `person-gear` / `person-fill-gear` | **nothing** — the one real gap |
+
+So: use the Feather names for the three that exist, and for `person-gear` add that one Bootstrap
+Icons symbol into our own sprite. The sprite is ours and a symbol is just a `<symbol>` element; one
+borrowed glyph is far cheaper than a second icon set, and it keeps every screen on one component.
+Replacing the eyeball with a person-and-gear on the Actions column is right — *view* is not what
+that button does, it opens the person's management view.
+
+**The badges themselves.** A column of small, consistent marks, each one a fact and not a guess:
+
+| Mark | Means |
+|---|---|
+| Personal account | Not a member of any organization |
+| Group member / manager / owner | Their highest `OrganizationMemberRole` |
+| Ghost tour owner / employee | The above, where the org is `OrganizationKind.GhostWalkingTour` |
+| Event organizer / employee | The same, for `PublicEventProvider` |
+| Venue | `HauntedProperty` |
+| Verified | Account address confirmed, and (per A) that means proved |
+| Paying | An **Active** subscription right now, on their own account or an org they own |
+| Two-factor | On |
+| Apple / Microsoft | An external login is linked |
+
+**Colour carries one meaning only: green is money in.** Ben's instinct — *"when a person is paying
+money currently, maybe we color the icon green vs base"* — is right, and it works precisely because
+nothing else is coloured. The moment a second thing is green the column stops answering the question
+it exists for. Everything else is the base weight.
+
+**The popover is the deliverable, not the badges.** Most people are one thing; some are five, and a
+row cannot show five without becoming unreadable. So a reusable component in the library — Ben asked
+for it in the library and that is right, because the same "who is this person, everywhere" answer is
+wanted on the org member list, on a case's contacts and on a booking's lead guest. It lists every
+position: the organization, the role, whether they own it, whether they are staff, whether they are
+merely an attendee, and since when. One query behind it, one component in front of it.
+
+**Look.** Ben: *"the site should pop and sizzle."* The floor is the tour page; the badges are small,
+quiet and consistent, and the popover is where the richness goes. A grid row that sizzles is a grid
+row nobody can scan.
+
+---
+
+### C. What we can honestly say about where people spend their time
+
+Ben: *"are we able to determine how long they were on the site and where they spent most of their
+time? If they looked at any ads, groups, events, tours, etc and how many times which ones."*
+
+**Partly, and the honest answer differs sharply by question.**
+
+| Question | Can we answer it today? |
+|---|---|
+| How many times somebody signed in, and when they last did | **Yes, now.** `SignInEvent` has every row already. This is a query, not a feature. |
+| Which method they used — password, Apple, Microsoft | **Yes, now.** `Method` is on the same row. |
+| Which pages they opened, and how often | **Not today.** Nothing records a page view. Adding it is ordinary work: one row per view, or a rolled-up counter per person per surface per day. |
+| How long they were on the site | **Only ever an estimate.** A browser does not tell a server when somebody wanders off; the usual trick is the gap between requests with a session cut-off, and it is wrong for anybody who reads one long page. Report it as "active minutes" with the definition written on the screen, or not at all. |
+| Which ads, groups, events and tours they looked at, and how many times | **Not today, and this is the one with a cost.** It means recording, per person, what they read — which is a different kind of data from anything the site currently keeps about members, let alone about signed-out visitors. |
+
+**The privacy line, and it should be drawn before anything is built.** This site's whole posture is
+that it holds less than it could: pseudonyms on public case pages, two keys before a member's photo
+reaches a client, addresses withheld for private residences. A per-person reading history is the
+first thing that would cut against that, and it would sit in the same database as people's home
+addresses.
+
+The recommendation is therefore: **count, do not follow.** Aggregate counters — how many views this
+tour had, what hour of day sign-ins cluster in, how the sections compare — answer every question Ben
+actually named as a reason (*"it is just to determine where to focus development time"*) and none of
+them need a per-person trail. Where a per-person number is genuinely wanted, keep it to the ones
+already kept for another reason: their own bookings, their own sessions, their own sign-ins.
+
+If a per-person trail is later wanted anyway, it needs: a retention window, a line in `/privacy`, an
+exclusion for signed-out visitors, and it must be in what an account deletion removes.
+
+### D. Charts on the manage-user page
+
+Ben wants cards above or below the grid: when people sign in, where they spend time, how the
+sections compare — group, iPhone, iPad, organization event, ghost tour, ads, maps.
+
+**`ApexChart.razor` already exists and already themes to the site**, including re-reading the
+palette when the theme changes, so a chart is a component call rather than a project. And
+`AdminStatsController` already answers the dashboard's numbers, which is where these belong beside.
+
+Buildable **immediately**, from `SignInEvent` alone:
+
+- Sign-ins by hour of day, averaged — the "when do people actually turn up" chart, which is the one
+  Ben named first and the one that tells a deployment window.
+- Sign-ins by day, with failures alongside successes; a spike in failures is an incident.
+- Method split — password against Apple against Microsoft — which is the number that says whether
+  Sign in with Apple was worth the fortnight it cost.
+- New accounts by week, against sign-ins, which is retention in the only form we can currently prove.
+
+Buildable **after C's counters exist**: section comparison, per-surface time, ad and tour view
+counts. Not before, and the cards should not be drawn with placeholder data in the meantime — a
+chart of nothing looks like a chart of zero.
+
+---
+
+### Suggested order
+
+| Slice | Why it goes here |
+|---|---|
+| **1. Verify a new email; refuse primary and public until it is** | It is the defect, and it is small |
+| **2. The saved-toast on the profile** | Same screen, same afternoon |
+| **3. Verified ticks, one shared component** | Reads what slice 1 now writes |
+| **4. The badge column and the positions popover** | The visible half, and the popover is reusable straight away |
+| **5. Sign-in charts on `/admin/users`** | Pure query over data already held |
+| **6. Aggregate view counters** | Needs the privacy decision first |
+| **7. Per-surface time, if still wanted** | Needs 6, and an honest definition of "time" |
+
+Slices 1 to 5 are all reading or writing things the schema already has. Slice 6 is the first one
+that changes what the site knows about people, and it should be a separate decision with its own
+sentence in `/privacy`.
+
+## 238. Telling the venue somebody is asking: reservation alerts, a digest, and the staff room (item 235 follow-on — open, doable now)
+
+Ben, 2026-09-12, while phase 2.4 was being built:
+
+> Add future enhancement where we can send out notices to event organizers with summaries of who
+> is confirmed, any new reservations to contact with a link for them to log in and get the contact
+> information for the attendee and also ability to add this to the organizer or employee internal
+> messages. This might be triggered by someone signing up to reserve room or seat to give employee
+> notice new people are requesting reservation for "X".
+
+**Why it matters more than it sounds.** Everything item 235 built so far is pull: a request lands
+in a queue and waits for somebody to open the board. The bell rows added in phase 2.3 help a person
+who is already on the site. Nobody is *told*. A venue that checks on Monday has left a guest waiting
+since Friday, and a guest who waits three days books somewhere else — so the one number this
+feature moves is how fast a request is answered.
+
+### A. The alert, when somebody asks
+
+Triggered by a request arriving (the guest's own door, the umbrella RSVP, or a confirmed email
+invitation), to every member of the venue who may decide bookings.
+
+- **Say what is being asked for, not that something happened.** "A party of 4 has asked for the
+  Blue Room, Fri–Sat" is actionable; "you have a new notification" is not.
+- **Never carry the guest's contact details.** The letter links to the booking and the person signs
+  in to see who it is. Ben asked for exactly this — *"a link for them to log in and get the contact
+  information"* — and it is also the only version that survives a forwarded email.
+- **Batch, do not flood.** A weekend that sells out in an hour must not send forty letters. One
+  immediate letter, then a rolling window (fifteen minutes is a sensible first guess) that collapses
+  everything else into one "and 12 more".
+- **Per-person opt-out**, because the busiest venue is the one most likely to want only the digest.
+
+### B. The digest
+
+A scheduled summary per event, not per site: who is confirmed, who is still waiting and for how
+long, what is left in each room or seat, and anything undecided inside the booking deadline.
+
+- **Cadence is the venue's**, and the useful default is daily while an event is inside its booking
+  window and weekly outside it. A digest for an event nobody has asked about should not be sent at
+  all — an empty letter every morning is how people learn to filter you.
+- **The oldest undecided request is the headline.** That is the number a venue can act on, and it
+  is the one the bell already computes.
+- Reuses the existing job scheduling; nothing new is needed to run it.
+
+### C. Into the staff room
+
+Ben's *"ability to add this to the organizer or employee internal messages"*. The site already has
+organization messages, so this is a delivery target rather than a new feature: the same alert
+written into the group's own thread so a venue can discuss it where they discuss everything else,
+and so a member with no email still sees it.
+
+- Worth a **thread per event** rather than one per booking, or a busy weekend buries every other
+  conversation the group is having.
+
+### What has to be decided first
+
+- **Which permission receives them.** Today deciding a booking takes the settings key, which is
+  billing-level; phase 5 introduces the `Events` area and per-event staff, and that is the honest
+  audience for this. Building it before phase 5 means sending a venue's bookings to whoever can see
+  its bank details, which is broader than it should be. **So this follows phase 5, not phase 2.**
+- Whether the digest is per event or per venue when a venue runs several at once.
+- Whether an alert should ever go to a non-member (a hired door manager), which is the same
+  question phase 5 asks about non-member staff.
+
+
+## 239. The mail outbox: every letter recorded, retried, and answerable (PLATFORM — 239a SHIPPED 2026-09-12; 239b open)
+
+Ben, 2026-09-12:
+
+> Should we create an email db table and a task to send them so we can timestamp when they are
+> created and when they are sent or if they have been sent. basically in order to verify all
+> e-mails generated get sent and if it doesn't send on the first try it will try to send it on the
+> next try.
+
+**Yes.** This is the transactional-outbox pattern and the site has already been bitten by not
+having it. `AdminMailDiagnosticsController`'s own doc comment records the incident: *"Ben signed up
+on 2026-08-31, received nothing, and there was no way to find out why: the sender swallowed its own
+failure, and the one log line that recorded it was a Warning, below the database sink's Error
+threshold. So the failure left no trace at all."* The diagnostics screen answers "can this machine
+send **right now**"; nothing answers "did **that** letter go, and if not, why, and will it be tried
+again". Today the answer to the second question is always no — every one of the twenty call sites
+catches, logs at Warning, and moves on.
+
+### Why it is cheap: the seam already exists
+
+`IEmailService` (`Ben.Data.Common/Interfaces/IEmailService.cs`) is one interface with one real
+implementation (`SmtpEmailService`) and one method that matters (`SendAsync(EmailMessage)`; the
+three-argument overload defaults into it). So the outbox is a **decorator**, not a rewrite:
+
+- `OutboxEmailService : IEmailService` — writes a row and returns. Registered as `IEmailService`.
+- `SmtpEmailService` stays, registered as itself, used only by the sender job and by
+  `AdminMailDiagnosticsController` (which must keep sending immediately and surfacing the raw
+  exception — a diagnostic that queues is not a diagnostic).
+- `MailSenderJob : IScheduledJob` beside `EventCreditExpiryJob`, claiming and sending.
+
+All twenty callers — Identity's own password and confirmation mail, the tour mailer, the event
+mailer, the client status mailer, the reminder job, the invite doors — are covered without being
+edited.
+
+### The table
+
+`OutboxEmail`: Id, To, Subject, HtmlBody, ReplyTo, Attachments (JSON of name/type/bytes, or a
+child table), **Kind** (a short string like `event-booking-confirmed` so a screen can group and a
+retention rule can differ), correlation ids (OrganizationId?, AppUserId?, a free `SubjectRef`),
+`CreatedUtc`, `Attempts`, `NextAttemptUtc`, `ClaimedUtc`/`ClaimedBy`, **`AcceptedBySmtpUtc`**,
+`FailedUtc`, `LastError`, `BodyScrubbedUtc`. Indexes: `(NextAttemptUtc) WHERE AcceptedBySmtpUtc IS
+NULL AND FailedUtc IS NULL` for the job's only query, and `(CreatedUtc)` for the screen.
+
+### Five things worth deciding, that the one-line ask does not settle
+
+1. **"Sent" must mean "the SMTP server accepted it", not "it arrived."** Naming the column
+   `AcceptedBySmtpUtc` rather than `SentUtc` is the whole difference between an honest screen and
+   one that claims delivery it cannot know. Real delivery needs bounce webhooks from a provider we
+   do not have; that is a later item, and the column name should not pretend otherwise.
+2. **Transient and permanent failures are not the same.** A 5xx for a mailbox that does not exist
+   must not be retried six times; a socket timeout or a 4xx must. MailKit's `SmtpCommandException`
+   carries the status code. Without this split the queue fills with dead addresses and the screen
+   stops being read. Recommended backoff: 1 min, 5, 15, 60, 6 h, 24 h, then `Failed` — about
+   31 hours of trying — and straight to `Failed` on a permanent reply, with the reply text kept.
+3. **A stored body is personal data, and sometimes a credential.** A hosted-event confirmation
+   carries the pass QR inlined as base64; the token behind it is a working door credential. It is
+   already in `HostedEventPasses`, so the outbox adds no new *kind* of secret, but it does put it
+   in a second table and every backup. Recommended: **scrub the body and attachments after
+   acceptance + 30 days, keeping the metadata row for ever** (`BodyScrubbedUtc`), so "did it go"
+   is answerable a year later and "what did it say" for a month. Same shape as the media retention
+   job. Cap the stored body (say 256 KB) and record truncation rather than refusing the enqueue.
+4. **When mail is not configured, enqueue anyway.** Then the day SMTP is switched on, everything
+   queued goes out. This changes what several screens should say — item 235's invite result field
+   is literally called `Sent` and would become `Queued`, and the copyable-link fallbacks stay but
+   stop being the only record. Better semantics, but it is a wording change across the site.
+5. **A crash between "SMTP accepted" and "row marked" sends twice.** Claim-then-send-then-mark
+   makes that window small and one-sided: at worst a duplicate letter, never a lost one. That is
+   the right way round and should be said out loud in the class comment rather than discovered.
+
+### Two steps, because the second is the expensive half
+
+- **239a — the decorator.** `OutboxEmailService` writes through its own `DbContext`; the job sends.
+  Fixes the actual complaint: nothing is lost to a transient failure, every letter is visible, a
+  SuperAdmin can retry one or see why it died. Twenty call sites unchanged. **This is most of the
+  value for a fraction of the work.**
+- **239b — enqueue inside the caller's transaction.** 239a still has a hairline window: a booking
+  saves, the process dies, the letter was never enqueued. Closing it means the enqueue joins the
+  caller's `SaveChanges`, which means the mailers take the caller's `db` — `EventGuestMailer`
+  already does; several others do not. Worth doing for the letters where silence is expensive
+  (a confirmed booking, a password reset, an invitation), not for all twenty.
+
+### The screen
+
+Extend `AdminMailDiagnosticsController` and its page rather than building a second one: a list of
+recent letters with Kind, To, Created, Attempts, state and the last error; filters for Failed and
+Waiting; **Retry now** on one and on all failed; the existing "can this box send" probe stays at
+the top. This is the screen that would have answered the 2026-08-31 question in five seconds.
+
+### 239a SHIPPED, 2026-09-12
+
+Built as designed, with four things worth recording that the design did not predict.
+
+- **`OutboxEmailService` decorates `IEmailService`; `SmtpEmailService` is registered as itself.**
+  All twenty callers were covered without one being edited, as intended.
+- **The diagnostics controller was taking the interface**, so its test-send would have queued
+  instead of proving anything — the one endpoint whose whole purpose is to fail loudly. It now
+  takes the raw sender, and a source guard,
+  `EveryMailerGoesThroughTheOutboxTests`, names the only three files allowed to.
+- **That guard's first run accused `IdentityEmailSender`**, which mentions the sender in a comment
+  and correctly asks for the interface. Guards that read comments cry wolf, and somebody edits the
+  comment to satisfy them, so it strips comments first.
+- **`OrganizationPurgeCoverageTests` fired**, because the outbox carries an `OrganizationId`. The
+  answer was not to purge: a queued letter is not the group's property, and the most important
+  letter a purge can produce is the one telling somebody the group they belonged to is gone.
+  Deleting the rows would take that letter away at the moment it was most needed. The purge clears
+  the link and keeps the letter.
+- **`TierValidationShapeTests` fired** on the retry endpoints answering with a bare string, which
+  MVC serves as text/plain and every client here reads as JSON. They return a record now.
+- Migration `20260912182335_MailOutbox`, two tables, nothing dropped in `Up`, applied to
+  `IsHauntedDb_player`. 17 tests; the backoff table and the wiring were each proved to
+  discriminate. Suite 8,458 pass.
+
+### Sequencing — DECIDED by Ben, 2026-09-12: *"Yes, do that after merging Phase 1"*
+
+**239a and 239b run immediately after item 235 phase 1 merges, before phase 2 (the layout
+designer).** Not part of item 235, but three of its phases add letters (the decision letters
+exist; hold-lapsed and go/no-go land in phases 4 and 3; the digest in phase 8), and phase 1's
+slice D is editing `EventGuestMailer` right now, so mail cannot be touched until that merges.
+Doing it here means every letter item 235 adds from phase 3 onwards is born inside the outbox
+rather than retrofitted into it. Tests: `OutboxEmailServiceTests` (an unconfigured send still enqueues; a body over
+the cap is truncated and says so), `MailSenderJobTests` (transient retries with backoff, permanent
+fails at once, a claimed row is not claimed twice, running twice sends once),
+`MailRetentionTests` (a scrubbed row keeps its metadata), and a source guard
+`EveryMailerGoesThroughTheOutboxTests` (no class outside `SmtpEmailService`, the sender job and the
+diagnostics controller may take `SmtpEmailService` directly).
+
+
+## 240. Two branches parked with real work on them (HOUSEKEEPING — come back to both)
+
+Found on 2026-09-12 while clearing stale worktrees. Both worktrees are gone; **both branches are
+kept and pushed**, and neither is merged. Written down because a branch nobody has a note about is
+a branch nobody remembers, and one of these was only ever in a working directory.
+
+### A. `feature/equipment-make-category-filter` — Ben: *"save the equipment one and make a note to come back to it later"*
+
+Tip `62ce47e6`, pushed. **275 lines that had never been committed at all** — they were sitting
+uncommitted in a worktree and would have gone with it. Committed as an explicit WIP, and **never
+built or tested in that state**, so the first thing to do on picking it up is build it.
+
+What it does, from the diff:
+
+- **Every make stays listed in the picker, even when it has nothing in the chosen category.**
+  Dropping the empty ones hides exactly the make somebody needs the first time anybody registers,
+  say, a FLIR audio recorder — and typing "FLIR" back in is then refused as a probable duplicate,
+  which is a dead end with no way out of it. Labelling is the honest half: the choice stays, it
+  just stops looking like a promise of models underneath it.
+- Loading states on the make and model selects, so a select is never enabled while empty.
+- The empty case says **which** of the three things it is, because broken, still loading, and
+  genuinely nothing here otherwise render identically — and points at the input below that fixes it.
+- Files: `Equipment/MyEquipmentItemEditor.razor`, `Organization/Equipment/OrgEquipmentEditor.razor`,
+  `Help/Content/your-equipment.md`, and 66 lines of `Ben.Web.Playwright/Tests/EquipmentTests.cs`.
+
+**To finish:** build it, run `EquipmentTests` through `scripts/run-e2e.sh --filter EquipmentTests`,
+check the help wording against the shipped screens, then merge. It is self-contained and touches
+nothing item 235 touches.
+
+### B. `claude/xenodochial-pare-b58e81` — the dead stylesheet
+
+Tip `faf4046a`, one commit ahead of master: *"The stylesheet nothing ever loaded, and the three
+things it was hiding"*. Moves 54 lines out of `Ben.Web.Website/wwwroot/css/app.css` into scoped
+component CSS for `FeedPostCard`, `FeedText` and `MailRow` — rules that were never loaded, and so
+three components were rendering without styling somebody had written for them.
+
+**One thing to fix before merging:** it adds `README-dead-app-css-scoped.md` and
+`README-remaining-work-nine-phases.md` at the repository ROOT, which is no longer where those live
+— all 118 of them moved to `ProjectNotes/FeatureHistory/` on 2026-09-12. `git mv` both as part of
+the merge, or the root fills up again.
+

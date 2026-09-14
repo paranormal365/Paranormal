@@ -1,0 +1,23 @@
+{
+  "pass": {
+    "id": "5aad2a81-b9dc-439c-a1d3-e60143e30b03",
+    "hostedEventBookingId": "fb8d257c-09b3-458a-adc8-30bac33e5543",
+    "token": "fixture-pass-token",
+    "imageUrl": "/api/public/event-passes/fixture-pass-token.png",
+    "issuedUtc": "2026-09-13T21:07:58.042912",
+    "revokedUtc": null,
+    "revokedReason": null,
+    "emailedUtc": null,
+    "checkedInUtc": null,
+    "checkedInByName": null,
+    "replacedAnEarlierOne": false
+  },
+  "eventName": "Thomas House S\u00E9ance Weekend",
+  "venueName": "The Thomas House Hotel",
+  "leadName": "Daniel Park",
+  "partySize": 2,
+  "kind": 1,
+  "nights": [],
+  "band": null,
+  "seating": []
+}

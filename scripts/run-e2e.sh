@@ -41,9 +41,49 @@ ROOT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 cd "$ROOT_DIR"
 
 DB_NAME="${BEN_E2E_DB:-IsHauntedDb_e2e}"
-SQL_SERVER="${BEN_E2E_SQL_SERVER:-192.168.1.71,1433}"
-SQL_USER="${BEN_E2E_SQL_USER:-IsHaunted}"
-SQL_PASSWORD="${BEN_E2E_SQL_PASSWORD:-ishaunted}"
+
+# THE SQL LOGIN IS NEVER WRITTEN DOWN HERE.
+#
+# It used to be: `SQL_PASSWORD="${BEN_E2E_SQL_PASSWORD:-ishaunted}"`, a working credential in a
+# public repository. The sweep of 2026-09-02 removed eighteen ACCOUNT passwords from sixteen files
+# and missed this one twice over — once because it is a database login rather than a site account,
+# and once because it is a shell default rather than a `Password=` literal, so the grep that found
+# the others could not see it. Removed 2026-09-12.
+#
+# A default is the same bug wearing a hat, so there is none: the server, user and password are read
+# from the same gitignored appsettings the rest of the harness reads, exactly as
+# scripts/seeded-passwords.sh reads the account passwords, and the script stops with a sentence if
+# they are not there. An environment variable still wins, for a machine pointed somewhere else.
+_E2E_SECRETS="$ROOT_DIR/Ben.Data.WebApi/appsettings.Development.json"
+_e2e_conn_part() {
+  # $1 = the connection-string key to lift out of the dev connection string
+  python3 - "$_E2E_SECRETS" "$1" <<'PYEOF' 2>/dev/null || true
+import json, sys
+try:
+    raw = json.load(open(sys.argv[1]))["ConnectionStrings"]["BenDbConnectionString"]
+except Exception:
+    sys.exit(0)
+wanted = sys.argv[2].lower()
+for part in raw.split(";"):
+    if "=" in part:
+        k, _, v = part.partition("=")
+        if k.strip().lower() == wanted:
+            print(v.strip())
+            break
+PYEOF
+}
+
+SQL_SERVER="${BEN_E2E_SQL_SERVER:-$(_e2e_conn_part 'Server')}"
+SQL_USER="${BEN_E2E_SQL_USER:-$(_e2e_conn_part 'User Id')}"
+SQL_PASSWORD="${BEN_E2E_SQL_PASSWORD:-$(_e2e_conn_part 'Password')}"
+
+if [ -z "$SQL_SERVER" ] || [ -z "$SQL_USER" ] || [ -z "$SQL_PASSWORD" ]; then
+  echo "The e2e database login could not be read from $_E2E_SECRETS."
+  echo "Either restore that file's ConnectionStrings:BenDbConnectionString, or export"
+  echo "BEN_E2E_SQL_SERVER, BEN_E2E_SQL_USER and BEN_E2E_SQL_PASSWORD before running this."
+  exit 1
+fi
+
 CONN="Server=${SQL_SERVER};Database=${DB_NAME};User Id=${SQL_USER};Password=${SQL_PASSWORD};Encrypt=True;TrustServerCertificate=True;"
 
 # Named AFTER the database, and that pairing is load-bearing. The database persists between runs,
@@ -226,12 +266,16 @@ echo "   database: $DB_NAME"
 echo "   uploads : $UPLOADS_DIR"
 echo ""
 
+# BEN_E2E_API_LOG: with no mail server, a link that would have been emailed (picking seats without
+# signing in) is written to the API's log instead, and the browser test that follows one reads it
+# from there. Nothing but a token for a throwaway address on this throwaway database is ever in it.
+#
 # -p:IsTestProject=true is NOT optional: the csproj sets it false to stay out of the solution's
 # test run, and without the override `dotnet test` finds zero tests and EXITS 0 — a silent pass
 # that has been reported as a real one before.
 set +e
 dotnet test Ben.Web.Playwright -p:IsTestProject=true -c Release --nologo \
-  -e BEN_BASE_URL="$WEB_URL" "${PASSTHROUGH[@]:-}" 2>&1 | tee "$LOG_DIR/e2e.log"
+  -e BEN_BASE_URL="$WEB_URL" -e BEN_E2E_API_LOG="$LOG_DIR/api.log" "${PASSTHROUGH[@]:-}" 2>&1 | tee "$LOG_DIR/e2e.log"
 STATUS=${PIPESTATUS[0]}
 set -e
 

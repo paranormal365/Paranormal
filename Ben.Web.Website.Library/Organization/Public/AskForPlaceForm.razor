@@ -1,0 +1,264 @@
+@namespace Ben.Web.Website.Library.Organization.Public
+
+@inject IBenAdminClient AdminClient
+
+@using Ben.Data.Common.Enums
+@using Ben.Service.Models.Entities
+@using Ben.Web.Website.Library.Kit
+@using Ben.Web.Website.Library.Manage.Icon
+
+@* Asking a venue for a place, in words (item 235 phase 6).
+
+   ASKING HOLDS NOTHING, and the form says so before the button rather than after. A guest who
+   thought a request was a booking is a guest who arrives with a suitcase.
+
+   NIGHTS ARE TICKS, BECAUSE TWO OF THREE IS AN ORDINARY BOOKING. Somebody who can only come on
+   the Saturday should not have to ask for the whole weekend and hope; and a day pass is that same
+   tick with no room against it.
+
+   THE ROOM IS A PREFERENCE. The venue puts a party where it can, so this asks what they would
+   like and the answer says plainly that it may be somewhere else. *@
+
+<div class="ask-form" id="hosted-ask">
+
+    @if (_error is { Length: > 0 })
+    {
+        <div class="alert alert-danger py-2" id="ask-error" role="alert">@_error</div>
+    }
+
+    <div class="fw-semibold mb-1">Ask @Hosted.OrganizationName for a place</div>
+    <p class="text-secondary small">
+        Nothing is held until they answer, and nothing is paid here.
+    </p>
+
+    @* ── how long for ─────────────────────────────────────────────────────── *@
+    @if (Plan is { Units.Count: > 0 } || Hosted.DayPassPrice is not null || Hosted.DayPassCapacity is not null)
+    {
+        <div class="btn-group btn-group-sm mb-3 flex-wrap" role="group" aria-label="What to ask for">
+            <button type="button" id="ask-kind-overnight"
+                    class="btn @(_kind == HostedEventBookingKind.Overnight ? "btn-primary" : "btn-outline-primary")"
+                    @onclick="() => _kind = HostedEventBookingKind.Overnight">
+                Staying
+            </button>
+            <button type="button" id="ask-kind-day"
+                    class="btn @(_kind == HostedEventBookingKind.DayPass ? "btn-primary" : "btn-outline-primary")"
+                    @onclick="() => _kind = HostedEventBookingKind.DayPass">
+                Just for the day
+            </button>
+        </div>
+    }
+
+    @* ── which nights ─────────────────────────────────────────────────────── *@
+    <div class="mb-3">
+        <div class="fw-semibold small mb-1">
+            Which @(Hosted.Nights.Count == 1 ? Hosted.DateNoun : $"{Hosted.DateNoun}s")?
+        </div>
+        @foreach (var night in Hosted.Nights)
+        {
+            var thisNight = night;
+            <div class="form-check">
+                <input class="form-check-input" type="checkbox"
+                       id="@($"ask-night-{thisNight.Id}")"
+                       checked="@_nights.Contains(thisNight.Id)"
+                       @onchange="e => Toggle(thisNight.Id, e.Value is true)" />
+                <label class="form-check-label" for="@($"ask-night-{thisNight.Id}")">
+                    @thisNight.Label
+                </label>
+            </div>
+
+            @* The room they would like, on the nights they are staying. A day pass sleeps
+               nowhere, so it is not asked. *@
+            @if (_kind == HostedEventBookingKind.Overnight
+                 && _nights.Contains(thisNight.Id)
+                 && Plan is { Units.Count: > 0 } plan)
+            {
+                <div class="ms-4 mb-2">
+                    <label class="form-label small mb-1" for="@($"ask-unit-{thisNight.Id}")">
+                        Which room, if you have a preference
+                    </label>
+                    <select id="@($"ask-unit-{thisNight.Id}")" class="form-select form-select-sm"
+                            value="@Preferred(thisNight.Id)"
+                            @onchange="e => Prefer(thisNight.Id, e.Value?.ToString())">
+                        <option value="">No preference — put us anywhere</option>
+                        @foreach (var unit in Offered(plan, thisNight.Id))
+                        {
+                            <option value="@unit.Id">@Describe(unit)</option>
+                        }
+                    </select>
+                </div>
+            }
+        }
+    </div>
+
+    @* ── how many ─────────────────────────────────────────────────────────── *@
+    <div class="row g-2 mb-3">
+        <div class="col-6 col-md-3">
+            <label class="form-label small mb-1" for="ask-party">How many of you?</label>
+            <input id="ask-party" type="number" class="form-control" min="1"
+                   max="@Plan?.MaxPartySize" value="@_partySize"
+                   @onchange="e => _partySize = Clamp(e.Value?.ToString())" />
+        </div>
+        <div class="col-12 col-md-9">
+            <label class="form-label small mb-1" for="ask-note">
+                Anything they should know
+            </label>
+            <input id="ask-note" class="form-control" maxlength="500"
+                   placeholder="Optional — allergies, arriving late, a wheelchair"
+                   @bind="_note" @bind:event="oninput" />
+        </div>
+    </div>
+
+    @if (Money() is { Length: > 0 } money)
+    {
+        <p class="text-secondary small">@money</p>
+    }
+
+    <div class="mb-3">
+        <div class="fw-semibold small mb-2">Who this is for</div>
+        <BookingContactFields Draft="_contact" IdPrefix="ask" OrganizationName="@Hosted.OrganizationName"
+                              Changed="StateHasChanged" />
+    </div>
+
+    <button type="button" class="btn btn-primary" id="ask-send"
+            disabled="@(_busy || _nights.Count == 0 || !_contact.IsEnough(withEmail: false))" @onclick="AskAsync">
+        @(_busy ? "Asking…" : "Ask for a place")
+    </button>
+
+    @if (_nights.Count == 0)
+    {
+        <span class="text-secondary small ms-2" id="ask-needs-a-night">
+            Tick at least one @Hosted.DateNoun.
+        </span>
+    }
+</div>
+
+@code {
+    [Parameter, EditorRequired] public PublicHostedEventRecord Hosted { get; set; } = null!;
+
+    /// <summary>The plan, when the event has one, for the rooms a guest may name.</summary>
+    /// <remarks>
+    /// Optional: an Ask event need not have a plan at all — a hall with a hundred places and no
+    /// seats is an ordinary event — and the form is the same one without the pickers.
+    /// </remarks>
+    [Parameter] public PublicHostedEventPlanRecord? Plan { get; set; }
+
+    [Parameter] public EventCallback<MyHostedEventBookingRecord> OnAsked { get; set; }
+
+    private readonly BookingContactDraft _contact = new();
+    private readonly HashSet<Guid> _nights = [];
+    private readonly Dictionary<Guid, Guid?> _preferred = [];
+    private HostedEventBookingKind _kind = HostedEventBookingKind.Overnight;
+    private int _partySize = 1;
+    private string? _note;
+    private string? _error;
+    private bool _busy;
+
+    /// <summary>
+    /// A one-night event is ticked already.
+    /// </summary>
+    /// <remarks>
+    /// Making somebody tick the only box there is is a form asking a question with one answer.
+    /// A run of several is left blank on purpose: which nights is the actual question there.
+    /// </remarks>
+    protected override void OnInitialized()
+    {
+        if (Hosted.Nights.Count == 1) _nights.Add(Hosted.Nights[0].Id);
+    }
+
+    /// <summary>What the account already says about who they are (slice 11d).</summary>
+    protected override async Task OnAfterRenderAsync(bool firstRender)
+    {
+        if (!firstRender) return;
+
+        var mine = await AdminClient.GetMyBookingContactAsync();
+        _contact.Fill(mine.Item);
+        StateHasChanged();
+    }
+
+    private void Toggle(Guid nightId, bool on)
+    {
+        if (on) _nights.Add(nightId);
+        else { _nights.Remove(nightId); _preferred.Remove(nightId); }
+    }
+
+    private string Preferred(Guid nightId)
+        => _preferred.TryGetValue(nightId, out var unit) && unit is { } id ? id.ToString() : "";
+
+    private void Prefer(Guid nightId, string? unitId)
+        => _preferred[nightId] = Guid.TryParse(unitId, out var id) ? id : null;
+
+    private int Clamp(string? typed)
+        => int.TryParse(typed, out var n)
+            ? Math.Clamp(n, 1, Plan?.MaxPartySize ?? 40)
+            : 1;
+
+    /// <summary>
+    /// The rooms worth naming on a night.
+    /// </summary>
+    /// <remarks>
+    /// What the venue has kept back is left out: offering a room that cannot be had produces a
+    /// refusal the guest could have been spared. What somebody else is holding stays in, because a
+    /// request holds nothing and a hold that lapses is exactly the room the next person gets.
+    /// </remarks>
+    private static IReadOnlyList<PublicHostedEventPlanUnitRecord> Offered(
+        PublicHostedEventPlanRecord plan, Guid nightId)
+        => [.. plan.Units.Where(u => plan.Cells
+                .FirstOrDefault(c => c.HostedEventNightId == nightId
+                                  && c.HostedEventLayoutUnitId == u.Id)?.State
+                is not (HostedEventPlanCellState.Blocked or HostedEventPlanCellState.NotOffered))];
+
+    private static string Describe(PublicHostedEventPlanUnitRecord unit)
+    {
+        var holds = unit.Holds is { } capacity ? $" · sleeps {capacity}" : "";
+        var price = unit.Price is { } money ? $" · {money:C0}" : "";
+        return $"{unit.Name}{holds}{price}";
+    }
+
+    /// <summary>What it costs, and who to settle it with — shown and never charged.</summary>
+    private string? Money()
+    {
+        if (_kind == HostedEventBookingKind.DayPass)
+            return Hosted.DayPassPrice is { } day
+                ? $"A day pass is {day:C0}, settled with {Hosted.OrganizationName} and never here."
+                : null;
+
+        var named = _preferred.Values.OfType<Guid>()
+            .Select(id => Plan?.Units.FirstOrDefault(u => u.Id == id)?.Price)
+            .Where(price => price is not null)
+            .ToList();
+
+        return named.Count == 0
+            ? null
+            : $"Those rooms come to {named.Sum(p => p!.Value):C0}, settled with "
+              + $"{Hosted.OrganizationName} and never here.";
+    }
+
+    private async Task AskAsync()
+    {
+        _busy = true;
+        _error = null;
+
+        var nights = _nights
+            .Select(id => new HostedEventBookingNightChoice(
+                id,
+                _kind == HostedEventBookingKind.Overnight
+                    ? _preferred.GetValueOrDefault(id)
+                    : null))
+            .ToList();
+
+        var (asked, error) = await AdminClient.RequestHostedEventBookingAsync(
+            Hosted.Id,
+            new RequestHostedEventBookingRequest(
+                _kind, _partySize, nights, Guests: null,
+                Note: _note?.Trim() is { Length: > 0 } said ? said : null,
+                FirstName: BookingContactDraft.Sent(_contact.FirstName),
+                LastName: BookingContactDraft.Sent(_contact.LastName),
+                Phone: BookingContactDraft.Sent(_contact.Phone)));
+
+        _busy = false;
+
+        if (asked is null) { _error = error ?? "That couldn't be sent just now."; return; }
+
+        await OnAsked.InvokeAsync(asked);
+    }
+}

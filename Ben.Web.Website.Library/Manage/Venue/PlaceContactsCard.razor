@@ -1,0 +1,206 @@
+@namespace Ben.Web.Website.Library.Manage.Venue
+@using Ben.Data.Common.Enums
+@using Ben.Service.Models.Entities
+@using Ben.Web.Services
+@using Ben.Web.Services.WebApi
+@using Ben.Web.Website.Library.Kit
+@inject IBenAdminClient AdminClient
+
+@* How to reach a place, on its own page (item 235 phase 9).
+
+   PUBLIC DETAILS FOR EVERYBODY, PRIVATE ONES FOR THE GROUP THAT KEPT THEM. Ben, 2026-09-13: "Links
+   to website. Phone public and private maybe for scheduling." Each detail says whether it is
+   public, who added it, and — until the venue has vouched for it — that it is somebody's note
+   rather than the venue's word.
+
+   ONCE A VENUE IS CONFIRMED, its public details are its own. Other groups see why they may only add
+   private notes, rather than a switch that silently does nothing. *@
+
+<div class="card mb-4" id="place-contacts">
+    <div class="card-header fw-semibold">Contact</div>
+    <div class="card-body">
+        @if (_list.Failed)
+        {
+            <div class="text-secondary small">@(_list.Reason ?? "We couldn't load this place's contact details.")</div>
+        }
+        else if (_list.Item is { } list)
+        {
+            @if (list.Contacts.Count == 0)
+            {
+                <div class="text-secondary small mb-2" id="place-contacts-empty">Nobody has recorded how to reach this place yet.</div>
+            }
+            else
+            {
+                <ul class="list-unstyled mb-2">
+                    @foreach (var contact in list.Contacts)
+                    {
+                        var c = contact;
+                        <li class="d-flex flex-wrap align-items-center gap-2 py-1 place-contact" data-contact="@c.Id">
+                            <BenIcon Name="@Icon(c.Kind)" />
+                            @if (c.Kind == PlaceContactKind.Website)
+                            {
+                                <a href="@c.Value" target="_blank" rel="noopener nofollow">@c.Value</a>
+                            }
+                            else if (c.Kind == PlaceContactKind.Email)
+                            {
+                                <a href="@($"mailto:{c.Value}")">@c.Value</a>
+                            }
+                            else
+                            {
+                                <a href="@($"tel:{c.Value}")">@c.Value</a>
+                            }
+                            @if (c.Label is { Length: > 0 } label)
+                            {
+                                <span class="text-secondary small">· @label</span>
+                            }
+                            @if (!c.IsPublic)
+                            {
+                                <span class="badge bg-secondary">Private to @c.AddedBy</span>
+                            }
+                            else if (c.IsProvisional && SignedIn)
+                            {
+                                <span class="badge bg-secondary-subtle text-secondary-emphasis border" title="Added by @(c.AddedBy ?? "the site"), not yet confirmed by the venue">
+                                    Added by @(c.AddedBy ?? "the site")
+                                </span>
+                            }
+                            @if (c.CanConfirm)
+                            {
+                                <button type="button" class="btn btn-link btn-sm p-0" disabled="@_busy"
+                                        @onclick="() => ConfirmAsync(c)">That's right</button>
+                            }
+                            @if (c.CanRemove)
+                            {
+                                <button type="button" class="btn btn-link btn-sm p-0 text-danger" disabled="@_busy"
+                                        @onclick="() => RemoveAsync(c)">Remove</button>
+                            }
+                        </li>
+                    }
+                </ul>
+            }
+
+            @if (SignedIn && MyOrgs.Count > 0)
+            {
+                @if (!_adding)
+                {
+                    <button type="button" class="btn btn-outline-secondary btn-sm" id="place-contact-add-open"
+                            @onclick="() => _adding = true">Add a way to reach them</button>
+                }
+                else
+                {
+                    <div class="border rounded p-3" id="place-contact-form">
+                        <div class="row g-2 align-items-end">
+                            <div class="col-6 col-md-3">
+                                <label class="form-label small mb-1" for="place-contact-kind">What</label>
+                                <select class="form-select" id="place-contact-kind" @bind="_kind">
+                                    <option value="@PlaceContactKind.Website">Website</option>
+                                    <option value="@PlaceContactKind.Phone">Phone</option>
+                                    <option value="@PlaceContactKind.Email">Email</option>
+                                </select>
+                            </div>
+                            <div class="col-6 col-md-5">
+                                <label class="form-label small mb-1" for="place-contact-value">Address or number</label>
+                                <input class="form-control" id="place-contact-value" maxlength="320" @bind="_value" @bind:event="oninput" />
+                            </div>
+                            <div class="col-12 col-md-4">
+                                <label class="form-label small mb-1" for="place-contact-label">Whose, or what for</label>
+                                <input class="form-control" id="place-contact-label" maxlength="120"
+                                       placeholder="Front desk" @bind="_label" />
+                            </div>
+                            @if (MyOrgs.Count > 1)
+                            {
+                                <div class="col-12 col-md-5">
+                                    <label class="form-label small mb-1" for="place-contact-org">For</label>
+                                    <select class="form-select" id="place-contact-org" @bind="_orgId">
+                                        @foreach (var org in MyOrgs)
+                                        {
+                                            <option value="@org.OrganizationId">@org.Name</option>
+                                        }
+                                    </select>
+                                </div>
+                            }
+                            <div class="col-12 col-md-7">
+                                <div class="form-check">
+                                    <input class="form-check-input" type="radio" name="place-contact-visibility"
+                                           id="place-contact-public" checked="@_public" disabled="@(list.WhyNoPublic is not null)"
+                                           @onchange="() => _public = true" />
+                                    <label class="form-check-label" for="place-contact-public">Public — anybody can see it</label>
+                                </div>
+                                <div class="form-check">
+                                    <input class="form-check-input" type="radio" name="place-contact-visibility"
+                                           id="place-contact-private" checked="@(!_public)" @onchange="() => _public = false" />
+                                    <label class="form-check-label" for="place-contact-private">Private — only your group, e.g. for scheduling</label>
+                                </div>
+                                @if (list.WhyNoPublic is { Length: > 0 } why)
+                                {
+                                    <div class="form-text" id="place-contact-why-private">@why</div>
+                                }
+                            </div>
+                        </div>
+                        <div class="d-flex gap-2 mt-2">
+                            <button type="button" class="btn btn-primary btn-sm" id="place-contact-save"
+                                    disabled="@_busy" @onclick="AddAsync">Save</button>
+                            <button type="button" class="btn btn-outline-secondary btn-sm" @onclick="() => _adding = false">Cancel</button>
+                        </div>
+                    </div>
+                }
+            }
+
+            @if (_error is { Length: > 0 })
+            {
+                <div class="text-danger small mt-2" role="alert" id="place-contact-error">@_error</div>
+            }
+        }
+    </div>
+</div>
+
+@code {
+    [Parameter, EditorRequired] public Guid PlaceId { get; set; }
+    [Parameter] public bool SignedIn { get; set; }
+    [Parameter] public IReadOnlyList<MyMembershipOrgItem> MyOrgs { get; set; } = [];
+
+    private ItemResult<PlaceContactListRecord> _list;
+    private bool _adding;
+    private bool _busy;
+    private string? _error;
+
+    private PlaceContactKind _kind = PlaceContactKind.Website;
+    private string _value = "";
+    private string? _label;
+    private Guid _orgId;
+    private bool _public = true;
+
+    protected override async Task OnParametersSetAsync()
+    {
+        if (_orgId == Guid.Empty && MyOrgs.Count > 0) _orgId = MyOrgs[0].OrganizationId;
+        _list = await AdminClient.GetPlaceContactsAsync(PlaceId, SignedIn);
+        if (_list.Item?.WhyNoPublic is not null) _public = false;
+    }
+
+    private async Task AddAsync()
+    {
+        await SendAsync(() => AdminClient.AddPlaceContactAsync(PlaceId,
+            new AddPlaceContactRequest(_orgId, _kind, _value, _label, _public)));
+        if (_error is null) { _adding = false; _value = ""; _label = null; }
+    }
+
+    private Task RemoveAsync(PlaceContactRecord c) => SendAsync(() => AdminClient.RemovePlaceContactAsync(PlaceId, c.Id));
+
+    private Task ConfirmAsync(PlaceContactRecord c) => SendAsync(() => AdminClient.ConfirmPlaceContactAsync(PlaceId, c.Id));
+
+    private async Task SendAsync(Func<Task<(PlaceContactListRecord? Result, string? Error)>> send)
+    {
+        _busy = true;
+        _error = null;
+        var (list, error) = await send();
+        _busy = false;
+        if (list is null) { _error = error ?? "That couldn't be saved just now."; return; }
+        _list = ItemResult<PlaceContactListRecord>.Ok(list);
+    }
+
+    private static string Icon(PlaceContactKind kind) => kind switch
+    {
+        PlaceContactKind.Website => "globe",
+        PlaceContactKind.Email => "mail",
+        _ => "phone",
+    };
+}

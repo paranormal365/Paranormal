@@ -1,0 +1,125 @@
+/*
+    The furniture around the plan: a toolbar, a tray, a selection bar (item 235 phase 2).
+
+    ALL THREE WRAP AND NONE OF THEM SCROLL SIDEWAYS. The grid is the one thing on this page allowed
+    its own horizontal scroller; a toolbar that scrolled would hide the Save button off the right
+    of a phone, which is the one control nobody may lose.
+*/
+
+.plan-designer__bar {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: 0.4rem;
+    margin-bottom: 0.75rem;
+}
+
+/* Pushes Undo, Tools and Save to the right on a wide screen, and collapses to nothing on a narrow
+   one, where the toolbar has already wrapped and there is no right to push to. */
+.plan-designer__spacer {
+    flex: 1 1 auto;
+    min-width: 0;
+}
+
+.plan-designer__dirty {
+    color: var(--bs-secondary-color);
+    display: flex;
+    align-items: center;
+}
+
+.plan-designer__phone-note {
+    color: var(--bs-secondary-color);
+    margin-bottom: 0.75rem;
+}
+
+/* ── the tray of rooms ─────────────────────────────────────────────────── */
+/*
+    A tray and not a drag source. HTML5 drag does not exist on a touch screen, and pick-then-place
+    is two taps everywhere rather than a gesture that works on half the devices.
+*/
+
+.plan-designer__tray {
+    border: 1px solid var(--bs-border-color);
+    border-radius: var(--bs-border-radius);
+    background: var(--bs-tertiary-bg);
+    padding: 0.75rem;
+    margin-bottom: 0.75rem;
+}
+
+.plan-designer__tray-how {
+    color: var(--bs-secondary-color);
+}
+
+.plan-designer__tray-floor {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: 0.35rem;
+    margin-bottom: 0.5rem;
+}
+
+.plan-designer__tray-floor:last-child {
+    margin-bottom: 0;
+}
+
+/* The floor's name, wide enough that the rooms under two floors start in the same place. */
+.plan-designer__tray-label {
+    flex: 0 0 auto;
+    min-width: 7rem;
+    font-size: 0.8rem;
+    font-weight: 600;
+    color: var(--bs-secondary-color);
+}
+
+/* What the beds are, under the name: "will the two of us have to share" is the question a host is
+   answering while deciding which rooms to offer. */
+.plan-designer__tray-detail {
+    display: block;
+    font-size: 0.7rem;
+    font-weight: 400;
+    opacity: 0.75;
+}
+
+/* ── the selection bar ─────────────────────────────────────────────────── */
+/*
+    Sticky at the top of its own container rather than fixed to the window: fixed would sit over
+    the last row of a plan on a short screen, which is where somebody working on the back row is
+    looking.
+*/
+
+.plan-designer__selection {
+    position: sticky;
+    top: 0;
+    z-index: 2;
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: 0.4rem;
+    padding: 0.5rem;
+    margin-bottom: 0.5rem;
+    border: 1px solid var(--bs-primary-border-subtle, var(--bs-border-color));
+    border-radius: var(--bs-border-radius);
+    background: var(--bs-body-bg);
+}
+
+.plan-designer__selection-count {
+    font-weight: 600;
+    font-size: 0.85rem;
+    white-space: nowrap;
+}
+
+/* ── phones ────────────────────────────────────────────────────────────── */
+/*
+    Forty-four pixels is the smallest control a finger hits reliably, and the selection bar is
+    where every per-square edit starts once the toolbar has been thinned out.
+*/
+@media (max-width: 767.98px) {
+    .plan-designer__bar .btn,
+    .plan-designer__selection .btn {
+        min-height: 2.75rem;
+    }
+
+    .plan-designer__tray-label {
+        min-width: 100%;
+    }
+}

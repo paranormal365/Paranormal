@@ -62,6 +62,10 @@ public static class MediaProxy
             // unfinished: the browser holds the connection open waiting for bytes that never
             // come, the page never reaches network-idle, and a media page appears to hang. Let
             // Kestrel chunk it instead — it knows when we stopped writing.
+            // The file's own name, when the API sends one: an event's guest pack should save as
+            // "guest-pack.pdf", not as the last segment of this relay's address.
+            if (response.Content.Headers.ContentDisposition is { } disposition)
+                ctx.Response.Headers["Content-Disposition"] = disposition.ToString();
             if (response.Content.Headers.ContentRange is { } contentRange)
                 ctx.Response.Headers["Content-Range"] = contentRange.ToString();
             ctx.Response.Headers["Accept-Ranges"] = "bytes";

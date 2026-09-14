@@ -40,6 +40,30 @@ public interface IMediaUrlBuilder
     string SharedFieldSessionFile(string shareToken, Guid fileId);
 
     /// <summary>
+    /// One of a hosted event's files (item 235 phase 11).
+    /// </summary>
+    /// <remarks>
+    /// Its own route because the event decides who may have it — staff, confirmed guests, or anybody
+    /// — and a signed-in guest's ticket has to reach that check with their token inside it.
+    /// </remarks>
+    string EventFile(Guid eventId, Guid fileId);
+
+    /// <summary>A photo or video posted in an event's room, for the people in it (item 235 phase 11).</summary>
+    string EventRoomMedia(Guid eventId, Guid messageId);
+
+    /// <summary>A picture from an event's public gallery — anonymous, like a tour's (item 235 phase 11).</summary>
+    string EventPhoto(Guid uploadFileId);
+
+    /// <summary>A picture a venue kept in its photo library, for its public page (item 235 phase 12).</summary>
+    string VenuePhoto(Guid uploadFileId);
+
+    /// <summary>
+    /// The chosen files, pictures and photos of an event as one zip (item 235 phase 12). Not cached: every
+    /// choice is a different address.
+    /// </summary>
+    string EventKeepZip(Guid orgId, Guid eventId, IReadOnlyCollection<Guid> uploadFileIds);
+
+    /// <summary>
     /// A tour guide's published photograph (item 233).
     /// </summary>
     /// <remarks>

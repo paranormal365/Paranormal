@@ -596,6 +596,10 @@ app.MapGet("/go/{adId:guid}", async (
             if (target is not null && target.TargetKind == "org"
                 && !string.IsNullOrWhiteSpace(target.OrganizationUrlName))
                 return Results.Redirect($"/o/{Uri.EscapeDataString(target.OrganizationUrlName)}");
+            // An event on this site (item 235 phase 11) — built from the two slugs, still never a free URL.
+            if (target is not null && target.TargetKind == "event"
+                && !string.IsNullOrWhiteSpace(target.OrganizationUrlName) && !string.IsNullOrWhiteSpace(target.EventUrlName))
+                return Results.Redirect($"/o/{Uri.EscapeDataString(target.OrganizationUrlName)}/events/{Uri.EscapeDataString(target.EventUrlName)}");
         }
     }
     catch (Exception)
@@ -629,6 +633,49 @@ app.MapGet("/media/field-sessions/{sessionId:guid}/files/{fileId:guid}", async (
         accessToken, httpFactory, ctx, ct);
 });
 
+// One of a hosted event's files (item 235 phase 11). The ticket carries the viewer's token when
+// they are signed in; without one the API serves only what the event has made public.
+app.MapGet("/media/event-files/{eventId:guid}/{fileId:guid}", async (
+    Guid eventId, Guid fileId, string? t,
+    Ben.Web.Website.Services.MediaTicketService tickets,
+    IHttpClientFactory httpFactory, IConfiguration config,
+    HttpContext ctx, CancellationToken ct) =>
+{
+    var accessToken = string.IsNullOrWhiteSpace(t) ? null : tickets.Unprotect(fileId, t);
+    return await Ben.Web.Website.Services.MediaProxy.StreamAsync(
+        $"{config["WebApi:BaseUrl"]}/api/public/hosted-events/{eventId}/files/{fileId}/download",
+        accessToken, httpFactory, ctx, ct);
+}).AllowAnonymous();
+
+// What an organizer takes away from an event before its files are removed, as one zip (item 235 phase 12).
+// The organizer's own permission is checked by the API; the ticket carries who they are.
+app.MapGet("/media/event-keep/{orgId:guid}/{eventId:guid}", async (
+    Guid orgId, Guid eventId, string? ids, string? t,
+    Ben.Web.Website.Services.MediaTicketService tickets,
+    IHttpClientFactory httpFactory, IConfiguration config,
+    HttpContext ctx, CancellationToken ct) =>
+{
+    var accessToken = string.IsNullOrWhiteSpace(t) ? null : tickets.Unprotect(eventId, t);
+    if (accessToken is null) return Results.NotFound();
+    return await Ben.Web.Website.Services.MediaProxy.StreamAsync(
+        $"{config["WebApi:BaseUrl"]}/api/organizations/{orgId}/events/{eventId}/keep.zip?ids={Uri.EscapeDataString(ids ?? "")}",
+        accessToken, httpFactory, ctx, ct);
+}).AllowAnonymous();
+
+// A photo or video in an event's room (item 235 phase 11). Members only, so the ticket is required.
+app.MapGet("/media/event-room/{eventId:guid}/{messageId:guid}", async (
+    Guid eventId, Guid messageId, string? t,
+    Ben.Web.Website.Services.MediaTicketService tickets,
+    IHttpClientFactory httpFactory, IConfiguration config,
+    HttpContext ctx, CancellationToken ct) =>
+{
+    var accessToken = string.IsNullOrWhiteSpace(t) ? null : tickets.Unprotect(messageId, t);
+    if (accessToken is null) return Results.NotFound();
+    return await Ben.Web.Website.Services.MediaProxy.StreamAsync(
+        $"{config["WebApi:BaseUrl"]}/api/public/hosted-events/{eventId}/room/messages/{messageId}/media",
+        accessToken, httpFactory, ctx, ct);
+}).AllowAnonymous();
+
 // A recording reached through a share link (item 207). No ticket and no bearer token: the share
 // token IS the authority, and the API re-checks its expiry, its revocation and which file it
 // covers on every request. This endpoint asserts nothing — it forwards a path and streams the
@@ -659,6 +706,27 @@ app.MapGet("/media/guide-photo/{fileId:guid}", async (
 
 // A picture from a tour's gallery (item 233). Anonymous like the guide photograph above: a tour
 // page is read by people with no account.
+// A picture from a hosted event's public gallery (item 235 phase 11). Anonymous, like a tour's.
+app.MapGet("/media/event-photo/{fileId:guid}", async (
+    Guid fileId,
+    IHttpClientFactory httpFactory, IConfiguration config,
+    HttpContext ctx, CancellationToken ct) =>
+{
+    return await Ben.Web.Website.Services.MediaProxy.StreamAsync(
+        $"{config["WebApi:BaseUrl"]}/api/public/event-photo/{fileId}",
+        accessToken: null, httpFactory, ctx, ct);
+}).AllowAnonymous();
+
+app.MapGet("/media/venue-photo/{fileId:guid}", async (
+    Guid fileId,
+    IHttpClientFactory httpFactory, IConfiguration config,
+    HttpContext ctx, CancellationToken ct) =>
+{
+    return await Ben.Web.Website.Services.MediaProxy.StreamAsync(
+        $"{config["WebApi:BaseUrl"]}/api/public/venue-photo/{fileId}",
+        accessToken: null, httpFactory, ctx, ct);
+}).AllowAnonymous();
+
 app.MapGet("/media/tour-photo/{fileId:guid}", async (
     Guid fileId,
     IHttpClientFactory httpFactory, IConfiguration config,
@@ -666,6 +734,18 @@ app.MapGet("/media/tour-photo/{fileId:guid}", async (
 {
     return await Ben.Web.Website.Services.MediaProxy.StreamAsync(
         $"{config["WebApi:BaseUrl"]}/api/public/tour-photo/{fileId}",
+        accessToken: null, httpFactory, ctx, ct);
+}).AllowAnonymous();
+
+// A session on a hosted event's programme, as a calendar file (item 235 phase 10). Anonymous: the
+// programme is public once published, and a calendar app following the link carries no session.
+app.MapGet("/calendar/hosted-events/{eventId:guid}/sessions/{sessionId:guid}.ics", async (
+    Guid eventId, Guid sessionId,
+    IHttpClientFactory httpFactory, IConfiguration config,
+    HttpContext ctx, CancellationToken ct) =>
+{
+    return await Ben.Web.Website.Services.MediaProxy.StreamAsync(
+        $"{config["WebApi:BaseUrl"]}/api/public/hosted-events/{eventId}/sessions/{sessionId}/calendar.ics",
         accessToken: null, httpFactory, ctx, ct);
 }).AllowAnonymous();
 

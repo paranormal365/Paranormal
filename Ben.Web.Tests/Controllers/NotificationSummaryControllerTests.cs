@@ -974,4 +974,139 @@ public class NotificationSummaryControllerTests
 
         Assert.Equal(0, (await GetSummaryAsync(factory, guest)).MyTourSeats?.Count ?? 0);
     }
+
+    // ── Hosted-event bookings: holds and who decides (item 235 phase 8) ─────────
+
+    private static Guid AddHostedEvent(BenDataContext db, Guid orgId)
+    {
+        var id = Guid.NewGuid();
+        var placeId = Guid.NewGuid();
+        db.Places.Add(new Place
+        {
+            Id = placeId, Name = "The Thomas House Hotel",
+            DateCreated = Older, CreatedByAppUserId = Guid.NewGuid(),
+        });
+        db.HostedEvents.Add(new HostedEvent
+        {
+            Id = id, OrganizationId = orgId, PlaceId = placeId,
+            Name = "Halloween Lock-In", UrlName = $"lock-in-{id:N}",
+            StartsOn = DateTime.UtcNow.Date.AddDays(30), EndsOn = DateTime.UtcNow.Date.AddDays(31),
+            LifecycleState = HostedEventLifecycleState.Published,
+            DateCreated = Older, CreatedByAppUserId = Guid.NewGuid(),
+        });
+        return id;
+    }
+
+    private static void AddBooking(
+        BenDataContext db, Guid eventId, Guid leadId, HostedEventBookingStatus status,
+        DateTime? holdExpiresUtc = null, DateTime? decidedUtc = null)
+        => db.HostedEventBookings.Add(new HostedEventBooking
+        {
+            Id = Guid.NewGuid(), HostedEventId = eventId, LeadAppUserId = leadId,
+            PartySize = 2, Kind = HostedEventBookingKind.DayPass, Status = status,
+            HoldExpiresUtc = holdExpiresUtc, DecidedUtc = decidedUtc,
+            DateCreated = Older, CreatedByAppUserId = leadId,
+        });
+
+    [Fact]
+    public async Task A_hold_is_waiting_on_the_venue_and_one_about_to_lapse_gets_its_own_row()
+    {
+        // The bell used to count requests only, so a Pick-mode weekend — where every booking
+        // starts as a hold — could fill with guests waiting and never ring once.
+        var owner = Guid.NewGuid();
+        var factory = CreateFactory();
+
+        await using (var db = factory.CreateDbContext())
+        {
+            var orgId = AddOrg(db);
+            AddMembership(db, orgId, owner, OrganizationMemberRole.Owner);
+            var eventId = AddHostedEvent(db, orgId);
+
+            AddBooking(db, eventId, Guid.NewGuid(), HostedEventBookingStatus.Requested);
+            AddBooking(db, eventId, Guid.NewGuid(), HostedEventBookingStatus.Held,
+                       holdExpiresUtc: DateTime.UtcNow.AddDays(2));
+            AddBooking(db, eventId, Guid.NewGuid(), HostedEventBookingStatus.Held,
+                       holdExpiresUtc: DateTime.UtcNow.AddHours(3));
+            await db.SaveChangesAsync();
+        }
+
+        var summary = await GetSummaryAsync(factory, owner);
+
+        Assert.Equal(2, summary.EventBookingsToDecide?.Count);
+        Assert.Equal(1, summary.EventHoldsLapsing?.Count);
+        // Each booking once on the bell: the lapsing hold is not ALSO in the queue's number.
+        Assert.Equal(3, summary.TotalCount);
+    }
+
+    [Fact]
+    public async Task A_steward_handed_Decides_is_told_and_one_handed_only_the_door_is_not()
+    {
+        var decides = Guid.NewGuid();
+        var door = Guid.NewGuid();
+        var factory = CreateFactory();
+
+        await using (var db = factory.CreateDbContext())
+        {
+            var orgId = AddOrg(db);
+            var eventId = AddHostedEvent(db, orgId);
+            AddBooking(db, eventId, Guid.NewGuid(), HostedEventBookingStatus.Requested);
+
+            db.HostedEventStaff.AddRange(
+                new HostedEventStaff
+                {
+                    Id = Guid.NewGuid(), HostedEventId = eventId, AppUserId = decides,
+                    Decides = true, DateConfirmed = Older,
+                    DateCreated = Older, CreatedByAppUserId = Guid.NewGuid(),
+                },
+                new HostedEventStaff
+                {
+                    Id = Guid.NewGuid(), HostedEventId = eventId, AppUserId = door,
+                    RunsTheDoor = true, DateConfirmed = Older,
+                    DateCreated = Older, CreatedByAppUserId = Guid.NewGuid(),
+                });
+            await db.SaveChangesAsync();
+        }
+
+        Assert.Equal(1, (await GetSummaryAsync(factory, decides)).EventBookingsToDecide?.Count);
+        Assert.Equal(0, (await GetSummaryAsync(factory, door)).EventBookingsToDecide?.Count ?? 0);
+    }
+
+    [Fact]
+    public async Task A_deciders_own_booking_is_not_a_decision_waiting_on_them()
+    {
+        var owner = Guid.NewGuid();
+        var factory = CreateFactory();
+
+        await using (var db = factory.CreateDbContext())
+        {
+            var orgId = AddOrg(db);
+            AddMembership(db, orgId, owner, OrganizationMemberRole.Owner);
+            var eventId = AddHostedEvent(db, orgId);
+            AddBooking(db, eventId, owner, HostedEventBookingStatus.Requested);
+            await db.SaveChangesAsync();
+        }
+
+        Assert.Equal(0, (await GetSummaryAsync(factory, owner)).EventBookingsToDecide?.Count ?? 0);
+    }
+
+    [Fact]
+    public async Task A_guests_hold_is_not_an_answer_but_its_lapsing_is_worth_a_row()
+    {
+        // "A venue answered you" for seats the guest picked themselves, a minute ago, is a bell
+        // announcing something nobody did.
+        var guest = Guid.NewGuid();
+        var factory = CreateFactory();
+
+        await using (var db = factory.CreateDbContext())
+        {
+            var orgId = AddOrg(db);
+            AddBooking(db, AddHostedEvent(db, orgId), guest, HostedEventBookingStatus.Held,
+                       holdExpiresUtc: DateTime.UtcNow.AddHours(5));
+            await db.SaveChangesAsync();
+        }
+
+        var summary = await GetSummaryAsync(factory, guest);
+        Assert.Equal(0, summary.MyEventBookings?.Count ?? 0);
+        Assert.Equal(1, summary.MyEventHoldLapsing?.Count);
+    }
 }

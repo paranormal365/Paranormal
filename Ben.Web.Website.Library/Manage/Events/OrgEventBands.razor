@@ -1,0 +1,291 @@
+@page "/organizations/{OrgId:guid}/events/{EventId:guid}/bands"
+@namespace Ben.Web.Website.Library.Manage.Events
+
+@inject IBenAdminClient AdminClient
+@inject IBenUserState UserState
+
+@using Ben.Data.Common.Enums
+@using Ben.Service.Models.Entities
+@using Ben.Web.Services.WebApi
+@using Ben.Web.Website.Library.Kit
+@using Ben.Web.Website.Library.Manage.Icon
+
+@* What a party wears, so a steward knows by glance (item 235 phase 7).
+
+   BEN, 2026-09-13: "blue could be the full event with food, purple could be the full event, red is
+   day one … lets their employees know by glance what a person is registered for."
+
+   MOST OF THEM ARE WORKED OUT, not tagged. A venue that had to put a colour against two hundred
+   parties by hand would put one against none of them, and a band nobody assigned is worse than no
+   bands at all — a steward glancing at a wrist and seeing nothing has learned something false. So
+   each row carries a rule, and only the ones a rule cannot know are given out by hand.
+
+   THE ORDER IS A DECISION. A party staying every night matches "every night" and would also match
+   "some nights"; the first rule that matches wins, so the arrows are how a venue says which. *@
+
+<PageTitle>@(_event?.Name is { Length: > 0 } n ? $"Bands — {n}" : "Bands")</PageTitle>
+
+<div class="container-fluid py-3" style="max-width:1000px;">
+
+    <div class="text-secondary small">
+        <a href="@($"/organizations/{OrgId}/events")">Events</a>
+        @if (_event is { } crumb)
+        {
+            <text> · </text><a href="@($"/organizations/{OrgId}/events/{EventId}")">@crumb.Name</a>
+        }
+    </div>
+
+    <h1 class="h3 mb-1">
+        Bands
+        <HelpLink Slug="organization-administration" Anchor="hosted-events" />
+    </h1>
+    <p class="text-secondary small mb-3">
+        Wristbands, lanyards, stamps — whatever your people hand out. The colour is yours; we only
+        say who gets which, and show it beside their name at the door.
+    </p>
+
+    @if (_note is { Length: > 0 })
+    {
+        <div class="alert alert-success py-2" id="bands-note">@_note</div>
+    }
+    @if (_error is { Length: > 0 })
+    {
+        <div class="alert alert-danger py-2" id="bands-error" role="alert">@_error</div>
+    }
+
+    <BenItemState TItem="HostedEventBandsRecord" Result="_bands" Loading="_loading"
+                  LoadingText="Loading the bands…" OnRetry="LoadAsync">
+        <ChildContent>
+            @if (_rows.Count == 0)
+            {
+                <div class="alert alert-light" id="bands-empty">
+                    No bands yet. Most venues want two or three — "the whole weekend", "Saturday
+                    only", "day pass" — and the door works perfectly well without any.
+                </div>
+            }
+
+            @for (var i = 0; i < _rows.Count; i++)
+            {
+                var row = _rows[i];
+                var at = i;
+
+                <div class="card mb-2 band-row">
+                    <div class="card-body">
+                        <div class="row g-2 align-items-end">
+                            <div class="col-6 col-md-2">
+                                <label class="form-label small mb-1" for="@($"band-colour-{row.Key}")">
+                                    Colour
+                                </label>
+                                <input id="@($"band-colour-{row.Key}")" class="form-control"
+                                       maxlength="60" placeholder="Blue"
+                                       @bind="row.Colour" @bind:event="oninput" />
+                            </div>
+                            <div class="col-6 col-md-2">
+                                <label class="form-label small mb-1" for="@($"band-hex-{row.Key}")">
+                                    Swatch
+                                </label>
+                                <input id="@($"band-hex-{row.Key}")" type="color"
+                                       class="form-control form-control-color w-100"
+                                       value="@(row.Hex ?? "#3b82f6")"
+                                       @onchange="e => row.Hex = e.Value?.ToString()" />
+                            </div>
+                            <div class="col-12 col-md-4">
+                                <label class="form-label small mb-1" for="@($"band-meaning-{row.Key}")">
+                                    What it means
+                                </label>
+                                <input id="@($"band-meaning-{row.Key}")" class="form-control"
+                                       maxlength="160" placeholder="The whole weekend, with dinner"
+                                       @bind="row.Meaning" @bind:event="oninput" />
+                            </div>
+                            <div class="col-8 col-md-3">
+                                <label class="form-label small mb-1" for="@($"band-rule-{row.Key}")">
+                                    Who gets it
+                                </label>
+                                <select id="@($"band-rule-{row.Key}")" class="form-select"
+                                        value="@((int)row.Rule)"
+                                        @onchange="e => row.Rule = Rule(e.Value?.ToString())">
+                                    @foreach (var rule in Rules)
+                                    {
+                                        <option value="@((int)rule.Value)">@rule.Words</option>
+                                    }
+                                </select>
+                            </div>
+                            <div class="col-4 col-md-1 d-flex gap-1 justify-content-end">
+                                <button type="button" class="btn btn-outline-secondary btn-sm"
+                                        id="@($"band-up-{row.Key}")" disabled="@(_busy || at == 0)"
+                                        title="Try this rule earlier"
+                                        @onclick="() => Move(at, -1)">
+                                    <BenIcon Name="arrow-up" Title="Try this rule earlier" />
+                                </button>
+                                <button type="button" class="btn btn-outline-danger btn-sm"
+                                        id="@($"band-remove-{row.Key}")" disabled="@_busy"
+                                        title="Remove this band"
+                                        @onclick="() => Remove(row)">
+                                    <BenIcon Name="trash-2" Title="Remove this band" />
+                                </button>
+                            </div>
+                        </div>
+
+                        <div class="mt-2">
+                            <BenBandChip Band="@Preview(row)" WithMeaning="true" />
+                        </div>
+                    </div>
+                </div>
+            }
+
+            <div class="d-flex flex-wrap gap-2 mt-3">
+                <button type="button" class="btn btn-outline-primary" id="bands-add"
+                        disabled="@_busy" @onclick="Add">
+                    Add a band
+                </button>
+                <button type="button" class="btn btn-primary" id="bands-save"
+                        disabled="@_busy" @onclick="SaveAsync">
+                    @(_busy ? "Saving…" : "Save the bands")
+                </button>
+            </div>
+
+            <p class="text-secondary small mt-3 mb-0">
+                <strong>Anything about food is given out by hand.</strong> Nothing on a booking says
+                a party is eating, so we cannot work that one out — set it on the party from the
+                booking board.
+            </p>
+        </ChildContent>
+    </BenItemState>
+</div>
+
+@code {
+    [Parameter] public Guid OrgId { get; set; }
+    [Parameter] public Guid EventId { get; set; }
+
+    private HostedEventRecord? _event;
+    private ItemResult<HostedEventBandsRecord> _bands;
+    private readonly List<BandForm> _rows = [];
+    private bool _loading = true;
+    private bool _busy;
+    private string? _note;
+    private string? _error;
+
+    /// <summary>One band while it is being edited.</summary>
+    /// <remarks>
+    /// Carries the id, because a row that survives a save has to keep it: a party wearing this
+    /// colour by hand would otherwise be quietly unbanded by an edit to the wording.
+    /// </remarks>
+    private sealed class BandForm
+    {
+        public Guid Key { get; init; } = Guid.NewGuid();
+        public Guid? Id { get; init; }
+        public string Colour { get; set; } = "";
+        public string Meaning { get; set; } = "";
+        public string? Hex { get; set; }
+        public HostedEventBandRule Rule { get; set; } = HostedEventBandRule.ByHand;
+    }
+
+    private sealed record RuleOption(HostedEventBandRule Value, string Words);
+
+    /// <summary>
+    /// The four, in the order a venue thinks of them.
+    /// </summary>
+    /// <remarks>
+    /// Said as who wears it rather than as the rule's name, and short enough to fit the box: the
+    /// first version wrote whole sentences and the screenshot showed every one of them cut off
+    /// mid-word, which is a choice a host cannot read.
+    /// </remarks>
+    private static readonly RuleOption[] Rules =
+    [
+        new(HostedEventBandRule.EveryNight, "Here every night"),
+        new(HostedEventBandRule.SomeNights, "Here some nights"),
+        new(HostedEventBandRule.DayPass,    "Day pass"),
+        new(HostedEventBandRule.ByHand,     "Given out by hand"),
+    ];
+
+    protected override async Task OnAfterRenderAsync(bool firstRender)
+    {
+        if (!firstRender) return;
+
+        if (!await UserState.WaitUntilAuthReadyAsync(RendererInfo.IsInteractive)) return;
+
+        await LoadAsync();
+        StateHasChanged();
+    }
+
+    private async Task LoadAsync()
+    {
+        _loading = true;
+        _event ??= await AdminClient.GetHostedEventAsync(OrgId, EventId);
+        _bands = await AdminClient.GetEventBandsAsync(OrgId, EventId);
+
+        if (_bands.Item is { } loaded) Fill(loaded);
+
+        _loading = false;
+    }
+
+    private void Fill(HostedEventBandsRecord loaded)
+    {
+        _rows.Clear();
+
+        foreach (var band in loaded.Bands.OrderBy(b => b.SortOrder))
+        {
+            _rows.Add(new BandForm
+            {
+                Id = band.Id,
+                Colour = band.Colour,
+                Meaning = band.Meaning,
+                Hex = band.Hex,
+                Rule = band.Rule,
+            });
+        }
+    }
+
+    private void Add() => _rows.Add(new BandForm());
+
+    private void Remove(BandForm row) => _rows.Remove(row);
+
+    private void Move(int index, int by)
+    {
+        var to = index + by;
+        if (to < 0 || to >= _rows.Count) return;
+
+        (_rows[index], _rows[to]) = (_rows[to], _rows[index]);
+    }
+
+    /// <summary>What the chip will look like, drawn from what is typed so far.</summary>
+    private static HostedEventBandRecord Preview(BandForm row)
+        => new(row.Id ?? Guid.Empty,
+               row.Colour is { Length: > 0 } ? row.Colour : "Unnamed",
+               row.Meaning,
+               row.Hex,
+               row.Rule,
+               0);
+
+    private static HostedEventBandRule Rule(string? value)
+        => int.TryParse(value, out var n) && Enum.IsDefined(typeof(HostedEventBandRule), n)
+            ? (HostedEventBandRule)n
+            : HostedEventBandRule.ByHand;
+
+    private async Task SaveAsync()
+    {
+        _busy = true;
+        _error = null;
+        _note = null;
+
+        var bands = _rows
+            .Where(r => !string.IsNullOrWhiteSpace(r.Colour))
+            .Select(r => new HostedEventBandInput(
+                r.Colour.Trim(), r.Meaning?.Trim() ?? "", r.Hex, r.Rule, r.Id))
+            .ToList();
+
+        var (saved, error) = await AdminClient.SetEventBandsAsync(
+            OrgId, EventId, new SetHostedEventBandsRequest(bands));
+
+        _busy = false;
+
+        if (saved is null) { _error = error ?? "Those couldn't be saved just now."; return; }
+
+        _bands = ItemResult<HostedEventBandsRecord>.Ok(saved);
+        Fill(saved);
+        _note = bands.Count == 0
+            ? "Saved. Nobody is wearing anything."
+            : $"Saved. {bands.Count} {(bands.Count == 1 ? "band" : "bands")}, and the door will "
+              + "show them beside each name.";
+    }
+}

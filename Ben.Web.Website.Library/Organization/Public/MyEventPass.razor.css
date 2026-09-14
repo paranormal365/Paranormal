@@ -1,0 +1,42 @@
+/* The guest's pass (item 235 phase 6).
+
+   IT IS HELD UP TO A CAMERA IN THE DARK, and sometimes printed and put in a pocket. So: the code
+   is large, the words under it are large enough to read across a desk, and everything that is a
+   control on a screen is gone from the paper. */
+
+.pass {
+    max-width: 30rem;
+    margin-inline: auto;
+}
+
+.pass__code ::deep .qr-plate__code {
+    /* A little air around the plate: scanners lock on faster when the quiet zone is real. */
+    padding: .75rem !important;
+}
+
+/* A WITHDRAWN PASS IS DRAWN AND CROSSED, never blanked. A guest holding a dead code has to be
+   able to see that it is dead — a blank screen reads as a fault and sends somebody to a door
+   anyway. */
+.pass--revoked .card-body {
+    opacity: .45;
+}
+
+.pass--revoked .pass__band {
+    opacity: 1;
+}
+
+.pass__band {
+    margin: .75rem 0;
+    padding: .5rem .75rem;
+    border-radius: var(--bs-border-radius);
+    border: 1px solid var(--bs-danger-border-subtle);
+    background: var(--bs-danger-bg-subtle);
+    color: var(--bs-danger-text-emphasis);
+}
+
+@media print {
+    .pass {
+        border: none;
+        max-width: none;
+    }
+}

@@ -28,4 +28,20 @@ public enum OrgMessageChannel
     /// definition — a comment on a published case is published with it.</para>
     /// </remarks>
     PublicCaseComment = 4,
+
+
+    /// <summary>
+    /// The room for one hosted event: what the people who are there share with each other while
+    /// they are there (item 235).
+    /// </summary>
+    /// <remarks>
+    /// <para>An <c>OrgMessage</c> for the same reason a case comment is one — hiding, reporting,
+    /// the author trail, the media screening queue and the audit columns already exist here and
+    /// already work.</para>
+    ///
+    /// <para>It carries its event in <c>HostedEventId</c> and is the first channel whose audience
+    /// is neither an organization nor the public: it is the people with a confirmed booking, plus
+    /// the staff. Every public feed query must exclude it, and a guard test says so.</para>
+    /// </remarks>
+    EventRoom = 5,
 }

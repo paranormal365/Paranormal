@@ -113,12 +113,17 @@ public actor TokenSession {
         request.setValue("application/json", forHTTPHeaderField: "Content-Type")
         request.httpBody = try? BenJSON.encoder.encode(["refreshToken": refreshToken])
 
-        guard let (data, response) = try? await transport.send(request),
-              (200..<300).contains(response.statusCode),
+        guard let (data, response) = try? await transport.send(request) else {
+            // Unreachable, not refused: the refresh token may be perfectly good. Keep it for the
+            // next attempt rather than signing somebody out for having no signal.
+            return nil
+        }
+        if response.statusCode >= 500 { return nil }
+        guard (200..<300).contains(response.statusCode),
               let refreshed = try? BenJSON.decoder.decode(AccessTokenResponse.self, from: data),
               !refreshed.accessToken.isEmpty
         else {
-            // The refresh token is dead. This is the session ending, exactly once.
+            // The server refused the refresh token. This is the session ending, exactly once.
             endSession()
             return nil
         }

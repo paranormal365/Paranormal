@@ -1,0 +1,214 @@
+@page "/organizations/{OrgId:guid}/events/{EventId:guid}/dietary"
+@namespace Ben.Web.Website.Library.Manage.Events
+
+@inject IBenAdminClient AdminClient
+@inject IBenUserState UserState
+
+@using Ben.Service.Models.Entities
+@using Ben.Web.Services.WebApi
+@using Ben.Web.Website.Library.Kit
+@using Ben.Web.Website.Library.Manage.Icon
+
+@* What the kitchen has to cook differently (item 235 phase 5).
+
+   THE DENOMINATOR IS PART OF THE ANSWER. Eight notes is a completely different service depending
+   on whether eight people are coming or two hundred, and a party of four who named two people
+   leaves two the kitchen knows nothing about. So the three numbers are the top of the page and
+   the list is underneath them.
+
+   IT PRINTS, BECAUSE THE PLACE THIS IS READ IS A KITCHEN. A cook is not going to scroll a phone
+   with flour on their hands. The sheet for each night is its own page, and everything that is a
+   control on screen is gone from the paper. *@
+
+<PageTitle>@(_event?.Name is { Length: > 0 } n ? $"The kitchen — {n}" : "The kitchen")</PageTitle>
+
+<div class="container-fluid py-3">
+
+    <div class="text-secondary small d-print-none">
+        <a href="@($"/organizations/{OrgId}/events")">Events</a>
+        @if (_event is { } crumb)
+        {
+            <text> · </text><a href="@($"/organizations/{OrgId}/events/{EventId}")">@crumb.Name</a>
+            <text> · </text><a href="@($"/organizations/{OrgId}/events/{EventId}/bookings")">Bookings</a>
+        }
+    </div>
+
+    <h1 class="h3 mb-1">
+        What the kitchen needs
+        <HelpLink Slug="organization-administration" Anchor="hosted-events" />
+    </h1>
+    <p class="text-secondary small d-print-none">
+        Everything a guest told us they cannot eat, and how many people it is out of.
+        <strong>This is health information about named people.</strong> Print it for the kitchen,
+        not for the notice board.
+    </p>
+
+    @if (_error is { Length: > 0 })
+    {
+        <div class="alert alert-danger py-2 d-print-none" id="kitchen-error" role="alert">@_error</div>
+    }
+
+    <BenItemState TItem="HostedEventDietaryRecord" Result="_sheet" Loading="_loading"
+                  LoadingText="Reading the bookings…" OnRetry="LoadAsync">
+        <ChildContent Context="sheet">
+
+            @* ── what is being counted ───────────────────────────────────── *@
+            <div class="d-flex flex-wrap align-items-center gap-2 mb-3 d-print-none" id="kitchen-scope">
+                <div class="btn-group btn-group-sm" role="group" aria-label="Which night">
+                    <button type="button" id="kitchen-night-all"
+                            class="btn @(_night is null ? "btn-primary" : "btn-outline-primary")"
+                            disabled="@_loading" @onclick="() => ChooseAsync(null)">
+                        The whole event
+                    </button>
+                    @foreach (var night in _event?.Nights ?? [])
+                    {
+                        var thisNight = night;
+                        <button type="button" id="@($"kitchen-night-{thisNight.Id}")"
+                                class="btn @(_night == thisNight.Id ? "btn-primary" : "btn-outline-primary")"
+                                disabled="@_loading" @onclick="() => ChooseAsync(thisNight.Id)">
+                            @thisNight.Date.ToString("ddd MM/dd")
+                        </button>
+                    }
+                </div>
+
+                <div class="form-check form-switch ms-auto">
+                    <input class="form-check-input" type="checkbox" role="switch"
+                           id="kitchen-include-unconfirmed"
+                           checked="@_includeUnconfirmed"
+                           @onchange="IncludeUnconfirmedAsync" />
+                    <label class="form-check-label" for="kitchen-include-unconfirmed">
+                        Count parties you haven't decided on
+                    </label>
+                </div>
+
+                <button type="button" class="btn btn-sm btn-outline-secondary"
+                        id="kitchen-every-night" disabled="@(_loading || _building)"
+                        @onclick="BuildEveryNightAsync">
+                    <BenIcon Name="printer" Class="me-1" />
+                    @(_building ? "Building…" : "A sheet for every night")
+                </button>
+            </div>
+
+            @* ── the sheet on screen ─────────────────────────────────────── *@
+            @if (_perNight.Count == 0)
+            {
+                <DietarySheet Heading="@Heading()" Record="sheet" Event="_event" />
+            }
+            else
+            {
+                @* Built on purpose, so it replaces the single sheet rather than sitting under it:
+                   two versions of the same numbers on one page is how a kitchen ends up cooking
+                   from the wrong one. *@
+                <div class="d-flex justify-content-between align-items-center gap-2 mb-2 d-print-none">
+                    <span class="text-secondary small">
+                        One sheet for each @(_event?.DateNoun ?? "night"), each its own page when
+                        you print.
+                    </span>
+                    <button type="button" class="btn btn-sm btn-outline-secondary"
+                            id="kitchen-back-to-one" @onclick="() => _perNight.Clear()">
+                        Back to one sheet
+                    </button>
+                </div>
+
+                @foreach (var (night, record) in _perNight)
+                {
+                    <div class="kitchen-page">
+                        <DietarySheet Heading="@night.Date.ToString("dddd MM/dd/yyyy")"
+                                      Record="record" Event="_event" />
+                    </div>
+                }
+            }
+        </ChildContent>
+    </BenItemState>
+</div>
+
+@code {
+    [Parameter] public Guid OrgId { get; set; }
+    [Parameter] public Guid EventId { get; set; }
+
+    private HostedEventRecord? _event;
+    private ItemResult<HostedEventDietaryRecord> _sheet;
+    private readonly List<(HostedEventNightRecord Night, HostedEventDietaryRecord Sheet)> _perNight = [];
+
+    private Guid? _night;
+    private bool _includeUnconfirmed;
+    private bool _loading = true;
+    private bool _building;
+    private string? _error;
+
+    protected override async Task OnAfterRenderAsync(bool firstRender)
+    {
+        if (!firstRender) return;
+
+        // Auth resolves after the circuit attaches. Asking first asks as nobody, and a page about
+        // people's allergies must never answer "there is nothing here" when it means "not you".
+        if (!await UserState.WaitUntilAuthReadyAsync(RendererInfo.IsInteractive)) return;
+
+        await LoadAsync();
+        StateHasChanged();
+    }
+
+    private async Task LoadAsync()
+    {
+        _loading = true;
+        _event ??= await AdminClient.GetHostedEventAsync(OrgId, EventId);
+        _sheet = await AdminClient.GetEventDietaryAsync(OrgId, EventId, _includeUnconfirmed, _night);
+        _loading = false;
+    }
+
+    private async Task ChooseAsync(Guid? night)
+    {
+        _night = night;
+        _perNight.Clear();
+        await LoadAsync();
+    }
+
+    private async Task IncludeUnconfirmedAsync(ChangeEventArgs e)
+    {
+        _includeUnconfirmed = e.Value is true;
+        _perNight.Clear();
+        await LoadAsync();
+    }
+
+    /// <summary>
+    /// Reads every night separately, so each can be printed on its own.
+    /// </summary>
+    /// <remarks>
+    /// One call per night rather than one call and a client-side split, because the numbers a cook
+    /// acts on are counted on the server against party sizes the sheet does not carry. Splitting
+    /// the lines here would give a per-night list of allergies with the whole weekend's head count
+    /// beside it, which is the one mistake this page exists to prevent.
+    /// </remarks>
+    private async Task BuildEveryNightAsync()
+    {
+        if (_event is not { } ev) return;
+
+        _building = true;
+        _error = null;
+        _perNight.Clear();
+
+        foreach (var night in ev.Nights)
+        {
+            var one = await AdminClient.GetEventDietaryAsync(
+                OrgId, EventId, _includeUnconfirmed, night.Id);
+
+            if (one.Item is not { } record)
+            {
+                _perNight.Clear();
+                _error = one.Reason
+                    ?? $"{night.Date:MM/dd/yyyy} couldn't be read, so the set is incomplete.";
+                _building = false;
+                return;
+            }
+
+            _perNight.Add((night, record));
+        }
+
+        _building = false;
+    }
+
+    private string Heading()
+        => _night is { } id && _event?.Nights.FirstOrDefault(n => n.Id == id) is { } night
+            ? night.Date.ToString("dddd MM/dd/yyyy")
+            : _event?.Name ?? "The whole event";
+}

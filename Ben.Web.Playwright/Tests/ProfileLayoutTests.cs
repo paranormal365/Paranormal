@@ -92,17 +92,22 @@ public class ProfileLayoutTests : BenTestBase
     [Test]
     public async Task TheMapTabDrawsTheMap()
     {
-        // Retried for the same interactivity race as the Contact tab above.
-        await ClickUntilAsync(
-            Page.GetByRole(AriaRole.Tab, new() { Name = "Where you've been" }),
-            Page.Locator(".k-map").First);
+        // Retried for the same interactivity race as the Contact tab above. The map is Apple Maps
+        // through Kit/Maps/BenMap since item 228, so the container is .ben-map, not Kendo's .k-map.
+        var map = Main.Locator(".ben-map").First;
+        await ClickUntilAsync(Page.GetByRole(AriaRole.Tab, new() { Name = "Where you've been" }), map);
+        await Expect(map).ToBeVisibleAsync(new() { Timeout = 20_000 });
 
-        // Sarah has attended investigations with coordinates in the seed data. An empty state here
-        // means either the seed changed or the endpoint is failing again.
-        await Expect(Page.Locator(".k-map").First)
-            .ToBeVisibleAsync(new() { Timeout = 20_000 });
-
-        var tiles = await Page.Locator(".k-map img").CountAsync();
-        Assert.That(tiles, Is.GreaterThan(0), "The map rendered no tiles.");
+        // Sarah has attended investigations with coordinates in the seed data. No pins means either
+        // the seed changed or the endpoint is failing again. Asked of the map module itself, which
+        // is the only thing that knows what it drew; it answers null until the map has loaded.
+        // The module is imported once up front: WaitForFunction polls a plain predicate and would
+        // take an async one's promise as the answer.
+        var module = await Page.EvaluateHandleAsync("path => import(path)", "/_content/Ben.Web.Website.Library/Kit/Maps/BenMap.razor.js");
+        var pins = await Page.WaitForFunctionAsync(@"([mod, id]) => {
+            const d = mod.describe(id);
+            return d && d.annotations > 0 ? d.annotations : false;
+        }", new object[] { module, (await map.GetAttributeAsync("id"))! }, new() { Timeout = 20_000 });
+        Assert.That(await pins.JsonValueAsync<int>(), Is.GreaterThan(0), "The map drew no pins.");
     }
 }

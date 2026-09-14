@@ -1,0 +1,30 @@
+{
+  "canPost": true,
+  "whyNotPost": null,
+  "canModerate": false,
+  "hostNames": [
+    "Paranormal365"
+  ],
+  "messages": [
+    {
+      "id": "a3314b6c-2f11-4ca7-8db4-6745b23bf776",
+      "authorId": "60327bd2-2d42-4d77-c60d-08df10411452",
+      "authorName": "Daniel Park",
+      "body": "The stairs, just after ten.",
+      "postedUtc": "2026-09-13T21:07:58.727514",
+      "hasMedia": true,
+      "mediaContentType": "image/jpeg",
+      "mediaWaiting": false,
+      "isMine": true,
+      "isHidden": false,
+      "sentToHosts": false,
+      "reports": 0
+    }
+  ],
+  "note": null,
+  "photoPosting": 0,
+  "canAddPhotos": true,
+  "canSeeWall": false,
+  "needsPhotoConsent": false,
+  "photoNotice": "Photos you add here are shown to the people at this event in its room, and the organizers may show them on a photo wall or slideshow at the venue. Your photos stay yours, and you can take one down at any time. Please only add photos of people who are happy to be shown."
+}
