@@ -253,7 +253,7 @@
                                             </div>
                                             <div>
                                                 <label class="form-label mb-1" style="font-size:.8rem;" for="investigationpanel-role-optional-3abb">Role (optional)</label>
-                                                <input id="investigationpanel-role-optional-3abb" type="text" class="form-control" placeholder="Lead Investigator" style="max-width:160px;" @bind="@_newAttendeeRole" @bind:event="oninput" />
+                                                <input id="investigationpanel-role-optional-3abb" type="text" class="form-control" placeholder="e.g. Lead Investigator" style="max-width:160px;" @bind="@_newAttendeeRole" @bind:event="oninput" />
                                             </div>
                                             <button type="button" class="btn btn-primary btn-sm" @onclick="@(() => AddAttendee(i))" disabled="@(!(_newAttendeeUserId != Guid.Empty && !_attendeeBusy))"><BenIcon Name="plus" Class="me-1" />
                                                 Add
@@ -283,7 +283,7 @@
         <div class="row g-3">
             <div class="col-12">
                 <label class="form-label fw-semibold" for="investigationpanel-title-092d">Title <span class="text-danger">*</span></label>
-                <input id="investigationpanel-title-092d" type="text" class="form-control" placeholder="Night Investigation #1" @bind="@_form.Title" @bind:event="oninput" />
+                <input id="investigationpanel-title-092d" type="text" class="form-control" placeholder="e.g. Night Investigation #1" @bind="@_form.Title" @bind:event="oninput" />
             </div>            <div class="col-12">
                 <label class="form-label fw-semibold" for="investigationpanel-investigation-plan-description-32cb">Investigation Plan / Description</label>
                 <textarea id="investigationpanel-investigation-plan-description-32cb" class="form-control" rows="3" placeholder="What areas will be investigated? What equipment will be used?" @bind="@_form.Description"></textarea>

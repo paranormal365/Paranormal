@@ -55,18 +55,18 @@
             <div class="row g-2 align-items-end">
                 <div class="col-12 col-md-3">
                     <label class="form-label" for="room-name">Name</label>
-                    <input id="room-name" class="form-control" maxlength="120" placeholder="Room 217"
+                    <input id="room-name" class="form-control" maxlength="120" placeholder="e.g. Room 217"
                            @bind="_name" @bind:event="oninput" />
                 </div>
                 <div class="col-12 col-md-3">
                     <label class="form-label" for="room-floor">Floor or wing</label>
-                    <input id="room-floor" class="form-control" maxlength="60" placeholder="Second floor"
+                    <input id="room-floor" class="form-control" maxlength="60" placeholder="e.g. Second floor"
                            @bind="_floor" @bind:event="oninput" />
                 </div>
                 <div class="col-12 col-md-6">
                     <label class="form-label" for="room-desc">Description</label>
                     <input id="room-desc" class="form-control" maxlength="1000"
-                           placeholder="Guests report a knock at 3am." @bind="_description" @bind:event="oninput" />
+                           placeholder="e.g. Guests report a knock at 3am." @bind="_description" @bind:event="oninput" />
                 </div>
 
                 @* Blank is a real answer here, not a missing one. A venue that has not said how many

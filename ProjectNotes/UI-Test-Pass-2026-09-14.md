@@ -215,8 +215,10 @@ pages, the surfaces a mouse can drag (calendar, event floor plan, seat picker, a
   settings"** above "You've been signed out" — a permission sentence to somebody who is only signed out. → only to a
   signed-in person.
 - [x] **6.11 The event pages' example values read as entries** ("Thomas House Weekend", "Meet at reception", "Mrs Cole,
-  the manager" — fifteen of them), as 1.6 did. → each starts "e.g.". *Open for the final pass:* about ninety more
-  capitalised placeholders across the site need the same look — many are instructions ("No limit", "Optional") and stay.
+  the manager" — fifteen of them), as 1.6 did. → each starts "e.g.". The rest of the site's placeholders were read one by one:
+  twenty-five more were example values ("Room 217", "Jane Doe", "LAUNCH25", "123 Main St" on New Case…) and start "e.g."
+  now; the others are instructions ("No limit", "Optional", "Search venues by name") or show what is used when a box is
+  left blank (a tour letter's default subject), and stay as they are.
 - [x] **6.12 A quick mouse sweep across a floor plan or seating plan skipped squares.** Mouse and pen paint a selection,
   and the square under the pointer was asked for only where each move landed; a fast sweep across four rooms chose
   three. The same component is the public seat picker. → every point along the line since the last move is asked for.

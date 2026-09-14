@@ -290,7 +290,7 @@
             <div class="mb-3">
                 <label class="form-label" for="cpn-code">The code <span class="text-danger">*</span></label>
                 <input id="cpn-code" type="text" class="form-control text-uppercase" style="max-width:280px"
-                       placeholder="LAUNCH25" @bind="_form.SharedCode" @bind:event="oninput"
+                       placeholder="e.g. LAUNCH25" @bind="_form.SharedCode" @bind:event="oninput"
                        disabled="@(_editing is not null)" />
                 @if (_editing is not null)
                 {

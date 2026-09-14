@@ -180,7 +180,7 @@
                                 @(_proof is null ? "What shows you run it" : "Anything the other groups should know (optional)")
                             </label>
                             <textarea class="form-control mb-3" id="claim-evidence" rows="4" maxlength="4000"
-                                      placeholder="I'm the general manager. Our business licence and listing are under this name."
+                                      placeholder="e.g. I'm the general manager. Our business licence and listing are under this name."
                                       @bind="_evidence" @bind:event="oninput"></textarea>
 
                             <button type="button" class="btn btn-primary" id="claim-submit" disabled="@_busy" @onclick="ClaimAsync">
