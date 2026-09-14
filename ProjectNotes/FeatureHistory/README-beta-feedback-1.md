@@ -50,3 +50,15 @@ product walk as every persona, and the full e2e run.
   Belmont case, and the research Playwright fixtures (page, map block, viewports). The first run of those fixtures
   found a real autosave defect — a save that carried the editor's last keystrokes still said "Unsaved changes" and
   refused to publish — and 38.5px touch targets on wide screens; both fixed.
+- H8 committed; the finishing steps done: changelog catch-up, help pages and pictures, product and persona PDFs, the
+  investor overview, and the product walk extended to the new screens.
+- A visual UI test pass (Ben: "use the mouse drag … work through it like layers, from outer to inner"), recorded in
+  `ProjectNotes/UI-Test-Pass-2026-09-14.md`, six layers each fixed and committed before the next: the public shell,
+  the signed-in shell, a group's hub, a case, research pages and the block editor, and the inner workings (seats,
+  dragging, signing in, refusals). The largest finds: members could not see pictures on a published research page;
+  signing in from any deep page landed on the home page; calendar events could not be dragged and deleted on one click;
+  a member's Decline removed a request it had not declined; "view as" showed the SuperAdmin's name.
+- Ben, during layer 5: the research document is to become Notion + Canva + OneNote + Obsidian Canvas, edited in the
+  browser (Blazor WebAssembly) with the working copy in browser storage — Future-Improvements item 241. He is building
+  that in another project; the research editor was left alone from layer 6 on.
+- Full e2e run on the finished branch, then merge to master and develop.
