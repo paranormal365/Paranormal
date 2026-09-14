@@ -24,9 +24,10 @@ account step, help, what's new, contact, sign-in and sign-up — at 1280 and 375
 - [x] **1.2 Two city boxes one after the other on the home page** (the hero's Find Groups and What's Near You).
   → *Not changed: a design question for Ben* — they do different things (find groups / show events and places near).
 - [x] **1.3 The sign-in page's browser tab said "Login"** while the page says "Sign In". → "Sign in".
-- [ ] **1.4 In dark mode, outline-primary buttons read as disabled** — "View" on the home page's case cards, "Find a
+- [x] **1.4 In dark mode, outline-primary buttons read as disabled** — "View" on the home page's case cards, "Find a
   group near you" on the feed: blue text at ~3:1 on the dark card beside a white "Group" button. app.css documents this
-  as a deliberate palette choice below WCAG AA. → *Ben's call*: raise to 4.5:1, or keep.
+  as a deliberate palette choice below WCAG AA. → Ben: "whatever is best". Each outline colour's text is lifted to
+  4.5:1 on both the card and the page (primary, info, danger, success each by its own amount).
 - [x] **1.5 Seeded public events showed "08:00 PM UTC"** for a Tennessee walk: the development seed gave them no time
   zone. → seeded in America/Chicago at the intended local hours (fresh databases).
 - [x] **1.6 The request form's example values read as entries** ("TN", "37201", "123 Main St", "Apt 4B") — I skipped
@@ -35,8 +36,10 @@ account step, help, what's new, contact, sign-in and sign-up — at 1280 and 375
 - [x] **1.7 "Gender" had no "(optional)"** beside "Birth Year (optional)". → added.
 - [x] **1.8 Step 4 greeted the person with a red "Select at least one organization."** before they had done anything.
   → grey guidance: "Choose at least one organization to send your request to."
-- [ ] **1.9 On a phone the home map centres on the middle of the US**; the only pins sit at its right edge.
-  → *Not changed*: the map's fixed framing drives "cases in this view"; noted for Ben.
+- [x] **1.9 On a phone the home map centres on the middle of the US**; the only pins sit at its right edge.
+  → Ben: "best judgement". The first view centres on the middle of the pins at the same zoom (unless they span more than
+  a continent); the person's own location still wins.
+- [x] **1.14 In light mode the sign-in card's logo was a pale ghost on a white card.** → the navigation's colour behind it.
 - [x] **1.10 In light mode on a phone the header's logo nearly vanished** (pale mark on the white header). → the mark
   gets the navigation's colour behind it below 992px, as it has beside the sidebar on wide screens.
 - [x] **1.11 In light mode the sidebar's "Filter" placeholder was dark grey on the dark sidebar.** → light placeholder.
@@ -50,6 +53,31 @@ Tool notes (not site defects): the browser tool's Backspace does not reach input
 test posts with 8×8 grey pictures.
 
 ## Layer 2 — The signed-in shell
+
+Walked as the SuperAdmin (Ben's seat), light then dark: sign-in, the desk, the bell and its drawer, notifications (mark
+all read, opening a message), the profile menu and profile tabs, My investigations / cases / requests / evidence,
+equipment, checkouts, upload files, field sessions, videos, media library, organizations (grid actions, More actions).
+
+- [x] **2.1 The "work waiting" banners' links were blue on purple** in light mode (~2.4:1). → Bootstrap's alert-link.
+- [x] **2.2 The desk said "All 0 upcoming"** with nothing scheduled. → "My investigations" when there are none.
+- [x] **2.3 The bell's "99+" showed as "9…"** — the template caps icon badges at 28px with an ellipsis. → no cap on the bell.
+- [x] **2.4 The desk said "5 unread messages" beside the bell's "Unread messages 99+"** — the desk counts group messages,
+  the bell's row the platform's. → "unread group messages".
+- [x] **2.5 Opening a notification looked like nothing happened**: the message opens below a list of 100+. → the page
+  scrolls to it.
+- [x] **2.6 The desk's date was the server's clock**, not the viewer's. → the viewer's.
+- [x] **2.7 "My Cases" told a member with two open group cases "You have no active cases"** — it is the client's view.
+  → a line under the heading says whose cases these are and where a member's are.
+- [x] **2.8 Organizations grid: the More actions button had no icon** (an invisible button beside View), **and its menu
+  opened clipped by the grid** — a sliver, its nine choices unreachable. Same button on the CMS pages grid. → an icon
+  button like the other row actions, and BenDropdown's new Floating mode places the open menu against the window.
+- [x] **2.9 Signed in, "Public Investigations" lists cases you can open that are not public** (by design) **with nothing
+  saying so** — a member's private case looked published. → such cards carry a "Not public" badge (API: additive
+  `IsPublic` on the discovery item).
+
+- [x] **2.10 On a phone the footer did not wrap**: "Terms" sat past the right edge. → wraps, copyright on its own line.
+
+Seen and fine: tooltips on grid icons; sign-out asks first; mark-all-read updates the bell and sidebar; profile map (pin below the fold).
 
 ## Layer 3 — A group's hub
 

@@ -134,8 +134,8 @@
                         }
                         <div class="btn-group">
                             <BenGridAction Icon="eye" Label="View" OnClick="@(() => NavManager.NavigateTo($"/organizations/{org.Id}"))" />
-                            <BenDropdown ToggleClass="btn btn-link text-decoration-none btn-sm" Title="More actions" MinWidth="180px">
-                                <ToggleContent><span class="visually-hidden">More actions</span></ToggleContent>
+                            <BenDropdown ToggleClass="btn btn-sm ben-grid-action btn-outline-secondary" Title="More actions" MinWidth="180px" Floating="true">
+                                <ToggleContent><BenIcon Name="more-horizontal" /></ToggleContent>
                                 <ChildContent>
                                     <li><button class="dropdown-item" type="button" @onclick="@(() => NavManager.NavigateTo($"/organizations/{org.Id}/cms"))">CMS</button></li>
                                     <li><button class="dropdown-item" type="button" @onclick="@(() => NavManager.NavigateTo($"/organizations/{org.Id}/cases"))">Cases</button></li>

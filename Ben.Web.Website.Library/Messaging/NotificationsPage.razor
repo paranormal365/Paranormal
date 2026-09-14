@@ -8,6 +8,7 @@
 @inject IBenUserState UserState
 @inject NotificationState Notifications
 @inject NavigationManager NavManager
+@inject IJSRuntime JS
 @using Ben.Web.Services.WebApi
 @using Ben.Web.Website.Library.Kit
 
@@ -146,7 +147,7 @@
            the list in view while reading. *@
         @if (_openMessage is not null)
         {
-            <div class="card mt-3">
+            <div class="card mt-3" id="notification-open-message">
                 <div class="card-body">
                     <div class="d-flex align-items-start gap-2 mb-2">
                         <div class="flex-grow-1">
@@ -241,9 +242,30 @@
         await LoadDetailAsync();
     }
 
+    /// <summary>Set when a message is opened, so the page scrolls to where it is read.</summary>
+    /// <remarks>
+    /// The reading pane is below the list. With a hundred messages that is several screens down, and opening one looked
+    /// like a click that did nothing (UI test pass, 2026-09-14).
+    /// </remarks>
+    private bool _scrollToOpenPending;
+
+    protected override async Task OnAfterRenderAsync(bool firstRender)
+    {
+        if (!_scrollToOpenPending || _openMessage is null) return;
+        _scrollToOpenPending = false;
+        try
+        {
+            await using var dom = await JS.InvokeAsync<IJSObjectReference>("import", "/_content/Ben.Web.Website.Library/js/domInterop.js");
+            await dom.InvokeVoidAsync("scrollToElementId", "notification-open-message", "start");
+        }
+        catch (JSDisconnectedException) { }
+        catch (JSException) { /* The message is on the page; scrolling to it is a courtesy. */ }
+    }
+
     private async Task OpenMessageAsync(MyMessageRecord msg)
     {
         _openMessage = msg;
+        _scrollToOpenPending = true;
 
         if (msg.ReadUtc is not null) return;
 

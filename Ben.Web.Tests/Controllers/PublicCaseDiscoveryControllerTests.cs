@@ -451,6 +451,18 @@ public class PublicCaseDiscoveryControllerTests
     }
 
     [Fact]
+    public async Task A_case_shown_only_because_you_can_open_it_says_it_is_not_public()
+    {
+        // The list is headed "Public Investigations"; a member's private case must not read as published there.
+        var seeded = await SeedAPrivateCaseAsync();
+
+        var page = await AsAsync(seeded.Factory, seeded.MemberId);
+
+        Assert.False(page.Items.Single(i => i.CaseId == seeded.PrivateCaseId).IsPublic);
+        Assert.True(page.Items.Single(i => i.Title == "Public one").IsPublic);
+    }
+
+    [Fact]
     public async Task Somebody_elses_account_gains_nothing()
     {
         var seeded = await SeedAPrivateCaseAsync();

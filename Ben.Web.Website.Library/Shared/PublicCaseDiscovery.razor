@@ -158,7 +158,15 @@
                                 <div class="card-body pb-1">
                                     <div class="d-flex justify-content-between align-items-start mb-1">
                                         <span class="font-monospace text-muted" style="font-size:.75rem;">@item.CaseReference</span>
-                                        @if (item.IsHaunted)
+                                        @* Signed in, the list adds cases this person may already open. Under "Public Investigations"
+                                           a member's private case looked published (UI test pass, 2026-09-14). *@
+                                        @if (!item.IsPublic)
+                                        {
+                                            <span class="badge text-bg-secondary" title="Shown to you because you can open it. Visitors don't see it.">
+                                                <BenIcon Name="eye-off" Class="me-1" />Not public
+                                            </span>
+                                        }
+                                        else if (item.IsHaunted)
                                         { <span class="badge bg-warning text-dark">👻 Haunted</span> }
                                     </div>
                                     <h6 class="card-title mb-1">@item.Title</h6>
@@ -330,6 +338,7 @@
         _tourPins = (await AdminClient.GetTourMapPinsAsync(token)).Items;
 
         BuildMarkers(allItems);
+        FrameFirstView();
         SlicePage(allItems);
         await LoadVoteSummariesAsync();
 
@@ -398,11 +407,39 @@
             .ToList();
     }
 
+    /// <summary>True once the view has been placed — by the person's own location, or by the pins on the first answer.</summary>
+    private bool _viewPlaced;
+
+    /// <summary>
+    /// Centres the first view on the published cases rather than on the middle of the United States.
+    /// </summary>
+    /// <remarks>
+    /// UI test pass, 2026-09-14: on a phone the fixed centre over Kansas left every pin — all in Tennessee — at the right
+    /// edge of a 375px map. The zoom is kept, so the view still reads as a country and the list below still shows every
+    /// case; only the centre moves, to the middle of the pins. Pins spread over more than a continent keep the default
+    /// centre, where the middle of them would be an ocean. The person's own location, when the browser gives one, wins.
+    /// </remarks>
+    private void FrameFirstView()
+    {
+        if (_viewPlaced || _inView is not null || _mapPins.Count == 0) return;
+        _viewPlaced = true;
+
+        var south = _mapPins.Min(p => p.Latitude);
+        var north = _mapPins.Max(p => p.Latitude);
+        var west = _mapPins.Min(p => p.Longitude);
+        var east = _mapPins.Max(p => p.Longitude);
+        if (north - south > 30 || east - west > 60) return;
+
+        _mapLat = (north + south) / 2;
+        _mapLon = (east + west) / 2;
+    }
+
     [JSInvokable]
     public async Task SetUserLocation(double? lat, double? lon)
     {
         if (lat.HasValue && lon.HasValue)
         {
+            _viewPlaced = true;
             // BenMap follows these on its next render: the map is the caller's to drive here.
             _mapLat  = lat.Value;
             _mapLon  = lon.Value;

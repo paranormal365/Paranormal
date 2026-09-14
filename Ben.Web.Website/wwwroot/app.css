@@ -68,6 +68,28 @@
 .app-footer-link,
 .app-footer-link:hover { color: inherit; opacity: .85; }
 
+/* On a phone the copyright and five links did not fit one line: the footer is a flex row that does not wrap, and "Terms"
+   sat past the right edge where nobody could reach it (UI test pass, 2026-09-14). It wraps, the copyright on a line of
+   its own and the links spaced evenly beneath. */
+@media (max-width: 575.98px) {
+    .app-footer {
+        flex-wrap: wrap;
+        row-gap: .35rem;
+        height: auto;
+        padding-block: .6rem;
+    }
+
+    .app-footer .app-footer-text {
+        flex-basis: 100%;
+    }
+
+    .app-footer .app-footer-link {
+        margin-left: 0 !important;   /* Bootstrap's ms-3 utility is !important */
+        margin-right: 1rem;
+        white-space: nowrap;
+    }
+}
+
 /* ── Blazor's error bar ─────────────────────────────────────────────────── */
 #blazor-error-ui {
     background: var(--bs-warning-bg-subtle, #ffe69c);
@@ -95,27 +117,30 @@
    the same colour as text on the page background instead, where the darkest of them get hard to
    read against the dark surface.
 
-   The nudge here is deliberately small: enough to lift the resting text off the background,
-   not enough to turn the brand colours pastel. Hover still fills with the true colour.
-   These sit below the 4.5:1 WCAG AA text threshold by design — the palette is the priority. */
+   The text is lifted toward white until it reads at 4.5:1 (WCAG AA) on both the card surface
+   (#272b30) and the page (#373b41) — each colour by its own amount, because a deep navy needs far
+   more than a bright green. It was a smaller nudge, below AA by choice; the UI test pass of
+   2026-09-14 found "View" on the home page's case cards reading as a disabled button beside a
+   white one, and Ben chose readable. The border keeps more of the true colour, and hover still
+   fills with it. */
 :root[data-bs-theme="dark"] .btn-outline-primary {
-    --bs-btn-color:        color-mix(in srgb, var(--bs-primary) 78%, #fff);
-    --bs-btn-border-color: color-mix(in srgb, var(--bs-primary) 88%, #fff);
+    --bs-btn-color:        color-mix(in srgb, var(--bs-primary) 52%, #fff);
+    --bs-btn-border-color: color-mix(in srgb, var(--bs-primary) 70%, #fff);
 }
 
 :root[data-bs-theme="dark"] .btn-outline-info {
-    --bs-btn-color:        color-mix(in srgb, var(--bs-info) 72%, #fff);
-    --bs-btn-border-color: color-mix(in srgb, var(--bs-info) 85%, #fff);
+    --bs-btn-color:        color-mix(in srgb, var(--bs-info) 49%, #fff);
+    --bs-btn-border-color: color-mix(in srgb, var(--bs-info) 68%, #fff);
 }
 
 :root[data-bs-theme="dark"] .btn-outline-danger {
-    --bs-btn-color:        color-mix(in srgb, var(--bs-danger) 85%, #fff);
-    --bs-btn-border-color: color-mix(in srgb, var(--bs-danger) 92%, #fff);
+    --bs-btn-color:        color-mix(in srgb, var(--bs-danger) 63%, #fff);
+    --bs-btn-border-color: color-mix(in srgb, var(--bs-danger) 80%, #fff);
 }
 
 :root[data-bs-theme="dark"] .btn-outline-success {
-    --bs-btn-color:        color-mix(in srgb, var(--bs-success) 88%, #fff);
-    --bs-btn-border-color: color-mix(in srgb, var(--bs-success) 94%, #fff);
+    --bs-btn-color:        color-mix(in srgb, var(--bs-success) 78%, #fff);
+    --bs-btn-border-color: color-mix(in srgb, var(--bs-success) 88%, #fff);
 }
 
 /* ── Button size ────────────────────────────────────────────────────────────
@@ -395,6 +420,14 @@ html[data-bs-theme="dark"] {
     --app-nav-bg: color-mix(in srgb, var(--primary-900) 55%, var(--secondary-800) 45%);
 }
 
+/* ── The bell's count ────────────────────────────────────────────────────────
+   The template caps .badge-icon at 28px with an ellipsis, sized for one or two digits. The bell shows "99+", which the
+   cap cut to "9…" — a count that reads as nine (UI test pass, 2026-09-14). */
+.notification-bell .badge-icon {
+    max-width: none;
+    padding-inline: .3em;
+}
+
 /* ── The navigation's filter box ─────────────────────────────────────────────
    The sidebar is dark in both themes, but in light mode the box took the page's placeholder colour — dark grey on the
    dark navigation, so "Filter" all but vanished (UI test pass, 2026-09-14). The placeholder follows the sidebar. */
@@ -406,6 +439,13 @@ html[data-bs-theme="dark"] {
    Below 992px the brand sits on the header's own ground rather than the navigation's, and in light mode that ground is
    white — the mark is a pale ghost drawn for a dark backdrop, so it read as a faint outline. It gets the navigation's
    colour behind it, as it has beside the sidebar on a wide screen (UI test pass, 2026-09-14). */
+html:not([data-bs-theme="dark"]) .ben-mark-on-light {
+    /* The same answer for the mark wherever it stands on a light card — the sign-in page's, found the same day. */
+    background-color: var(--app-nav-bg, #2f3849);
+    border-radius: 50%;
+    padding: 6px;
+}
+
 @media (max-width: 991.98px) {
     html:not([data-bs-theme="dark"]) .app-header .ben-brand img {
         background-color: var(--app-nav-bg, #2f3849);

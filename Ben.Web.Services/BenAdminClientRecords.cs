@@ -995,7 +995,10 @@ public sealed record PublicCaseDiscoveryItem(
     int      Score,
     decimal? ApproxLatitude,
     decimal? ApproxLongitude,
-    string?  ClientName);
+    string?  ClientName,
+    // False for a case shown only because this caller may already open it (their group's, or their own as a client), so
+    // the card can say it is not public — the section is headed "Public Investigations". Trailing and defaulted: additive.
+    bool     IsPublic = true);
 
 // ── Phase 5: Investigation + Evidence Voting request records ──────────────────
 public sealed record UpsertInvestigationRequest(

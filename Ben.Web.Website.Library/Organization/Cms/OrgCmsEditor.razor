@@ -112,8 +112,8 @@
                                 @{ var pg = (CmsPageListItem)context; }
                                 <span class="text-nowrap">
                                 <BenGridAction Icon="layout" Label="Sections" OnClick="@(() => NavManager.NavigateTo($"/organizations/{OrgId}/cms/pages/{pg.Id}"))" />
-                                <BenDropdown ToggleClass="btn btn-link text-decoration-none btn-sm" Title="More actions" MinWidth="160px">
-                                    <ToggleContent><span class="visually-hidden">More actions</span></ToggleContent>
+                                <BenDropdown ToggleClass="btn btn-sm ben-grid-action btn-outline-secondary" Title="More actions" MinWidth="160px" Floating="true">
+                                    <ToggleContent><BenIcon Name="more-horizontal" /></ToggleContent>
                                     <ChildContent>
                                         @if (pg.CanEdit)
                                         {

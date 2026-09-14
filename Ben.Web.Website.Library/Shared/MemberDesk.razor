@@ -37,7 +37,7 @@ else if (_desk is { GroupCount: > 0 })
     <div class="container-fluid px-3 py-3" style="max-width:1100px;" data-testid="member-desk">
         <div class="d-flex align-items-baseline justify-content-between flex-wrap gap-2 mb-3">
             <h3 class="mb-0">Your desk</h3>
-            <span class="text-muted small">@DateTime.Now.ToString("dddd, MMMM d")</span>
+            <span class="text-muted small">@DateTime.UtcNow.ToViewerLocalTime(UserState).ToString("dddd, MMMM d")</span>
         </div>
 
         <div class="row g-3">
@@ -46,7 +46,7 @@ else if (_desk is { GroupCount: > 0 })
                 <div class="card h-100" data-testid="desk-next-investigation">
                     <div class="card-header py-2 d-flex justify-content-between">
                         <span>Next investigation</span>
-                        <a href="/my-investigations" class="small">All @_desk.UpcomingInvestigationCount upcoming</a>
+                        <a href="/my-investigations" class="small">@(_desk.UpcomingInvestigationCount > 0 ? $"All {_desk.UpcomingInvestigationCount} upcoming" : "My investigations")</a>
                     </div>
                     <div class="card-body">
                         @if (_desk.NextInvestigation is { } inv)
@@ -105,7 +105,9 @@ else if (_desk is { GroupCount: > 0 })
                 <a class="card h-100 text-decoration-none" href="/notifications" data-testid="desk-unread">
                     <div class="card-body text-center">
                         <div class="display-6">@_desk.UnreadMessageCount</div>
-                        <div class="text-muted">unread message@(_desk.UnreadMessageCount == 1 ? "" : "s")</div>
+                        @* Group messages only (MyDeskController counts OrgMessageRecipients). Plain "unread messages" said 5 beside the bell's
+   "Unread messages 99+", which counts the platform's own messages (UI test pass, 2026-09-14). *@
+                        <div class="text-muted">unread group message@(_desk.UnreadMessageCount == 1 ? "" : "s")</div>
                     </div>
                 </a>
             </div>
