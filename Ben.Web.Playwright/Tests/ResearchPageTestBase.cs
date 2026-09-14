@@ -54,11 +54,20 @@ public abstract class ResearchPageTestBase : BenTestBase
     }
 
     /// <summary>Adds a text block from the Add bar and types into its editor.</summary>
+    /// <remarks>
+    /// Waits for the NEW block's editor. It used to wait for any open editor, which the block added before already was —
+    /// so under load the helper clicked the previous block's editor before the new block arrived, took the page back to
+    /// it, and the words went nowhere (full e2e run, 2026-09-14).
+    /// </remarks>
     protected async Task AddTextAsync(string words)
     {
-        var editors = Page.Locator("[data-testid=text-block-editor] .k-editor [contenteditable='true']");
-        await ClickUntilAsync(Page.Locator("[data-testid=block-add-text]"), editors);
-        await editors.First.ClickAsync();
+        var before = await Page.Locator("section[data-block-id]").EvaluateAllAsync<string[]>("els => els.map(e => e.dataset.blockId)");
+        var newEditor = Page.Locator(before.Length == 0
+            ? "section[data-kind=text] [data-testid=text-block-editor] .k-editor [contenteditable='true']"
+            : "section[data-kind=text]" + string.Concat(before.Select(id => $":not([data-block-id='{id}'])"))
+              + " [data-testid=text-block-editor] .k-editor [contenteditable='true']");
+        await ClickUntilAsync(Page.Locator("[data-testid=block-add-text]"), newEditor);
+        await newEditor.First.ClickAsync();
         await Page.Keyboard.TypeAsync(words);
     }
 
