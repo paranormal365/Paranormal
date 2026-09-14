@@ -692,8 +692,9 @@ ledger row — there is nothing to hand back.
 
 ### The events dashboard
 
-**Administration → Dashboard** has two tabs. **The site** is the dashboard above; **Events** is the same
-kind of page for hosted events across every group, and the range picker drives both.
+**Administration → Dashboard** has three tabs. **The site** is the dashboard above; **Events** is the same
+kind of page for hosted events across every group; **Event health** says whether hosted events are working
+(below). The range picker drives all three.
 
 ![The events dashboard's cards](help-media:site-administration/events-dashboard.png)
 
@@ -719,8 +720,11 @@ event, the group, the organizer or the place, and the state filter narrows the l
 
 ![Every hosted event](help-media:site-administration/every-event.png)
 
-The eye opens the event's own page as its organizer sees it. From there you can follow it through its
-whole process: plan, bookings, door, room and what happened afterwards.
+The eye opens the event's own page as its organizer sees it. The arrow at the start of each row opens every
+other screen of that event — plan, bookings, menus, the kitchen's sheet, programme, staff, the door, bands,
+files, gallery, what happened afterwards, keeping the files, copying it, the photo wall and, while it is
+published, on or just ended, its public page. A SuperAdmin can open all of them for any group's event, including groups you don't
+belong to.
 
 The bin opens **Remove an event**, which says what removing it will do before you confirm:
 
@@ -751,6 +755,37 @@ whether its credit went back, and your note from the removal.
 
 Either way the organizer is told by email and in their messages. Each removal takes one appeal; an event
 removed again after an upheld appeal can be appealed again.
+
+## Event health
+
+**Event health** is for whoever is building or looking after hosted events: it says whether the feature is
+working, where **Events** says how it is being used. It counts and names addresses and jobs; it never names a
+guest.
+
+The cards say where things stand now:
+- **holds live**, and how many lapse in the next 24 hours unless somebody answers them;
+- **waiting for an answer** — asks and holds nobody has answered at events still taking bookings — and how long
+  the longest has waited;
+- **letters in the outbox** not yet sent, and how many were given up on in the period. This is all of the
+  site's mail, because the outbox doesn't record which letters are about events;
+- **errors on event addresses** the server logged in the period.
+
+The charts cover the period:
+- **Bookings made, answered and lapsed**, by day. Lapses climbing while answers stay flat means nobody is
+  looking at the board.
+- **How long parties waited** for an answer, from within an hour to over three days.
+- **Letters** queued, sent and failed, by day.
+- **Turned away by a limit** — requests the booking and attendance limits refused, all time, with the day each
+  last refused somebody.
+- **Errors on event addresses**, by day and by address, from the server's error log. Ids in the addresses are
+  shown as `{id}`. The days are the server's own days. Where the log can't be read — it is only kept on SQL
+  Server — the panels say so instead of drawing an empty chart.
+
+**Scheduled jobs** lists every background job — expiring holds, moving events through their states, alerts
+and digests, reminders, thank-you letters, retention, sending mail and the rest — with when it last ran, how
+long it took, whether it failed and the first line of its most recent error. It counts from when the server
+last started, so a restart empties it. Every job runs every five minutes: one that stops appearing, or keeps
+failing, is the first place to look.
 
 ## Referrals and what they earn
 

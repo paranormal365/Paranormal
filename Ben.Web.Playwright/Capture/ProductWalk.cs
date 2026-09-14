@@ -164,21 +164,6 @@ public sealed class ProductWalk : BenTestBase
         return results.filter(src => src).map(src => src.split('?')[0]);
     }");
 
-    /// <summary>Every spinner showing in the page's content — the site's loaders all draw Bootstrap's.</summary>
-    private ILocator Spinners => Main.Locator(".spinner-border:visible");
-
-    /// <summary>Waits until the circuit has taken over the server-rendered page.</summary>
-    /// <remarks>
-    /// A page arrives prerendered and only starts loading its data once its circuit connects, so "no Loading
-    /// placeholder" is briefly true of a page that has not begun. The prerendered HTML marks each interactive component
-    /// with a <c>&lt;!--Blazor:…--&gt;</c> comment and the circuit consumes those comments as it attaches them — none
-    /// left means the components are live and any placeholder they show is already on the page.
-    /// </remarks>
-    private Task WaitForTheCircuitAsync() => Page.WaitForFunctionAsync(@"() => {
-        const comments = document.createTreeWalker(document, NodeFilter.SHOW_COMMENT);
-        while (comments.nextNode()) if (comments.currentNode.data.startsWith('Blazor:')) return false;
-        return true;
-    }", null, new() { Timeout = 60_000 });
 
     /// <summary>
     /// Follows the first link on the page whose address starts with <paramref name="prefix"/>, or notes that the page
@@ -472,6 +457,14 @@ public sealed class ProductWalk : BenTestBase
 
         await StepAsync("dashboard", () => GoAsync("/admin/dashboard"), expect: "Sign-ins and registrations");
         await StepAsync("dashboard, events tab", () => GoAsync("/admin/dashboard?tab=events"), Main.Locator("#events-dashboard"));
+        await StepAsync("dashboard, event health tab", () => GoAsync("/admin/dashboard?tab=event-health"), Main.Locator("#event-health"));
+        await StepAsync("every screen of one event, from the list", async () =>
+        {
+            await GoAsync("/admin/events");
+            var row = Main.Locator(".admin-events-grid tr.k-master-row").First;
+            await Expect(row).ToBeVisibleAsync(new() { Timeout = 30_000 });
+            await ClickUntilAsync(row.Locator("td.k-hierarchy-cell"), Main.Locator("[id^='screens-']"));
+        }, Main.Locator("[id^='screens-']"));
         foreach (var route in new[]
                  {
                      "/admin/users", "/admin/cases", "/admin/investigations", "/admin/events", "/admin/event-credits",

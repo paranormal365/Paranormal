@@ -18,6 +18,12 @@ day-by-day account of building it would say nothing to anyone using it now.
 
 ## 2026-09-14
 
+- SuperAdmins have an Event health tab on the dashboard. It shows holds and how long parties wait for an answer,
+  letters going out, errors on event pages, requests turned away by the booking limits, and when each
+  background job last ran and whether it failed.
+- On the SuperAdmin's list of hosted events, each row opens onto every screen of that event: bookings, plan,
+  door, staff, menus, files and the rest.
+- The door screen names the event it is for.
 - A client's own case page and investigation list show when a visit starts and ends, instead of a line of
   program text after the start time. The same fix reaches a group's investigation panel and its scheduling
   proposals.

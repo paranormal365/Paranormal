@@ -18,6 +18,9 @@ public interface IBenEventOversightClient
     /// <summary>The events dashboard over a window of days. SuperAdmin.</summary>
     Task<ItemResult<AdminHostedEventStats>> GetAdminHostedEventStatsAsync(int days = 30, CancellationToken token = default);
 
+    /// <summary>Whether hosted events are working — holds, answers, letters, errors, refusals, jobs — over a window. SuperAdmin.</summary>
+    Task<ItemResult<AdminHostedEventHealth>> GetAdminHostedEventHealthAsync(int days = 30, CancellationToken token = default);
+
     /// <summary>What removing this event would do: whether its credit comes back and who with a place is told.</summary>
     Task<ItemResult<AdminHostedEventRemovalEffect>> GetHostedEventRemovalEffectAsync(Guid eventId, CancellationToken token = default);
 

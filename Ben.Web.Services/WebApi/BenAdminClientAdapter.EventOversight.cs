@@ -11,6 +11,9 @@ public sealed partial class BenAdminClientAdapter
     public Task<ItemResult<AdminHostedEventStats>> GetAdminHostedEventStatsAsync(int days = 30, CancellationToken token = default)
         => _api.GetItemAsync<AdminHostedEventStats>($"/api/admin/hosted-events/stats?days={days}", token);
 
+    public Task<ItemResult<AdminHostedEventHealth>> GetAdminHostedEventHealthAsync(int days = 30, CancellationToken token = default)
+        => _api.GetItemAsync<AdminHostedEventHealth>($"/api/admin/hosted-events/health?days={days}", token);
+
     public Task<ItemResult<AdminHostedEventRemovalEffect>> GetHostedEventRemovalEffectAsync(Guid eventId, CancellationToken token = default)
         => _api.GetItemAsync<AdminHostedEventRemovalEffect>($"/api/admin/hosted-events/{eventId}/removal-effect", token);
 

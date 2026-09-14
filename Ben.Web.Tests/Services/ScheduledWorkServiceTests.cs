@@ -40,7 +40,8 @@ public sealed class ScheduledWorkServiceTests
 
         return new ScheduledWorkService(
             services.BuildServiceProvider().GetRequiredService<IServiceScopeFactory>(),
-            NullLogger<ScheduledWorkService>.Instance);
+            NullLogger<ScheduledWorkService>.Instance,
+            new ScheduledJobLedger());
     }
 
     [Fact]
@@ -108,7 +109,8 @@ public sealed class ScheduledWorkServiceTests
 
         var service = new ScheduledWorkService(
             services.BuildServiceProvider().GetRequiredService<IServiceScopeFactory>(),
-            NullLogger<ScheduledWorkService>.Instance);
+            NullLogger<ScheduledWorkService>.Instance,
+            new ScheduledJobLedger());
 
         // The assertion is that this returns at all rather than throwing.
         await service.RunOnceAsync(default);
