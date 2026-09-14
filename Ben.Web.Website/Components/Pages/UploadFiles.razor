@@ -102,7 +102,7 @@
 
     @* A file grid shown empty over a refusal sends somebody to upload again what is already
        stored. *@
-    <BenListState TItem="UploadFileRecord" Result="@_filesResult"
+    <BenListState TItem="UploadFileRecord" Result="@_filesResult" Loading="@_loading"
                   EmptyText="No files uploaded yet" OnRetry="@LoadDataAsync">
     <ChildContent>
     <TelerikGrid Data="@_files"
@@ -356,6 +356,12 @@
     // ── State ────────────────────────────────────────────────────────────────
     private IReadOnlyList<UploadFileRecord> _files = [];
     private LoadResult<UploadFileRecord> _filesResult;
+
+    /// <summary>
+    /// True until the list has come back. A result nobody has fetched yet is empty, and without this the page said
+    /// "No files uploaded yet" to somebody with files for as long as sign-in and the fetch took.
+    /// </summary>
+    private bool _loading = true;
     private IReadOnlyList<UploadFileTypeRecord> _fileTypes = [];
     private IReadOnlyList<OrganizationSummaryResponse> _myOrgs = [];
 
@@ -443,6 +449,8 @@
 
     private async Task LoadDataAsync()
     {
+        _loading = true;
+
         var filesTask = Api.GetUploadFilesAsync();
         var typesTask = Api.GetUploadFileTypesAsync();
         var orgsTask  = Api.GetMyOrganizationsAsync();
@@ -453,6 +461,7 @@
         _files       = _filesResult.Items;
         _fileTypes   = typesTask.Result.Items;
         _myOrgs      = orgsTask.Result.Items;
+        _loading     = false;
 
         if (_fileTypes.Any())
             _newUpload.FileTypeId = _fileTypes[0].Id;
