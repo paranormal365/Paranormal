@@ -866,8 +866,9 @@ internal static class DevelopmentDataSeeder
             Title = "Bell Witch Cave — Public Night Walk",
             Description = "<p>An open evening at the cave. Bring a torch; we supply the recorders.</p>",
             PlaceId = placeId,
-            StartDateTime = now.AddDays(14).Date.AddHours(20),
-            EndDateTime   = now.AddDays(14).Date.AddHours(23),
+            StartDateTime = TennesseeTimeToUtc(now.AddDays(14).Date.AddHours(20)),
+            EndDateTime   = TennesseeTimeToUtc(now.AddDays(14).Date.AddHours(23)),
+            TimeZoneId    = TennesseeZone,
             IsPublic = true,
             UrlName = $"{now.AddDays(14):yyyy-MM-dd}-bell-witch-cave-public-night-walk",
             AttendeeCapacity = 20,
@@ -890,8 +891,9 @@ internal static class DevelopmentDataSeeder
             // No PlaceId: an event may name an organization address instead, and VisibleEvents
             // allows a null Place. The nearby projection falls back to the address for coordinates.
             OrganizationAddressId = npsAddress?.Id,
-            StartDateTime = now.AddDays(28).Date.AddHours(19),
-            EndDateTime   = now.AddDays(28).Date.AddHours(21),
+            StartDateTime = TennesseeTimeToUtc(now.AddDays(28).Date.AddHours(19)),
+            EndDateTime   = TennesseeTimeToUtc(now.AddDays(28).Date.AddHours(21)),
+            TimeZoneId    = TennesseeZone,
             IsPublic = true,
             UrlName = $"{now.AddDays(28):yyyy-MM-dd}-open-meeting-what-we-found-this-year",
             DateCreated = now, CreatedByAppUserId = emma.Id,
@@ -1119,6 +1121,16 @@ internal static class DevelopmentDataSeeder
         await db.SaveChangesAsync();
         Console.WriteLine($"[DevDataSeeder] Seeded case: {org.Name} #{year}-{number:D3} ({city}, {state})");
     }
+
+    /// <summary>Where the seeded public events happen. Named, so their times read in the place's own clock.</summary>
+    /// <remarks>
+    /// The two public events used to be seeded with no zone, and an event with none reads in UTC: a Tennessee night walk
+    /// at eight showed as "08:00 PM UTC" on What's on (UI test pass, 2026-09-14). The hours are the place's; stored as UTC.
+    /// </remarks>
+    private const string TennesseeZone = "America/Chicago";
+
+    private static DateTime TennesseeTimeToUtc(DateTime placeTime) =>
+        TimeZoneInfo.ConvertTimeToUtc(DateTime.SpecifyKind(placeTime, DateTimeKind.Unspecified), TimeZoneInfo.FindSystemTimeZoneById(TennesseeZone));
 
     /// <summary>
     /// One published, dated research page on the Belmont case, with a text, link and map block.

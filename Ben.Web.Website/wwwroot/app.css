@@ -395,6 +395,25 @@ html[data-bs-theme="dark"] {
     --app-nav-bg: color-mix(in srgb, var(--primary-900) 55%, var(--secondary-800) 45%);
 }
 
+/* ── The navigation's filter box ─────────────────────────────────────────────
+   The sidebar is dark in both themes, but in light mode the box took the page's placeholder colour — dark grey on the
+   dark navigation, so "Filter" all but vanished (UI test pass, 2026-09-14). The placeholder follows the sidebar. */
+.app-sidebar #searchInput {
+    --ben-placeholder-color: rgba(255, 255, 255, .55);   /* the site-wide placeholder rule reads this, !important */
+}
+
+/* ── The brand on a phone's light header ─────────────────────────────────────
+   Below 992px the brand sits on the header's own ground rather than the navigation's, and in light mode that ground is
+   white — the mark is a pale ghost drawn for a dark backdrop, so it read as a faint outline. It gets the navigation's
+   colour behind it, as it has beside the sidebar on a wide screen (UI test pass, 2026-09-14). */
+@media (max-width: 991.98px) {
+    html:not([data-bs-theme="dark"]) .app-header .ben-brand img {
+        background-color: var(--app-nav-bg, #2f3849);
+        border-radius: 50%;
+        padding: 2px;
+    }
+}
+
 /* ── Brand block ─────────────────────────────────────────────────────────────
    The template puts its logo in the header, in a block exactly the sidebar's width
    (`.app-header .app-logo { width: var(--menu-width) }`) and painted the navigation's colour, so

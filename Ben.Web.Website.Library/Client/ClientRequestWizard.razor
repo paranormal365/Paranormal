@@ -72,23 +72,23 @@
                 <div class="row g-3">
                     <div class="col-12">
                         <label class="form-label fw-semibold" for="req-street1">Street Address <span class="text-danger">*</span></label>
-                        <input type="text" id="req-street1" class="form-control" placeholder="123 Main St" @bind="@_streetAddress1" @bind:event="oninput" />
+                        <input type="text" id="req-street1" class="form-control" placeholder="e.g. 123 Main St" @bind="@_streetAddress1" @bind:event="oninput" @bind:after="AddressEdited" />
                     </div>
                     <div class="col-12">
                         <label class="form-label fw-semibold" for="req-street2">Apt / Unit (optional)</label>
-                        <input type="text" id="req-street2" class="form-control" placeholder="Apt 4B" @bind="@_streetAddress2" @bind:event="oninput" />
+                        <input type="text" id="req-street2" class="form-control" placeholder="e.g. Apt 4B" @bind="@_streetAddress2" @bind:event="oninput" />
                     </div>
                     <div class="col-md-5">
                         <label class="form-label fw-semibold" for="req-city">City <span class="text-danger">*</span></label>
-                        <input type="text" id="req-city" class="form-control" @bind="@_city" @bind:event="oninput" />
+                        <input type="text" id="req-city" class="form-control" @bind="@_city" @bind:event="oninput" @bind:after="AddressEdited" />
                     </div>
                     <div class="col-md-3">
                         <label class="form-label fw-semibold" for="req-state">State <span class="text-danger">*</span></label>
-                        <input type="text" id="req-state" class="form-control" placeholder="TN" @bind="@_state" @bind:event="oninput" />
+                        <input type="text" id="req-state" class="form-control" placeholder="e.g. TN" @bind="@_state" @bind:event="oninput" @bind:after="AddressEdited" />
                     </div>
                     <div class="col-md-4">
                         <label class="form-label fw-semibold" for="req-zip">ZIP Code <span class="text-danger">*</span></label>
-                        <input type="text" id="req-zip" class="form-control" placeholder="37201" @bind="@_zipCode" @bind:event="oninput" />
+                        <input type="text" id="req-zip" class="form-control" placeholder="e.g. 37201" @bind="@_zipCode" @bind:event="oninput" @bind:after="AddressEdited" />
                     </div>
                     <div class="col-12">
                         @* W-A12: gated on _verifying only. "The address is incomplete" is the
@@ -152,7 +152,7 @@
                         @* W-S4: onboarding asks "Sex" and this asked "Gender", so a signed-in
                            person answered the same question twice under two names. One question,
                            one word, and prefilled from the profile when there is one. *@
-                        <label class="form-label fw-semibold" id="req-gender-label">Gender</label>
+                        <label class="form-label fw-semibold" id="req-gender-label">Gender (optional)</label>
                         <BenSelect AriaLabel="Gender" Data="@_genderOptions" @bind-Value="@_gender" TextField="@nameof(GenderOption.Label)" ValueField="@nameof(GenderOption.Value)" Width="100%" />
                         <div class="form-text">Optional. Groups use it only to know who is in the home.</div>
                     </div>
@@ -314,9 +314,11 @@
                             </div>
                         }
                     </div>
+                    @* Why Submit is not yet offered, said before anybody has done anything wrong — so not in red
+                       (UI test pass, 2026-09-14: it read as an error on arriving at the step). *@
                     @if (_selectedOrgIds.Count == 0)
                     {
-                        <div class="text-danger small mt-2">Select at least one organization.</div>
+                        <div class="text-secondary small mt-2">Choose at least one organization to send your request to.</div>
                     }
                 }
 
@@ -338,7 +340,7 @@
                         <div class="col-md-4">
                             <label class="form-label fw-semibold" for="req-name">Your name <span class="text-danger">*</span></label>
                             <input type="text" id="req-name" class="form-control" autocomplete="name"
-                                   placeholder="Casey Miller" @bind="@_accountName" @bind:event="oninput" />
+                                   placeholder="e.g. Casey Miller" @bind="@_accountName" @bind:event="oninput" />
                         </div>
                         <div class="col-md-4">
                             <label class="form-label fw-semibold" for="req-email">Email <span class="text-danger">*</span></label>
@@ -504,6 +506,13 @@
     private LoadResult<OrgSearchResult> _orgsResult;
     private readonly HashSet<Guid> _selectedOrgIds = new();
 
+    private static string JoinNames(IReadOnlyList<string> names) => names.Count switch
+    {
+        1 => names[0],
+        2 => $"{names[0]} and {names[1]}",
+        _ => string.Join(", ", names.Take(names.Count - 1)) + " and " + names[^1],
+    };
+
     // ── Options ───────────────────────────────────────────────────────────────
     private bool CanGeocode =>
         !string.IsNullOrWhiteSpace(_streetAddress1) &&
@@ -585,7 +594,11 @@
         // W-A12: the refusal the disabled attribute used to make, made here where it can speak.
         if (!CanGeocode)
         {
-            _geocodeError = "Fill in the street, city, state and ZIP first.";
+            // Names what is missing: an example value in a box reads like an entry, and "fill in all four" sent
+            // a tester looking for a problem in the three they had typed (UI test pass, 2026-09-14).
+            var missing = new (string Value, string Name)[] { (_streetAddress1, "street"), (_city, "city"), (_state, "state"), (_zipCode, "ZIP code") }
+                .Where(f => string.IsNullOrWhiteSpace(f.Value)).Select(f => f.Name).ToList();
+            _geocodeError = $"Fill in the {JoinNames(missing)} first.";
             return;
         }
 
@@ -597,16 +610,33 @@
         {
             var q = $"{_streetAddress1}, {_city}, {_state} {_zipCode}";
             var result = await AdminClient.SearchGeocodingAsync(q);
-            if (result is null)
+            if (result?.Latitude is not { } lat || result.Longitude is not { } lon)
+            {
+                _lat = _lon = null;
                 _geocodeError = "Address not found. Please check the details and try again.";
+            }
             else
             {
-                _lat = result.Latitude  ?? _lat;
-                _lon = result.Longitude ?? _lon;
+                _lat = lat;
+                _lon = lon;
             }
         }
         catch { _geocodeError = "We couldn't reach the map service. Try again in a moment."; }
         finally { _verifying = false; }
+    }
+
+    /// <summary>
+    /// A changed address is no longer the address that was verified: the tick goes, and Next waits for Verify again.
+    /// </summary>
+    /// <remarks>
+    /// UI test pass, 2026-09-14: verify an address, then empty its state and ZIP — "✓ Address verified" stayed, Next stayed
+    /// on, and the request would have gone to the groups near the old address. A lookup that finds nothing now also clears
+    /// the old place rather than keeping it behind "Address not found".
+    /// </remarks>
+    private void AddressEdited()
+    {
+        _lat = _lon = null;
+        _geocodeError = null;
     }
 
     // ── Step navigation ───────────────────────────────────────────────────────

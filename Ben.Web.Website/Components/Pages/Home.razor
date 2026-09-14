@@ -26,7 +26,9 @@
 @* Item 186 F9: the feed's front door on the front page. Renders nothing while the feed is dark. *@
 <Ben.Web.Website.Library.Feed.FeedTeaser />
 @* Item 166 W3: one promoted group per load, rotating server-side, always marked. *@
-<div class="container-fluid px-3" style="max-width:860px;margin:0 auto;">
+@* The home page's sections share one column: 1000px from the content's left edge. The teaser and this card sat in a
+   narrower centred column and read as misaligned beside the sections above and below (UI test pass, 2026-09-14). *@
+<div class="container-fluid px-3" style="max-width:1000px;">
     <PromotedGroupsCard />
 </div>
 <PublicCaseDiscovery />
