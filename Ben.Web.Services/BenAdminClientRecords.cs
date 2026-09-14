@@ -1404,7 +1404,8 @@ public sealed record UpsertResearchRequest(
     Ben.Data.Common.Enums.CaseResearchType ResearchType,
     string  Title,
     string? Body,
-    string? Url);
+    string? Url,
+    DateTime? EventDateTime = null);
 
 public sealed record CaseResearchEntryDto(
     Guid                                   Id,
@@ -1415,7 +1416,57 @@ public sealed record CaseResearchEntryDto(
     string?                                Url,
     ResearchFileInfo?                      File,
     int                                    SortOrder,
-    DateTime                               DateCreated);
+    DateTime                               DateCreated,
+    // Research pages (2026-09-14)
+    DateTime?                              EventDateTime = null,
+    DateTime?                              PublishedUtc = null,
+    DateTime?                              DraftSavedUtc = null,
+    bool                                   HasUnpublishedDraft = false,
+    bool                                   DraftIsMine = false,
+    string?                                Excerpt = null);
+
+/// <summary>A research page as one reader sees it (2026-09-14) — mirrors the API's record.</summary>
+public sealed record CaseResearchPageDto(
+    Guid Id,
+    Guid CaseId,
+    string Title,
+    DateTime? EventDateTime,
+    Ben.Data.Common.Blocks.BlockDocument Document,
+    bool IsDraft,
+    int Revision,
+    DateTime? PublishedUtc,
+    string? PublishedByName,
+    DateTime? DraftSavedUtc,
+    bool HasUnpublishedDraft,
+    string? DraftHeldByName,
+    bool DraftHeldByMe,
+    IReadOnlyList<CaseResearchAttachmentDto> Attachments);
+
+public sealed record CaseResearchAttachmentDto(
+    Guid Id,
+    Ben.Data.Common.Enums.CaseResearchAttachmentKind Kind,
+    string Title,
+    Guid? FileId,
+    string? FileName,
+    string? ContentType,
+    long? FileSize,
+    string? Url,
+    int SortOrder,
+    DateTime DateCreated);
+
+public sealed record SaveResearchDraftRequest(
+    Ben.Data.Common.Blocks.BlockDocument Document,
+    int BaseRevision,
+    Guid ClientSaveId,
+    string Title,
+    DateTime? EventDateTime);
+
+public sealed record ResearchDraftSavedDto(int Revision, DateTime SavedUtc);
+
+/// <summary>What a draft save came to: saved, refused with a sentence, or refused because newer work would be lost.</summary>
+public sealed record ResearchDraftSaveOutcome(ResearchDraftSavedDto? Saved, string? Refusal, bool IsConflict);
+
+public sealed record AddResearchLinkRequest(string Url, string? Title = null, bool RefreshPreview = false);
 
 public sealed record ResearchFileInfo(Guid FileId, string FileName, string ContentType, long FileSize);
 

@@ -203,6 +203,16 @@ public interface IBenCaseClient
     Task<CaseResearchEntryDto?> UpdateCaseResearchAsync(Guid orgId, Guid caseId, Guid entryId, UpsertResearchRequest request, CancellationToken token = default);
     Task<bool> DeleteCaseResearchAsync(Guid orgId, Guid caseId, Guid entryId, CancellationToken token = default);
 
+    // ── Research pages (2026-09-14) ──────────────────────────────────────────
+    /// <summary>A new research page, with the server's refusal sentence when there is one.</summary>
+    Task<(CaseResearchEntryDto? Result, string? Error)> CreateCaseResearchPageAsync(Guid orgId, Guid caseId, string title, CancellationToken token = default);
+    Task<ItemResult<CaseResearchPageDto>> GetCaseResearchPageAsync(Guid orgId, Guid caseId, Guid entryId, CancellationToken token = default);
+    Task<ResearchDraftSaveOutcome> SaveCaseResearchDraftAsync(Guid orgId, Guid caseId, Guid entryId, SaveResearchDraftRequest request, CancellationToken token = default);
+    Task<(CaseResearchPageDto? Result, string? Error)> PublishCaseResearchPageAsync(Guid orgId, Guid caseId, Guid entryId, CancellationToken token = default);
+    Task<(CaseResearchAttachmentDto? Result, string? Error)> UploadCaseResearchAttachmentAsync(Guid orgId, Guid caseId, Guid entryId, Stream content, string fileName, string contentType, CancellationToken token = default);
+    Task<(CaseResearchAttachmentDto? Result, string? Error)> AddCaseResearchLinkAsync(Guid orgId, Guid caseId, Guid entryId, AddResearchLinkRequest request, CancellationToken token = default);
+    Task<(bool Ok, string? Error)> DeleteCaseResearchAttachmentAsync(Guid orgId, Guid caseId, Guid entryId, Guid attachmentId, CancellationToken token = default);
+
     // ── Case Files (Files/Evidence tab) ──────────────────────────────────────
 
     /// <summary>Returns all files linked to a case's Files/Evidence tab, newest first.</summary>

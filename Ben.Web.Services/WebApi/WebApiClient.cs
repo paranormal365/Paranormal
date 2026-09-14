@@ -171,6 +171,26 @@ public sealed class WebApiClient : IWebApiClient
     }
 
     /// <inheritdoc />
+    public async Task<(TResponse? Result, string? Error, int Status)> SendWithStatusAsync<TRequest, TResponse>(
+        HttpMethod method, string relativeUrl, TRequest? payload, CancellationToken token = default)
+    {
+        using var req = Auth(method, relativeUrl);
+        if (payload is not null) req.Content = JsonContent.Create(payload);
+        using var response = await _httpClient.SendAsync(req, token);
+        var status = (int)response.StatusCode;
+
+        if (response.IsSuccessStatusCode)
+            return (await BodyOrDefaultAsync<TResponse>(response, token), null, status);
+
+        var body = await response.Content.ReadAsStringAsync(token);
+        var looksLikeProse = !string.IsNullOrWhiteSpace(body)
+                          && body.Length < 400
+                          && !body.TrimStart().StartsWith('{')
+                          && !body.TrimStart().StartsWith('<');
+        return (default, looksLikeProse ? body.Trim('"', ' ', '\n') : null, status);
+    }
+
+    /// <inheritdoc />
     public async Task<(TResponse? Result, TConflict? Conflict)> PostExpectingConflictAsync<TRequest, TResponse, TConflict>(
         string relativeUrl, TRequest payload, CancellationToken token = default)
     {
