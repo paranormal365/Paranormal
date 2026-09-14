@@ -129,4 +129,28 @@ public class AdminEventOversightTests : BenTestBase
 
         await ClickUntilAsync(Page.Locator("#dashboard-tab-site"), Page.GetByText("Sign-ins and registrations"));
     }
+
+    /// <summary>
+    /// The Event health tab: the holds and letters, the server's own error log or why it cannot be read, and the
+    /// scheduled jobs.
+    /// </summary>
+    [Test]
+    public async Task The_dashboard_has_an_event_health_tab_with_errors_and_jobs()
+    {
+        await Page.GotoAsync($"{BaseUrl}/admin/dashboard?tab=event-health");
+        await WaitForTheCircuitAsync();
+        await WaitUntilLoadedAsync();
+
+        await Expect(Page.Locator("#event-health")).ToContainTextAsync("Holds live", new() { Timeout = 30_000 });
+        await Expect(Page.Locator("#dashboard-tab-event-health")).ToHaveClassAsync(new System.Text.RegularExpressions.Regex(@"\bactive\b"));
+        await Expect(Page.Locator("#event-health")).ToContainTextAsync("Letters in the outbox");
+
+        // The errors panel is the chart when the server's log table is in this database, and otherwise says why it
+        // is not — never an empty chart that reads as a clean week. The e2e database has no log table of its own.
+        await Expect(Page.Locator("#event-health-errors")).ToContainTextAsync(
+            new System.Text.RegularExpressions.Regex("By the server's own day|could not be read|only kept on SQL Server"));
+
+        // The jobs panel is there; whether a pass has happened yet depends on how long the host has been up.
+        await Expect(Page.Locator("#event-health-jobs")).ToContainTextAsync("Since this server started");
+    }
 }

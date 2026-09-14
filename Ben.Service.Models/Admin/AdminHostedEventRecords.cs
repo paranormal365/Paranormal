@@ -106,6 +106,57 @@ public sealed record AdminHostedEventStats(
     IReadOnlyList<StatSlice> TopEventsByPeople,
     IReadOnlyList<StatSlice> EventsByRegion);
 
+// ── the SuperAdmin's Event health tab: whether the feature is working ──────────
+
+/// <summary>
+/// Whether hosted events are working, for whoever is developing them: holds, answers, letters, errors, refusals and
+/// the scheduled jobs (Ben, 2026-09-14). Counts, addresses and job names; never a person.
+/// </summary>
+/// <param name="HoldsLiveNow">Seat holds that have not lapsed yet.</param>
+/// <param name="HoldsLapsingNextDay">Of those, the ones that lapse in the next 24 hours unless somebody answers.</param>
+/// <param name="WaitingNow">Asks and holds at events still taking bookings that nobody has answered.</param>
+/// <param name="OldestWaitHours">How long the longest of those has waited; null when none is waiting.</param>
+/// <param name="LettersWaitingNow">Letters in the outbox not yet accepted by the mail server nor given up on. All mail.</param>
+/// <param name="LettersFailedInPeriod">Letters the outbox gave up on in the window. All mail.</param>
+/// <param name="TimeToAnswer">Answers given in the window, bucketed by how long the party waited.</param>
+/// <param name="ErrorsPerDay">Errors the server logged on event addresses, by the server's own day; null when the log cannot be read here.</param>
+/// <param name="ErrorsByAddress">The addresses those errors came from, ids replaced by <c>{id}</c>; null likewise.</param>
+/// <param name="ErrorsUnavailable">Why the error panels are empty, when they are.</param>
+/// <param name="RateLimitRefusals">Requests turned away by the booking and attendance limits, all time, by limit.</param>
+/// <param name="JobsSinceUtc">When the job ledger began counting: the API's start.</param>
+public sealed record AdminHostedEventHealth(
+    int HoldsLiveNow,
+    int HoldsLapsingNextDay,
+    int WaitingNow,
+    double? OldestWaitHours,
+    int LettersWaitingNow,
+    int LettersFailedInPeriod,
+    IReadOnlyList<StatPoint> BookingsMadePerDay,
+    IReadOnlyList<StatPoint> AnsweredPerDay,
+    IReadOnlyList<StatPoint> HoldsLapsedPerDay,
+    IReadOnlyList<StatSlice> TimeToAnswer,
+    IReadOnlyList<StatPoint> LettersQueuedPerDay,
+    IReadOnlyList<StatPoint> LettersSentPerDay,
+    IReadOnlyList<StatPoint> LettersFailedPerDay,
+    IReadOnlyList<StatPoint>? ErrorsPerDay,
+    IReadOnlyList<StatSlice>? ErrorsByAddress,
+    string? ErrorsUnavailable,
+    IReadOnlyList<StatSlice> RateLimitRefusals,
+    DateTime JobsSinceUtc,
+    IReadOnlyList<ScheduledJobRunRecord> Jobs);
+
+/// <summary>One scheduled job, as the ledger has seen it since the API started.</summary>
+/// <param name="LastError">The first line of the most recent failure's message, if it has ever failed.</param>
+public sealed record ScheduledJobRunRecord(
+    string Job,
+    DateTime LastStartedUtc,
+    long LastDurationMs,
+    bool LastSucceeded,
+    string? LastError,
+    DateTime? LastFailedUtc,
+    int Runs,
+    int Failures);
+
 // ── the organizer's side of a removal ──────────────────────────────────────────
 
 /// <summary>The newest removal of an event, as its organizer reads it — without the reviewer's private note.</summary>

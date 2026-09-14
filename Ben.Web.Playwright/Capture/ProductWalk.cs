@@ -457,6 +457,14 @@ public sealed class ProductWalk : BenTestBase
 
         await StepAsync("dashboard", () => GoAsync("/admin/dashboard"), expect: "Sign-ins and registrations");
         await StepAsync("dashboard, events tab", () => GoAsync("/admin/dashboard?tab=events"), Main.Locator("#events-dashboard"));
+        await StepAsync("dashboard, event health tab", () => GoAsync("/admin/dashboard?tab=event-health"), Main.Locator("#event-health"));
+        await StepAsync("every screen of one event, from the list", async () =>
+        {
+            await GoAsync("/admin/events");
+            var row = Main.Locator(".admin-events-grid tr.k-master-row").First;
+            await Expect(row).ToBeVisibleAsync(new() { Timeout = 30_000 });
+            await ClickUntilAsync(row.Locator("td.k-hierarchy-cell"), Main.Locator("[id^='screens-']"));
+        }, Main.Locator("[id^='screens-']"));
         foreach (var route in new[]
                  {
                      "/admin/users", "/admin/cases", "/admin/investigations", "/admin/events", "/admin/event-credits",

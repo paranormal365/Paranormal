@@ -1,0 +1,232 @@
+@namespace Ben.Web.Website.Library.SuperAdmin
+
+@inject IBenAdminClient AdminClient
+@inject IBenUserState UserState
+
+@* The Event health tab (Ben, 2026-09-14): whether hosted events are WORKING, for whoever is developing them — beside the
+   Events tab, which says how the business is doing.
+
+   Every panel is a question somebody would otherwise answer by reading rows or the server's log: are holds lapsing
+   before anybody answers, how long parties wait, is mail going out, are the event addresses throwing, is anybody
+   hitting the booking limits, and have the jobs behind all of it actually been running. Counts, addresses and job
+   names only; never a guest. *@
+
+<BenItemState TItem="AdminHostedEventHealth" Result="_health" Loading="_loading"
+              LoadingText="Checking how events are running…" OnRetry="LoadAsync">
+    <ChildContent Context="h">
+        <div class="row g-2 mb-3" id="event-health">
+            <div class="col-sm-6 col-xl-3">
+                <StatCard Label="Holds live" Icon="clock" Value="@h.HoldsLiveNow.ToString("N0")"
+                          Caption="@($"{h.HoldsLapsingNextDay:N0} lapse in the next 24 hours unless answered")" />
+            </div>
+            <div class="col-sm-6 col-xl-3">
+                <StatCard Label="Waiting for an answer" Icon="inbox" Value="@h.WaitingNow.ToString("N0")"
+                          Caption="@(h.OldestWaitHours is { } oldest ? $"The longest has waited {Hours(oldest)}" : "Nobody is waiting")" />
+            </div>
+            <div class="col-sm-6 col-xl-3">
+                <StatCard Label="Letters in the outbox" Icon="mail" Value="@h.LettersWaitingNow.ToString("N0")"
+                          Href="/admin/mail" LinkLabel="Outgoing mail"
+                          Caption="@($"{h.LettersFailedInPeriod:N0} given up on in this period · all mail")" />
+            </div>
+            <div class="col-sm-6 col-xl-3">
+                <StatCard Label="Errors on event addresses" Icon="alert-triangle"
+                          Value="@(h.ErrorsPerDay is { } perDay ? perDay.Sum(p => p.Count).ToString("N0") : "—")"
+                          Href="/admin/error-log" LinkLabel="Error log"
+                          Caption="@(h.ErrorsUnavailable ?? "Logged by the server in this period")" />
+            </div>
+        </div>
+
+        <div class="row g-3">
+            <div class="col-xl-8">
+                <div class="card h-100"><div class="card-body">
+                    <div class="small text-secondary mb-2">Bookings made, answered and lapsed</div>
+                    <p class="text-secondary" style="font-size:.78rem;">
+                        Asks and holds made, answers given (confirmed, turned down or released) and holds that ran out, by day.
+                        Lapses climbing while answers stay flat means nobody is looking at the board.
+                    </p>
+                    <ApexChart Type="line" Height="280"
+                               Categories="@DayLabels(h.BookingsMadePerDay)"
+                               Series="@(new List<ApexChart.ChartSeries> { new("Made", Counts(h.BookingsMadePerDay)), new("Answered", Counts(h.AnsweredPerDay)), new("Holds lapsed", Counts(h.HoldsLapsedPerDay)) })"
+                               NoDataText="No bookings in this period." />
+                </div></div>
+            </div>
+
+            <div class="col-xl-4">
+                <div class="card h-100"><div class="card-body">
+                    <div class="small text-secondary mb-2">How long parties waited</div>
+                    <p class="text-secondary" style="font-size:.78rem;">Answers given in this period, by how long after asking.</p>
+                    <ApexChart Type="bar" Height="260" Horizontal="true"
+                               Categories="@Labels(h.TimeToAnswer)"
+                               Series="@(new List<ApexChart.ChartSeries> { new("Answers", Counts(h.TimeToAnswer)) })"
+                               NoDataText="Nothing was answered in this period." />
+                </div></div>
+            </div>
+
+            <div class="col-xl-8">
+                <div class="card h-100"><div class="card-body">
+                    <div class="small text-secondary mb-2">Letters</div>
+                    <p class="text-secondary" style="font-size:.78rem;">
+                        Queued, accepted by the mail server, and given up on, by day. All of the site's mail — the outbox does
+                        not know which letters are about events.
+                    </p>
+                    <ApexChart Type="bar" Height="260"
+                               Categories="@DayLabels(h.LettersQueuedPerDay)"
+                               Series="@(new List<ApexChart.ChartSeries> { new("Queued", Counts(h.LettersQueuedPerDay)), new("Sent", Counts(h.LettersSentPerDay)), new("Failed", Counts(h.LettersFailedPerDay)) })"
+                               NoDataText="No letters in this period." />
+                </div></div>
+            </div>
+
+            <div class="col-xl-4">
+                <div class="card h-100"><div class="card-body">
+                    <div class="small text-secondary mb-2">Turned away by a limit</div>
+                    <p class="text-secondary" style="font-size:.78rem;">Requests the booking and attendance limits refused, all time.</p>
+                    @* A horizontal bar chart with no bars draws an axis of nothing and clips its own empty message, so
+                       the quiet case is a sentence. *@
+                    @if (h.RateLimitRefusals.Count == 0)
+                    {
+                        <p class="text-secondary small mb-0" id="event-health-no-refusals">No booking or attendance limit has refused anybody.</p>
+                    }
+                    else
+                    {
+                        <ApexChart Type="bar" Height="260" Horizontal="true"
+                                   Categories="@Labels(h.RateLimitRefusals)"
+                                   Series="@(new List<ApexChart.ChartSeries> { new("Refused", Counts(h.RateLimitRefusals)) })" />
+                    }
+                </div></div>
+            </div>
+
+            <div class="col-xl-6">
+                <div class="card h-100"><div class="card-body" id="event-health-errors">
+                    <div class="small text-secondary mb-2">Errors on event addresses</div>
+                    @if (h.ErrorsUnavailable is { } why)
+                    {
+                        <p class="text-secondary small mb-0">@why</p>
+                    }
+                    else
+                    {
+                        <p class="text-secondary" style="font-size:.78rem;">By the server's own day, from its error log.</p>
+                        <ApexChart Type="bar" Height="240"
+                                   Categories="@DayLabels(h.ErrorsPerDay!)"
+                                   Series="@(new List<ApexChart.ChartSeries> { new("Errors", Counts(h.ErrorsPerDay!)) })"
+                                   NoDataText="No errors on event addresses in this period." />
+                    }
+                </div></div>
+            </div>
+
+            <div class="col-xl-6">
+                <div class="card h-100"><div class="card-body">
+                    <div class="small text-secondary mb-2">Where the errors came from</div>
+                    @if (h.ErrorsByAddress is not { Count: > 0 } addresses)
+                    {
+                        <p class="text-secondary small mb-0">@(h.ErrorsUnavailable ?? "No errors on event addresses in this period.")</p>
+                    }
+                    else
+                    {
+                        <ul class="list-group list-group-flush small">
+                            @foreach (var address in addresses)
+                            {
+                                <li class="list-group-item d-flex justify-content-between gap-2 px-0">
+                                    <code class="text-break">@address.Label</code>
+                                    <span class="badge bg-danger-subtle text-danger-emphasis align-self-start">@address.Count</span>
+                                </li>
+                            }
+                        </ul>
+                    }
+                </div></div>
+            </div>
+
+            <div class="col-12">
+                <div class="card"><div class="card-body" id="event-health-jobs">
+                    <div class="small text-secondary mb-2">Scheduled jobs</div>
+                    <p class="text-secondary" style="font-size:.78rem;">
+                        Since this server started, @h.JobsSinceUtc.ToViewerLocalTime(UserState).ToDisplayDateTime(). Every job runs
+                        every five minutes; one that stops appearing, or keeps failing, is where to look first.
+                    </p>
+                    @if (h.Jobs.Count == 0)
+                    {
+                        <p class="text-secondary small mb-0" id="event-health-no-jobs">No job has run yet — the first pass is half a minute after the server starts.</p>
+                    }
+                    else
+                    {
+                        <div class="table-responsive">
+                            <table class="table table-sm align-middle mb-0">
+                                <thead>
+                                    <tr><th>Job</th><th>Last run</th><th class="text-end">Took</th><th>Result</th><th class="text-end">Runs</th><th class="text-end">Failures</th></tr>
+                                </thead>
+                                <tbody>
+                                    @foreach (var job in h.Jobs)
+                                    {
+                                        <tr>
+                                            <td class="text-nowrap">@job.Job</td>
+                                            <td class="text-nowrap">@job.LastStartedUtc.ToViewerLocalTime(UserState).ToDisplayDateTime()</td>
+                                            <td class="text-end text-nowrap">@job.LastDurationMs.ToString("N0") ms</td>
+                                            <td>
+                                                @if (job.LastSucceeded)
+                                                {
+                                                    <span class="badge bg-success-subtle text-success-emphasis">OK</span>
+                                                }
+                                                else
+                                                {
+                                                    <span class="badge bg-danger-subtle text-danger-emphasis">Failed</span>
+                                                }
+                                                @if (job.LastError is { } error)
+                                                {
+                                                    <div class="small text-secondary text-break">
+                                                        @(job.LastSucceeded ? $"Last failed {job.LastFailedUtc?.ToViewerLocalTime(UserState).ToDisplayDateTime()}: " : "")@error
+                                                    </div>
+                                                }
+                                            </td>
+                                            <td class="text-end">@job.Runs.ToString("N0")</td>
+                                            <td class="text-end @(job.Failures > 0 ? "text-danger" : null)">@job.Failures.ToString("N0")</td>
+                                        </tr>
+                                    }
+                                </tbody>
+                            </table>
+                        </div>
+                    }
+                </div></div>
+            </div>
+        </div>
+    </ChildContent>
+</BenItemState>
+
+@code {
+    /// <summary>The window the series and "in this period" numbers cover, from the dashboard's range picker.</summary>
+    [Parameter] public int Days { get; set; } = 30;
+
+    private ItemResult<AdminHostedEventHealth> _health;
+    private bool _loading = true;
+    private int _loadedDays;
+
+    // Like the Events tab, this can be the first thing on the page (?tab=event-health), so it renders before sign-in has
+    // resolved; asking then would ask as nobody, and a refusal must not be remembered as this range's answer.
+    protected override async Task OnParametersSetAsync()
+    {
+        if (_loadedDays == Days) return;
+        if (!await UserState.WaitUntilAuthReadyAsync(RendererInfo.IsInteractive)) return;
+        await LoadAsync();
+    }
+
+    private async Task LoadAsync()
+    {
+        _loading = true;
+        _loadedDays = Days;
+        _health = await AdminClient.GetAdminHostedEventHealthAsync(Days);
+        _loading = false;
+    }
+
+    private static string Hours(double hours) => hours switch
+    {
+        < 1 => $"{Math.Round(hours * 60):N0} minutes",
+        < 48 => $"{hours:N1} hours",
+        _ => $"{hours / 24:N1} days",
+    };
+
+    private static List<string> Labels(IReadOnlyList<StatSlice> slices) => slices.Select(s => s.Label).ToList();
+
+    private static List<double> Counts(IReadOnlyList<StatSlice> slices) => slices.Select(s => (double)s.Count).ToList();
+
+    private static List<double> Counts(IReadOnlyList<StatPoint> points) => points.Select(p => (double)p.Count).ToList();
+
+    private static List<string> DayLabels(IReadOnlyList<StatPoint> points) => points.Select(p => p.Day.ToChartDay()).ToList();
+}

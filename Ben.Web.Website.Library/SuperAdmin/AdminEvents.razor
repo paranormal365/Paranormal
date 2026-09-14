@@ -153,7 +153,7 @@
                                     <a class="btn btn-sm btn-outline-secondary" href="@screen.Href(row.OrganizationId, row.Id)">@screen.Label</a>
                                 }
                                 <a class="btn btn-sm btn-outline-secondary" href="@Manage.Events.EventScreens.PhotoWall(row.Id)">Photo wall</a>
-                                @if (row.State is not HostedEventLifecycleState.Draft and not HostedEventLifecycleState.Removed)
+                                @if (row.State is HostedEventLifecycleState.Published or HostedEventLifecycleState.Live or HostedEventLifecycleState.Ended)
                                 {
                                     <a class="btn btn-sm btn-outline-primary" target="_blank"
                                        href="@Manage.Events.EventScreens.PublicPage(row.OrganizationUrlName, row.UrlName)">
