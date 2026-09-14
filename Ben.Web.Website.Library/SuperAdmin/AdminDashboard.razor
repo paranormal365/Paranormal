@@ -30,12 +30,16 @@
        events — venues, organizers and events overall. The range picker drives both. *@
     <ul class="nav nav-tabs mb-3" role="tablist" id="dashboard-tabs">
         <li class="nav-item" role="presentation">
-            <button type="button" role="tab" id="dashboard-tab-site" aria-selected="@(!EventsTab)"
-                    class="nav-link @(EventsTab ? null : "active")" @onclick="@(() => ShowTab(null))">The site</button>
+            <button type="button" role="tab" id="dashboard-tab-site" aria-selected="@SiteTab"
+                    class="nav-link @(SiteTab ? "active" : null)" @onclick="@(() => ShowTab(null))">The site</button>
         </li>
         <li class="nav-item" role="presentation">
             <button type="button" role="tab" id="dashboard-tab-events" aria-selected="@EventsTab"
                     class="nav-link @(EventsTab ? "active" : null)" @onclick="@(() => ShowTab("events"))">Events</button>
+        </li>
+        <li class="nav-item" role="presentation">
+            <button type="button" role="tab" id="dashboard-tab-event-health" aria-selected="@EventHealthTab"
+                    class="nav-link @(EventHealthTab ? "active" : null)" @onclick="@(() => ShowTab("event-health"))">Event health</button>
         </li>
     </ul>
 
@@ -46,6 +50,13 @@
                 <h3 class="mb-0">Events<HelpLink Slug="site-administration" Anchor="hosted-events" /></h3>
                 <p class="text-secondary small mb-0">
                     Hosted events across every group: where they stand, who runs them, where, and how they are booking.
+                </p>
+            }
+            else if (EventHealthTab)
+            {
+                <h3 class="mb-0">Event health<HelpLink Slug="site-administration" Anchor="event-health" /></h3>
+                <p class="text-secondary small mb-0">
+                    Whether hosted events are working: holds, answers, letters, errors, limits and the jobs behind them.
                 </p>
             }
             else
@@ -75,6 +86,10 @@
     @if (EventsTab)
     {
         <AdminEventsDashboard Days="@_days" />
+    }
+    else if (EventHealthTab)
+    {
+        <AdminEventHealthDashboard Days="@_days" />
     }
     else
     {
@@ -411,6 +426,11 @@
     [SupplyParameterFromQuery(Name = "tab")] public string? Tab { get; set; }
 
     private bool EventsTab => string.Equals(Tab, "events", StringComparison.OrdinalIgnoreCase);
+
+    /// <summary>The Event health tab, <c>?tab=event-health</c>: whether events are working, for development.</summary>
+    private bool EventHealthTab => string.Equals(Tab, "event-health", StringComparison.OrdinalIgnoreCase);
+
+    private bool SiteTab => !EventsTab && !EventHealthTab;
 
     private void ShowTab(string? tab)
     {

@@ -906,6 +906,22 @@ public abstract class BenTestBase : PageTest
     /// </summary>
     protected ILocator Main => Page.Locator(".app-content, main, .content-wrapper").First;
 
+    /// <summary>Every spinner showing in the page's content — the site's loaders all draw Bootstrap's.</summary>
+    protected ILocator Spinners => Main.Locator(".spinner-border:visible");
+
+    /// <summary>Waits until the circuit has taken over the server-rendered page.</summary>
+    /// <remarks>
+    /// A page arrives prerendered and only starts loading its data once its circuit connects, so "no Loading
+    /// placeholder" is briefly true of a page that has not begun. The prerendered HTML marks each interactive component
+    /// with a <c>&lt;!--Blazor:…--&gt;</c> comment and the circuit consumes those comments as it attaches them — none
+    /// left means the components are live and any placeholder they show is already on the page.
+    /// </remarks>
+    protected Task WaitForTheCircuitAsync() => Page.WaitForFunctionAsync(@"() => {
+        const comments = document.createTreeWalker(document, NodeFilter.SHOW_COMMENT);
+        while (comments.nextNode()) if (comments.currentNode.data.startsWith('Blazor:')) return false;
+        return true;
+    }", null, new() { Timeout = 60_000 });
+
     /// <summary>
     /// The typing surface of the site's rich-text box — one place that knows its shape.
     /// </summary>

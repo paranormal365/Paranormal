@@ -363,6 +363,8 @@ builder.Services.AddScoped<Ben.Data.WebApi.Services.Admin.OrganizationPurge>();
 builder.Services.AddScoped<Ben.Data.WebApi.Services.Admin.AppUserPurge>();
 builder.Services.AddScoped<Ben.Data.WebApi.Services.Admin.CasePurge>();
 builder.Services.AddScoped<Ben.Data.WebApi.Services.Billing.IncludedAreasResolver>();
+// What each job did on its last pass, for the SuperAdmin's Event health tab. One per process, like the scheduler.
+builder.Services.AddSingleton<Ben.Data.WebApi.Services.Scheduling.ScheduledJobLedger>();
 builder.Services.AddHostedService<Ben.Data.WebApi.Services.Scheduling.ScheduledWorkService>();
 
 builder.Services.AddAutoMapper(_ => { }, typeof(AppUserProfile).Assembly);

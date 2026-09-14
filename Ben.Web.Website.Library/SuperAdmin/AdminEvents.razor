@@ -140,6 +140,29 @@
             {
                 <TelerikGrid Data="@Filtered(all)" TItem="AdminHostedEventRow" Pageable="true" PageSize="25" Sortable="true"
                              Class="admin-events-grid">
+                    @* Every screen of the event, one click from the list: the SuperAdmin's way into any event's
+                       board, door or files without being a member of the group that runs it. The screens come
+                       from EventScreens, which a guard holds to every event page there is. *@
+                    <DetailTemplate>
+                        @{ var row = (AdminHostedEventRow)context; }
+                        <div class="p-2 ms-3" id="@($"screens-{row.Id}")">
+                            <div class="small text-secondary mb-2">Every screen of @row.EventName</div>
+                            <div class="d-flex flex-wrap gap-2">
+                                @foreach (var screen in Manage.Events.EventScreens.Organizer)
+                                {
+                                    <a class="btn btn-sm btn-outline-secondary" href="@screen.Href(row.OrganizationId, row.Id)">@screen.Label</a>
+                                }
+                                <a class="btn btn-sm btn-outline-secondary" href="@Manage.Events.EventScreens.PhotoWall(row.Id)">Photo wall</a>
+                                @if (row.State is HostedEventLifecycleState.Published or HostedEventLifecycleState.Live or HostedEventLifecycleState.Ended)
+                                {
+                                    <a class="btn btn-sm btn-outline-primary" target="_blank"
+                                       href="@Manage.Events.EventScreens.PublicPage(row.OrganizationUrlName, row.UrlName)">
+                                        <BenIcon Name="external-link" Class="me-1" />The public page
+                                    </a>
+                                }
+                            </div>
+                        </div>
+                    </DetailTemplate>
                     <GridColumns>
                         <GridColumn Field="@nameof(AdminHostedEventRow.CreatedByName)" Title="Organizer" Width="200px">
                             <Template>

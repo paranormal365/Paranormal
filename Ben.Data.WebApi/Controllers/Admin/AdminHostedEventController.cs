@@ -155,6 +155,22 @@ public sealed class AdminHostedEventController : BenControllerBase
         return Ok(await HostedEventOversightStats.ReadAsync(db, days, DateTime.UtcNow, TopN, ct));
     }
 
+    /// <summary>
+    /// Whether hosted events are working: holds, answers, letters, errors on event addresses, refusals and the
+    /// scheduled jobs. For development rather than the business; see <see cref="HostedEventHealthStats"/>.
+    /// </summary>
+    [HttpGet("health")]
+    public async Task<ActionResult<AdminHostedEventHealth>> Health(
+        [FromServices] IConfiguration configuration,
+        [FromServices] Services.Scheduling.ScheduledJobLedger ledger,
+        [FromQuery] int days = 30, CancellationToken ct = default)
+    {
+        days = Math.Clamp(days, 7, 365);
+        await using var db = await _dbFactory.CreateDbContextAsync(ct);
+        var errors = await HostedEventErrorLog.ReadAsync(db, configuration, days, TopN, ct);
+        return Ok(await HostedEventHealthStats.ReadAsync(db, days, DateTime.UtcNow, errors, ledger.SinceUtc, ledger.Snapshot(), ct));
+    }
+
     private static string Safe(string text) => System.Net.WebUtility.HtmlEncode(text);
 
     private static async Task<AdminHostedEventsRecord> ListAsync(BenDataContext db, string? note, CancellationToken ct)

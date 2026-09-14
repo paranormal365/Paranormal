@@ -40,11 +40,13 @@ public sealed class ScheduledWorkService : BackgroundService
 
     private readonly IServiceScopeFactory _scopeFactory;
     private readonly ILogger<ScheduledWorkService> _logger;
+    private readonly ScheduledJobLedger _ledger;
 
-    public ScheduledWorkService(IServiceScopeFactory scopeFactory, ILogger<ScheduledWorkService> logger)
+    public ScheduledWorkService(IServiceScopeFactory scopeFactory, ILogger<ScheduledWorkService> logger, ScheduledJobLedger ledger)
     {
         _scopeFactory = scopeFactory;
         _logger = logger;
+        _ledger = ledger;
     }
 
     protected override async Task ExecuteAsync(CancellationToken stoppingToken)
@@ -102,9 +104,14 @@ public sealed class ScheduledWorkService : BackgroundService
         {
             if (ct.IsCancellationRequested) return;
 
+            // Every run is written down — when it started, how long it took, whether it failed — for the
+            // SuperAdmin's Event health tab. A pass cancelled by shutdown is not a run.
+            var started = DateTime.UtcNow;
+            var clock = System.Diagnostics.Stopwatch.StartNew();
             try
             {
                 await job.RunAsync(ct);
+                _ledger.Record(job.Name, started, clock.Elapsed, null);
             }
             catch (OperationCanceledException) when (ct.IsCancellationRequested)
             {
@@ -114,6 +121,7 @@ public sealed class ScheduledWorkService : BackgroundService
             {
                 // Logged and swallowed on purpose: one broken job must not stop the others, and
                 // must not end the loop for the lifetime of the process. The next pass tries again.
+                _ledger.Record(job.Name, started, clock.Elapsed, ex);
                 _logger.LogError(ex, "Scheduled job {Job} failed. Continuing.", job.Name);
             }
         }
