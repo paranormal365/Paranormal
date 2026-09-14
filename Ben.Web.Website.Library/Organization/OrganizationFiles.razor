@@ -33,13 +33,28 @@
                 <h4 class="mb-0">Files — @_orgName</h4>
             </div>
         }
+        @* Each button for whoever the server lets use it — Upload and Share need Files create, the delete log Files delete —
+           and "← Organizations" only on the page of its own, not inside a group's hub (member test pass M.6, 2026-09-14). *@
         <div class="d-flex gap-2 flex-wrap mb-3">
-                <button type="button" class="btn btn-primary btn-sm" @onclick="@(() => _showUploadDialog = true)">⬆ Upload</button>
-                <button type="button" class="btn @(ThemeConstants.Button.FillMode.Outline == ThemeConstants.Button.FillMode.Solid ? "btn-secondary" : "btn-outline-secondary") btn-sm" @onclick="@(() => _showCopyDialog = true)">📋 Share from User</button>
-                <button type="button" class="btn @(ThemeConstants.Button.FillMode.Outline == ThemeConstants.Button.FillMode.Solid ? "btn-secondary" : "btn-outline-secondary") btn-sm" @onclick="@(() => _showDeleteLog = !_showDeleteLog)">
-                    🗒 @(_showDeleteLog ? "Hide" : "Show") Delete Log
-                </button>
-                <a href="/organizations" class="btn btn-sm btn-outline-secondary">← Organizations</a>
+                @if (_canCreate)
+                {
+                    <button type="button" class="btn btn-primary btn-sm" @onclick="@(() => _showUploadDialog = true)">⬆ Upload</button>
+                    <button type="button" class="btn @(ThemeConstants.Button.FillMode.Outline == ThemeConstants.Button.FillMode.Solid ? "btn-secondary" : "btn-outline-secondary") btn-sm" @onclick="@(() => _showCopyDialog = true)">📋 Share from User</button>
+                }
+                @if (_canDelete)
+                {
+                    <button type="button" class="btn @(ThemeConstants.Button.FillMode.Outline == ThemeConstants.Button.FillMode.Solid ? "btn-secondary" : "btn-outline-secondary") btn-sm" @onclick="@(() => _showDeleteLog = !_showDeleteLog)">
+                        🗒 @(_showDeleteLog ? "Hide" : "Show") Delete Log
+                    </button>
+                }
+                @if (!EmbeddedMode)
+                {
+                    <a href="/organizations" class="btn btn-sm btn-outline-secondary">← Organizations</a>
+                }
+                @if (!_canCreate)
+                {
+                    <span class="small text-secondary align-self-center" id="org-files-who-adds">Members with the Files permission add the group's files.</span>
+                }
             </div>
 
         @if (_error is not null) { <div class="alert alert-danger">@_error</div> }
@@ -99,14 +114,18 @@
                 <GridColumn Field="@nameof(OrganizationFileRecord.Description)" Title="Description" />
                 @* Publish/Unpublish + Edit + Delete, and Edit Image as well on an image row —
                    the widest of these columns, and the one whose contents change per row. *@
+                @if (_canUpdate || _canDelete)
+                {
                 <GridCommandColumn Width="172px">
+                    @if (_canUpdate)
+                    {
                     <GridCommandButton OnClick="@(e => OpenPublish((OrganizationFileRecord)e.Items.First()))"
                                        ThemeColor="@ThemeConstants.Button.ThemeColor.Success"
                                        Size="@ThemeConstants.Button.Size.Small"
                                        Title="@(((OrganizationFileRecord)context).IsPublic ? "Unpublish" : "Publish")"
                                        Class="ben-grid-action"
                                        FillMode="@ThemeConstants.Button.FillMode.Outline"><BenIcon Name="@(((OrganizationFileRecord)context).IsPublic ? "cloud-off" : "upload-cloud")" /></GridCommandButton>
-                    @{ var fc = (OrganizationFileRecord)context; }
+                    var fc = (OrganizationFileRecord)context;
                     @if (fc.ContentType.StartsWith("image/"))
                     {
                         <GridCommandButton Size="@ThemeConstants.Button.Size.Small"
@@ -120,13 +139,18 @@
                                        Title="Edit"
                                        Class="ben-grid-action"
                                        FillMode="@ThemeConstants.Button.FillMode.Outline"><BenIcon Name="edit-2" /></GridCommandButton>
+                    }
+                    @if (_canDelete)
+                    {
                     <GridCommandButton OnClick="@(e => ConfirmDelete((OrganizationFileRecord)e.Items.First()))"
                                        ThemeColor="@ThemeConstants.Button.ThemeColor.Error"
                                        Size="@ThemeConstants.Button.Size.Small"
                                        Title="Delete"
                                        Class="ben-grid-action"
                                        FillMode="@ThemeConstants.Button.FillMode.Outline"><BenIcon Name="trash-2" /></GridCommandButton>
+                    }
                 </GridCommandColumn>
+                }
             </GridColumns>
         </TelerikGrid>
         </BenListState>
@@ -348,6 +372,9 @@
     private List<OrganizationFileRecord>          _files      = [];
     private LoadResult<OrganizationFileRecord>   _filesResult;
     private List<OrganizationFileDeleteLogRecord> _deleteLogs = [];
+    private bool _canCreate;
+    private bool _canUpdate;
+    private bool _canDelete;
     private IReadOnlyList<UploadFileTypeRecord>   _fileTypes  = [];
     private bool _showDeleteLog;
 
@@ -422,7 +449,13 @@
             // only in the type.
             _filesResult = await AdminClient.GetOrgFilesAsync(OrgId);
             _files      = _filesResult.Items.ToList();
-            _deleteLogs = (await AdminClient.GetOrgFileDeleteLogAsync(OrgId)).Items.ToList();
+            var perms   = UserState.IsSuperAdmin ? null : await AdminClient.GetMyOrgPermissionsAsync(OrgId);
+            bool May(Ben.Data.Common.Enums.OrganizationSecurityAction action) => UserState.IsSuperAdmin
+                || perms?.May(Ben.Data.Common.Enums.OrganizationPermissionArea.Files, action) == true;
+            _canCreate  = May(Ben.Data.Common.Enums.OrganizationSecurityAction.Create);
+            _canUpdate  = May(Ben.Data.Common.Enums.OrganizationSecurityAction.Update);
+            _canDelete  = May(Ben.Data.Common.Enums.OrganizationSecurityAction.Delete);
+            _deleteLogs = _canDelete ? (await AdminClient.GetOrgFileDeleteLogAsync(OrgId)).Items.ToList() : [];
             _fileTypes  = (await AdminClient.GetPublicFileTypesAsync()).Items;
             var orgs    = (await AdminClient.GetOrganizationsAsync()).Items;
             _orgName    = orgs.FirstOrDefault(o => o.Id == OrgId)?.Name ?? OrgId.ToString();
@@ -587,7 +620,7 @@
             if (ok)
             {
                 await ReloadAsync();
-                Toasts.Error("Deleted. Audit record saved.");
+                Toasts.Success("Deleted. Audit record saved.");   // a red error that stayed until dismissed (M.7)
             }
             else
             {

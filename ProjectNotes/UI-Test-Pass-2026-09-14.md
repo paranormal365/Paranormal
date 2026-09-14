@@ -296,3 +296,31 @@ an accepted request), My Investigations.
 
 Seen and fine: sending a formatted message (bold kept, box cleared, thread at the newest); the four request steps keep a
 draft's answers; Save as Draft returns to the list; the accepted request names its group under "Submitted To".
+
+## Member pass — James Thornton
+
+Walked Paranormal365 as James (a member: reads cases and investigations; no Files, Calendar or Clients grants; not an
+admin): the hub (Details, Members, Cases, Investigations, Calendar, Messages, Files, Equipment), the Belmont case
+(overview, points of contact, the publishing tour, timeline, messages, files and their recordings).
+
+- [x] **M.1 "Choose contacts" was offered to every member** — ticking names and pressing Save met the server's refusal
+  (case manager or group admin only). → the button for those two; a line saying who chooses for everyone else.
+- [x] **M.2 The "How cases go public" tour was offered to members who cannot edit**, its first step pointing at an Edit
+  Case button they do not have. → offered with Edit Case.
+- [x] **M.3 Edit and Delete sat on every timeline entry** — the client's own report included — though only an entry's
+  author or a group admin may change it; a refused Delete closed its question and left the entry without a word.
+  → the buttons for the author or an admin; a refused Delete says so.
+- [x] **M.4 A colleague's message to the client appeared unnamed on the group's side**, reading as the member's own.
+  → a name on every message the viewer did not write.
+- [x] **M.5 Recordings loaded as pale grey slabs on a dark page**: the loading overlay used a Kendo colour variable the
+  theme does not define, and fell back to white. → Bootstrap's body colour.
+- [x] **M.6 The hub's Files tab offered Upload, Share from User and Show Delete Log to a member with no Files permission**,
+  and a "← Organizations" button inside the group's own hub. Row actions (publish, edit, delete) likewise.
+  → each for whoever the server lets use it; a line saying who adds files; the back button only on the page of its own.
+- [x] **M.7 Deleting a group file showed a red error that stayed until dismissed**: "Deleted. Audit record saved." → a
+  success toast.
+- [x] **M.8 A lone "?" at the right edge of Investigations** — the help beside Schedule an investigation, left behind when
+  the button is not offered. → shown with the button.
+
+Seen and fine: the Pending Requests button is the warning colour when something waits (the theme's yellow is olive); the
+member's Members, Cases and Equipment tabs; an empty inbox says so; recordings draw their waveforms.

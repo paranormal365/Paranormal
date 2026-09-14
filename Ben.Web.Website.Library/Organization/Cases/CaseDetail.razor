@@ -105,11 +105,17 @@
                         <BenIcon Name="sliders" Class="me-1" />Audio Mixer
                     </button>
                 }
-                <button type="button" id="case-tour-launch" class="btn btn-outline-secondary btn-sm"
-                        title="How cases go public" @onclick="StartTourAsync">
-                    <BenIcon Name="help-circle" />
-                    <span class="visually-hidden">How cases go public</span>
-                </button>
+                @* The tour is about publishing, which starts in Edit Case: offered to whoever can edit. A member who cannot got
+                   a first step pointing at a button they do not have (member test pass M.2, 2026-09-14). *@
+                @if (_perms?.May(Ben.Data.Common.Enums.OrganizationPermissionArea.Cases,
+                                 Ben.Data.Common.Enums.OrganizationSecurityAction.Update) == true)
+                {
+                    <button type="button" id="case-tour-launch" class="btn btn-outline-secondary btn-sm"
+                            title="How cases go public" @onclick="StartTourAsync">
+                        <BenIcon Name="help-circle" />
+                        <span class="visually-hidden">How cases go public</span>
+                    </button>
+                }
                 @* IH-03 step 2: the same Cases.Update grant CaseController checks on PUT. A
                    member who cannot edit is no longer shown the door to a refusal. *@
                 @if (_perms?.May(Ben.Data.Common.Enums.OrganizationPermissionArea.Cases,
@@ -250,7 +256,7 @@
                             </div>
                         </div>
 
-                        <CaseContactsPanel OrgId="@OrgId" CaseId="@CaseId" />
+                        <CaseContactsPanel OrgId="@OrgId" CaseId="@CaseId" CaseManagerAppUserId="@_case.CaseManagerAppUserId" />
                     </div>
                 </div>
             </BenTab>

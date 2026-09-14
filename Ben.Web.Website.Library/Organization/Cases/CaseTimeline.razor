@@ -164,7 +164,7 @@
                                         <BenIcon Name="book-open" Class="me-1" />Open research page
                                     </a>
                                 }
-                                else if (!e.IsReadOnly)
+                                else if (!e.IsReadOnly && MayChange(e))
                                 {
                                     <button type="button" class="btn @(ThemeConstants.Button.FillMode.Flat == ThemeConstants.Button.FillMode.Solid ? "btn-secondary" : "btn-outline-secondary") btn-sm" @onclick="@(() => OpenEditDialog(e))" title="Edit"><BenIcon Name="edit-2" /></button>
                                     <button type="button" class="btn @(ThemeConstants.Button.FillMode.Flat == ThemeConstants.Button.FillMode.Solid ? "btn-secondary" : "btn-outline-secondary") btn-sm" @onclick="@(() => ConfirmDelete(e))" title="Delete"><BenIcon Name="trash-2" /></button>
@@ -466,8 +466,20 @@
     private Guid? _investigationFilter;
     private List<InvestigationRecord> _investigations = [];
 
+    /// <summary>Whether this person is a group admin here, who may change anybody's entry.</summary>
+    private bool _isOrgAdmin;
+
+    /// <summary>
+    /// An entry's author or a group admin may change it — the server's rule. Everybody was offered Edit and Delete on every
+    /// entry, so a member could open a client's report, change it, and be refused at Save; a refused Delete closed its
+    /// question and left the entry there without a word (member test pass M.3, 2026-09-14).
+    /// </summary>
+    private bool MayChange(CaseTimelineEntryRecord e) => _isOrgAdmin || e.AuthorAppUserId == UserState.UserId;
+
     protected override async Task OnParametersSetAsync()
     {
+        _isOrgAdmin = UserState.IsSuperAdmin
+            || (await AdminClient.GetOrganizationsAsync()).Items.Any(o => o.Id == OrgId && o.CanEdit);
         await LoadAsync();
         _taxonomy = (await AdminClient.GetExperienceTaxonomyAsync()).Items.ToList();
         _expTypeNames = _taxonomy
@@ -675,8 +687,9 @@
         _isBusy = true;
         try
         {
-            await AdminClient.DeleteCaseTimelineEntryAsync(OrgId, CaseId, _pendingDelete.Id);
+            var deleted = await AdminClient.DeleteCaseTimelineEntryAsync(OrgId, CaseId, _pendingDelete.Id);
             _showDeleteConfirm = false;
+            if (!deleted) _error = "The entry could not be deleted. Only its author or a group admin can delete it.";
             await LoadAsync();
         }
         catch { _error = "Delete failed."; }

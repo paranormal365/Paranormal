@@ -44,9 +44,11 @@ else
                    theme, and a fixed light fill turns into a white block in night mode. *@
                 <div class="rounded-3 px-3 py-2 case-bubble @(isOwn ? "case-bubble--own bg-primary text-white" : "bg-body-tertiary border")"
                      style="max-width:80%; word-break:break-word;" data-testid="case-message-bubble">
-                    @if (!isOwn)
+                    @* A name on everything this person did not write. The group's messages sit on the group's side, so a
+                       member read a colleague's reply to the client, unnamed, as their own (member test pass M.4). *@
+                    @if (!isOwn || msg.AuthorAppUserId != UserState.UserId)
                     {
-                        <div class="fw-semibold small mb-1">@msg.AuthorDisplayName</div>
+                        <div class="fw-semibold small mb-1 @(isOwn ? "text-white" : "")">@msg.AuthorDisplayName</div>
                     }
                     @* A message written in the editor (2026-09-14) carries a sanitized BodyHtml and is drawn
                        formatted. Everything else — older messages, and whatever the iPhone app sends — is

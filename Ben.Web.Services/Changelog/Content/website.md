@@ -86,6 +86,13 @@ day-by-day account of building it would say nothing to anyone using it now.
 - A case card marked "Not public" no longer offers the public vote.
 - Signing in again from a SuperAdmin page brings you back to that page.
 - Example text in boxes across the site starts "e.g.".
+- A member sees the buttons they can use and a line saying who can do the rest: choosing a case's points of contact,
+  editing or deleting somebody else's timeline entry, and uploading, sharing, publishing or deleting a group's files.
+  The case publishing tour is offered to the people who can edit the case.
+- In a case's messages, every message you did not write carries its author's name, including a colleague's reply to the
+  client.
+- Recordings no longer flash a pale grey box on a dark page while they load, and deleting a group file shows a success
+  message instead of an error.
 - SuperAdmins have an Event health tab on the dashboard. It shows holds and how long parties wait for an answer,
   letters going out, errors on event pages, requests turned away by the booking limits, and when each
   background job last ran and whether it failed.
