@@ -33,7 +33,7 @@
 
     @* An empty user grid to a SuperAdmin reads as "this deployment has no accounts", which is
        never true and sends them looking at the database. *@
-    <BenListState TItem="AppUserRecord" Result="@_usersResult" EmptyText="No user accounts yet" OnRetry="@OnInitializedAsync">
+    <BenListState TItem="AppUserRecord" Result="@_usersResult" Loading="@_loading" EmptyText="No user accounts yet" OnRetry="@LoadAsync">
     <ChildContent>
     <TelerikGrid Data="@_filtered"
                  TItem="AppUserRecord"
@@ -157,6 +157,12 @@
     private IReadOnlyList<AppUserRecord> _users  = [];
     private IReadOnlyList<AppUserRecord> _filtered = [];
     private LoadResult<AppUserRecord> _usersResult;
+
+    /// <summary>
+    /// True until the list has come back. A result nobody has fetched yet is empty, and without this the page said
+    /// "No user accounts yet" to the SuperAdmin for as long as sign-in and the fetch took.
+    /// </summary>
+    private bool _loading = true;
     private string _search = string.Empty;
     private string? _errorMessage;
 
@@ -172,11 +178,18 @@
         if (firstRender)
         {
             if (!await UserState.WaitUntilAuthReadyAsync(RendererInfo.IsInteractive)) return;
-            _usersResult = await AdminClient.GetAllUsersAsync();
-            _users       = _usersResult.Items;
-            _filtered = _users;
+            await LoadAsync();
             StateHasChanged();
         }
+    }
+
+    private async Task LoadAsync()
+    {
+        _loading     = true;
+        _usersResult = await AdminClient.GetAllUsersAsync();
+        _users       = _usersResult.Items;
+        _filtered    = _users;
+        _loading     = false;
     }
 
     private void ApplySearch()

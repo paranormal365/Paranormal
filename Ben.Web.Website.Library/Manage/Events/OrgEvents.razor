@@ -5,6 +5,7 @@
 @inject IBenUserState UserState
 @inject NavigationManager NavManager
 
+@using Ben.Data.Common.Enums
 @using Ben.Service.Models.Entities
 @using Ben.Web.Services.WebApi
 @using Ben.Web.Website.Library.Kit
@@ -61,6 +62,19 @@
         <div class="alert alert-danger" id="events-error">@_error</div>
     }
 
+    @* Adding an event is refused to anybody who may not change the group's settings, so the form is only
+       offered to the people it will work for; everybody else is told who can. *@
+    @if (!MayManage)
+    {
+        @if (!_loading)
+        {
+            <div class="alert alert-secondary" id="events-read-only">
+                Adding and changing events is for people who can manage the group's settings.
+            </div>
+        }
+    }
+    else
+    {
     <div class="card mb-3">
         <div class="card-header fw-semibold">Add an event</div>
         <div class="card-body">
@@ -217,9 +231,10 @@
             </div>
         </div>
     </div>
+    }
 
     <BenListState TItem="HostedEventRecord" Result="@_events" Loading="@_loading"
-                  EmptyText="No events yet — the form above starts one"
+                  EmptyText="@(MayManage ? "No events yet — the form above starts one" : "No events yet")"
                   OnRetry="@LoadAsync">
         <ChildContent>
             <div class="table-responsive">
@@ -298,6 +313,10 @@
     }
     private bool _loading = true;
     private bool _saving;
+
+    /// <summary>What this person may do in the group; adding an event is checked against its settings.</summary>
+    private MyOrgPermissionsItem? _perms;
+    private bool MayManage => _perms?.May(OrganizationPermissionArea.OrganizationProfile, OrganizationSecurityAction.Update) == true;
     private string? _error;
     private readonly NewEventForm _form = new();
 
@@ -333,6 +352,7 @@
 
         _events = await AdminClient.GetHostedEventsAsync(OrgId);
         _plan = await AdminClient.GetHostedEventPlanAsync(OrgId);
+        _perms = await AdminClient.GetMyOrgPermissionsAsync(OrgId);
 
         _loading = false;
     }

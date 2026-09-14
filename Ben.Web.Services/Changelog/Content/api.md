@@ -18,6 +18,11 @@ read.
 This stream deliberately does not repeat the website's list. A change people meet as a page
 belongs there; this is for the part underneath.
 
+## 2026-09-14
+
+- Files are now saved whole or not at all. A save interrupted part way, such as a thumbnail being made when the
+  person leaves the page, no longer leaves an empty file that is then served in place of the picture.
+
 ## 2026-09-13
 
 - SuperAdmin endpoints list every hosted event, return the events dashboard figures, show what removing an

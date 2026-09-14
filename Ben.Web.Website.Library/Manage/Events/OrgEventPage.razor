@@ -37,6 +37,20 @@
     {
         var ev = _event;
 
+        @* Every change on this page is refused by the server to anybody who may not change the group's
+           settings, so for them it is a page to read: the controls below the heading are there to show
+           what is set, and they do nothing. A fieldset is what disables every native control in it at
+           once, which is all this page uses; plain links still work, so the index and the other event
+           pages stay reachable. The heading's own buttons sit outside it, because Bootstrap disables a
+           link styled as a button inside a disabled fieldset, and "See it as a visitor" is for readers
+           too — the two that change the event are simply not offered. *@
+        @if (!MayManage)
+        {
+            <div class="alert alert-secondary" id="event-read-only">
+                You can read this event. Changing it is for people who can manage the group's settings.
+            </div>
+        }
+
         <div class="d-flex justify-content-between align-items-start flex-wrap gap-2 mb-2">
             <div>
                 <div class="text-secondary small">
@@ -64,14 +78,14 @@
                         <BenIcon Name="eye" Class="me-1" />See it as a visitor
                     </a>
                 }
-                @if (ev.LifecycleState is HostedEventLifecycleState.Draft)
+                @if (MayManage && ev.LifecycleState is HostedEventLifecycleState.Draft)
                 {
                     <button type="button" class="btn btn-primary" id="publish-event"
                             disabled="@_busy" @onclick="() => _confirmingPublish = true">
                         Publish it
                     </button>
                 }
-                else if (ev.LifecycleState is HostedEventLifecycleState.Published)
+                else if (MayManage && ev.LifecycleState is HostedEventLifecycleState.Published)
                 {
                     @* Only while it is Published. Once it is on, taking it down mid-event would
                        strand everybody holding a pass, and once it is over there is nothing to
@@ -83,6 +97,8 @@
                 }
             </div>
         </div>
+
+        <fieldset disabled="@(!MayManage)" class="border-0 p-0 m-0" style="min-width:0;">
 
         @if (_note is null && CopiedNote() is { } copied)
         {
@@ -904,10 +920,17 @@
                 </div>
             </div>
         </div>
+        </fieldset>
     }
 </div>
 
 @code {
+    /// <summary>What this person may do in the group, for whether the page is one they can change.</summary>
+    private MyOrgPermissionsItem? _perms;
+
+    /// <summary>The permission every change on this page is checked against: the group's settings.</summary>
+    private bool MayManage => _perms?.May(OrganizationPermissionArea.OrganizationProfile, OrganizationSecurityAction.Update) == true;
+
     [Parameter] public Guid OrgId { get; set; }
     [Parameter] public Guid EventId { get; set; }
 
@@ -1027,6 +1050,7 @@
         _loading = true;
         _event = await AdminClient.GetHostedEventAsync(OrgId, EventId);
         _plan = await AdminClient.GetHostedEventPlanAsync(OrgId);
+        _perms = await AdminClient.GetMyOrgPermissionsAsync(OrgId);
 
         if (_event is { } ev)
         {
