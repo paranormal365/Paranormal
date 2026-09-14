@@ -52,6 +52,10 @@
                   LoadingText="Opening the door…" OnRetry="LoadAsync">
         <ChildContent Context="door">
 
+            @* Which event this door is. A steward can be helping at more than one, and the tab's title is
+               not something anybody reads on a phone held out to a queue. *@
+            <div class="text-secondary mb-2" id="door-event">@door.EventName</div>
+
             @* ── which night, and how the evening stands ─────────────────── *@
             @if (door.Nights.Count > 1)
             {
