@@ -348,9 +348,13 @@
         </div>
 
         @* ── The money trail ──────────────────────────────────────────────── *@
+        @* The empty sentence explained a group with no plan, and sat under "Current plan: Small group · Active" for one that
+           has a plan and no recorded charge yet — a seeded or comped plan (UI test pass, 2026-09-14). *@
         <h2 class="h5 mt-4 mb-2">Billing history</h2>
         <BenListState TItem="OrgBillingHistoryRecord" Result="@_history" Loading="@false"
-                      EmptyText="No charges or payments yet — a group with no plan is charged nothing.">
+                      EmptyText="@(_subscription is null || _subscription.Status == SubscriptionStatus.Free
+                                     ? "No charges or payments yet — a group with no plan is charged nothing."
+                                     : "No charges or payments recorded yet.")">
             <table class="table align-middle">
                 <thead><tr>
                     <th>Date</th><th>What</th><th class="text-end">Amount</th>

@@ -26,3 +26,16 @@
 .ben-tabs-scroll > .nav-item > .nav-link {
     white-space: nowrap;
 }
+
+/* More tabs past an edge: that edge fades out (BenTabs.razor.js sets the classes from the scroll position). */
+.ben-tabs-scroll.is-more-after {
+    mask-image: linear-gradient(to right, #000 calc(100% - 3.5rem), transparent);
+}
+
+.ben-tabs-scroll.is-more-before {
+    mask-image: linear-gradient(to left, #000 calc(100% - 3.5rem), transparent);
+}
+
+.ben-tabs-scroll.is-more-before.is-more-after {
+    mask-image: linear-gradient(to right, transparent, #000 3.5rem, #000 calc(100% - 3.5rem), transparent);
+}

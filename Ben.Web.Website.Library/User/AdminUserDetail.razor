@@ -201,7 +201,11 @@ else
                         <GridColumn Field="@nameof(UserLinkAdminRecord.LinkUrl)" Title="URL" />
                         <GridColumn Field="@nameof(UserLinkAdminRecord.DisplayText)" Title="Label" Width="120px" />
                         <GridColumn Field="@nameof(UserLinkAdminRecord.IsPublic)" Title="Public" Width="70px" />
-                        <GridColumn Field="@nameof(UserLinkAdminRecord.IsActive)" Title="Active" Width="70px" />
+                        <GridColumn Field="@nameof(UserLinkAdminRecord.IsActive)" Title="Active" Width="70px">
+                            <Template>
+                                <span class="badge @(((UserLinkAdminRecord)context).IsActive ? "bg-success" : "bg-secondary")">@(((UserLinkAdminRecord)context).IsActive ? "Yes" : "No")</span>
+                            </Template>
+                        </GridColumn>
                         <GridCommandColumn Width="100px">
                             <GridCommandButton OnClick="@((GridCommandEventArgs e) => OpenSubDialog("link", e.Items.First()))"
                                 Title="Edit"
@@ -253,7 +257,11 @@ else
                             </Template>
                         </GridColumn>
                         <GridColumn Field="@nameof(OrganizationUserMembershipAdminRecord.Role)" Title="Role" Width="130px" />
-                        <GridColumn Field="@nameof(OrganizationUserMembershipAdminRecord.IsActive)" Title="Active" Width="70px" />
+                        <GridColumn Field="@nameof(OrganizationUserMembershipAdminRecord.IsActive)" Title="Active" Width="70px">
+                            <Template>
+                                <span class="badge @(((OrganizationUserMembershipAdminRecord)context).IsActive ? "bg-success" : "bg-secondary")">@(((OrganizationUserMembershipAdminRecord)context).IsActive ? "Yes" : "No")</span>
+                            </Template>
+                        </GridColumn>
                         <GridColumn Field="@nameof(OrganizationUserMembershipAdminRecord.DateCreated)" Title="Joined" Width="110px">
                             <Template>
                                 @(((OrganizationUserMembershipAdminRecord)context).DateCreated.ToViewerLocalTime(UserState).ToDisplayDate())

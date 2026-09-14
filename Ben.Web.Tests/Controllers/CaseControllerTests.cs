@@ -50,7 +50,7 @@ public class CaseControllerTests
                 : new CaseRecord { Title = "", StreetAddress1 = "", City = "", State = "", ZipCode = "", Country = "", DateCaseOpened = DateTime.UtcNow, DateCreated = DateTime.UtcNow });
         m.Setup(x => x.Map<IEnumerable<CaseRecord>>(It.IsAny<object>()))
             .Returns<object>(o => o is IEnumerable<Case> list
-                ? list.Select(c => new CaseRecord { Id = c.Id, OrganizationId = c.OrganizationId, Title = c.Title, Status = c.Status, CaseYear = c.CaseYear, OrgCaseNumber = c.OrgCaseNumber, StreetAddress1 = c.StreetAddress1, City = c.City, State = c.State, ZipCode = c.ZipCode, Country = c.Country, DateCaseOpened = c.DateCaseOpened, DateCreated = c.DateCreated })
+                ? list.Select(c => new CaseRecord { Id = c.Id, OrganizationId = c.OrganizationId, Title = c.Title, Status = c.Status, CaseYear = c.CaseYear, OrgCaseNumber = c.OrgCaseNumber, StreetAddress1 = c.StreetAddress1, City = c.City, State = c.State, ZipCode = c.ZipCode, Country = c.Country, DateCaseOpened = c.DateCaseOpened, DateCreated = c.DateCreated, CaseManagerAppUserId = c.CaseManagerAppUserId, CaseManagerDisplayName = c.CaseManagerAppUser?.DisplayName })
                 : []);
         m.Setup(x => x.Map<CaseTimelineEntryRecord>(It.IsAny<object>()))
             .Returns<object>(o => o is CaseTimelineEntry e
@@ -237,6 +237,33 @@ public class CaseControllerTests
         var dto = Assert.IsType<CaseRecord>(Assert.IsType<OkObjectResult>(result.Result).Value);
         Assert.Equal(managerId, dto.CaseManagerAppUserId);
         Assert.Equal("Dana Holt", dto.CaseManagerDisplayName);
+    }
+
+    [Fact]
+    public async Task GetAll_NamesEachCasesManager()
+    {
+        // UI test pass, 2026-09-14: the Cases tab said "Manager: Unassigned" on every case, including the Belmont case
+        // whose manager is Sarah — the list query loaded cases without the manager navigation the name is mapped from
+        // (the same bug W-A9 fixed for Update, one query over).
+        var (factory, orgId, userId) = await SeedAsync();
+        var managerId = Guid.NewGuid();
+        await using (var db = await factory.CreateDbContextAsync())
+        {
+            db.Users.Add(new AppUser
+            {
+                Id = managerId, UserName = "mgr@t.com", NormalizedUserName = "MGR@T.COM",
+                Email = "mgr@t.com", NormalizedEmail = "MGR@T.COM",
+                DisplayName = "Dana Holt", DateCreated = DateTime.UtcNow,
+            });
+            await db.SaveChangesAsync();
+        }
+        var ctrl   = Build(factory, userId);
+        var caseId = ((CaseRecord)((CreatedAtActionResult)(await ctrl.Create(orgId, MakeCreateRequest(), default)).Result!).Value!).Id;
+        await ctrl.Update(orgId, caseId, new UpdateCaseRequest("Assigned", null, CaseStatus.Accepted, null, false, managerId), default);
+
+        var ok = Assert.IsType<OkObjectResult>((await Build(factory, userId).GetAll(orgId, default)).Result);
+
+        Assert.Equal("Dana Holt", Assert.Single((IEnumerable<CaseRecord>)ok.Value!).CaseManagerDisplayName);
     }
 
     [Fact]

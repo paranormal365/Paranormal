@@ -138,6 +138,7 @@ public sealed class CaseController : BenControllerBase
         if (!await CanReadAsync(orgId, ct)) return Forbid();
         await using var db = await _db.CreateDbContextAsync(ct);
         var cases = await db.Cases.AsNoTracking()
+            .Include(c => c.CaseManagerAppUser)   // the record's manager name maps from this navigation (as GetById)
             .Where(c => c.OrganizationId == orgId)
             .OrderByDescending(c => c.DateCaseOpened)
             .ToListAsync(ct);

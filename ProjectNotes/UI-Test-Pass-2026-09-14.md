@@ -81,6 +81,27 @@ Seen and fine: tooltips on grid icons; sign-out asks first; mark-all-read update
 
 ## Layer 3 — A group's hub
 
+Walked Paranormal365 as the SuperAdmin: every hub tab (Details, Members, Cases, Investigations, Calendar, Messages, Files,
+Requests, Clients, CMS, Publications, Equipment, Roles, Addresses, Settings), Pending Requests, Billing — 1280 and 768.
+
+- [x] **3.1 Three of the hub's fifteen tabs could not be reached with a mouse wheel.** The row scrolls sideways with its
+  bar hidden: nothing said it went on past "Equipment", and a vertical wheel does not scroll sideways, so Roles,
+  Addresses and Settings were keyboard-only on an ordinary Windows mouse; a ?tab=settings link opened on a tab off the
+  edge. → BenTabs fades the edge that has more, turns the wheel into a sideways scroll over the row, and brings the
+  chosen tab into view.
+- [x] **3.2 Every case on the Cases tab said "Manager: Unassigned"** — the list query did not load the manager the name is
+  mapped from (W-A9 fixed the same thing for Update). → included; `GetAll_NamesEachCasesManager`, seen failing first.
+- [x] **3.3 Members grids printed "True"** in Active (hub members, admin user detail ×2). → Yes/No badges, as Roles does.
+- [x] **3.4 The Clients tab's switch had no label** — only its grey consequence beside it. → "Taking new cases", with the
+  consequence beneath.
+- [x] **3.5 Billing said "a group with no plan is charged nothing"** under "Current plan: Small group · Active".
+  → that sentence only for a group with no plan; otherwise "No charges or payments recorded yet."
+- [x] **3.6 Pending Requests' "View more…" was inside the 3em box that clips the excerpt** — cut off with the text.
+  → a button below the excerpt, and "Show less" when expanded.
+
+Seen and fine: investigations map (pins arrive a moment after the tiles), calendar, messages, files, publications,
+equipment, settings links, the tablet layout.
+
 ## Layer 4 — A case
 
 ## Layer 5 — Research pages and the block editor
