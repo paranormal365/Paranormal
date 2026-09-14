@@ -177,4 +177,69 @@ browser tests (`CaseResearchEditorTests`) do each of these the way a person woul
 Measured and fine: a block move, menu open and text-block open each answered in 3–5 ms locally; words typed quickly are all
 kept (an earlier loss was the browser tool's own typing).
 
-## Layer 6 — Inner workings: seats, persistence, refusals, saving
+## Layer 6 — Inner workings: seats, persistence, refusals, dragging
+
+Ben, again: "use the mouse drag … Dont worry about the research editor. I am working on it in another project." Research
+pages are left out from here. Walked: the group calendar (drag, resize, the ✕, the editor's Delete), signing in from deep
+pages, the surfaces a mouse can drag (calendar, event floor plan, seat picker, audio mix, waveform regions).
+
+- [x] **6.1 Signing in from a deep page landed on the home page.** A group's calendar opened signed out went to a bare
+  sign-in page, and so did the header's Sign In from anywhere — seven pages sent people to `/login` with no way back.
+  → one `SignInLink` builds the sign-in address with the page as a relative returnUrl; the header's link follows the
+  person round the site. `SignInReturnsTests`, `SignInLinkTests`.
+- [x] **6.2 The calendar's evidence box put Decline on its own line**, away from its reason box, with Accept beside it.
+  → *cosmetic, noted.*
+- [x] **6.3 Dragging an event on the calendar did nothing.** Updates were allowed, so an event could be picked up and
+  dropped, but nothing handled the drop: it sprang back without a word. → a dropped or resized event is saved with every
+  other detail as it was, and a line says where it went with Undo; a repeating event is refused in words (dragging one
+  date would move the series); a server refusal is shown and the event stays put. The line and any refusal stick to the
+  top of the scroll, so a drop far down the calendar is answered where it can be seen. `CalendarDragTests`.
+- [x] **6.4 The ✕ on a calendar event deleted it on one click** — a public event with its sign-ups included — and the
+  editor's Delete did the same; a server refusal ("archive the event there") was thrown away, the editor closed and the
+  event stayed with nothing said. → both ask first, naming the event and its date (and that every repeat goes with a
+  repeating one); a refusal is shown in its own words.
+- [x] **6.5 The calendar, signed out, said so above a spinner that never stopped**, with no way to sign in. → no spinner
+  once the load has failed; the sentence carries a Sign in link.
+- [x] **6.6 Every restart of the local hosts signed the browser out.** The website keeps sign-ins in the browser through
+  ProtectedLocalStorage (Data Protection), and on this Mac its default key folder `~/.aspnet` is owned by root, so its
+  keys lived in memory and died with each restart. → *Not a site defect*: the production application pools load a user
+  profile, where the keys persist (deploy runbook, "Why three application pools"). A shared key-ring setup for the
+  website was tried and backed out — compiling the API's class into both hosts collides in the test project. Machine
+  fix, for Ben: `sudo chown -R "$USER" ~/.aspnet`.
+- [x] **6.7 Case voting, case comments, a hosted event's reviews, a tour page and polls sent people to sign in with the
+  page's full address**, which the sign-in page's open-redirect guard refuses — so they too landed on the home page.
+  → the same `SignInLink`; a guard fails the build if a sign-in link is built from the full address again.
+- [x] **6.9 A group page's Back followed any returnUrl**, another website's included. → only a path on this site.
+
+- [x] **6.10 Signed out, the events page said "Adding and changing events is for people who can manage the group's
+  settings"** above "You've been signed out" — a permission sentence to somebody who is only signed out. → only to a
+  signed-in person.
+- [x] **6.11 The event pages' example values read as entries** ("Thomas House Weekend", "Meet at reception", "Mrs Cole,
+  the manager" — fifteen of them), as 1.6 did. → each starts "e.g.". *Open for the final pass:* about ninety more
+  capitalised placeholders across the site need the same look — many are instructions ("No limit", "Optional") and stay.
+- [x] **6.12 A quick mouse sweep across a floor plan or seating plan skipped squares.** Mouse and pen paint a selection,
+  and the square under the pointer was asked for only where each move landed; a fast sweep across four rooms chose
+  three. The same component is the public seat picker. → every point along the line since the last move is asked for.
+  `A_quick_mouse_sweep_chooses_every_seat_it_crosses`: 2 of 6 before, 6 of 6 after.
+- [x] **6.13 "View as" showed the SuperAdmin's name and picture in the member's profile menu**, above the member's email
+  address — the menu fetched them once and "view as" happens in the same visit (signing out and in as somebody else
+  without reloading did the same). → the menu refetches when the person changes, and shows nothing of the last person
+  meanwhile. `Impersonation_shows_their_world…` now opens the menu.
+- [x] **6.14 A member's "work waiting: 1 investigation request" banner led to the group's Details.** The count is for
+  anyone who can read the queue; the hub's Requests tab is an admin's, so `?tab=requests` fell back to Details, and his
+  desk said "0 requests waiting on you" under it. → the banner opens the requests page, which every reader can use.
+- [x] **6.15 The requests queue offered every member Accept and Decline**, which the server refuses without the
+  client-requests grant — and Decline then took the request off the screen anyway, so it looked answered and came back on
+  the next visit. → the buttons show only for whoever may decide, and a refused Decline says so and leaves the request.
+  `A_members_request_banner_opens_a_queue…`.
+
+- [x] **6.16 Signed out, the case audio mixer said "This case doesn't exist, or you don't have access to it."**
+  → says the person is signed out, with a Sign in link that comes back to the mixer.
+- [x] **6.17 The mixer's heading put its icon above the words.** → on one line.
+- [x] **6.18 The mixer said "Add clips from the case's Files tab to get started"** beside a list of clips each with its
+  own Add button. → "Press Add beside a clip to put it on a track" when the case has audio.
+
+Measured and fine: a clip dragged along its lane lands at the time dropped on (80px → 10s); a moved event keeps its time
+and length; the Delete question cancels cleanly; members may add, move
+and delete calendar events (item 156 decided the calendar is member-open).
+

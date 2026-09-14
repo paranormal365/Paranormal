@@ -185,7 +185,11 @@ public interface IBenPlacesClient
     Task<(OrgCalendarEventRecord? Result, string? Error)> SaveCalendarEventAsync(
         Guid orgId, Guid? eventId, UpsertCalendarEventRequest request, CancellationToken token = default);
     Task<OrgCalendarEventRecord?> UpdateCalendarEventAsync(Guid orgId, Guid eventId, UpsertCalendarEventRequest request, CancellationToken token = default);
-    Task<bool> DeleteCalendarEventAsync(Guid orgId, Guid eventId, CancellationToken token = default);
+    /// <remarks>
+    /// Keeps the server's refusal: an event run from its hosted-event pages is archived there, not deleted here, and a
+    /// calendar that read only true/false left the event in place with nothing said (UI test pass 6.4, 2026-09-14).
+    /// </remarks>
+    Task<(bool Deleted, string? Error)> DeleteCalendarEventAsync(Guid orgId, Guid eventId, CancellationToken token = default);
 
     Task<LoadResult<OrgCalendarEventAttendeeRecord>> GetCalendarEventAttendeesAsync(Guid orgId, Guid eventId, CancellationToken token = default);
 

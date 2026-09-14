@@ -61,12 +61,12 @@
             <div class="mb-2">
                 <label class="form-label small mb-1" for="letter-subject">Subject</label>
                 <input class="form-control form-control-sm" id="letter-subject" maxlength="160"
-                       placeholder="Parking has moved" @bind="_subject" @bind:event="oninput" />
+                       placeholder="e.g. Parking has moved" @bind="_subject" @bind:event="oninput" />
             </div>
             <div class="mb-2">
                 <label class="form-label small mb-1" for="letter-body">Letter</label>
                 <textarea class="form-control form-control-sm" id="letter-body" rows="5" maxlength="4000"
-                          placeholder="Park behind the church on Main Street tonight — the hotel car park is closed."
+                          placeholder="e.g. Park behind the church on Main Street tonight — the hotel car park is closed."
                           @bind="_body" @bind:event="oninput"></textarea>
             </div>
 

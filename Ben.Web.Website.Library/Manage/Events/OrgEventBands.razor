@@ -77,7 +77,7 @@
                                     Colour
                                 </label>
                                 <input id="@($"band-colour-{row.Key}")" class="form-control"
-                                       maxlength="60" placeholder="Blue"
+                                       maxlength="60" placeholder="e.g. Blue"
                                        @bind="row.Colour" @bind:event="oninput" />
                             </div>
                             <div class="col-6 col-md-2">
@@ -94,7 +94,7 @@
                                     What it means
                                 </label>
                                 <input id="@($"band-meaning-{row.Key}")" class="form-control"
-                                       maxlength="160" placeholder="The whole weekend, with dinner"
+                                       maxlength="160" placeholder="e.g. The whole weekend, with dinner"
                                        @bind="row.Meaning" @bind:event="oninput" />
                             </div>
                             <div class="col-8 col-md-3">

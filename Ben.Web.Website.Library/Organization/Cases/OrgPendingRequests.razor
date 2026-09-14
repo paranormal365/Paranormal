@@ -87,12 +87,17 @@
                                         Under Review
                                     </button>
                                 }
-                                <button type="button" class="btn btn-primary btn-sm" @onclick="@(() => OpenAccept(r))" disabled="@(!(!_isBusy))"><BenIcon Name="check" Class="me-1" />
-                                    Accept
-                                </button>
-                                <button type="button" class="btn btn-danger btn-sm" @onclick="@(() => OpenDecline(r))" disabled="@(!(!_isBusy))"><BenIcon Name="x" Class="me-1" />
-                                    Decline
-                                </button>
+                                @* Only for whoever may decide (UI test pass 6.15): every member can read and vote, and the
+                                   buttons that answer the client were offered to all of them. *@
+                                @if (_canDecide)
+                                {
+                                    <button type="button" class="btn btn-primary btn-sm" @onclick="@(() => OpenAccept(r))" disabled="@(!(!_isBusy))"><BenIcon Name="check" Class="me-1" />
+                                        Accept
+                                    </button>
+                                    <button type="button" class="btn btn-danger btn-sm" @onclick="@(() => OpenDecline(r))" disabled="@(!(!_isBusy))"><BenIcon Name="x" Class="me-1" />
+                                        Decline
+                                    </button>
+                                }
                             </div>
                         </div>
 
@@ -189,6 +194,9 @@
     private string _acceptTitle = "";
     private OrgPendingRequestRecord? _declineTarget;
 
+    /// <summary>Whether this person may accept or decline — the client-requests grant, or an admin seat.</summary>
+    private bool _canDecide;
+
     protected override async Task OnAfterRenderAsync(bool firstRender)
     {
         if (!firstRender) return;
@@ -203,6 +211,8 @@
         {
             _requestsResult = await AdminClient.GetOrgPendingRequestsAsync(OrgId);
             _requests       = _requestsResult.Items.ToList();
+            _canDecide = UserState.IsSuperAdmin
+                || (await AdminClient.GetMyOrgPermissionsAsync(OrgId))?.May(OrganizationPermissionArea.Clients, OrganizationSecurityAction.Update) == true;
         }
         catch
         {
@@ -291,9 +301,16 @@
         _isBusy = true; _actionError = null;
         try
         {
-            await AdminClient.DeclineClientRequestAsync(OrgId, _declineTarget.ClientRequestId);
-            _requests?.Remove(_declineTarget);
-            _declineTarget = null;
+            var (declined, error) = await AdminClient.DeclineClientRequestAsync(OrgId, _declineTarget.ClientRequestId);
+            if (declined)
+            {
+                _requests?.Remove(_declineTarget);
+                _declineTarget = null;
+            }
+            else
+            {
+                _actionError = error ?? "The request could not be declined. It is still waiting for an answer.";
+            }
         }
         catch (Exception ex) { _actionError = ex.Message; }
         finally { _isBusy = false; }

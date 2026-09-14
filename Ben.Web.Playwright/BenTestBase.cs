@@ -483,7 +483,7 @@ public abstract class BenTestBase : PageTest
     /// from a component lifecycle method, so it cannot show up before the circuit is live. Outside
     /// Development there is nothing to wait for, hence best-effort with a short bound.</para>
     /// </remarks>
-    private async Task FillCredentialsAsync(string email, string password)
+    protected async Task FillCredentialsAsync(string email, string password)
     {
         var emailBox    = Page.Locator(EmailSelector).First;
         var passwordBox = Page.Locator("input[type='password']").First;

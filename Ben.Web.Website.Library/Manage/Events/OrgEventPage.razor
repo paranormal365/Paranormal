@@ -259,7 +259,7 @@
                             <div class="col-12 col-md-6">
                                 <label class="form-label" for="event-tagline">One line under it</label>
                                 <input id="event-tagline" class="form-control" @bind="_form.Tagline"
-                                       placeholder="Three nights at the Thomas House" />
+                                       placeholder="e.g. Three nights at the Thomas House" />
                             </div>
                             <div class="col-12">
                                 @* The rich editor is not a labelable control, so the label names the
@@ -459,7 +459,7 @@
                                 <label class="form-label" for="event-access">Getting in and getting around</label>
                                 <textarea id="event-access" class="form-control" rows="3" maxlength="2000"
                                           @bind="_form.AccessNotes"
-                                          placeholder="Stairs only to the ballroom. Low lighting all night. Parking behind the hotel."></textarea>
+                                          placeholder="e.g. Stairs only to the ballroom. Low lighting all night. Parking behind the hotel."></textarea>
                                 <div class="form-text">
                                     Shown on the event's page and in the letter a guest gets when their place is
                                     confirmed, so anybody it matters to knows before they book and before they travel.
@@ -580,7 +580,7 @@
                                 {
                                     <label class="form-label" for="event-venue-message">Anything they should know</label>
                                     <textarea id="event-venue-message" class="form-control mb-2" rows="3" maxlength="2000"
-                                              placeholder="About forty guests, two nights, a séance in the ballroom on the Saturday."
+                                              placeholder="e.g. About forty guests, two nights, a séance in the ballroom on the Saturday."
                                               @bind="_venueMessage"></textarea>
                                     <button type="button" class="btn btn-primary" id="event-venue-ask"
                                             disabled="@_busy" @onclick="AskTheVenueAsync">
@@ -638,7 +638,7 @@
                                         Who agreed it
                                     </label>
                                     <input id="event-venue-contact" class="form-control" maxlength="160"
-                                           placeholder="Mrs Cole, the manager"
+                                           placeholder="e.g. Mrs Cole, the manager"
                                            @bind="_form.VenueContactName" />
                                 </div>
                                 <div class="col-6 col-md-3">

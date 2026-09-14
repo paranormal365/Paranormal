@@ -65,7 +65,9 @@
             <strong>@item.OrganizationName</strong> has work waiting:
             @if (item.PendingClientRequests > 0)
             {
-                <a class="alert-link" href="/organizations/@item.OrganizationId?tab=requests">
+                @* The requests page, not the hub's Requests tab: the count is for anyone who can read the queue, and the tab is an
+                   admin's — a member followed this to the group's Details (UI test pass 6.14). *@
+                <a class="alert-link" href="/organizations/@item.OrganizationId/pending-requests">
                     @item.PendingClientRequests investigation request@(item.PendingClientRequests == 1 ? "" : "s")
                 </a>
             }

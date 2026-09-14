@@ -296,7 +296,7 @@
         // The circuit is not necessarily live on a hard navigation, and checking IsAuthenticated
         // before auth is ready is the race this app has been caught by repeatedly.
         if (!await UserState.WaitUntilAuthReadyAsync(RendererInfo.IsInteractive)) return;
-        if (!UserState.IsAuthenticated) { NavManager.NavigateTo("/login"); return; }
+        if (!UserState.IsAuthenticated) { NavManager.NavigateTo(Ben.Web.Website.Library.Kit.SignInLink.For(NavManager)); return; }
 
         _place = await AdminClient.GetPlaceAsync(PlaceId);
         await LoadAsync();

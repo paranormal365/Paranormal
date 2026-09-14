@@ -69,6 +69,15 @@ day-by-day account of building it would say nothing to anyone using it now.
 - On the investigation request form, example values start "e.g.", the missing address fields are named, and changing
   a checked address asks for it to be checked again.
 - On a phone, the footer wraps instead of running off the screen, and the home map starts on the pins.
+- Signing in from any page brings you back to that page — from the header, from a group's pages, and from the Sign in
+  links beside voting, comments, polls, tour pages and event reviews.
+- On a group's calendar, an event can be dragged to another day or time, or have its end dragged, and the move can be
+  undone. Deleting an event asks first, and a refusal says why.
+- A quick sweep of the mouse across a floor plan or seating plan chooses every square it passes over.
+- When a SuperAdmin views the site as somebody else, the profile menu shows that person's name and picture.
+- The "work waiting" banner for client requests opens the requests page, which every member who can read it can use.
+  Accept and Decline appear only for the people who can answer for the group.
+- Example text in the event pages' boxes starts "e.g.", so it isn't mistaken for something already filled in.
 - SuperAdmins have an Event health tab on the dashboard. It shows holds and how long parties wait for an answer,
   letters going out, errors on event pages, requests turned away by the booking limits, and when each
   background job last ran and whether it failed.

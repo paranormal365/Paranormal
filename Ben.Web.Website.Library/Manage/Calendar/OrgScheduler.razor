@@ -19,9 +19,25 @@
         </div>
     }
 
-    @if (_error is not null) { <div class="alert alert-danger mb-3">@_error</div> }
+    @* Sticky, as is the line a drag leaves: an event dropped far down a scrolled calendar was answered at the top of the
+       page, out of sight (UI test pass 6.3). *@
+    @if (_error is not null)
+    {
+        <div class="alert alert-danger mb-3 sticky-top shadow-sm" data-testid="calendar-error">
+            @_error
+            @if (_signedOut)
+            {
+                <a class="alert-link ms-1" href="@SignInLink.For(NavManager)">Sign in</a>
+            }
+        </div>
+    }
 
-    @if (_appointments is null)
+    @if (_appointments is null && _error is not null)
+    {
+        @* Nothing more is coming: a spinner under "you've been signed out" or "could not be loaded" said otherwise
+           (UI test pass 6.5). *@
+    }
+    else if (_appointments is null)
     {
         <BenLoaderOverlay Visible="true" Text="Loading calendar…" />
     }
@@ -31,6 +47,14 @@
            opens the editor. The editor is good; the door was invisible, which for the feature
            that carries public events and walking tours is most of the feature (2026-09-04 sweep).
            The button opens the same form the double-click does, on the next round hour. *@
+        @if (_moved is { } moved)
+        {
+            <div class="alert alert-info d-flex align-items-center flex-wrap gap-2 mb-2 sticky-top shadow-sm" role="status" data-testid="calendar-moved">
+                <span>Moved <strong>@moved.Title</strong> to @moved.NewStart.ToString("ddd M/d, h:mm tt").</span>
+                <button type="button" class="btn btn-sm btn-outline-primary" id="calendar-move-undo" disabled="@_isBusy"
+                        @onclick="UndoMoveAsync">Undo</button>
+            </div>
+        }
         <div class="d-flex justify-content-end mb-2">
             <button type="button" class="btn btn-primary btn-sm" id="calendar-new-event"
                     @onclick="NewEventAsync">
@@ -47,6 +71,7 @@
                           AllowUpdate="true"
                           AllowDelete="true"
                           OnEdit="@OnSchedulerEdit"
+                          OnUpdate="@OnSchedulerMovedAsync"
                           OnDelete="@OnSchedulerDelete">
             @* Every appointment rendered identically was hiding real information. Event types have
                carried ColorClass and IconClass since they were built and only the type-manager
@@ -430,6 +455,20 @@
     </ChildContent>
 </BenModal>
 
+@* Asked first (UI test pass 6.4): the ✕ on an event deleted it outright, public events and their sign-ups included,
+   one stray click away. *@
+<BenConfirmDialog @bind-Visible="@_showDeleteConfirm" Title="Delete event" Width="440px"
+                  Busy="@_isBusy" BusyText="Deleting…" OnConfirm="DeleteConfirmedAsync">
+    <p class="mb-0" data-testid="calendar-delete-message">
+        Delete <strong>@_deleteTarget?.Title</strong> on @_deleteTarget?.StartDateTime.ToViewerLocalTime(UserState).ToString("ddd M/d, h:mm tt")?
+        @if (_deleteTarget?.RecurrenceRule is { Length: > 0 })
+        {
+            <span>Every date it repeats on goes with it.</span>
+        }
+        This cannot be undone.
+    </p>
+</BenConfirmDialog>
+
 </FeatureGate>
 
 @code {
@@ -450,7 +489,14 @@
     private DateTime _dayEnd          = new DateTime(2000, 1, 1, 22, 0, 0);
 
     private string? _error;
+    private bool _signedOut;
     private bool _isBusy;
+    private bool _showDeleteConfirm;
+    private OrgCalendarEventRecord? _deleteTarget;
+
+    /// <summary>The last event moved by dragging, and where it was, so the move can be undone.</summary>
+    private MovedEvent? _moved;
+    private sealed record MovedEvent(Guid Id, string Title, DateTime OldStartUtc, DateTime OldEndUtc, DateTime NewStart);
     private bool _showEventDialog;
     private bool _isNewEvent;
     private OrgCalendarEventRecord? _editingEvent;
@@ -706,14 +752,16 @@
 
         if (events.Failed)
         {
+            _signedOut = events.SessionExpired;
             _error = events.SessionExpired
-                ? "You've been signed out, so the calendar could not be loaded. Sign in again to see it."
+                ? "You've been signed out, so the calendar could not be loaded."
                 : "The calendar could not be loaded. This is a problem reaching the server — it does "
                 + "not mean the calendar is empty.";
             return;
         }
 
         _error        = null;
+        _signedOut    = false;
         _events       = events.Items.ToList();
         _appointments = _events.Select(ToAppointment).ToList();
     }
@@ -865,18 +913,109 @@
         _showEventDialog = true;
     }
 
-    /// <summary>OnDelete fires when the user clicks the ✕ on an appointment.</summary>
-    private async Task OnSchedulerDelete(SchedulerDeleteEventArgs args)
+    /// <summary>The ✕ on an appointment: asks first.</summary>
+    private Task OnSchedulerDelete(SchedulerDeleteEventArgs args)
     {
-        var appt = args.Item as OrgCalendarAppointment;
-        if (appt is null) return;
+        if (args.Item is OrgCalendarAppointment appt && _events.FirstOrDefault(e => e.Id == appt.Id) is { } record)
+        {
+            _deleteTarget = record;
+            _showDeleteConfirm = true;
+        }
+        return Task.CompletedTask;
+    }
+
+    private async Task DeleteConfirmedAsync()
+    {
+        if (_deleteTarget is not { } target) return;
+        _isBusy = true;
         try
         {
-            await AdminClient.DeleteCalendarEventAsync(OrgId, appt.Id);
+            var (deleted, error) = await AdminClient.DeleteCalendarEventAsync(OrgId, target.Id);
+            _showDeleteConfirm = false;
+            _deleteTarget = null;
+            _error = deleted ? null : error ?? "The event could not be deleted. Nothing was changed.";
+            if (_moved?.Id == target.Id) _moved = null;
             await LoadEventsAsync();
         }
-        catch { _error = "Delete failed."; }
+        finally { _isBusy = false; }
     }
+
+    /// <summary>
+    /// An event dragged to another time, or its end dragged: saved with every other detail as it was.
+    /// </summary>
+    /// <remarks>
+    /// UI test pass 6.3, 2026-09-14: the calendar let an event be picked up and dropped — updates were allowed — but nothing
+    /// handled the drop, so it sprang back and nothing was said. A repeating event is not moved this way: dragging one date
+    /// of a series would move them all, which is a decision for its editor. The move can be undone from the line it leaves.
+    /// </remarks>
+    private async Task OnSchedulerMovedAsync(SchedulerUpdateEventArgs args)
+    {
+        if (args.Item is not OrgCalendarAppointment moved || _events.FirstOrDefault(e => e.Id == moved.Id) is not { } record) return;
+
+        if (!string.IsNullOrWhiteSpace(record.RecurrenceRule))
+        {
+            _error = $"“{record.Title}” repeats, so it isn't moved by dragging. Open it to change when it starts.";
+            await LoadEventsAsync();
+            return;
+        }
+
+        _isBusy = true;
+        try
+        {
+            var startUtc = moved.Start.ToUtcFromViewerLocal(UserState);
+            var endUtc = moved.End.ToUtcFromViewerLocal(UserState);
+            var (saved, error) = await AdminClient.SaveCalendarEventAsync(OrgId, record.Id, RequestFor(record, startUtc, endUtc, moved.IsAllDay));
+            if (saved is null)
+            {
+                _error = error ?? "The event could not be moved. It is back where it was.";
+                _moved = null;
+            }
+            else
+            {
+                _error = null;
+                _moved = new MovedEvent(record.Id, record.Title, record.StartDateTime, record.EndDateTime, moved.Start);
+            }
+            await LoadEventsAsync();
+        }
+        finally { _isBusy = false; }
+    }
+
+    private async Task UndoMoveAsync()
+    {
+        if (_moved is not { } moved || _events.FirstOrDefault(e => e.Id == moved.Id) is not { } record) { _moved = null; return; }
+        _isBusy = true;
+        try
+        {
+            var (saved, error) = await AdminClient.SaveCalendarEventAsync(OrgId, record.Id,
+                RequestFor(record, moved.OldStartUtc, moved.OldEndUtc, record.IsAllDay));
+            _error = saved is null ? error ?? "The move could not be undone." : null;
+            if (saved is not null) _moved = null;
+            await LoadEventsAsync();
+        }
+        finally { _isBusy = false; }
+    }
+
+    /// <summary>An event as it is, at another time. Guides are left alone (null), as they are by anything not editing them.</summary>
+    private static UpsertCalendarEventRequest RequestFor(OrgCalendarEventRecord e, DateTime startUtc, DateTime endUtc, bool isAllDay) => new(
+        Title:                 e.Title,
+        Description:           e.Description,
+        Location:              e.Location,
+        StartDateTime:         startUtc,
+        EndDateTime:           endUtc,
+        IsAllDay:              isAllDay,
+        IsPublic:              e.IsPublic,
+        EventTypeId:           e.EventTypeId,
+        OrganizationAddressId: e.OrganizationAddressId,
+        MeetingUrl:            e.MeetingUrl,
+        CaseId:                e.CaseId,
+        RecurrenceRule:        e.RecurrenceRule,
+        PlaceId:               e.PlaceId,
+        HideExactLocation:     e.HideExactLocation,
+        AttendeeCapacity:      e.AttendeeCapacity,
+        RsvpClosesAt:          e.RsvpClosesAt,
+        TourId:                e.TourId,
+        GuideAppUserIds:       null,
+        TimeZoneId:            e.TimeZoneId);
 
     // ── Custom dialog save / delete ───────────────────────────────────────────
 
@@ -940,18 +1079,13 @@
         finally { _isBusy = false; }
     }
 
-    private async Task DeleteFromDialog()
+    /// <summary>Delete from the editor: the editor closes and the same question is asked as for the ✕.</summary>
+    private void DeleteFromDialog()
     {
         if (_editingEvent is null) return;
-        _isBusy = true;
-        try
-        {
-            await AdminClient.DeleteCalendarEventAsync(OrgId, _editingEvent.Id);
-            _showEventDialog = false;
-            await LoadEventsAsync();
-        }
-        catch { _error = "Delete failed."; }
-        finally { _isBusy = false; }
+        _deleteTarget = _editingEvent;
+        _showEventDialog = false;
+        _showDeleteConfirm = true;
     }
 
     // ── Appointment DTO — uses the exact default field names from Telerik docs ──

@@ -143,7 +143,11 @@ public interface IBenCaseClient
     Task<(CaseRecord? Result, string? Error)> CreateOrgCaseAsync(Guid orgId, CreateCaseRequest request, CancellationToken token = default);
     Task<LoadResult<OrgPendingRequestRecord>> GetOrgPendingRequestsAsync(Guid orgId, CancellationToken token = default);
     Task<(CaseRecord? Result, string? Error)> AcceptClientRequestAsCaseAsync(Guid orgId, Guid clientRequestId, AcceptClientRequestAsCaseRequest request, CancellationToken token = default);
-    Task<bool> DeclineClientRequestAsync(Guid orgId, Guid clientRequestId, CancellationToken token = default);
+    /// <remarks>
+    /// Declined only when the server says so: the list used to take a request off the screen whatever the answer, so a member
+    /// without the grant "declined" a request that came back on the next visit (UI test pass 6.15, 2026-09-14).
+    /// </remarks>
+    Task<(bool Declined, string? Error)> DeclineClientRequestAsync(Guid orgId, Guid clientRequestId, CancellationToken token = default);
     /// <summary>Marks a pending request as Viewed or UnderReview without accepting or declining.</summary>
     Task<bool> UpdatePendingRequestStatusAsync(Guid orgId, Guid clientRequestId, Ben.Data.Common.Enums.ClientOrgRequestStatus status, CancellationToken token = default);
 

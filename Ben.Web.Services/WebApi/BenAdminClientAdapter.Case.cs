@@ -174,9 +174,12 @@ public sealed partial class BenAdminClientAdapter
         => _api.SendExpectingReasonAsync<AcceptClientRequestAsCaseRequest, CaseRecord>(
                HttpMethod.Post, $"/api/organizations/{orgId}/cases/accept-client-request/{clientRequestId}", request, token);
 
-    public Task<bool> DeclineClientRequestAsync(Guid orgId, Guid clientRequestId, CancellationToken token = default)
-        => _api.PostVoidAsync(
-               $"/api/organizations/{orgId}/cases/decline-request/{clientRequestId}", new { }, token);
+    public async Task<(bool Declined, string? Error)> DeclineClientRequestAsync(Guid orgId, Guid clientRequestId, CancellationToken token = default)
+    {
+        var (_, error, status) = await _api.SendWithStatusAsync<object, object>(
+            HttpMethod.Post, $"/api/organizations/{orgId}/cases/decline-request/{clientRequestId}", new { }, token);
+        return status is >= 200 and < 300 ? (true, null) : (false, error);
+    }
 
     public Task<bool> UpdatePendingRequestStatusAsync(Guid orgId, Guid clientRequestId, Ben.Data.Common.Enums.ClientOrgRequestStatus status, CancellationToken token = default)
         => _api.PutVoidAsync(

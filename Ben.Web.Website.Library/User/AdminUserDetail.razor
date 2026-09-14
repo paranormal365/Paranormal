@@ -1011,7 +1011,7 @@ else
 
     private void ViewOrganization(OrganizationUserMembershipAdminRecord m)
     {
-        var returnUrl = Uri.EscapeDataString(NavManager.Uri);
+        var returnUrl = Uri.EscapeDataString("/" + NavManager.ToBaseRelativePath(NavManager.Uri));
         NavManager.NavigateTo($"/organizations/{m.OrganizationId}?returnUrl={returnUrl}");
     }
 

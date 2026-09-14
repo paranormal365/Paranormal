@@ -281,6 +281,10 @@ Declining tells the client, and lets them send it elsewhere without rewriting it
 The group's **Calendar** holds meetings, training, anything with a time attached. Investigations
 are scheduled from the case they belong to, not here.
 
+**Moving an event.** Drag an event to another day or time, or drag its end to make it longer or shorter. A line above the
+calendar says where it went, with **Undo**. A repeating event is moved from its editor instead, because dragging one date
+would move every date in the series. Deleting an event — with the ✕ on it or **Delete** in its editor — asks first.
+
 **Where it happens.** Type a free-text location, or pick one of the group's saved addresses. Prefer
 the saved address: it is stored as a reference rather than copied text, so correcting the address
 once corrects every event held there. A **meeting link** can sit alongside it — paste a Zoom, Teams
