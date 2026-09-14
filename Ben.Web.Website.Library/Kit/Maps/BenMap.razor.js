@@ -306,10 +306,85 @@ export function route(containerId, req) {
 
 export function clearRoute(containerId) {
     const entry = _maps.get(containerId)
-    if (!entry?.map || !entry.route) return
-    entry.map.removeOverlay(entry.route.polyline)
-    entry.map.removeAnnotations(entry.route.pins)
-    entry.route = null
+    if (!entry?.map) return
+    if (entry.route) {
+        entry.map.removeOverlay(entry.route.polyline)
+        entry.map.removeAnnotations(entry.route.pins)
+        entry.route = null
+    }
+    if (entry.legs?.length) {
+        entry.map.removeOverlays(entry.legs)
+        entry.legs = []
+    }
+}
+
+// ── Routes through several stops (map blocks, 2026-09-14) ───────────────────
+// Only lines: the stops themselves are the map's ordinary pins. The route colour follows the theme through a CSS custom
+// property on the container, so it reads on light and dark maps alike.
+
+function routeStyle(entry, dashed) {
+    const color = getComputedStyle(entry.container).getPropertyValue('--ben-map-route').trim()
+        || getComputedStyle(document.documentElement).getPropertyValue('--bs-primary').trim()
+        || '#1a73e8'
+    return new mapkit.Style({ strokeColor: color, strokeOpacity: .9, lineWidth: 4, lineDash: dashed ? [6, 6] : [] })
+}
+
+function frameLegs(entry) {
+    if (!entry.legs?.length) return
+    entry.framing = true
+    entry.map.showItems([...entry.legs, ...entry.annotations], { animate: true, padding: new mapkit.Padding(40, 40, 40, 40) })
+    setTimeout(() => { entry.framing = false }, 800)
+}
+
+/** Straight lines from stop to stop. */
+export function routeStraight(containerId, stops) {
+    const entry = _maps.get(containerId)
+    if (!entry?.map) return
+    clearRoute(containerId)
+    const line = new mapkit.PolylineOverlay(stops.map(s => new mapkit.Coordinate(s.latitude, s.longitude)),
+        { style: routeStyle(entry, false) })
+    entry.map.addOverlay(line)
+    entry.legs = [line]
+    frameLegs(entry)
+}
+
+/**
+ * Walking or driving directions leg by leg, asked for one after another. A leg the provider cannot route is drawn as a
+ * dashed straight line and reported as not routed. Resolves to one { routed, distanceMeters, durationSeconds } per leg;
+ * never rejects.
+ */
+export async function routeThrough(containerId, stops, transport) {
+    const entry = _maps.get(containerId)
+    if (!entry?.map) return []
+    clearRoute(containerId)
+    _directions ??= new mapkit.Directions()
+    const type = transport === 'walking' ? mapkit.Directions.Transport.Walking : mapkit.Directions.Transport.Automobile
+    const results = []
+    entry.legs = []
+
+    for (let i = 0; i + 1 < stops.length; i++) {
+        const from = new mapkit.Coordinate(stops[i].latitude, stops[i].longitude)
+        const to = new mapkit.Coordinate(stops[i + 1].latitude, stops[i + 1].longitude)
+        const best = await new Promise(resolve =>
+            _directions.route({ origin: from, destination: to, transportType: type },
+                (err, data) => resolve(err || !data?.routes?.length ? null : data.routes[0])))
+        if (!_maps.has(containerId)) return results   // the map went away while we waited
+
+        if (best) {
+            best.polyline.style = routeStyle(entry, false)
+            entry.map.addOverlay(best.polyline)
+            entry.legs.push(best.polyline)
+            results.push({ routed: true, distanceMeters: best.distance, durationSeconds: best.expectedTravelTime })
+        } else {
+            const line = new mapkit.PolylineOverlay([from, to], { style: routeStyle(entry, true) })
+            entry.map.addOverlay(line)
+            entry.legs.push(line)
+            results.push({ routed: false, distanceMeters: 0, durationSeconds: null })
+        }
+    }
+
+    frameLegs(entry)
+    return results
 }
 
 export function fit(containerId) {

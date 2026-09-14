@@ -1,0 +1,339 @@
+@namespace Ben.Web.Website.Library.Kit.Blocks
+@using Ben.Data.Common.Blocks
+@using Ben.Web.Website.Library.Kit.Maps
+@implements IAsyncDisposable
+@inject IJSRuntime JS
+@inject MapsOptions Maps
+
+@*
+    Places on a map, in order, with a route between them if the author wants one (Ben, 2026-09-14: "show a location on a
+    map in the notes — which is not the exact location of where the haunted location is. Like a cemetery where the
+    previous owners are buried"; then "should allow drawing route between pins").
+
+    A new map block holds no places and no region: every place on it is one the author searched for or tapped. The
+    route is a choice per map — none, straight lines, walking or driving — and only the choice is stored; distances and
+    times are worked out when the map is drawn. A leg the map provider cannot route is shown as a dashed straight line
+    and says so.
+*@
+
+<div class="ben-map-block" data-testid="map-block" @ref="_root">
+    @if (ReadOnly && Stops.Count == 0)
+    {
+        <div class="ben-map-block__none text-secondary small">No place chosen.</div>
+    }
+    else
+    {
+        <div class="ben-map-block__map">
+            @if (_visible || !ReadOnly)
+            {
+                <BenMap @ref="_map" Pins="@Pins" Height="var(--ben-map-block-height)" FitToPins="true"
+                        OnReady="@DrawRouteAsync"
+                        OnMapClicked="@(ReadOnly ? default : EventCallback.Factory.Create<BenMapPoint>(this, AddTappedAsync))" />
+            }
+        </div>
+    }
+
+    @if (!ReadOnly && Active)
+    {
+        <div class="ben-map-block__editor mt-2">
+            @if (Stops.Count < Ben.Data.Common.Blocks.BlockMapLimits.MaxStops)
+            {
+                <div class="d-flex flex-wrap gap-2 align-items-end">
+                    <div class="flex-grow-1" style="min-width:12rem;">
+                        <label class="form-label small mb-1" for="@($"block-{Block.Id}-search")">Add a place</label>
+                        <input id="@($"block-{Block.Id}-search")" class="form-control form-control-sm" placeholder="A town, an address, a cemetery…"
+                               @bind="_search" @bind:event="oninput" @onkeydown="OnSearchKeyAsync" disabled="@(MapHost is null)" />
+                    </div>
+                    <button type="button" class="btn btn-sm btn-outline-primary ben-touch" disabled="@(_searching || MapHost is null || string.IsNullOrWhiteSpace(_search))"
+                            @onclick="SearchAsync" data-testid="map-block-add-place">
+                        <BenIcon Name="search" Class="me-1" />@(_searching ? "Finding…" : "Find")
+                    </button>
+                </div>
+                <div class="form-text">
+                    @(MapHost is null ? "Map search is not available here; tap the map to add a place." : "Or tap the map to add a place where you tapped.")
+                </div>
+                @if (_searchMessage is not null) { <div class="small text-danger mt-1">@_searchMessage</div> }
+            }
+            else
+            {
+                <div class="small text-secondary">A map can show up to @Ben.Data.Common.Blocks.BlockMapLimits.MaxStops places.</div>
+            }
+
+            @if (Stops.Count >= 2)
+            {
+                <div class="mt-2" style="max-width:18rem;">
+                    <label class="form-label small mb-1" for="@($"block-{Block.Id}-route")">Route between the places</label>
+                    <select id="@($"block-{Block.Id}-route")" class="form-select form-select-sm" value="@Route" @onchange="SetRouteAsync">
+                        <option value="@BlockMapRoutes.None">None</option>
+                        <option value="@BlockMapRoutes.Straight">Straight lines</option>
+                        <option value="@BlockMapRoutes.Walking">Walking</option>
+                        <option value="@BlockMapRoutes.Driving">Driving</option>
+                    </select>
+                </div>
+            }
+        </div>
+    }
+
+    @if (Stops.Count > 0)
+    {
+        <ol class="ben-map-block__stops" data-testid="map-block-stops">
+            @for (var i = 0; i < Stops.Count; i++)
+            {
+                var index = i;
+                var stop = Stops[i];
+                <li class="ben-map-block__stop">
+                    <span class="ben-map-block__number" aria-hidden="true">@(index + 1)</span>
+                    <div class="ben-map-block__stop-body">
+                        @if (!ReadOnly && Active)
+                        {
+                            <label class="visually-hidden" for="@($"block-{Block.Id}-stop-{index}-label")">Name of place @(index + 1)</label>
+                            <input id="@($"block-{Block.Id}-stop-{index}-label")" class="form-control form-control-sm mb-1" maxlength="120"
+                                   placeholder="Name this place" value="@stop.Label" @onchange="@(e => EditStopAsync(index, label: e.Value?.ToString()))" />
+                            <label class="visually-hidden" for="@($"block-{Block.Id}-stop-{index}-note")">Note for place @(index + 1)</label>
+                            <input id="@($"block-{Block.Id}-stop-{index}-note")" class="form-control form-control-sm" maxlength="500"
+                                   placeholder="A note (optional)" value="@stop.Note" @onchange="@(e => EditStopAsync(index, note: e.Value?.ToString()))" />
+                        }
+                        else
+                        {
+                            <div class="fw-semibold">@(stop.Label ?? $"Place {index + 1}")</div>
+                            @if (!string.IsNullOrWhiteSpace(stop.Note)) { <div class="small">@stop.Note</div> }
+                        }
+                        @if (!string.IsNullOrWhiteSpace(stop.AddressText)) { <div class="small text-secondary">@stop.AddressText</div> }
+                        <div class="small">
+                            <a href="@BlockMapLinks.OpenPlace(stop)" target="_blank" rel="noopener noreferrer">Open in Maps</a>
+                            @if (stop.PlaceId is { } placeId && MapHost?.PlaceUrl is { } placeUrl)
+                            {
+                                <span> · </span><a href="@placeUrl(placeId)">See this place</a>
+                            }
+                        </div>
+                    </div>
+                    @if (!ReadOnly && Active)
+                    {
+                        <div class="ben-map-block__stop-actions">
+                            <button type="button" class="btn btn-sm btn-outline-secondary ben-touch" aria-label="@($"Move place {index + 1} up")"
+                                    disabled="@(index == 0)" @onclick="@(() => MoveAsync(index, -1))"><BenIcon Name="arrow-up" /></button>
+                            <button type="button" class="btn btn-sm btn-outline-secondary ben-touch" aria-label="@($"Move place {index + 1} down")"
+                                    disabled="@(index == Stops.Count - 1)" @onclick="@(() => MoveAsync(index, 1))"><BenIcon Name="arrow-down" /></button>
+                            <button type="button" class="btn btn-sm btn-outline-danger ben-touch" aria-label="@($"Remove place {index + 1}")"
+                                    @onclick="@(() => RemoveAsync(index))"><BenIcon Name="trash-2" /></button>
+                        </div>
+                    }
+                </li>
+                @if (index + 1 < Stops.Count && LegFrom(index) is { } leg)
+                {
+                    <li class="ben-map-block__leg" aria-label="@($"From place {index + 1} to place {index + 2}")">
+                        <BenIcon Name="@(leg.FollowsPaths ? (Route == BlockMapRoutes.Driving ? "truck" : "navigation") : "minus")" Class="me-1" />
+                        @BlockMapLinks.LegText(leg, Route)
+                        @if (leg.Note is not null) { <span class="text-secondary"> — @leg.Note</span> }
+                    </li>
+                }
+            }
+        </ol>
+
+        <div class="d-flex flex-wrap gap-3 small">
+            @if (_summary is { Legs.Count: > 1 } total)
+            {
+                <span data-testid="map-block-total">
+                    Total @(string.Create(System.Globalization.CultureInfo.InvariantCulture, $"{total.TotalMeters / 1609.344:0.0}")) mi@(total.TotalSeconds is { } t ? $" · {BlockMapLinks.Duration(t)}" : "")
+                </span>
+            }
+            @if (BlockMapLinks.OpenInMaps(Stops, Route) is { } open)
+            {
+                <a href="@open" target="_blank" rel="noopener noreferrer" data-testid="map-block-open-in-maps">
+                    <BenIcon Name="external-link" Class="me-1" />@(Stops.Count == 1 ? "Open in Maps" : "Directions in Maps")
+                </a>
+            }
+            @if (_summary?.Error is { } error) { <span class="text-danger">@error</span> }
+        </div>
+    }
+
+    @if (!string.IsNullOrWhiteSpace(Block.Caption) && (ReadOnly || !Active))
+    {
+        <div class="small text-secondary mt-1">@Block.Caption</div>
+    }
+</div>
+
+@code {
+    [Parameter, EditorRequired] public Block Block { get; set; } = null!;
+    [Parameter] public bool Active { get; set; }
+    [Parameter] public bool ReadOnly { get; set; }
+    [Parameter] public EventCallback Changed { get; set; }
+    [Parameter] public BlockMapHost? MapHost { get; set; }
+
+    private ElementReference _root;
+    private BenMap? _map;
+    private IJSObjectReference? _module;
+    private DotNetObjectReference<BenMapBlock>? _self;
+    private bool _visible;
+    private bool _mapReady;
+    private string _search = "";
+    private bool _searching;
+    private string? _searchMessage;
+    private BenMapRouteSummary? _summary;
+    private string? _drawnFor;
+    private IReadOnlyList<BenMapPin> _pins = [];
+    private string? _pinsFor;
+
+    private List<BlockMapStop> Stops => Block.MapStops ??= [];
+    private string Route => Block.MapRoute ?? BlockMapRoutes.None;
+
+    private IReadOnlyList<BenMapPin> Pins
+    {
+        get
+        {
+            // The same list object until the places change, so the map does not redraw its pins on every render.
+            var key = string.Join('|', Stops.Select(s => $"{s.Latitude},{s.Longitude},{s.Label}"));
+            if (key != _pinsFor)
+            {
+                _pinsFor = key;
+                _pins = Stops.Select((s, i) => new BenMapPin(s.Latitude, s.Longitude, s.Label ?? $"Place {i + 1}", s.AddressText, Glyph: (i + 1).ToString())).ToList();
+            }
+            return _pins;
+        }
+    }
+
+    private BenMapLeg? LegFrom(int index) =>
+        Route == BlockMapRoutes.None ? null
+        : _summary is { } s && index < s.Legs.Count ? s.Legs[index]
+        : GreatCircle.StraightLegs(Stops.Select(p => new BenMapPoint(p.Latitude, p.Longitude)).ToList()) is { } straight && index < straight.Count ? straight[index]
+        : null;
+
+    protected override async Task OnAfterRenderAsync(bool firstRender)
+    {
+        if (firstRender && ReadOnly && Stops.Count > 0)
+        {
+            _self = DotNetObjectReference.Create(this);
+            _module = await JS.InvokeAsync<IJSObjectReference>("import", "/_content/Ben.Web.Website.Library/Kit/Blocks/BenMapBlock.razor.js");
+            await _module.InvokeVoidAsync("whenVisible", _root, _self);
+        }
+        if (_mapReady) await DrawRouteIfChangedAsync();
+    }
+
+    [JSInvokable]
+    public Task VisibleAsync()
+    {
+        _visible = true;
+        return InvokeAsync(StateHasChanged);
+    }
+
+    private async Task DrawRouteAsync()
+    {
+        _mapReady = true;
+        _drawnFor = null;
+        await DrawRouteIfChangedAsync();
+    }
+
+    private async Task DrawRouteIfChangedAsync()
+    {
+        if (_map is null) return;
+        var key = $"{Route}|{_pinsFor}";
+        if (key == _drawnFor) return;
+        _drawnFor = key;
+
+        var points = Stops.Select(s => new BenMapPoint(s.Latitude, s.Longitude)).ToList();
+        if (Route == BlockMapRoutes.None || points.Count < 2)
+        {
+            await _map.ClearRouteAsync();
+            _summary = null;
+        }
+        else
+        {
+            var mode = Route switch
+            {
+                BlockMapRoutes.Walking => BenMapRouteMode.Walking,
+                BlockMapRoutes.Driving => BenMapRouteMode.Driving,
+                _ => BenMapRouteMode.Straight,
+            };
+            _summary = await _map.RouteThroughAsync(points, mode);
+        }
+        StateHasChanged();
+    }
+
+    private async Task OnSearchKeyAsync(KeyboardEventArgs e)
+    {
+        if (e.Key == "Enter") await SearchAsync();
+    }
+
+    private async Task SearchAsync()
+    {
+        if (MapHost is null || string.IsNullOrWhiteSpace(_search) || Stops.Count >= Ben.Data.Common.Blocks.BlockMapLimits.MaxStops) return;
+        _searching = true;
+        _searchMessage = null;
+        try
+        {
+            var found = await MapHost.SearchAsync(_search.Trim());
+            if (found is null)
+            {
+                _searchMessage = "No place was found for that. Try a fuller address, or tap the map.";
+                return;
+            }
+            Stops.Add(new BlockMapStop(found.Latitude, found.Longitude, Cap(found.Label, 120), null, Cap(found.Address, 300)));
+            _search = "";
+            await Changed.InvokeAsync();
+        }
+        finally { _searching = false; }
+    }
+
+    private async Task AddTappedAsync(BenMapPoint point)
+    {
+        if (!Active || Stops.Count >= Ben.Data.Common.Blocks.BlockMapLimits.MaxStops) return;
+        string? address = null;
+        if (MapHost?.ReverseAsync is { } reverse)
+        {
+            try { address = await reverse(point.Latitude, point.Longitude); }
+            catch (Exception ex) when (ex is not OperationCanceledException) { address = null; }
+        }
+        Stops.Add(new BlockMapStop(Math.Round(point.Latitude, 6), Math.Round(point.Longitude, 6), null, null, Cap(address, 300)));
+        await Changed.InvokeAsync();
+    }
+
+    private async Task SetRouteAsync(ChangeEventArgs e)
+    {
+        var value = e.Value?.ToString();
+        Block.MapRoute = BlockMapRoutes.All.Contains(value ?? "") ? value : BlockMapRoutes.None;
+        await Changed.InvokeAsync();
+    }
+
+    private async Task EditStopAsync(int index, string? label = null, string? note = null)
+    {
+        var s = Stops[index];
+        Stops[index] = s with
+        {
+            Label = label is null ? s.Label : string.IsNullOrWhiteSpace(label) ? null : label.Trim(),
+            Note = note is null ? s.Note : string.IsNullOrWhiteSpace(note) ? null : note.Trim(),
+        };
+        await Changed.InvokeAsync();
+    }
+
+    private async Task MoveAsync(int index, int by)
+    {
+        var to = index + by;
+        if (to < 0 || to >= Stops.Count) return;
+        (Stops[index], Stops[to]) = (Stops[to], Stops[index]);
+        await Changed.InvokeAsync();
+    }
+
+    private async Task RemoveAsync(int index)
+    {
+        Stops.RemoveAt(index);
+        if (Stops.Count < 2) Block.MapRoute = BlockMapRoutes.None;
+        await Changed.InvokeAsync();
+    }
+
+    private static string? Cap(string? value, int max) =>
+        string.IsNullOrWhiteSpace(value) ? null : value.Length <= max ? value.Trim() : value.Trim()[..max];
+
+    public async ValueTask DisposeAsync()
+    {
+        try
+        {
+            if (_module is not null)
+            {
+                await _module.InvokeVoidAsync("stop", _root);
+                await _module.DisposeAsync();
+            }
+        }
+        catch (JSDisconnectedException) { }
+        _self?.Dispose();
+    }
+}

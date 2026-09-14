@@ -218,9 +218,11 @@
 
                 <div class="col-12">
                     <label class="form-label fw-semibold">Message <span class="text-danger">*</span></label>
-                    <BenEditor @bind-Value="@_composeBody" Height="200px"
-                                   Tools="@_editorTools" />
-                    <BenComposerLinkCard Html="@_composeBody" />
+                    <div @onfocusin="@(() => _composeLeft = false)" @onfocusout="@(() => _composeLeft = true)">
+                        <BenEditor @bind-Value="@_composeBody" Height="200px"
+                                       Tools="@_editorTools" />
+                    </div>
+                    <BenComposerLinkCard Html="@_composeBody" LeftTheBox="@_composeLeft" />
                 </div>
                 <div class="col-12 d-flex align-items-center gap-2">
                     <input type="checkbox" class="form-check-input" id="encrypted" @bind="@_composeEncrypted" />
@@ -375,6 +377,7 @@
 
     // Compose
     private bool _showCompose;
+    private bool _composeLeft;
     private OrgMessageRecord? _replyTo;
     private OrgMessageChannel _composeChannel = OrgMessageChannel.OrgBroadcast;
     private string _composeSubject = "";

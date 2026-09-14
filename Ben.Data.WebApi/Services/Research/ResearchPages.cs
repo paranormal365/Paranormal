@@ -19,7 +19,7 @@ namespace Ben.Data.WebApi.Services.Research;
 public static partial class ResearchPages
 {
     public const int MaxBlocks = 500;
-    public const int MaxMapStops = 10;
+    public const int MaxMapStops = BlockMapLimits.MaxStops;
 
     /// <summary>A legacy note — written before pages existed — has neither copy stored and counts as published.</summary>
     public static bool IsLegacyNote(CaseResearchEntry e) =>

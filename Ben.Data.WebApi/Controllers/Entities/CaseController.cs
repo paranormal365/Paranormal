@@ -734,7 +734,66 @@ public sealed class CaseController : BenControllerBase
             .ThenBy(e => e.DateCreated)
             .ThenBy(e => e.Id)
             .ToListAsync(ct);
-        return Ok(_mapper.Map<IEnumerable<CaseTimelineEntryRecord>>(entries));
+        var rows = _mapper.Map<IEnumerable<CaseTimelineEntryRecord>>(entries).ToList();
+
+        // Research pages that are published and dated take their place on the case's timeline (2026-09-14): the page says
+        // when what it is about happened, and the timeline is where a case's moments are read in order. Not in an
+        // investigation's binder — a research page belongs to the case, not to a visit. Group-only, like the page, and
+        // read-only here: a page changes on its page.
+        if (investigationId is null)
+        {
+            var pages = await db.CaseResearchEntries.AsNoTracking()
+                .Where(r => r.CaseId == caseId && r.ResearchType == CaseResearchType.Note
+                         && r.EventDateTime != null && r.PublishedUtc != null)
+                .OrderBy(r => r.EventDateTime)
+                .ThenBy(r => r.PublishedUtc)
+                .ThenBy(r => r.Id)
+                .Select(r => new
+                {
+                    r.Id, r.Title, r.Excerpt, r.EventDateTime, r.PublishedUtc, r.PublishedByAppUserId, r.CreatedByAppUserId,
+                    PublishedBy = db.Users.Where(u => u.Id == r.PublishedByAppUserId).Select(u => u.DisplayName).FirstOrDefault(),
+                })
+                .ToListAsync(ct);
+
+            if (pages.Count > 0)
+            {
+                rows = MergeByMoment(rows, pages.Select(p => new CaseTimelineEntryRecord
+                {
+                    Id = p.Id, CaseId = caseId,
+                    AuthorAppUserId = p.PublishedByAppUserId ?? p.CreatedByAppUserId,
+                    AuthorDisplayName = p.PublishedBy,
+                    EntryType = CaseTimelineEntryType.ResearchNote,
+                    EventDateTime = p.EventDateTime,
+                    Title = p.Title,
+                    Body = string.IsNullOrWhiteSpace(p.Excerpt) ? null : Ben.Data.Common.Text.PlainTextHtml.FromPlainText(p.Excerpt),
+                    Visibility = CaseTimelineVisibility.OrgOnly,
+                    DateCreated = p.PublishedUtc!.Value,
+                    CreatedByAppUserId = p.CreatedByAppUserId,
+                    ResearchEntryId = p.Id,
+                    IsReadOnly = true,
+                }).ToList());
+            }
+        }
+
+        return Ok(rows);
+    }
+
+    /// <summary>
+    /// Puts research pages among timeline entries by the moment each is about, without reordering either list: both arrive
+    /// already sorted (entries by the database's event time, logged time and id), and re-sorting the entries in memory
+    /// would break their ties differently from the database. On the same moment an entry comes before a page.
+    /// </summary>
+    internal static List<CaseTimelineEntryRecord> MergeByMoment(List<CaseTimelineEntryRecord> entries, List<CaseTimelineEntryRecord> pages)
+    {
+        var merged = new List<CaseTimelineEntryRecord>(entries.Count + pages.Count);
+        int e = 0, p = 0;
+        while (e < entries.Count || p < pages.Count)
+        {
+            var takePage = e == entries.Count
+                        || (p < pages.Count && (pages[p].EventDateTime ?? pages[p].DateCreated) < (entries[e].EventDateTime ?? entries[e].DateCreated));
+            merged.Add(takePage ? pages[p++] : entries[e++]);
+        }
+        return merged;
     }
 
     [HttpPost("{caseId:guid}/timeline")]

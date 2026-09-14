@@ -154,8 +154,19 @@
                                 }
                             </div>
                             <div class="d-flex gap-1 flex-shrink-0">
-                                <button type="button" class="btn @(ThemeConstants.Button.FillMode.Flat == ThemeConstants.Button.FillMode.Solid ? "btn-secondary" : "btn-outline-secondary") btn-sm" @onclick="@(() => OpenEditDialog(e))" title="Edit"><BenIcon Name="edit-2" /></button>
-                                <button type="button" class="btn @(ThemeConstants.Button.FillMode.Flat == ThemeConstants.Button.FillMode.Solid ? "btn-secondary" : "btn-outline-secondary") btn-sm" @onclick="@(() => ConfirmDelete(e))" title="Delete"><BenIcon Name="trash-2" /></button>
+                                @if (e.ResearchEntryId is { } researchId)
+                                {
+                                    @* A research page's row: it is changed on its page (2026-09-14). *@
+                                    <a class="btn btn-outline-secondary btn-sm" href="@($"/organizations/{OrgId}/cases/{CaseId}/research/{researchId}")"
+                                       data-testid="timeline-open-research-page">
+                                        <BenIcon Name="book-open" Class="me-1" />Open research page
+                                    </a>
+                                }
+                                else if (!e.IsReadOnly)
+                                {
+                                    <button type="button" class="btn @(ThemeConstants.Button.FillMode.Flat == ThemeConstants.Button.FillMode.Solid ? "btn-secondary" : "btn-outline-secondary") btn-sm" @onclick="@(() => OpenEditDialog(e))" title="Edit"><BenIcon Name="edit-2" /></button>
+                                    <button type="button" class="btn @(ThemeConstants.Button.FillMode.Flat == ThemeConstants.Button.FillMode.Solid ? "btn-secondary" : "btn-outline-secondary") btn-sm" @onclick="@(() => ConfirmDelete(e))" title="Delete"><BenIcon Name="trash-2" /></button>
+                                }
                             </div>
                         </div>
                     </div>

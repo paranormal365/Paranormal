@@ -33,3 +33,10 @@ public static class BlockMapRoutes
     public static IReadOnlySet<string> All { get; } =
         new HashSet<string>([None, Straight, Walking, Driving], StringComparer.Ordinal);
 }
+
+/// <summary>Limits a map block keeps within — the same number on the editor and on the server.</summary>
+public static class BlockMapLimits
+{
+    /// <summary>Each walking or driving leg is one directions request every time the map is shown.</summary>
+    public const int MaxStops = 10;
+}

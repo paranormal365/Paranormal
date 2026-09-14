@@ -15,7 +15,7 @@
     the content — which is the point, and is also what makes the WYSIWYG claim true, since the
     published article is rendered by that same CSS.
 
-    Three parameters, declared rather than splatted: TelerikEditor throws on an attribute it does
+    Parameters declared rather than splatted: TelerikEditor throws on an attribute it does
     not recognise, so this forwards exactly what call sites pass and nothing else.
 
     GetCurrentHtmlAsync (2026-09-14) is for forms: read it on submit, because ValueChanged arrives on
@@ -23,11 +23,34 @@
 *@
 
 <div class="ben-editor" @ref="_host">
-    <TelerikEditor Value="@Value"
-                   ValueChanged="@ValueChanged"
-                   EditMode="@EditorEditMode.Div"
-                   Height="@Height"
-                   Tools="@Tools" />
+    @if (CleanPaste)
+    {
+        <TelerikEditor @ref="_editor"
+                       Value="@Value"
+                       ValueChanged="@ValueChanged"
+                       EditMode="@EditorEditMode.Div"
+                       Height="@Height"
+                       Tools="@Tools">
+            <EditorSettings>
+                @* Pasting from Word, a web page or a PDF brings its styling and its comments; a research page wants the
+                   words and their structure (2026-09-14). Scripts and embeds never come in at all. *@
+                <EditorPasteSettings ConvertMsLists="true"
+                                     RemoveMsClasses="true"
+                                     RemoveMsStyles="true"
+                                     RemoveHtmlComments="true"
+                                     StripTags="@StrippedOnPaste" />
+            </EditorSettings>
+        </TelerikEditor>
+    }
+    else
+    {
+        <TelerikEditor @ref="_editor"
+                       Value="@Value"
+                       ValueChanged="@ValueChanged"
+                       EditMode="@EditorEditMode.Div"
+                       Height="@Height"
+                       Tools="@Tools" />
+    }
 </div>
 
 @code {
@@ -35,6 +58,22 @@
 
     private ElementReference _host;
     private IJSObjectReference? _module;
+    private TelerikEditor? _editor;
+
+    private static readonly List<string> StrippedOnPaste = ["script", "style", "iframe", "object", "embed", "form", "link", "meta"];
+
+    /// <summary>Cleans what is pasted: Office classes and styles, comments, and tags that have no place in a page.</summary>
+    [Parameter] public bool CleanPaste { get; set; }
+
+    /// <summary>
+    /// Puts HTML where the cursor is — a link to a file or a web page from a research page's rail (2026-09-14).
+    /// </summary>
+    /// <param name="inline">True for something that belongs inside a line, like a link; false for a paragraph of its own.</param>
+    public async Task InsertHtmlAsync(string html, bool inline = true)
+    {
+        if (_editor is null) return;
+        await _editor.ExecuteAsync(new Telerik.Blazor.Components.Editor.HtmlCommandArgs("insertHtml", html, inline));
+    }
 
     /// <summary>
     /// What the editor holds right now, read from the page rather than from the last debounced

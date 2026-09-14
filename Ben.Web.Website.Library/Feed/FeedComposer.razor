@@ -27,8 +27,9 @@
                   maxlength="@MaxLength"
                   placeholder="@Placeholder"
                   value="@_body"
-                  @oninput="OnBodyInput"></textarea>
-        <BenComposerLinkCard Text="@_body" />
+                  @oninput="OnBodyInput"
+                  @onfocusin="@(() => _bodyLeft = false)" @onfocusout="@(() => _bodyLeft = true)"></textarea>
+        <BenComposerLinkCard Text="@_body" LeftTheBox="@_bodyLeft" />
 
         @if (_error is not null)
         {
@@ -416,6 +417,7 @@
     [Parameter] public EventCallback<FeedPostRecord> OnPosted { get; set; }
 
     private string _body = string.Empty;
+    private bool _bodyLeft;
     private string? _error;
     private bool _busy;
 

@@ -1,0 +1,43 @@
+@namespace Ben.Web.Website.Library.Kit.Blocks
+@using Ben.Data.Common.Blocks
+
+<figure class="ben-image-block mb-0" data-testid="image-block">
+    @if (Block.UploadFileId is { } fileId)
+    {
+        <img src="@FileUrl(fileId, BlockFileUrlKind.Download)" alt="@(Block.Alt ?? "")" loading="lazy" />
+    }
+    @if (!ReadOnly && Active)
+    {
+        <div class="row g-2 mt-1">
+            <div class="col-12 col-md-6">
+                <label class="form-label small mb-1" for="@($"block-{Block.Id}-alt")">What the picture shows</label>
+                <input id="@($"block-{Block.Id}-alt")" class="form-control form-control-sm" maxlength="300"
+                       value="@Block.Alt" @onchange="@(e => SetAsync(v => Block.Alt = v, e))" />
+            </div>
+            <div class="col-12 col-md-6">
+                <label class="form-label small mb-1" for="@($"block-{Block.Id}-caption")">Caption</label>
+                <input id="@($"block-{Block.Id}-caption")" class="form-control form-control-sm" maxlength="500"
+                       value="@Block.Caption" @onchange="@(e => SetAsync(v => Block.Caption = v, e))" />
+            </div>
+        </div>
+    }
+    else if (!string.IsNullOrWhiteSpace(Block.Caption))
+    {
+        <figcaption class="small text-secondary mt-1">@Block.Caption</figcaption>
+    }
+</figure>
+
+@code {
+    [Parameter, EditorRequired] public Block Block { get; set; } = null!;
+    [Parameter, EditorRequired] public Func<Guid, BlockFileUrlKind, string> FileUrl { get; set; } = null!;
+    [Parameter] public bool Active { get; set; }
+    [Parameter] public bool ReadOnly { get; set; }
+    [Parameter] public EventCallback Changed { get; set; }
+
+    private async Task SetAsync(Action<string?> set, ChangeEventArgs e)
+    {
+        var value = e.Value?.ToString();
+        set(string.IsNullOrWhiteSpace(value) ? null : value.Trim());
+        await Changed.InvokeAsync();
+    }
+}

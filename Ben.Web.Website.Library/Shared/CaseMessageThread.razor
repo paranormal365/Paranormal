@@ -72,11 +72,11 @@ else
    disabled while the box looks empty: the editor's value reaches the server a round trip behind the keyboard,
    so a disabled button would sit dead for someone who types and clicks straight through. Sending nothing says
    so instead. *@
-<div class="mt-2" data-testid="case-thread-compose">
+<div class="mt-2" data-testid="case-thread-compose" @onfocusin="@(() => _composeLeft = false)" @onfocusout="@(() => _composeLeft = true)">
     @* Keyed by the number of messages sent: after a send the box is a new editor, so a keystroke update still on
        its way from the old one (Telerik reports typing on a debounce) cannot put the sent words back. *@
     <BenEditor @key="_composeGeneration" @ref="_compose" @bind-Value="@_draft" Height="130px" Tools="@Ben.Web.Website.Library.Organization.Cases.CaseEditorTools.Prose" />
-    <BenComposerLinkCard Html="@_draft" />
+    <BenComposerLinkCard Html="@_draft" LeftTheBox="@_composeLeft" />
     <div class="d-flex justify-content-end mt-2">
         <button type="button" class="btn btn-primary" id="case-thread-send"
                 disabled="@_sending"
@@ -109,6 +109,7 @@ else
     private string _draft = string.Empty;
     private BenEditor? _compose;
     private int _composeGeneration;
+    private bool _composeLeft;
     private bool _sending;
     private string? _error;
     private ElementReference _scrollRef;

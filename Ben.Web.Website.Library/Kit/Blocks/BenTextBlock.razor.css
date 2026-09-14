@@ -1,0 +1,28 @@
+.ben-text-block {
+    min-height: 1.5rem;
+    overflow-wrap: anywhere;
+}
+
+.ben-text-block ::deep p:last-child,
+.ben-text-block ::deep ul:last-child,
+.ben-text-block ::deep ol:last-child {
+    margin-bottom: 0;
+}
+
+.ben-text-block ::deep img {
+    max-width: 100%;
+    height: auto;
+}
+
+.ben-text-block--empty {
+    font-style: italic;
+}
+
+/* The editor grows with what is in it; its toolbar wraps on a phone rather than scrolling the page sideways. */
+.ben-text-block--editing ::deep .k-editor {
+    min-height: 8rem;
+}
+
+.ben-text-block--editing ::deep .k-toolbar {
+    flex-wrap: wrap;
+}

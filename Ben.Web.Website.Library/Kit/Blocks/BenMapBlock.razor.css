@@ -1,0 +1,85 @@
+.ben-map-block {
+    --ben-map-block-height: 260px;
+    --ben-map-route: var(--bs-primary);
+    min-width: 0;
+}
+
+@media (min-width: 992px) {
+    .ben-map-block {
+        --ben-map-block-height: 360px;
+    }
+}
+
+/* The map never makes the page scroll sideways. */
+.ben-map-block__map {
+    overflow: hidden;
+    border-radius: .5rem;
+    border: 1px solid var(--bs-border-color);
+    min-height: var(--ben-map-block-height);
+}
+
+.ben-map-block__none {
+    padding: 1rem;
+    border: 1px dashed var(--bs-border-color);
+    border-radius: .5rem;
+}
+
+.ben-map-block__stops {
+    list-style: none;
+    margin: .75rem 0 .5rem;
+    padding: 0;
+}
+
+.ben-map-block__stop {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: flex-start;
+    gap: .6rem;
+    padding: .4rem 0;
+}
+
+.ben-map-block__number {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    flex: 0 0 auto;
+    width: 1.75rem;
+    height: 1.75rem;
+    border-radius: 50%;
+    font-size: .8rem;
+    font-weight: 700;
+    color: #fff;
+    background: var(--bs-primary);
+}
+
+.ben-map-block__stop-body {
+    flex: 1 1 12rem;
+    min-width: 0;
+    overflow-wrap: anywhere;
+}
+
+.ben-map-block__stop-actions {
+    display: flex;
+    gap: .25rem;
+}
+
+.ben-map-block ::deep .ben-touch {
+    min-width: 2.75rem;
+    min-height: 2.75rem;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+}
+
+.ben-map-block__leg {
+    margin-left: .85rem;
+    padding: .15rem 0 .15rem 1.4rem;
+    border-left: 2px dashed var(--bs-border-color);
+    font-size: .8rem;
+    color: var(--bs-secondary-color);
+}
+
+.ben-map-block__leg ::deep .sa-icon {
+    width: .85rem;
+    height: .85rem;
+}
