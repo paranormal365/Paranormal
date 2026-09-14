@@ -31,6 +31,8 @@ to the part of the page where you choose.
 If the hosts have said how to get in and around — stairs, lifts, parking, low light — it is on the
 page under **Getting in and getting around**, and again in your confirmation letter.
 
+![Getting in and getting around, on an event's page](/help/media/going-to-an-event/getting-in-and-around.png)
+
 You don't need an account to choose, either — see [Choosing without an account](#choosing-without-an-account).
 
 ## Two ways to get a place

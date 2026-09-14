@@ -695,6 +695,8 @@ ledger row — there is nothing to hand back.
 **Administration → Dashboard** has two tabs. **The site** is the dashboard above; **Events** is the same
 kind of page for hosted events across every group, and the range picker drives both.
 
+![The events dashboard's cards](help-media:site-administration/events-dashboard.png)
+
 The cards say where things stand now:
 - events on the site, with drafts, events that happened and events called off underneath;
 - organizers (groups with at least one hosted event);
@@ -715,6 +717,8 @@ The dashboard counts; it never names a guest. The events list is where individua
 group, the event and its venue, the dates, the state, and how many people are coming. Search matches the
 event, the group, the organizer or the place, and the state filter narrows the list.
 
+![Every hosted event](help-media:site-administration/every-event.png)
+
 The eye opens the event's own page as its organizer sees it. From there you can follow it through its
 whole process: plan, bookings, door, room and what happened afterwards.
 
@@ -729,6 +733,8 @@ The bin opens **Remove an event**, which says what removing it will do before yo
 - **The organizer is emailed** that the event doesn't meet the guidelines for hosted events, with a link to
   appeal. The letter is generic on purpose. Your **note for the record** is kept with the removal for
   whoever reviews an appeal, and is never sent to anyone.
+
+![Removing an event says what it will do first](help-media:site-administration/remove-an-event.png)
 
 The organizer can't un-cancel, restore or publish a removed event.
 

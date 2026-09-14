@@ -2818,6 +2818,74 @@ public sealed class HelpMediaCapture : BenTestBase
             gated: true, selector: "#booking-letters + .card", proves: "A daily letter");
     }
 
+    /// <summary>Access notes, the numbers at a glance, and writing to the guests (item 235 phase 17a).</summary>
+    [Test]
+    [Description("organization-administration and going-to-an-event: getting in and around, at a glance, writing to guests.")]
+    public async Task Capture_EventGlanceLettersAndAccess()
+    {
+        var orgId = await OrgIdBySlugAsync("paranormal365");
+
+        await LogoutAsync();
+        await GoAsync("/o/paranormal365/events/thomas-house-seance-weekend");
+        await ShootAsync("going-to-an-event", "getting-in-and-around.png",
+            gated: false, selector: "#event-access-notes", proves: "Getting in and getting around",
+            around: new Around(Left: 16, Top: 16, Right: 16, Bottom: 16));
+
+        await LoginAsync(SuperAdminEmail, SuperAdminPassword);
+        await GoAsync($"/organizations/{orgId}/events/{SeededRoomsEventId}");
+        await ShootAsync("organization-administration", "event-at-a-glance.png",
+            gated: true, selector: "#event-glance", proves: "At a glance");
+
+        await GoAsync($"/organizations/{orgId}/events/{SeededRoomsEventId}/bookings");
+        await Expect(Page.Locator("#letter-start")).ToBeVisibleAsync(new() { Timeout = 30_000 });
+        await ClickUntilAsync(Page.Locator("#letter-start"), Page.Locator("#letter-subject"));
+        await Page.Locator("#letter-subject").FillAsync("Doors open at eight on Saturday");
+        await Page.Locator("#letter-body").FillAsync("The séance starts half an hour later than the programme says. Dinner is unchanged.");
+        await ShootAsync("organization-administration", "event-write-to-guests.png",
+            gated: true, selector: "#board-letters", proves: "It goes by email");
+    }
+
+    /// <summary>The events dashboard, every event, removing one, and the organizer's appeal (item 235 phase 17b).</summary>
+    [Test]
+    [Description("site-administration and organization-administration: hosted events oversight.")]
+    public async Task Capture_AdminEventOversight()
+    {
+        var orgId = await OrgIdBySlugAsync("paranormal365");
+        await LoginAsync(SuperAdminEmail, SuperAdminPassword);
+
+        await GoAsync("/admin/dashboard?tab=events");
+        await ShootAsync("site-administration", "events-dashboard.png", gated: true, selector: "#events-dashboard", proves: "Events on the site");
+
+        await GoAsync("/admin/events");
+        await ShootAsync("site-administration", "every-event.png", gated: true, selector: ".admin-events-grid", proves: "No appeals waiting");
+
+        var api = await SignedInApiAsync(SuperAdminEmail, SuperAdminPassword);
+        var eventId = await DraftHostedEventAsync(api, orgId, "Mill Lock-In (help capture)", "40000002-0000-0000-0000-000000000001");
+
+        try
+        {
+            await GoAsync($"/admin/events/{eventId}/remove");
+            await ShootAsync("site-administration", "remove-an-event.png", gated: true, selector: "#remove-event", proves: "What removing it does");
+
+            await api.PostAsync($"/api/admin/hosted-events/{eventId}/remove", new() { DataObject = new { note = "Help capture." } });
+            await GoAsync($"/organizations/{orgId}/events/{eventId}");
+            await ShootAsync("organization-administration", "event-removed.png",
+                gated: true, selector: "#event-removed", proves: "Removed by IsHaunted");
+        }
+        finally
+        {
+            await api.PostAsync($"/api/organizations/{orgId}/events/{eventId}/removal/appeal", new() { DataObject = new { message = "Help capture tidy-up." } });
+            var list = await api.GetAsync("/api/admin/hosted-events");
+            if (list.Ok)
+                foreach (var appeal in (await list.JsonAsync())!.Value.GetProperty("appeals").EnumerateArray())
+                    if (appeal.GetProperty("hostedEventId").GetString() == eventId && appeal.GetProperty("appealState").GetInt32() == 1)
+                        await api.PostAsync($"/api/admin/hosted-events/appeals/{appeal.GetProperty("removalId").GetString()}/decide",
+                            new() { DataObject = new { uphold = true, note = "Help capture tidy-up." } });
+            await api.PostAsync($"/api/organizations/{orgId}/events/{eventId}/archive", new() { DataObject = new { } });
+            await api.DisposeAsync();
+        }
+    }
+
     /// <summary>The seeded evening's slug, which is the address on the poster.</summary>
     private async Task<string> SeatsEventSlugAsync(string orgId)
     {

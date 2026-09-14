@@ -134,6 +134,46 @@ public abstract class BenTestBase : PageTest
     private static readonly SemaphoreSlim _orgIdLock = new(1, 1);
 
     /// <summary>The seeded org's current id, looked up by its stable slug.</summary>
+    /// <summary>
+    /// A draft hosted event with this name in the group, for a capture that takes it through a story and archives it
+    /// afterwards: the archived one is restored when it is already there, and it is made the first time.
+    /// </summary>
+    /// <remarks>
+    /// Event names are unique within a group, so making a fresh draft each run fails on the second. Restoring brings an
+    /// archived event that never went live back as a draft; anything else is reported rather than photographed.
+    /// </remarks>
+    /// <param name="admin">An API context signed in as somebody who may see every hosted event and edit this group's.</param>
+    protected static async Task<string> DraftHostedEventAsync(
+        IAPIRequestContext admin, string orgId, string name, string placeId)
+    {
+        var list = await admin.GetAsync("/api/admin/hosted-events");
+        Assert.That(list.Ok, Is.True, await list.TextAsync());
+        var existing = (await list.JsonAsync())!.Value.GetProperty("events").EnumerateArray()
+            .FirstOrDefault(e => e.GetProperty("organizationId").GetString() == orgId && e.GetProperty("eventName").GetString() == name);
+
+        if (existing.ValueKind == System.Text.Json.JsonValueKind.Object)
+        {
+            var id = existing.GetProperty("id").GetString()!;
+            var restored = await admin.PostAsync($"/api/organizations/{orgId}/events/{id}/restore", new() { DataObject = new { } });
+            Assert.That(restored.Ok, Is.True, await restored.TextAsync());
+            Assert.That((await restored.JsonAsync())!.Value.GetProperty("lifecycleState").GetInt32(), Is.EqualTo(0),
+                $"{name} is not a draft after restoring it.");
+            return id;
+        }
+
+        var starts = DateTime.UtcNow.Date.AddDays(45);
+        var made = await admin.PostAsync($"/api/organizations/{orgId}/events", new()
+        {
+            DataObject = new
+            {
+                name, placeId, timeZoneId = "America/Chicago",
+                startsOn = starts.ToString("yyyy-MM-dd"), endsOn = starts.ToString("yyyy-MM-dd"), contactLine = "Call us.",
+            },
+        });
+        Assert.That(made.Ok, Is.True, await made.TextAsync());
+        return (await made.JsonAsync())!.Value.GetProperty("id").GetString()!;
+    }
+
     protected async Task<string> OrgIdBySlugAsync(string slug)
     {
         await _orgIdLock.WaitAsync();

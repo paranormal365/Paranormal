@@ -13,16 +13,28 @@ import XCTest
 final class HelpMediaCaptureTests: XCTestCase {
     private var app: XCUIApplication!
 
+    /// The API every launch in a capture talks to, as `-apiBaseURL`.
+    ///
+    /// **Required, and passed on every launch.** The address is deliberately not sticky, so a launch without it uses
+    /// whatever the simulator last saved — or the shipped address, which is the live site. The captures relaunch the
+    /// app to prove a session survives, and those relaunches once cleared the arguments, so help pictures could have
+    /// been taken of real accounts without a word.
+    private var apiArguments: [String] = []
+
     override func setUpWithError() throws {
         guard ProcessInfo.processInfo.environment["BEN_SCREENSHOTS"] == "1" else {
             throw XCTSkip("screenshot capture runs only when asked — set TEST_RUNNER_BEN_SCREENSHOTS=1")
         }
+        guard let base = ProcessInfo.processInfo.environment["BEN_API_BASE_URL"], !base.isEmpty else {
+            throw XCTSkip("set TEST_RUNNER_BEN_API_BASE_URL to the stack to photograph — without it the app could reach the live site")
+        }
         continueAfterFailure = true
         app = XCUIApplication()
+        apiArguments = ["-apiBaseURL", base]
 
         let email = ProcessInfo.processInfo.environment["BEN_CLIENT_EMAIL"] ?? "daniel.park@benco.dev"
         let password = TestSecrets.required("BEN_CLIENT_PASSWORD")
-        app.launchArguments += ["-autoSignIn", "\(email):\(password)"]
+        app.launchArguments = apiArguments + ["-autoSignIn", "\(email):\(password)"]
         app.launch()
     }
 
@@ -50,7 +62,7 @@ final class HelpMediaCaptureTests: XCTestCase {
         // stores fetch while sign-in is still in flight and cache their anonymous answers — the
         // lesson AppStoreScreenshotTests learned by screenshotting empty surfaces.
         app.terminate()
-        app.launchArguments = []
+        app.launchArguments = apiArguments
         app.launch()
         settle(5)
 
@@ -78,7 +90,7 @@ final class HelpMediaCaptureTests: XCTestCase {
     func testCaptureMyEventsAndPass() {
         settle(6)
         app.terminate()
-        app.launchArguments = []
+        app.launchArguments = apiArguments
         app.launch()
         settle(5)
 
@@ -116,7 +128,7 @@ final class HelpMediaCaptureTests: XCTestCase {
     func testCaptureDuringTheEvent() {
         settle(6)
         app.terminate()
-        app.launchArguments = []
+        app.launchArguments = apiArguments
         app.launch()
         settle(5)
 
@@ -175,7 +187,7 @@ final class HelpMediaCaptureTests: XCTestCase {
     func testCaptureTheDoor() {
         settle(6)
         app.terminate()
-        app.launchArguments = []
+        app.launchArguments = apiArguments
         if let code = ProcessInfo.processInfo.environment["BEN_DOOR_SCAN_CODE"] {
             app.launchArguments += ["-doorScanCode", code]
         }

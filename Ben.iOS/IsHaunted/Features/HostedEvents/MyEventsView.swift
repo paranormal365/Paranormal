@@ -8,6 +8,7 @@ import BenKit
 /// somebody opens this for, standing in a queue.
 struct MyEventsView: View {
     @Environment(AppDependencies.self) private var dependencies
+    @Environment(Router.self) private var router
 
     @State private var store: HostedEventsStore?
     @State private var bookings: [MyHostedEventBooking] = []
@@ -91,16 +92,19 @@ struct MyEventsView: View {
                 }
             }
 
+            // Buttons that push, not NavigationLinks. Two links in one List row are drawn as plain chevron rows and the
+            // whole row answers to the last of them, so "Pass" opened the event's screen and the pass could only be
+            // reached through it. A bordered button is its own tap target inside a row.
             HStack(spacing: 10) {
                 if booking.status == .confirmed {
-                    NavigationLink(value: AppRoute.eventPass(booking.hostedEventId)) {
+                    Button { router.push(.eventPass(booking.hostedEventId)) } label: {
                         Label("Pass", systemImage: "qrcode")
                     }
                     .buttonStyle(.borderedProminent)
                     .accessibilityIdentifier("my-events-pass-\(booking.hostedEventId.uuidString.lowercased())")
                 }
                 // Programme, menus, downloads and the room live on the event's own screen, which also links to its page.
-                NavigationLink(value: AppRoute.eventHub(booking.hostedEventId)) {
+                Button { router.push(.eventHub(booking.hostedEventId)) } label: {
                     Label("The event", systemImage: "sparkles")
                 }
                 .buttonStyle(.bordered)

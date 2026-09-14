@@ -18,6 +18,8 @@ read.
 
 ## 2026-09-13
 
+- On What I'm going to, Pass now opens your pass. It had opened the event's screen, so the pass could only be
+  reached from there.
 - Hosted events: the event screen shows where your booking stands, lets you let a request or a hold go,
   and opens the event's page inside the app to ask for a place.
 - What I'm going to, under Profile, lists every hosted event you have asked for, once each, with its

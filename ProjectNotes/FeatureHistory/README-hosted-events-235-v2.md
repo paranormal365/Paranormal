@@ -1565,6 +1565,52 @@ Verified by:
 - the full .NET unit suite, 5,666 passed;
 - Playwright `AdminEventOversightTests`, 2 of 2 on the e2e database, with no unhandled API errors in the run.
 
+#### 17d as built (2026-09-13)
+
+- **The walk.** `HostedEventPersonaWalk` walks every person against `IsHauntedDb_player`:
+  - a guest asking for a room;
+  - the organizer confirming the party, writing to guests, inviting a helper and checking the kitchen sheet;
+  - the guest's pass on the web and on a phone;
+  - the helper accepting the invitation (followed from the local mail catcher) and finding the party at the
+    door;
+  - a stranger picking seats;
+  - the venue;
+  - the SuperAdmin dashboard, removal and appeal.
+
+  That's 30 story shots plus 8 public pages at desktop and phone width. Every shot waits on its subject, the
+  network, decoded images and fonts, never on time. Letters are photographed from the catcher into
+  `docs/media/hosted-events/emails/`.
+- **Found and fixed by the walk:**
+  - confirming or editing a booking into a room returned 500 on SQL Server;
+  - the events tab opened directly asked before sign-in resolved;
+  - a stay with no room yet read "Just for the day";
+  - on the iPhone, **Pass** on What I'm going to opened the event's screen: two `NavigationLink`s in one
+    `List` row;
+  - the iPhone help capture could reach the live site on a relaunch. It now requires
+    `BEN_API_BASE_URL` and passes it on every launch.
+- **Help:**
+  - six new captures on the web: at a glance, writing to guests, the removed card, the events dashboard,
+    every event, and removing one;
+  - access notes on the public page;
+  - the iPhone help screens re-captured on the demo event (pass, hub, programme, menus, door, scan,
+    reservation, What I'm going to).
+- **Pass reissued.** Daniel Park's pass was reissued afterwards, so every pictured QR code is withdrawn.
+
+#### 17e as built so far (2026-09-13)
+
+- **Built:**
+  - `docs/IsHaunted-Hosted-Events.pdf`, eight pages: cover, the five people, the guest, the organizer, the
+    night, seats and strangers, venues and oversight, and the letters with pricing;
+  - six front-and-back ads under `docs/ads/`;
+  - all from `docs/ads/build-ads.py`.
+- **Updated:**
+  - the product documentation, rebuilt from the help;
+  - the iPhone developer guide, with ten hosted-event sections;
+  - the investor overview: a hosted events section, current test counts, Stripe live, the App Store
+    submission, event credits and tour pricing.
+- **Not yet regenerated:** the six website persona documents and the iPad guide. They are captured per seat
+  on a throwaway e2e database, which is its own run.
+
 ### FUTURE (recorded, not scheduled)
 
 - **Apple Wallet** (decision 14): `eventTicket` pass, serial = pass id, barcode message = the

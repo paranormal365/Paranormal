@@ -846,6 +846,8 @@ Hosted events have to meet the site's guidelines. If one doesn't, IsHaunted can 
 
 The people who run the group's billing and whoever created the event are emailed, with a link to appeal.
 
+![An event IsHaunted removed, with the appeal](help-media:organization-administration/event-removed.png)
+
 The event's page then opens with **Removed by IsHaunted**. If you think it was a mistake, write why it
 should come back and anything you've changed, and send the appeal. A person reads every appeal, and you
 hear back by email and in your messages:
@@ -965,6 +967,8 @@ marked as not on offer. Under it is how many are coming for the day on that nigh
 Once an event is published, its page opens with **At a glance**: how many people are coming and in
 how many parties, how many are waiting on you, places left, day passes, who has come through the
 door, and the reviews. Each number opens the screen that explains it.
+
+![The event's numbers at a glance](help-media:organization-administration/event-at-a-glance.png)
 
 **Places are counted night by night.** A room on a two-night plan is two places to sell, and a party
 in it for both nights has taken both. A place somebody is holding counts as taken, as it does on the
@@ -1703,6 +1707,8 @@ red from green.
 **Write to your guests**, at the bottom of the booking board, sends one letter to everybody with a
 place: *the car park is closed, use the church lot*, *doors open at eight, not seven*, *bring a coat*.
 It is for what everybody needs to know. Anything about one party belongs on that party.
+
+![Writing to everybody with a place](help-media:organization-administration/event-write-to-guests.png)
 
 - **Who it goes to.** Everybody with a confirmed place, or only the people there on one date. A pass
   for the whole event counts as being there every date. Turn on **Include people you haven't answered

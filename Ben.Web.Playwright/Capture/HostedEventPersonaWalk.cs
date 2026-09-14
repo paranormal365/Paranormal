@@ -132,6 +132,7 @@ public sealed class HostedEventPersonaWalk : BenTestBase
         await GoAsync($"/organizations/{_orgId}/events/{RoomsEventId}/staff");
         await Page.Locator("#staff-email").FillAsync(MemberEmail);
         await Page.Locator("#staff-role").FillAsync("Front door, Friday and Saturday");
+        var invitedAt = DateTime.UtcNow;
         await ClickUntilAsync(Page.Locator("#staff-add"), Page.Locator("#staff-note"));
         await ShotAsync("organizer-inviting-the-door", Content, subject: Page.Locator("#staff-list"));
 
@@ -154,7 +155,7 @@ public sealed class HostedEventPersonaWalk : BenTestBase
         });
 
         // ── 4. The helper on the door accepts, and finds the party ────────────
-        var invite = await MailLinkAsync(MemberEmail, "/helping/", TimeSpan.FromMinutes(7));
+        var invite = await MailLinkAsync(MemberEmail, "/helping/", invitedAt, TimeSpan.FromMinutes(7));
         await LoginAsync(MemberEmail, MemberPassword);
 
         await Page.GotoAsync(invite);
@@ -309,47 +310,11 @@ public sealed class HostedEventPersonaWalk : BenTestBase
         await admin.DisposeAsync();
     }
 
-    /// <summary>
-    /// The Old Mill draft the removal story is told about: made the first time, and restored from the archive, where
-    /// the story leaves it, every time after — event names are unique within a group.
-    /// </summary>
     private async Task<string> ADraftToRemoveAsync()
     {
-        const string name = "Old Mill Lock-In";
         var admin = await ApiAsync(SuperAdminEmail, SuperAdminPassword);
-        try
-        {
-            var list = await admin.GetAsync("/api/admin/hosted-events");
-            Assert.That(list.Ok, Is.True, await list.TextAsync());
-            var existing = (await list.JsonAsync())!.Value.GetProperty("events").EnumerateArray()
-                .FirstOrDefault(e => e.GetProperty("organizationId").GetString() == _orgId && e.GetProperty("eventName").GetString() == name);
-
-            if (existing.ValueKind == System.Text.Json.JsonValueKind.Object)
-            {
-                var id = existing.GetProperty("id").GetString()!;
-                var restored = await admin.PostAsync($"/api/organizations/{_orgId}/events/{id}/restore", new() { DataObject = new { } });
-                Assert.That(restored.Ok, Is.True, await restored.TextAsync());
-                Assert.That((await restored.JsonAsync())!.Value.GetProperty("lifecycleState").GetInt32(), Is.EqualTo(0),
-                    $"{name} is not a draft after restoring, so it cannot be removed for the story.");
-                return id;
-            }
-
-            var starts = DateTime.UtcNow.Date.AddDays(45);
-            var made = await admin.PostAsync($"/api/organizations/{_orgId}/events", new()
-            {
-                DataObject = new
-                {
-                    name, placeId = VenuePlaceId, timeZoneId = "America/Chicago",
-                    startsOn = starts.ToString("yyyy-MM-dd"), endsOn = starts.ToString("yyyy-MM-dd"), contactLine = "Call us.",
-                },
-            });
-            Assert.That(made.Ok, Is.True, await made.TextAsync());
-            return (await made.JsonAsync())!.Value.GetProperty("id").GetString()!;
-        }
-        finally
-        {
-            await admin.DisposeAsync();
-        }
+        try { return await DraftHostedEventAsync(admin, _orgId, "Old Mill Lock-In", VenuePlaceId); }
+        finally { await admin.DisposeAsync(); }
     }
 
     // ── photographing ────────────────────────────────────────────────────────
@@ -439,24 +404,24 @@ public sealed class HostedEventPersonaWalk : BenTestBase
     }
 
     /// <summary>
-    /// The first link to <paramref name="path"/> in a letter to <paramref name="to"/>, from the mail catcher's folder,
-    /// on the local site.
+    /// The link to <paramref name="path"/> in a letter to <paramref name="to"/> written after <paramref name="sentAfter"/>,
+    /// from the mail catcher's folder, on the local site. Earlier letters are earlier runs' invitations, which no longer
+    /// open anything.
     /// </summary>
     /// <remarks>
     /// The mail sender runs every five minutes, so the letter is waited for. A development API has no public address to
     /// put in front of its links, so a relative link is put on the local site, and an absolute one moved onto it.
     /// </remarks>
-    private static async Task<string> MailLinkAsync(string to, string path, TimeSpan patience)
+    private static async Task<string> MailLinkAsync(string to, string path, DateTime sentAfter, TimeSpan patience)
     {
         var folder = Environment.GetEnvironmentVariable("BEN_MAIL_CATCHER_DIR");
         Assert.That(folder is not null && Directory.Exists(folder), Is.True, "Set BEN_MAIL_CATCHER_DIR to the mail catcher's folder.");
 
         var link = new Regex("href=\"(?<url>[^\"]*" + Regex.Escape(path) + "[^\"]*)\"");
-        var startedAt = DateTime.UtcNow;
-        var until = startedAt + patience;
+        var until = DateTime.UtcNow + patience;
         while (DateTime.UtcNow < until)
         {
-            foreach (var file in new DirectoryInfo(folder!).GetFiles("*.html").Where(f => f.LastWriteTimeUtc >= startedAt.AddMinutes(-10))
+            foreach (var file in new DirectoryInfo(folder!).GetFiles("*.html").Where(f => f.LastWriteTimeUtc >= sentAfter)
                          .OrderByDescending(f => f.LastWriteTimeUtc))
             {
                 var text = await File.ReadAllTextAsync(file.FullName);

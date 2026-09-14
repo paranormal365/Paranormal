@@ -168,6 +168,53 @@ whatever it found — so run `Capture_TheFeed` first, or turn the flag on by han
 skips itself and says so.
 
 
+## Hosted Events brochure and the advertisements
+
+- **`docs/IsHaunted-Hosted-Events.pdf`** — an eight-page brochure for hosted events and the iPhone app.
+- **`docs/ads/IsHaunted-Ad-*.pdf`** — one-sheet, front-and-back advertisements for the whole product,
+  enthusiasts, investigation groups, ghost walk tours, venues and event hosts.
+
+Both are built by one script from the repository root:
+
+```bash
+python3 docs/ads/build-ads.py --png
+```
+
+`--png` also renders every page to `docs/ads/preview/` (ignored by git) for checking. Check them before
+calling a document done; a PDF cannot be read here.
+
+**The design.** Each ad takes its palette from its lead photograph: a deep base colour from the shadows
+and a complementary accent from the light — indigo with candle amber, night blue with lamplight, oxblood
+with champagne. Every frame is sized from its image's own proportions, so no screenshot is ever cropped
+mid-sentence.
+
+**Where the pictures come from:**
+
+- **Photographs** — `docs/media/stock/`, from Unsplash, credited in
+  `ProjectNotes/FeatureHistory/README-hosted-events-235-media.md`.
+- **Website screens** — `docs/media/hosted-events/walk/`, from `HostedEventPersonaWalk`.
+- **Letters** — `docs/media/hosted-events/emails/`.
+- **iPhone screens** — the help captures in `Ben.Web.Website/wwwroot/help/media/the-mobile-apps/`.
+
+**Re-walking.** The walk runs against the local hosts on `IsHauntedDb_player`, with the API's mail pointed
+at a local catcher so nothing leaves the machine:
+
+- Start the API with `Smtp__Host=127.0.0.1 Smtp__Port=2525 Smtp__UseSsl=false Smtp__User=`.
+- Run a catcher that writes each letter as `.html` to a folder, then:
+
+```bash
+BEN_CAPTURE_WALK=1 BEN_MAIL_CATCHER_DIR=<catcher folder> dotnet test Ben.Web.Playwright -p:IsTestProject=true --filter FullyQualifiedName~HostedEventPersonaWalk
+```
+
+Photograph the letters with headless Chrome at 720 px wide.
+
+**Then reissue the demo guest's pass.** Every pictured QR code must be a withdrawn one, because this
+repository is public.
+
+**iPhone help captures** need `TEST_RUNNER_BEN_API_BASE_URL`: `HelpMediaCaptureTests` refuses to run
+without it. Reset the simulator's keychain first (`xcrun simctl keychain <udid> reset`), so a leftover
+session can't photograph the wrong person.
+
 ## What it deliberately leaves out
 
 No business, market or financial information, and no usage figures — only what the software does.
