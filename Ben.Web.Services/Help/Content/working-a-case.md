@@ -150,10 +150,11 @@ is never overwritten.
 
 ### When it happened, and the timeline
 
-**When this happened** dates the page. A published page with a date appears on the case's **Timeline** in its place,
-as a research entry that opens the page; it is changed on the page, not on the timeline. It is internal to the group,
-like the page, and it does not appear in an investigation's binder. An undated page, or a page that has never been
-published, stays off the timeline.
+A new page is undated. **Add a date** opens a date and a time, starting from the current hour, to change to
+the moment the page is about; **Remove date** undates it again. A published page with a date appears on the case's
+**Timeline** in its place, as a research entry that opens the page; it is changed on the page, not on the timeline.
+It is internal to the group, like the page, and it does not appear in an investigation's binder. An undated page, or a
+page that has never been published, stays off the timeline.
 
 ### Link cards
 

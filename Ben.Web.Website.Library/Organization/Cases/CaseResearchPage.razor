@@ -101,19 +101,35 @@
             </div>
         }
 
-        <div class="row g-2 mb-3 align-items-end">
-            <div class="col-12 col-sm-8 col-md-5 col-lg-4">
+        @* When the page is about. Never an empty date box: an empty Telerik date field rebuilds the whole date the first
+           time a segment is stepped (Ben, 2026-09-09, on Propose Dates). An undated page — the ordinary case, and the one
+           that stays off the timeline — shows "Add a date", which opens a date box and a time box already holding one;
+           "Remove date" undates it again. Separate boxes, as InvestigationPanel's, for the same two reasons. *@
+        <div class="mb-3" data-testid="research-page-when-row">
+            @if (CanEdit && _eventLocal is { } eventLocal)
+            {
                 <label class="form-label small mb-1" for="research-page-when">When this happened <span class="text-secondary">(puts the page on the timeline)</span></label>
-                @if (CanEdit)
-                {
-                    <TelerikDateTimePicker Id="research-page-when" Format="@DateTimeViewerExtensions.DateTimeNoSecondsPattern"
-                                           Value="@_eventLocal" ValueChanged="@((DateTime? v) => OnWhenChangedAsync(v))" Width="100%" />
-                }
-                else
-                {
-                    <div id="research-page-when">@(current.EventDateTime is { } when ? when.ToViewerLocalTime(UserState).ToDisplayDateTime() : "Not dated")</div>
-                }
-            </div>
+                <div class="d-flex flex-wrap gap-2 align-items-center">
+                    <TelerikDatePicker Id="research-page-when" Format="MM/dd/yyyy" Value="@eventLocal" ValueChanged="@((DateTime v) => OnWhenDateChanged(v))" Width="160px" />
+                    <label class="visually-hidden" for="research-page-when-time">Time</label>
+                    <TelerikTimePicker Id="research-page-when-time" Format="hh:mm tt" Value="@eventLocal" ValueChanged="@((DateTime v) => OnWhenTimeChanged(v))" Width="130px" />
+                    <button type="button" class="btn btn-sm btn-outline-secondary" id="research-page-when-remove" @onclick="RemoveWhen">
+                        <BenIcon Name="x" Class="me-1" />Remove date
+                    </button>
+                </div>
+            }
+            else if (CanEdit)
+            {
+                <div class="small text-secondary mb-1">Not dated, so it isn't on the timeline.</div>
+                <button type="button" class="btn btn-sm btn-outline-secondary" id="research-page-when-add" @onclick="AddWhen">
+                    <BenIcon Name="calendar" Class="me-1" />Add a date
+                </button>
+            }
+            else
+            {
+                <div class="small text-secondary">When this happened</div>
+                <div data-testid="research-page-when-read">@(current.EventDateTime is { } when ? when.ToViewerLocalTime(UserState).ToDisplayDateTime() : "Not dated")</div>
+            }
         </div>
 
         @if (CanEdit)
@@ -219,9 +235,31 @@
         _autosave?.Touch();
     }
 
-    private void OnWhenChangedAsync(DateTime? value)
+    /// <summary>Starts the date at the top of the current hour, the viewer's own clock: a real date to change, never an empty box.</summary>
+    private void AddWhen()
     {
-        _eventLocal = value;
+        var now = DateTime.UtcNow.ToViewerLocalTime(UserState);
+        _eventLocal = new DateTime(now.Year, now.Month, now.Day, now.Hour, 0, 0);
+        _autosave?.Touch();
+    }
+
+    private void RemoveWhen()
+    {
+        _eventLocal = null;
+        _autosave?.Touch();
+    }
+
+    private void OnWhenDateChanged(DateTime date)
+    {
+        if (_eventLocal is not { } current) return;
+        _eventLocal = date.Date + current.TimeOfDay;
+        _autosave?.Touch();
+    }
+
+    private void OnWhenTimeChanged(DateTime time)
+    {
+        if (_eventLocal is not { } current) return;
+        _eventLocal = current.Date + time.TimeOfDay;
         _autosave?.Touch();
     }
 

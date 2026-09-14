@@ -241,17 +241,16 @@ public class CaseResearchPageTests : ResearchPageTestBase
         var url = await CreatePageAsync(title);
         await AddTextAsync("Both owners are buried at the county cemetery.");
 
-        // Chosen from the picker's calendar, as with a mouse: the first day of the month it opens on, at the time it
-        // offers. (Typed keys are each a round trip to the server in this picker, and a key sent while the last is still
-        // being applied can be lost — a hazard of the control under automation, not of this page.)
+        // Add a date opens a date box already holding one; the day is then chosen from its calendar, as with a mouse.
+        await Page.Locator("#research-page-when-add").ClickAsync();
         var when = Page.Locator("#research-page-when");
-        await Page.Locator(".k-datetimepicker:has(#research-page-when) button[aria-label='Open']").ClickAsync();
-        var firstOfMonth = Page.Locator(".k-datetime-container .k-calendar-td:not(.k-other-month)").First;
+        await Expect(when).ToHaveValueAsync(new System.Text.RegularExpressions.Regex(@"^\d{2}/\d{2}/\d{4}$"), new() { Timeout = 10_000 });
+        await Page.Locator(".k-datepicker:has(#research-page-when) button[aria-label='Open']").ClickAsync();
+        var firstOfMonth = Page.Locator(".k-calendar .k-calendar-td:not(.k-other-month)").First;
         await Expect(firstOfMonth).ToBeVisibleAsync(new() { Timeout = 10_000 });
         var day = DateTime.Parse((await firstOfMonth.GetAttributeAsync("title"))!, System.Globalization.CultureInfo.GetCultureInfo("en-US"));
         await firstOfMonth.ClickAsync();
-        await Page.Locator(".k-datetime-container .k-time-accept").ClickAsync();
-        await Expect(when).ToHaveValueAsync(new System.Text.RegularExpressions.Regex("^" + day.ToString("MM/dd/yyyy", System.Globalization.CultureInfo.InvariantCulture) + " "), new() { Timeout = 10_000 });
+        await Expect(when).ToHaveValueAsync(day.ToString("MM/dd/yyyy", System.Globalization.CultureInfo.InvariantCulture), new() { Timeout = 10_000 });
 
         await PublishAsync();
 
@@ -263,6 +262,24 @@ public class CaseResearchPageTests : ResearchPageTestBase
 
         await ClickUntilUrlAsync(open, PageUrl.ToString());
         await Expect(Page.Locator("[data-testid=research-page]")).ToBeVisibleAsync(new() { Timeout = 20_000 });
+    }
+
+    [Test]
+    public async Task TheDate_IsNeverAnEmptyBox_AndCanBeTakenAwayAgain()
+    {
+        // An empty Telerik date box rebuilds the whole date the first time a segment is stepped (2026-09-09). A new page
+        // is undated, so it offers Add a date rather than an empty box; added, the box holds a whole date.
+        await OpenResearchTabAsync();
+        await CreatePageAsync(UniqueTitle("Dating"));
+
+        await Expect(Page.Locator("#research-page-when")).ToHaveCountAsync(0);
+        await Page.Locator("#research-page-when-add").ClickAsync();
+        await Expect(Page.Locator("#research-page-when")).ToHaveValueAsync(new System.Text.RegularExpressions.Regex(@"^\d{2}/\d{2}/\d{4}$"), new() { Timeout = 10_000 });
+        await Expect(Page.Locator("#research-page-when-time")).ToHaveValueAsync(new System.Text.RegularExpressions.Regex(@"^\d{2}:00 (AM|PM)$"));
+
+        await Page.Locator("#research-page-when-remove").ClickAsync();
+        await Expect(Page.Locator("#research-page-when")).ToHaveCountAsync(0);
+        await Expect(Page.Locator("#research-page-when-add")).ToBeVisibleAsync();
     }
 
     [Test]
