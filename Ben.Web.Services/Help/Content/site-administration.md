@@ -651,6 +651,107 @@ record. When they pay, record the payment on the Ledger and set the seat **Activ
 period. The two are separate on purpose — the money and the entitlement can never disagree by
 being the same write.
 
+## Event credits
+
+**Event Credits** lists every credit ever bought. One credit publishes one hosted event —
+whatever it costs to run and however many nights it lasts — and is good for a year from the day
+it was bought. It is spent the moment the event goes live, and the price it was bought at is
+frozen on the row, so moving the price never reaches one somebody is already holding.
+
+The screen shows who holds it, when it lapses, whether it has been spent and on what, and the
+receipt the purchase produced. An envelope beside the expiry date means the holder has already
+had the thirty-day warning; that warning goes out by email, and to the bell for anybody who
+cannot be emailed.
+
+**Granting** hands a group credits nobody paid for: a purchase that never landed, an apology, a
+credit somebody was promised. Choose the group, how many, and say why — the reason is required,
+because it and your name on the row are the only record that it happened. A granted credit behaves
+exactly like a bought one in every other respect: a year to use, spent when an event is published,
+oldest first, warned at thirty days. It shows as **Granted** rather than $0.00 in the Paid column,
+on this screen and on the group's own.
+
+**A grant writes nothing to the ledger.** A $0 charge and payment pair would put a sale that never
+happened into the money trail, and a receipt would say somebody paid nothing. If money genuinely
+changed hands outside Stripe — a cheque, a transfer — record that on the Ledger as well, as its own
+payment.
+
+**Refunding** is the other reason this screen exists — nobody refunds themselves. A refund needs a
+reason, marks the credit so it can never be spent whatever its date says, and writes a credit
+adjustment on the group's ledger. Untick that box when you have already put the money back
+through Stripe, whose own row reaches the ledger by another route.
+
+A **spent** credit cannot be refunded, and the refusal names the event it went on. One event,
+one credit, for the life of that event: handing the credit back would make that event's own
+payment record untrue, and putting the event up again would then never charge for it. When money
+genuinely has to go back on an event that is live, record a **credit adjustment** on the Ledger
+instead. An **expired** credit can still be refunded — that is the goodwill case, somebody who
+paid and never got to use it. Refunding a **granted** credit simply revokes it, and writes no
+ledger row — there is nothing to hand back.
+
+## Hosted events
+
+### The events dashboard
+
+**Administration → Dashboard** has two tabs. **The site** is the dashboard above; **Events** is the same
+kind of page for hosted events across every group, and the range picker drives both.
+
+![The events dashboard's cards](help-media:site-administration/events-dashboard.png)
+
+The cards say where things stand now:
+- events on the site, with drafts, events that happened and events called off underneath;
+- organizers (groups with at least one hosted event);
+- venues, and how many are confirmed for their building;
+- event credits held;
+- people confirmed at events still taking bookings;
+- appeals waiting for an answer.
+
+The charts cover the chosen period: events created and published, bookings made and where they stand,
+credits bought and spent, the biggest events, and the busiest organizers and venues. **Where events
+happen** counts published events by the state their venue is in.
+
+The dashboard counts; it never names a guest. The events list is where individual events are.
+
+### Every event, and removing one
+
+**Administration → Events** lists every hosted event in every state: the person who created it and their
+group, the event and its venue, the dates, the state, and how many people are coming. Search matches the
+event, the group, the organizer or the place, and the state filter narrows the list.
+
+![Every hosted event](help-media:site-administration/every-event.png)
+
+The eye opens the event's own page as its organizer sees it. From there you can follow it through its
+whole process: plan, bookings, door, room and what happened afterwards.
+
+The bin opens **Remove an event**, which says what removing it will do before you confirm:
+
+- **It comes off the site** and can't take bookings. Nothing is deleted: the event, its bookings and its
+  history stay.
+- **Everybody with a place or waiting for one is told** it is not going ahead, with no reason given, and
+  their passes stop working.
+- **The event credit spent on it goes back** to whoever paid for it, whatever the timing. Publishing the
+  event again later spends a credit again.
+- **The organizer is emailed** that the event doesn't meet the guidelines for hosted events, with a link to
+  appeal. The letter is generic on purpose. Your **note for the record** is kept with the removal for
+  whoever reviews an appeal, and is never sent to anyone.
+
+![Removing an event says what it will do first](help-media:site-administration/remove-an-event.png)
+
+The organizer can't un-cancel, restore or publish a removed event.
+
+### Appeals
+
+The removal letter takes the organizer to their event's page, where a card explains the removal and
+offers one appeal. When they send it, SuperAdmins get a message, and the appeal waits at the top of
+**Administration → Events**. It shows the organizer's message, what the event was when it was removed,
+whether its credit went back, and your note from the removal.
+
+- **Uphold** brings the event back as a **draft**, never straight onto the site. Its guests were told it
+  was not going ahead, so putting it back up is the organizer's decision, made on purpose.
+- **Decline** needs an answer. The organizer reads it, and the event stays removed.
+
+Either way the organizer is told by email and in their messages. Each removal takes one appeal; an event
+removed again after an upheld appeal can be appealed again.
+
 ## Referrals and what they earn
 
 **Referrals** shows every referrer's standing. A referrer is anyone a coupon campaign is

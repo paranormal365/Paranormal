@@ -10,11 +10,15 @@ public sealed record OrganizationAdRecord(
     /// <summary>Times the card was served to a page (item 186 F8) — serves, not eyeballs.</summary>
     long Impressions = 0,
     /// <summary>Times somebody followed it through /go.</summary>
-    long Clicks = 0);
+    long Clicks = 0,
+    /// <summary>The event an "event" ad leads to (item 235 phase 11).</summary>
+    Guid? HostedEventId = null);
 
 /// <summary>What the group writes: everything reviewable, nothing about status.</summary>
 public sealed record SaveOrganizationAdRequest(
-    string Headline, string Body, Guid? ImageUploadFileId, string TargetKind);
+    string Headline, string Body, Guid? ImageUploadFileId, string TargetKind,
+    /// <summary>The event, when <paramref name="TargetKind"/> is "event" (item 235 phase 11).</summary>
+    Guid? HostedEventId = null);
 
 /// <summary>A queue row for the SuperAdmin review screen.</summary>
 public sealed record AdminOrganizationAdRecord(
@@ -31,9 +35,15 @@ public sealed record PromotedGroupCard(
     /// (item 186 F8). Null when the viewer shared no location, or the group has no public address
     /// — an area-of-operation circle deliberately yields no distance, since its centre is
     /// somebody's privacy compromise, not a place.</summary>
-    double? DistanceMiles = null);
+    double? DistanceMiles = null,
+    /// <summary>The event's name, for an "event" ad (item 235 phase 11).</summary>
+    string? EventName = null,
+    /// <summary>When the event starts, for the card's date line.</summary>
+    DateTime? EventStartsOn = null);
 
 /// <summary>Where a clicked promoted card leads (item 186 F8): the group's public page or the
 /// group finder — a CLOSED set, and the website's /go route renders the redirect from nothing
 /// but these two fields.</summary>
-public sealed record PromotedClickTarget(string TargetKind, string OrganizationUrlName);
+public sealed record PromotedClickTarget(string TargetKind, string OrganizationUrlName,
+    /// <summary>The event's slug, for an "event" ad — still inside the closed set: a page on this site.</summary>
+    string? EventUrlName = null);

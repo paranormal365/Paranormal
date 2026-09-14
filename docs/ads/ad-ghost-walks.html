@@ -1,0 +1,115 @@
+<!doctype html>
+<html lang="en"><head><meta charset="utf-8"><title>IsHaunted for ghost walk tours</title><style>
+@page { size: 8.5in 11in; margin: 0; }
+* { box-sizing: border-box; -webkit-print-color-adjust: exact; print-color-adjust: exact; }
+html, body { margin: 0; padding: 0; background: #555; }
+body { font-family: "Avenir Next", Avenir, "Helvetica Neue", sans-serif; color: var(--ink); }
+.page { width: 8.5in; height: 11in; position: relative; overflow: hidden; background: var(--base);
+        page-break-after: always; break-after: page; }
+.page:last-child { page-break-after: auto; break-after: auto; }
+@media screen { .page { margin: 0 auto 24px; } }
+body.only-front .back, body.only-back .front { display: none; }
+body.only-front .page, body.only-back .page { margin: 0; }
+
+/* ── front ─────────────────────────────────────────────────── */
+.hero { position: absolute; inset: 0 0 auto 0; height: 7.05in; background-size: cover; background-position: var(--focus, center); }
+.hero::after { content: ""; position: absolute; inset: 0;
+  background: linear-gradient(180deg, rgba(0,0,0,.45) 0%, rgba(0,0,0,0) 22%, var(--base-a0) 42%, var(--base-a70) 72%, var(--base) 100%); }
+.brandbar { position: absolute; top: .42in; left: .55in; right: .55in; display: flex; align-items: center; justify-content: space-between; z-index: 3; }
+.brand { display: flex; align-items: center; gap: .12in; color: #fff; font-weight: 700; letter-spacing: .02em; font-size: 15pt; }
+.brand img { width: .46in; height: .46in; filter: drop-shadow(0 2px 6px rgba(0,0,0,.5)); }
+.brand small { display: block; font-weight: 500; font-size: 8pt; letter-spacing: .22em; text-transform: uppercase; opacity: .8; }
+.pill { font-size: 8.5pt; font-weight: 700; letter-spacing: .16em; text-transform: uppercase; color: var(--base);
+        background: var(--accent); padding: .07in .16in; border-radius: 99px; box-shadow: 0 4px 14px rgba(0,0,0,.35); }
+.headline { position: absolute; left: .55in; right: 3.1in; top: 4.05in; z-index: 3; color: #fff; }
+.kicker { font-size: 9pt; font-weight: 700; letter-spacing: .24em; text-transform: uppercase; color: var(--accent); margin-bottom: .1in; }
+.headline h1 { font-family: Futura, "Avenir Next", sans-serif; font-weight: 800; font-size: 40pt; line-height: 1.02;
+               margin: 0 0 .16in; letter-spacing: -.01em; text-shadow: 0 3px 18px rgba(0,0,0,.45); }
+.headline h1 em { font-style: normal; color: var(--accent); }
+.headline p { font-size: 13.5pt; line-height: 1.38; margin: 0; color: rgba(255,255,255,.9); max-width: 4.6in; }
+.phone { position: absolute; z-index: 4; right: .6in; top: 3.25in; width: 2.3in; height: 4.95in; border-radius: .34in;
+         background: #050505; padding: .075in; box-shadow: 0 30px 60px rgba(0,0,0,.6), 0 0 0 1.5px rgba(255,255,255,.14), 0 0 60px var(--glow); transform: rotate(3deg); }
+.phone img { width: 100%; height: 100%; object-fit: cover; object-position: top; border-radius: .27in; display: block; }
+.pillars { position: absolute; left: .55in; right: 3.2in; top: 7.2in; display: grid; gap: .16in; z-index: 3; }
+.pillar { display: grid; grid-template-columns: .5in 1fr; gap: .14in; align-items: start; }
+.pillar .badge { width: .5in; height: .5in; border-radius: .14in; display: grid; place-items: center; color: var(--base);
+                 background: linear-gradient(135deg, var(--accent), var(--accent2)); box-shadow: 0 6px 16px var(--glow); }
+.pillar h3 { margin: .02in 0 .03in; font-size: 12.5pt; color: #fff; font-weight: 700; }
+.pillar p { margin: 0; font-size: 9.6pt; line-height: 1.38; color: var(--muted); }
+.cta { position: absolute; left: 0; right: 0; bottom: 0; height: 1.02in; display: flex; align-items: center; justify-content: space-between;
+       padding: 0 .55in; background: linear-gradient(90deg, var(--accent), var(--accent2)); color: var(--base); z-index: 5; }
+.cta .go { font-family: Futura, sans-serif; font-weight: 800; font-size: 19pt; letter-spacing: -.01em; }
+.cta .go span { display: block; font-family: "Avenir Next", sans-serif; font-size: 9pt; font-weight: 600; letter-spacing: .12em; text-transform: uppercase; opacity: .78; }
+.cta .price { text-align: right; font-weight: 700; font-size: 10pt; line-height: 1.25; }
+.cta .price b { display: block; font-family: Futura, sans-serif; font-size: 22pt; font-weight: 800; }
+
+/* ── back ──────────────────────────────────────────────────── */
+.back { background: radial-gradient(120% 60% at 100% 0%, var(--base2) 0%, var(--base) 60%); color: #fff; }
+.back-top { height: 2.55in; display: grid; grid-template-columns: 1.55fr 1fr 1fr; gap: .07in; }
+.back-top div { background-size: cover; background-position: center; position: relative; }
+.back-top div::after { content: ""; position: absolute; inset: 0; background: linear-gradient(180deg, rgba(0,0,0,0) 45%, var(--base-a70) 100%); }
+.back-head { position: absolute; top: 1.72in; left: .55in; right: .55in; z-index: 2; }
+.back-head h2 { font-family: Futura, sans-serif; font-weight: 800; font-size: 25pt; margin: 0; line-height: 1.05; text-shadow: 0 3px 14px rgba(0,0,0,.6); }
+.back-head h2 em { font-style: normal; color: var(--accent); }
+.grid { position: absolute; top: 2.95in; left: .55in; right: .55in; display: grid; grid-template-columns: repeat(3, 1fr); gap: .14in; }
+.card { background: var(--card); border: 1px solid var(--line); border-radius: .14in; padding: .15in .16in .14in; }
+.card .ic { color: var(--accent); }
+.card h4 { margin: .06in 0 .04in; font-size: 10.6pt; font-weight: 700; }
+.card p { margin: 0; font-size: 8.5pt; line-height: 1.4; color: var(--muted); }
+.shots { position: absolute; top: 6.05in; left: .55in; right: .55in; height: 2.45in; display: grid; grid-template-columns: 1.9fr 1fr; gap: .2in; align-items: stretch; }
+.screen { border-radius: .12in; overflow: hidden; background: #111; box-shadow: 0 18px 40px rgba(0,0,0,.5), 0 0 0 1px rgba(255,255,255,.1); position: relative; }
+.screen::before { content: ""; position: absolute; top: 0; left: 0; right: 0; height: .17in; background: #2a2a2e; z-index: 1; }
+.screen::after { content: "● ● ●"; position: absolute; top: .012in; left: .1in; font-size: 6pt; letter-spacing: .02in; color: #6d6d74; z-index: 2; }
+.screen img { position: absolute; top: .17in; left: 0; width: 100%; height: calc(100% - .17in); object-fit: cover; object-position: var(--shot-focus, top left); }
+.side { display: flex; flex-direction: column; justify-content: center; gap: .1in; }
+.side .quote { font-family: Didot, Georgia, serif; font-style: italic; font-size: 14pt; line-height: 1.25; color: #fff; }
+.side .who { font-size: 8pt; letter-spacing: .14em; text-transform: uppercase; color: var(--accent); font-weight: 700; }
+.steps { position: absolute; top: 8.72in; left: .55in; right: .55in; display: grid; grid-template-columns: repeat(3, 1fr); gap: .2in; }
+.step { display: grid; grid-template-columns: .38in 1fr; gap: .08in; align-items: start; }
+.step b { font-family: Futura, sans-serif; font-weight: 800; font-size: 20pt; color: var(--accent); line-height: 1; }
+.step h5 { margin: 0 0 .02in; font-size: 10pt; }
+.step p { margin: 0; font-size: 8.4pt; color: var(--muted); line-height: 1.35; }
+.offer { position: absolute; left: .55in; right: .55in; bottom: .4in; height: 1.1in; border-radius: .16in; display: grid;
+         grid-template-columns: 1.6fr 1fr; overflow: hidden; background: var(--card-solid); box-shadow: 0 0 0 1.5px var(--accent), 0 16px 40px rgba(0,0,0,.45); }
+.offer > div:first-child { padding: .16in .28in; display: flex; flex-direction: column; justify-content: center; }
+.offer .big { font-family: Futura, sans-serif; font-weight: 800; font-size: 16.5pt; color: #fff; line-height: 1.08; }
+.offer .big em { font-style: normal; color: var(--accent); }
+.offer .small { font-size: 8.4pt; color: var(--muted); margin-top: .05in; line-height: 1.35; }
+.offer .url { display: flex; flex-direction: column; justify-content: center; align-items: center; text-align: center;
+              color: var(--base); background: linear-gradient(135deg, var(--accent), var(--accent2)); }
+.offer .url b { display: block; font-family: Futura, sans-serif; font-weight: 800; font-size: 18pt; }
+.offer .url span { font-size: 8pt; font-weight: 700; letter-spacing: .12em; text-transform: uppercase; margin-top: .02in; }
+.fine { position: absolute; bottom: .14in; left: .55in; right: .55in; font-size: 5.8pt; white-space: nowrap; overflow: hidden; color: rgba(255,255,255,.42); text-align: center; }
+</style>
+<script>document.addEventListener('DOMContentLoaded',()=>{if(location.hash==='#front')document.body.classList.add('only-front');if(location.hash==='#back')document.body.classList.add('only-back');});</script>
+</head><body style="--base:#08142A;--base2:#17305A;--accent:#FFB547;--accent2:#FFDB8E;--base-a0:rgba(8,20,42,0);--base-a70:rgba(8,20,42,0.72);--glow:rgba(255,181,71,0.28);--card:rgba(255,255,255,0.055);--card-solid:#17305A;--line:rgba(255,255,255,0.09);--muted:rgba(255,255,255,.72);--ink:#fff;--focus:center 35%;">
+<section class="page front">
+  <div class="hero" style="background-image:url(../media/stock/w1-cobblestone-streetlights.jpg)"></div>
+  <div class="brandbar">
+    <div class="brand"><img src="../assets/is-haunted-logo.svg" alt=""><div>IsHaunted.com<small>Web &amp; iPhone</small></div></div>
+    <div class="pill">For ghost walk tours</div>
+  </div>
+  <div class="headline">
+    <div class="kicker">Tours that book themselves</div>
+    <h1>Fill every <em>lantern-lit</em> walk.</h1>
+    <p>A page for each tour, dates people book in a tap, and a reminder with your guide&#x27;s face the night before.</p>
+  </div>
+  <div class="phone"><img src="../media/hosted-events/walk/42-public-tour-phone.png" alt=""></div>
+  <div class="pillars"><div class="pillar"><div class="badge"><svg class="ic" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M12 22s7-6.2 7-12a7 7 0 0 0-14 0c0 5.8 7 12 7 12z"/><circle cx="12" cy="10" r="2.5"/></svg></div><div><h3>A page per tour</h3><p>Meeting point on a map, who&#x27;s guiding, photos, dates and reviews.</p></div></div><div class="pillar"><div class="badge"><svg class="ic" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><rect x="2" y="4" width="20" height="16" rx="2"/><path d="m22 6-10 7L2 6"/></svg></div><div><h3>Emails that sell the night</h3><p>Written once in your voice: time, place, guide and a calendar file.</p></div></div><div class="pillar"><div class="badge"><svg class="ic" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M23 19a2 2 0 0 1-2 2H3a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h4l2-3h6l2 3h4a2 2 0 0 1 2 2z"/><circle cx="12" cy="13" r="4"/></svg></div><div><h3>Guests become marketing</h3><p>Last night&#x27;s best photo in your slideshow by breakfast — you approve it.</p></div></div></div>
+  <div class="cta"><div class="go">List your tour at ishaunted.com<span>Unlimited dates and guides</span></div>
+    <div class="price"><b>$29</b>a month per tour</div></div>
+</section>
+<section class="page back">
+  <div class="back-top"><div style="background-image:url(../media/stock/w2-cobblestone-night.jpg)"></div><div style="background-image:url(../media/stock/w3-foggy-graveyard.jpg)"></div><div style="background-image:url(../media/stock/i1-flashlight-silhouette.jpg)"></div></div>
+  <div class="back-head"><h2>More walkers. <em>Fewer</em> no-shows.</h2></div>
+  <div class="grid"><div class="card"><svg class="ic" width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="4" width="18" height="18" rx="2"/><path d="M16 2v4M8 2v4M3 10h18"/></svg><h4>Dates and capacity</h4><p>Open a date, cap it, and close it when the street is full.</p></div><div class="card"><svg class="ic" width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M23 21v-2a4 4 0 0 0-3-3.87M16 3.13a4 4 0 0 1 0 7.75"/></svg><h4>Walk-ups welcome</h4><p>Sign somebody up on the pavement — no account needed.</p></div><div class="card"><svg class="ic" width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="m12 2 3.1 6.3 6.9 1-5 4.9 1.2 6.8L12 17.8 5.8 21l1.2-6.8-5-4.9 6.9-1z"/></svg><h4>Reviews that count</h4><p>Only people who came can rate the walk.</p></div><div class="card"><svg class="ic" width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M3 8a2 2 0 0 0 2-2h14a2 2 0 0 0 2 2v2a2 2 0 0 0 0 4v2a2 2 0 0 0-2 2H5a2 2 0 0 0-2-2v-2a2 2 0 0 0 0-4z"/><path d="M13 6v12" stroke-dasharray="2 2"/></svg><h4>Seat plans</h4><p>Trolleys and theatres get a seat map guests pick from.</p></div><div class="card"><svg class="ic" width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><path d="M2 12h20M12 2a15 15 0 0 1 0 20M12 2a15 15 0 0 0 0 20"/></svg><h4>Found by visitors</h4><p>Tours show on the home map and in “near you” searches.</p></div><div class="card"><svg class="ic" width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><rect x="6" y="2" width="12" height="20" rx="3"/><path d="M11 18h2"/></svg><h4>Free app for guests</h4><p>Their phone becomes an instrument on your walk.</p></div></div>
+  <div class="shots">
+    <div class="screen" style="--shot-focus:top center"><img src="../media/hosted-events/walk/41-public-tour.png" alt=""></div>
+    <div class="side"><div class="quote">“One extra ticket a month pays for the listing.”</div><div class="who">Priced per tour, not per guide</div></div>
+  </div>
+  <div class="steps"><div class="step"><b>1</b><div><h5>Create your tour</h5><p>Choose ghost walking tour when you start your group.</p></div></div><div class="step"><b>2</b><div><h5>Open dates</h5><p>Run it twice a year or four nights a week.</p></div></div><div class="step"><b>3</b><div><h5>Welcome guests</h5><p>They arrive knowing where, when and who.</p></div></div></div>
+  <div class="offer"><div><div class="big"><em>$29</em> a month per tour.</div><div class="small">Or $290 a year. Every guide and every date included — ask about three months free for new tour businesses.</div></div>
+    <div class="url"><b>ishaunted.com</b><span>Your page is public from day one</span></div></div>
+  <div class="fine">IsHaunted.com · Nashville, Tennessee · Photographs: Unsplash · Features shown are live on the website; the iPhone app is on its way to the App Store · Prices in USD, subject to change</div>
+</section>
+</body></html>

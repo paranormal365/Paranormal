@@ -9,6 +9,7 @@ struct RootShell: View {
     @Environment(\.horizontalSizeClass) private var sizeClass
     @Environment(Router.self) private var router
     @Environment(AppDependencies.self) private var dependencies
+    @Environment(\.scenePhase) private var scenePhase
     @State private var showSignInFromBanner = false
 
     var body: some View {
@@ -25,6 +26,23 @@ struct RootShell: View {
         .onChange(of: sizeClass) { _, _ in router.availableSections = shownSections }
         // Cold start: tokens in the Keychain mean quiet optimistic sign-in.
         .task { await dependencies.session.restore() }
+        // A cold start with no signal keeps the saved tokens and stays signed out for the moment; coming back
+        // to the app tries again, so the person is signed in once there is a signal, without typing anything.
+        .onChange(of: scenePhase) { _, phase in
+            if phase == .active {
+                Task {
+                    await dependencies.session.restore()
+                    // Photos kept for a signal, including any shared to an event from Photos while the app was away.
+                    await dependencies.roomOutbox.send()
+                    await dependencies.roomOutbox.refreshShareableEvents()
+                }
+            }
+        }
+        .task(id: dependencies.session.me?.userId) {
+            dependencies.roomOutbox.start()
+            await dependencies.roomOutbox.send()
+            await dependencies.roomOutbox.refreshShareableEvents()
+        }
         // A session left recording when the app went away is closed as interrupted, its log
         // recovered, before anything can show a stale "recording" row.
         .task { await dependencies.fieldKit.recoverInterruptedSessions() }
@@ -193,6 +211,24 @@ struct RootShell: View {
             EventDetailView(eventId: id)
         case .tourDetail(let org, let slug):
             TourDetailView(organizationUrlName: org, tourSlug: slug)
+        case .myEvents:
+            MyEventsView()
+        case .eventPass(let id):
+            EventPassView(hostedEventId: id)
+        case .eventHub(let id):
+            EventHubView(hostedEventId: id)
+        case .eventProgramme(let id):
+            ProgrammeView(hostedEventId: id)
+        case .eventMenus(let id):
+            MenusView(hostedEventId: id)
+        case .eventDownloads(let id):
+            DownloadsView(hostedEventId: id)
+        case .eventRoom(let id, let addPhotos):
+            EventRoomView(hostedEventId: id, startWithComposer: addPhotos)
+        case .doorDuties:
+            DoorDutiesView()
+        case .door(let organizationId, let hostedEventId):
+            DoorView(organizationId: organizationId, hostedEventId: hostedEventId)
         case .myEvidence:
             MyEvidenceView()
         case .developerSettings:

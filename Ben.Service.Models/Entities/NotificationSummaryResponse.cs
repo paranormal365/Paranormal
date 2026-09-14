@@ -82,7 +82,35 @@ public sealed record NotificationSummaryResponse(
     /// Cleared by the guest's optional "Got it" — which is what makes the acknowledgement worth
     /// having at all, and why nothing else depends on it.
     /// </remarks>
-    NotificationBucket? MyTourSeats = null)
+    NotificationBucket? MyTourSeats = null,
+    /// <summary>
+    /// Hosted-event bookings waiting on a venue this person can decide for.
+    /// </summary>
+    /// <remarks>
+    /// Its own row rather than folded into the tour one (item 235 phase 2.3). A bell that says
+    /// "3 seats to decide" and lands somebody on a walk's screen when what is waiting is a hotel
+    /// weekend is a bell that sends people to the wrong page, and the two are decided from
+    /// different screens with different questions.
+    /// </remarks>
+    NotificationBucket? EventBookingsToDecide = null,
+    /// <summary>
+    /// This person's own bookings that have been decided and not yet acknowledged.
+    /// </summary>
+    NotificationBucket? MyEventBookings = null,
+    /// <summary>
+    /// Holds at events this person decides for that run out within a day (item 235 phase 8).
+    /// </summary>
+    /// <remarks>
+    /// Not counted again in <see cref="EventBookingsToDecide"/>: a booking is one number on the
+    /// bell, and the urgent ones get a row of their own rather than hiding among the rest.
+    /// </remarks>
+    NotificationBucket? EventHoldsLapsing = null,
+    /// <summary>This person's own hold, not yet confirmed, running out within a day.</summary>
+    NotificationBucket? MyEventHoldLapsing = null,
+    /// <summary>Groups asking to hold an event at a venue this person answers for (item 235 phase 9).</summary>
+    NotificationBucket? VenueRequestsToDecide = null,
+    /// <summary>Events whose programme changed since this guest last looked at it (item 235 phase 10).</summary>
+    NotificationBucket? EventScheduleChanges = null)
 {
     public static readonly NotificationSummaryResponse Empty = new(
         NotificationBucket.Empty, NotificationBucket.Empty, NotificationBucket.Empty,
@@ -97,7 +125,15 @@ public sealed record NotificationSummaryResponse(
          // Null on a payload written before item 234, which is why these are read through a
          // fallback rather than dereferenced — an older client and an older server both survive.
          TourSeatsToDecide ?? NotificationBucket.Empty,
-         MyTourSeats ?? NotificationBucket.Empty];
+         MyTourSeats ?? NotificationBucket.Empty,
+         // Null on a payload written before item 235, read through the same fallback and for the
+         // same reason: an older client and an older server both survive.
+         EventBookingsToDecide ?? NotificationBucket.Empty,
+         MyEventBookings ?? NotificationBucket.Empty,
+         EventHoldsLapsing ?? NotificationBucket.Empty,
+         MyEventHoldLapsing ?? NotificationBucket.Empty,
+         VenueRequestsToDecide ?? NotificationBucket.Empty,
+         EventScheduleChanges ?? NotificationBucket.Empty];
 
     /// <summary>Total across every bucket — the number on the bell.</summary>
     [JsonIgnore]

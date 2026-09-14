@@ -13,16 +13,28 @@ import XCTest
 final class HelpMediaCaptureTests: XCTestCase {
     private var app: XCUIApplication!
 
+    /// The API every launch in a capture talks to, as `-apiBaseURL`.
+    ///
+    /// **Required, and passed on every launch.** The address is deliberately not sticky, so a launch without it uses
+    /// whatever the simulator last saved — or the shipped address, which is the live site. The captures relaunch the
+    /// app to prove a session survives, and those relaunches once cleared the arguments, so help pictures could have
+    /// been taken of real accounts without a word.
+    private var apiArguments: [String] = []
+
     override func setUpWithError() throws {
         guard ProcessInfo.processInfo.environment["BEN_SCREENSHOTS"] == "1" else {
             throw XCTSkip("screenshot capture runs only when asked — set TEST_RUNNER_BEN_SCREENSHOTS=1")
         }
+        guard let base = ProcessInfo.processInfo.environment["BEN_API_BASE_URL"], !base.isEmpty else {
+            throw XCTSkip("set TEST_RUNNER_BEN_API_BASE_URL to the stack to photograph — without it the app could reach the live site")
+        }
         continueAfterFailure = true
         app = XCUIApplication()
+        apiArguments = ["-apiBaseURL", base]
 
         let email = ProcessInfo.processInfo.environment["BEN_CLIENT_EMAIL"] ?? "daniel.park@benco.dev"
         let password = TestSecrets.required("BEN_CLIENT_PASSWORD")
-        app.launchArguments += ["-autoSignIn", "\(email):\(password)"]
+        app.launchArguments = apiArguments + ["-autoSignIn", "\(email):\(password)"]
         app.launch()
     }
 
@@ -50,7 +62,7 @@ final class HelpMediaCaptureTests: XCTestCase {
         // stores fetch while sign-in is still in flight and cache their anonymous answers — the
         // lesson AppStoreScreenshotTests learned by screenshotting empty surfaces.
         app.terminate()
-        app.launchArguments = []
+        app.launchArguments = apiArguments
         app.launch()
         settle(5)
 
@@ -69,5 +81,147 @@ final class HelpMediaCaptureTests: XCTestCase {
         row.tap()
         settle(4)
         snap("iphone-my-evidence")
+    }
+
+    /// What I'm going to, and a pass — the help page's "An event you've booked" (item 235 phase 14).
+    ///
+    /// Daniel again: a guest with confirmed bookings and no group. The first booking whose pass has actually been
+    /// issued is the one photographed, because a confirmed booking can still be waiting on the venue for its pass.
+    func testCaptureMyEventsAndPass() {
+        settle(6)
+        app.terminate()
+        app.launchArguments = apiArguments
+        app.launch()
+        settle(5)
+
+        XCTAssertTrue(AppNavigator.openSection("Profile", in: app),
+                      "Could not reach Profile, so What I'm going to was never opened.")
+        settle()
+
+        let row = app.buttons["settings-my-events"].firstMatch
+        if !row.waitForExistence(timeout: 10) {
+            XCTFail("The What I'm going to row is missing from Profile — nothing to capture.")
+            return
+        }
+        row.tap()
+        settle(4)
+        snap("iphone-my-events")
+
+        let passes = app.buttons.matching(NSPredicate(format: "identifier BEGINSWITH 'my-events-pass-'"))
+        for index in 0..<passes.count {
+            passes.element(boundBy: index).tap()
+            if app.descendants(matching: .any)["event-pass-code"].firstMatch.waitForExistence(timeout: 8) {
+                settle(2)
+                snap("iphone-event-pass")
+                return
+            }
+            app.navigationBars.buttons.element(boundBy: 0).tap()
+            settle(2)
+        }
+        XCTFail("None of the confirmed bookings has an issued pass — nothing to capture.")
+    }
+
+    /// During the event: the event's own screen, its programme, a menu and the room (item 235 phase 14b).
+    ///
+    /// Walks each booking's event screen until one has a programme to show, and photographs what that event has; a
+    /// row that isn't there is reported rather than photographed blank.
+    func testCaptureDuringTheEvent() {
+        settle(6)
+        app.terminate()
+        app.launchArguments = apiArguments
+        app.launch()
+        settle(5)
+
+        XCTAssertTrue(AppNavigator.openSection("Profile", in: app), "Could not reach Profile.")
+        settle()
+        let row = app.buttons["settings-my-events"].firstMatch
+        guard row.waitForExistence(timeout: 10) else { return XCTFail("The What I'm going to row is missing from Profile.") }
+        row.tap()
+        settle(4)
+
+        let hubs = app.buttons.matching(NSPredicate(format: "identifier BEGINSWITH 'my-events-hub-'"))
+        for index in 0..<hubs.count {
+            hubs.element(boundBy: index).tap()
+            let programme = app.buttons["hub-programme"].firstMatch
+            if programme.waitForExistence(timeout: 8) {
+                settle(2)
+                snap("iphone-event-hub")
+
+                programme.tap()
+                settle(3)
+                snap("iphone-event-programme")
+                app.navigationBars.buttons.element(boundBy: 0).tap()
+                settle(2)
+
+                let menus = app.buttons["hub-menus"].firstMatch
+                if menus.waitForExistence(timeout: 3) {
+                    menus.tap()
+                    settle(3)
+                    snap("iphone-event-menus")
+                    app.navigationBars.buttons.element(boundBy: 0).tap()
+                    settle(2)
+                } else {
+                    XCTFail("This event has no menus to photograph.")
+                }
+
+                let room = app.buttons["hub-room"].firstMatch
+                if room.waitForExistence(timeout: 3) {
+                    room.tap()
+                    settle(4)
+                    snap("iphone-event-room")
+                } else {
+                    XCTFail("This event's room isn't open to the guest.")
+                }
+                return
+            }
+            app.navigationBars.buttons.element(boundBy: 0).tap()
+            settle(2)
+        }
+        XCTFail("None of the guest's events has a published programme — nothing to capture.")
+    }
+
+    /// Tonight's door and a scanned reservation (item 235 phase 14c). Needs an account that may run a door — run it
+    /// with `TEST_RUNNER_BEN_CLIENT_EMAIL` and `TEST_RUNNER_BEN_CLIENT_PASSWORD` set to the organizer seat — and
+    /// `TEST_RUNNER_BEN_DOOR_SCAN_CODE` set to a pass token for that door, which stands in for the camera a
+    /// simulator doesn't have.
+    func testCaptureTheDoor() {
+        settle(6)
+        app.terminate()
+        app.launchArguments = apiArguments
+        if let code = ProcessInfo.processInfo.environment["BEN_DOOR_SCAN_CODE"] {
+            app.launchArguments += ["-doorScanCode", code]
+        }
+        app.launch()
+        settle(5)
+
+        XCTAssertTrue(AppNavigator.openSection("Profile", in: app), "Could not reach Profile.")
+        settle()
+        let row = app.buttons["settings-door-duties"].firstMatch
+        if !row.waitForExistence(timeout: 10) {
+            app.swipeUp()
+        }
+        guard row.waitForExistence(timeout: 5) else {
+            return XCTFail("Doors I'm running is missing — this account may not run any door. See the test's note.")
+        }
+        row.tap()
+        settle(3)
+
+        let door = app.buttons.matching(NSPredicate(format: "identifier BEGINSWITH 'door-duty-'")).firstMatch
+        guard door.waitForExistence(timeout: 8) else { return XCTFail("No door is listed.") }
+        door.tap()
+        guard app.staticTexts["door-count"].waitForExistence(timeout: 10) else { return XCTFail("The door did not open.") }
+        settle(2)
+        snap("iphone-door")
+
+        guard ProcessInfo.processInfo.environment["BEN_DOOR_SCAN_CODE"] != nil else { return }
+        app.buttons["door-scan"].firstMatch.tap()
+        let reservation = app.buttons["door-scanned-reservation"].firstMatch
+        guard reservation.waitForExistence(timeout: 10) else { return XCTFail("The scanned pass found no reservation.") }
+        settle(1)
+        snap("iphone-door-scanned")
+        reservation.tap()
+        guard app.buttons["reservation-check-in"].waitForExistence(timeout: 8) else { return XCTFail("The reservation did not open.") }
+        settle(1)
+        snap("iphone-door-reservation")
     }
 }

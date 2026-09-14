@@ -122,6 +122,19 @@ enum AppRoute: Hashable {
     /// Public events as a pushed screen, for the shell that has no Events tab.
     case eventsList
     case eventDetail(UUID)
+    /// What I'm going to: hosted-event bookings (item 235 phase 14).
+    case myEvents
+    /// The pass for one hosted event, by the hosted event's id.
+    case eventPass(UUID)
+    /// Everything for one hosted event, and its parts (item 235 phase 14b). All by the hosted event's id.
+    case eventHub(UUID)
+    case eventProgramme(UUID)
+    case eventMenus(UUID)
+    case eventDownloads(UUID)
+    case eventRoom(UUID, addPhotos: Bool = false)
+    /// The events this person may run the door at, and one night's door (item 235 phase 14c).
+    case doorDuties
+    case door(organizationId: UUID, hostedEventId: UUID)
     /// One tour, by the addresses its public page uses (item 234).
     ///
     /// Carried as SLUGS rather than as an id because that is what the public endpoint takes, and
@@ -202,6 +215,24 @@ final class Router {
             openArea(.events, pushing: .eventsList)
         case .eventDetail(let id):
             openArea(.events, pushing: .eventsList, then: .eventDetail(id))
+        // Profile is always a section, so these push onto it directly — openArea would select the tab and push
+        // nothing.
+        case .myEvents:
+            paths[.profile] = NavigationPath()
+            push(.myEvents, in: .profile)
+        case .eventPass(let id):
+            paths[.profile] = NavigationPath()
+            push(.myEvents, in: .profile)
+            push(.eventPass(id), in: .profile)
+        case .eventHub(let id):
+            paths[.profile] = NavigationPath()
+            push(.myEvents, in: .profile)
+            push(.eventHub(id), in: .profile)
+        case .eventRoom(let id, let addPhotos):
+            paths[.profile] = NavigationPath()
+            push(.myEvents, in: .profile)
+            push(.eventHub(id), in: .profile)
+            push(.eventRoom(id, addPhotos: addPhotos), in: .profile)
         case .myCases:
             selection = .cases
             paths[.cases] = NavigationPath()

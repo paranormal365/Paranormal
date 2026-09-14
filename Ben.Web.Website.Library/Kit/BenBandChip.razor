@@ -1,0 +1,52 @@
+@namespace Ben.Web.Website.Library.Kit
+
+@using Ben.Service.Models.Entities
+
+@* A colour a party wears, drawn once and read everywhere (item 235 phase 7).
+
+   THE NAME IS NOT OPTIONAL. About one man in twelve cannot separate red from green, and a chip
+   that is only a colour tells him nothing at all — the same reason every square on a plan carries
+   a word as well as a hue. The swatch is a help for the steward matching it against a box of
+   wristbands, never the message.
+
+   ONE COMPONENT, because the door, the board and the guest's own pass all draw this and three
+   copies is three chances to disagree about a colour in front of somebody at a door. *@
+
+@if (Band is { } band)
+{
+    <span class="band-chip @Class" title="@band.Meaning">
+        <span class="band-chip__dot" style="@Swatch(band)" aria-hidden="true"></span>
+        <span class="band-chip__word">@band.Colour</span>
+        @if (WithMeaning)
+        {
+            <span class="band-chip__meaning">@band.Meaning</span>
+        }
+    </span>
+}
+
+@code {
+    [Parameter] public HostedEventBandRecord? Band { get; set; }
+
+    /// <summary>Show what the colour means as well as its name. Off where space is short.</summary>
+    [Parameter] public bool WithMeaning { get; set; }
+
+    [Parameter] public string? Class { get; set; }
+
+    /// <summary>
+    /// The dot's colour, when the venue gave one.
+    /// </summary>
+    /// <remarks>
+    /// <b>Only a hex, and only a real one.</b> The value is the venue's own text and goes into a
+    /// style attribute, so anything that is not plainly a colour is dropped rather than trusted —
+    /// a swatch is worth having and not worth an injection.
+    /// </remarks>
+    private static string Swatch(HostedEventBandRecord band)
+        => band.Hex is { Length: > 0 } hex && IsAColour(hex)
+            ? $"background:{hex};"
+            : "";
+
+    private static bool IsAColour(string hex)
+        => (hex.Length is 4 or 7 or 9)
+        && hex[0] == '#'
+        && hex[1..].All(Uri.IsHexDigit);
+}

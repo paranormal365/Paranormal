@@ -12,6 +12,15 @@ public enum DeepLink: Sendable, Equatable {
     case feedType(UUID)
     case events
     case eventDetail(UUID)
+    /// `/my-events` — a guest's hosted-event bookings (item 235 phase 14).
+    case myEvents
+    /// `/my-events/{hostedEventId}/pass` — the pass for one of them.
+    case eventPass(UUID)
+    /// `/my-events/{hostedEventId}` — everything for one of them: programme, menus, downloads, the room (phase 14b).
+    case eventHub(UUID)
+    /// `/events/{hostedEventId}/room`, and `/events/{hostedEventId}/photos` with `addPhotos` — the address the photo
+    /// wall's code carries, so a guest who scans it lands ready to add theirs.
+    case eventRoom(UUID, addPhotos: Bool)
     case myCases
     case myCaseDetail(UUID)
     /// `/organizations/{orgId}/cases/{caseId}` — a case from the GROUP's side, which is a
@@ -60,7 +69,19 @@ public enum DeepLinkParser {
             }
         case "events":
             guard components.count > 1, let id = UUID(uuidString: components[1]) else { return .events }
+            // The room and add-photos addresses carry the HOSTED event's id; the bare one is a calendar date's.
+            if components.count > 2 {
+                switch components[2].lowercased() {
+                case "room": return .eventRoom(id, addPhotos: false)
+                case "photos": return .eventRoom(id, addPhotos: true)
+                default: break
+                }
+            }
             return .eventDetail(id)
+        case "my-events":
+            guard components.count > 1, let id = UUID(uuidString: components[1]) else { return .myEvents }
+            if components.count > 2 { return components[2].lowercased() == "pass" ? .eventPass(id) : .eventHub(id) }
+            return .eventHub(id)
         case "my-cases":
             guard components.count > 1, let id = UUID(uuidString: components[1]) else { return .myCases }
             return .myCaseDetail(id)

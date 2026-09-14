@@ -57,8 +57,30 @@ public static class IcsBuilder
     public static byte[] BuildBytes(IcsEvent calendarEvent)
         => Encoding.UTF8.GetBytes(Build(calendarEvent));
 
+    /// <summary>
+    /// Several entries in one file, ready to attach.
+    /// </summary>
+    /// <remarks>
+    /// A weekend at a hotel is not one calendar entry (item 235): a guest who booked Friday and
+    /// Saturday wants two nights in their diary, each with the room they are in, so that looking
+    /// at Saturday tells them where they are sleeping. One entry spanning both would sit across
+    /// the whole weekend as a single block and say nothing about either night.
+    /// </remarks>
+    public static byte[] BuildBytes(IReadOnlyList<IcsEvent> calendarEvents)
+        => Encoding.UTF8.GetBytes(Build(calendarEvents));
+
     /// <summary>The file's text.</summary>
-    public static string Build(IcsEvent e)
+    public static string Build(IcsEvent e) => Build([e]);
+
+    /// <summary>
+    /// The file's text, with one entry per event.
+    /// </summary>
+    /// <remarks>
+    /// Each entry keeps its OWN uid, because that is what a calendar updates against. Sharing one
+    /// uid across the nights of a weekend would make every night overwrite the last and leave a
+    /// guest with a single entry for a three-night stay.
+    /// </remarks>
+    public static string Build(IReadOnlyList<IcsEvent> events)
     {
         var lines = new List<string>
         {
@@ -70,6 +92,22 @@ public static class IcsBuilder
             // meeting being negotiated. REQUEST makes clients offer accept/decline buttons whose
             // replies would go nowhere — the sign-up already happened on the site.
             "METHOD:PUBLISH",
+        };
+
+        foreach (var e in events) lines.AddRange(EventLines(e));
+
+        lines.Add("END:VCALENDAR");
+
+        var text = new StringBuilder();
+        foreach (var line in lines) text.Append(Fold(line)).Append("\r\n");
+        return text.ToString();
+    }
+
+    /// <summary>One VEVENT block.</summary>
+    private static List<string> EventLines(IcsEvent e)
+    {
+        var lines = new List<string>
+        {
             "BEGIN:VEVENT",
             $"UID:{Escape(e.Uid)}",
             $"SEQUENCE:{e.Sequence}",
@@ -95,16 +133,22 @@ public static class IcsBuilder
         }
 
         lines.Add("END:VEVENT");
-        lines.Add("END:VCALENDAR");
-
-        var text = new StringBuilder();
-        foreach (var line in lines) text.Append(Fold(line)).Append("\r\n");
-        return text.ToString();
+        return lines;
     }
 
     /// <summary>UTC, in the basic form the format wants: <c>20260913T190000Z</c>.</summary>
-    private static string Stamp(DateTime value)
-        => value.ToUniversalTime().ToString("yyyyMMdd'T'HHmmss'Z'", CultureInfo.InvariantCulture);
+    /// <remarks>
+    /// <para><b>Unspecified is UTC.</b> Everything this product stores is UTC, and a time read back
+    /// from the database arrives with no kind at all. <c>ToUniversalTime()</c> treats that as the
+    /// SERVER's local time and shifts it — so a 9 PM séance was written at 2 AM on a machine in
+    /// Chicago and correctly on one in UTC, and the bug lived or died with where the site was
+    /// hosted (found in item 235 phase 10).</para>
+    ///
+    /// <para>Only a value that says it is Local is converted.</para>
+    /// </remarks>
+    internal static string Stamp(DateTime value)
+        => (value.Kind == DateTimeKind.Local ? value.ToUniversalTime() : DateTime.SpecifyKind(value, DateTimeKind.Utc))
+            .ToString("yyyyMMdd'T'HHmmss'Z'", CultureInfo.InvariantCulture);
 
     private static string Number(decimal value)
         => value.ToString("0.######", CultureInfo.InvariantCulture);

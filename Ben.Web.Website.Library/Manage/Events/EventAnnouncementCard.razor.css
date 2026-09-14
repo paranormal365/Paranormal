@@ -1,0 +1,5 @@
+/* A letter keeps the lines the host wrote it in. */
+.letter-body {
+    white-space: pre-line;
+    overflow-wrap: anywhere;
+}

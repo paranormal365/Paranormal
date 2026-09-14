@@ -21,9 +21,16 @@ namespace Ben.Data.Source.Entities
         public string Headline { get; set; } = string.Empty;   // ≤80, enforced at the edge
         public string Body { get; set; } = string.Empty;       // ≤300, enforced at the edge
         public Guid? ImageUploadFileId { get; set; }
-        /// <summary>"org" = the group's public page; "find" = the group finder. A closed set,
-        /// never a free URL — a promoted card must not lead off-site.</summary>
+        /// <summary>"org" = the group's public page; "find" = the group finder; "event" = one of the
+        /// group's hosted events (item 235 phase 11). A closed set, never a free URL — a promoted card
+        /// must not lead off-site.</summary>
         public string TargetKind { get; set; } = "org";
+
+        /// <summary>
+        /// The event an "event" ad leads to. The ad stops being served once the event is over or off
+        /// the public site, without anybody having to remember to withdraw it.
+        /// </summary>
+        public Guid? HostedEventId { get; set; }
         public OrganizationAdStatus Status { get; set; } = OrganizationAdStatus.Draft;
 
         /// <summary>How many times the card was SERVED to a page (item 186 F8). Counted in
@@ -43,6 +50,7 @@ namespace Ben.Data.Source.Entities
         public Guid? UpdatedByAppUserId { get; set; }
 
         public virtual Organization Organization { get; set; } = null!;
+        public virtual HostedEvent? HostedEvent { get; set; }
         public virtual UploadFile? ImageUploadFile { get; set; }
         public virtual AppUser? ReviewedByAppUser { get; set; }
         public virtual AppUser CreatedByAppUser { get; set; } = null!;

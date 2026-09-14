@@ -85,6 +85,58 @@ public sealed class OrganizationBillingController : Cms.OrgCmsControllerBase
     }
 
     /// <summary>
+    /// The event credits this group holds, and what one costs today (item 235, phase 1B.5).
+    /// </summary>
+    /// <remarks>
+    /// <para>Gated like the rest of this controller: who may see what the group is billed is who
+    /// may see what it has bought. A credit is $99 of the group's money sitting unspent, so it
+    /// belongs on the same page as the plan and the receipts rather than hidden behind the events
+    /// section — somebody looking for "what have we paid for?" looks here.</para>
+    ///
+    /// <para><b>Spent credits stay in the list.</b> The question a year later is not "how many do
+    /// we have" but "did we pay for that weekend in October", and a list that quietly drops the
+    /// answer as soon as it is used cannot be asked.</para>
+    /// </remarks>
+    [HttpGet("event-credits")]
+    public async Task<ActionResult<OrgEventCreditsView>> GetEventCredits(
+        Guid organizationId, CancellationToken ct)
+    {
+        if (!await MayReadAsync(organizationId, ct)) return Forbid();
+
+        await using var db = await _db.CreateDbContextAsync(ct);
+
+        var credits = await db.EventCredits.AsNoTracking()
+            .Where(c => c.OwnerOrganizationId == organizationId)
+            .OrderByDescending(c => c.PurchasedUtc)
+            .Select(c => new OrgEventCreditRecord(
+                c.Id, c.PriceAtPurchase, c.Currency, c.PurchasedUtc, c.ExpiresUtc,
+                c.SpentUtc, c.SpentOnHostedEventId,
+                c.SpentOnHostedEvent != null ? c.SpentOnHostedEvent.Name : null,
+                c.RefundedUtc, c.ReceiptNumber, c.GrantedReason))
+            .ToListAsync(ct);
+
+        var settings = HttpContext.RequestServices.GetRequiredService<Services.SiteSettingsService>();
+        var onSale = await settings.GetBoolAsync(
+            Services.SiteSettingKeys.EventCreditsEnabled, whenUnset: true, ct);
+        var price = await settings.GetDecimalAsync(
+            Services.SiteSettingKeys.EventCreditPriceUsd,
+            Services.Events.EventCredits.DefaultPriceUsd, ct);
+
+        var now = DateTime.UtcNow;
+        return Ok(new OrgEventCreditsView(
+            // The price test cannot fire today — GetDecimalAsync already refuses anything at or
+            // below zero and falls back to the $99 default — and it is kept because the checkout
+            // endpoint keeps the same one. If that fallback is ever loosened, the button that
+            // spends money and the card that offers it must go dark together, not one of them.
+            OnSale: onSale && price > 0m,
+            UnitPrice: price,
+            Currency: "USD",
+            MaximumPerPurchase: Services.Events.EventCredits.MaximumPerPurchase,
+            Spendable: credits.Count(c => c.SpentUtc is null && c.RefundedUtc is null && c.ExpiresUtc > now),
+            Credits: credits));
+    }
+
+    /// <summary>
     /// The receipt for one payment row, as a self-contained HTML document the browser can save
     /// or print. Only Payment rows have receipts — a charge is a bill, not proof of payment.
     /// </summary>

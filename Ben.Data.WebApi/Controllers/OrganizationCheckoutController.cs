@@ -164,6 +164,88 @@ public sealed class OrganizationCheckoutController : OrgCmsControllerBase
     }
 
     /// <summary>
+    /// Buying event credits — one credit, one event (item 235).
+    /// </summary>
+    /// <remarks>
+    /// <para><b>Not a subscription.</b> A credit is bought once, lasts a year, and is spent when an
+    /// event is published. There is no period to open, nothing to renew, and no tier involved — so
+    /// it takes its own path rather than being bent through the subscription machinery, and the
+    /// fulfilment side does the same.</para>
+    ///
+    /// <para><b>The settings key</b>, because this spends the group's money, and the same
+    /// permission opens the billing page where the receipt lands.</para>
+    ///
+    /// <para><b>No free path.</b> Unlike a subscription there is no coupon and no zero-priced
+    /// case: a credit either costs what it costs or it is not sold, and a zero-priced credit
+    /// would be a paid feature given away by a misconfigured setting.</para>
+    /// </remarks>
+    [HttpPost("event-credits")]
+    public async Task<ActionResult<StartCheckoutResponse>> StartEventCreditCheckout(
+        Guid organizationId, [FromQuery] int quantity, CancellationToken ct)
+    {
+        var userId = GetCurrentUserId();
+        if (userId is null) return Unauthorized();
+
+        if (!await IsCmsAuthorizedAsync(userId.Value, organizationId,
+                OrganizationSecurityTable.OrganizationSettings, OrganizationSecurityAction.Update, ct))
+            return Forbid();
+
+        var count = Math.Clamp(quantity <= 0 ? 1 : quantity, 1, Services.Events.EventCredits.MaximumPerPurchase);
+
+        await using var db = await DbFactory.CreateDbContextAsync(ct);
+        var org = await db.Organizations.AsNoTracking()
+            .FirstOrDefaultAsync(o => o.Id == organizationId, ct);
+        if (org is null) return NotFound();
+
+        var settings = HttpContext.RequestServices.GetRequiredService<Services.SiteSettingsService>();
+        if (!await settings.GetBoolAsync(Services.SiteSettingKeys.EventCreditsEnabled, whenUnset: true, ct))
+            return BadRequest("Event credits aren't on sale at the moment.");
+
+        var unit = await settings.GetDecimalAsync(
+            Services.SiteSettingKeys.EventCreditPriceUsd, Services.Events.EventCredits.DefaultPriceUsd, ct);
+
+        if (unit <= 0m)
+            return Problem("Event credits aren't priced yet.", statusCode: 503);
+
+        var listPrice = unit * count;
+        var (_, taxRate) = await TaxResolver.ForOrganizationAsync(db, organizationId, ct);
+        var tax = TaxResolver.TaxOn(listPrice, taxRate);
+
+        if (!_stripe.IsConfigured)
+            return Problem("Online payment isn't set up yet — contact us and we'll sort your group out directly.",
+                statusCode: 503);
+
+        var baseUrl = (_configuration["AppBaseUrl"] ?? "").TrimEnd('/');
+        var billingUrl = $"{baseUrl}/organizations/{organizationId}/billing";
+
+        var metadata = new Dictionary<string, string>
+        {
+            [StripeFulfillmentService.CheckoutFacts.Keys.Organization] = organizationId.ToString(),
+            [StripeFulfillmentService.CheckoutFacts.Keys.User] = userId.Value.ToString(),
+            [StripeFulfillmentService.CheckoutFacts.Keys.EventCredits] = count.ToString(),
+            [StripeFulfillmentService.CheckoutFacts.Keys.List] =
+                listPrice.ToString(System.Globalization.CultureInfo.InvariantCulture),
+            [StripeFulfillmentService.CheckoutFacts.Keys.TaxRate] =
+                taxRate.ToString(System.Globalization.CultureInfo.InvariantCulture),
+            [StripeFulfillmentService.CheckoutFacts.Keys.TaxAmount] =
+                tax.ToString(System.Globalization.CultureInfo.InvariantCulture),
+        };
+
+        var sub = await db.OrganizationSubscriptions.AsNoTracking()
+            .FirstOrDefaultAsync(x => x.OrganizationId == organizationId, ct);
+
+        var handle = await _stripe.CreateCheckoutSessionAsync(new StripeCheckoutSpec(
+            organizationId, org.Name, sub?.ProviderCustomerRef,
+            listPrice, tax,
+            count == 1 ? "IsHaunted — 1 event credit" : $"IsHaunted — {count} event credits",
+            SuccessUrl: $"{billingUrl}?credits=success",
+            CancelUrl:  $"{billingUrl}?credits=cancelled",
+            metadata), ct);
+
+        return Ok(new StartCheckoutResponse(handle.SessionUrl, PaidWithoutCharge: false));
+    }
+
+    /// <summary>
     /// The seat-holder pays for their own overflow seat (item 144 meets Stripe).
     /// </summary>
     /// <remarks>

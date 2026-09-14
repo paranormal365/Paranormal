@@ -342,6 +342,10 @@ number is always the sum of the rows underneath it. If the bell says four, four 
 | Equipment requests & overdue gear | Waiting on your decision, or late back. |
 | Posts that mention you | Somebody named you with an **@name** in the feed. |
 | Unread messages | Sent to you through the platform. |
+| Bookings waiting on you | Somebody asked for, or picked, a place at an event you decide bookings for. |
+| Holds running out | Places picked at your event that lapse within a day unless somebody confirms them. |
+| A venue answered you | Your booking at an event has been decided. |
+| Your hold is running out | You picked places, the venue has not confirmed them, and they lapse within a day. |
 
 ![The notifications page](/help/media/getting-started/notifications.png)
 *Everything waiting on you, grouped by what it is.*
@@ -351,6 +355,9 @@ zeroes.
 
 **The colour means age, not importance.** A single item from last week is coloured more urgently
 than five from this morning, because the old one is the one somebody is still waiting on.
+
+If you decide bookings for a group, the page also has **Letters about bookings**, where you choose
+how often that group writes to you about them.
 
 Opening something is what clears it — a message you have read, a post you have opened, a request you
 have answered. Nothing disappears before you have seen it.

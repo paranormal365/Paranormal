@@ -1,0 +1,115 @@
+<!doctype html>
+<html lang="en"><head><meta charset="utf-8"><title>IsHaunted.com</title><style>
+@page { size: 8.5in 11in; margin: 0; }
+* { box-sizing: border-box; -webkit-print-color-adjust: exact; print-color-adjust: exact; }
+html, body { margin: 0; padding: 0; background: #555; }
+body { font-family: "Avenir Next", Avenir, "Helvetica Neue", sans-serif; color: var(--ink); }
+.page { width: 8.5in; height: 11in; position: relative; overflow: hidden; background: var(--base);
+        page-break-after: always; break-after: page; }
+.page:last-child { page-break-after: auto; break-after: auto; }
+@media screen { .page { margin: 0 auto 24px; } }
+body.only-front .back, body.only-back .front { display: none; }
+body.only-front .page, body.only-back .page { margin: 0; }
+
+/* ── front ─────────────────────────────────────────────────── */
+.hero { position: absolute; inset: 0 0 auto 0; height: 7.05in; background-size: cover; background-position: var(--focus, center); }
+.hero::after { content: ""; position: absolute; inset: 0;
+  background: linear-gradient(180deg, rgba(0,0,0,.45) 0%, rgba(0,0,0,0) 22%, var(--base-a0) 42%, var(--base-a70) 72%, var(--base) 100%); }
+.brandbar { position: absolute; top: .42in; left: .55in; right: .55in; display: flex; align-items: center; justify-content: space-between; z-index: 3; }
+.brand { display: flex; align-items: center; gap: .12in; color: #fff; font-weight: 700; letter-spacing: .02em; font-size: 15pt; }
+.brand img { width: .46in; height: .46in; filter: drop-shadow(0 2px 6px rgba(0,0,0,.5)); }
+.brand small { display: block; font-weight: 500; font-size: 8pt; letter-spacing: .22em; text-transform: uppercase; opacity: .8; }
+.pill { font-size: 8.5pt; font-weight: 700; letter-spacing: .16em; text-transform: uppercase; color: var(--base);
+        background: var(--accent); padding: .07in .16in; border-radius: 99px; box-shadow: 0 4px 14px rgba(0,0,0,.35); }
+.headline { position: absolute; left: .55in; right: 3.1in; top: 4.05in; z-index: 3; color: #fff; }
+.kicker { font-size: 9pt; font-weight: 700; letter-spacing: .24em; text-transform: uppercase; color: var(--accent); margin-bottom: .1in; }
+.headline h1 { font-family: Futura, "Avenir Next", sans-serif; font-weight: 800; font-size: 40pt; line-height: 1.02;
+               margin: 0 0 .16in; letter-spacing: -.01em; text-shadow: 0 3px 18px rgba(0,0,0,.45); }
+.headline h1 em { font-style: normal; color: var(--accent); }
+.headline p { font-size: 13.5pt; line-height: 1.38; margin: 0; color: rgba(255,255,255,.9); max-width: 4.6in; }
+.phone { position: absolute; z-index: 4; right: .6in; top: 3.25in; width: 2.3in; height: 4.95in; border-radius: .34in;
+         background: #050505; padding: .075in; box-shadow: 0 30px 60px rgba(0,0,0,.6), 0 0 0 1.5px rgba(255,255,255,.14), 0 0 60px var(--glow); transform: rotate(3deg); }
+.phone img { width: 100%; height: 100%; object-fit: cover; object-position: top; border-radius: .27in; display: block; }
+.pillars { position: absolute; left: .55in; right: 3.2in; top: 7.2in; display: grid; gap: .16in; z-index: 3; }
+.pillar { display: grid; grid-template-columns: .5in 1fr; gap: .14in; align-items: start; }
+.pillar .badge { width: .5in; height: .5in; border-radius: .14in; display: grid; place-items: center; color: var(--base);
+                 background: linear-gradient(135deg, var(--accent), var(--accent2)); box-shadow: 0 6px 16px var(--glow); }
+.pillar h3 { margin: .02in 0 .03in; font-size: 12.5pt; color: #fff; font-weight: 700; }
+.pillar p { margin: 0; font-size: 9.6pt; line-height: 1.38; color: var(--muted); }
+.cta { position: absolute; left: 0; right: 0; bottom: 0; height: 1.02in; display: flex; align-items: center; justify-content: space-between;
+       padding: 0 .55in; background: linear-gradient(90deg, var(--accent), var(--accent2)); color: var(--base); z-index: 5; }
+.cta .go { font-family: Futura, sans-serif; font-weight: 800; font-size: 19pt; letter-spacing: -.01em; }
+.cta .go span { display: block; font-family: "Avenir Next", sans-serif; font-size: 9pt; font-weight: 600; letter-spacing: .12em; text-transform: uppercase; opacity: .78; }
+.cta .price { text-align: right; font-weight: 700; font-size: 10pt; line-height: 1.25; }
+.cta .price b { display: block; font-family: Futura, sans-serif; font-size: 22pt; font-weight: 800; }
+
+/* ── back ──────────────────────────────────────────────────── */
+.back { background: radial-gradient(120% 60% at 100% 0%, var(--base2) 0%, var(--base) 60%); color: #fff; }
+.back-top { height: 2.55in; display: grid; grid-template-columns: 1.55fr 1fr 1fr; gap: .07in; }
+.back-top div { background-size: cover; background-position: center; position: relative; }
+.back-top div::after { content: ""; position: absolute; inset: 0; background: linear-gradient(180deg, rgba(0,0,0,0) 45%, var(--base-a70) 100%); }
+.back-head { position: absolute; top: 1.72in; left: .55in; right: .55in; z-index: 2; }
+.back-head h2 { font-family: Futura, sans-serif; font-weight: 800; font-size: 25pt; margin: 0; line-height: 1.05; text-shadow: 0 3px 14px rgba(0,0,0,.6); }
+.back-head h2 em { font-style: normal; color: var(--accent); }
+.grid { position: absolute; top: 2.95in; left: .55in; right: .55in; display: grid; grid-template-columns: repeat(3, 1fr); gap: .14in; }
+.card { background: var(--card); border: 1px solid var(--line); border-radius: .14in; padding: .15in .16in .14in; }
+.card .ic { color: var(--accent); }
+.card h4 { margin: .06in 0 .04in; font-size: 10.6pt; font-weight: 700; }
+.card p { margin: 0; font-size: 8.5pt; line-height: 1.4; color: var(--muted); }
+.shots { position: absolute; top: 6.05in; left: .55in; right: .55in; height: 2.45in; display: grid; grid-template-columns: 1.9fr 1fr; gap: .2in; align-items: stretch; }
+.screen { border-radius: .12in; overflow: hidden; background: #111; box-shadow: 0 18px 40px rgba(0,0,0,.5), 0 0 0 1px rgba(255,255,255,.1); position: relative; }
+.screen::before { content: ""; position: absolute; top: 0; left: 0; right: 0; height: .17in; background: #2a2a2e; z-index: 1; }
+.screen::after { content: "● ● ●"; position: absolute; top: .012in; left: .1in; font-size: 6pt; letter-spacing: .02in; color: #6d6d74; z-index: 2; }
+.screen img { position: absolute; top: .17in; left: 0; width: 100%; height: calc(100% - .17in); object-fit: cover; object-position: var(--shot-focus, top left); }
+.side { display: flex; flex-direction: column; justify-content: center; gap: .1in; }
+.side .quote { font-family: Didot, Georgia, serif; font-style: italic; font-size: 14pt; line-height: 1.25; color: #fff; }
+.side .who { font-size: 8pt; letter-spacing: .14em; text-transform: uppercase; color: var(--accent); font-weight: 700; }
+.steps { position: absolute; top: 8.72in; left: .55in; right: .55in; display: grid; grid-template-columns: repeat(3, 1fr); gap: .2in; }
+.step { display: grid; grid-template-columns: .38in 1fr; gap: .08in; align-items: start; }
+.step b { font-family: Futura, sans-serif; font-weight: 800; font-size: 20pt; color: var(--accent); line-height: 1; }
+.step h5 { margin: 0 0 .02in; font-size: 10pt; }
+.step p { margin: 0; font-size: 8.4pt; color: var(--muted); line-height: 1.35; }
+.offer { position: absolute; left: .55in; right: .55in; bottom: .4in; height: 1.1in; border-radius: .16in; display: grid;
+         grid-template-columns: 1.6fr 1fr; overflow: hidden; background: var(--card-solid); box-shadow: 0 0 0 1.5px var(--accent), 0 16px 40px rgba(0,0,0,.45); }
+.offer > div:first-child { padding: .16in .28in; display: flex; flex-direction: column; justify-content: center; }
+.offer .big { font-family: Futura, sans-serif; font-weight: 800; font-size: 16.5pt; color: #fff; line-height: 1.08; }
+.offer .big em { font-style: normal; color: var(--accent); }
+.offer .small { font-size: 8.4pt; color: var(--muted); margin-top: .05in; line-height: 1.35; }
+.offer .url { display: flex; flex-direction: column; justify-content: center; align-items: center; text-align: center;
+              color: var(--base); background: linear-gradient(135deg, var(--accent), var(--accent2)); }
+.offer .url b { display: block; font-family: Futura, sans-serif; font-weight: 800; font-size: 18pt; }
+.offer .url span { font-size: 8pt; font-weight: 700; letter-spacing: .12em; text-transform: uppercase; margin-top: .02in; }
+.fine { position: absolute; bottom: .14in; left: .55in; right: .55in; font-size: 5.8pt; white-space: nowrap; overflow: hidden; color: rgba(255,255,255,.42); text-align: center; }
+</style>
+<script>document.addEventListener('DOMContentLoaded',()=>{if(location.hash==='#front')document.body.classList.add('only-front');if(location.hash==='#back')document.body.classList.add('only-back');});</script>
+</head><body style="--base:#0B1624;--base2:#16324A;--accent:#F5A524;--accent2:#FFCF73;--base-a0:rgba(11,22,36,0);--base-a70:rgba(11,22,36,0.72);--glow:rgba(245,165,36,0.28);--card:rgba(255,255,255,0.055);--card-solid:#16324A;--line:rgba(255,255,255,0.09);--muted:rgba(255,255,255,.72);--ink:#fff;--focus:center 40%;">
+<section class="page front">
+  <div class="hero" style="background-image:url(../media/stock/i3-walking-to-house.jpg)"></div>
+  <div class="brandbar">
+    <div class="brand"><img src="../assets/is-haunted-logo.svg" alt=""><div>IsHaunted.com<small>Web &amp; iPhone</small></div></div>
+    <div class="pill">For everyone who wonders</div>
+  </div>
+  <div class="headline">
+    <div class="kicker">One home for the paranormal</div>
+    <h1>Where the unexplained gets <em>organized</em>.</h1>
+    <p>Explore haunted places, investigate with your group, run ghost walks and sell out haunted weekends — on the web and on your iPhone.</p>
+  </div>
+  <div class="phone"><img src="../../Ben.Web.Website/wwwroot/help/media/the-mobile-apps/iphone-event-hub.png" alt=""></div>
+  <div class="pillars"><div class="pillar"><div class="badge"><svg class="ic" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><path d="M2 12h20M12 2a15 15 0 0 1 0 20M12 2a15 15 0 0 0 0 20"/></svg></div><div><h3>Explore, free</h3><p>The feed, a map of haunted places, and the events and ghost walks near you.</p></div></div><div class="pillar"><div class="badge"><svg class="ic" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M22 19a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h5l2 3h9a2 2 0 0 1 2 2z"/></svg></div><div><h3>Investigate together</h3><p>Cases, evidence tools, a phone that records in the field, and reports clients can read.</p></div></div><div class="pillar"><div class="badge"><svg class="ic" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M3 8a2 2 0 0 0 2-2h14a2 2 0 0 0 2 2v2a2 2 0 0 0 0 4v2a2 2 0 0 0-2 2H5a2 2 0 0 0-2-2v-2a2 2 0 0 0 0-4z"/><path d="M13 6v12" stroke-dasharray="2 2"/></svg></div><div><h3>Host and grow</h3><p>Ghost walks, venues and hosted events — bookings, passes and the door, handled.</p></div></div></div>
+  <div class="cta"><div class="go">Start free at ishaunted.com<span>No card needed to join</span></div>
+    <div class="price"><b>Free</b>to join, explore and post</div></div>
+</section>
+<section class="page back">
+  <div class="back-top"><div style="background-image:url(../media/stock/v6-ballroom.jpg)"></div><div style="background-image:url(../media/stock/w1-cobblestone-streetlights.jpg)"></div><div style="background-image:url(../media/stock/s1-candles.jpg)"></div></div>
+  <div class="back-head"><h2>One platform. <em>Every seat</em> at the table.</h2></div>
+  <div class="grid"><div class="card"><svg class="ic" width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M2 12h2l2-6 3 12 3-9 2 5 2-2h6"/></svg><h4>Enthusiasts</h4><p>Field Kit turns a phone into a magnetometer, sound meter and recorder — no signal needed.</p></div><div class="card"><svg class="ic" width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M23 21v-2a4 4 0 0 0-3-3.87M16 3.13a4 4 0 0 1 0 7.75"/></svg><h4>Investigation groups</h4><p>Cases, members and roles, evidence review and privacy for private-home clients.</p></div><div class="card"><svg class="ic" width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M9 3h6M12 3V1M8 6h8l1 3v9l-1 3H8l-1-3V9z"/><path d="M12 10c1.5 1.5 1.5 3.5 0 5-1.5-1.5-1.5-3.5 0-5z"/></svg><h4>Ghost walk tours</h4><p>A page per tour, dates people book, reminders with your guide, reviews that sell.</p></div><div class="card"><svg class="ic" width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="m3 10 9-7 9 7v10a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"/><path d="M9 22V12h6v10"/></svg><h4>Venues</h4><p>Tell your building&#x27;s story, show your rooms, and say yes to who hosts there.</p></div><div class="card"><svg class="ic" width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="4" width="18" height="18" rx="2"/><path d="M16 2v4M8 2v4M3 10h18"/></svg><h4>Event hosts</h4><p>Rooms or seats, confirmations with passes, and check-in at the door.</p></div><div class="card"><svg class="ic" width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><rect x="6" y="2" width="12" height="20" rx="3"/><path d="M11 18h2"/></svg><h4>The iPhone app</h4><p>Passes that open with no signal, the programme, the menus and the room.</p></div></div>
+  <div class="shots">
+    <div class="screen" style="--shot-focus:top center"><img src="../media/hosted-events/walk/45-public-event.png" alt=""></div>
+    <div class="side"><div class="quote">“A weekend at a haunted hotel should feel like one — from the first email to the last photo.”</div><div class="who">Built for the people who run the night</div></div>
+  </div>
+  <div class="steps"><div class="step"><b>1</b><div><h5>Join free</h5><p>Make an account in a minute, or look around without one.</p></div></div><div class="step"><b>2</b><div><h5>Find your people</h5><p>Follow the feed, join a group or book an event near you.</p></div></div><div class="step"><b>3</b><div><h5>Bring your night</h5><p>Start a group, list a tour, or host an event of your own.</p></div></div></div>
+  <div class="offer"><div><div class="big">Free to <em>explore</em>.</div><div class="small">Groups from $19.99 a month · ghost walks $29 a month per tour · hosted events $99 each</div></div>
+    <div class="url"><b>ishaunted.com</b><span>Web · iPhone coming soon</span></div></div>
+  <div class="fine">IsHaunted.com · Nashville, Tennessee · Photographs: Unsplash · Features shown are live on the website; the iPhone app is on its way to the App Store · Prices in USD, subject to change</div>
+</section>
+</body></html>

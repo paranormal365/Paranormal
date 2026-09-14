@@ -483,6 +483,31 @@ public sealed class OrgCalendarEventController : BenControllerBase
                             && e.Id != entity.Id, ct));
     }
 
+    /// <summary>
+    /// Why this calendar row cannot be edited here, or null.
+    /// </summary>
+    /// <remarks>
+    /// <para>A hosted event's umbrella row is written from the event (item 235), so its title,
+    /// dates, place, zone and public flag all come from there. Letting the calendar change them
+    /// would leave two screens each believing they own the row, and the next save from either one
+    /// would silently undo the other.</para>
+    ///
+    /// <para>The sentence names the event and says where to go, because a refusal that only says
+    /// no is a refusal somebody works around.</para>
+    /// </remarks>
+    private static async Task<string?> UmbrellaRefusalAsync(
+        BenDataContext db, OrgCalendarEvent entity, CancellationToken ct)
+    {
+        if (entity.HostedEventId is not Guid hostedId) return null;
+
+        var name = await db.HostedEvents.AsNoTracking()
+            .Where(e => e.Id == hostedId).Select(e => e.Name).FirstOrDefaultAsync(ct);
+
+        return $"This date belongs to the event \u201c{name}\u201d and is kept in step with it. "
+             + "Change it on the event's own page — its dates, venue and description all come "
+             + "from there.";
+    }
+
     [HttpPut("{eventId:guid}")]
     public async Task<ActionResult<OrgCalendarEventRecord>> Update(
         Guid orgId, Guid eventId, [FromBody] UpsertCalendarEventRequest request, CancellationToken ct)
@@ -493,6 +518,7 @@ public sealed class OrgCalendarEventController : BenControllerBase
         var entity = await db.OrgCalendarEvents
             .FirstOrDefaultAsync(e => e.Id == eventId && e.OrganizationId == orgId, ct);
         if (entity is null) return NotFound();
+        if (await UmbrellaRefusalAsync(db, entity, ct) is string managed) return BadRequest(managed);
         entity.EventTypeId = request.EventTypeId; entity.CaseId = request.CaseId;
         entity.Title = request.Title.Trim(); entity.Description = CleanDescription(request.Description);
         entity.Location = request.Location?.Trim();
@@ -545,6 +571,8 @@ public sealed class OrgCalendarEventController : BenControllerBase
         var entity = await db.OrgCalendarEvents
             .FirstOrDefaultAsync(e => e.Id == eventId && e.OrganizationId == orgId, ct);
         if (entity is null) return NotFound();
+        if (await UmbrellaRefusalAsync(db, entity, ct) is string managed)
+            return BadRequest(managed + " To take it off the calendar, archive the event there.");
 
         // A review cites the date it was written after, and that key is NoAction — so a business
         // deleting a walk it had run would be handed a database error with nothing to act on.
@@ -592,6 +620,9 @@ public sealed class OrgCalendarEventController : BenControllerBase
     {
         if (!await IsOrgMemberAsync(orgId, ct)) return Forbid();
         await using var db = await _db.CreateDbContextAsync(ct);
+        // Reading is fine on a hosted event's row — the fence below is on CHANGING these, because
+        // a change here would leave the booking behind it saying something different. Refusing to
+        // read would take the attendee list off the ordinary calendar screen for no benefit.
         if (!await db.OrgCalendarEvents.AnyAsync(e => e.Id == eventId && e.OrganizationId == orgId, ct))
             return NotFound();
         var attendees = await db.OrgCalendarEventAttendees.AsNoTracking()
@@ -630,8 +661,12 @@ public sealed class OrgCalendarEventController : BenControllerBase
         if (string.IsNullOrWhiteSpace(email)) return BadRequest("An email address is required.");
 
         await using var db = await _db.CreateDbContextAsync(ct);
-        if (!await db.OrgCalendarEvents.AnyAsync(e => e.Id == eventId && e.OrganizationId == orgId, ct))
-            return NotFound();
+        var calendarRow = await db.OrgCalendarEvents.AsNoTracking()
+            .FirstOrDefaultAsync(e => e.Id == eventId && e.OrganizationId == orgId, ct);
+        if (calendarRow is null) return NotFound();
+
+        if (WhyThisBelongsToTheEvent(calendarRow) is { } bookedElsewhere)
+            return Conflict(bookedElsewhere);
 
         // Matched against the user's *published* addresses, never AppUser.Email. The sign-in
         // address is private by design — the profile page says so in as many words — so resolving
@@ -678,8 +713,12 @@ public sealed class OrgCalendarEventController : BenControllerBase
         if (!await IsAdminOrHasAsync(orgId, ct)) return Forbid();
         var userId = GetCurrentUserId();
         await using var db = await _db.CreateDbContextAsync(ct);
-        if (!await db.OrgCalendarEvents.AnyAsync(e => e.Id == eventId && e.OrganizationId == orgId, ct))
-            return NotFound();
+        var calendarRow = await db.OrgCalendarEvents.AsNoTracking()
+            .FirstOrDefaultAsync(e => e.Id == eventId && e.OrganizationId == orgId, ct);
+        if (calendarRow is null) return NotFound();
+
+        if (WhyThisBelongsToTheEvent(calendarRow) is { } bookedElsewhere)
+            return Conflict(bookedElsewhere);
 
         var attendee = new OrgCalendarEventAttendee
         {
@@ -822,6 +861,10 @@ public sealed class OrgCalendarEventController : BenControllerBase
         if (attendee is null) return NotFound();
         // Only the attendee themselves or an org admin can update RSVP
         if (attendee.AppUserId != userId && !await IsAdminOrHasAsync(orgId, ct)) return Forbid();
+
+        if (await WhyThisRowBelongsToAnEventAsync(db, eventId, orgId, ct) is { } elsewhere)
+            return Conflict(elsewhere);
+
         attendee.RsvpStatus = request.RsvpStatus;
         attendee.DateRsvp   = DateTime.UtcNow;
         await db.SaveChangesAsync(ct);
@@ -839,6 +882,10 @@ public sealed class OrgCalendarEventController : BenControllerBase
         var attendee = await db.OrgCalendarEventAttendees
             .FirstOrDefaultAsync(a => a.Id == attendeeId && a.OrgCalendarEventId == eventId, ct);
         if (attendee is null) return NotFound();
+
+        if (await WhyThisRowBelongsToAnEventAsync(db, eventId, orgId, ct) is { } elsewhere)
+            return Conflict(elsewhere);
+
         db.OrgCalendarEventAttendees.Remove(attendee);
         await db.SaveChangesAsync(ct);
         return NoContent();
@@ -873,6 +920,8 @@ public sealed class OrgCalendarEventController : BenControllerBase
         var ev = await db.OrgCalendarEvents
             .FirstOrDefaultAsync(e => e.Id == eventId && e.OrganizationId == orgId, ct);
         if (ev is null) return NotFound();
+
+        if (WhyThisBelongsToTheEvent(ev) is { } bookedElsewhere) return Conflict(bookedElsewhere);
 
         var attendees = await db.OrgCalendarEventAttendees
             .Where(a => a.OrgCalendarEventId == eventId).ToListAsync(ct);
@@ -919,8 +968,12 @@ public sealed class OrgCalendarEventController : BenControllerBase
         if (!await IsAdminOrHasAsync(orgId, ct)) return Forbid();
 
         await using var db = await _db.CreateDbContextAsync(ct);
-        if (!await db.OrgCalendarEvents.AnyAsync(e => e.Id == eventId && e.OrganizationId == orgId, ct))
-            return NotFound();
+        var calendarRow = await db.OrgCalendarEvents.AsNoTracking()
+            .FirstOrDefaultAsync(e => e.Id == eventId && e.OrganizationId == orgId, ct);
+        if (calendarRow is null) return NotFound();
+
+        if (WhyThisBelongsToTheEvent(calendarRow) is { } bookedElsewhere)
+            return Conflict(bookedElsewhere);
 
         var seat = await db.OrgCalendarEventAttendees
             .FirstOrDefaultAsync(a => a.Id == attendeeId && a.OrgCalendarEventId == eventId, ct);
@@ -934,6 +987,37 @@ public sealed class OrgCalendarEventController : BenControllerBase
 
         return Ok(await SeatRecordAsync(db, seat.Id, ct));
     }
+
+    /// <summary>
+    /// Why this calendar row's attendees are not the calendar's to change, or null when they are.
+    /// </summary>
+    /// <remarks>
+    /// <para>A hosted event has an ordinary calendar row behind it so every existing list, reminder
+    /// and share card keeps working. The attendees on that row are a REFLECTION of the bookings,
+    /// written by <c>BookingTransitions</c> and by nothing else. Approving, turning down or
+    /// removing one here would change the reflection and leave the booking saying something
+    /// different — a room the venue has catered for with nobody on the list, or somebody on the
+    /// list with no room.</para>
+    ///
+    /// <para>The refusal names where the decision belongs, because a host who has found this screen
+    /// is trying to do something reasonable and needs sending to the right place rather than
+    /// stopping.</para>
+    /// </remarks>
+    /// <inheritdoc cref="WhyThisBelongsToTheEvent"/>
+    /// <remarks>For the endpoints that never load the row for any other reason.</remarks>
+    private async Task<string?> WhyThisRowBelongsToAnEventAsync(
+        BenDataContext db, Guid eventId, Guid orgId, CancellationToken ct)
+    {
+        var row = await db.OrgCalendarEvents.AsNoTracking()
+            .FirstOrDefaultAsync(e => e.Id == eventId && e.OrganizationId == orgId, ct);
+        return row is null ? null : WhyThisBelongsToTheEvent(row);
+    }
+
+    private static string? WhyThisBelongsToTheEvent(OrgCalendarEvent ev)
+        => ev.HostedEventId is null
+            ? null
+            : "Places at this event are booked through the event itself, not the calendar. "
+            + "Open its Bookings page to confirm, turn down or release a party.";
 
     private async Task<OrgCalendarEventAttendeeRecord> SeatRecordAsync(
         BenDataContext db, Guid attendeeId, CancellationToken ct)

@@ -261,6 +261,77 @@ public sealed partial class BenAdminClientAdapter
     public Task<LoadResult<TourRecord>> GetToursAsync(Guid orgId, CancellationToken token = default)
         => _api.GetListAsync<TourRecord>($"/api/organizations/{orgId}/tours", token);
 
+    // ── Hosted events (item 235) ────────────────────────────────────────────
+
+    public Task<LoadResult<HostedEventRecord>> GetHostedEventsAsync(
+        Guid orgId, CancellationToken token = default)
+        => _api.GetListAsync<HostedEventRecord>($"/api/organizations/{orgId}/events", token);
+
+    public Task<HostedEventRecord?> GetHostedEventAsync(
+        Guid orgId, Guid eventId, CancellationToken token = default)
+        => _api.GetAsync<HostedEventRecord>($"/api/organizations/{orgId}/events/{eventId}", token);
+
+    public Task<HostedEventPlanRecord?> GetHostedEventPlanAsync(
+        Guid orgId, CancellationToken token = default)
+        => _api.GetAsync<HostedEventPlanRecord>($"/api/organizations/{orgId}/events/plan", token);
+
+    public Task<(HostedEventRecord? Result, string? Error)> SaveHostedEventAsync(
+        Guid orgId, Guid? eventId, UpsertHostedEventRequest request,
+        CancellationToken token = default)
+        => _api.SendExpectingReasonAsync<UpsertHostedEventRequest, HostedEventRecord>(
+               eventId is null ? HttpMethod.Post : HttpMethod.Put,
+               eventId is null
+                   ? $"/api/organizations/{orgId}/events"
+                   : $"/api/organizations/{orgId}/events/{eventId}",
+               request, token);
+
+    public Task<(HostedEventRecord? Result, string? Error)> SaveHostedEventNightAsync(
+        Guid orgId, Guid eventId, Guid nightId, UpsertHostedEventNightRequest request,
+        CancellationToken token = default)
+        => _api.SendExpectingReasonAsync<UpsertHostedEventNightRequest, HostedEventRecord>(
+               HttpMethod.Put,
+               $"/api/organizations/{orgId}/events/{eventId}/nights/{nightId}", request, token);
+
+    public Task<(HostedEventRecord? Result, string? Error)> SetHostedEventStateAsync(
+        Guid orgId, Guid eventId, string action, CancellationToken token = default)
+        => _api.SendExpectingReasonAsync<object, HostedEventRecord>(
+               HttpMethod.Post, $"/api/organizations/{orgId}/events/{eventId}/{action}",
+               new { }, token);
+
+    public Task<(HostedEventRecord? Result, string? Error)> CancelHostedEventAsync(
+        Guid orgId, Guid eventId, string? reason, CancellationToken token = default)
+        => _api.SendExpectingReasonAsync<CancelHostedEventRequest, HostedEventRecord>(
+               HttpMethod.Post, $"/api/organizations/{orgId}/events/{eventId}/cancel",
+               new CancelHostedEventRequest(reason), token);
+
+    public Task<LoadResult<HostedEventReadinessItem>> GetHostedEventReadinessAsync(
+        Guid orgId, Guid eventId, CancellationToken token = default)
+        => _api.GetListAsync<HostedEventReadinessItem>(
+               $"/api/organizations/{orgId}/events/{eventId}/readiness", token);
+
+    public Task<HostedEventCancellationEffect?> GetHostedEventCancellationEffectAsync(
+        Guid orgId, Guid eventId, CancellationToken token = default)
+        => _api.GetAsync<HostedEventCancellationEffect>(
+               $"/api/organizations/{orgId}/events/{eventId}/cancellation-effect", token);
+
+    public Task<(HostedEventRecord? Result, string? Error)> DecideHostedEventAsync(
+        Guid orgId, Guid eventId, bool going, CancellationToken token = default)
+        => _api.SendExpectingReasonAsync<object, HostedEventRecord>(
+               HttpMethod.Post,
+               $"/api/organizations/{orgId}/events/{eventId}/{(going ? "go" : "no-go")}",
+               new { }, token);
+
+    public Task<(HostedEventRecord? Result, string? Error)> SetHostedEventBookingModeAsync(
+        Guid orgId, Guid eventId, HostedEventBookingMode mode, CancellationToken token = default)
+        => _api.SendExpectingReasonAsync<SetHostedEventBookingModeRequest, HostedEventRecord>(
+               HttpMethod.Post, $"/api/organizations/{orgId}/events/{eventId}/booking-mode",
+               new SetHostedEventBookingModeRequest(mode), token);
+
+    public Task<ItemResult<PublicHostedEventRecord>> GetPublicHostedEventAsync(
+        Guid hostedEventId, CancellationToken token = default)
+        => _api.GetItemAsync<PublicHostedEventRecord>(
+               $"/api/public/hosted-events/{hostedEventId}", token);
+
     public Task<TourRecord?> GetTourAsync(Guid orgId, Guid tourId, CancellationToken token = default)
         => _api.GetAsync<TourRecord>($"/api/organizations/{orgId}/tours/{tourId}", token);
 

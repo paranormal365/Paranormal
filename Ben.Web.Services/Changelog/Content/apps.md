@@ -16,6 +16,39 @@ known it is worth naming, because that is what somebody can check on their own p
 **Shape:** `## yyyy-MM-dd` headings, newest first, each followed by `- ` lines. Nothing else is
 read.
 
+## 2026-09-13
+
+- On What I'm going to, Pass now opens your pass. It had opened the event's screen, so the pass could only be
+  reached from there.
+- Hosted events: the event screen shows where your booking stands, lets you let a request or a hold go,
+  and opens the event's page inside the app to ask for a place.
+- What I'm going to, under Profile, lists every hosted event you have asked for, once each, with its
+  dates, venue and pass.
+- Your pass for a hosted event shows its code, short code, party size, nights and table. It turns the
+  screen up to full brightness, and it still opens with no signal.
+- Opening the app with no signal no longer signs you out, and neither does a moment when the server
+  cannot be reached.
+- Each hosted event has its own screen with the pass, programme, menus, downloads and the event's room,
+  showing only the parts that event has.
+- You can sign up for programme sessions for as many of your party as are coming, join a waiting list
+  when a session is full, and give a place back. Times are shown on the venue's clock.
+- Organizers and their helpers can run an event's door from the app. Scanning a pass with the camera
+  finds its reservation, and tapping the reservation checks the party in as arrived, all of them or some.
+  The door also shows tonight's count, finds a reservation by name or pass code, takes an arrival back,
+  and writes down walk-ups.
+- The door works with no signal once tonight's list has been opened. A scanned pass finds its reservation
+  on the kept list, and arrivals are sent with the time they happened as soon as there is signal.
+- Opening the app with no signal now keeps you signed in as yourself, instead of showing the app signed
+  out until the server can be reached.
+- Posts and photos for an event's room are kept on the phone when there's no signal and sent when it
+  returns. The room opens with no signal, as it was last seen, so you can still add to it.
+- Photos and videos can be shared to one of your events straight from the Photos app, with a caption,
+  the photo notice and the choice to send the organizers a copy.
+- Photos from the phone are sent as JPEG, so pictures saved in the iPhone's own format are read correctly.
+- In the event's room you can write, add photos and video from your library or the camera, agree to the
+  photo notice the first time, send a photo to the organizers, take your own posts down and report
+  somebody else's.
+
 ## 2026-09-12
 
 - Sign in with Apple now works. It was returning to the sign-in screen without explanation when

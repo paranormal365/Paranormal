@@ -1,0 +1,269 @@
+@namespace Ben.Web.Website.Library.Organization.Public
+
+@inject IBenAdminClient AdminClient
+
+@using Ben.Data.Common.Enums
+@using Ben.Service.Models.Entities
+@using Ben.Web.Website.Library.Kit
+@using Ben.Web.Website.Library.Manage.Icon
+
+@* What the venue has said, and what the guest can do about it (item 235 phase 6).
+
+   EVERY STATE IS A COLOUR AND A GLYPH AND A SENTENCE. "Asked for" and "confirmed" are the
+   difference between turning up and being turned away at a door, and a badge that only differs by
+   hue tells one man in twelve nothing at all.
+
+   THE CLOCK IS PART OF THE STATE. A hold that runs out is a decision the clock takes instead of
+   the venue, and a guest who was never shown the deadline is a guest who lost their seats without
+   being asked. *@
+
+<div class="booking-card" id="hosted-booking">
+
+    @if (_error is { Length: > 0 })
+    {
+        <div class="alert alert-danger py-2" id="booking-error" role="alert">@_error</div>
+    }
+
+    <div class="d-flex flex-wrap align-items-center gap-2">
+        <span class="badge @Badge.Class" id="booking-state">
+            <BenIcon Name="@Badge.Icon" Class="me-1" />@Badge.Words
+        </span>
+        <span class="text-secondary small flex-grow-1">@What()</span>
+    </div>
+
+    <p class="mt-2 mb-1">@Sentence()</p>
+
+    @if (Booking.DecisionNote is { Length: > 0 } said)
+    {
+        @* The venue's own words to this guest. Worth quoting rather than summarising: it is
+           usually the part that answers the question the badge raises. *@
+        <p class="fst-italic mb-1">“@said”</p>
+    }
+
+    @if (Countdown() is { } left)
+    {
+        <p class="mb-1 @(left.Urgent ? "text-danger" : "text-warning")" id="booking-countdown">
+            <BenIcon Name="clock" Class="me-1" />@left.Words
+        </p>
+    }
+
+    @if (Booking.CancellationRequestedUtc is not null)
+    {
+        <p class="text-secondary small mb-1" id="booking-asked-out">
+            You've asked @Hosted.OrganizationName to release this. They'll be in touch.
+        </p>
+    }
+
+    <div class="d-flex flex-wrap gap-2 mt-2">
+        @if (Booking.Status == HostedEventBookingStatus.Confirmed)
+        {
+            <a class="btn btn-primary btn-sm" id="booking-pass"
+               href="@($"/my-events/{Booking.HostedEventId}/pass")">
+                <BenIcon Name="key" Class="me-1" />Your pass
+            </a>
+        }
+
+        @if (Booking.GuestAcknowledgedUtc is null && WantsAnAnswer)
+        {
+            @* Clears it off their bell. Without this a refusal counts as unread for ever, because
+               nothing else takes it off. *@
+            <button type="button" class="btn btn-outline-secondary btn-sm" id="booking-got-it"
+                    disabled="@_busy" @onclick="AcknowledgeAsync">Got it</button>
+        }
+
+        @if (CanLetGo)
+        {
+            <button type="button" class="btn btn-outline-secondary btn-sm" id="booking-let-go"
+                    disabled="@_busy" @onclick="LetGoAsync">@LetGoWords</button>
+        }
+
+        @if (Booking.Status is HostedEventBookingStatus.Expired
+                            or HostedEventBookingStatus.TurnedDown)
+        {
+            <button type="button" class="btn btn-primary btn-sm" id="booking-again"
+                    disabled="@_busy" @onclick="() => OnStartAgain.InvokeAsync()">
+                @(Hosted.BookingMode == HostedEventBookingMode.Pick ? "Choose again" : "Ask again")
+            </button>
+        }
+    </div>
+</div>
+
+@code {
+    [Parameter, EditorRequired] public MyHostedEventBookingRecord Booking { get; set; } = null!;
+    [Parameter, EditorRequired] public PublicHostedEventRecord Hosted { get; set; } = null!;
+
+    /// <summary>Told when the booking changed, so the page can read it again.</summary>
+    [Parameter] public EventCallback<MyHostedEventBookingRecord?> OnChanged { get; set; }
+
+    /// <summary>
+    /// What just happened, in a sentence, raised to the page rather than shown here.
+    /// </summary>
+    /// <remarks>
+    /// Because letting a request go DELETES it: this card is then removed from the page, and a
+    /// note rendered inside it goes with it — the first version told a guest nothing at all at the
+    /// one moment they most needed telling. Whatever outlives the card has to own the sentence.
+    /// </remarks>
+    [Parameter] public EventCallback<string> OnSaid { get; set; }
+
+    /// <summary>They want to start over — the page puts the picker or the form back.</summary>
+    [Parameter] public EventCallback OnStartAgain { get; set; }
+
+    private bool _busy;
+    private string? _error;
+
+    /// <summary>A decision the guest has not said they have seen.</summary>
+    private bool WantsAnAnswer
+        => Booking.Status is HostedEventBookingStatus.Confirmed
+                          or HostedEventBookingStatus.TurnedDown
+                          or HostedEventBookingStatus.Expired;
+
+    /// <summary>
+    /// Whether there is anything left for the guest to give back.
+    /// </summary>
+    /// <remarks>
+    /// A confirmed booking is not withdrawn, it is <i>asked</i> about: the venue has catered,
+    /// staffed and possibly turned somebody else away against it, so the guest asks and the venue
+    /// decides. Asking twice is not offered.
+    /// </remarks>
+    private bool CanLetGo
+        => Booking.Status is HostedEventBookingStatus.Requested or HostedEventBookingStatus.Held
+        || (Booking.Status == HostedEventBookingStatus.Confirmed
+            && Booking.CancellationRequestedUtc is null);
+
+    private string LetGoWords
+        => Booking.Status == HostedEventBookingStatus.Confirmed
+            ? "I can't make it"
+            : "Never mind";
+
+    private (string Class, string Icon, string Words) Badge => Booking.Status switch
+    {
+        HostedEventBookingStatus.Requested =>
+            ("text-bg-warning", "clock", "Asked for"),
+        HostedEventBookingStatus.Held =>
+            ("text-bg-warning", "clock", "Held for you"),
+        HostedEventBookingStatus.Confirmed =>
+            ("text-bg-success", "check", "You're coming"),
+        HostedEventBookingStatus.TurnedDown =>
+            ("bg-body-secondary text-body-emphasis", "x", "Not this time"),
+        HostedEventBookingStatus.Expired =>
+            ("bg-body-secondary text-body-emphasis", "clock", "Hold ran out"),
+        HostedEventBookingStatus.Cancelled =>
+            ("bg-body-secondary text-body-emphasis", "x", "Released"),
+        _ => ("bg-body-secondary text-body-emphasis", "help-circle", "Booking"),
+    };
+
+    /// <summary>What they have — the party, and which nights, and where.</summary>
+    private string What()
+    {
+        var people = $"{Booking.PartySize} {(Booking.PartySize == 1 ? "person" : "people")}";
+
+        if (Booking.Kind == HostedEventBookingKind.DayPass)
+            return Booking.Nights.Count == 0
+                ? $"{people} · for the day"
+                : $"{people} · for the day on "
+                  + string.Join(", ", Booking.Nights.Select(n => n.Date.ToString("MM/dd")));
+
+        return Booking.Nights.Count == 0
+            ? people
+            : $"{people} · " + string.Join(", ", Booking.Nights.Select(Where));
+    }
+
+    private static string Where(HostedEventBookingNightRecord night)
+        => night.UnitName is { Length: > 0 } name
+            ? $"{night.Date:MM/dd} in {name}"
+            : $"{night.Date:MM/dd}";
+
+    /// <summary>The one sentence that says what is actually happening.</summary>
+    /// <remarks>
+    /// Written for the person waiting rather than about the record: "they'll be in touch" is what
+    /// somebody wants from a screen, and "status: Requested" is not.
+    /// </remarks>
+    private string Sentence() => Booking.Status switch
+    {
+        HostedEventBookingStatus.Requested =>
+            $"{Hosted.OrganizationName} has your request and will answer it. Nothing is held until "
+          + "they do — they may put you somewhere else, and they'll say so.",
+
+        HostedEventBookingStatus.Held =>
+            $"These places are out of everybody else's reach while {Hosted.OrganizationName} "
+          + "answers you. Nothing is paid here.",
+
+        HostedEventBookingStatus.Confirmed =>
+            $"{Hosted.OrganizationName} has confirmed your places. Your pass is below — show it at "
+          + "the door, on a screen or printed.",
+
+        HostedEventBookingStatus.TurnedDown =>
+            $"{Hosted.OrganizationName} couldn't take this one. Another "
+          + $"{Hosted.DateNoun} may have room.",
+
+        HostedEventBookingStatus.Expired =>
+            "Your hold ran out before the venue answered, so the places went back. You can choose "
+          + "again if they are still free.",
+
+        HostedEventBookingStatus.Cancelled =>
+            "These places have gone back. Nothing is being held for you.",
+
+        _ => "",
+    };
+
+    /// <summary>How long is left on a hold, or how long ago it went.</summary>
+    private (string Words, bool Urgent)? Countdown()
+    {
+        if (Booking.Status != HostedEventBookingStatus.Held
+            || Booking.HoldExpiresUtc is not { } at) return null;
+
+        var left = at - DateTime.UtcNow;
+
+        if (left <= TimeSpan.Zero)
+            return ("Your hold has run out — the places go back on the next sweep.", true);
+        if (left < TimeSpan.FromHours(1))
+            return ($"Yours for another {left.TotalMinutes:0} minutes.", true);
+        if (left < TimeSpan.FromDays(1))
+            return ($"Yours for about another {left.TotalHours:0} hours.", false);
+
+        return ($"Yours for another {left.TotalDays:0} days.", false);
+    }
+
+    // ── what they can do ─────────────────────────────────────────────────────
+
+    private async Task AcknowledgeAsync()
+    {
+        _busy = true;
+        _error = null;
+
+        var (saved, error) = await AdminClient.AcknowledgeMyHostedEventBookingAsync(Hosted.Id);
+
+        _busy = false;
+
+        if (saved is null) { _error = error ?? "That couldn't be saved just now."; return; }
+        await OnChanged.InvokeAsync(saved);
+    }
+
+    /// <summary>
+    /// Gives the places back, or asks the venue to.
+    /// </summary>
+    /// <remarks>
+    /// <b>The answer's shape is the answer.</b> A request or a hold is simply let go and nothing
+    /// comes back; a confirmed booking is not — the ask is recorded and the booking returns with
+    /// its cancellation request set. "It's gone" and "you've asked them" are opposite things to
+    /// tell somebody, and the card has to be able to tell them apart.
+    /// </remarks>
+    private async Task LetGoAsync()
+    {
+        _busy = true;
+        _error = null;
+
+        var (stillStanding, error) = await AdminClient.WithdrawMyHostedEventBookingAsync(
+            Hosted.Id, null);
+
+        _busy = false;
+
+        if (error is { Length: > 0 }) { _error = error; return; }
+
+        await OnSaid.InvokeAsync(stillStanding is null
+            ? "That's let go. Nothing is being held for you."
+            : $"{Hosted.OrganizationName} has been asked to release your places.");
+
+        await OnChanged.InvokeAsync(stillStanding);
+    }
+}

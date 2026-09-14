@@ -73,6 +73,32 @@ public static class RateLimiting
     /// </remarks>
     public const string AudioProcessingPolicy = "audio-processing";
 
+    /// <summary>
+    /// Taking and giving back places on a hosted event's plan (item 235 phase 4).
+    /// </summary>
+    /// <remarks>
+    /// <para>The abuse this invites is not volume, it is denial: a script that holds every seat in
+    /// the house for two days empties a venue's weekend without booking anything. The per-caller
+    /// ceiling is deliberately low because a person picking seats presses this button once, twice
+    /// if they lose a race, and never thirty times a minute.</para>
+    ///
+    /// <para>The real defence is elsewhere and has to be — an attacker has more than one account.
+    /// A cap on how many holds one account may have at once, and the hold expiry that gives them
+    /// back, are what bound the damage; this only slows the loudest version down.</para>
+    /// </remarks>
+    public const string HostedBookingPolicy = "hosted-booking";
+
+    /// <summary>
+    /// Picking places on a hosted event without signing in (item 235 slice 11d).
+    /// </summary>
+    /// <remarks>
+    /// Keyed by address, because there is nobody signed in to key by, and windowed over ten minutes
+    /// rather than one: a person picks, perhaps loses a race and picks again, then goes to their
+    /// email. Six in ten minutes is that with room to spare, and a script sending a different made-up
+    /// address each time is stopped here long before the per-night ceiling has to.
+    /// </remarks>
+    public const string HostedEmailPickPolicy = "hosted-email-pick";
+
     // Defaults, all per caller per minute. A SuperAdmin can override each one from the site
     // settings page; configuration (RateLimits:*) is the fallback, and these are the last resort.
     // See RateLimitSettingsProvider for how the current values reach the partition factory without
@@ -86,6 +112,13 @@ public static class RateLimiting
     /// several sessions running over, and everyone reloading the page while they wait.
     /// </summary>
     internal const int DefaultEventAttendancePerMinute = 300;
+
+    /// <summary>Thirty a minute: a person picking seats, not a script taking a house.</summary>
+    internal const int DefaultHostedBookingPerMinute = 30;
+
+    /// <summary>Six unproven picks per address per ten minutes.</summary>
+    internal const int DefaultHostedEmailPicksPerWindow = 6;
+    internal static readonly TimeSpan HostedEmailPickWindow = TimeSpan.FromMinutes(10);
     /// <summary>
     /// Enough for somebody working steadily \u2014 trying a gain, undoing it, clipping two regions,
     /// running a scan \u2014 and nowhere near enough to keep a server busy decoding.
@@ -141,6 +174,9 @@ public static class RateLimiting
             options.AddPolicy(AuthPolicy,            context => FixedWindowByClient(context, Limits(context).Auth));
             options.AddPolicy(EventAttendancePolicy, context => FixedWindowByClient(context, Limits(context).EventAttendance));
             options.AddPolicy(AudioProcessingPolicy, context => FixedWindowByClient(context, Limits(context).AudioProcessing));
+            options.AddPolicy(HostedBookingPolicy,   context => FixedWindowByClient(context, DefaultHostedBookingPerMinute));
+            options.AddPolicy(HostedEmailPickPolicy, context => FixedWindowByClient(
+                context, DefaultHostedEmailPicksPerWindow, HostedEmailPickWindow));
         });
 
         return services;
@@ -199,13 +235,14 @@ public static class RateLimiting
     /// land at some unpredictable later point. Including it means a new limit is simply a new
     /// partition, and the stale one is evicted once idle.</para>
     /// </remarks>
-    private static RateLimitPartition<string> FixedWindowByClient(HttpContext context, int permitLimit)
+    private static RateLimitPartition<string> FixedWindowByClient(
+        HttpContext context, int permitLimit, TimeSpan? window = null)
         => RateLimitPartition.GetFixedWindowLimiter(
-            partitionKey: $"{ClientKey(context)}|{permitLimit}",
+            partitionKey: $"{ClientKey(context)}|{permitLimit}|{(window ?? TimeSpan.FromMinutes(1)).TotalSeconds}",
             factory: _ => new FixedWindowRateLimiterOptions
             {
                 PermitLimit = permitLimit,
-                Window      = TimeSpan.FromMinutes(1),
+                Window      = window ?? TimeSpan.FromMinutes(1),
                 QueueLimit  = 0,
             });
 

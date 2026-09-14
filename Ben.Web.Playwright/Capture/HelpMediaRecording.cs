@@ -130,6 +130,54 @@ public sealed class HelpMediaRecording : BenTestBase
     /// true, the recorded context lands on a signed-out page and the assertion below says so
     /// rather than quietly filming a sign-in form.
     /// </remarks>
+    /// <summary>Picking seats on an evening's plan, signed out (item 235 phase 17d).</summary>
+    /// <remarks>
+    /// Nothing is held: seats are only chosen, and the recording ends before "Hold these places". Each click waits for
+    /// the summary to count the seat; the pause after it is the viewer's time to read the frame, which is what a
+    /// recording is for.
+    /// </remarks>
+    [Test]
+    [Description("going-to-an-event: picking seats on the plan.")]
+    public async Task Record_PickingSeats()
+    {
+        _sinceRecordingStarted.Restart();
+        var context = await Browser.NewContextAsync(new BrowserNewContextOptions
+        {
+            ViewportSize    = new ViewportSize { Width = 1280, Height = 800 },
+            ColorScheme     = ColorScheme.Dark,
+            RecordVideoDir  = VideoDir,
+            RecordVideoSize = new RecordVideoSize { Width = 1280, Height = 800 },
+        });
+        await context.AddInitScriptAsync(RecordingInitScript);
+
+        var page = await context.NewPageAsync();
+        await page.GotoAsync($"{BaseUrl}/o/paranormal365/events/an-evening-of-evidence");
+        await page.WaitForLoadStateAsync(LoadState.NetworkIdle);
+
+        var free = page.Locator(".plan__unit[data-state='free']");
+        await Expect(free.First).ToBeVisibleAsync(new() { Timeout = 30_000 });
+        await free.Nth(40).ScrollIntoViewIfNeededAsync();
+        await page.Locator("#hosted-places").EvaluateAsync("el => el.scrollIntoView({ block: 'center' })");
+        await Expect(free.Nth(40)).ToBeInViewportAsync();
+        _subjectStartsAt = _sinceRecordingStarted.Elapsed;
+
+        // Three neighbouring seats, fixed by their keys before any is picked: a picked seat keeps its free state until
+        // the plan redraws, so "the 40th free seat" would be the same one again.
+        var keys = new List<string>();
+        for (var i = 40; i < 43; i++)
+            keys.Add((await free.Nth(i).GetAttributeAsync("data-key"))!);
+
+        for (var picked = 1; picked <= keys.Count; picked++)
+        {
+            await page.Locator($".plan__unit[data-key='{keys[picked - 1]}']").ClickAsync();
+            await Expect(page.Locator("#picker-bar")).ToContainTextAsync($"party of {picked}");
+            await page.WaitForTimeoutAsync(1_100);
+        }
+        await page.WaitForTimeoutAsync(1_200);
+
+        await WriteGifAsync(page, context, "going-to-an-event", "picking-seats.gif");
+    }
+
     private async Task<(IPage Page, IBrowserContext Context)> StartRecordingAsync(Func<Task<string>> arrange)
     {
         var url = await arrange();

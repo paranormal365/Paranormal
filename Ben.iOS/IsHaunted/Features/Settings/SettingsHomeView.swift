@@ -8,6 +8,8 @@ struct SettingsHomeView: View {
     @Environment(Router.self) private var router
     @State private var showSignIn = false
     @State private var showRegister = false
+    /// Events this person may run the door at. The row appears only when there is one — for most guests there never is.
+    @State private var doorDuties: [MyHostedEventDuty] = []
 
     private var session: SessionStore { dependencies.session }
 
@@ -93,6 +95,26 @@ struct SettingsHomeView: View {
             // a refusal — the dead-end click the site made policy against.
             if session.me != nil {
                 Section {
+                    NavigationLink(value: AppRoute.myEvents) {
+                        Label("What I'm going to", systemImage: "ticket")
+                    }
+                    .accessibilityIdentifier("settings-my-events")
+                } footer: {
+                    Text("Events you've booked, and your passes — which work without a signal.")
+                }
+
+                if !doorDuties.isEmpty {
+                    Section {
+                        NavigationLink(value: AppRoute.doorDuties) {
+                            Label("Doors I'm running", systemImage: "door.left.hand.open")
+                        }
+                        .accessibilityIdentifier("settings-door-duties")
+                    } footer: {
+                        Text("Let people in at events you're helping at — by name or by scanning their pass, with or without a signal.")
+                    }
+                }
+
+                Section {
                     NavigationLink(value: AppRoute.myEvidence) {
                         Label("My evidence", systemImage: "photo.on.rectangle.angled")
                     }
@@ -129,6 +151,14 @@ struct SettingsHomeView: View {
             #endif
         }
         .navigationTitle("Profile")
+        // Asked once per account; kept on the phone by the store, so a door opened with no signal is still offered.
+        .task(id: session.me?.userId) {
+            guard session.me != nil else { doorDuties = []; return }
+            switch await DoorStore(api: dependencies.api).loadDuties() {
+            case .live(let duties), .saved(let duties, _): doorDuties = duties
+            case .failed: break
+            }
+        }
         .sheet(isPresented: $showSignIn) {
             SignInView().environment(dependencies)
         }

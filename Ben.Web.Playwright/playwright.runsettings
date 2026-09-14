@@ -1,0 +1,18 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!--
+  The browser the whole suite launches.
+
+  disable-audio-output: Chromium plays media through its own fake sink instead of the machine's
+  sound card. Without it a recording's clock only advances when this Mac's audio device will take
+  the stream, and on 2026-09-13 it would not: a sixteen-second WAV sat at 0.064 s with the element
+  playing, fully buffered and error-free, headed or headless, in the harness or out of it. The
+  player test that follows a recording's clock then failed on develop and on this branch alike for
+  a reason that had nothing to do with the page. What the suite tests is the page, not the speakers.
+-->
+<RunSettings>
+  <Playwright>
+    <LaunchOptions>
+      <Args>["--disable-audio-output"]</Args>
+    </LaunchOptions>
+  </Playwright>
+</RunSettings>

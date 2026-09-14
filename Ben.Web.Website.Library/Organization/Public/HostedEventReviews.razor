@@ -1,0 +1,180 @@
+@namespace Ben.Web.Website.Library.Organization.Public
+
+@inject IBenAdminClient AdminClient
+@inject IBenUserState UserState
+@inject NavigationManager NavManager
+
+@using Ben.Service.Models.Entities
+@using Ben.Web.Website.Library.Kit
+
+@* What people who came thought of it (item 235 phase 12).
+
+   BEFORE THE EVENT, ONE LINE about the group's earlier events, if anybody has said anything — the
+   question somebody deciding whether to come is actually asking. AFTER IT, the reviews, and the form
+   for somebody who had a place.
+
+   The same look as a tour's reviews, so a guest who has read one has read both. *@
+
+@if (_record is { } r)
+{
+    @if (!r.IsOver)
+    {
+        @if (r.PastCount > 0 && r.PastAverage is { } past)
+        {
+            <p class="text-secondary small mb-4" id="event-past-rating">
+                Guests rated @r.OrganizationName's earlier events <strong>@past.ToString("0.0") ★</strong>
+                from @r.PastCount @(r.PastCount == 1 ? "review" : "reviews").
+            </p>
+        }
+    }
+    else if (r.Reviews.Reviews.Count > 0 || r.Reviews.MayReview || ShowWhyNot(r.Reviews.WhyNot))
+    {
+        <BenSectionHeading Text="What people said" Id="event-reviews">
+            <Note>
+                @if (r.Reviews.Average is { } avg)
+                {
+                    <text>@avg.ToString("0.0") ★ from @r.Reviews.Count @(r.Reviews.Count == 1 ? "guest" : "guests")</text>
+                }
+            </Note>
+        </BenSectionHeading>
+
+        @if (r.Reviews.MayReview)
+        {
+            <div class="card mb-3" id="event-review-form">
+                <div class="card-body">
+                    <div class="fw-semibold mb-2">@(r.Reviews.Mine is null ? "How was it?" : "Your review")</div>
+                    <div class="d-flex gap-1 mb-2" role="group" aria-label="Stars">
+                        @for (var star = 1; star <= 5; star++)
+                        {
+                            var value = star;
+                            <button type="button" id="@($"event-review-star-{value}")"
+                                    class="btn btn-sm @(value <= _stars ? "btn-warning" : "btn-outline-secondary")"
+                                    aria-label="@($"{value} star{(value == 1 ? "" : "s")}")" aria-pressed="@(value <= _stars)"
+                                    @onclick="@(() => _stars = value)">★</button>
+                        }
+                    </div>
+                    <label class="visually-hidden" for="event-review-comment">What it was like</label>
+                    <textarea class="form-control mb-2" rows="3" maxlength="1000" id="event-review-comment"
+                              placeholder="What was it like? What should the next people know?"
+                              @bind="_comment" @bind:event="oninput"></textarea>
+                    <div class="d-flex gap-2 flex-wrap">
+                        <button type="button" class="btn btn-primary btn-sm" id="event-review-save"
+                                disabled="@(_busy || _stars == 0)" @onclick="SaveAsync">
+                            @(_busy ? "Saving…" : r.Reviews.Mine is null ? "Leave it" : "Change it")
+                        </button>
+                        @if (r.Reviews.Mine is not null)
+                        {
+                            <button type="button" class="btn btn-outline-danger btn-sm" id="event-review-delete"
+                                    disabled="@_busy" @onclick="DeleteAsync">Take it down</button>
+                        }
+                    </div>
+                    @if (_error is not null)
+                    {
+                        <div class="text-warning small mt-2" id="event-review-error">@_error</div>
+                    }
+                </div>
+            </div>
+        }
+        else if (r.Reviews.WhyNot is { } whyNot && ShowWhyNot(whyNot))
+        {
+            <p class="text-secondary small" id="event-review-why-not">
+                @whyNot
+                @if (whyNot.StartsWith("Sign in", StringComparison.OrdinalIgnoreCase))
+                {
+                    <a class="ms-1" href="@($"/login?returnUrl={Uri.EscapeDataString(NavManager.Uri)}")">Sign in</a>
+                }
+            </p>
+        }
+
+        <div class="event-reviews mb-4" id="event-review-list">
+            @foreach (var review in r.Reviews.Reviews)
+            {
+                <div class="event-review">
+                    <div class="d-flex justify-content-between gap-2 flex-wrap align-items-baseline">
+                        <div>
+                            <span class="event-review__stars">@Stars(review.Stars)</span>
+                            <span class="event-review__stars event-review__stars--spent">@Stars(5 - review.Stars)</span>
+                            <span class="fw-semibold ms-2">@review.By</span>
+                            @if (review.IsHidden)
+                            {
+                                <span class="badge text-bg-secondary ms-1">Hidden by the organizer</span>
+                            }
+                        </div>
+                        <span class="text-secondary small">@review.WhenUtc.ToViewerLocalTime(UserState).ToString("MM/dd/yyyy")</span>
+                    </div>
+                    @if (!string.IsNullOrWhiteSpace(review.Comment))
+                    {
+                        <p class="event-review__text">@review.Comment</p>
+                    }
+                </div>
+            }
+        </div>
+    }
+}
+
+@code {
+    [Parameter, EditorRequired] public Guid HostedEventId { get; set; }
+
+    /// <summary>Told when the reviews load, so a page of its own can name the event.</summary>
+    [Parameter] public EventCallback<PublicHostedEventReviewsRecord?> Loaded { get; set; }
+
+    private PublicHostedEventReviewsRecord? _record;
+    private int _stars;
+    private string _comment = "";
+    private bool _busy;
+    private string? _error;
+
+    protected override async Task OnAfterRenderAsync(bool firstRender)
+    {
+        if (!firstRender) return;
+        if (!await UserState.WaitUntilAuthReadyAsync(RendererInfo.IsInteractive)) return;
+
+        Take((await AdminClient.GetHostedEventReviewsAsync(HostedEventId)).Item);
+        await Loaded.InvokeAsync(_record);
+        StateHasChanged();
+    }
+
+    private void Take(PublicHostedEventReviewsRecord? record)
+    {
+        _record = record;
+        if (record?.Reviews.Mine is { } mine)
+        {
+            _stars = mine.Stars;
+            _comment = mine.Comment ?? "";
+        }
+    }
+
+    /// <summary>
+    /// A reader who had nothing to do with the event is not told why they cannot review it; somebody
+    /// who might have been there, or needs to sign in, is.
+    /// </summary>
+    private static bool ShowWhyNot(string? whyNot)
+        => whyNot is { Length: > 0 } && !whyNot.StartsWith("Reviews come from", StringComparison.Ordinal)
+                                     && !whyNot.StartsWith("Reviews open", StringComparison.Ordinal);
+
+    private async Task SaveAsync()
+    {
+        if (_stars == 0) return;
+        _busy = true;
+        _error = null;
+        var (saved, error) = await AdminClient.SaveMyHostedEventReviewAsync(
+            HostedEventId, _stars, string.IsNullOrWhiteSpace(_comment) ? null : _comment.Trim());
+        _busy = false;
+        if (saved is null) { _error = error ?? "That could not be saved."; return; }
+        Take(saved);
+    }
+
+    private async Task DeleteAsync()
+    {
+        _busy = true;
+        _error = null;
+        var (gone, error) = await AdminClient.DeleteMyHostedEventReviewAsync(HostedEventId);
+        _busy = false;
+        if (!gone) { _error = error ?? "That could not be taken down."; return; }
+        _stars = 0;
+        _comment = "";
+        Take((await AdminClient.GetHostedEventReviewsAsync(HostedEventId)).Item);
+    }
+
+    private static string Stars(int count) => new('★', Math.Clamp(count, 0, 5));
+}

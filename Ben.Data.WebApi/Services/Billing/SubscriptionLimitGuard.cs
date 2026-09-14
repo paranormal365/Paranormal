@@ -227,6 +227,10 @@ public sealed class SubscriptionLimitGuard
         SubscriptionLimit.PhotoRetentionDays   => "how long photographs are kept",
         SubscriptionLimit.RecordingRetentionDays => "how long recordings are kept",
         SubscriptionLimit.RecordingMinutes     => "how long a recording may be",
+        SubscriptionLimit.ActiveHostedEvents   => "events at once",
+        SubscriptionLimit.EventSessions        => "sessions on an event's programme",
+        SubscriptionLimit.EventStaff           => "people on an event's staff",
+        SubscriptionLimit.EventFilesMegabytes  => "files kept with an event",
         _                                      => limit.ToString(),
     };
 
@@ -245,6 +249,10 @@ public sealed class SubscriptionLimitGuard
         SubscriptionLimit.PhotoRetentionDays   => $"photographs kept {max} day(s)",
         SubscriptionLimit.RecordingRetentionDays => $"recordings kept {max} day(s)",
         SubscriptionLimit.RecordingMinutes     => $"{max} minute(s) per recording",
+        SubscriptionLimit.ActiveHostedEvents   => $"{max} event(s) running at once",
+        SubscriptionLimit.EventSessions        => $"{max} session(s) on an event's programme",
+        SubscriptionLimit.EventStaff           => $"{max} person or people on an event's staff",
+        SubscriptionLimit.EventFilesMegabytes  => max >= 1024 ? $"{max / 1024m:0.#} GB of files per event" : $"{max} MB of files per event",
         _                                      => max.ToString(),
     };
 }
