@@ -210,7 +210,7 @@
         // SuperAdmin counts too — the roles are granted separately. Impersonation still does
         // not: moderating as somebody else would attribute a decision to them.
         if ((!UserState.IsModerator && !UserState.IsSuperAdmin) || UserState.IsImpersonating)
-        { NavManager.NavigateTo("/"); return; }
+        { NavManager.NavigateTo(Ben.Web.Website.Library.Kit.SignInLink.ForRefusal(NavManager, UserState)); return; }
 
         await LoadAsync();
     }

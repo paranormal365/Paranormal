@@ -517,7 +517,7 @@ public sealed class CaseReportController : BenControllerBase
         if (report is null) return NotFound();
 
         var pdfBytes = GeneratePdf(report, await ReadoutsAsync(report, ct));
-        var fileName = $"report-{report.Title.Replace(' ', '-')}.pdf";
+        var fileName = CaseReportPdfGenerator.FileName(report.Title);
         return File(pdfBytes, "application/pdf", fileName);
     }
 

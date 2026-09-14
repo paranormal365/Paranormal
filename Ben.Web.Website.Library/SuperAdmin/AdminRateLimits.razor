@@ -141,7 +141,7 @@
         // The circuit is not necessarily live when this first runs; checking IsAuthenticated
         // before auth is ready is the race this app has been caught by repeatedly.
         if (!await UserState.WaitUntilAuthReadyAsync(RendererInfo.IsInteractive)) return;
-        if (!UserState.IsSuperAdmin || UserState.IsImpersonating) { NavManager.NavigateTo("/"); return; }
+        if (!UserState.IsSuperAdmin || UserState.IsImpersonating) { NavManager.NavigateTo(Ben.Web.Website.Library.Kit.SignInLink.ForRefusal(NavManager, UserState)); return; }
 
         await LoadAsync();
     }

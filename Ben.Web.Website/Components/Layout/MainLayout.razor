@@ -69,7 +69,12 @@
            a person sees on hover or focus are the same words a screen reader hears from its
            aria-label. Here rather than per grid: rows arrive, page and filter long after a grid's
            first render, and one delegated tooltip covers all of them. *@
-        <TelerikTooltip TargetSelector=".ben-grid-action[title], .ben-grid-action-tip[title]"
+        @* Keyed on the address: a tip open when a row's button navigated stayed on the next page, floating over the logo,
+           because the button it belonged to was gone and nothing told the tooltip (client test pass P.1, 2026-09-14). A
+           new page gets a new tooltip, and the old one's popup goes with it. The path, not the whole address: a page that
+           writes its tab or filter into the query string re-made the tooltip under the pointer, and a hover in that moment
+           showed nothing (GridActionTooltipTests, one run in three). *@
+        <TelerikTooltip @key="TooltipPage" TargetSelector=".ben-grid-action[title], .ben-grid-action-tip[title]"
                         Position="@TooltipPosition.Top"
                         ShowDelay="300" />
 
@@ -83,6 +88,9 @@
 </div>
 
 @code {
+    /// <summary>The page the grid tooltip belongs to — see its key above.</summary>
+    private string TooltipPage => NavManager.ToBaseRelativePath(NavManager.Uri).Split('?', '#')[0];
+
     private const string AuthStateKey = "ben-auth-state";
 
     protected override void OnInitialized()

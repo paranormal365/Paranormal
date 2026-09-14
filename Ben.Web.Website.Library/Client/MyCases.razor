@@ -14,7 +14,8 @@
     @* Says whose cases these are. A member whose desk showed "Open cases 2" opened My Cases and read "You have no active
        cases" — true of them as a client, and nothing to do with the cases they work (UI test pass, 2026-09-14). *@
     <p class="text-secondary small mb-4">
-        Cases you asked a group to take on, as the client. The cases you work on as a member are on each group's Cases tab.
+        Cases you asked a group to take on, as the client. If you are also a member of a group, the cases you work on are on
+        its Cases tab.
     </p>
 
     @* A client has no other window into this. "You have no active cases" to somebody who has one
@@ -58,9 +59,9 @@
                         </div>
                         @if (c.NextInvestigationDate.HasValue)
                         {
-                            <div class="small mt-1 text-primary fw-semibold">
+                            <div class="small mt-1 text-primary fw-semibold d-flex align-items-center gap-1">
                                 <BenIcon Name="calendar" />
-                                Next visit: @c.NextInvestigationDate.Value.ToViewerLocalTime(UserState).ToDisplayDateTimeNoSeconds()
+                                <span>Next visit: @c.NextInvestigationDate.Value.ToViewerLocalTime(UserState).ToDisplayDateTimeNoSeconds()</span>
                             </div>
                         }
                     </div>

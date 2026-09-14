@@ -78,6 +78,14 @@ day-by-day account of building it would say nothing to anyone using it now.
 - The "work waiting" banner for client requests opens the requests page, which every member who can read it can use.
   Accept and Decline appear only for the people who can answer for the group.
 - Example text in the event pages' boxes starts "e.g.", so it isn't mistaken for something already filled in.
+- A client's Home shows their case at the top — its state and the next visit — above the usual search.
+- On a client's case, the calendar marks each day something was logged; the report's PDF button says it is preparing
+  the file, and says so if it can't; downloaded reports have plain file names.
+- Starting a request for an address you have already asked about says so, with a link to the earlier request.
+- An accepted request's "View My Case" opens the case that request became.
+- A case card marked "Not public" no longer offers the public vote.
+- Signing in again from a SuperAdmin page brings you back to that page.
+- Example text in boxes across the site starts "e.g.".
 - SuperAdmins have an Event health tab on the dashboard. It shows holds and how long parties wait for an answer,
   letters going out, errors on event pages, requests turned away by the booking limits, and when each
   background job last ran and whether it failed.

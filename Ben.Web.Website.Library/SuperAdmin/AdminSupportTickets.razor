@@ -200,7 +200,7 @@
 
         if (!UserState.IsSuperAdmin && !UserState.IsAdmin)
         {
-            NavManager.NavigateTo("/");
+            NavManager.NavigateTo(Ben.Web.Website.Library.Kit.SignInLink.ForRefusal(NavManager, UserState));
             return;
         }
 

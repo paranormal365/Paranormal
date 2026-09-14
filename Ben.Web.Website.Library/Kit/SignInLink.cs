@@ -16,6 +16,16 @@ public static class SignInLink
 
     public static string For(NavigationManager nav) => For(nav.ToBaseRelativePath(nav.Uri));
 
+    /// <summary>
+    /// Where a page sends somebody it will not show itself to: a signed-out visitor to sign in (and back), anybody else home.
+    /// </summary>
+    /// <remarks>
+    /// The SuperAdmin pages sent everybody they refused to the home page — right for a member, wrong for the SuperAdmin whose
+    /// session had simply ended, who then had to find the page again after signing in (client test pass, 2026-09-14).
+    /// </remarks>
+    public static string ForRefusal(NavigationManager nav, Ben.Web.Services.IBenUserState user)
+        => user.IsAuthenticated ? "/" : For(nav);
+
     /// <summary>For a base-relative path such as <c>organizations/x/calendar?view=month</c>.</summary>
     public static string For(string relativePath)
     {

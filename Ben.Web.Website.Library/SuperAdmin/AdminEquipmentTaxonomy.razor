@@ -217,7 +217,7 @@
     {
         if (!firstRender) return;
         if (!await UserState.WaitUntilAuthReadyAsync(RendererInfo.IsInteractive)) return;
-        if (!UserState.IsAuthenticated || !UserState.IsSuperAdmin) { NavManager.NavigateTo("/"); return; }
+        if (!UserState.IsAuthenticated || !UserState.IsSuperAdmin) { NavManager.NavigateTo(Ben.Web.Website.Library.Kit.SignInLink.ForRefusal(NavManager, UserState)); return; }
 
         await LoadAsync();
         StateHasChanged();

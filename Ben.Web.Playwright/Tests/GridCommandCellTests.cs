@@ -115,9 +115,18 @@ public class GridActionTooltipTests : BenTestBase
         Assert.That((await edit.InnerTextAsync()).Trim(), Is.Empty, "the Edit action still shows words instead of an icon");
         await Expect(edit.Locator("svg")).ToHaveCountAsync(1);
 
-        await edit.HoverAsync();
+        // Hover as a person does — move onto it, and off and on again if nothing showed. The tooltip's listener is attached
+        // after the grid is drawn, and a pointer already resting on the button when it attaches never "enters" it: the test
+        // hovered once, the moment the rows appeared, and failed five runs in six on unchanged code (2026-09-14).
         var tip = Page.Locator(".k-tooltip:visible");
-        await Expect(tip).ToBeVisibleAsync(new() { Timeout = 5_000 });
+        for (var attempt = 0; attempt < 5 && await tip.CountAsync() == 0; attempt++)
+        {
+            await Page.Mouse.MoveAsync(0, 0);
+            await edit.HoverAsync();
+            try { await Expect(tip).ToBeVisibleAsync(new() { Timeout = 1_500 }); }
+            catch (PlaywrightException) { /* not yet attached — move off and back */ }
+        }
+        await Expect(tip).ToBeVisibleAsync(new() { Timeout = 1_000 });
         await Expect(tip).ToContainTextAsync("Edit");
     }
 }

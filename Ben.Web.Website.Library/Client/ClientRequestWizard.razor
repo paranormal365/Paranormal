@@ -114,6 +114,19 @@
                         {
                             <span class="ms-3 text-success small">✓ Address verified</span>
                         }
+                        @* Somebody whose group already has this address asked again, and the wizard offered them the same
+                           group (client test pass P.11, 2026-09-14). Said, not refused: a second property at the same
+                           address, or a request that went unanswered, are good reasons to ask again. *@
+                        @if (_sameAddress is { } earlier && _lat.HasValue)
+                        {
+                            <div class="alert alert-info small mt-2 mb-0" id="request-same-address">
+                                You already asked about this address on @earlier.DateCreated.ToViewerLocalTime(UserState).ToDisplayDate()
+                                @(earlier.Status == ClientRequestStatus.Assigned
+                                    ? "— a group has taken it on. Anything new about the same place can go in a message from that case."
+                                    : "— it is still with the groups you sent it to.")
+                                <a class="alert-link" href="/my-requests/@earlier.Id">See that request</a>
+                            </div>
+                        }
                         @if (_geocodeError is not null)
                         {
                             <div class="text-danger small mt-1">@_geocodeError</div>
@@ -619,10 +632,36 @@
             {
                 _lat = lat;
                 _lon = lon;
+                await FindSameAddressAsync();
             }
         }
         catch { _geocodeError = "We couldn't reach the map service. Try again in a moment."; }
         finally { _verifying = false; }
+    }
+
+    /// <summary>A live request of this person's for the same street and ZIP, other than the one being written.</summary>
+    private ClientRequestRecord? _sameAddress;
+
+    private async Task FindSameAddressAsync()
+    {
+        _sameAddress = null;
+        if (!UserState.IsAuthenticated) return;
+        try
+        {
+            var mine = await AdminClient.GetMyClientRequestsAsync();
+            static string Key(string? street, string? zip) =>
+                System.Text.RegularExpressions.Regex.Replace($"{street} {zip}".ToLowerInvariant(), "[^a-z0-9]", "");
+            var here = Key(_streetAddress1, _zipCode);
+            _sameAddress = mine.Items
+                .Where(r => r.Id != _draftId && r.Status is ClientRequestStatus.Submitted or ClientRequestStatus.Assigned)
+                .Where(r => Key(r.StreetAddress1, r.ZipCode) == here)
+                .OrderByDescending(r => r.Status == ClientRequestStatus.Assigned).ThenByDescending(r => r.DateCreated)
+                .FirstOrDefault();
+        }
+        catch
+        {
+            // Only a courtesy: a request that cannot be compared is sent the same as one that was.
+        }
     }
 
     /// <summary>
@@ -637,6 +676,7 @@
     {
         _lat = _lon = null;
         _geocodeError = null;
+        _sameAddress = null;
     }
 
     // ── Step navigation ───────────────────────────────────────────────────────

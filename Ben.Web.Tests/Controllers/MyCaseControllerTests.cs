@@ -140,6 +140,12 @@ public class MyCaseControllerTests
         var list = Assert.IsAssignableFrom<IEnumerable<ClientCaseListItem>>(ok.Value);
         Assert.Single(list);
         Assert.Equal(caseId, list.First().CaseId);
+
+        // Which request the case came from, so a request's page opens its own case.
+        await using var db = await factory.CreateDbContextAsync();
+        var requestId = db.Cases.Single(c => c.Id == caseId).ClientRequestId;
+        Assert.NotNull(requestId);
+        Assert.Equal(requestId, list.First().ClientRequestId);
     }
 
     [Fact]

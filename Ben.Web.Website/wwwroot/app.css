@@ -724,3 +724,23 @@ textarea.form-control::placeholder {
 .k-animation-container:has(.k-list-container) .k-list-container {
     min-width: 100%;
 }
+
+/* A day on a calendar that has something logged on it: a dot under the number (client test pass P.6, 2026-09-14). Telerik
+   draws the cells, so the class it is given is styled here rather than in a component's scoped sheet. */
+.k-calendar td.ben-cal-has-entries .k-link {
+    position: relative;
+}
+.k-calendar td.ben-cal-has-entries .k-link::after {
+    content: "";
+    position: absolute;
+    left: 50%;
+    bottom: 2px;
+    width: 5px;
+    height: 5px;
+    margin-left: -2.5px;
+    border-radius: 50%;
+    background: var(--bs-primary);
+}
+.k-calendar td.ben-cal-has-entries.k-selected .k-link::after {
+    background: var(--bs-body-bg);
+}

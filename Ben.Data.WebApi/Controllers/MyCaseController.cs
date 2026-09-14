@@ -117,7 +117,8 @@ public sealed class MyCaseController : BenControllerBase
             Status:                  c.Status,
             CaseManagerDisplayName:  c.CaseManagerAppUser?.DisplayName,
             DateCaseOpened:          c.DateCaseOpened,
-            NextInvestigationDate:   nextInvMap.GetValueOrDefault(c.Id))));
+            NextInvestigationDate:   nextInvMap.GetValueOrDefault(c.Id),
+            ClientRequestId:         c.ClientRequestId)));
     }
 
     /// <summary>
@@ -442,7 +443,7 @@ public sealed class MyCaseController : BenControllerBase
         // Reuse the static PDF generator from CaseReportController via shared helper
         var readouts = await CaseReportReadouts.ForAsync(report.Sections.SelectMany(x => x.FieldSessions), _fileStorage, ct);
         var pdfBytes = CaseReportPdfGenerator.Generate(report, readouts);
-        return File(pdfBytes, "application/pdf", $"report-{report.Title.Replace(' ', '-')}.pdf");
+        return File(pdfBytes, "application/pdf", CaseReportPdfGenerator.FileName(report.Title));
     }
 
     // ── Investigation scheduling (client responds to proposed dates) ───────────
@@ -1407,7 +1408,10 @@ public sealed record ClientCaseListItem(
     Ben.Data.Common.Enums.CaseStatus Status,
     string?   CaseManagerDisplayName,
     DateTime  DateCaseOpened,
-    DateTime? NextInvestigationDate = null);
+    DateTime? NextInvestigationDate = null,
+    // The request this case was accepted from, so a request's page can open ITS case rather than the client's first one
+    // (client test pass, 2026-09-14). Additive: older apps ignore it.
+    Guid?     ClientRequestId = null);
 
 public sealed record ClientCaseDetail(
     Guid      CaseId,

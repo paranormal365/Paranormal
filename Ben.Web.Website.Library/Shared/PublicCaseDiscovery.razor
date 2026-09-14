@@ -106,8 +106,11 @@
                         <p class="text-muted small mb-2">Client: @_selectedCase.ClientName</p>
                     }
 
-                    @* Community votes *@
-                    <CaseVoteWidget CaseId="@_selectedCase.CaseId" />
+                    @* Community votes — only on a case the public can see (P.3). *@
+                    @if (_selectedCase.IsPublic)
+                    {
+                        <CaseVoteWidget CaseId="@_selectedCase.CaseId" />
+                    }
 
                     <div class="d-flex gap-2 mt-3 flex-wrap">
                         <a href="/o/@_selectedCase.OrgUrlName/cases/@_selectedCase.CaseReference.TrimStart('#')"
@@ -178,7 +181,13 @@
                                        they were reading different tables they disagreed, which is
                                        how the card came to say "No votes yet" over "3 votes".
                                        Whoever cannot see the widget still gets the bar. *@
-                                    @if (UserState.IsAuthenticated && Features.IsOn(SiteFeatures.Voting))
+                                    @* A case shown only because this person can open it is not up for the public's vote:
+                                       its card offered the thumbs anyway (client test pass P.3, 2026-09-14). *@
+                                    @if (!item.IsPublic)
+                                    {
+                                        <p class="small text-secondary mb-0">Only the group and its client can see this case.</p>
+                                    }
+                                    else if (UserState.IsAuthenticated && Features.IsOn(SiteFeatures.Voting))
                                     {
                                         <CaseVoteWidget CaseId="@item.CaseId"
                                                         PreloadedSummary="@(_voteSummaries.GetValueOrDefault(item.CaseId))" />

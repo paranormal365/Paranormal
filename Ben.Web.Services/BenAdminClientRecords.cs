@@ -1158,7 +1158,8 @@ public sealed record ClientCaseListItem(
     Ben.Data.Common.Enums.CaseStatus Status,
     string?   CaseManagerDisplayName,
     DateTime  DateCaseOpened,
-    DateTime? NextInvestigationDate = null);
+    DateTime? NextInvestigationDate = null,
+    Guid?     ClientRequestId = null);
 
 public sealed record ClientCaseDetail(
     Guid      CaseId,

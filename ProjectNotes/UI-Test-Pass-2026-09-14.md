@@ -245,3 +245,54 @@ Measured and fine: a clip dragged along its lane lands at the time dropped on (8
 and length; the Delete question cancels cleanly; members may add, move
 and delete calendar events (item 156 decided the calendar is member-open).
 
+
+---
+
+# Second pass — as other kinds of people
+
+Ben, after the full suite passed: "run through testing the site visually again as a different type of person - except
+for the research editor." Reached through the SuperAdmin's "view as", so no password is typed: Daniel Park (a client),
+then James Thornton (an ordinary member), then Victor Reyes (a viewer). Same method — outer to inner, fix each layer
+before the next.
+
+Before starting, the full suite on the finished branch: 707 passed, 2 failed — both a research-test helper that, under
+the whole suite's load, clicked the previous block's editor before the new block arrived (fixed; research set 45/45).
+
+## Client pass — Daniel Park
+
+Walked: Home, the sidebar, My Cases, his case (occurrence calendar, occurrences, shared access, people at the property,
+messages with a bold word, the report PDF, the visit), My Requests (a draft through all four steps to Save as Draft, and
+an accepted request), My Investigations.
+
+- [x] **P.0 Signed out, a SuperAdmin page sent the person home**, not to sign in: a SuperAdmin whose session ended had to
+  find the page again. Thirty-six SuperAdmin pages. → `SignInLink.ForRefusal`: signed out goes to sign in and back;
+  anybody else still goes home.
+- [x] **P.1 The grid's "Impersonate this user" tooltip stayed on the next page**, floating over the logo, after the row's
+  button had navigated away. → the layout's delegated tooltip is keyed on the address, so a new page has a new tooltip.
+- [x] **P.2 A client's Home said nothing about their case.** Clients get the visitor's hero (the member desk was group
+  work — W-S5), which invited Daniel to "connect with groups near you" while his group had booked a visit. → a "Your
+  case" strip above the hero: the case, its state, the next visit, a link. Nothing when there is no case.
+- [x] **P.3 A "Not public" case card offered the public vote** (Daniel's own private case on the home page). The server
+  already refused the vote. → no vote controls on a card the public cannot see; a line says who can see it.
+- [x] **P.4 My Cases put the calendar icon on a line of its own** above "Next visit". → one line.
+- [x] **P.5 My Cases told a client "The cases you work on as a member are on each group's Cases tab"** (my own layer 2
+  line) as though he were a member. → "If you are also a member of a group…".
+- [x] **P.6 The case's calendar said "9 occurrences" and marked no day**: finding the other days meant pressing every
+  date. → a dot under each day with something logged.
+- [x] **P.8 The main action on a draft request, Edit & Submit, and the case's Add Person were grey** and read as disabled.
+  → primary and outline-primary.
+- [x] **P.9 The report's PDF button did nothing visible** while the PDF was made, and nothing at all when it failed.
+  → "Preparing…" with a spinner, and a sentence on failure. (The download itself works: 3.9 KB.)
+- [x] **P.10 The downloaded report was named `report-Initial-Assessment-_-Belmont-Blvd-residence.pdf`** — the title's dash
+  became "_" in the plain copy of the name a download reads. → names are plain letters, digits and hyphens.
+- [x] **P.11 Asking again about an address already in hand gave no hint**: Daniel's draft for 4512 Belmont Blvd offered
+  him the very group that had accepted his case there. → after Verify Address, a note names the earlier request and
+  what became of it, with a link. Not a refusal.
+- [x] **P.12 An accepted request's "View My Case" opened the client's first case**, not the one the request became — a
+  client with two would land on the wrong one. → the case list carries its request id (additive API field), and the
+  link uses it. `GetMyCases_ReturnsOnlyClientsCases` checks the id.
+- [x] **P.13 My Investigations told a client "You have not been assigned to any investigations"** with a visit to his
+  home booked. → a line says visits to your own property are on My Cases.
+
+Seen and fine: sending a formatted message (bold kept, box cleared, thread at the newest); the four request steps keep a
+draft's answers; Save as Draft returns to the list; the accepted request names its group under "Submitted To".

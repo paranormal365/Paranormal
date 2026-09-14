@@ -20,6 +20,7 @@ belongs there; this is for the part underneath.
 
 ## 2026-09-14
 
+- A client's list of cases now says which request each case was accepted from, as a new field that older apps ignore.
 - Files are now saved whole or not at all. A save interrupted part way, such as a thumbnail being made when the
   person leaves the page, no longer leaves an empty file that is then served in place of the picture.
 - Case descriptions are cleaned of anything that could run as code before they are stored, and a description

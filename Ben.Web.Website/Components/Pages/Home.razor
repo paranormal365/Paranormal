@@ -17,6 +17,7 @@
 <MemberDesk OnHasGroups="@(v => { _hasGroups = v; StateHasChanged(); })" />
 @if (!_hasGroups)
 {
+    <Ben.Web.Website.Library.Client.ClientCaseStrip />
     <HomeHero />
 }
 @* Item 233: tours with a date on the calendar, soonest first, each led by its own picture.
