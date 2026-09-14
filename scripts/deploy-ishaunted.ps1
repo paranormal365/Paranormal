@@ -561,8 +561,9 @@ if ($Apps -contains 'website') {
     # Signing in is the only thing that actually proves it.
     Set-JsonValue $cfg 'WebApi:BaseUrl' $ApiUrl
     Set-JsonValue $cfg 'SiteIdentity:BaseUrl' $SiteUrl
-    Set-JsonValue $cfg 'ConnectionStrings:BenDbConnectionString' $sqlConn
-    Set-SerilogConnectionString $cfg $sqlConn   # the bash script left this sink pointed at localhost
+    # No ConnectionStrings for the website: it reads no database of its own, only the API. The one
+    # connection it does make is the error-log sink's, which carries its own copy of the string.
+    Set-SerilogConnectionString $cfg $sqlConn
 
     # Entra, if it is configured at all. ClientId has to reach the WEBSITE and not only the API:
     # Program.cs decides whether to register the OpenIdConnect scheme by looking at this value, so
