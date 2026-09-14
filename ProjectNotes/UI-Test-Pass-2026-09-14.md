@@ -324,3 +324,16 @@ admin): the hub (Details, Members, Cases, Investigations, Calendar, Messages, Fi
 
 Seen and fine: the Pending Requests button is the warning colour when something waits (the theme's yellow is olive); the
 member's Members, Cases and Equipment tabs; an empty inbox says so; recordings draw their waveforms.
+
+## Viewer pass — Victor Reyes
+
+Walked Paranormal365 as Victor (the Viewer role, no grants). The hub gives him Details (the member count and the group's
+own facts — no case figures), Members, Calendar, Messages, Files (the new "who adds files" line, no tools) and Equipment;
+no Cases or Investigations tabs.
+
+- [ ] **V.1 A Viewer can add, move and delete the group's calendar events — public ones included — and post group
+  messages.** Both controllers let any active member do it (item 156 kept the calendar "member-open"), and a Viewer is an
+  active member. The page and the server agree, so nothing is offered that is then refused; whether the Viewer role
+  should be read-only here is a policy question for Ben, and nothing was changed.
+
+Seen and fine: no case figures on Details for a viewer; the tabs match the grants.
