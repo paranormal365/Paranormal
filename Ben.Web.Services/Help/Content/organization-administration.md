@@ -1997,6 +1997,14 @@ Plans are priced by **active members, per group** — the price list is on the *
 visible to everyone. Yearly billing usually costs less than paying month by month; the card says
 how much less.
 
+Each band on the Pricing page has its own button. If you don't run a group yet, **Start a group on
+this plan** opens the new-group steps with that plan named at the top; once the group exists you go
+straight to its billing page to confirm the plan and pay. If you already run a group, **Choose this
+plan** takes you to that group's billing page with the same billing period selected (with several
+groups, it asks which one). The price always follows the group's size: if the band you picked isn't
+the one your group falls in, the billing page says which band it is priced as. The band marked
+**Most groups start here** is simply the middle of the member bands.
+
 Two things worth knowing about how plans behave:
 
 **What you signed up for is a contract for the period you paid for.** If the plan changes after

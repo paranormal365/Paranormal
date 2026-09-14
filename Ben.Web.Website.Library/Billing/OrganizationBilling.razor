@@ -11,6 +11,7 @@
 @inject IBenUserState UserState
 @inject NavigationManager Nav
 @inject IJSRuntime JS
+@inject SiteFeaturesProvider Features
 
 @* The group-facing half of item 168's money trail, and the door Stripe phase 1 opened. Until
    this page, checkout, history and receipts were all write-only doors: adapter methods and API
@@ -23,6 +24,16 @@
 
     <h1 class="mb-1">Billing</h1>
     <p class="text-secondary mb-4">Your group's plan, payments and receipts.</p>
+
+    @if (_arrivedNew)
+    {
+        @* Straight from creating the group with a plan chosen on the pricing page (2026-09-14). The hub and its
+           tour are one link away; this page is where the plan is confirmed. *@
+        <div class="alert alert-success" id="billing-welcome-new">
+            <strong>Your group is ready.</strong> Confirm its plan below to finish, or
+            <a href="@($"/organizations/{OrgId}?welcome=1")">go to your group's page</a> and do it later.
+        </div>
+    }
 
     @if (_checkoutBanner is not null)
     {
@@ -116,6 +127,20 @@
                 </div>
             </div>
         }
+        else if (!Features.PlanPurchasesEnabled)
+        {
+            @* A SuperAdmin has taken plans off sale (2026-09-14). The price list stays readable; what is
+               removed is the button that would start a payment the API now refuses. *@
+            <div class="card mb-4" id="plans-not-on-sale">
+                <div class="card-body">
+                    <h2 class="h5 card-title">Plans aren't on sale at the moment</h2>
+                    <p class="mb-0 text-secondary">
+                        A plan your group already has carries on as it is. Prices are on the
+                        <a href="/pricing">price list</a>.
+                    </p>
+                </div>
+            </div>
+        }
         else
         {
         <div class="card mb-4">
@@ -155,6 +180,15 @@
                 @if (_quoteError is not null)
                 {
                     <div class="alert alert-warning mt-3 mb-0">@_quoteError</div>
+                }
+                else if (_quote is not null && _requestedTierName is { } asked && !string.Equals(asked, _quote.TierName, StringComparison.Ordinal))
+                {
+                    @* The plan chosen on the pricing page is not the band this group falls in. Said, not silently
+                       swapped: the price follows the group's size, which is the rule the price list states. *@
+                    <div class="alert alert-info mt-3 mb-0" id="tier-follows-size">
+                        You chose <strong>@asked</strong> on the price list. A group's price follows its size, so
+                        this group is priced as <strong>@_quote.TierName</strong>.
+                    </div>
                 }
                 else if (_quote is not null)
                 {
@@ -374,10 +408,19 @@
                         <strong>$@seat.PriceAtStart.ToString("0.00")/@(seat.Interval == BillingInterval.Yearly ? "year" : "month")</strong>,
                         billed to you. Joining was never blocked; paying keeps it that way.
                     </p>
-                    <button type="button" class="btn btn-warning" @onclick="PaySeatAsync"
-                            disabled="@_startingSeatCheckout">
-                        @(_startingSeatCheckout ? "Opening…" : "Pay for your seat")
-                    </button>
+                    @if (Features.PlanPurchasesEnabled)
+                    {
+                        <button type="button" class="btn btn-warning" @onclick="PaySeatAsync"
+                                disabled="@_startingSeatCheckout">
+                            @(_startingSeatCheckout ? "Opening…" : "Pay for your seat")
+                        </button>
+                    }
+                    else
+                    {
+                        <p class="text-secondary mb-0" id="seat-not-on-sale">
+                            Seats can't be paid for on the site at the moment. Your place in the group is not affected.
+                        </p>
+                    }
                     @if (_seatError is not null)
                     {
                         <div class="alert alert-danger mt-2 mb-0">@_seatError</div>
@@ -398,6 +441,12 @@
 
     private bool _loading = true;
     private bool _forbidden;
+
+    /// <summary>Arrived from the new-group wizard with a plan chosen (<c>?from=new</c>).</summary>
+    private bool _arrivedNew;
+
+    /// <summary>The band named in <c>?tier=</c>, when the person chose one on the price list.</summary>
+    private string? _requestedTierName;
     private OrgSubscriptionView? _subscription;
     private LoadResult<OrgBillingHistoryRecord> _history;
     private SubscriptionQuoteResponse? _quote;
@@ -440,6 +489,17 @@
                 "Payment received — your event credits are below, and the receipt is in the history.");
         else if (query.Contains("credits=cancelled"))
             _checkoutBanner = ("alert-secondary", "Checkout was cancelled. No credits were bought.");
+
+        // From the pricing page or the new-group wizard (2026-09-14): the cadence the person was looking at, and the
+        // band they chose, so this page starts where they left off.
+        var parsed = Microsoft.AspNetCore.WebUtilities.QueryHelpers.ParseQuery(query);
+        if (parsed.TryGetValue("interval", out var intervalValue)
+            && int.TryParse(intervalValue, out var intervalNumber)
+            && Enum.IsDefined(typeof(BillingInterval), intervalNumber))
+            _interval = (BillingInterval)intervalNumber;
+        _arrivedNew = parsed.TryGetValue("from", out var from) && from == "new";
+        if (parsed.TryGetValue("tier", out var tierValue) && Guid.TryParse(tierValue, out var tierId))
+            _requestedTierName = (await AdminClient.GetPublicPricingAsync()).Items.FirstOrDefault(t => t.Id == tierId)?.Name;
 
         await LoadAsync();
         await RefreshQuoteAsync();

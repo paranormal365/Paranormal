@@ -22,6 +22,15 @@ belongs there; this is for the part underneath.
 
 - Files are now saved whole or not at all. A save interrupted part way, such as a thumbnail being made when the
   person leaves the page, no longer leaves an empty file that is then served in place of the picture.
+- Case descriptions are cleaned of anything that could run as code before they are stored, and a description
+  that holds no words once its formatting is removed is stored as no description.
+- Case notes are stored and returned as cleaned HTML. A note sent as plain text is kept as paragraphs and line
+  breaks, and notes written before this change are converted once, the same way.
+- Case messages accept a formatted copy as well as plain text. A message sent formatted is stored with its plain
+  text written from it, so every message still has a plain-text body; messages now return the formatted copy
+  when there is one.
+- A new site setting takes plans and member seats off sale. While it is off, starting a checkout for either is
+  refused with a short sentence, and the public features answer says so.
 
 ## 2026-09-13
 

@@ -93,5 +93,7 @@ public sealed class AdminSiteSettingController : BenControllerBase
         // selling credits, or introducing the switch would close the only door a group without a
         // plan has.
         || key == SiteSettingKeys.EventCreditsEnabled
+        // Beta feedback 2026-09-14: plans have been on sale since 2026-08-30; the switch must not stop that.
+        || key == SiteSettingKeys.PlanPurchasesEnabled
         || SiteSettingKeys.FeatureDefaults.Any(f => f.Key == key && f.DefaultWhenUnset);
 }

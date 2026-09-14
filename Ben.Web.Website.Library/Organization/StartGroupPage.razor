@@ -5,6 +5,7 @@
 @inject NavigationManager NavManager
 @inject Ben.Web.Services.SiteFeaturesProvider Features
 @using Ben.Data.Common.Enums
+@using Ben.Service.Models
 @using Ben.Web.Website.Library.Help
 @using Ben.Web.Website.Library.Kit
 @using System.Text.Json
@@ -47,6 +48,26 @@
                     @switch (_wizard.CurrentIndex)
                     {
                         case 0:
+                            @if (_chosenTier is { } plan)
+                            {
+                                @* Arrived from a plan's button on the pricing page (2026-09-14). The group has to
+                                   exist before it can pay, so the plan is confirmed on its billing page next. *@
+                                <div class="alert alert-info py-2 small mb-3" id="newgroup-plan-chosen">
+                                    Plan: <strong>@plan.Name</strong>.
+                                    @if (ChosenTierIsPaid)
+                                    {
+                                        <text>Once the group exists you'll go to its billing page to confirm the plan and pay — the price follows the group's size.</text>
+                                    }
+                                    else
+                                    {
+                                        <text>Nothing to pay.</text>
+                                    }
+                                    @if (!plan.IsBandedByMembers)
+                                    {
+                                        <text> This plan is for tour and events businesses, so choose one of those below.</text>
+                                    }
+                                </div>
+                            }
                             @* The first question, because it decides the defaults every later
                                step starts from (2026-08-24). Not a permanent classification —
                                the hub can change it — but getting it right here means a tour
@@ -241,6 +262,11 @@
 
                         case 3:
                             <dl class="row g-1 small mb-0" id="newgroup-review">
+                                @if (_chosenTier is { } reviewPlan)
+                                {
+                                    <dt class="col-sm-4 text-secondary">Plan</dt>
+                                    <dd class="col-sm-8">@reviewPlan.Name@(ChosenTierIsPaid ? " — confirmed and paid on the billing page next" : "")</dd>
+                                }
                                 <dt class="col-sm-4 text-secondary">Name</dt>
                                 <dd class="col-sm-8 fw-semibold">@_name</dd>
                                 <dt class="col-sm-4 text-secondary">Web address</dt>
@@ -315,6 +341,11 @@
 
     private bool HasAddress => !string.IsNullOrWhiteSpace(_city);
 
+    /// <summary>The plan chosen on the pricing page (<c>?tier=</c>), when the founder came from one.</summary>
+    private PublicSubscriptionTier? _chosenTier;
+
+    private bool ChosenTierIsPaid => _chosenTier is { } t && t.Prices.Any(p => p.Price > 0);
+
     public StartGroupPage()
     {
         _wizard = new WizardModel(
@@ -331,8 +362,19 @@
         if (!await UserState.WaitUntilAuthReadyAsync(RendererInfo.IsInteractive)) return;
         if (!UserState.IsAuthenticated)
         {
-            NavManager.NavigateTo($"/login?returnUrl={Uri.EscapeDataString("/organizations/new")}");
+            // The whole address, query included: a visitor who pressed a plan's button on the pricing page must
+            // come back to the wizard with that plan still chosen.
+            var here = "/" + NavManager.ToBaseRelativePath(NavManager.Uri);
+            NavManager.NavigateTo($"/login?returnUrl={Uri.EscapeDataString(here)}");
             return;
+        }
+
+        var query = Microsoft.AspNetCore.WebUtilities.QueryHelpers.ParseQuery(new Uri(NavManager.Uri).Query);
+        if (query.TryGetValue("tier", out var tierValue) && Guid.TryParse(tierValue, out var tierId))
+        {
+            // Named from the live price list rather than trusted from the address; an unknown id shows nothing.
+            var pricing = await AdminClient.GetPublicPricingAsync();
+            _chosenTier = pricing.Items.FirstOrDefault(t => t.Id == tierId);
         }
 
         _closed = !Features.AllowOrganizationSelfRegistration && !UserState.IsSuperAdmin;
@@ -539,7 +581,13 @@
             catch { /* hub-editable extras; the group is already theirs */ }
 
             if (_wizardRef is not null) await _wizardRef.ClearDraftAsync();
-            NavManager.NavigateTo($"/organizations/{created.OrganizationId}?welcome=1");
+
+            // A founder who chose a paid plan on the pricing page goes on to pay for it; everyone else to the hub and
+            // its tour, as before. The billing page offers the hub from its welcome banner.
+            if (ChosenTierIsPaid && Features.PlanPurchasesEnabled)
+                NavManager.NavigateTo($"/organizations/{created.OrganizationId}/billing?from=new&tier={_chosenTier!.Id}");
+            else
+                NavManager.NavigateTo($"/organizations/{created.OrganizationId}?welcome=1");
         }
         finally { _busy = false; }
     }

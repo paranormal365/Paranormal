@@ -18,6 +18,25 @@ day-by-day account of building it would say nothing to anyone using it now.
 
 ## 2026-09-14
 
+- In every table, the line under a row now runs under its action buttons too.
+- Buttons in tables are icons now, so a row stays on one line. Hover over one to see what it does.
+- A group's Cases screen shows waiting requests in yellow with their count, and each status shows its count in
+  that status's colour when it has cases.
+- Research is no longer one of the kinds of timeline entry; research is written on the case's Research tab.
+  Research entries already on a timeline stay, and the timeline can now be filtered to instrument readings.
+- Editing a case opens a page of its own instead of a small window, with a tall description box and a short
+  formatting toolbar. The status and publishing settings sit beside the description, and the page asks before
+  you leave with unsaved changes. New cases get the same description editor.
+- Case notes can be formatted with bold, italics, lists and links. Older notes keep their line breaks.
+- Messages between a group and its client can be formatted too. Sending an empty message says so instead of
+  doing nothing.
+- Plans can be taken off sale. The prices stay on the pricing page with a line saying they aren't on sale,
+  and the buttons to buy are removed.
+- Every plan on the pricing page has a button. Without a group, it starts one with that plan chosen and then
+  opens the new group's billing page; if you run a group, it opens that group's billing page with the same
+  billing period selected.
+- The pricing page's plans are redrawn: each has its own colour, an icon, the price large, its limits as a
+  checklist, and the plan most groups start on is marked.
 - SuperAdmins have an Event health tab on the dashboard. It shows holds and how long parties wait for an answer,
   letters going out, errors on event pages, requests turned away by the booking limits, and when each
   background job last ran and whether it failed.
