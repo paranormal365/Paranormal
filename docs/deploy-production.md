@@ -1,15 +1,16 @@
 # Deploying IsHaunted.com
 
-Four applications share one IIS site and one certificate:
+Five applications share one IIS site and one certificate:
 
 | Path | What | Kind | Application pool |
 |---|---|---|---|
 | `/` | the website | Blazor Server — a .NET process | `IsHaunted.com` |
 | `/webapi` | the WebApi | a .NET process | `IsHaunted.com-webapi` |
 | `/editors/video` | the video editor | static files, runs in the browser | `IsHaunted.com-static` |
+| `/editors/canvas` | the canvas editor | static files, runs in the browser | `IsHaunted.com-static` |
 | `/files` | sidecar downloads | static files, kept outside the site | `IsHaunted.com-static` |
 
-They are **separate IIS Applications** under a single site. That is what lets four things share
+They are **separate IIS Applications** under a single site. That is what lets five things share
 `https://ishaunted.com` without a second certificate, and it is not optional — see
 [Why each one is an Application](#why-each-one-is-an-application).
 
@@ -44,7 +45,7 @@ room for the next editor.
 .\scripts\setup-iis-ishaunted.ps1
 ```
 
-Elevated. Creates the three application pools, the four applications, the folders, the file
+Elevated. Creates the three application pools, the five applications, the folders, the file
 permissions and the SQL logins, and copies `scripts\secrets.template.json` to
 `C:\ishaunted-deploy\secrets.json`. It is idempotent — run it again after any change and it
 reconciles.
@@ -353,3 +354,5 @@ SQL Server is a process that dies rather than a site that starts broken.
 
 - [deploy-editor.md](deploy-editor.md) — what the editor's publish sets, and why each part fails
   silently if wrong.
+- [deploy-canvas.md](deploy-canvas.md) — the case canvas at `/editors/canvas`: its project path,
+  the migration it needs first, its feature switch and its rollout.
