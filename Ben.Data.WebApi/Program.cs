@@ -201,6 +201,19 @@ builder.Services.AddSingleton<Ben.Data.WebApi.Services.SupportFormGuard>();
 // Handoff codes are issued by one request and redeemed by another, so the store has to outlive
 // both — and it holds nothing worth persisting, since every code dies within a minute (phase 12).
 builder.Services.AddSingleton<Ben.Data.WebApi.Services.EditorHandoffCodeStore>();
+// ── Case canvas link previews (canvas plan M6-10) ────────────────────────────
+// The one HttpClient that fetches an address somebody pasted. Its primary handler dials only the
+// address SafeUrlFetcher vetted, follows no redirect, sends no cookie and uses no proxy — see
+// SafeUrlFetcher for why each of those matters. Named, so no other code picks this handler up by
+// accident and no other handler is used for these fetches.
+builder.Services.AddHttpClient(Ben.Data.WebApi.Services.LinkUnfurl.SafeUrlFetcher.ClientName)
+    .ConfigurePrimaryHttpMessageHandler(() => Ben.Data.WebApi.Services.LinkUnfurl.SafeUrlFetcher.CreateHandler());
+builder.Services.AddSingleton<Ben.Data.WebApi.Services.LinkUnfurl.ISafeUrlFetcher, Ben.Data.WebApi.Services.LinkUnfurl.SafeUrlFetcher>();
+builder.Services.AddScoped<Ben.Data.WebApi.Services.LinkUnfurl.LinkUnfurlService>();
+// One server-wide ceiling on picture fetches, shared by every request — so a singleton.
+builder.Services.AddSingleton<Ben.Data.WebApi.Services.LinkUnfurl.LinkUnfurlImageCeiling>();
+// The real clock, for services that take one so tests can move it (LinkUnfurlService).
+Microsoft.Extensions.DependencyInjection.Extensions.ServiceCollectionDescriptorExtensions.TryAddSingleton(builder.Services, TimeProvider.System);
 builder.Services.Configure<Ben.Data.WebApi.Services.SmtpOptions>(builder.Configuration.GetSection("Smtp"));
 // What the site is called, in one place — see SiteIdentity for why it is not a literal.
 builder.Services.Configure<Ben.Data.Common.SiteIdentity>(builder.Configuration.GetSection("SiteIdentity"));

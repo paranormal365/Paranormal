@@ -125,6 +125,32 @@ public static class RateLimiting
     /// </summary>
     internal const int DefaultAudioProcessingPerMinute = 12;
 
+    /// <summary>
+    /// Turning a pasted link into a preview card on a case canvas (canvas plan M6-10).
+    /// </summary>
+    /// <remarks>
+    /// Per signed-in person. Thirty a minute is somebody pasting links as fast as they can find
+    /// them; each miss makes this server fetch a stranger's page, and the week-long cache means a
+    /// person re-opening their boards spends almost none of it.
+    /// </remarks>
+    public const string LinkUnfurlPolicy = "link-unfurl";
+
+    /// <summary>
+    /// The link-unfurl image proxy: a preview card's picture, re-encoded by us.
+    /// </summary>
+    /// <remarks>
+    /// <para>Separate from <see cref="LinkUnfurlPolicy"/> because opening a board draws every link
+    /// card's picture at once: a board with forty cards would be refused at the unfurl limit on open,
+    /// for work the person never asked to repeat.</para>
+    ///
+    /// <para>Per person, and not the only bound: <c>LinkUnfurlImageCeiling</c> caps the whole server,
+    /// because cheap accounts multiply a per-person limit (canvas plan review R21).</para>
+    /// </remarks>
+    public const string LinkUnfurlImagePolicy = "link-unfurl-image";
+
+    internal const int DefaultLinkUnfurlPerMinute = 30;
+    internal const int DefaultLinkUnfurlImagePerMinute = 120;
+
     public static IServiceCollection AddBenRateLimiting(
         this IServiceCollection services, IConfiguration configuration)
     {
@@ -177,6 +203,8 @@ public static class RateLimiting
             options.AddPolicy(HostedBookingPolicy,   context => FixedWindowByClient(context, DefaultHostedBookingPerMinute));
             options.AddPolicy(HostedEmailPickPolicy, context => FixedWindowByClient(
                 context, DefaultHostedEmailPicksPerWindow, HostedEmailPickWindow));
+            options.AddPolicy(LinkUnfurlPolicy,      context => FixedWindowByClient(context, DefaultLinkUnfurlPerMinute));
+            options.AddPolicy(LinkUnfurlImagePolicy, context => FixedWindowByClient(context, DefaultLinkUnfurlImagePerMinute));
         });
 
         return services;
