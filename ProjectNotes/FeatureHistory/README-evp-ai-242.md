@@ -29,4 +29,9 @@ not to be it.
 
 ## Status
 
-- 2026-09-15: branch opened.
+- 2026-09-15: branch opened. Ben approved downloading Whisper small only (not Silero VAD, the smaller Whisper models or
+  LibriSpeech); speech comes from macOS `say` voices.
+- 2026-09-15: bench built and run — findings in `EVP-Bench-2026-09-15.md`. Whisper invents nothing from steady noise
+  but confidently turns reversed speech into phrases, its confidence cannot filter that, and it cannot read voices
+  below the noise level. The next detector to grade is a voice-activity detector, pending Ben's download approval;
+  after that, Ben's real recordings as backgrounds (`generate --backgrounds <folder>`).
