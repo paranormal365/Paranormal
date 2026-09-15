@@ -570,6 +570,27 @@ app.MapGet(Ben.Web.Website.Library.Kit.Maps.MapsOptions.TokenPath,
     return Results.Text(tokens.Issue(origin, DateTimeOffset.UtcNow), "text/plain");
 }).AllowAnonymous();
 
+// A still picture of a place for the canvas editor's map boxes (canvas plan R35): a redirect to a signed Apple
+// Maps Web Snapshot, so the browser fetches the picture from Apple and nothing is stored here (Apple's terms keep
+// map data temporary). The signed address expires with the token lifetime; the redirect is cached privately for
+// a little less. 404 when maps are unconfigured, when the canvas editor is switched off, or when the request is
+// not from our own pages - see MapKitSnapshotRequest.
+app.MapGet("/auth/mapkit-snapshot",
+    (HttpContext ctx, Ben.Web.Website.Services.MapKitTokenService tokens, IConfiguration config, Ben.Web.Services.SiteFeaturesProvider features) =>
+{
+    if (!tokens.IsConfigured || !features.IsOn(Ben.Web.Services.SiteFeatures.CanvasEditor)) return Results.NotFound();
+
+    var q = ctx.Request.Query;
+    var ask = Ben.Web.Website.Services.MapKitSnapshotRequest.Read(
+        q["lat"], q["lng"], q["z"], q["w"], q["h"], q["scheme"],
+        $"{ctx.Request.Scheme}://{ctx.Request.Host}", ctx.Request.Headers.Referer,
+        config.GetSection("Maps:AllowedTokenOrigins").Get<string[]>() ?? []);
+    if (ask is null) return Results.NotFound();
+
+    ctx.Response.Headers.CacheControl = "private, max-age=1500";
+    return Results.Redirect(tokens.SnapshotUrl(ask.Latitude, ask.Longitude, ask.Zoom, ask.Width, ask.Height, ask.ColorScheme, DateTimeOffset.UtcNow));
+}).AllowAnonymous();
+
 app.MapGet("/.well-known/apple-app-site-association", (IConfiguration config) =>
 {
     // No default. An association file naming the wrong team would be worse than none: it claims
