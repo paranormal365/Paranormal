@@ -183,8 +183,11 @@ public sealed class AdminAppUserController : AdminEntityControllerBase<AppUser, 
         user.Handle = await _handles.AllocateAsync(user.DisplayName, user.Email, ct);
 
         var result = await _userManager.CreateAsync(user, request.Password);
+        // One sentence the New User page shows as it is. This used to be a JSON list of Identity's descriptions, which
+        // the website could not show as prose, so it said "the server rejected the request" for every refusal — and a
+        // SuperAdmin adding a family member could not tell a space in the username from a taken email (2026-09-15).
         if (!result.Succeeded)
-            return BadRequest(result.Errors.Select(e => e.Description));
+            return BadRequest(string.Join(" ", result.Errors.Select(e => e.Description)));
 
         if (request.IsSuperAdmin)
             await _userManager.AddToRoleAsync(user, RoleNames.SuperAdmin);

@@ -169,7 +169,10 @@ public class AdminAppUserControllerTests
         var result = await c.CreateUser(
             new AdminCreateUserRequest("fail@test.com", "weak", "Fail User", null, false, false), default);
 
-        Assert.IsType<BadRequestObjectResult>(result.Result);
+        // A sentence, not a JSON list: the New User page shows the server's reason as prose and drops anything that
+        // looks like JSON, which is how every refusal used to read "the server rejected the request".
+        var bad = Assert.IsType<BadRequestObjectResult>(result.Result);
+        Assert.Equal("Too weak.", Assert.IsType<string>(bad.Value));
     }
 
     [Fact]

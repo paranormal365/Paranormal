@@ -124,6 +124,37 @@ public class AdminTests : BenTestBase
             .ToBeVisibleAsync(new() { Timeout = 8_000 });
     }
 
+    /// <summary>
+    /// A refused New User says why, in the server's words (2026-09-15).
+    /// </summary>
+    /// <remarks>
+    /// Ben tried to add his nephew and was told only that "the server rejected the request", with a guess about the email
+    /// and the password. A username with a space is refused by Identity and was one of the things that sentence never
+    /// mentioned. The refusal creates nothing, so this leaves no account behind.
+    /// </remarks>
+    [Test]
+    public async Task AdminUserCreate_ARefusal_NamesTheReason()
+    {
+        await Page.GotoAsync($"{BaseUrl}/admin/users/create");
+        await WaitForTheCircuitAsync();
+
+        var email = Page.Locator("#adminusercreate-email-0463");
+        await Expect(email).ToBeVisibleAsync(new() { Timeout = 15_000 });
+        await Page.Locator("#adminusercreate-display-name-4286").FillAsync("Refused Person");
+        await Page.Locator("#adminusercreate-username-defaults-to-email-0b90").FillAsync("has a space");
+        await email.FillAsync($"refused-{Guid.NewGuid():N}@example.com");
+        await Page.Locator("#adminusercreate-password-2989").FillAsync("Refused1Pass");
+        await Page.Locator("#adminusercreate-confirm-password-f173").FillAsync("Refused1Pass");
+        await Page.Locator("#adminusercreate-confirm-password-f173").BlurAsync();
+
+        await Page.GetByRole(AriaRole.Button, new() { Name = "Create User" }).ClickAsync();
+
+        var alert = Page.Locator(".alert-danger");
+        await Expect(alert).ToContainTextAsync("has a space", new() { Timeout = 15_000 });
+        await Expect(alert).Not.ToContainTextAsync("rejected the request");
+        await Expect(Page).ToHaveURLAsync(new System.Text.RegularExpressions.Regex(@"/admin/users/create$"));
+    }
+
     // ── File types ────────────────────────────────────────────────────────────
 
     [Test]
