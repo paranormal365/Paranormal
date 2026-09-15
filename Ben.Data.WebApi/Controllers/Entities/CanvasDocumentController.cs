@@ -302,6 +302,132 @@ public sealed class CanvasDocumentController : BenControllerBase
         return NoContent();
     }
 
+    // POST /api/canvas-documents/{id}/publish
+    /// <summary>
+    /// Publishes a PNG picture of a case board to the case's Files tab, replacing the board's
+    /// previous snapshot. Form field <c>file</c>, <c>image/png</c>, at most 25 MB. Cases Update.
+    /// </summary>
+    /// <remarks>
+    /// <para><b>The picture stays inside the case</b> (canvas plan review R22). It bakes in whatever
+    /// the board held — names, a client's address, pinned places — so it is filed as a
+    /// <b>Board Snapshot</b> upload, never public, and <see cref="BoardSnapshots"/> refuses the two
+    /// routes by which a case file could reach a visitor.</para>
+    ///
+    /// <para><b>Replace-after-save ordering</b>, for VideoProjectController's reason: the previous
+    /// snapshot is removed only after the new one is recorded, so a failure part-way leaves an extra
+    /// file rather than losing both. Publishing does not change the document, so it does not move
+    /// the revision and never conflicts with a save.</para>
+    ///
+    /// <para>Ingest keeps the PNG as the original and serves a sanitised derivative, as for every
+    /// other upload (Ben's rule, 2026-08-24).</para>
+    /// </remarks>
+    /// <response code="200">Published; the body is the board with its new snapshot id.</response>
+    /// <response code="400">Empty, not a PNG, a personal board, or the group's subscription has ended.</response>
+    /// <response code="403">The caller can read the case but may not change it.</response>
+    /// <response code="404">No such board, or not one the caller may read.</response>
+    [HttpPost("{id:guid}/publish")]
+    [DisableRequestSizeLimit]
+    [RequestFormLimits(MultipartBodyLengthLimit = 25_000_000)]
+    [Consumes("multipart/form-data")]
+    [ProducesResponseType(typeof(CanvasDocumentRecord), 200)]
+    public async Task<ActionResult<CanvasDocumentRecord>> Publish(Guid id, IFormFile file, CancellationToken ct)
+    {
+        var userId = GetCurrentUserIdOrThrow();
+        if (file is null || file.Length == 0) return BadRequest("The snapshot is empty.");
+
+        await using var db = await _db.CreateDbContextAsync(ct);
+        var board = await db.CanvasDocuments.Include(d => d.Case).FirstOrDefaultAsync(d => d.Id == id, ct);
+        if (board is null || !await MayReadAsync(board, userId, ct)) return NotFound();
+        if (board.Case is not { } onCase) return BadRequest("Save this board to a case before publishing it.");
+
+        if (await _limits.WhyReadOnlyAsync(onCase.OrganizationId, ct) is { } readOnly) return BadRequest(readOnly);
+        // Publishing changes what the case holds, so it is Update, not Create.
+        if (!await MayOnCaseAsync(onCase.OrganizationId, OrganizationSecurityAction.Update, ct)) return Forbid();
+
+        if (!string.Equals(file.ContentType, "image/png", StringComparison.OrdinalIgnoreCase)
+            || !await StartsWithPngSignatureAsync(file, ct))
+            return BadRequest("The snapshot must be a PNG.");
+
+        var storedName   = $"{Guid.NewGuid():N}.png";
+        var storagePath  = _fileStorage.CaseFilePath(onCase.Id, $"files/{storedName}");
+        var uploadFileId = Guid.NewGuid();
+        IngestedMedia ingested;
+        try
+        {
+            ingested = await _mediaIngest.IngestAsync(file, storagePath, uploadFileId, ct);
+        }
+        catch (UnreadableImageException ex)
+        {
+            return BadRequest(ex.Message);
+        }
+
+        var now = DateTime.UtcNow;
+        db.UploadFiles.Add(new UploadFile
+        {
+            Id                 = uploadFileId,
+            UploadFileTypeId   = SeedData.UploadFileTypeSeeder.BoardSnapshotFileTypeId,
+            AppUserId          = userId,
+            FileName           = SnapshotFileName(board.Name),
+            StoredFileName     = storedName,
+            StoragePath        = storagePath,
+            ContentType        = ingested.ServedContentType,
+            FileSize           = ingested.ServedFileSize,
+            IsPublic           = false,
+            SortOrder          = 0,
+            DateCreated        = now,
+            CreatedByAppUserId = userId,
+        });
+        db.UploadFileMetadata.Add(ingested.Metadata);
+        db.CaseFiles.Add(new CaseFile
+        {
+            Id                 = Guid.NewGuid(),
+            CaseId             = onCase.Id,
+            UploadFileId       = uploadFileId,
+            Description        = $"Board snapshot: \"{board.Name}\"",
+            DateCreated        = now,
+            CreatedByAppUserId = userId,
+        });
+
+        var before = Slim(board);
+        var previousUploadId = board.PublishedUploadFileId;
+        board.PublishedUploadFileId = uploadFileId;
+        board.PublishedAtUtc        = now;
+        board.PublishedByAppUserId  = userId;
+        board.DateUpdated           = now;
+        board.UpdatedByAppUserId    = userId;
+        await db.SaveChangesAsync(ct);
+
+        await RemovePublishedSnapshotAsync(db, previousUploadId, ct);
+        await TryAuditAsync(_audit.LogUpdateAsync(nameof(CanvasDocument), board.Id, before, Slim(board), userId, AppSources.WebApi));
+
+        SetETag(board.Revision);
+        return Ok(_mapper.Map<CanvasDocumentRecord>(board));
+    }
+
+    /// <summary>The eight bytes every PNG starts with. The content type is the client's claim; this is the file's.</summary>
+    private static async Task<bool> StartsWithPngSignatureAsync(IFormFile file, CancellationToken ct)
+    {
+        byte[] signature = [0x89, 0x50, 0x4E, 0x47, 0x0D, 0x0A, 0x1A, 0x0A];
+        var head = new byte[8];
+        await using var stream = file.OpenReadStream();
+        var read = 0;
+        while (read < head.Length)
+        {
+            var n = await stream.ReadAsync(head.AsMemory(read), ct);
+            if (n == 0) break;
+            read += n;
+        }
+        return read == head.Length && head.AsSpan().SequenceEqual(signature);
+    }
+
+    /// <summary>"{board name}.png", with characters no file system accepts replaced.</summary>
+    private static string SnapshotFileName(string boardName)
+    {
+        var invalid = Path.GetInvalidFileNameChars();
+        var safe = new string(boardName.Select(c => invalid.Contains(c) ? '-' : c).ToArray()).Trim();
+        return (string.IsNullOrEmpty(safe) ? UntitledBoardName : safe) + ".png";
+    }
+
     // ── Helpers ───────────────────────────────────────────────────────────────
 
     private const string NotAnObject = "The board must be a JSON object.";

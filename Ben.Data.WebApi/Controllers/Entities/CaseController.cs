@@ -783,6 +783,12 @@ public sealed class CaseController : BenControllerBase
         // Author or org admin can edit
         if (entry.AuthorAppUserId != userId && !await IsOrgAdminOrSuperAsync(orgId, ct)) return Forbid();
 
+        // A published board picture stays inside the case (canvas plan R22): it shows the names
+        // and addresses the board held, so an entry carrying one never becomes Public.
+        if (request.Visibility == Ben.Data.Common.Enums.CaseTimelineVisibility.Public
+            && await Services.BoardSnapshots.EntryHoldsOneAsync(db, entry.Id, ct))
+            return BadRequest(Services.BoardSnapshots.StaysInsideTheCase);
+
         entry.EntryType          = request.EntryType;
         entry.EventDateTime      = request.EventDateTime;
         entry.Title              = request.Title?.Trim();

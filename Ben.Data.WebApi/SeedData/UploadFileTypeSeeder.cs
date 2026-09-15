@@ -37,6 +37,22 @@ internal static class UploadFileTypeSeeder
     internal const string FeedMediaFileTypeName = "Feed Media";
 
     /// <summary>
+    /// The upload type of a case canvas board's published PNG snapshot (canvas plan review R22).
+    /// </summary>
+    /// <remarks>
+    /// <para>Its own type rather than Case Evidence because the picture is not evidence somebody
+    /// chose to share: it is a screenshot of the team's working board, and it bakes in whatever the
+    /// board held — witness names, a client's home address, pinned locations. The type is how the
+    /// rest of the site can tell. <c>BoardSnapshots</c> refuses a timeline entry holding one being
+    /// made Public, and <c>CaseMediaPublication</c> never offers one for a public page.</para>
+    ///
+    /// <para>Fixed GUID, like the others, so the publish endpoint and the refusals name it directly.</para>
+    /// </remarks>
+    internal static readonly Guid BoardSnapshotFileTypeId = new("80000000-0000-0000-0000-000000000001");
+
+    internal const string BoardSnapshotFileTypeName = "Board Snapshot";
+
+    /// <summary>
     /// What a feed post may carry: browser-displayable photos, and video the &lt;video&gt; element
     /// plays without a plugin. No SVG — an SVG is a document that can carry script, and the feed
     /// is the one surface where anybody who belongs may upload.
@@ -90,6 +106,8 @@ internal static class UploadFileTypeSeeder
         await SeedEvidenceFileTypeAsync(db, owner.Id);
 
         await SeedPublishedVideoFileTypeAsync(db, owner.Id);
+
+        await SeedBoardSnapshotFileTypeAsync(db, owner.Id);
 
         await SeedAudioMixFileTypeAsync(db, owner.Id);
 
@@ -186,6 +204,34 @@ internal static class UploadFileTypeSeeder
             IsPublic           = false,
             SortOrder          = 5,
             AllowAllExtensions = true, // any video format the editor produces
+            DateCreated        = DateTime.UtcNow,
+            CreatedByAppUserId = ownerId,
+        });
+        await db.SaveChangesAsync();
+    }
+
+    /// <summary>
+    /// Ensures the Board Snapshot file type exists (fixed GUID so the canvas publish endpoint can use
+    /// it directly). Never public: see <see cref="BoardSnapshotFileTypeId"/>.
+    /// </summary>
+    /// <remarks>
+    /// Seeded at startup like the others, and it has to be: the publish endpoint writes this id into
+    /// <c>UploadFiles.UploadFileTypeId</c>, a foreign key, so on a database where the row is missing
+    /// the first publish would be refused by SQL Server rather than by anything that says why.
+    /// </remarks>
+    private static async Task SeedBoardSnapshotFileTypeAsync(BenDataContext db, Guid ownerId)
+    {
+        if (await db.UploadFileTypes.AnyAsync(t => t.Id == BoardSnapshotFileTypeId)) return;
+
+        db.UploadFileTypes.Add(new UploadFileType
+        {
+            Id                 = BoardSnapshotFileTypeId,
+            Name               = BoardSnapshotFileTypeName,
+            Description        = "Pictures of case canvas boards, published to the case. They show what the board held, so they stay inside the case.",
+            IsActive           = true,
+            IsPublic           = false,
+            SortOrder          = 10,
+            AllowAllExtensions = true, // the editor's own output: a PNG, served as a sanitised derivative
             DateCreated        = DateTime.UtcNow,
             CreatedByAppUserId = ownerId,
         });

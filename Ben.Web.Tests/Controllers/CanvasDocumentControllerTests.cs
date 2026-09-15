@@ -574,4 +574,156 @@ public sealed class CanvasDocumentControllerTests
         Assert.Equal(2, stored.Revision);
         Assert.Equal("Second", stored.Name);
     }
+
+    // ── publish (M6-07, R22) ──────────────────────────────────────────────────
+
+    private static byte[] PngBytes()
+    {
+        using var bitmap = new SkiaSharp.SKBitmap(4, 3);
+        bitmap.Erase(SkiaSharp.SKColors.DarkSlateGray);
+        using var image = SkiaSharp.SKImage.FromBitmap(bitmap);
+        using var data = image.Encode(SkiaSharp.SKEncodedImageFormat.Png, 100);
+        return data.ToArray();
+    }
+
+    private static IFormFile Upload(byte[] bytes, string contentType = "image/png", string name = "board.png")
+        => new FormFile(new MemoryStream(bytes), 0, bytes.Length, "file", name)
+        {
+            Headers = new HeaderDictionary(),
+            ContentType = contentType,
+        };
+
+    private static void IngestSucceeds(Built built)
+        => built.Ingest
+            .Setup(i => i.IngestAsync(It.IsAny<IFormFile>(), It.IsAny<string>(), It.IsAny<Guid>(), It.IsAny<CancellationToken>(), It.IsAny<bool>()))
+            .ReturnsAsync((IFormFile f, string path, Guid uploadId, CancellationToken _, bool _) =>
+                new IngestedMedia(new UploadFileMetadata { Id = Guid.NewGuid(), UploadFileId = uploadId, MediaKind = "Image" },
+                    ServedFileSize: 1234, ServedContentType: "image/jpeg", WasSanitized: true));
+
+    [Fact]
+    public async Task Publish_stores_a_board_snapshot_on_the_case_and_stamps_who_published()
+    {
+        var w = await SeedAsync();
+        var board = await CreateOnCaseAsync(w, title: "Henderson board");
+        var built = Build(w.Factory, w.NoDeleteId);
+        IngestSucceeds(built);
+
+        var ok = Assert.IsType<OkObjectResult>((await built.Controller.Publish(board.Id, Upload(PngBytes()), default)).Result);
+        var record = (CanvasDocumentRecord)ok.Value!;
+
+        await using var db = await w.Factory.CreateDbContextAsync();
+        var link = await db.CaseFiles.SingleAsync();
+        var upload = await db.UploadFiles.SingleAsync();
+        var stored = await db.CanvasDocuments.SingleAsync();
+        Assert.Equal(w.CaseId, link.CaseId);
+        Assert.Equal(upload.Id, link.UploadFileId);
+        Assert.Equal("Board snapshot: \"Henderson board\"", link.Description);
+        Assert.Equal(Ben.Data.WebApi.SeedData.UploadFileTypeSeeder.BoardSnapshotFileTypeId, upload.UploadFileTypeId);
+        Assert.Equal("Henderson board.png", upload.FileName);
+        Assert.False(upload.IsPublic);
+        Assert.StartsWith($"cases/{w.CaseId}/files/", upload.StoragePath);
+        Assert.Equal(upload.Id, stored.PublishedUploadFileId);
+        Assert.Equal(w.NoDeleteId, stored.PublishedByAppUserId);
+        Assert.NotNull(stored.PublishedAtUtc);
+        Assert.Equal(1, stored.Revision);   // publishing is not an edit of the document
+        Assert.Equal(upload.Id, record.PublishedUploadFileId);
+        built.Ingest.Verify(i => i.IngestAsync(It.IsAny<IFormFile>(), upload.StoragePath!, upload.Id, It.IsAny<CancellationToken>(), It.IsAny<bool>()), Times.Once);
+        built.Audit.Verify(a => a.LogUpdateAsync(nameof(CanvasDocument), board.Id, It.IsAny<object>(), It.IsAny<object>(), w.NoDeleteId, AppSources.WebApi), Times.Once);
+    }
+
+    [Fact]
+    public async Task Publishing_twice_keeps_one_snapshot()
+    {
+        var w = await SeedAsync();
+        var board = await CreateOnCaseAsync(w);
+
+        var first = Build(w.Factory, w.EditorId); IngestSucceeds(first);
+        Assert.IsType<OkObjectResult>((await first.Controller.Publish(board.Id, Upload(PngBytes()), default)).Result);
+        var second = Build(w.Factory, w.EditorId); IngestSucceeds(second);
+        Assert.IsType<OkObjectResult>((await second.Controller.Publish(board.Id, Upload(PngBytes()), default)).Result);
+
+        await using var db = await w.Factory.CreateDbContextAsync();
+        var upload = await db.UploadFiles.SingleAsync();
+        Assert.Equal(upload.Id, (await db.CaseFiles.SingleAsync()).UploadFileId);
+        Assert.Equal(upload.Id, (await db.CanvasDocuments.SingleAsync()).PublishedUploadFileId);
+        second.Ingest.Verify(i => i.DeleteAllAsync(It.IsAny<string>(), It.IsAny<CancellationToken>()), Times.Once);
+    }
+
+    [Fact]
+    public async Task A_personal_board_cannot_be_published()
+    {
+        var w = await SeedAsync();
+        var mine = (CanvasDocumentRecord)Assert.IsType<CreatedAtActionResult>(
+            (await Build(w.Factory, w.EditorId).Controller.Create(null, Board(), default)).Result).Value!;
+        var built = Build(w.Factory, w.EditorId); IngestSucceeds(built);
+
+        var result = await built.Controller.Publish(mine.Id, Upload(PngBytes()), default);
+
+        Assert.Equal("Save this board to a case before publishing it.",
+            Assert.IsType<BadRequestObjectResult>(result.Result).Value);
+        built.Ingest.VerifyNoOtherCalls();
+    }
+
+    [Theory]
+    [InlineData("text/plain", false)]
+    [InlineData("image/jpeg", true)]
+    [InlineData("image/png", false)]    // says PNG, is not one
+    public async Task Publish_refuses_anything_but_a_png(string contentType, bool realImage)
+    {
+        var w = await SeedAsync();
+        var board = await CreateOnCaseAsync(w);
+        var built = Build(w.Factory, w.EditorId); IngestSucceeds(built);
+        var bytes = realImage ? PngBytes() : "not a picture at all"u8.ToArray();
+
+        var result = await built.Controller.Publish(board.Id, Upload(bytes, contentType), default);
+
+        Assert.Equal("The snapshot must be a PNG.", Assert.IsType<BadRequestObjectResult>(result.Result).Value);
+        built.Ingest.VerifyNoOtherCalls();
+    }
+
+    [Fact]
+    public async Task An_empty_snapshot_is_refused()
+    {
+        var w = await SeedAsync();
+        var board = await CreateOnCaseAsync(w);
+
+        var result = await Build(w.Factory, w.EditorId).Controller.Publish(board.Id, Upload([]), default);
+
+        Assert.IsType<BadRequestObjectResult>(result.Result);
+    }
+
+    [Fact]
+    public async Task A_viewer_cannot_publish_and_an_outsider_is_told_nothing()
+    {
+        var w = await SeedAsync();
+        var board = await CreateOnCaseAsync(w);
+
+        var viewer = Build(w.Factory, w.ViewerId); IngestSucceeds(viewer);
+        Assert.IsType<ForbidResult>((await viewer.Controller.Publish(board.Id, Upload(PngBytes()), default)).Result);
+        viewer.Ingest.VerifyNoOtherCalls();
+        viewer.Audit.VerifyNoOtherCalls();
+
+        var outsider = Build(w.Factory, w.OutsiderId); IngestSucceeds(outsider);
+        Assert.IsType<NotFoundResult>((await outsider.Controller.Publish(board.Id, Upload(PngBytes()), default)).Result);
+
+        await Assert.ThrowsAsync<UnauthorizedAccessException>(() =>
+            Build(w.Factory, userId: null).Controller.Publish(board.Id, Upload(PngBytes()), default));
+    }
+
+    [Fact]
+    public async Task Deleting_removes_the_published_snapshot()
+    {
+        var w = await SeedAsync();
+        var board = await CreateOnCaseAsync(w);
+        var publish = Build(w.Factory, w.EditorId); IngestSucceeds(publish);
+        Assert.IsType<OkObjectResult>((await publish.Controller.Publish(board.Id, Upload(PngBytes()), default)).Result);
+
+        var delete = Build(w.Factory, w.EditorId);
+        Assert.IsType<NoContentResult>(await delete.Controller.Delete(board.Id, default));
+
+        await using var db = await w.Factory.CreateDbContextAsync();
+        Assert.Empty(await db.UploadFiles.ToListAsync());
+        Assert.Empty(await db.CaseFiles.ToListAsync());
+        delete.Ingest.Verify(i => i.DeleteAllAsync(It.IsAny<string>(), It.IsAny<CancellationToken>()), Times.Once);
+    }
 }
