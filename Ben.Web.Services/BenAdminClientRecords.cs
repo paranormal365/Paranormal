@@ -641,7 +641,8 @@ public sealed record MyOrgPermissionsItem(
     bool CanReadCases,
     bool CanReadInvestigations,
     IReadOnlyDictionary<Ben.Data.Common.Enums.OrganizationPermissionArea, OrgAreaActions>? Areas = null,
-    IReadOnlyDictionary<Ben.Data.Common.Enums.TierCapability, bool>? Capabilities = null)
+    IReadOnlyDictionary<Ben.Data.Common.Enums.TierCapability, bool>? Capabilities = null,
+    bool IsViewer = false)
 {
     /// <summary>Whether the group's PLAN includes a capability — a different question from
     /// whether this person may act.</summary>

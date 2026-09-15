@@ -60,6 +60,11 @@ has decided its people stay unidentified to clients.
 | Member | Works cases and attends investigations. |
 | Viewer | Reads without changing anything. |
 
+A **Viewer** reads and never changes anything, whatever roles or permissions they are given: roles can widen what they
+may *see*, never what they may do. They can read the calendar and the group's messages, but cannot add, move or delete an
+event, send a message, schedule or change an investigation, add to a timeline, or vote on a request. To let somebody
+contribute, make them a Member.
+
 ## The roles every group starts with
 
 Every group begins with seven ready-made roles — **Case Manager Role, Equipment Manager Role,

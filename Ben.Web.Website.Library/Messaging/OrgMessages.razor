@@ -15,7 +15,10 @@
         {
             <div class="d-flex align-items-center justify-content-between mb-3">
                 <h3 class="mb-0">Messages<HelpLink Slug="working-a-case" Anchor="group-messages" /></h3>
-                <button type="button" class="btn btn-primary" @onclick="OpenCompose"><BenIcon Name="edit-2" Class="me-1" />Compose</button>
+                @if (!_isViewer)
+                {
+                    <button type="button" class="btn btn-primary" @onclick="OpenCompose"><BenIcon Name="edit-2" Class="me-1" />Compose</button>
+                }
             </div>
         }
 
@@ -33,7 +36,12 @@
 
             @* ── Folder rail ────────────────────────────────────────────────── *@
             <div class="col-lg-3 col-xl-2">
-                @if (EmbeddedMode)
+                @* A Viewer reads the group's messages and sends none (Ben, 2026-09-14). *@
+                @if (_isViewer)
+                {
+                    <p class="small text-secondary mb-3" id="messages-viewer-note">You're a viewer in this group, so you can read its messages but not send them.</p>
+                }
+                else if (EmbeddedMode)
                 {
                     <button type="button" class="btn btn-primary w-100 mb-3" @onclick="OpenCompose">
                         <BenIcon Name="edit-2" Class="me-1" />Compose
@@ -123,9 +131,12 @@
                                     </div>
                                 </div>
                                 <div class="d-flex gap-2 flex-shrink-0">
-                                    <button type="button" class="btn btn-sm btn-primary" @onclick="OpenReply">
+@if (!_isViewer)
+                                    {
+                                                                        <button type="button" class="btn btn-sm btn-primary" @onclick="OpenReply">
                                         <BenIcon Name="rotate-ccw" Class="me-1" />Reply
                                     </button>
+                                    }
                                     <button type="button" class="btn btn-sm btn-outline-secondary" @onclick="@(() => _openMessage = null)">
                                         Close
                                     </button>
@@ -408,10 +419,13 @@
             new Telerik.Blazor.Components.Editor.Redo()),
     ];
 
+    private bool _isViewer;
+
     protected override async Task OnAfterRenderAsync(bool firstRender)
     {
         if (!firstRender) return;
         if (!await UserState.WaitUntilAuthReadyAsync(RendererInfo.IsInteractive)) return;
+        _isViewer = !UserState.IsSuperAdmin && (await AdminClient.GetMyOrgPermissionsAsync(OrgId))?.IsViewer == true;
         await LoadActiveTabAsync();
         StateHasChanged();
     }

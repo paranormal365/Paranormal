@@ -143,11 +143,22 @@ public class OrganizationMembershipController : BenControllerBase
             }
         }
 
+        bool isViewer;
+        using (var viewerScope = HttpContext.RequestServices.CreateScope())
+        {
+            var viewerFactory = viewerScope.ServiceProvider
+                .GetRequiredService<Microsoft.EntityFrameworkCore.IDbContextFactory<Ben.Data.Source.Context.BenDataContext>>();
+            await using var viewerDb = await viewerFactory.CreateDbContextAsync(cancellationToken);
+            isViewer = !isSuperAdmin && await Ben.Data.WebApi.Services.Access.FileAudienceAccess.IsOrgViewerAsync(
+                viewerDb, organizationId, appUserId, cancellationToken);
+        }
+
         return Ok(new MyOrgPermissionsResponse(
             CanReadCases: areas[Ben.Data.Common.Enums.OrganizationPermissionArea.Cases].Read,
             CanReadInvestigations: areas[Ben.Data.Common.Enums.OrganizationPermissionArea.Investigations].Read,
             Areas: areas,
-            Capabilities: capabilities));
+            Capabilities: capabilities,
+            IsViewer: isViewer));
 
         async Task<bool> MayAsync(
             Ben.Data.Common.Enums.OrganizationSecurityTable table,
@@ -310,7 +321,10 @@ public class OrganizationMembershipController : BenControllerBase
         bool CanReadCases,
         bool CanReadInvestigations,
         IReadOnlyDictionary<Ben.Data.Common.Enums.OrganizationPermissionArea, AreaActions> Areas,
-        IReadOnlyDictionary<Ben.Data.Common.Enums.TierCapability, bool> Capabilities);
+        IReadOnlyDictionary<Ben.Data.Common.Enums.TierCapability, bool> Capabilities,
+        // A Viewer reads and changes nothing, including the member-open writes the areas above do not describe — the
+        // calendar, group messages (Ben, 2026-09-14). Additive.
+        bool IsViewer = false);
 
     /// <summary>What one person may do in one area. Absent action means refused.</summary>
     public sealed record AreaActions(bool Create, bool Read, bool Update, bool Delete);

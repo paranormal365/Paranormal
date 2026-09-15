@@ -93,6 +93,8 @@ day-by-day account of building it would say nothing to anyone using it now.
   client.
 - Recordings no longer flash a pale grey box on a dark page while they load, and deleting a group file shows a success
   message instead of an error.
+- A group's Viewers are read-only: they read the calendar and messages but can no longer add, move or delete events, send
+  group messages, or change investigations, timelines or requests, whatever roles they hold.
 - SuperAdmins have an Event health tab on the dashboard. It shows holds and how long parties wait for an answer,
   letters going out, errors on event pages, requests turned away by the booking limits, and when each
   background job last ran and whether it failed.

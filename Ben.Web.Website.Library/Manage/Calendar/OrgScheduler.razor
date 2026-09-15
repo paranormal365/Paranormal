@@ -56,10 +56,19 @@
             </div>
         }
         <div class="d-flex justify-content-end mb-2">
-            <button type="button" class="btn btn-primary btn-sm" id="calendar-new-event"
-                    @onclick="NewEventAsync">
-                <BenIcon Name="plus" Class="me-1" />New event
-            </button>
+            @* A Viewer reads the calendar and changes nothing on it (Ben, 2026-09-14): no New event, and the scheduler's own
+               create, drag and ✕ are off for them too. *@
+            @if (_isViewer)
+            {
+                <span class="small text-secondary" id="calendar-viewer-note">You're a viewer in this group, so the calendar is read-only for you.</span>
+            }
+            else
+            {
+                <button type="button" class="btn btn-primary btn-sm" id="calendar-new-event"
+                        @onclick="NewEventAsync">
+                    <BenIcon Name="plus" Class="me-1" />New event
+                </button>
+            }
         </div>
 
         @* TelerikScheduler with built-in edit form intercepted for custom fields *@
@@ -67,9 +76,9 @@
                           @bind-Date="@_schedulerDate"
                           @bind-View="@_currentView"
                           Height="700px"
-                          AllowCreate="true"
-                          AllowUpdate="true"
-                          AllowDelete="true"
+                          AllowCreate="@(!_isViewer)"
+                          AllowUpdate="@(!_isViewer)"
+                          AllowDelete="@(!_isViewer)"
                           OnEdit="@OnSchedulerEdit"
                           OnUpdate="@OnSchedulerMovedAsync"
                           OnDelete="@OnSchedulerDelete">
@@ -490,6 +499,7 @@
 
     private string? _error;
     private bool _signedOut;
+    private bool _isViewer;
     private bool _isBusy;
     private bool _showDeleteConfirm;
     private OrgCalendarEventRecord? _deleteTarget;
@@ -716,6 +726,7 @@
         {
             // Options for the type dropdown. A refusal narrows the choices; it does not
             // misreport the calendar, which reports its own state below.
+            _isViewer = !UserState.IsSuperAdmin && (await AdminClient.GetMyOrgPermissionsAsync(OrgId))?.IsViewer == true;
             _eventTypes = (await AdminClient.GetCalendarEventTypesAsync(OrgId)).Items.ToList();
             _eventTypeOptions = [new(null, "(No type)"),
                 .. _eventTypes.Select(t => new EventTypeOption(t.Id, t.Name))];

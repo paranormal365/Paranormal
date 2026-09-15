@@ -106,6 +106,15 @@ public class OrganizationSecurityService : IOrganizationSecurityService
             return true;
         }
 
+        // A Viewer reads and does nothing else, whatever roles or grants they hold (Ben, 2026-09-14: "make viewers
+        // read-only"). The role was documented that way from the start and never enforced: a Viewer given a role with
+        // Create in it — the role new members start on, say — could add and change things like anybody else.
+        if (membership.Role == OrganizationMemberRole.Viewer
+            && (actionName & ~OrganizationSecurityAction.Read) != OrganizationSecurityAction.None)
+        {
+            return false;
+        }
+
         // ── The tier area gate (item 156 Phase D, decision D4) ────────────────
         // Role permissions and direct grants in an area the group's plan does not include stop
         // applying HERE, at runtime — stored untouched, grayed-but-remembered in the editor,

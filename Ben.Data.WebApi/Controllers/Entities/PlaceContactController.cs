@@ -67,6 +67,8 @@ public sealed class PlaceContactController : BenControllerBase
         if (!await db.Places.AnyAsync(p => p.Id == placeId, ct)) return NotFound("We can't find that place.");
         if (!IsSuperAdmin && !await IsMemberAsync(db, request.OrganizationId, userId, ct))
             return Forbid();
+        if (!IsSuperAdmin && await Ben.Data.WebApi.Services.Access.FileAudienceAccess.IsOrgViewerAsync(db, request.OrganizationId, userId, ct))
+            return ViewerReadOnly();
 
         if (Enum.IsDefined(request.Kind) == false) return BadRequest("Choose a website, a phone number or an email address.");
         var (value, refusal) = Normalise(request.Kind, request.Value);

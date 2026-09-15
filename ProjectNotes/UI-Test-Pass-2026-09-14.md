@@ -331,8 +331,14 @@ Walked Paranormal365 as Victor (the Viewer role, no grants). The hub gives him D
 own facts — no case figures), Members, Calendar, Messages, Files (the new "who adds files" line, no tools) and Equipment;
 no Cases or Investigations tabs.
 
-- [ ] **V.1 A Viewer can add, move and delete the group's calendar events — public ones included — and post group
-  messages.** Both controllers let any active member do it (item 156 kept the calendar "member-open"), and a Viewer is an
+- [x] **V.1 A Viewer can add, move and delete the group's calendar events — public ones included — and post group
+  messages.** → Ben: "make viewers read-only". Done at both layers the rank could slip through: the permission service
+  answers no to any write for a Viewer whatever roles or grants they hold (a Viewer is put on the same starting role as a
+  Member), and the twenty-one member-open writes — calendar events, investigations and their attendance, check-in, lead,
+  duties and findings, group messages, timeline entries, request statuses and votes, place contacts — refuse a Viewer
+  with a sentence. The calendar and messages say so instead of offering New event, the drag, the ✕, Compose and Reply.
+  My-permissions carries `isViewer` (additive). `ViewerReadOnlyTests`, the service test (seen failing first),
+  `ViewerSeatTests`. Earlier: Both controllers let any active member do it (item 156 kept the calendar "member-open"), and a Viewer is an
   active member. The page and the server agree, so nothing is offered that is then refused; whether the Viewer role
   should be read-only here is a policy question for Ben, and nothing was changed.
 
