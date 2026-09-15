@@ -77,7 +77,7 @@
 
             <div class="mb-2">
                 <label class="form-label fw-semibold">When do you need it? <span class="text-secondary fw-normal">(optional)</span></label>
-                <TelerikDatePicker Format="@DateTimeViewerExtensions.DatePattern" @bind-Value="@_neededFrom" Width="100%" />
+                <BenDateField Mode="DateEntryMode.Date" @bind-Value="@_neededFrom" Width="100%" />
             </div>
 
             <div class="mb-2">

@@ -296,8 +296,8 @@
             <div class="col-md-6">
                 <label class="form-label fw-semibold" for="investigationpanel-start-date">Starts</label>
                 <div class="d-flex gap-2">
-                    <TelerikDatePicker Id="investigationpanel-start-date" Format="MM/dd/yyyy" @bind-Value="@_form.StartDate" Width="160px" />
-                    <TelerikTimePicker Format="hh:mm tt" @bind-Value="@_form.StartTime" Width="130px" />
+                    <BenDateField Mode="DateEntryMode.Date" Id="investigationpanel-start-date" @bind-Value="@_form.StartDate" Width="160px" />
+                    <BenDateField Mode="DateEntryMode.Time" @bind-Value="@_form.StartTime" Width="130px" />
                 </div>
             </div>
             @* One arrival and one departure is the ordinary shape, and it is allowed to cross
@@ -309,11 +309,11 @@
                 <label class="form-label fw-semibold">Ends (optional)</label>
                 @if (_form.MultiDay)
                 {
-                    <TelerikDateTimePicker Format="@DateTimeViewerExtensions.DateTimeNoSecondsPattern" @bind-Value="@_form.EndDateTime" Width="100%" />
+                    <BenDateField Mode="DateEntryMode.DateTime" @bind-Value="@_form.EndDateTime" Width="100%" />
                 }
                 else
                 {
-                    <TelerikTimePicker Format="hh:mm tt" @bind-Value="@_form.EndTime" Width="100%" />
+                    <BenDateField Mode="DateEntryMode.Time" @bind-Value="@_form.EndTime" Width="100%" />
                     <div class="form-text">A time at or before the start is the next morning.</div>
                 }
                 <div class="form-check mt-2">
@@ -340,7 +340,7 @@
                 </div>
                 <div class="col-md-6">
                     <label class="form-label fw-semibold">Evidence Due Date (optional)</label>
-                    <TelerikDateTimePicker Format="@DateTimeViewerExtensions.DateTimeNoSecondsPattern" @bind-Value="@_form.EvidenceDueDate" Width="100%" />
+                    <BenDateField Mode="DateEntryMode.DateTime" @bind-Value="@_form.EvidenceDueDate" Width="100%" />
                     <div class="form-text">After this date, no new evidence may be submitted for this investigation.</div>
                 </div>
             }

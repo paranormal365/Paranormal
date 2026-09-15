@@ -95,16 +95,16 @@ else
                 <div class="col-12">
                     <div class="d-flex gap-2 align-items-center">
                         <span class="text-secondary small" style="width:20px;">@(idx + 1).</span>
-                        <TelerikDatePicker Format="MM/dd/yyyy" @bind-Value="@_slots[idx].StartDate" Width="150px" />
-                        <TelerikTimePicker Format="hh:mm tt" @bind-Value="@_slots[idx].StartTime" Width="120px" />
+                        <BenDateField Mode="DateEntryMode.Date" @bind-Value="@_slots[idx].StartDate" Width="150px" />
+                        <BenDateField Mode="DateEntryMode.Time" @bind-Value="@_slots[idx].StartTime" Width="120px" />
                         <span class="text-secondary small">to</span>
                         @if (_multiDay)
                         {
-                            <TelerikDateTimePicker Format="@DateTimeViewerExtensions.DateTimeNoSecondsPattern" @bind-Value="@_slots[idx].End" Width="200px" />
+                            <BenDateField Mode="DateEntryMode.DateTime" @bind-Value="@_slots[idx].End" Width="200px" />
                         }
                         else
                         {
-                            <TelerikTimePicker Format="hh:mm tt" @bind-Value="@_slots[idx].EndTime" Width="120px" />
+                            <BenDateField Mode="DateEntryMode.Time" @bind-Value="@_slots[idx].EndTime" Width="120px" />
                         }
                         @if (_slots.Count > 1)
                         {

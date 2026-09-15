@@ -1,23 +1,17 @@
-using System.Text.RegularExpressions;
 using Microsoft.Playwright;
 using NUnit.Framework;
 
 namespace Ben.Web.Playwright.Tests;
 
 /// <summary>
-/// A date field has to keep the date you are building.
+/// A date field keeps the date you are building, and refuses one that cannot exist.
 /// </summary>
 /// <remarks>
-/// <para>
-/// Ben, 2026-09-09: <em>"I had entered 09 and was moving the numbers up for the date from 00 to 18
-/// and before I could even get to 18, it moved and my 09 had changed to 10."</em>
-/// </para>
-/// <para>
-/// Measured on the isolated stack: an <b>empty</b> Telerik date field rebuilds the whole date the
-/// first time a segment is stepped. Type <c>09</c>, press Up once on the day, and the field reads
-/// <c>10/01</c>. It is deterministic, not a race — a single slow press does it. A field that
-/// already holds a date steps its segments correctly, twelve fast presses running.
-/// </para>
+/// <para>Ben, 2026-09-09: an empty Telerik date box rebuilt the whole date the first time a segment was stepped
+/// (item 221). Item 224, measured 2026-09-15: a seeded one turned 0-9-3-1 into 09/01 and hour 13 PM into 03 PM,
+/// silently, on Telerik 14.1 and 15.0.1 alike. Every date and time field is now <c>BenDateField</c>: typed text, read
+/// by the site, with a sentence for anything impossible and the kept value back in the box.</para>
+/// <para>Driven through the Propose Dates dialog, a field inside a modal — the hardest place for a field to behave.</para>
 /// </remarks>
 [TestFixture]
 [Category("DateField")]
@@ -37,62 +31,70 @@ public class DateFieldTests : BenTestBase
         await Expect(propose).ToBeVisibleAsync(new() { Timeout = 15_000 });
         await propose.ClickAsync();
         await Expect(Page.Locator(".modal.show").First).ToBeVisibleAsync(new() { Timeout = 15_000 });
-        await Page.WaitForTimeoutAsync(500);
         return true;
     }
 
-    /// <summary>
-    /// The date half of the first proposed slot, whichever control is carrying it — a union, so
-    /// this test still finds the field if the split into a date box and a time box is ever
-    /// undone, and reports the mask rather than "no such element".
-    /// </summary>
-    private ILocator FirstDateBox =>
-        Page.Locator(".modal.show .k-datepicker input.k-input-inner, .modal.show .k-datetimepicker input.k-input-inner").First;
+    private ILocator FirstField(string mode) => Page.Locator($".modal.show .ben-date-field[data-mode='{mode}']").First;
 
-    /// <summary>
-    /// The precondition for the fault, stated as a rule: no date field is ever handed over empty.
-    /// </summary>
+    /// <summary>No date field is ever handed over empty.</summary>
     [Test]
     public async Task A_proposed_date_starts_from_a_real_date()
     {
         if (!await OpenProposeDatesAsync())
             Assert.Ignore("Seeded Paranormal365/Belmont case not reachable.");
 
-        var value = await FirstDateBox.InputValueAsync();
-        TestContext.Out.WriteLine($"first slot: \"{value}\"");
-
-        Assert.That(value, Does.Match(@"^\d{2}/\d{2}/\d{4}$"),
-            "The date field was handed over empty, which is what lets a stepped segment rewrite the whole date.");
+        await Expect(FirstField("date").Locator("input")).ToHaveValueAsync(
+            new System.Text.RegularExpressions.Regex(@"^\d{2}/\d{2}/\d{4}$"), new() { Timeout = 10_000 });
     }
 
-    /// <summary>Stepping the day must not touch the month.</summary>
+    /// <summary>The measured keystrokes: 09/31 is refused with the month's length, and the date already there stays.</summary>
     [Test]
-    public async Task Stepping_the_day_leaves_the_month_alone()
+    public async Task The_thirty_first_of_September_is_refused_and_the_date_already_there_stays()
     {
         if (!await OpenProposeDatesAsync())
             Assert.Ignore("Seeded Paranormal365/Belmont case not reachable.");
 
-        var before = await FirstDateBox.InputValueAsync();
-        Assert.That(before, Does.Match(@"^\d{2}/\d{2}/\d{4}$"), $"Unexpected starting value \"{before}\".");
+        var field = FirstField("date");
+        var input = field.Locator("input");
+        await Expect(input).ToHaveValueAsync(new System.Text.RegularExpressions.Regex(@"^\d{2}/\d{2}/\d{4}$"), new() { Timeout = 10_000 });
+        var before = await input.InputValueAsync();
 
-        // The day segment of MM/dd/yyyy.
-        await Page.EvaluateAsync(
-            @"() => { const e = document.querySelector('.modal.show .k-datepicker input.k-input-inner');
-                      e.focus(); e.setSelectionRange(3, 5); }");
-        await Page.WaitForTimeoutAsync(200);
+        await input.FillAsync("09/31/2026");
+        await input.PressAsync("Tab");
 
-        for (var i = 0; i < 8; i++)
-        {
-            await Page.Keyboard.PressAsync("ArrowUp");
-            await Page.WaitForTimeoutAsync(40);
-        }
-        await Page.WaitForTimeoutAsync(800);
+        var said = field.Locator(".invalid-feedback");
+        await Expect(said).ToContainTextAsync("September 2026 has 30 days", new() { Timeout = 10_000 });
+        await Expect(said).ToContainTextAsync($"It is still {before}");
+        await Expect(input).ToHaveValueAsync(before);
+        await Expect(input).ToHaveAttributeAsync("aria-invalid", "true");
 
-        var after = await FirstDateBox.InputValueAsync();
-        TestContext.Out.WriteLine($"{before} -> {after}");
+        // And a real date is taken, written the site's way, with the refusal gone.
+        await input.FillAsync("9/30/26");
+        await input.PressAsync("Tab");
+        await Expect(input).ToHaveValueAsync("09/30/2026", new() { Timeout = 10_000 });
+        await Expect(field.Locator(".invalid-feedback")).ToHaveCountAsync(0);
+    }
 
-        var month = new Func<string, string>(v => Regex.Match(v, @"^(\d{2})/").Groups[1].Value);
-        Assert.That(month(after), Is.EqualTo(month(before)),
-            $"Stepping the day changed the month: {before} became {after}.");
+    /// <summary>Hour 13 with PM was 03 PM on Telerik's time picker; here it is a sentence, and 8pm reads as 08:00 PM.</summary>
+    [Test]
+    public async Task An_impossible_hour_is_refused_and_a_casual_time_is_read()
+    {
+        if (!await OpenProposeDatesAsync())
+            Assert.Ignore("Seeded Paranormal365/Belmont case not reachable.");
+
+        var field = FirstField("time");
+        var input = field.Locator("input");
+        await Expect(input).ToBeVisibleAsync(new() { Timeout = 10_000 });
+        var before = await input.InputValueAsync();
+
+        await input.FillAsync("13:00 PM");
+        await input.PressAsync("Tab");
+        await Expect(field.Locator(".invalid-feedback")).ToContainTextAsync("13 PM isn't a time", new() { Timeout = 10_000 });
+        await Expect(input).ToHaveValueAsync(before);
+
+        await input.FillAsync("8pm");
+        await input.PressAsync("Tab");
+        await Expect(input).ToHaveValueAsync("08:00 PM", new() { Timeout = 10_000 });
+        await Expect(field.Locator(".invalid-feedback")).ToHaveCountAsync(0);
     }
 }
