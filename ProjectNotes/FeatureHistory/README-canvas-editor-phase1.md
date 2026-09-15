@@ -118,4 +118,71 @@ copy the bug. Fixing the video editor is separate work.
 
 ## Status
 
-Recorded below as each step lands.
+Server half (M6-01..M6-13) and the deploy scripts and docs (M7-01..M7-04) are done on this branch.
+Nothing is pushed, merged, migrated on production or deployed.
+
+## What shipped
+
+### API contract
+
+| Route | Verb | Who | Answers |
+|---|---|---|---|
+| `api/canvas-documents?caseId=` | GET | Case.Read on the case; without `caseId`, the caller's personal boards | 200 `CanvasDocumentSummaryRecord[]` newest first (with `createdByName` on a case), 403, 404 no case |
+| `api/canvas-documents/{id}` | GET | case readers; a personal board's author | 200 `CanvasDocumentRecord` + `ETag: "<revision>"`, 404 |
+| `api/canvas-documents?caseId=` | POST | Cases Create (or personal when no `caseId`) | 201 at revision 1 + `ETag`, 400 not an object / lapsed group, 403, 404 no case |
+| `api/canvas-documents/{id}` | PUT | Cases Update; personal: author | 200 new revision + `ETag`, 400, 403, 404, **409 with the server copy**, **428** without a readable `If-Match` |
+| `api/canvas-documents/{id}` | DELETE | Cases Delete; personal: author or SuperAdmin | 204 (snapshot removed too), 403, 404 |
+| `api/canvas-documents/{id}/publish` | POST multipart `file` (image/png, 25 MB) | Cases Update | 200 record with `publishedUploadFileId`, 400 empty / not a PNG / personal / lapsed, 403, 404 |
+| `api/link-unfurl?url=` | GET | holds Cases Create in some group; 30/min per person | 200 `LinkUnfurlRecord` (`Cache-Control: private, max-age=86400`), 400 refused address with a sentence, 403, 404 unreadable, 429 |
+| `api/link-unfurl/image?url=` | GET | as above; 120/min per person and 1200/min server-wide | 200 `image/jpeg` 800 px (`private, max-age=604800`), 400, 403, 404, 429 |
+
+All eight answer **404 to a signed-in caller while Feature — Canvas editor is off** (the default)
+and 401 to an anonymous one.
+
+### Files
+
+- API: `Controllers/Entities/CanvasDocumentController.cs`, `Controllers/LinkUnfurlController.cs`,
+  `Services/LinkUnfurl/{SafeUrlPolicy,SafeUrlFetcher,OpenGraphParser,LinkUnfurlService,LinkUnfurlImageCeiling}.cs`,
+  `Services/BoardSnapshots.cs`, `Services/FeatureGatedAttribute.cs` (R1), `Services/SiteSettingsService.cs`,
+  `Services/RateLimiting.cs`, `Services/Admin/{CasePurge,OrganizationPurge}.cs`,
+  `SeedData/UploadFileTypeSeeder.cs` (Board Snapshot), `Controllers/Entities/CaseController.cs` and
+  `Controllers/Cms/CaseMediaPublication.cs` (R22), `Program.cs`.
+- Data: `Entities/BenDataModel.{CanvasDocument,LinkUnfurlCache}.cs`, `Context/BenDataContext.cs`,
+  migration `20260914235349_AddCanvasEditor`.
+- Models: `Entities/CanvasDocumentRecord.cs`, `Support/LinkUnfurlRecord.cs`,
+  `Mappings/Entities/CanvasDocumentProfile.cs`, `Admin/AdminStatsRecords.cs` (purge preview counts boards).
+- Website: `Ben.Web.Services/{SiteFeaturesProvider,StandaloneCanvasAddress}.cs`,
+  `Services/MapKitTokenOrigin.cs`, `Program.cs`, `appsettings.json` (`Maps:AllowedTokenOrigins: []`),
+  `SuperAdmin/AdminDeleteCase.razor`.
+- Scripts and docs: `scripts/run-webapi-e2e.ps1`, `scripts/deploy-ishaunted.ps1`,
+  `scripts/setup-iis-ishaunted.ps1`, `docs/deploy-canvas.md`, `docs/deploy-production.md`,
+  `docs/dev-loop-canvas.md`.
+
+### Tests
+
+New: `CanvasDocumentControllerTests` (33), `BoardSnapshotPrivacyTests` (5), `SafeUrlPolicyTests` and
+`SafeUrlFetcherTests` (92), `OpenGraphParserTests` and `LinkUnfurlServiceTests` (25),
+`LinkUnfurlControllerTests` (24), `StandaloneCanvasAddressTests` (8), `MapKitTokenOriginTests` (16),
+`CanvasDocumentProfileTests` (2), `CanvasDeployScriptGuardTests` (13), `Support/FeatureGateProbe`.
+Extended: `FeatureGatedAttributeTests`, `SiteFeatureFlagTests`, `CasePurgeBehaviourTests`,
+`OrganizationPurgeBehaviourTests`, `AppUserPurgeBehaviourTests`, `ReadDoesNotGrantDestructionTests`
+(R25), `SqliteTestDb` (interceptors for the race test).
+
+Every new test was shown failing first; each commit body carries the failing assertion and, for the
+guards, which sabotage turned which test red.
+
+### Found on the way
+
+- `FeatureGatedAttribute` read an unset flag as on (R1) — fixed, see above.
+- The base commit did not build with `-warnaserror` (three CS8604 in `VenueRequestsController`).
+- `scripts/secrets.template.json` does not parse under Windows PowerShell 5.1's `ConvertFrom-Json`
+  ("Unrecognized escape sequence"), so a `-StageOnly` run cannot use the template as its secrets file.
+- `run-webapi-e2e.ps1` has to override Serilog's own SQL connection string, which names `BenDb`.
+- EF InMemory does enforce concurrency tokens, so the stale-save 409 is covered by both the C#
+  compare and the token; only SQLite proves the race.
+
+### Deliberately not done here
+
+- The editor-side seams (M6-14 onward) are in the Messenger tree.
+- Live MapKit check: signing is not configured in this worktree.
+- No production migration, IIS change or deploy; the rollout is in `docs/deploy-canvas.md`.
