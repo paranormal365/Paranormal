@@ -545,12 +545,27 @@ app.MapGet("/.well-known/apple-developer-domain-association.txt", (IConfiguratio
 // is; same-origin, because the token names the origin it was minted for and Apple refuses it
 // anywhere else. 404 when unconfigured, for the same reason as the files above: a page that
 // fetches this and gets nothing useful should fail the way an absent feature fails.
+//
+// ?origin= mints for a DIFFERENT origin, but only one listed in Maps:AllowedTokenOrigins — empty in
+// production, the local canvas editor (http://localhost:5125) in development, where it runs on its
+// own port and a same-origin token would draw no tiles (canvas plan M6-12). Anything unlisted is 404,
+// never a token for somebody else's site. See MapKitTokenOrigin.
 app.MapGet(Ben.Web.Website.Library.Kit.Maps.MapsOptions.TokenPath,
-    (HttpContext ctx, Ben.Web.Website.Services.MapKitTokenService tokens) =>
+    (HttpContext ctx, Ben.Web.Website.Services.MapKitTokenService tokens, IConfiguration config) =>
 {
     if (!tokens.IsConfigured) return Results.NotFound();
 
-    var origin = $"{ctx.Request.Scheme}://{ctx.Request.Host}";
+    var requestOrigin = $"{ctx.Request.Scheme}://{ctx.Request.Host}";
+    var allowed = config.GetSection("Maps:AllowedTokenOrigins").Get<string[]>() ?? [];
+    var origin = Ben.Web.Website.Services.MapKitTokenOrigin.Resolve(requestOrigin, ctx.Request.Query["origin"], allowed);
+    if (origin is null) return Results.NotFound();
+
+    if (!string.Equals(origin, requestOrigin, StringComparison.OrdinalIgnoreCase))
+    {
+        // The override exists for a page on another origin, which fetches this cross-origin.
+        ctx.Response.Headers.AccessControlAllowOrigin = origin;
+        ctx.Response.Headers.Vary = "Origin";
+    }
     ctx.Response.Headers.CacheControl = "no-store";
     return Results.Text(tokens.Issue(origin, DateTimeOffset.UtcNow), "text/plain");
 }).AllowAnonymous();
