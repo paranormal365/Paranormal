@@ -86,6 +86,11 @@ if (-not $SkipMigrate) {
 $env:ASPNETCORE_ENVIRONMENT                  = 'Development'
 $env:ConnectionStrings__BenDbConnectionString = $conn
 $env:FileStorage__RootPath                   = $uploads
+# Serilog's SQL sink carries its OWN copy of the connection string (index 1 of WriteTo; see
+# SerilogSinkOrderTests), which names BenDb - a database that does not exist on this box, so the
+# host dies at startup with "Cannot open database BenDb". Point it at the same e2e database, never
+# at production, where errors from a scratch run would mislead diagnosis.
+$env:Serilog__WriteTo__1__Args__connectionString = $conn
 if ($ResetSeedPasswords) { $env:SeedData__SeedOrganization__ResetPasswords = 'true' }
 
 Write-Host "== Starting the WebApi on http://127.0.0.1:5252 against $database"
