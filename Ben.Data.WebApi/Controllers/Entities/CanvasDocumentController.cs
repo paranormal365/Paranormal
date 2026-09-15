@@ -112,7 +112,9 @@ public sealed class CanvasDocumentController : BenControllerBase
         }
 
         var entities = await query.OrderByDescending(d => d.DateUpdated ?? d.DateCreated).ToListAsync(ct);
-        var records = entities.Select(e => _mapper.Map<CanvasDocumentSummaryRecord>(e)).ToList();
+        // Every board in one list has the same answer: all on one case, or all the caller's own.
+        var canEdit = caseId is null || await MayChangeCaseAsync(entities.FirstOrDefault()?.Case?.OrganizationId, ct);
+        var records = entities.Select(e => _mapper.Map<CanvasDocumentSummaryRecord>(e) with { CanEdit = canEdit }).ToList();
 
         // Names only where the list holds more than one person's work; one query for all of them.
         if (caseId.HasValue && records.Count > 0)
@@ -147,7 +149,10 @@ public sealed class CanvasDocumentController : BenControllerBase
         if (entity is null || !await MayReadAsync(entity, userId, ct)) return NotFound();
 
         SetETag(entity.Revision);
-        return Ok(_mapper.Map<CanvasDocumentRecord>(entity));
+        var canEdit = entity.Case is { } onCase
+            ? await MayChangeCaseAsync(onCase.OrganizationId, ct)
+            : entity.CreatedByAppUserId == userId;
+        return Ok(_mapper.Map<CanvasDocumentRecord>(entity) with { CanEdit = canEdit });
     }
 
     // POST /api/canvas-documents[?caseId=]
@@ -195,7 +200,7 @@ public sealed class CanvasDocumentController : BenControllerBase
         await TryAuditAsync(_audit.LogCreateAsync(nameof(CanvasDocument), entity.Id, Slim(entity), userId, AppSources.WebApi));
 
         SetETag(entity.Revision);
-        var record = _mapper.Map<CanvasDocumentRecord>(entity) with { OrganizationId = orgId };
+        var record = _mapper.Map<CanvasDocumentRecord>(entity) with { OrganizationId = orgId, CanEdit = true };
         return CreatedAtAction(nameof(GetById), new { id = entity.Id }, record);
     }
 
@@ -231,7 +236,8 @@ public sealed class CanvasDocumentController : BenControllerBase
         }
 
         if (ReadIfMatch() is not { } loaded) return StatusCode(428, IfMatchRequired);
-        if (loaded != entity.Revision) return Conflict(_mapper.Map<CanvasDocumentRecord>(entity));
+        // Every answer from here on passed the write checks above, so it can say the board is editable.
+        if (loaded != entity.Revision) return Conflict(_mapper.Map<CanvasDocumentRecord>(entity) with { CanEdit = true });
 
         var before = Slim(entity);
         entity.Name               = NameOf(body);
@@ -257,13 +263,13 @@ public sealed class CanvasDocumentController : BenControllerBase
             var server = await fresh.CanvasDocuments.AsNoTracking().Include(d => d.Case)
                 .FirstOrDefaultAsync(d => d.Id == id, ct);
             if (server is null) return NotFound();
-            return Conflict(_mapper.Map<CanvasDocumentRecord>(server));
+            return Conflict(_mapper.Map<CanvasDocumentRecord>(server) with { CanEdit = true });
         }
 
         await TryAuditAsync(_audit.LogUpdateAsync(nameof(CanvasDocument), entity.Id, before, Slim(entity), userId, AppSources.WebApi));
 
         SetETag(entity.Revision);
-        return Ok(_mapper.Map<CanvasDocumentRecord>(entity));
+        return Ok(_mapper.Map<CanvasDocumentRecord>(entity) with { CanEdit = true });
     }
 
     // DELETE /api/canvas-documents/{id}
@@ -401,7 +407,7 @@ public sealed class CanvasDocumentController : BenControllerBase
         await TryAuditAsync(_audit.LogUpdateAsync(nameof(CanvasDocument), board.Id, before, Slim(board), userId, AppSources.WebApi));
 
         SetETag(board.Revision);
-        return Ok(_mapper.Map<CanvasDocumentRecord>(board));
+        return Ok(_mapper.Map<CanvasDocumentRecord>(board) with { CanEdit = true });
     }
 
     /// <summary>The eight bytes every PNG starts with. The content type is the client's claim; this is the file's.</summary>
@@ -444,6 +450,17 @@ public sealed class CanvasDocumentController : BenControllerBase
         => User.IsInRole(RoleNames.SuperAdmin)
             ? Task.FromResult(true)
             : _security.MayAsync(GetCurrentUserId(), orgId, OrganizationPermissionArea.Cases, action, ct);
+
+    /// <summary>
+    /// May the caller change this group's case boards right now: Cases Update, and a subscription that
+    /// allows writes? The answer the editor shows as an editable or view-only board (canvas plan R33).
+    /// </summary>
+    private async Task<bool> MayChangeCaseAsync(Guid? orgId, CancellationToken ct)
+    {
+        if (orgId is not { } org) return false;
+        if (await _limits.WhyReadOnlyAsync(org, ct) is not null) return false;
+        return await MayOnCaseAsync(org, OrganizationSecurityAction.Update, ct);
+    }
 
     /// <summary>May the caller read this group's cases? The only question a read grant answers.</summary>
     private async Task<bool> CanReadCaseAsync(Guid orgId, CancellationToken ct)

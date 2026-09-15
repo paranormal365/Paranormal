@@ -18,10 +18,12 @@ public class CanvasDocumentProfile : Profile
     {
         CreateMap<CanvasDocument, CanvasDocumentRecord>()
             .ForMember(d => d.OrganizationId, o => o.MapFrom(s => s.Case != null ? s.Case.OrganizationId : (Guid?)null))
-            .ForMember(d => d.CreatedByName, o => o.Ignore());
+            .ForMember(d => d.CreatedByName, o => o.Ignore())
+            .ForMember(d => d.CanEdit, o => o.Ignore());
 
         CreateMap<CanvasDocument, CanvasDocumentSummaryRecord>()
             .ForMember(d => d.OrganizationId, o => o.MapFrom(s => s.Case != null ? s.Case.OrganizationId : (Guid?)null))
-            .ForMember(d => d.CreatedByName, o => o.Ignore());
+            .ForMember(d => d.CreatedByName, o => o.Ignore())
+            .ForMember(d => d.CanEdit, o => o.Ignore());
     }
 }

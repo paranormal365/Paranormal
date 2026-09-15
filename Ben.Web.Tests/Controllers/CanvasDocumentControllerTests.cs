@@ -286,6 +286,71 @@ public sealed class CanvasDocumentControllerTests
         Assert.Equal(1, (await db.CanvasDocuments.SingleAsync()).Revision);
     }
 
+    // ── can edit (canvas plan R33) ────────────────────────────────────────────
+
+    [Fact]
+    public async Task A_manager_is_told_the_board_is_editable_in_the_list_and_on_open()
+    {
+        var w = await SeedAsync();
+        var board = await CreateOnCaseAsync(w);
+        var editor = Build(w.Factory, w.EditorId).Controller;
+
+        var list = (IEnumerable<CanvasDocumentSummaryRecord>)Assert.IsType<OkObjectResult>((await editor.GetAll(w.CaseId, default)).Result).Value!;
+        var open = (CanvasDocumentRecord)Assert.IsType<OkObjectResult>((await editor.GetById(board.Id, default)).Result).Value!;
+
+        Assert.True(Assert.Single(list).CanEdit);
+        Assert.True(open.CanEdit);
+        Assert.True(board.CanEdit);
+    }
+
+    [Fact]
+    public async Task A_reader_is_told_the_board_is_view_only()
+    {
+        var w = await SeedAsync();
+        var board = await CreateOnCaseAsync(w);
+        var viewer = Build(w.Factory, w.ViewerId).Controller;
+
+        var list = (IEnumerable<CanvasDocumentSummaryRecord>)Assert.IsType<OkObjectResult>((await viewer.GetAll(w.CaseId, default)).Result).Value!;
+        var open = (CanvasDocumentRecord)Assert.IsType<OkObjectResult>((await viewer.GetById(board.Id, default)).Result).Value!;
+
+        Assert.False(Assert.Single(list).CanEdit);
+        Assert.False(open.CanEdit);
+    }
+
+    [Fact]
+    public async Task A_lapsed_subscription_makes_the_board_view_only_even_for_a_manager()
+    {
+        var w = await SeedAsync();
+        var board = await CreateOnCaseAsync(w);
+        await using (var db = await w.Factory.CreateDbContextAsync())
+        {
+            db.OrganizationSubscriptions.Add(new OrganizationSubscription
+            {
+                Id = Guid.NewGuid(), OrganizationId = w.OrgId, Status = SubscriptionStatus.Lapsed,
+                Interval = BillingInterval.Monthly, DateCreated = DateTime.UtcNow, CreatedByAppUserId = w.EditorId,
+            });
+            await db.SaveChangesAsync();
+        }
+
+        var open = (CanvasDocumentRecord)Assert.IsType<OkObjectResult>((await Build(w.Factory, w.EditorId).Controller.GetById(board.Id, default)).Result).Value!;
+
+        Assert.False(open.CanEdit);
+    }
+
+    [Fact]
+    public async Task A_personal_board_is_editable_by_its_author_in_the_list_and_on_open()
+    {
+        var w = await SeedAsync();
+        var author = Build(w.Factory, w.EditorId).Controller;
+        var mine = (CanvasDocumentRecord)Assert.IsType<CreatedAtActionResult>((await author.Create(null, Board("My sketch"), default)).Result).Value!;
+
+        var list = (IEnumerable<CanvasDocumentSummaryRecord>)Assert.IsType<OkObjectResult>((await author.GetAll(null, default)).Result).Value!;
+        var open = (CanvasDocumentRecord)Assert.IsType<OkObjectResult>((await author.GetById(mine.Id, default)).Result).Value!;
+
+        Assert.True(Assert.Single(list).CanEdit);
+        Assert.True(open.CanEdit);
+    }
+
     [Fact]
     public async Task A_manager_creates_a_board_at_revision_1()
     {

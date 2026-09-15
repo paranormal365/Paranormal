@@ -52,6 +52,13 @@ public record CanvasDocumentRecord
     /// boards appear. Null elsewhere.
     /// </summary>
     public string? CreatedByName { get; init; }
+
+    /// <summary>
+    /// Whether the caller may change this board: a case board when they hold Cases Update and the group's
+    /// subscription allows writes, a personal board when it is theirs. Advice for the editor, which shows a
+    /// view-only board otherwise; every write is still checked on its own.
+    /// </summary>
+    public bool CanEdit { get; init; }
 }
 
 /// <summary>
@@ -95,4 +102,7 @@ public record CanvasDocumentSummaryRecord
 
     /// <summary>The creator's display name, in a case's list; null elsewhere.</summary>
     public string? CreatedByName { get; init; }
+
+    /// <summary>Whether the caller may change this board; see <see cref="CanvasDocumentRecord.CanEdit"/>.</summary>
+    public bool CanEdit { get; init; }
 }
