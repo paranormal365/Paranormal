@@ -42,6 +42,12 @@
     /// <summary>Raised with the ground coordinate when somebody clicks the map itself, not a pin.</summary>
     [Parameter] public EventCallback<BenMapPoint> OnMapClicked { get; set; }
 
+    /// <summary>
+    /// Raised once, when the map has drawn for the first time and can take a route. A caller that draws a route when the
+    /// map appears waits for this rather than guessing at render order (map blocks, 2026-09-14).
+    /// </summary>
+    [Parameter] public EventCallback OnReady { get; set; }
+
     private readonly string _containerId = $"ben-map-{Guid.NewGuid():N}";
     private IJSObjectReference? _module;
     private DotNetObjectReference<BenMap>? _self;
@@ -90,10 +96,12 @@
     private async Task SyncAsync(bool firstRender)
     {
 
+        var becameReady = false;
         if (firstRender)
         {
             _appliedView = (CenterLatitude, CenterLongitude, Zoom);
             _ready = true;
+            becameReady = true;
         }
 
         // Blazor runs OnAfterRenderAsync after EVERY render, including ones that land while the
@@ -129,6 +137,8 @@
             _appliedView = (CenterLatitude, CenterLongitude, Zoom);
             await _module.InvokeVoidAsync("setCenter", _containerId, CenterLatitude, CenterLongitude, Zoom);
         }
+
+        if (becameReady && OnReady.HasDelegate) await OnReady.InvokeAsync();
     }
 
     [JSInvokable]
@@ -170,6 +180,58 @@
             return new BenMapRoute(0, 0, [], $"Directions could not be worked out: {ex.Message}");
         }
     }
+
+    /// <summary>
+    /// Draws a route through <paramref name="stops"/> in order and returns each leg's distance and, for walking or driving,
+    /// its time. Never throws.
+    /// </summary>
+    /// <remarks>
+    /// <para>For a map block with several places (2026-09-14). Straight lines are drawn and measured here, with no provider
+    /// call. Walking and driving ask the provider for one leg at a time; a leg it cannot route — a footpath through a
+    /// cemetery or woods — is drawn as a dashed straight line and comes back with a note, so one missing path never
+    /// blanks the whole route. Only what was drawn is returned: nothing here is stored.</para>
+    /// <para>The stops are not drawn as pins by this method; pass them as <see cref="Pins"/> as usual. Drawing replaces any
+    /// route this map already shows.</para>
+    /// </remarks>
+    public async Task<BenMapRouteSummary> RouteThroughAsync(IReadOnlyList<BenMapPoint> stops, BenMapRouteMode mode)
+    {
+        if (stops.Count < 2) { await ClearRouteAsync(); return new BenMapRouteSummary([]); }
+
+        var straight = GreatCircle.StraightLegs(stops);
+        if (_module is null || !_ready)
+            return mode == BenMapRouteMode.Straight ? new BenMapRouteSummary(straight) : BenMapRouteSummary.Failed("The map is not ready yet.");
+
+        try
+        {
+            if (mode == BenMapRouteMode.Straight || !Maps.Configured)
+            {
+                await _module.InvokeVoidAsync("routeStraight", _containerId, stops);
+                return new BenMapRouteSummary(straight);
+            }
+
+            var legs = await _module.InvokeAsync<List<JsLeg>?>("routeThrough", _containerId, stops,
+                mode == BenMapRouteMode.Walking ? "walking" : "driving") ?? [];
+            return new BenMapRouteSummary(legs.Select((leg, i) => leg.Routed
+                    ? new BenMapLeg(i, i + 1, leg.DistanceMeters, leg.DurationSeconds, FollowsPaths: true)
+                    : straight[i] with
+                    {
+                        Note = mode == BenMapRouteMode.Walking
+                            ? "No walking path found — straight line shown"
+                            : "No driving route found — straight line shown",
+                    })
+                .ToList());
+        }
+        catch (Exception ex) when (ex is ObjectDisposedException or JSDisconnectedException)
+        {
+            return BenMapRouteSummary.Failed("The map went away before the route arrived.");
+        }
+        catch (JSException ex)
+        {
+            return BenMapRouteSummary.Failed($"The route could not be drawn: {ex.Message}");
+        }
+    }
+
+    private sealed record JsLeg(bool Routed, double DistanceMeters, double? DurationSeconds);
 
     /// <summary>Takes a drawn route and its A and B pins off the map.</summary>
     public async Task ClearRouteAsync()

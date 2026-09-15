@@ -77,6 +77,32 @@ public class ActionNeededBannerTests : BenTestBase
         }
     }
 
+    [Test]
+    public async Task A_members_request_banner_opens_a_queue_they_can_read_without_answering_for_the_group()
+    {
+        // James reads cases, so the waiting client request is counted for him; the hub's Requests tab is an admin's,
+        // so the banner used to land him on the group's Details (UI test pass 6.14). And the queue offered him Accept and
+        // Decline, which the server refuses him — Decline then took the request off his screen anyway (6.15).
+        await LoginAsync(MemberEmail, MemberPassword);
+        await Page.GotoAsync(BaseUrl);
+        await WaitUntilLoadedAsync();
+
+        var link = Main.Locator($".action-needed-banner a[href='/organizations/{TghId}/pending-requests']");
+        try
+        {
+            await Expect(link).ToBeVisibleAsync(new() { Timeout = 20_000 });
+        }
+        catch (PlaywrightException)
+        {
+            Assert.Ignore("No client request is waiting on the seeded group on this database.");
+        }
+
+        await ClickUntilUrlAsync(link, "/pending-requests");
+        await Expect(Page.GetByRole(AriaRole.Link, new() { Name = "Review & vote" }).First).ToBeVisibleAsync(new() { Timeout = 20_000 });
+        await Expect(Page.GetByRole(AriaRole.Button, new() { Name = "Accept", Exact = true })).ToHaveCountAsync(0);
+        await Expect(Page.GetByRole(AriaRole.Button, new() { Name = "Decline", Exact = true })).ToHaveCountAsync(0);
+    }
+
     private async Task<Dictionary<string, string>> ApiLoginAsync(string email, string password)
     {
         var login = await Page.APIRequest.PostAsync("http://localhost:5252/login",

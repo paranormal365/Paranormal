@@ -20,8 +20,14 @@ public sealed class CaseMessageController : BenControllerBase
     public CaseMessageController(
         IDbContextFactory<BenDataContext> db,
         Services.Billing.SubscriptionLimitGuard limits,
-        Ben.Service.RepositoryService.GenericInterfaces.IOrganizationSecurityService security)
-    { _db = db; _limits = limits; _security = security; }
+        Ben.Service.RepositoryService.GenericInterfaces.IOrganizationSecurityService security,
+        Services.ICmsMarkupSanitizer sanitizer,
+        Ben.Data.WebApi.Services.LinkPreviews.ILinkPreviewWarmer previews)
+    { _db = db; _limits = limits; _security = security; _sanitizer = sanitizer; _previews = previews; }
+
+    private readonly Ben.Data.WebApi.Services.LinkPreviews.ILinkPreviewWarmer _previews;
+
+    private readonly Services.ICmsMarkupSanitizer _sanitizer;
 
     /// <summary>Returns all messages and marks client messages as read by the org.</summary>
     [HttpGet]
@@ -63,7 +69,9 @@ public sealed class CaseMessageController : BenControllerBase
     {
         var userId = GetCurrentUserId();
         if (userId == Guid.Empty) return Unauthorized();
-        if (string.IsNullOrWhiteSpace(request.Body)) return BadRequest("Message body is required.");
+        // Body, BodyHtml, or both — see CaseMessageBodies for why Body stays plain text.
+        if (Services.CaseMessageBodies.Normalise(request.Body, request.BodyHtml, _sanitizer) is not { } bodies)
+            return BadRequest("Type a message first.");
 
         await using var db = await _db.CreateDbContextAsync(ct);
         if (!await MayUseThreadAsync(db, orgId, caseId, OrganizationSecurityAction.Update, ct)) return NotFound();
@@ -76,7 +84,8 @@ public sealed class CaseMessageController : BenControllerBase
             Id                 = Guid.NewGuid(),
             CaseId             = caseId,
             AuthorAppUserId    = userId,
-            Body               = request.Body.Trim(),
+            Body               = bodies.Body,
+            BodyHtml           = bodies.BodyHtml,
             SenderSide         = CaseMessageSide.Organization,
             IsReadByClient     = false,
             IsReadByOrg        = true,
@@ -85,6 +94,7 @@ public sealed class CaseMessageController : BenControllerBase
         };
         db.CaseMessages.Add(msg);
         await db.SaveChangesAsync(ct);
+        _previews.WarmFrom(msg.Body, msg.BodyHtml, userId);
 
         await db.Entry(msg).Reference(m => m.AuthorAppUser).LoadAsync(ct);
         return Ok(ToRecord(msg));
@@ -132,7 +142,7 @@ public sealed class CaseMessageController : BenControllerBase
     private static CaseMessageRecord ToRecord(CaseMessage m) => new(
         m.Id, m.CaseId, m.AuthorAppUserId,
         m.AuthorAppUser?.DisplayName ?? "Unknown",
-        m.Body, m.SenderSide, m.IsReadByClient, m.IsReadByOrg, m.DateCreated);
+        m.Body, m.SenderSide, m.IsReadByClient, m.IsReadByOrg, m.DateCreated, m.BodyHtml);
 
     /// <summary>Returns the count of unread client messages (org has not yet seen them).</summary>
     [HttpGet("unread-count")]
@@ -153,7 +163,8 @@ public sealed class CaseMessageController : BenControllerBase
     }
 }
 
-public sealed record PostCaseMessageRequest(string Body);
+/// <summary>A message to post: plain <c>Body</c> (the app), formatted <c>BodyHtml</c> (the website), or both.</summary>
+public sealed record PostCaseMessageRequest(string? Body = null, string? BodyHtml = null);
 
 public sealed record CaseMessageRecord(
     Guid   Id,
@@ -164,4 +175,7 @@ public sealed record CaseMessageRecord(
     Ben.Data.Common.Enums.CaseMessageSide SenderSide,
     bool   IsReadByClient,
     bool   IsReadByOrg,
-    DateTime DateCreated);
+    DateTime DateCreated,
+    // Added 2026-09-14, last and optional so the shipped app's decoder is untouched. Null unless the message was
+    // written in the website's formatting editor; Body always carries the same words as plain text.
+    string? BodyHtml = null);

@@ -16,6 +16,16 @@
 {
     <BenLoaderOverlay Visible="true" Text="Loading mixer…" />
 }
+else if (!UserState.IsAuthenticated)
+{
+    @* Signed out is not "this case doesn't exist" (UI test pass 6.16). *@
+    <div class="container py-4">
+        <div class="alert alert-warning">
+            You've been signed out, so the mixer can't be opened.
+            <a class="alert-link ms-1" href="@Ben.Web.Website.Library.Kit.SignInLink.For(NavManager)">Sign in</a>
+        </div>
+    </div>
+}
 else if (_case is null)
 {
     <div class="container py-4">
@@ -29,7 +39,7 @@ else
         @* ── Header ────────────────────────────────────────────────────────── *@
         <div class="d-flex align-items-center gap-2 mb-3 flex-wrap">
             <a href="/organizations/@OrgId/cases/@CaseId" class="text-secondary small">← @_case.DisplayLabel</a>
-            <h4 class="mb-0 ms-2"><BenIcon Name="sliders" Class="me-1" />Audio Mixer<HelpLink Slug="using-the-audio-editor" Anchor="the-case-mixer" /></h4>
+            <h4 class="mb-0 ms-2 d-flex align-items-center"><BenIcon Name="sliders" Class="me-1" />Audio Mixer<HelpLink Slug="using-the-audio-editor" Anchor="the-case-mixer" /></h4>
         </div>
 
         @* ── Transport bar ─────────────────────────────────────────────────── *@
@@ -58,7 +68,11 @@ else
             }
             else if (!HasAnyClips)
             {
-                <span class="small text-secondary ms-auto">Add clips from the case's Files tab to get started.</span>
+                @* Beside a list of clips each with its own Add, "add clips from the Files tab" sent people away from
+                   the button in front of them (UI test pass 6.18). *@
+                <span class="small text-secondary ms-auto">@(_audioFiles.Count > 0
+                    ? "Press Add beside a clip to put it on a track."
+                    : "Add audio to the case's Files tab to get started.")</span>
             }
             else
             {

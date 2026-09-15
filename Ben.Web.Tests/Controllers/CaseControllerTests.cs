@@ -50,7 +50,7 @@ public class CaseControllerTests
                 : new CaseRecord { Title = "", StreetAddress1 = "", City = "", State = "", ZipCode = "", Country = "", DateCaseOpened = DateTime.UtcNow, DateCreated = DateTime.UtcNow });
         m.Setup(x => x.Map<IEnumerable<CaseRecord>>(It.IsAny<object>()))
             .Returns<object>(o => o is IEnumerable<Case> list
-                ? list.Select(c => new CaseRecord { Id = c.Id, OrganizationId = c.OrganizationId, Title = c.Title, Status = c.Status, CaseYear = c.CaseYear, OrgCaseNumber = c.OrgCaseNumber, StreetAddress1 = c.StreetAddress1, City = c.City, State = c.State, ZipCode = c.ZipCode, Country = c.Country, DateCaseOpened = c.DateCaseOpened, DateCreated = c.DateCreated })
+                ? list.Select(c => new CaseRecord { Id = c.Id, OrganizationId = c.OrganizationId, Title = c.Title, Status = c.Status, CaseYear = c.CaseYear, OrgCaseNumber = c.OrgCaseNumber, StreetAddress1 = c.StreetAddress1, City = c.City, State = c.State, ZipCode = c.ZipCode, Country = c.Country, DateCaseOpened = c.DateCaseOpened, DateCreated = c.DateCreated, CaseManagerAppUserId = c.CaseManagerAppUserId, CaseManagerDisplayName = c.CaseManagerAppUser?.DisplayName })
                 : []);
         m.Setup(x => x.Map<CaseTimelineEntryRecord>(It.IsAny<object>()))
             .Returns<object>(o => o is CaseTimelineEntry e
@@ -58,7 +58,7 @@ public class CaseControllerTests
                 : new CaseTimelineEntryRecord { DateCreated = DateTime.UtcNow });
         m.Setup(x => x.Map<IEnumerable<CaseTimelineEntryRecord>>(It.IsAny<object>()))
             .Returns<object>(o => o is IEnumerable<CaseTimelineEntry> list
-                ? list.Select(e => new CaseTimelineEntryRecord { Id = e.Id, CaseId = e.CaseId, EntryType = e.EntryType, Title = e.Title, InvestigationId = e.InvestigationId, DateCreated = e.DateCreated })
+                ? list.Select(e => new CaseTimelineEntryRecord { Id = e.Id, CaseId = e.CaseId, EntryType = e.EntryType, Title = e.Title, InvestigationId = e.InvestigationId, EventDateTime = e.EventDateTime, DateCreated = e.DateCreated })
                 : []);
         return m.Object;
     }
@@ -67,7 +67,7 @@ public class CaseControllerTests
     {
         var claims = new List<Claim> { new(ClaimTypes.NameIdentifier, userId.ToString()) };
         if (isSuperAdmin) claims.Add(new Claim(ClaimTypes.Role, RoleNames.SuperAdmin));
-        var ctrl = new CaseController(factory, CreateMapper(), new Ben.Data.WebApi.Services.Billing.SubscriptionLimitGuard(factory), new Ben.Service.RepositoryService.Services.OrganizationSecurityService(factory), new Ben.Data.WebApi.Services.RequestReviewNotifier(factory, new Ben.Data.WebApi.Services.PlatformMessageService(factory)), Ben.Web.Tests.TestMailer.Quiet());
+        var ctrl = new CaseController(factory, CreateMapper(), new Ben.Data.WebApi.Services.Billing.SubscriptionLimitGuard(factory), new Ben.Service.RepositoryService.Services.OrganizationSecurityService(factory), new Ben.Data.WebApi.Services.RequestReviewNotifier(factory, new Ben.Data.WebApi.Services.PlatformMessageService(factory)), Ben.Web.Tests.TestMailer.Quiet(), new Ben.Data.WebApi.Services.CmsMarkupSanitizer());
         ctrl.ControllerContext = new ControllerContext
         {
             HttpContext = new DefaultHttpContext
@@ -237,6 +237,33 @@ public class CaseControllerTests
         var dto = Assert.IsType<CaseRecord>(Assert.IsType<OkObjectResult>(result.Result).Value);
         Assert.Equal(managerId, dto.CaseManagerAppUserId);
         Assert.Equal("Dana Holt", dto.CaseManagerDisplayName);
+    }
+
+    [Fact]
+    public async Task GetAll_NamesEachCasesManager()
+    {
+        // UI test pass, 2026-09-14: the Cases tab said "Manager: Unassigned" on every case, including the Belmont case
+        // whose manager is Sarah — the list query loaded cases without the manager navigation the name is mapped from
+        // (the same bug W-A9 fixed for Update, one query over).
+        var (factory, orgId, userId) = await SeedAsync();
+        var managerId = Guid.NewGuid();
+        await using (var db = await factory.CreateDbContextAsync())
+        {
+            db.Users.Add(new AppUser
+            {
+                Id = managerId, UserName = "mgr@t.com", NormalizedUserName = "MGR@T.COM",
+                Email = "mgr@t.com", NormalizedEmail = "MGR@T.COM",
+                DisplayName = "Dana Holt", DateCreated = DateTime.UtcNow,
+            });
+            await db.SaveChangesAsync();
+        }
+        var ctrl   = Build(factory, userId);
+        var caseId = ((CaseRecord)((CreatedAtActionResult)(await ctrl.Create(orgId, MakeCreateRequest(), default)).Result!).Value!).Id;
+        await ctrl.Update(orgId, caseId, new UpdateCaseRequest("Assigned", null, CaseStatus.Accepted, null, false, managerId), default);
+
+        var ok = Assert.IsType<OkObjectResult>((await Build(factory, userId).GetAll(orgId, default)).Result);
+
+        Assert.Equal("Dana Holt", Assert.Single((IEnumerable<CaseRecord>)ok.Value!).CaseManagerDisplayName);
     }
 
     [Fact]
@@ -1071,5 +1098,106 @@ public class CaseControllerTests
         Assert.NotNull(saved.UrlName);
         Assert.DoesNotContain("evaluator", saved.UrlName, StringComparison.OrdinalIgnoreCase);
         Assert.DoesNotContain("casey", saved.UrlName, StringComparison.OrdinalIgnoreCase);
+    }
+
+    // ── Research pages on the timeline (beta feedback, 2026-09-14) ───────────
+
+    private static async Task<Guid> SeedResearchPageAsync(
+        IDbContextFactory<BenDataContext> factory, Guid caseId, Guid userId, string title,
+        DateTime? eventDateTime, DateTime? publishedUtc, string? excerpt = "What the page says")
+    {
+        var id = Guid.NewGuid();
+        await using var db = await factory.CreateDbContextAsync();
+        db.CaseResearchEntries.Add(new CaseResearchEntry
+        {
+            Id = id, CaseId = caseId, ResearchType = CaseResearchType.Note, Title = title,
+            EventDateTime = eventDateTime,
+            PublishedUtc = publishedUtc, PublishedByAppUserId = publishedUtc is null ? null : userId,
+            PublishedBlocksJson = publishedUtc is null ? null : "{\"version\":1,\"blocks\":[]}",
+            DraftBlocksJson = publishedUtc is null ? "{\"version\":1,\"blocks\":[]}" : null,
+            DraftAuthorAppUserId = publishedUtc is null ? userId : null,
+            Excerpt = excerpt,
+            DateCreated = DateTime.UtcNow, CreatedByAppUserId = userId,
+        });
+        await db.SaveChangesAsync();
+        return id;
+    }
+
+    [Fact]
+    public async Task Timeline_PublishedDatedResearchPage_AppearsReadOnlyAndLinked()
+    {
+        var (factory, orgId, userId) = await SeedAsync();
+        var caseId = await CreateCaseAsync(factory, orgId, userId);
+        var pageId = await SeedResearchPageAsync(factory, caseId, userId, "The cemetery records",
+            eventDateTime: new DateTime(1921, 5, 2, 0, 0, 0, DateTimeKind.Utc), publishedUtc: DateTime.UtcNow);
+
+        var row = Assert.Single(await TimelineAsync(factory, userId, orgId, caseId));
+
+        Assert.Equal(pageId, row.ResearchEntryId);
+        Assert.True(row.IsReadOnly);
+        Assert.Equal(CaseTimelineEntryType.ResearchNote, row.EntryType);
+        Assert.Equal(CaseTimelineVisibility.OrgOnly, row.Visibility);
+        Assert.Equal("The cemetery records", row.Title);
+        Assert.Equal("<p>What the page says</p>", row.Body);
+    }
+
+    [Fact]
+    public async Task Timeline_UnpublishedOrUndatedResearchPage_StaysOff()
+    {
+        var (factory, orgId, userId) = await SeedAsync();
+        var caseId = await CreateCaseAsync(factory, orgId, userId);
+        await SeedResearchPageAsync(factory, caseId, userId, "Still a draft",
+            eventDateTime: new DateTime(1921, 5, 2, 0, 0, 0, DateTimeKind.Utc), publishedUtc: null);
+        await SeedResearchPageAsync(factory, caseId, userId, "Published, no date",
+            eventDateTime: null, publishedUtc: DateTime.UtcNow);
+
+        Assert.Empty(await TimelineAsync(factory, userId, orgId, caseId));
+    }
+
+    [Fact]
+    public async Task Timeline_InvestigationBinder_LeavesResearchPagesOut()
+    {
+        var (factory, orgId, userId) = await SeedAsync();
+        var caseId = await CreateCaseAsync(factory, orgId, userId);
+        var invId  = await SeedInvestigationAsync(factory, caseId, userId);
+        await SeedTimelineEntryAsync(factory, caseId, userId, "In the binder", investigationId: invId,
+            eventDateTime: new DateTime(2026, 3, 14, 21, 0, 0, DateTimeKind.Utc));
+        await SeedResearchPageAsync(factory, caseId, userId, "Case research",
+            eventDateTime: new DateTime(2026, 3, 14, 20, 0, 0, DateTimeKind.Utc), publishedUtc: DateTime.UtcNow);
+
+        var titles = (await TimelineAsync(factory, userId, orgId, caseId, invId)).Select(e => e.Title).ToList();
+
+        Assert.Equal(["In the binder"], titles);
+    }
+
+    [Fact]
+    public async Task Timeline_ResearchPages_TakeTheirPlaceByEventTime()
+    {
+        var (factory, orgId, userId) = await SeedAsync();
+        var caseId = await CreateCaseAsync(factory, orgId, userId);
+        var moment = new DateTime(2026, 3, 14, 21, 30, 0, DateTimeKind.Utc);
+        await SeedTimelineEntryAsync(factory, caseId, userId, "Before", eventDateTime: moment.AddHours(-2));
+        await SeedTimelineEntryAsync(factory, caseId, userId, "Same moment entry", eventDateTime: moment);
+        await SeedTimelineEntryAsync(factory, caseId, userId, "After", eventDateTime: moment.AddHours(2));
+        await SeedResearchPageAsync(factory, caseId, userId, "Same moment page", eventDateTime: moment, publishedUtc: DateTime.UtcNow);
+        await SeedResearchPageAsync(factory, caseId, userId, "Long ago page", eventDateTime: moment.AddYears(-100), publishedUtc: DateTime.UtcNow);
+
+        var titles = (await TimelineAsync(factory, userId, orgId, caseId)).Select(e => e.Title).ToList();
+
+        Assert.Equal(["Long ago page", "Before", "Same moment entry", "Same moment page", "After"], titles);
+    }
+
+    [Fact]
+    public void MergeByMoment_KeepsEachListsOwnOrder()
+    {
+        // Entries whose ties the database already broke must come out in that order, even when a page lands between them.
+        var t = new DateTime(2026, 1, 1, 0, 0, 0, DateTimeKind.Utc);
+        CaseTimelineEntryRecord Row(string title, DateTime at) => new() { Id = Guid.NewGuid(), Title = title, EventDateTime = at, DateCreated = at };
+        var entries = new List<CaseTimelineEntryRecord> { Row("b", t), Row("a", t), Row("c", t.AddHours(1)) };
+        var pages   = new List<CaseTimelineEntryRecord> { Row("page", t.AddMinutes(30)) };
+
+        var titles = Ben.Data.WebApi.Controllers.Entities.CaseController.MergeByMoment(entries, pages).Select(r => r.Title);
+
+        Assert.Equal(["b", "a", "page", "c"], titles);
     }
 }

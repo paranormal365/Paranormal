@@ -506,6 +506,21 @@ frozen from the moment you save, and the group keeps those terms for the whole p
 happens to the price list. The Members column shows the current count beside the frozen one —
 the gap is what the group will be re-banded on at renewal.
 
+## Taking plans off sale
+
+**Sell plans and seats**, under *Selling plans* in Site Settings, decides whether anybody can buy.
+It is on unless it has been turned off.
+
+Turned off:
+
+- the pricing page still shows every band and price, with one line saying plans aren't on sale;
+- a group's billing page shows the same sentence in place of **Subscribe**, and a member with an
+  unpaid seat is told seats can't be paid for on the site at the moment;
+- the site refuses to start a payment for a plan or a seat, even from a page that was already open.
+
+Nothing already bought changes: plans and paid seats carry on and renew as before. Event credits
+have their own switch, **Sell event credits**.
+
 ## Merging two groups
 
 **Administration → Groups → Merge Groups** takes two organizations and ends with one. Choose

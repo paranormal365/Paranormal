@@ -717,6 +717,19 @@ app.MapGet("/media/event-photo/{fileId:guid}", async (
         accessToken: null, httpFactory, ctx, ct);
 }).AllowAnonymous();
 
+// A link preview's picture (2026-09-14): our own small copy of the picture another site published for its page. Anonymous
+// and un-ticketed on purpose — the address is stored inside research pages, and a card is drawn for readers who are not
+// signed in. The API serves only pictures it copied for a kept preview.
+app.MapGet("/media/link-preview/{previewId:guid}", async (
+    Guid previewId,
+    IHttpClientFactory httpFactory, IConfiguration config,
+    HttpContext ctx, CancellationToken ct) =>
+{
+    return await Ben.Web.Website.Services.MediaProxy.StreamAsync(
+        $"{config["WebApi:BaseUrl"]}/api/public/link-previews/{previewId}/thumbnail",
+        accessToken: null, httpFactory, ctx, ct);
+}).AllowAnonymous();
+
 app.MapGet("/media/venue-photo/{fileId:guid}", async (
     Guid fileId,
     IHttpClientFactory httpFactory, IConfiguration config,

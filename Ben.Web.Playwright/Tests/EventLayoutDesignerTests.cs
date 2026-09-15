@@ -150,6 +150,32 @@ public class EventLayoutDesignerTests : BenTestBase
     }
 
     [Test]
+    public async Task A_quick_mouse_sweep_chooses_every_seat_it_crosses()
+    {
+        await OpenAsync(SeatsEventId, Desktop);
+
+        // Six seats side by side in the first row, swept in one jump — as a quick hand does, and as the pointer reports a
+        // fast drag: a move every few seats. Asking only where each move landed chose the ends and missed the middle
+        // (UI test pass 6.12, 2026-09-14).
+        var seats = await Page.Locator(".plan__unit").EvaluateAllAsync<float[][]>(@"els => {
+            const boxes = els.map(e => e.getBoundingClientRect()).map(r => [r.left, r.top, r.width, r.height]);
+            const top = Math.min(...boxes.map(b => b[1]));
+            return boxes.filter(b => Math.abs(b[1] - top) < 2).sort((a, b) => a[0] - b[0]);
+        }");
+        Assert.That(seats.Length, Is.GreaterThanOrEqualTo(6), "the seeded house's first row has fewer than six seats side by side");
+        var first = seats[0];
+        var sixth = seats[5];
+        var midY = first[1] + first[3] / 2;
+
+        await Page.Mouse.MoveAsync(first[0] + first[2] / 2, midY);
+        await Page.Mouse.DownAsync();
+        await Page.Mouse.MoveAsync(sixth[0] + sixth[2] / 2, midY, new() { Steps = 1 });
+        await Page.Mouse.UpAsync();
+
+        await Expect(Page.Locator("#plan-selection-bar")).ToContainTextAsync("6 chosen", new() { Timeout = 10_000 });
+    }
+
+    [Test]
     public async Task A_seating_plan_never_offers_the_tray_of_rooms()
     {
         await OpenAsync(SeatsEventId, Desktop);

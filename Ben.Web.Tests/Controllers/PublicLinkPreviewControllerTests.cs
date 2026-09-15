@@ -37,13 +37,14 @@ public sealed class PublicLinkPreviewControllerTests
     private const string SiteUrl = "https://ishaunted.com";
 
     /// <summary>The controller, answering on the API's own host — which is not the website's.</summary>
-    private static PublicLinkPreviewController Build(IDbContextFactory<BenDataContext> factory)
+    private static PublicLinkPreviewController Build(IDbContextFactory<BenDataContext> factory,
+        Ben.Data.WebApi.Services.LinkPreviews.ILinkPreviewService? kept = null)
     {
         var configuration = new ConfigurationBuilder()
             .AddInMemoryCollection(new Dictionary<string, string?> { ["AppBaseUrl"] = SiteUrl })
             .Build();
 
-        return new PublicLinkPreviewController(factory, configuration)
+        return new PublicLinkPreviewController(factory, configuration, kept ?? new NothingKept())
         {
             ControllerContext = new ControllerContext
             {
@@ -154,5 +155,60 @@ public sealed class PublicLinkPreviewControllerTests
     {
         var factory = await SeedAsync();
         Assert.Null(await PreviewAsync(factory, "/o/nashville-paranormal/cases/no-such-case"));
+    }
+
+    // ── Another site's page, 2026-09-14 ───────────────────────────────────────────────────────────────────
+
+    /// <summary>A single kept card for one address; asking it to fetch fails the test.</summary>
+    private sealed class OneKept(string url, Ben.Data.Source.Entities.StoredLinkPreview row) : Ben.Data.WebApi.Services.LinkPreviews.ILinkPreviewService
+    {
+        public Task<Ben.Data.Source.Entities.StoredLinkPreview?> FindAsync(string asked, CancellationToken ct) =>
+            Task.FromResult(asked == url ? row : null);
+
+        public Task<Ben.Data.Source.Entities.StoredLinkPreview?> GetOrFetchAsync(string asked, Guid userId, bool refresh, CancellationToken ct) =>
+            throw new InvalidOperationException("an anonymous preview must never fetch");
+    }
+
+    [Fact]
+    public async Task Another_sites_page_gets_the_card_that_was_kept_and_nothing_is_fetched()
+    {
+        var factory = await SeedAsync();
+        var id = Guid.NewGuid();
+        var kept = new OneKept("https://findagrave.example/memorial/1", new Ben.Data.Source.Entities.StoredLinkPreview
+        {
+            Id = id, Url = "https://findagrave.example/memorial/1", UrlHash = "x", Domain = "findagrave.example",
+            Title = "Rest Haven", Description = "Founded 1850.", SiteName = "Find a Grave", ThumbnailStoragePath = $"link-previews/{id}.jpg",
+            Fetched = true, FetchedUtc = DateTime.UtcNow, ExpiresUtc = DateTime.UtcNow.AddDays(7),
+        });
+
+        var result = await Build(factory, kept).Get("https://findagrave.example/memorial/1", default);
+        var card = Assert.IsType<LinkPreview>(Assert.IsType<OkObjectResult>(result.Result).Value);
+        Assert.Equal("Rest Haven", card.Title);
+        Assert.Equal("findagrave.example", card.Domain);
+        Assert.Equal($"/media/link-preview/{id}", card.ImageUrl);
+
+        Assert.IsType<NotFoundResult>((await Build(factory, kept).Get("https://unknown.example/", default)).Result);
+    }
+
+    [Fact]
+    public async Task A_kept_page_that_could_not_be_read_gets_no_card()
+    {
+        var factory = await SeedAsync();
+        var kept = new OneKept("https://down.example/", new Ben.Data.Source.Entities.StoredLinkPreview
+        {
+            Id = Guid.NewGuid(), Url = "https://down.example/", UrlHash = "y", Domain = "down.example", Fetched = false,
+            FetchedUtc = DateTime.UtcNow, ExpiresUtc = DateTime.UtcNow.AddDays(7),
+        });
+        Assert.IsType<NotFoundResult>((await Build(factory, kept).Get("https://down.example/", default)).Result);
+    }
+
+    /// <summary>No kept previews: these tests are about our own addresses.</summary>
+    private sealed class NothingKept : Ben.Data.WebApi.Services.LinkPreviews.ILinkPreviewService
+    {
+        public Task<Ben.Data.Source.Entities.StoredLinkPreview?> FindAsync(string url, CancellationToken ct) =>
+            Task.FromResult<Ben.Data.Source.Entities.StoredLinkPreview?>(null);
+
+        public Task<Ben.Data.Source.Entities.StoredLinkPreview?> GetOrFetchAsync(string url, Guid userId, bool refresh, CancellationToken ct) =>
+            throw new InvalidOperationException("an anonymous preview must never fetch");
     }
 }

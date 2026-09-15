@@ -1,0 +1,181 @@
+/* A page of blocks (2026-09-14). Reads as a page — blocks have no boxes until one is worked on — with a gutter on the
+   left for the handle and the menu that appears on hover, focus, or when the block is the active one. */
+
+.ben-blocks__page {
+    position: relative;
+    min-height: 12rem;
+    padding: .5rem 0 1rem;
+    outline: none;
+    border-radius: .5rem;
+}
+
+.ben-blocks__page:focus-visible {
+    box-shadow: 0 0 0 .2rem rgba(var(--bs-primary-rgb), .25);
+}
+
+.ben-blocks__page.is-file-over {
+    background: rgba(var(--bs-primary-rgb), .06);
+    box-shadow: inset 0 0 0 2px rgba(var(--bs-primary-rgb), .35);
+}
+
+.ben-blocks__empty {
+    padding: 2rem 1rem;
+    border: 1px dashed var(--bs-border-color);
+    border-radius: .5rem;
+    text-align: center;
+}
+
+.ben-block {
+    position: relative;
+    display: grid;
+    grid-template-columns: 44px minmax(0, 1fr);
+    gap: .25rem;
+    margin: 0 0 .5rem;
+    padding: .35rem .5rem .35rem 0;
+    border: 1px solid transparent;
+    border-radius: .5rem;
+    transition: border-color .15s ease, background-color .15s ease;
+}
+
+.ben-block:hover,
+.ben-block:focus-within {
+    border-color: var(--bs-border-color-translucent);
+}
+
+.ben-block.is-active {
+    border-color: var(--bs-border-color);
+    background: var(--bs-tertiary-bg);
+}
+
+.ben-block.is-dragging {
+    opacity: .55;
+}
+
+.ben-block.is-drop-before {
+    box-shadow: 0 -3px 0 var(--bs-primary);
+}
+
+.ben-block.is-drop-after {
+    box-shadow: 0 3px 0 var(--bs-primary);
+}
+
+.ben-block__gutter {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: .15rem;
+}
+
+/* 44px targets: a thumb on a phone has to be able to take hold of a block. In px, not rem: the site's root font
+   shrinks on wide screens, and 2.75rem came out at 38.5px there (CaseResearchPageViewportTests, 2026-09-14). */
+.ben-block__handle {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    width: 44px;
+    height: 44px;
+    padding: 0;
+    border: 0;
+    border-radius: .4rem;
+    background: transparent;
+    color: var(--bs-secondary-color);
+}
+
+.ben-block__handle {
+    cursor: grab;
+    touch-action: none;
+}
+
+.ben-block__handle:active {
+    cursor: grabbing;
+}
+
+.ben-block__handle:hover,
+.ben-block__handle:focus-visible,
+.ben-block__handle[aria-expanded="true"] {
+    background: var(--bs-secondary-bg);
+    color: var(--bs-body-color);
+}
+
+.ben-block__body {
+    min-width: 0;
+    padding-top: .35rem;
+}
+
+.ben-block__menu {
+    position: absolute;
+    top: 3rem;
+    left: 44px;
+    z-index: 20;
+    display: flex;
+    flex-direction: column;
+    min-width: 12rem;
+    padding: .25rem;
+    border: 1px solid var(--bs-border-color);
+    border-radius: .5rem;
+    background: var(--bs-body-bg);
+    box-shadow: 0 .5rem 1.25rem rgba(0, 0, 0, .2);
+}
+
+.ben-block__menu button {
+    display: flex;
+    align-items: center;
+    min-height: 44px;
+    padding: 0 .75rem;
+    border: 0;
+    border-radius: .35rem;
+    background: transparent;
+    color: var(--bs-body-color);
+    text-align: left;
+}
+
+.ben-block__menu button:hover:not(:disabled),
+.ben-block__menu button:focus-visible {
+    background: var(--bs-secondary-bg);
+}
+
+.ben-block__menu button:disabled {
+    opacity: .45;
+}
+
+.ben-blocks__add {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: .4rem;
+    margin-top: .75rem;
+    padding: .6rem .75rem;
+    border: 1px dashed var(--bs-border-color);
+    border-radius: .5rem;
+}
+
+.ben-blocks__add-label {
+    margin-right: .25rem;
+    font-size: .8rem;
+    font-weight: 600;
+    color: var(--bs-secondary-color);
+}
+
+.ben-blocks__page ::deep .ben-touch {
+    min-height: 44px;
+    display: inline-flex;
+    align-items: center;
+}
+
+/* The rail: folded above the page on a phone, beside it from 992px. Not sticky: the site's content wrapper clips
+   overflow, which makes it the scroll container sticky measures against, and it never scrolls — so sticky did nothing. */
+.ben-blocks__rail {
+    display: none;
+    margin-top: .5rem;
+}
+
+.ben-blocks__rail.is-open {
+    display: block;
+}
+
+@media (min-width: 992px) {
+    .ben-blocks__rail {
+        display: block;
+        margin-top: 0;
+    }
+}

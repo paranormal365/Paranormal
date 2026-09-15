@@ -270,6 +270,9 @@ public sealed class CasePurge
             await db.CaseMessages.Where(x => x.CaseId == caseId).ExecuteDeleteAsync(ct);
             await db.CaseNotes.Where(x => x.CaseId == caseId).ExecuteDeleteAsync(ct);
             await db.CaseRelatedPeople.Where(x => x.CaseId == caseId).ExecuteDeleteAsync(ct);
+            // A research page's rail goes with the page (the database cascades it too; named so a provider without
+            // cascades removes it in the same order).
+            await db.CaseResearchAttachments.Where(x => x.ResearchEntry.CaseId == caseId).ExecuteDeleteAsync(ct);
             await db.CaseResearchEntries.Where(x => x.CaseId == caseId).ExecuteDeleteAsync(ct);
             await db.CaseTransferLogs.Where(x => x.CaseId == caseId).ExecuteDeleteAsync(ct);
             await db.CaseVotes.Where(x => x.CaseId == caseId).ExecuteDeleteAsync(ct);

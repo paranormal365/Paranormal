@@ -1,0 +1,12 @@
+/* A note's body is formatted text now (2026-09-14). Paragraph margins from the editor's HTML would leave a gap
+   under the last line of every note card. */
+.case-note__body ::deep p:last-child,
+.case-note__body ::deep ul:last-child,
+.case-note__body ::deep ol:last-child {
+    margin-bottom: 0;
+}
+
+.case-note__body ::deep ul,
+.case-note__body ::deep ol {
+    padding-left: 1.25rem;
+}

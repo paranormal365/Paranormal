@@ -69,6 +69,12 @@ public sealed class PublicSiteFeaturesController : ControllerBase
             || !bool.TryParse(rawTours, out var parsedTours)
             || parsedTours;
 
-        return Ok(new SiteFeaturesInfo(features, announcement, allowSelfRegistration, allowTourSignUps));
+        // 2026-09-14: the pricing and billing pages have to know before they draw a buy button.
+        var planPurchases =
+            !stored.TryGetValue(SiteSettingKeys.PlanPurchasesEnabled, out var rawPurchases)
+            || !bool.TryParse(rawPurchases, out var parsedPurchases)
+            || parsedPurchases;
+
+        return Ok(new SiteFeaturesInfo(features, announcement, allowSelfRegistration, allowTourSignUps, planPurchases));
     }
 }

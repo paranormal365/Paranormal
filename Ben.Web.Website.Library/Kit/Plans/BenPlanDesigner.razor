@@ -255,7 +255,7 @@
             </div>
             <div class="col-6 col-md-2">
                 <label class="form-label" for="block-section">Section</label>
-                <input id="block-section" class="form-control" maxlength="80" placeholder="Stalls"
+                <input id="block-section" class="form-control" maxlength="80" placeholder="e.g. Stalls"
                        @bind="_blockSection" @bind:event="oninput" />
             </div>
             <div class="col-6 col-md-2">
@@ -308,14 +308,14 @@
             <div class="col-12">
                 <label class="form-label" for="sheet-section">Section</label>
                 <input id="sheet-section" class="form-control" maxlength="80"
-                       placeholder="Stalls, Balcony, Second floor"
+                       placeholder="e.g. Stalls, Balcony, Second floor"
                        @bind="_sheetSection" @bind:event="oninput" />
                 <div class="form-text">Squares in one section share a colour and a legend line.</div>
             </div>
             <div class="col-12">
                 <label class="form-label" for="sheet-note">Note</label>
                 <input id="sheet-note" class="form-control" maxlength="500"
-                       placeholder="Up two flights, no lift"
+                       placeholder="e.g. Up two flights, no lift"
                        @bind="_sheetNote" @bind:event="oninput" />
                 <div class="form-text">Shown to a guest choosing.</div>
             </div>

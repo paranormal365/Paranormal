@@ -137,7 +137,11 @@
                         }
                     </Template>
                 </GridColumn>
-                <GridColumn Field="@nameof(OrgMembershipItem.IsActive)" Title="Active" Width="80px" />
+                <GridColumn Field="@nameof(OrgMembershipItem.IsActive)" Title="Active" Width="80px">
+                    <Template>
+                        <span class="badge @(((OrgMembershipItem)context).IsActive ? "bg-success" : "bg-secondary")">@(((OrgMembershipItem)context).IsActive ? "Yes" : "No")</span>
+                    </Template>
+                </GridColumn>
             </GridColumns>
         </TelerikGrid>
         </BenListState>

@@ -47,6 +47,16 @@ public sealed class OrganizationCheckoutController : OrgCmsControllerBase
         _configuration = configuration;
     }
 
+    /// <summary>What a plan checkout says while plans are off sale.</summary>
+    public const string PlansNotOnSale = "Plans aren't on sale at the moment.";
+
+    /// <summary>What a seat checkout says while plans are off sale.</summary>
+    public const string SeatsNotOnSale = "Seats aren't on sale at the moment.";
+
+    /// <summary>The <see cref="Services.SiteSettingKeys.PlanPurchasesEnabled"/> switch; on when unset.</summary>
+    private static Task<bool> PlanPurchasesOpenAsync(BenDataContext db, CancellationToken ct) =>
+        Services.SiteSettingsService.GetBoolAsync(db, Services.SiteSettingKeys.PlanPurchasesEnabled, whenUnset: true, ct);
+
     [HttpPost]
     public async Task<ActionResult<StartCheckoutResponse>> Start(
         Guid organizationId, [FromBody] StartCheckoutRequest request, CancellationToken ct)
@@ -63,6 +73,11 @@ public sealed class OrganizationCheckoutController : OrgCmsControllerBase
         var org = await db.Organizations.AsNoTracking()
             .FirstOrDefaultAsync(o => o.Id == organizationId, ct);
         if (org is null) return NotFound();
+
+        // 2026-09-14: SuperAdmin can take plans off sale. Neutral wording — nothing about why, and nothing that
+        // reads as the group's fault (PaidPlan's rule for refusals a customer sees).
+        if (!await PlanPurchasesOpenAsync(db, ct))
+            return BadRequest(PlansNotOnSale);
 
         // ── price it, exactly as the quote did ───────────────────────────────
         var tiers = await db.SubscriptionTiers.AsNoTracking().Include(t => t.Prices).ToListAsync(ct);
@@ -271,6 +286,10 @@ public sealed class OrganizationCheckoutController : OrgCmsControllerBase
         var seat = await db.MemberSeatSubscriptions.AsNoTracking()
             .FirstOrDefaultAsync(s => s.OrganizationId == organizationId && s.AppUserId == userId, ct);
         if (seat is null) return NotFound("You don't hold a seat in this group.");
+
+        // The same switch as plans: a seat is the per-member half of a plan.
+        if (!await PlanPurchasesOpenAsync(db, ct))
+            return BadRequest(SeatsNotOnSale);
         if (seat.Status == SubscriptionStatus.Active
             && seat.CurrentPeriodEnd is { } end && end > DateTime.UtcNow)
             return BadRequest($"Your seat is already paid through {end:MM/dd/yyyy}.");

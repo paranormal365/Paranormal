@@ -124,7 +124,7 @@ h1, h2, h3 { break-after: avoid-page; }
     <div class="cover-meta">
       <div>Product Documentation</div>
       <div>18 documents &middot; 6 sections</div>
-      <div>13 September 2026</div>
+      <div>14 September 2026</div>
     </div>
   </div>
   <div class="status">
@@ -543,6 +543,9 @@ the state of your application right there on their page.</p>
 what you're starting and its name and web address, where you work (optional, it feeds the "near
 you" search), whether you're taking applications, then a review. Only the first step is required,
 and closing the tab keeps a draft so you can pick up where you left off.</p>
+<p>You can also start from the <strong>Pricing</strong> page: each plan's <strong>Start a group on this plan</strong> button
+opens the same steps with that plan named at the top, and when the group is created you go to its
+billing page to confirm the plan. Starting on the free plan works the same way, with nothing to pay.</p>
 <p>The first question is <strong>what kind of group this is</strong>, because it decides what everything else
 starts as:</p>
 <table>
@@ -1742,7 +1745,9 @@ remove it for good. Once a group has received it, deleting is no longer the righ
 <em>My Cases lists the cases a group has opened for you.</em></p>
 <p><strong>My Cases</strong> lists every case you are part of, whether you opened it or were invited onto it by
 someone else. Opening one shows the calendar, everything logged so far, files, and your message
-thread with the investigators.</p>
+thread with the investigators. Messages can be formatted with bold, italics, lists and links, using the
+small toolbar above the box, and the investigators' messages arrive the same way. In the iPhone
+app, messages show as plain text.</p>
 <h2>Logging an occurrence</h2>
 <p>Use <strong>Log Occurrence</strong> whenever something happens. Record it while it is fresh — the date and time
 matter more than polish. You can attach photos, audio, or video, and you can tag what kind of
@@ -1819,7 +1824,10 @@ it is.</p>
 <p><img alt="A group's page, with its cases listed" src="../Ben.Web.Website/wwwroot/help/media/working-a-case/org-hub.png" />
 <em>Open a group from Organizations, then its Cases tab, to reach any case it is working.</em></p>
 <h2>Taking on a request — reviewing and voting</h2>
-<p>Client requests arrive under <strong>Pending Requests</strong> on the group's Cases screen. Every request
+<p>Client requests arrive under <strong>Pending Requests</strong> on the group's Cases screen. When any are
+waiting, the button turns yellow and shows how many. The status buttons above the list work the
+same way: a status with cases in it shows its count in that status's colour, so new proposals and
+active cases stand out. Every request
 shows <strong>Review &amp; vote</strong>, which opens everything the client submitted — their description, the
 location, and any files they attached: photos, recordings, documents. Every group the client
 sent the request to sees the same materials while it decides.</p>
@@ -1852,10 +1860,24 @@ field rather than here.</p>
 <em>Timeline, Investigations, Files and Reports, each on the same case.</em></p>
 <p><strong>Overview</strong> carries the original request exactly as the client submitted it, shown separately
 from the case description so the two never blur together as the case is edited.</p>
-<p><strong>Timeline</strong> is the working record. Every entry has a visibility: internal to the group, shared
-with the client, or public. Choose deliberately — "internal" means not shared onward, not hidden
+<p><strong>Edit Case</strong>, at the top of the case, opens a page of its own. The description takes the wide
+column, with room for a line or several paragraphs and a short toolbar for bold, italics, lists
+and links. The status, the public pseudonym, <strong>Make Public</strong>, the private-engagement setting and
+the case manager sit beside it. On a phone they follow it, below. If you have made changes and try
+to leave another way, the page asks first; <strong>Cancel</strong> leaves without saving. <strong>New Case</strong> uses the
+same editor for its description.</p>
+<p><img alt="The Edit Case page" src="../Ben.Web.Website/wwwroot/help/media/working-a-case/edit-case.png" />
+<em>Edit Case: the description in the wide column, status and publishing beside it.</em></p>
+<p><strong>Timeline</strong> is the working record. Entries are client reports, investigator notes, evidence and
+instrument readings; research is written on the case's <strong>Research</strong> tab instead, where each page
+carries its own date and time. Research entries written on the timeline before that change are
+still there, under the <strong>Research</strong> filter. Every entry has a visibility: internal to the group,
+shared with the client, or public. Choose deliberately — "internal" means not shared onward, not hidden
 from its author.</p>
 <p><strong>Investigations</strong> covers scheduled visits, attendees and RSVPs, and each visit's binder.</p>
+<p><strong>Notes</strong> are the group's own working notes, never shown to the client. A note can be formatted — bold,
+italics, lists and links — and pinned to the top. Notes written before formatting arrived keep their
+line breaks.</p>
 <h2>Binders</h2>
 <p>A binder is the case timeline filtered to one investigation. Entries recorded during a visit stay
 on the main case timeline as well — that is the point of reusing it rather than keeping a separate
@@ -1863,6 +1885,93 @@ store. Filter the timeline by investigation to see just that visit.</p>
 <h2>Instrument readings</h2>
 <p>Readings recorded during a visit go in as <strong>Instrument Reading</strong> entries. Record the value, its
 unit, and what the ambient baseline was — a reading without its baseline cannot be judged later.</p>
+<h2>Research pages</h2>
+<p>The case's <strong>Research</strong> tab lists its research. <strong>Link</strong> and <strong>File</strong> are quick entries for a web address or a
+document. <strong>New page</strong> asks for a title, then opens a research page of its own: the place to write up what a deed,
+an obituary, a newspaper archive or a walk round a cemetery told you, with the pictures, files, links and places
+beside the words.</p>
+<p><img alt="A research page with words, a link and a map" src="../Ben.Web.Website/wwwroot/help/media/working-a-case/research-page.png" />
+<em>A published research page, as its author sees it: the page on the left, its files and links beside it.</em></p>
+<p><img alt="Building a research page" src="../Ben.Web.Website/wwwroot/help/media/working-a-case/research-page.gif" />
+<em>A new page: a title, a few words, a map with two places joined by a straight line, then Publish.</em></p>
+<p>A page is a stack of blocks. <strong>Add</strong> at the foot of the page offers five kinds:</p>
+<table>
+<thead>
+<tr>
+<th>Block</th>
+<th>What it holds</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>Text</td>
+<td>Words, with bold, lists, headings and links.</td>
+</tr>
+<tr>
+<td>Picture</td>
+<td>A photo or a scan.</td>
+</tr>
+<tr>
+<td>File</td>
+<td>A document to download.</td>
+</tr>
+<tr>
+<td>Link</td>
+<td>A web page, shown as a card with its title, description and picture.</td>
+</tr>
+<tr>
+<td>Map</td>
+<td>Places on a map, numbered, with a route between them if you want one.</td>
+</tr>
+</tbody>
+</table>
+<p>Paste works anywhere on the page. A picture or file you paste becomes its own block, a web address becomes a link
+card, and text becomes a text block — or, inside a text block, goes where the cursor is. Dropping files onto the page
+does the same. On a phone, <strong>Picture</strong> offers the camera.</p>
+<p><img alt="A research page on a phone" src="../Ben.Web.Website/wwwroot/help/media/working-a-case/research-page-phone.png" />
+<em>On a phone the page is one column, and Files and links folds behind a button above it.</em></p>
+<p>Drag a block by its handle to move it; on a touch screen, press and hold the handle first. The handle's menu also has
+<strong>Move up</strong>, <strong>Move down</strong>, <strong>Add text below</strong> and <strong>Delete block</strong>, and with the handle focused, Alt and the arrow
+keys move the block.</p>
+<h3>Files and links</h3>
+<p>Everything pasted, dropped or added is also kept in <strong>Files and links</strong>, beside the page (above it, behind a button,
+on a phone). <strong>Insert</strong> puts one on the page: a link goes in at the cursor of the text you are writing, a picture or
+file as a block of its own. Deleting a block leaves its file or link in the list. <strong>Remove</strong> deletes it from the list;
+a file still shown on the page has to come off the page first — and, if the published page shows it, that change
+published — so a reader never meets a missing picture.</p>
+<h3>Saving, drafts and publishing</h3>
+<p>The page saves itself a minute after you stop, and when you leave it. <strong>Save now</strong> saves at once. The status beside
+the buttons says whether everything is saved, and if a save fails, <strong>Try again</strong> is right there. Leaving with changes
+that could not be saved asks first.</p>
+<p>A new page is a draft that only you can see. <strong>Publish</strong> makes it readable by everyone who can read the case. Later
+changes are a new draft — the page says <em>Draft differs from published</em> — and the group keeps reading the published
+version until you publish again. While you hold unpublished changes, somebody else opening the page reads the
+published version and is told who is editing it; saving is stopped if the page changed underneath you, so newer work
+is never overwritten.</p>
+<h3>When it happened, and the timeline</h3>
+<p><strong>When this happened</strong> dates the page. A published page with a date appears on the case's <strong>Timeline</strong> in its place,
+as a research entry that opens the page; it is changed on the page, not on the timeline. It is internal to the group,
+like the page, and it does not appear in an investigation's binder. An undated page, or a page that has never been
+published, stays off the timeline.</p>
+<h3>Link cards</h3>
+<p>A link card shows the page's title, description, site and picture. The picture is a small copy kept on our own
+storage, so reading a card never sends anybody to the other site. We fetch the page once, when somebody signed in adds
+the link, and never for somebody who is only reading. Some addresses cannot be fetched — a private network, a page
+that is not a web page, a site too slow to answer — and those cards show the address instead.</p>
+<p>The same cards appear under links in group messages, case messages and feed posts. While you are writing, the card is
+fetched once the address is clearly finished — made with the link button, followed by a space, or followed by Enter —
+or when you move out of the box with a complete web address at the end of it; never while you are still typing one.</p>
+<h3>Map blocks</h3>
+<p>A map block starts empty, and never takes the case's address: the places on it are the ones you choose. Search for a
+town, an address or a cemetery and add the result, or tap the map to add a place where you tapped. Up to ten places;
+each can be named and given a note, moved up or down, or removed.</p>
+<p>With two places or more, <strong>Route between the places</strong> draws <strong>Straight lines</strong>, a <strong>Walking</strong> route or a <strong>Driving</strong>
+route through them, in order. Below the map, each leg shows its distance and, for walking and driving, its time, with a
+total underneath. Where no walking or driving path exists between two places — through woods, across a cemetery — that
+leg is drawn as a dashed straight line and says so. Routes are worked out each time the page is read, so they follow
+the roads as they are. <strong>Open in Maps</strong> opens the places, or the route from the first to the last, in Apple Maps.</p>
+<p><img alt="A map block with two numbered places and a driving route" src="../Ben.Web.Website/wwwroot/help/media/working-a-case/research-map.png" />
+<em>Two places the author chose, with the driving route between them and its distance and time.</em></p>
 <h2>Showing your finding on your public page</h2>
 <p>A report is written for your client, and by default that is the only person who ever sees it. If
 you want the world to read what you concluded, tick <strong>Show this on our public case page</strong> on the
@@ -2040,6 +2149,9 @@ holder's badge carries a small ⚠.</p>
 contact</strong> lists the members the client sees on their side of the case, and their messages are
 what land in those members' notifications. Choose contacts with the button there — the case
 manager and group admins can save the choice.</p>
+<p>Messages with the client, on the case's <strong>Messages</strong> tab, can be formatted with bold, italics,
+lists and links. The client sees the formatting on the website; the iPhone app shows the same words
+as plain text.</p>
 <p>With no explicit contact chosen, the <strong>case manager stands in</strong> automatically, marked as such.
 Clearing everyone returns to that fallback; the client's view is never blank while the case has
 a manager.</p>
@@ -4099,6 +4211,11 @@ at <strong>Events</strong> in your group's menu.</p>
 it has no public page, it takes no bookings and it sends nothing. Build all of it — the dates, the
 programme, the rooms, the files, the page — and change your mind as often as you like. Nothing is
 charged and nothing is announced until you press <strong>Publish</strong>.</p>
+<h3>Who can build and change one</h3>
+<p>Adding an event and changing one are for the people who can manage your group's settings — the owner,
+administrators, and anybody whose role includes the group's settings. Every other member can still open
+<strong>Events</strong>, read each event and follow its pages; the page tells them who can change it, and its controls
+are shown but can't be pressed.</p>
 <h3>A venue we haven't listed</h3>
 <p>Search for the venue by name, and if we have it already, use the one we have. We share venues across
 the whole site, so a building's map pin, its history and everything anybody has ever recorded there
@@ -5069,6 +5186,13 @@ recording's place, since a clip has no coordinates of its own.</p>
 <p>Plans are priced by <strong>active members, per group</strong> — the price list is on the <strong>Pricing</strong> page,
 visible to everyone. Yearly billing usually costs less than paying month by month; the card says
 how much less.</p>
+<p>Each band on the Pricing page has its own button. If you don't run a group yet, <strong>Start a group on
+this plan</strong> opens the new-group steps with that plan named at the top; once the group exists you go
+straight to its billing page to confirm the plan and pay. If you already run a group, <strong>Choose this
+plan</strong> takes you to that group's billing page with the same billing period selected (with several
+groups, it asks which one). The price always follows the group's size: if the band you picked isn't
+the one your group falls in, the billing page says which band it is priced as. The band marked
+<strong>Most groups start here</strong> is simply the middle of the member bands.</p>
 <p>Two things worth knowing about how plans behave:</p>
 <p><strong>What you signed up for is a contract for the period you paid for.</strong> If the plan changes after
 you subscribe, improvements reach you immediately — a raised limit, a lower price, nothing to do
@@ -5601,6 +5725,18 @@ record: when a group pays, set their band, cadence and period here. The member c
 frozen from the moment you save, and the group keeps those terms for the whole period whatever
 happens to the price list. The Members column shows the current count beside the frozen one —
 the gap is what the group will be re-banded on at renewal.</p>
+<h2>Taking plans off sale</h2>
+<p><strong>Sell plans and seats</strong>, under <em>Selling plans</em> in Site Settings, decides whether anybody can buy.
+It is on unless it has been turned off.</p>
+<p>Turned off:</p>
+<ul>
+<li>the pricing page still shows every band and price, with one line saying plans aren't on sale;</li>
+<li>a group's billing page shows the same sentence in place of <strong>Subscribe</strong>, and a member with an
+  unpaid seat is told seats can't be paid for on the site at the moment;</li>
+<li>the site refuses to start a payment for a plan or a seat, even from a page that was already open.</li>
+</ul>
+<p>Nothing already bought changes: plans and paid seats carry on and renew as before. Event credits
+have their own switch, <strong>Sell event credits</strong>.</p>
 <h2>Merging two groups</h2>
 <p><strong>Administration → Groups → Merge Groups</strong> takes two organizations and ends with one. Choose
 the <strong>base</strong> — the group that survives, keeping its URL and settings — and the group to merge
@@ -5748,8 +5884,9 @@ paid and never got to use it. Refunding a <strong>granted</strong> credit simply
 ledger row — there is nothing to hand back.</p>
 <h2>Hosted events</h2>
 <h3>The events dashboard</h3>
-<p><strong>Administration → Dashboard</strong> has two tabs. <strong>The site</strong> is the dashboard above; <strong>Events</strong> is the same
-kind of page for hosted events across every group, and the range picker drives both.</p>
+<p><strong>Administration → Dashboard</strong> has three tabs. <strong>The site</strong> is the dashboard above; <strong>Events</strong> is the same
+kind of page for hosted events across every group; <strong>Event health</strong> says whether hosted events are working
+(below). The range picker drives all three.</p>
 <p><img alt="The events dashboard's cards" src="../Ben.Web.Services/Help/Media/site-administration/events-dashboard.png" /></p>
 <p>The cards say where things stand now:
 - events on the site, with drafts, events that happened and events called off underneath;
@@ -5767,8 +5904,11 @@ happen</strong> counts published events by the state their venue is in.</p>
 group, the event and its venue, the dates, the state, and how many people are coming. Search matches the
 event, the group, the organizer or the place, and the state filter narrows the list.</p>
 <p><img alt="Every hosted event" src="../Ben.Web.Services/Help/Media/site-administration/every-event.png" /></p>
-<p>The eye opens the event's own page as its organizer sees it. From there you can follow it through its
-whole process: plan, bookings, door, room and what happened afterwards.</p>
+<p>The eye opens the event's own page as its organizer sees it. The arrow at the start of each row opens every
+other screen of that event — plan, bookings, menus, the kitchen's sheet, programme, staff, the door, bands,
+files, gallery, what happened afterwards, keeping the files, copying it, the photo wall and, while it is
+published, on or just ended, its public page. A SuperAdmin can open all of them for any group's event, including groups you don't
+belong to.</p>
 <p>The bin opens <strong>Remove an event</strong>, which says what removing it will do before you confirm:</p>
 <ul>
 <li><strong>It comes off the site</strong> and can't take bookings. Nothing is deleted: the event, its bookings and its
@@ -5795,6 +5935,32 @@ whether its credit went back, and your note from the removal.</p>
 </ul>
 <p>Either way the organizer is told by email and in their messages. Each removal takes one appeal; an event
 removed again after an upheld appeal can be appealed again.</p>
+<h2>Event health</h2>
+<p><strong>Event health</strong> is for whoever is building or looking after hosted events: it says whether the feature is
+working, where <strong>Events</strong> says how it is being used. It counts and names addresses and jobs; it never names a
+guest.</p>
+<p>The cards say where things stand now:
+- <strong>holds live</strong>, and how many lapse in the next 24 hours unless somebody answers them;
+- <strong>waiting for an answer</strong> — asks and holds nobody has answered at events still taking bookings — and how long
+  the longest has waited;
+- <strong>letters in the outbox</strong> not yet sent, and how many were given up on in the period. This is all of the
+  site's mail, because the outbox doesn't record which letters are about events;
+- <strong>errors on event addresses</strong> the server logged in the period.</p>
+<p>The charts cover the period:
+- <strong>Bookings made, answered and lapsed</strong>, by day. Lapses climbing while answers stay flat means nobody is
+  looking at the board.
+- <strong>How long parties waited</strong> for an answer, from within an hour to over three days.
+- <strong>Letters</strong> queued, sent and failed, by day.
+- <strong>Turned away by a limit</strong> — requests the booking and attendance limits refused, all time, with the day each
+  last refused somebody.
+- <strong>Errors on event addresses</strong>, by day and by address, from the server's error log. Ids in the addresses are
+  shown as <code>{id}</code>. The days are the server's own days. Where the log can't be read — it is only kept on SQL
+  Server — the panels say so instead of drawing an empty chart.</p>
+<p><strong>Scheduled jobs</strong> lists every background job — expiring holds, moving events through their states, alerts
+and digests, reminders, thank-you letters, retention, sending mail and the rest — with when it last ran, how
+long it took, whether it failed and the first line of its most recent error. It counts from when the server
+last started, so a restart empties it. Every job runs every five minutes: one that stops appearing, or keeps
+failing, is the first place to look.</p>
 <h2>Referrals and what they earn</h2>
 <p><strong>Referrals</strong> shows every referrer's standing. A referrer is anyone a coupon campaign is
 attributed to — set on the campaign, by their account email — and every redemption of their

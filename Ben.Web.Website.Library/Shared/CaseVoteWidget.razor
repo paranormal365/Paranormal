@@ -205,7 +205,7 @@
 
     private EvidenceVoteType? MyVote => _summary?.CurrentUserVote;
 
-    private string SignInUrl => $"/login?returnUrl={Uri.EscapeDataString(NavManager.Uri)}";
+    private string SignInUrl => Ben.Web.Website.Library.Kit.SignInLink.For(NavManager);
 
     /// <summary>
     /// What the one button says it will do, which changes with what the reader has already done.

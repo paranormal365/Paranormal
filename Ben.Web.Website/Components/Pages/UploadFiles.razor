@@ -132,22 +132,27 @@
                     @(((UploadFileRecord)context).DateCreated.ToViewerLocalTime(UserState).ToDisplayDate())
                 </Template>
             </GridColumn>
-            <GridCommandColumn Width="300px">
-                <GridCommandButton Command="Download" Icon="@SvgIcon.Download"
-                                   OnClick="@((GridCommandEventArgs e) => DownloadFile((UploadFileRecord)e.Items.First()))">
-                    Download
-                </GridCommandButton>
-                <GridCommandButton Command="Share" Icon="@SvgIcon.Share"
-                                   OnClick="@((GridCommandEventArgs e) => OpenShareDialog((UploadFileRecord)e.Items.First()))">
-                    Share
-                </GridCommandButton>
-                <GridCommandButton Command="Replace" Icon="@SvgIcon.Upload"
-                                   OnClick="@((GridCommandEventArgs e) => OpenReplaceDialog((UploadFileRecord)e.Items.First()))">
-                    Replace
-                </GridCommandButton>
-                <GridCommandButton Command="Delete" Icon="@SvgIcon.Trash"
-                                   OnClick="@((GridCommandEventArgs e) => DeleteFile((UploadFileRecord)e.Items.First()))">
-                </GridCommandButton>
+            <GridCommandColumn Width="172px">
+                <GridCommandButton Command="Download"
+                                   OnClick="@((GridCommandEventArgs e) => DownloadFile((UploadFileRecord)e.Items.First()))"
+                                   Title="Download"
+                                   Class="ben-grid-action"
+                                   FillMode="@ThemeConstants.Button.FillMode.Outline"><BenIcon Name="download" /></GridCommandButton>
+                <GridCommandButton Command="Share"
+                                   OnClick="@((GridCommandEventArgs e) => OpenShareDialog((UploadFileRecord)e.Items.First()))"
+                                   Title="Share"
+                                   Class="ben-grid-action"
+                                   FillMode="@ThemeConstants.Button.FillMode.Outline"><BenIcon Name="share-2" /></GridCommandButton>
+                <GridCommandButton Command="Replace"
+                                   OnClick="@((GridCommandEventArgs e) => OpenReplaceDialog((UploadFileRecord)e.Items.First()))"
+                                   Title="Replace the file"
+                                   Class="ben-grid-action"
+                                   FillMode="@ThemeConstants.Button.FillMode.Outline"><BenIcon Name="refresh-cw" /></GridCommandButton>
+                <GridCommandButton Command="Delete"
+                                   OnClick="@((GridCommandEventArgs e) => DeleteFile((UploadFileRecord)e.Items.First()))"
+                                   Title="Delete"
+                                   Class="ben-grid-action"
+                                   FillMode="@ThemeConstants.Button.FillMode.Outline"><BenIcon Name="trash-2" /></GridCommandButton>
             </GridCommandColumn>
         </GridColumns>
     </TelerikGrid>
@@ -428,7 +433,7 @@
     {
         if (!await TokenStore.WaitUntilAuthReadyAsync(RendererInfo.IsInteractive)) return;
         if (!TokenStore.IsAuthenticated)
-            NavManager.NavigateTo("/login");
+            NavManager.NavigateTo(Ben.Web.Website.Library.Kit.SignInLink.For(NavManager));
     }
 
     protected override async Task OnAfterRenderAsync(bool firstRender)

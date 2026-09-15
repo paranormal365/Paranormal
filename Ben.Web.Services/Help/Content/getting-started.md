@@ -393,6 +393,10 @@ what you're starting and its name and web address, where you work (optional, it 
 you" search), whether you're taking applications, then a review. Only the first step is required,
 and closing the tab keeps a draft so you can pick up where you left off.
 
+You can also start from the **Pricing** page: each plan's **Start a group on this plan** button
+opens the same steps with that plan named at the top, and when the group is created you go to its
+billing page to confirm the plan. Starting on the free plan works the same way, with nothing to pay.
+
 The first question is **what kind of group this is**, because it decides what everything else
 starts as:
 

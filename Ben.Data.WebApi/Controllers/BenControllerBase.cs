@@ -62,6 +62,10 @@ public abstract class BenControllerBase : ControllerBase
             && entra.Principal.IsInRole(Ben.Data.Common.Constants.RoleNames.SuperAdmin);
     }
 
+    /// <summary>The refusal for a Viewer who tries to change a group's work — a sentence, not a bare 403.</summary>
+    protected static ObjectResult ViewerReadOnly()
+        => new("You're a viewer in this group: you can see its work but not change it.") { StatusCode = 403 };
+
     /// <summary>
     /// Returns the current user's AppUser Guid.
     /// Prefers the <c>app_user_id</c> claim injected by EntraClaimsTransformation;

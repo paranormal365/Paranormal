@@ -18,6 +18,83 @@ day-by-day account of building it would say nothing to anyone using it now.
 
 ## 2026-09-14
 
+- In every table, the line under a row now runs under its action buttons too.
+- Buttons in tables are icons now, so a row stays on one line. Hover over one to see what it does.
+- A group's Cases screen shows waiting requests in yellow with their count, and each status shows its count in
+  that status's colour when it has cases.
+- Research is no longer one of the kinds of timeline entry; research is written on the case's Research tab.
+  Research entries already on a timeline stay, and the timeline can now be filtered to instrument readings.
+- Editing a case opens a page of its own instead of a small window, with a tall description box and a short
+  formatting toolbar. The status and publishing settings sit beside the description, and the page asks before
+  you leave with unsaved changes. New cases get the same description editor.
+- Case notes can be formatted with bold, italics, lists and links. Older notes keep their line breaks.
+- Messages between a group and its client can be formatted too. Sending an empty message says so instead of
+  doing nothing.
+- Plans can be taken off sale. The prices stay on the pricing page with a line saying they aren't on sale,
+  and the buttons to buy are removed.
+- Every plan on the pricing page has a button. Without a group, it starts one with that plan chosen and then
+  opens the new group's billing page; if you run a group, it opens that group's billing page with the same
+  billing period selected.
+- The pricing page's plans are redrawn: each has its own colour, an icon, the price large, its limits as a
+  checklist, and the plan most groups start on is marked.
+- Research on a case is written as pages. New page on the Research tab opens one: a stack of text, pictures,
+  files, link cards and maps that can be pasted or dropped in anywhere and dragged into order. A page saves
+  itself, stays a draft only its author can see until it is published, and later changes stay a draft until
+  published again. On a phone, pictures can be taken with the camera.
+- A research page keeps everything added to it under Files and links, where any of it can be put back on the page.
+- A research page with a date appears on the case's timeline once it is published, and opens from there.
+- A map on a research page shows up to ten places you choose, numbered, with straight lines, a walking route or a
+  driving route between them. Each leg shows its distance and time, with a total, and the route opens in Maps.
+- Links in group messages, case messages, feed posts and research pages show a card with the page's title,
+  description and picture. While you write, the card appears once the address is finished.
+- A research page's date is added with Add a date and can be taken away again; there is no empty date box.
+- Each block on a research page has one handle beside it: drag it to move the block, click or tap it for the block's
+  options. Clicking into a paragraph puts the cursor where you clicked, and formatted text pasted onto the page
+  arrives with its formatting.
+- Everyone in the group now sees the pictures and files on a published research page; before, only the person who
+  added them could.
+- On a case timeline, times are shown and entered in your own time zone; they were five hours out in the edit
+  window. A new entry starts at the current time, and a client suggesting a different date starts on tomorrow evening.
+- Bold words in notes, messages and research pages are properly bold.
+- A case's messages open at the newest one and stay there as you send.
+- A group's cases list names each case's manager instead of "Unassigned".
+- A group's tab row fades at the edge that has more tabs, scrolls with an ordinary mouse wheel, and brings the chosen
+  tab into view.
+- Members tables say Yes or No for Active; the Clients tab's switch is labelled "Taking new cases".
+- The bell shows "99+" in full, opening a notification scrolls to it, and the desk shows today's date in your time.
+- On Public Investigations, a case you can open only because you are in its group is marked "Not public".
+- The More actions menu on the organizations and page lists opens in full instead of clipped by the table.
+- In dark mode, outlined buttons are readable; in light mode, the logo on phones and the sign-in card, the sidebar's
+  Filter box and the work-waiting banners' links are too.
+- On the investigation request form, example values start "e.g.", the missing address fields are named, and changing
+  a checked address asks for it to be checked again.
+- On a phone, the footer wraps instead of running off the screen, and the home map starts on the pins.
+- Signing in from any page brings you back to that page — from the header, from a group's pages, and from the Sign in
+  links beside voting, comments, polls, tour pages and event reviews.
+- On a group's calendar, an event can be dragged to another day or time, or have its end dragged, and the move can be
+  undone. Deleting an event asks first, and a refusal says why.
+- A quick sweep of the mouse across a floor plan or seating plan chooses every square it passes over.
+- When a SuperAdmin views the site as somebody else, the profile menu shows that person's name and picture.
+- The "work waiting" banner for client requests opens the requests page, which every member who can read it can use.
+  Accept and Decline appear only for the people who can answer for the group.
+- Example text in the event pages' boxes starts "e.g.", so it isn't mistaken for something already filled in.
+- A client's Home shows their case at the top — its state and the next visit — above the usual search.
+- On a client's case, the calendar marks each day something was logged; the report's PDF button says it is preparing
+  the file, and says so if it can't; downloaded reports have plain file names.
+- Starting a request for an address you have already asked about says so, with a link to the earlier request.
+- An accepted request's "View My Case" opens the case that request became.
+- A case card marked "Not public" no longer offers the public vote.
+- Signing in again from a SuperAdmin page brings you back to that page.
+- Example text in boxes across the site starts "e.g.".
+- A member sees the buttons they can use and a line saying who can do the rest: choosing a case's points of contact,
+  editing or deleting somebody else's timeline entry, and uploading, sharing, publishing or deleting a group's files.
+  The case publishing tour is offered to the people who can edit the case.
+- In a case's messages, every message you did not write carries its author's name, including a colleague's reply to the
+  client.
+- Recordings no longer flash a pale grey box on a dark page while they load, and deleting a group file shows a success
+  message instead of an error.
+- A group's Viewers are read-only: they read the calendar and messages but can no longer add, move or delete events, send
+  group messages, or change investigations, timelines or requests, whatever roles they hold.
 - SuperAdmins have an Event health tab on the dashboard. It shows holds and how long parties wait for an answer,
   letters going out, errors on event pages, requests turned away by the booking limits, and when each
   background job last ran and whether it failed.

@@ -1,0 +1,48 @@
+@namespace Ben.Web.Website.Library.Kit.Blocks
+@using Ben.Data.Common.Blocks
+
+<div class="ben-file-block" data-testid="file-block">
+    <span class="ben-file-block__icon" aria-hidden="true"><BenIcon Name="file-text" /></span>
+    <span class="ben-file-block__text">
+        <span class="ben-file-block__name">@(Block.FileName ?? "File")</span>
+        <span class="ben-file-block__meta">@SizeText@(Block.Caption is { Length: > 0 } c && !Active ? $" · {c}" : "")</span>
+    </span>
+    @if (Block.UploadFileId is { } fileId)
+    {
+        <a class="btn btn-sm btn-outline-secondary ben-file-block__download" href="@FileUrl(fileId, BlockFileUrlKind.Download)"
+           download="@Block.FileName" target="_blank" rel="noopener">
+            <BenIcon Name="download" Class="me-1" />Download
+        </a>
+    }
+</div>
+@if (!ReadOnly && Active)
+{
+    <div class="mt-2">
+        <label class="form-label small mb-1" for="@($"block-{Block.Id}-caption")">Caption</label>
+        <input id="@($"block-{Block.Id}-caption")" class="form-control form-control-sm" maxlength="500"
+               value="@Block.Caption" @onchange="SetCaptionAsync" />
+    </div>
+}
+
+@code {
+    [Parameter, EditorRequired] public Block Block { get; set; } = null!;
+    [Parameter, EditorRequired] public Func<Guid, BlockFileUrlKind, string> FileUrl { get; set; } = null!;
+    [Parameter] public bool Active { get; set; }
+    [Parameter] public bool ReadOnly { get; set; }
+    [Parameter] public EventCallback Changed { get; set; }
+
+    private string SizeText => Block.FileSize switch
+    {
+        null => "",
+        < 1024 => $"{Block.FileSize} B",
+        < 1024 * 1024 => $"{Block.FileSize / 1024.0:0.#} KB",
+        _ => $"{Block.FileSize / (1024.0 * 1024):0.#} MB",
+    };
+
+    private async Task SetCaptionAsync(ChangeEventArgs e)
+    {
+        var value = e.Value?.ToString();
+        Block.Caption = string.IsNullOrWhiteSpace(value) ? null : value.Trim();
+        await Changed.InvokeAsync();
+    }
+}

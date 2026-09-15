@@ -12490,3 +12490,46 @@ three components were rendering without styling somebody had written for them.
 — all 118 of them moved to `ProjectNotes/FeatureHistory/` on 2026-09-12. `git mv` both as part of
 the merge, or the root fills up again.
 
+
+## 241. The research document, next: a canvas you edit in the browser (PRODUCT — after `feature/beta-feedback-1` merges)
+
+`feature/beta-feedback-1` ships research pages as a Notion-style stack of blocks (text, picture, file, link card, map), with
+private drafts, Publish, and a Files & links rail, built in `Ben.Web.Website.Library/Kit/Blocks`. Ben, 2026-09-14, during
+the UI test pass: that stack is the foundation, not what the research document is meant to be.
+
+### What it is meant to be — Ben: *"Keep it like a combination of Notion, Canva, OneNote and Obsidian's Canvas. This is what the Research tool document is supposed to be."*
+
+- **Notion** — what ships now: blocks you type into, move and turn into other kinds.
+- **Canva** — the page is designed: layout, sizes, colour, pictures placed with care rather than stacked.
+- **OneNote** — put anything anywhere: click an empty spot and start writing there.
+- **Obsidian Canvas** — cards on a board you pan and zoom, joined by arrows and gathered into groups: the owners, the deed,
+  the cemetery and the newspaper story, with lines saying how they connect.
+- The **table block** is still owed (Ben asked to be reminded; memory `project_block_editor_followups`).
+
+### Where it runs — Ben: *"WASM sounds like is where it should be. The end user only needs to get data from the server when needed. It doesn't need anything but when it is saved... that is when the server is really needed. The rest can be stored in local storage until saved."*
+
+Today the editor is Blazor Server: every toolbar press, menu, drag and keystroke-driven change is a round trip over the
+circuit. It measured 3–5 ms on localhost, but on a real connection the lag shows — the test pass found that clicking B and
+typing at once loses the bold (4.5), because the tool waits for the server. So the next editor is **Blazor WebAssembly**
+(the video editor already has a WASM host, `Ben.Wasm.Video`, so C# and Telerik stay):
+
+- **Load once**: the page, its draft and its attachments come from the existing research API.
+- **Edit in the browser**: typing, formatting, moving, arranging cards, drawing arrows — no server involved.
+- **Keep the working copy in browser storage** until it is saved, so a refresh, a closed laptop or a dropped connection
+  loses nothing.
+- **The server when it matters**: save a draft, publish, upload a file, fetch a link's preview. The API's
+  `BaseRevision`/409 already tells a tab that somebody else saved first.
+
+### To settle before building
+
+1. **A local copy older than the server's** — the other tab or person saved since. Show both and let the person choose, or
+   merge block by block?
+2. **Shared computers** — browser storage outlives sign-out. Key it by person, clear it on sign-out, and cap how long an
+   unsaved copy is kept.
+3. **Files cannot wait in browser storage** — pictures and files upload the moment they are added (as now); only the
+   document waits.
+4. **Phones** — a free canvas on a 375px screen: pan/zoom with a finger, or the stack as the phone's view of the same
+   document?
+5. **Storage shape** — card positions, sizes, groups and arrows beside today's block list (`BlockDocument` version 2), with
+   the stack kept as the reading and print view, and old version-1 pages opening unchanged.
+6. **The reader** — does a published canvas read as a canvas (pan/zoom) for members, or flatten to the stack?

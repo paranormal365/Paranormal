@@ -4,12 +4,12 @@ using NUnit.Framework;
 namespace Ben.Web.Playwright.Tests;
 
 /// <summary>
-/// Item 176: the case-title leak warning, walked through the real Edit Case dialog. The unit
+/// Item 176: the case-title leak warning, walked through the real Edit Case page. The unit
 /// tests prove the check; this proves the UI actually shows the sentence and that a second Save
 /// still publishes — a warning the dialog discarded would be the sixth instance of the
 /// server-guard-with-no-UI-path bug, so the UI path is the thing to verify.
 /// </summary>
-// Fixtures that drive the Edit Case dialog on the one seeded case, or upload to it, cannot run
+// Fixtures that drive the Edit Case page on the one seeded case, or upload to it, cannot run
 // beside each other: each one changes the case, asserts, and restores, and in parallel one
 // fixture's restore lands in the middle of another's assertion. The 2026-09-07 full run failed
 // The_leak_warning_fires_before_save_not_after_it exactly that way, having passed twice in
@@ -27,6 +27,56 @@ public class PublishLeakWarningTests : BenTestBase
     [SetUp]
     public async Task ResolveTgh() => TghId = await OrgIdBySlugAsync("paranormal365");
 
+    // The Edit Case form is a page of its own since 2026-09-14 (it was a dialog). Its fields kept their ids.
+    private ILocator TitleInput => Page.Locator("#casedetail-case-label-surname-city-0146");
+    private ILocator MakePublic => Page.Locator("#case-public");
+    private ILocator Pseudonym  => Page.Locator("#casedetail-public-pseudonym-88c6");
+    private ILocator SaveButton => Page.Locator("#case-edit-save");
+
+    /// <summary>Opens the Edit Case page from the case and returns its address, for the restore to go straight back to.</summary>
+    private async Task<string> OpenEditPageAsync()
+    {
+        await ClickUntilUrlAsync(Page.Locator("#case-edit"), @"/cases/[0-9a-f\-]+/edit$");
+        await Expect(TitleInput).ToBeVisibleAsync(new() { Timeout = 15_000 });
+        return Page.Url;
+    }
+
+    /// <summary>
+    /// Saved means the case page is showing again — its Edit Case button drawn — which only happens after the server
+    /// said yes. Waiting on the address alone let a restore run while the case page was still loading.
+    /// </summary>
+    private async Task ExpectSavedAsync()
+    {
+        await Expect(Page).ToHaveURLAsync(new System.Text.RegularExpressions.Regex(@"/cases/[0-9a-f\-]+$"), new() { Timeout = 15_000 });
+        await Expect(Page.Locator("#case-edit")).ToBeVisibleAsync(new() { Timeout = 15_000 });
+    }
+
+    /// <summary>
+    /// Puts the seeded case back. Goes to the edit page by address rather than through the case page, and never skips:
+    /// a restore that quietly did nothing renamed the shared case for every later run (2026-09-14).
+    /// </summary>
+    private async Task RestoreAsync(string editUrl, string title, string? pseudonym, bool isPublic)
+    {
+        await Page.GotoAsync(editUrl);
+        await WaitForTheCircuitAsync();
+        await Expect(TitleInput).ToBeVisibleAsync(new() { Timeout = 15_000 });
+
+        await TitleInput.FillAsync(title);
+        if (pseudonym is not null) await Pseudonym.FillAsync(pseudonym);
+        await MakePublic.SetCheckedAsync(isPublic);
+        await SaveButton.ClickAsync();
+
+        // Either it saves, or the original label is itself one the check warns about and a second Save publishes it.
+        var warning = Page.Locator("#case-title-leak-warning");
+        await Expect(warning.Or(Page.Locator("#case-edit"))).ToBeVisibleAsync(new() { Timeout = 15_000 });
+        if (await warning.IsVisibleAsync())
+        {
+            await Expect(Page.Locator("#case-leak-save-again")).ToBeVisibleAsync(new() { Timeout = 15_000 });
+            await SaveButton.ClickAsync();
+        }
+        await ExpectSavedAsync();
+    }
+
     [Test]
     public async Task Publishing_a_surname_title_warns_once_then_publishes_on_the_second_save()
     {
@@ -34,52 +84,41 @@ public class PublishLeakWarningTests : BenTestBase
         if (!await OpenOrgCaseAsync("Paranormal365", "Belmont"))
             Assert.Pass("TGH Park case not in the seed data; nothing to walk.");
 
-        await Page.GetByRole(AriaRole.Button, new() { Name = "Edit Case" }).ClickAsync();
-        var dialog = Page.Locator(".modal").Filter(new() { HasTextString = "Edit Case" }).First;
-        var titleInput = dialog.Locator("#casedetail-case-label-surname-city-0146");
-        await Expect(titleInput).ToBeVisibleAsync(new() { Timeout = 10_000 });
+        var editUrl = await OpenEditPageAsync();
 
         // ENSURE the state the test needs, and remember what to put back — shared DB.
-        var originalTitle = await titleInput.InputValueAsync();
-        var makePublic = dialog.Locator("#case-public");
-        var wasPublic = await makePublic.IsCheckedAsync();
+        var originalTitle = await TitleInput.InputValueAsync();
+        var wasPublic = await MakePublic.IsCheckedAsync();
 
         try
         {
-            await titleInput.FillAsync("Park Residence, Nashville TN");
-            if (!wasPublic) await makePublic.CheckAsync();
+            await TitleInput.FillAsync("Park Residence, Nashville TN");
+            if (!wasPublic) await MakePublic.CheckAsync();
 
-            var save = dialog.GetByRole(AriaRole.Button, new() { Name = "Save" });
-            await save.ClickAsync();
+            await SaveButton.ClickAsync();
 
             // First save: the warning, not the save. The sentence names what leaked.
             var warning = Page.Locator("#case-title-leak-warning");
             await Expect(warning).ToBeVisibleAsync(new() { Timeout = 10_000 });
             await Expect(warning).ToContainTextAsync("\"Park\"");
-            await Expect(titleInput).ToBeVisibleAsync(); // dialog still open — nothing saved
+            await Expect(Page).ToHaveURLAsync(new System.Text.RegularExpressions.Regex(@"/edit$")); // still editing — nothing saved
+
+            // The warning alone does not prove the first Save was handled: the live check draws it as soon as the label
+            // is left, before Save runs. "Save again" is drawn only once that Save has stopped at it.
+            await Expect(Page.Locator("#case-leak-save-again")).ToBeVisibleAsync(new() { Timeout = 10_000 });
 
             // Second save on the same text: warn-not-block means this one goes through.
-            await save.ClickAsync();
-            await Expect(titleInput).ToBeHiddenAsync(new() { Timeout = 10_000 });
+            await SaveButton.ClickAsync();
+            await ExpectSavedAsync();
         }
         finally
         {
-            // Restore: reopen the dialog and put the original title and visibility back.
-            var edit = Page.GetByRole(AriaRole.Button, new() { Name = "Edit Case" });
-            if (await edit.CountAsync() > 0)
-            {
-                await edit.ClickAsync();
-                await Expect(titleInput).ToBeVisibleAsync(new() { Timeout = 10_000 });
-                await titleInput.FillAsync(originalTitle);
-                if (!wasPublic) await makePublic.UncheckAsync();
-                await dialog.GetByRole(AriaRole.Button, new() { Name = "Save" }).ClickAsync();
-                await Expect(titleInput).ToBeHiddenAsync(new() { Timeout = 10_000 });
-            }
+            await RestoreAsync(editUrl, originalTitle, pseudonym: null, wasPublic);
         }
     }
 
     /// <summary>
-    /// Item 182: the retrofit door is present and wired on a case's Edit dialog.
+    /// Item 182: the retrofit door is present and wired on a case's Edit Case page.
     /// </summary>
     /// <remarks>
     /// Deliberately does NOT click it. The retrofit is destructive by design — it makes a case
@@ -90,21 +129,21 @@ public class PublishLeakWarningTests : BenTestBase
     /// which is the half unit tests cannot see.
     /// </remarks>
     [Test]
-    public async Task The_privacy_retrofit_is_reachable_from_a_cases_edit_dialog()
+    public async Task The_privacy_retrofit_is_reachable_from_a_cases_edit_page()
     {
         await LoginAsync(UserEmail, UserPassword);   // Sarah — TGH administrator
         if (!await OpenOrgCaseAsync("Paranormal365", "Belmont"))
             Assert.Pass("TGH Park case not in the seed data; nothing to walk.");
 
-        await Page.GetByRole(AriaRole.Button, new() { Name = "Edit Case" }).ClickAsync();
+        await OpenEditPageAsync();
 
         var apply = Page.Locator("#case-apply-privacy");
         await Expect(apply).ToBeVisibleAsync(new() { Timeout = 10_000 });
         await Expect(apply).ToBeEnabledAsync();
 
-        // Close without saving or applying anything.
-        var dialog = Page.Locator(".modal").Filter(new() { HasTextString = "Edit Case" }).First;
-        await dialog.GetByRole(AriaRole.Button, new() { Name = "Cancel", Exact = true }).First.ClickAsync();
+        // Leave without saving or applying anything.
+        await Page.Locator("#case-edit-cancel").ClickAsync();
+        await ExpectSavedAsync();
     }
 
     [Test]
@@ -114,43 +153,28 @@ public class PublishLeakWarningTests : BenTestBase
         if (!await OpenOrgCaseAsync("Paranormal365", "Belmont"))
             Assert.Pass("TGH Park case not in the seed data; nothing to walk.");
 
-        await Page.GetByRole(AriaRole.Button, new() { Name = "Edit Case" }).ClickAsync();
-        var dialog = Page.Locator(".modal").Filter(new() { HasTextString = "Edit Case" }).First;
-        var titleInput = dialog.Locator("#casedetail-case-label-surname-city-0146");
-        await Expect(titleInput).ToBeVisibleAsync(new() { Timeout = 10_000 });
+        var editUrl = await OpenEditPageAsync();
 
-        var originalTitle = await titleInput.InputValueAsync();
-        var makePublic = dialog.Locator("#case-public");
-        var wasPublic = await makePublic.IsCheckedAsync();
-        var pseudonym = dialog.Locator("#casedetail-public-pseudonym-88c6");
-        var originalPseudonym = await pseudonym.InputValueAsync();
+        var originalTitle = await TitleInput.InputValueAsync();
+        var wasPublic = await MakePublic.IsCheckedAsync();
+        var originalPseudonym = await Pseudonym.InputValueAsync();
 
         try
         {
             // A clean title AND a clean pseudonym — the seeded pseudonym may carry the surname.
-            await titleInput.FillAsync("The Belmont Farmhouse");
-            await pseudonym.FillAsync("The Hargrove Family");
-            if (!wasPublic) await makePublic.CheckAsync();
+            await TitleInput.FillAsync("The Belmont Farmhouse");
+            await Pseudonym.FillAsync("The Hargrove Family");
+            if (!wasPublic) await MakePublic.CheckAsync();
 
-            await dialog.GetByRole(AriaRole.Button, new() { Name = "Save" }).ClickAsync();
+            await SaveButton.ClickAsync();
 
-            // No warning stop: the dialog just closes on the first save.
-            await Expect(titleInput).ToBeHiddenAsync(new() { Timeout = 10_000 });
+            // No warning stop: the first save goes straight back to the case.
+            await ExpectSavedAsync();
             Assert.That(await Page.Locator("#case-title-leak-warning").CountAsync(), Is.EqualTo(0));
         }
         finally
         {
-            var edit = Page.GetByRole(AriaRole.Button, new() { Name = "Edit Case" });
-            if (await edit.CountAsync() > 0)
-            {
-                await edit.ClickAsync();
-                await Expect(titleInput).ToBeVisibleAsync(new() { Timeout = 10_000 });
-                await titleInput.FillAsync(originalTitle);
-                await pseudonym.FillAsync(originalPseudonym);
-                if (!wasPublic) await makePublic.UncheckAsync();
-                await dialog.GetByRole(AriaRole.Button, new() { Name = "Save" }).ClickAsync();
-                await Expect(titleInput).ToBeHiddenAsync(new() { Timeout = 10_000 });
-            }
+            await RestoreAsync(editUrl, originalTitle, originalPseudonym, wasPublic);
         }
     }
 }

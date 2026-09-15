@@ -63,7 +63,9 @@
             </div>
         }
 
-        <div class="timeline d-flex flex-column gap-3">
+        @* Not the template's "timeline" class: SmartAdmin draws a 2px rule down .timeline::before, which showed only in the
+           gaps between these cards — a column of stray marks like text cursors (UI test pass, 2026-09-14). *@
+        <div class="case-timeline d-flex flex-column gap-3">
             @foreach (var row in RenderedRows())
             {
                 var e = row.Entry;
@@ -154,8 +156,19 @@
                                 }
                             </div>
                             <div class="d-flex gap-1 flex-shrink-0">
-                                <button type="button" class="btn @(ThemeConstants.Button.FillMode.Flat == ThemeConstants.Button.FillMode.Solid ? "btn-secondary" : "btn-outline-secondary") btn-sm" @onclick="@(() => OpenEditDialog(e))" title="Edit"><BenIcon Name="edit-2" /></button>
-                                <button type="button" class="btn @(ThemeConstants.Button.FillMode.Flat == ThemeConstants.Button.FillMode.Solid ? "btn-secondary" : "btn-outline-secondary") btn-sm" @onclick="@(() => ConfirmDelete(e))" title="Delete"><BenIcon Name="trash-2" /></button>
+                                @if (e.ResearchEntryId is { } researchId)
+                                {
+                                    @* A research page's row: it is changed on its page (2026-09-14). *@
+                                    <a class="btn btn-outline-secondary btn-sm" href="@($"/organizations/{OrgId}/cases/{CaseId}/research/{researchId}")"
+                                       data-testid="timeline-open-research-page">
+                                        <BenIcon Name="book-open" Class="me-1" />Open research page
+                                    </a>
+                                }
+                                else if (!e.IsReadOnly && MayChange(e))
+                                {
+                                    <button type="button" class="btn @(ThemeConstants.Button.FillMode.Flat == ThemeConstants.Button.FillMode.Solid ? "btn-secondary" : "btn-outline-secondary") btn-sm" @onclick="@(() => OpenEditDialog(e))" title="Edit"><BenIcon Name="edit-2" /></button>
+                                    <button type="button" class="btn @(ThemeConstants.Button.FillMode.Flat == ThemeConstants.Button.FillMode.Solid ? "btn-secondary" : "btn-outline-secondary") btn-sm" @onclick="@(() => ConfirmDelete(e))" title="Delete"><BenIcon Name="trash-2" /></button>
+                                }
                             </div>
                         </div>
                     </div>
@@ -171,7 +184,7 @@
         <div class="row g-3">
             <div class="col-md-6">
                 <label class="form-label fw-semibold">Type</label>
-                <BenSelect Data="@_entryTypeOptions" @bind-Value="@_form.EntryType" TextField="@nameof(EntryTypeOption.Label)" ValueField="@nameof(EntryTypeOption.Value)" Width="100%" />
+                <BenSelect Data="@EntryTypeOptionsFor(_editEntry)" @bind-Value="@_form.EntryType" TextField="@nameof(EntryTypeOption.Label)" ValueField="@nameof(EntryTypeOption.Value)" Width="100%" />
             </div>
             <div class="col-md-6">
                 <label class="form-label fw-semibold">Event Date/Time (optional)</label>
@@ -358,14 +371,29 @@
             await _imageEditor.OpenAsync();
     }
 
+    // Research stays as a filter: entries written as research before 2026-09-14 still exist. Instrument
+    // reading was never filterable at all, which left a whole kind of entry impossible to pick out.
     private static readonly CaseTimelineEntryType?[] _typeFilters =
         [null, CaseTimelineEntryType.ClientReport, CaseTimelineEntryType.InvestigatorNote,
-         CaseTimelineEntryType.Evidence, CaseTimelineEntryType.ResearchNote];
+         CaseTimelineEntryType.Evidence, CaseTimelineEntryType.InstrumentReading, CaseTimelineEntryType.ResearchNote];
 
-    private static readonly List<EntryTypeOption> _entryTypeOptions = Enum
+    // What a new entry may be. Research is not offered — it has its own tab and its pages carry their own
+    // date (beta feedback, 2026-09-14); see CaseTimelineEntryTypes.Pickable.
+    private static readonly List<EntryTypeOption> _entryTypeOptions = CaseTimelineEntryTypes.Pickable
+        .Select(t => new EntryTypeOption(t, EntryTypeLabel(t)))
+        .ToList();
+
+    private static readonly List<EntryTypeOption> _entryTypeOptionsWithResearch = Enum
         .GetValues<CaseTimelineEntryType>()
         .Select(t => new EntryTypeOption(t, EntryTypeLabel(t)))
         .ToList();
+
+    /// <summary>
+    /// The Type list for the dialog. Editing an entry that is already research keeps Research in the list, so
+    /// the picker shows the entry's real kind instead of silently turning it into something else on save.
+    /// </summary>
+    private static List<EntryTypeOption> EntryTypeOptionsFor(CaseTimelineEntryRecord? editing) =>
+        editing?.EntryType == CaseTimelineEntryType.ResearchNote ? _entryTypeOptionsWithResearch : _entryTypeOptions;
 
     private static readonly List<Telerik.Blazor.Components.IEditorTool> _editorTools =
     [
@@ -438,8 +466,20 @@
     private Guid? _investigationFilter;
     private List<InvestigationRecord> _investigations = [];
 
+    /// <summary>Whether this person is a group admin here, who may change anybody's entry.</summary>
+    private bool _isOrgAdmin;
+
+    /// <summary>
+    /// An entry's author or a group admin may change it — the server's rule. Everybody was offered Edit and Delete on every
+    /// entry, so a member could open a client's report, change it, and be refused at Save; a refused Delete closed its
+    /// question and left the entry there without a word (member test pass M.3, 2026-09-14).
+    /// </summary>
+    private bool MayChange(CaseTimelineEntryRecord e) => _isOrgAdmin || e.AuthorAppUserId == UserState.UserId;
+
     protected override async Task OnParametersSetAsync()
     {
+        _isOrgAdmin = UserState.IsSuperAdmin
+            || (await AdminClient.GetOrganizationsAsync()).Items.Any(o => o.Id == OrgId && o.CanEdit);
         await LoadAsync();
         _taxonomy = (await AdminClient.GetExperienceTaxonomyAsync()).Items.ToList();
         _expTypeNames = _taxonomy
@@ -470,7 +510,10 @@
     private void OpenAddDialog()
     {
         _editEntry = null;
-        _form      = new();
+        // A new entry starts at the current minute, the viewer's own time: an empty Telerik date box rebuilds the whole
+        // date the first time a segment is stepped (2026-09-09). It stays optional — clearing it is still allowed.
+        var now = UserState.NowInViewerTimeZone();
+        _form      = new() { EventDateTime = new DateTime(now.Year, now.Month, now.Day, now.Hour, now.Minute, 0) };
         _dialogError = null;
         _showDialog  = true;
     }
@@ -481,7 +524,10 @@
         _form        = new EntryFormModel
         {
             EntryType          = entry.EntryType,
-            EventDateTime      = entry.EventDateTime,
+            // Stored in UTC, shown on the cards in the viewer's time — so the picker is filled in the viewer's time too, and
+            // saving converts back. The dialog used to show and save UTC: an entry typed as 9:00 PM appeared on its card as
+            // 4:00 PM, and editing one showed a time five hours from the card beside it (UI test pass, 2026-09-14).
+            EventDateTime      = entry.EventDateTime?.ToViewerLocalTime(UserState),
             Title              = entry.Title ?? "",
             Body               = entry.Body ?? "",
             Visibility         = entry.Visibility,
@@ -609,7 +655,7 @@
         {
             var req = new UpsertTimelineEntryRequest(
                 EntryType:         _form.EntryType,
-                EventDateTime:     _form.EventDateTime,
+                EventDateTime:     _form.EventDateTime?.ToUtcFromViewerLocal(UserState),
                 Title:             string.IsNullOrWhiteSpace(_form.Title) ? null : _form.Title.Trim(),
                 Body:              string.IsNullOrWhiteSpace(_form.Body) ? null : _form.Body.Trim(),
                 Visibility:        _form.Visibility,
@@ -641,8 +687,9 @@
         _isBusy = true;
         try
         {
-            await AdminClient.DeleteCaseTimelineEntryAsync(OrgId, CaseId, _pendingDelete.Id);
+            var deleted = await AdminClient.DeleteCaseTimelineEntryAsync(OrgId, CaseId, _pendingDelete.Id);
             _showDeleteConfirm = false;
+            if (!deleted) _error = "The entry could not be deleted. Only its author or a group admin can delete it.";
             await LoadAsync();
         }
         catch { _error = "Delete failed."; }

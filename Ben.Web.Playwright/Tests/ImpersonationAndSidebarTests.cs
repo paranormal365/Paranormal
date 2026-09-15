@@ -48,6 +48,14 @@ public class ImpersonationAndSidebarTests : BenTestBase
         await Expect(nav.GetByText("My Work", new() { Exact = true })).ToBeVisibleAsync(new() { Timeout = 20_000 });
         await Expect(nav.GetByText("Administration", new() { Exact = true })).ToHaveCountAsync(0);
 
+        // Her name in her menu, in the same visit: the menu kept the SuperAdmin's name and picture above her email address,
+        // because it was fetched once and "view as" happens without a new page (UI test pass 6.13).
+        var menu = Page.GetByRole(AriaRole.Button, new() { Name = "Open Profile Dropdown" });
+        await menu.ClickAsync();
+        await Expect(Page.Locator(".user-menu .notification-header")).ToContainTextAsync("Sarah Mitchell", new() { Timeout = 15_000 });
+        await menu.ClickAsync(new() { Force = true });   // closes it again; the click-away layer sits over the button
+        await Expect(Page.Locator(".user-menu .notification-header")).ToHaveCountAsync(0);
+
         try
         {
             // The reload is the regression that used to strand the SuperAdmin silently.

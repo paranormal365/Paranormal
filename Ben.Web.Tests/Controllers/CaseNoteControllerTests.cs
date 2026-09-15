@@ -49,7 +49,7 @@ public class CaseNoteControllerTests
 
     private static CaseNoteController Build(IDbContextFactory<BenDataContext> factory, Guid userId)
     {
-        var ctrl = new CaseNoteController(factory, CreateMapper(), new Ben.Data.WebApi.Services.Billing.SubscriptionLimitGuard(factory), new Ben.Service.RepositoryService.Services.OrganizationSecurityService(factory));
+        var ctrl = new CaseNoteController(factory, CreateMapper(), new Ben.Data.WebApi.Services.Billing.SubscriptionLimitGuard(factory), new Ben.Service.RepositoryService.Services.OrganizationSecurityService(factory), new Ben.Data.WebApi.Services.CmsMarkupSanitizer());
         ctrl.ControllerContext = new ControllerContext
         {
             HttpContext = new DefaultHttpContext
@@ -133,7 +133,8 @@ public class CaseNoteControllerTests
         var created = Assert.IsType<CreatedAtActionResult>(result.Result);
         var dto = Assert.IsType<CaseNoteRecord>(created.Value);
         Assert.Equal("Background", dto.Title);
-        Assert.Equal("Client has prior history.", dto.Body);
+        // Stored as HTML since 2026-09-14: plain text sent by an API caller becomes a paragraph.
+        Assert.Equal("<p>Client has prior history.</p>", dto.Body);
         Assert.False(dto.IsPinned);
         Assert.Equal(userId, dto.AuthorAppUserId);
     }
@@ -188,7 +189,7 @@ public class CaseNoteControllerTests
         var ok  = Assert.IsType<OkObjectResult>(result.Result);
         var dto = Assert.IsType<CaseNoteRecord>(ok.Value);
         Assert.Equal("Updated", dto.Title);
-        Assert.Equal("New body", dto.Body);
+        Assert.Equal("<p>New body</p>", dto.Body);
         Assert.True(dto.IsPinned);
     }
 
@@ -256,5 +257,69 @@ public class CaseNoteControllerTests
             new UpsertCaseNoteRequest(null, "Original", false), default)).Result!).Value!).Id;
 
         Assert.IsType<ForbidResult>(await Build(factory, otherUserId).Delete(orgId, caseId, noteId, default));
+    }
+
+    // ── Formatted notes (beta feedback, 2026-09-14) ──────────────────────────────────────────────
+
+    [Fact]
+    public async Task Create_KeepsTheFormattingTheEditorOffers()
+    {
+        var (factory, orgId, caseId, userId) = await SeedAsync();
+        var result = await Build(factory, userId).Create(orgId, caseId,
+            new UpsertCaseNoteRequest(null, "<p><strong>Cold</strong> spot</p><ul><li>Hall</li></ul>", false), default);
+        var dto = (CaseNoteRecord)((CreatedAtActionResult)result.Result!).Value!;
+        Assert.Equal("<p><strong>Cold</strong> spot</p><ul><li>Hall</li></ul>", dto.Body);
+    }
+
+    [Fact]
+    public async Task Create_RemovesAScript()
+    {
+        var (factory, orgId, caseId, userId) = await SeedAsync();
+        var result = await Build(factory, userId).Create(orgId, caseId,
+            new UpsertCaseNoteRequest(null, "<p>Noted</p><script>alert(1)</script>", false), default);
+        var dto = (CaseNoteRecord)((CreatedAtActionResult)result.Result!).Value!;
+        Assert.DoesNotContain("<script", dto.Body, StringComparison.OrdinalIgnoreCase);
+        Assert.Contains("Noted", dto.Body);
+    }
+
+    [Fact]
+    public async Task Create_RemovesAnEventHandler()
+    {
+        var (factory, orgId, caseId, userId) = await SeedAsync();
+        var result = await Build(factory, userId).Create(orgId, caseId,
+            new UpsertCaseNoteRequest(null, "<p onmouseover=\"steal()\">Hover</p><img src=x onerror=\"steal()\">", false), default);
+        var dto = (CaseNoteRecord)((CreatedAtActionResult)result.Result!).Value!;
+        Assert.DoesNotContain("onmouseover", dto.Body, StringComparison.OrdinalIgnoreCase);
+        Assert.DoesNotContain("onerror", dto.Body, StringComparison.OrdinalIgnoreCase);
+    }
+
+    [Theory]
+    [InlineData("<p></p>")]
+    [InlineData("<p>&nbsp;</p>")]
+    public async Task Create_AnEmptiedEditor_IsRefused(string body)
+    {
+        var (factory, orgId, caseId, userId) = await SeedAsync();
+        Assert.IsType<BadRequestObjectResult>((await Build(factory, userId).Create(orgId, caseId,
+            new UpsertCaseNoteRequest(null, body, false), default)).Result);
+    }
+
+    [Fact]
+    public async Task GetAll_DrawsANoteStoredAsPlainTextSafely()
+    {
+        // A row written before 2026-09-14 that the one-time conversion has not reached yet.
+        var (factory, orgId, caseId, userId) = await SeedAsync();
+        await using (var db = await factory.CreateDbContextAsync())
+        {
+            db.CaseNotes.Add(new CaseNote
+            {
+                Id = Guid.NewGuid(), CaseId = caseId, AuthorAppUserId = userId, CreatedByAppUserId = userId,
+                DateCreated = DateTime.UtcNow, Body = "Line one\nline <two>\n\nNext paragraph",
+            });
+            await db.SaveChangesAsync();
+        }
+
+        var ok = Assert.IsType<OkObjectResult>((await Build(factory, userId).GetAll(orgId, caseId, default)).Result);
+        var note = Assert.Single((IEnumerable<CaseNoteRecord>)ok.Value!);
+        Assert.Equal("<p>Line one<br>line &lt;two&gt;</p><p>Next paragraph</p>", note.Body);
     }
 }

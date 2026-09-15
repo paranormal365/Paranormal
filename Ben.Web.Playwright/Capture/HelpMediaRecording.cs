@@ -117,6 +117,91 @@ public sealed class HelpMediaRecording : BenTestBase
         await WriteGifAsync(page, context, "working-a-case", "case-tabs.gif");
     }
 
+    /// <summary>working-a-case: building a research page — a title, some words, a map with two places and a route, published.</summary>
+    /// <remarks>
+    /// The one recording here that makes something, because making it is the subject. The page is deleted afterwards
+    /// through the API, as Sarah who made it, whether or not the recording finished, so no run leaves a page behind for the
+    /// screenshots to find.
+    /// </remarks>
+    [Test]
+    [Description("working-a-case: building a research page.")]
+    public async Task Record_BuildingAResearchPage()
+    {
+        var (page, context) = await StartRecordingAsync(async () =>
+        {
+            await LoginAsync(UserEmail, UserPassword);
+            if (!await OpenOrgCaseAsync("Paranormal365", "Belmont"))
+                Assert.Ignore("The seeded Belmont case is not in this database.");
+            return Page.Url.Split('?')[0] + "?tab=research";
+        });
+
+        string? pageUrl = null;
+        try
+        {
+            await Expect(page.Locator("#research-new-page")).ToBeVisibleAsync(new() { Timeout = 20_000 });
+            await page.Locator("#research-new-page").ClickAsync();
+            var title = page.Locator("#research-new-page-title");
+            await Expect(title).ToBeVisibleAsync();
+            await title.PressSequentiallyAsync("The church burial register", new() { Delay = 45 });
+            await page.WaitForTimeoutAsync(500);
+            await page.Locator("#research-new-page-create").ClickAsync();
+            await page.WaitForURLAsync(new System.Text.RegularExpressions.Regex(@"/research/[0-9a-f\-]{36}$"), new() { Timeout = 20_000 });
+            pageUrl = page.Url;
+            await Expect(page.Locator("[data-testid=block-page]")).ToBeVisibleAsync(new() { Timeout = 20_000 });
+            await page.WaitForTimeoutAsync(800);
+
+            await page.Locator("[data-testid=block-add-text]").ClickAsync();
+            var editor = page.Locator("[data-testid=text-block-editor] [contenteditable='true']").First;
+            await Expect(editor).ToBeVisibleAsync(new() { Timeout = 10_000 });
+            await editor.ClickAsync();
+            await page.Keyboard.TypeAsync("Both of the second owners are listed in the register, buried a year apart.", new() { Delay = 30 });
+            await page.WaitForTimeoutAsync(800);
+
+            await page.Locator("[data-testid=block-add-map]").ClickAsync();
+            var map = page.Locator("[data-testid=map-block] .ben-map").First;
+            await map.Locator("canvas").First.WaitForAsync(new() { Timeout = 20_000 });
+            await map.ScrollIntoViewIfNeededAsync();
+            await page.WaitForTimeoutAsync(1_500);
+            var stops = page.Locator("[data-testid=map-block] li.ben-map-block__stop");
+            foreach (var (x, y, count) in new[] { (0.42f, 0.45f, 1), (0.58f, 0.55f, 2) })
+            {
+                var box = (await map.BoundingBoxAsync())!;
+                await page.Mouse.ClickAsync(box.X + box.Width * x, box.Y + box.Height * y);
+                await Expect(stops).ToHaveCountAsync(count, new() { Timeout = 10_000 });
+                await page.WaitForTimeoutAsync(900);
+            }
+            await page.Locator("[data-testid=map-block] select[id$='-route']").SelectOptionAsync(new SelectOptionValue { Label = "Straight lines" });
+            await Expect(page.Locator("[data-testid=map-block-leg]")).ToHaveCountAsync(1, new() { Timeout = 10_000 });
+            await page.WaitForTimeoutAsync(1_500);
+
+            await page.Locator("#research-page-publish").ScrollIntoViewIfNeededAsync();
+            await page.Locator("#research-page-publish").ClickAsync();
+            await Expect(page.Locator("[data-testid=research-page-notice]")).ToContainTextAsync("Published", new() { Timeout = 20_000 });
+            await page.WaitForTimeoutAsync(1_800);
+
+            await WriteGifAsync(page, context, "working-a-case", "research-page.gif");
+        }
+        finally
+        {
+            if (pageUrl is not null) await DeleteResearchPageAsync(pageUrl);
+        }
+    }
+
+    private async Task DeleteResearchPageAsync(string pageUrl)
+    {
+        var m = System.Text.RegularExpressions.Regex.Match(pageUrl, @"/organizations/(?<org>[0-9a-f\-]{36})/cases/(?<case>[0-9a-f\-]{36})/research/(?<entry>[0-9a-f\-]{36})");
+        if (!m.Success) return;
+        var api = await Playwright.APIRequest.NewContextAsync(new() { BaseURL = ApiUrl });
+        try
+        {
+            var login = await api.PostAsync("/login", new() { DataObject = new { email = UserEmail, password = UserPassword } });
+            var token = (await login.JsonAsync())!.Value.GetProperty("accessToken").GetString();
+            await api.DeleteAsync($"/api/orgs/{m.Groups["org"].Value}/cases/{m.Groups["case"].Value}/research/{m.Groups["entry"].Value}",
+                new() { Headers = new Dictionary<string, string> { ["Authorization"] = $"Bearer {token}" } });
+        }
+        finally { await api.DisposeAsync(); }
+    }
+
     /// <summary>
     /// Signs in on the ordinary context, then opens a second, recording context that resumes that
     /// session and lands directly on the page to be filmed.

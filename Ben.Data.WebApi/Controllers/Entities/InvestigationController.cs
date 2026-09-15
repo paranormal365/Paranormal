@@ -19,6 +19,14 @@ namespace Ben.Data.WebApi.Controllers.Entities;
 [Authorize]
 public sealed class InvestigationController : BenControllerBase
 {
+    /// <summary>A Viewer here reads and changes nothing — see <see cref="Ben.Data.WebApi.Services.Access.FileAudienceAccess.IsOrgViewerAsync"/>.</summary>
+    private async Task<bool> IsViewerAsync(Guid orgId, CancellationToken ct)
+    {
+        if (User.IsInRole(Ben.Data.Common.Constants.RoleNames.SuperAdmin)) return false;
+        await using var viewerDb = await _db.CreateDbContextAsync(ct);
+        return await Ben.Data.WebApi.Services.Access.FileAudienceAccess.IsOrgViewerAsync(viewerDb, orgId, GetCurrentUserId(), ct);
+    }
+
     private readonly IDbContextFactory<BenDataContext> _db;
     private readonly IMapper _mapper;
 
@@ -98,6 +106,7 @@ public sealed class InvestigationController : BenControllerBase
         Guid orgId, Guid caseId, [FromBody] UpsertInvestigationRequest request, CancellationToken ct)
     {
         if (!await IsOrgMemberAsync(orgId, ct)) return Forbid();
+        if (await IsViewerAsync(orgId, ct)) return ViewerReadOnly();
         if (WhyNotThisWindow(request) is { } badWindow) return BadRequest(badWindow);
         var userId = GetCurrentUserId();
         await using var db = await _db.CreateDbContextAsync(ct);
@@ -200,6 +209,7 @@ public sealed class InvestigationController : BenControllerBase
         Guid orgId, Guid caseId, Guid id, [FromBody] UpsertInvestigationRequest request, CancellationToken ct)
     {
         if (!await IsOrgMemberAsync(orgId, ct)) return Forbid();
+        if (await IsViewerAsync(orgId, ct)) return ViewerReadOnly();
         if (WhyNotThisWindow(request) is { } badWindow) return BadRequest(badWindow);
         var userId = GetCurrentUserId();
         await using var db = await _db.CreateDbContextAsync(ct);
@@ -257,6 +267,7 @@ public sealed class InvestigationController : BenControllerBase
     public async Task<IActionResult> Delete(Guid orgId, Guid caseId, Guid id, CancellationToken ct)
     {
         if (!await IsOrgMemberAsync(orgId, ct)) return Forbid();
+        if (await IsViewerAsync(orgId, ct)) return ViewerReadOnly();
         await using var db = await _db.CreateDbContextAsync(ct);
         if (!await CaseOrgAccess.CaseBelongsToOrgAsync(db, caseId, orgId, ct)) return NotFound();
         var entity = await db.Investigations.FirstOrDefaultAsync(i => i.Id == id && i.CaseId == caseId, ct);
@@ -299,6 +310,7 @@ public sealed class InvestigationController : BenControllerBase
     {
         var userId = GetCurrentUserId();
         if (!await IsOrgMemberAsync(orgId, ct)) return Forbid();
+        if (await IsViewerAsync(orgId, ct)) return ViewerReadOnly();
 
         await using var db = await _db.CreateDbContextAsync(ct);
         if (!await CaseOrgAccess.CaseBelongsToOrgAsync(db, caseId, orgId, ct)) return NotFound();
@@ -353,6 +365,7 @@ public sealed class InvestigationController : BenControllerBase
         Guid orgId, Guid caseId, Guid id, [FromBody] AddInvestigationAttendeeRequest request, CancellationToken ct)
     {
         if (!await IsOrgMemberAsync(orgId, ct)) return Forbid();
+        if (await IsViewerAsync(orgId, ct)) return ViewerReadOnly();
         var userId = GetCurrentUserId();
         await using var db = await _db.CreateDbContextAsync(ct);
         if (!await CaseOrgAccess.CaseBelongsToOrgAsync(db, caseId, orgId, ct)) return NotFound();
@@ -379,6 +392,7 @@ public sealed class InvestigationController : BenControllerBase
         Guid orgId, Guid caseId, Guid id, Guid attendeeId, [FromBody] UpdateAttendanceRequest request, CancellationToken ct)
     {
         if (!await IsOrgMemberAsync(orgId, ct)) return Forbid();
+        if (await IsViewerAsync(orgId, ct)) return ViewerReadOnly();
         await using var db = await _db.CreateDbContextAsync(ct);
         if (!await CaseOrgAccess.CaseBelongsToOrgAsync(db, caseId, orgId, ct)) return NotFound();
         var attendee = await db.InvestigationAttendees
@@ -426,6 +440,7 @@ public sealed class InvestigationController : BenControllerBase
         Guid orgId, Guid caseId, Guid id, Guid attendeeId, CancellationToken ct)
     {
         if (!await IsOrgMemberAsync(orgId, ct)) return Forbid();
+        if (await IsViewerAsync(orgId, ct)) return ViewerReadOnly();
         await using var db = await _db.CreateDbContextAsync(ct);
         if (!await CaseOrgAccess.CaseBelongsToOrgAsync(db, caseId, orgId, ct)) return NotFound();
         var attendee = await db.InvestigationAttendees

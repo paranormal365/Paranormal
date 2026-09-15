@@ -294,8 +294,8 @@ public sealed partial class BenAdminClientAdapter
     public Task<OrgCalendarEventRecord?> UpdateCalendarEventAsync(Guid orgId, Guid eventId, UpsertCalendarEventRequest request, CancellationToken token = default)
         => _api.PutAsync<UpsertCalendarEventRequest, OrgCalendarEventRecord>($"/api/organizations/{orgId}/calendar/{eventId}", request, token);
 
-    public Task<bool> DeleteCalendarEventAsync(Guid orgId, Guid eventId, CancellationToken token = default)
-        => _api.DeleteAsync($"/api/organizations/{orgId}/calendar/{eventId}", token);
+    public Task<(bool Deleted, string? Error)> DeleteCalendarEventAsync(Guid orgId, Guid eventId, CancellationToken token = default)
+        => _api.DeleteExpectingReasonAsync($"/api/organizations/{orgId}/calendar/{eventId}", token);
 
     public Task<LoadResult<OrgCalendarEventAttendeeRecord>> GetCalendarEventAttendeesAsync(Guid orgId, Guid eventId, CancellationToken token = default)
         => _api.GetListAsync<OrgCalendarEventAttendeeRecord>($"/api/organizations/{orgId}/calendar/{eventId}/attendees", token);

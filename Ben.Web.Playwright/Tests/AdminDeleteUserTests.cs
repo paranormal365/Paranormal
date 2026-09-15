@@ -41,9 +41,12 @@ public class AdminDeleteUserTests : BenTestBase
         await WaitUntilLoadedAsync();
 
         // Present, so the row keeps its shape rather than losing a control without explanation.
-        var own = Page.Locator("[title='Delete your own account from your profile']");
+        // The button is found by its accessible name. Its words sit on a wrapper as the tooltip's title,
+        // because a disabled button receives no hover and its tooltip would never open (BenGridAction).
+        var own = Page.Locator("button[aria-label='Delete your own account from your profile']");
         await Expect(own.First).ToBeVisibleAsync(new() { Timeout = 20_000 });
         await Expect(own.First).ToBeDisabledAsync();
+        await Expect(Page.Locator("[title='Delete your own account from your profile']")).ToHaveCountAsync(1);
 
         // Exactly one row is yours, and no live delete button carries your own account's row.
         Assert.That(await own.CountAsync(), Is.EqualTo(1),

@@ -28,7 +28,7 @@ public class CaseMessageControllerTests
 
     private static CaseMessageController BuildController(IDbContextFactory<BenDataContext> factory, Guid userId)
     {
-        var ctrl = new CaseMessageController(factory, new Ben.Data.WebApi.Services.Billing.SubscriptionLimitGuard(factory), new Ben.Service.RepositoryService.Services.OrganizationSecurityService(factory));
+        var ctrl = new CaseMessageController(factory, new Ben.Data.WebApi.Services.Billing.SubscriptionLimitGuard(factory), new Ben.Service.RepositoryService.Services.OrganizationSecurityService(factory), new Ben.Data.WebApi.Services.CmsMarkupSanitizer(), Ben.Data.WebApi.Services.LinkPreviews.LinkPreviewWarmer.None);
         ctrl.ControllerContext = new ControllerContext
         {
             HttpContext = new DefaultHttpContext
@@ -42,7 +42,7 @@ public class CaseMessageControllerTests
 
     private static CaseMessageController BuildAnonymous(IDbContextFactory<BenDataContext> factory)
     {
-        var ctrl = new CaseMessageController(factory, new Ben.Data.WebApi.Services.Billing.SubscriptionLimitGuard(factory), new Ben.Service.RepositoryService.Services.OrganizationSecurityService(factory));
+        var ctrl = new CaseMessageController(factory, new Ben.Data.WebApi.Services.Billing.SubscriptionLimitGuard(factory), new Ben.Service.RepositoryService.Services.OrganizationSecurityService(factory), new Ben.Data.WebApi.Services.CmsMarkupSanitizer(), Ben.Data.WebApi.Services.LinkPreviews.LinkPreviewWarmer.None);
         ctrl.ControllerContext = new ControllerContext
         {
             HttpContext = new DefaultHttpContext { User = new ClaimsPrincipal(new ClaimsIdentity()) }
@@ -173,6 +173,89 @@ public class CaseMessageControllerTests
         var result = await ctrl.PostMessage(orgId, caseId, new PostCaseMessageRequest("   "), default);
 
         Assert.IsType<BadRequestObjectResult>(result.Result);
+    }
+
+    // ── Formatted messages (2026-09-14): Body stays plain for the iPhone app, BodyHtml is added ─────────
+
+    [Fact]
+    public async Task PostMessage_Html_StoresBothForms_AndBodyIsThePlainWords()
+    {
+        var (factory, orgId, caseId, userId) = await SeedAsync();
+        var result = await BuildController(factory, userId).PostMessage(orgId, caseId,
+            new PostCaseMessageRequest(BodyHtml: "<p><strong>Visit</strong> moved to Friday.</p><ul><li>Bring keys</li></ul>"), default);
+
+        var dto = Assert.IsType<CaseMessageRecord>(Assert.IsType<OkObjectResult>(result.Result).Value);
+        Assert.Equal("<p><strong>Visit</strong> moved to Friday.</p><ul><li>Bring keys</li></ul>", dto.BodyHtml);
+        Assert.Equal("Visit moved to Friday.\n\nBring keys", dto.Body);
+        Assert.DoesNotContain("<", dto.Body);
+
+        await using var db = await factory.CreateDbContextAsync();
+        var stored = await db.CaseMessages.SingleAsync(m => m.Id == dto.Id);
+        Assert.Equal(dto.Body, stored.Body);
+        Assert.Equal(dto.BodyHtml, stored.BodyHtml);
+    }
+
+    [Fact]
+    public async Task PostMessage_Html_WithAScript_StoresNeitherFormWithIt()
+    {
+        var (factory, orgId, caseId, userId) = await SeedAsync();
+        var result = await BuildController(factory, userId).PostMessage(orgId, caseId,
+            new PostCaseMessageRequest(BodyHtml: "<p>Hi</p><script>alert(1)</script><img src=x onerror=\"steal()\">"), default);
+
+        var dto = Assert.IsType<CaseMessageRecord>(Assert.IsType<OkObjectResult>(result.Result).Value);
+        Assert.DoesNotContain("script", dto.BodyHtml!, StringComparison.OrdinalIgnoreCase);
+        Assert.DoesNotContain("onerror", dto.BodyHtml!, StringComparison.OrdinalIgnoreCase);
+        Assert.DoesNotContain("alert", dto.Body);
+    }
+
+    [Fact]
+    public async Task PostMessage_PlainBodyOnly_IsStoredAsBefore_WithNoHtml()
+    {
+        // What the shipped iPhone app sends.
+        var (factory, orgId, caseId, userId) = await SeedAsync();
+        var result = await BuildController(factory, userId).PostMessage(orgId, caseId,
+            new PostCaseMessageRequest("Line one\nline two"), default);
+
+        var dto = Assert.IsType<CaseMessageRecord>(Assert.IsType<OkObjectResult>(result.Result).Value);
+        Assert.Equal("Line one\nline two", dto.Body);
+        Assert.Null(dto.BodyHtml);
+    }
+
+    [Theory]
+    [InlineData("<p></p>")]
+    [InlineData("<p>&nbsp;</p>")]
+    [InlineData("<script>alert(1)</script>")]
+    public async Task PostMessage_AnEmptiedEditor_IsRefused(string html)
+    {
+        var (factory, orgId, caseId, userId) = await SeedAsync();
+        var result = await BuildController(factory, userId).PostMessage(orgId, caseId,
+            new PostCaseMessageRequest(BodyHtml: html), default);
+        Assert.IsType<BadRequestObjectResult>(result.Result);
+    }
+
+    /// <summary>Records what a post asked to have previews made for.</summary>
+    private sealed class RecordingWarmer : Ben.Data.WebApi.Services.LinkPreviews.ILinkPreviewWarmer
+    {
+        public readonly List<(string? Text, string? Html, Guid User)> Calls = [];
+        public void WarmFrom(string? text, string? html, Guid userId) => Calls.Add((text, html, userId));
+    }
+
+    [Fact]
+    public async Task PostMessage_AsksForTheCardsOfItsLinks_AfterItIsSaved()
+    {
+        var (factory, orgId, caseId, userId) = await SeedAsync();
+        var warmer = new RecordingWarmer();
+        var ctrl = new CaseMessageController(factory, new Ben.Data.WebApi.Services.Billing.SubscriptionLimitGuard(factory),
+            new Ben.Service.RepositoryService.Services.OrganizationSecurityService(factory), new Ben.Data.WebApi.Services.CmsMarkupSanitizer(), warmer)
+        {
+            ControllerContext = BuildController(factory, userId).ControllerContext,
+        };
+
+        await ctrl.PostMessage(orgId, caseId, new PostCaseMessageRequest(BodyHtml: "<p>See <a href=\"https://example.com/deed\">the deed</a></p>"), default);
+
+        var call = Assert.Single(warmer.Calls);
+        Assert.Equal(userId, call.User);
+        Assert.Single(Ben.Data.WebApi.Services.LinkPreviews.LinkPreviewWarmer.LinksIn(call.Text, call.Html), "https://example.com/deed");
     }
 
     [Fact]

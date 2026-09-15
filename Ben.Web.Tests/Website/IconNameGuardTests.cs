@@ -47,7 +47,8 @@ public sealed class IconNameGuardTests
 
         // A literal name only: Name="@something" is computed, and the switch that produces it is
         // ordinary code with ordinary tests.
-        var named = new Regex("<BenIcon\\b[^>]*\\bName=\"([^\"@][^\"]*)\"");
+        // BenGridAction takes the same sprite name as Icon (grid row actions, 2026-09-14).
+        var named = new Regex("<BenIcon\\b[^>]*\\bName=\"([^\"@][^\"]*)\"|<BenGridAction\\b[^>]*\\bIcon=\"([^\"@][^\"]*)\"");
 
         // RepoFiles, not a walk of its own: the walk this used to do also read the other branches
         // checked out under .claude/worktrees, and failed this branch for icons a stale copy of
@@ -59,7 +60,7 @@ public sealed class IconNameGuardTests
         {
             foreach (Match match in named.Matches(File.ReadAllText(path)))
             {
-                var name = match.Groups[1].Value;
+                var name = match.Groups[1].Success ? match.Groups[1].Value : match.Groups[2].Value;
                 if (!symbols.Contains(name))
                     missing.Add($"{Path.GetFileName(path)}: \"{name}\"");
             }

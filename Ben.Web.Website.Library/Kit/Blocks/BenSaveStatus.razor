@@ -1,0 +1,41 @@
+@namespace Ben.Web.Website.Library.Kit.Blocks
+
+@*
+    Where a page's work stands, in words, next to the controls that change it: saved and when, unsaved, saving, could not
+    save (with a way to try again), or stopped because newer work would be overwritten.
+*@
+
+<span class="ben-save-status" role="status" aria-live="polite" data-testid="save-status" data-state="@Autosave.State"
+      data-flushes="@Autosave.FlushesFinished">
+    @switch (Autosave.State)
+    {
+        case AutosaveState.Saving:
+            <span class="spinner-border spinner-border-sm me-1" aria-hidden="true"></span><span>Saving…</span>
+            break;
+        case AutosaveState.Dirty:
+            <BenIcon Name="edit-3" Class="me-1" /><span>Unsaved changes</span>
+            break;
+        case AutosaveState.Failed:
+            <span class="text-danger"><BenIcon Name="alert-triangle" Class="me-1" />@(Autosave.Message ?? "Could not save.")</span>
+            <button type="button" class="btn btn-link btn-sm p-0 ms-2 align-baseline" @onclick="RetryAsync">Try again</button>
+            break;
+        case AutosaveState.Conflict:
+            <span class="text-danger"><BenIcon Name="alert-octagon" Class="me-1" />@(Autosave.Message ?? "Saving has stopped so newer work isn't overwritten.")</span>
+            break;
+        default:
+            @if (Autosave.LastSavedAt is { } at)
+            {
+                <BenIcon Name="check" Class="me-1" /><span>Saved @FormatTime(at)</span>
+            }
+            break;
+    }
+</span>
+
+@code {
+    [Parameter, EditorRequired] public BlockAutosave Autosave { get; set; } = null!;
+
+    /// <summary>Turns a moment into the reader's own clock time.</summary>
+    [Parameter, EditorRequired] public Func<DateTimeOffset, string> FormatTime { get; set; } = null!;
+
+    private Task RetryAsync() => Autosave.FlushAsync();
+}

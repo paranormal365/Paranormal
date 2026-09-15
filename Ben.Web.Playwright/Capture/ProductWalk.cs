@@ -189,6 +189,16 @@ public sealed class ProductWalk : BenTestBase
         await ClickUntilUrlAsync(open, $@"/organizations/{org}/cases/[0-9a-f\-]{{36}}");
     }
 
+    /// <summary>Opens the case whose card names <paramref name="text"/>, from the group's case list.</summary>
+    private async Task OpenCaseNamedAsync(string org, string text)
+    {
+        await GoAsync($"/organizations/{org}/cases");
+        var card = Main.Locator(".card").Filter(new() { HasTextString = text }).First;
+        var open = card.GetByRole(AriaRole.Button, new() { Name = "Open" }).Or(card.GetByRole(AriaRole.Link, new() { Name = "Open" })).First;
+        await Expect(open).ToBeVisibleAsync(new() { Timeout = 20_000 });
+        await ClickUntilUrlAsync(open, $@"/organizations/{org}/cases/[0-9a-f\-]{{36}}");
+    }
+
     /// <summary>Follows the first link on the page whose address starts with <paramref name="prefix"/>.</summary>
     private async Task FollowAsync(string prefix)
     {
@@ -253,7 +263,8 @@ public sealed class ProductWalk : BenTestBase
         await StepAsync("an item somebody owns", () => FollowIfAnyAsync("/equipment/"));
         await StepAsync("a tour's public page", () => GoAsync("/o/pw-tour-1789070429/tours/church-street-walk"));
         await StepAsync("publications", () => GoAsync("/publications"));
-        await StepAsync("pricing", () => GoAsync("/pricing"), expect: "Pricing");
+        await StepAsync("pricing, a card and a button for every plan", () => GoAsync("/pricing"),
+            Main.Locator("[data-testid=pricing-band] [data-testid=pricing-cta] a, [data-testid=pricing-band] [data-testid=pricing-cta] button, #pricing-not-on-sale"), expect: "Pricing");
         await StepAsync("ask for an investigation", () => GoAsync("/my-requests/new"));
         await StepAsync("help", () => GoAsync("/help"), expect: "Help");
         await StepAsync("a help article", () => FollowAsync("/help/"));
@@ -313,6 +324,13 @@ public sealed class ProductWalk : BenTestBase
             await StepAsync($"group tab {tab}", () => OrgTabAsync(tab));
         await StepAsync("a case", () => GoAsync($"/organizations/{org}/cases"));
         await StepAsync("the case itself", () => OpenFirstCaseAsync(org));
+        await StepAsync("research on the Belmont case", async () =>
+        {
+            await OpenCaseNamedAsync(org, "Belmont");
+            await GoAsync(new Uri(Page.Url).AbsolutePath + "?tab=research");
+        }, Main.Locator("[data-testid=research-page-link]"));
+        await StepAsync("a published research page, to read", () => ClickUntilUrlAsync(Main.Locator("[data-testid=research-page-link]").First, "/research/"),
+            Main.Locator("[data-testid=block-reader]"));
         await StepAsync("a published case: vote and take it back", async () =>
         {
             await GoAsync("/o/paranormal365/cases");
@@ -407,6 +425,18 @@ public sealed class ProductWalk : BenTestBase
         await StepAsync("cases", () => GoAsync($"/organizations/{org}/cases"));
         await StepAsync("a case", () => OpenFirstCaseAsync(org));
         await StepAsync("a new case", () => GoAsync($"/organizations/{org}/cases/new"));
+        await StepAsync("the Edit Case page", async () =>
+        {
+            await OpenCaseNamedAsync(org, "Belmont");
+            await ClickUntilUrlAsync(Main.Locator("#case-edit"), "/edit$");
+        }, Main.Locator("#case-edit-description .k-editor"));
+        await StepAsync("leaving Edit Case unchanged goes back to the case", () => ClickUntilUrlAsync(Main.Locator("#case-edit-cancel"), $@"/organizations/{org}/cases/[0-9a-f\-]{{36}}$"));
+        await StepAsync("case notes, formatted", () => GoAsync(new Uri(Page.Url).AbsolutePath + "?tab=notes"), Main.Locator("#case-notes-new"));
+        await StepAsync("the timeline, with its research page", () => GoAsync(new Uri(Page.Url).AbsolutePath + "?tab=timeline"),
+            Main.Locator("[data-testid=timeline-open-research-page]"));
+        await StepAsync("research, with New page", () => GoAsync(new Uri(Page.Url).AbsolutePath + "?tab=research"), Main.Locator("#research-new-page"));
+        await StepAsync("a research page, as somebody who may edit it", () => ClickUntilUrlAsync(Main.Locator("[data-testid=research-page-link]").First, "/research/"),
+            Main.Locator("[data-testid=block-page]"));
         var caseAddress = $"/organizations/{org}/cases";
         await StepAsync("an investigation from the list", async () =>
         {

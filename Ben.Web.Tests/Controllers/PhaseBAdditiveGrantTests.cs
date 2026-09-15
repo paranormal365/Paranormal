@@ -102,7 +102,7 @@ public sealed class PhaseBAdditiveGrantTests
             new Ben.Data.WebApi.Services.Billing.SubscriptionLimitGuard(w.Factory),
             new OrganizationSecurityService(w.Factory),
             new Ben.Data.WebApi.Services.RequestReviewNotifier(w.Factory, new Ben.Data.WebApi.Services.PlatformMessageService(w.Factory)),
-            Ben.Web.Tests.TestMailer.Quiet()), userId);
+            Ben.Web.Tests.TestMailer.Quiet(), new Ben.Data.WebApi.Services.CmsMarkupSanitizer()), userId);
     }
 
     private static OrgCalendarEventTypeController EventTypes(World w, Guid userId)

@@ -1458,6 +1458,41 @@ public sealed class HelpMediaCapture : BenTestBase
 
     // ── Group members ─────────────────────────────────────────────────────────
 
+    /// <summary>The research page the development seed puts on the Belmont case.</summary>
+    private const string SeededResearchPageId = "12000001-0000-0000-0000-000000000001";
+
+    /// <summary>
+    /// working-a-case: the Edit Case page, and a research page — whole, on a phone, and its map block.
+    /// </summary>
+    /// <remarks>
+    /// Beta feedback, 2026-09-14. The research page is the seeded one (text, a link and a two-place driving map),
+    /// so the shots change nothing. Opened as Sarah, who manages the case, so the page shows as its author sees it: the
+    /// save status, Save now and Publish, and Files and links beside it.
+    /// </remarks>
+    [Test]
+    [Description("working-a-case: the Edit Case page and a research page with its map.")]
+    public async Task Capture_EditCaseAndResearchPages()
+    {
+        await LoginAsync(UserEmail, UserPassword);
+        if (!await OpenOrgCaseAsync("Paranormal365", "Belmont"))
+            Assert.Ignore("The seeded Belmont case is not in this database.");
+        var caseUrl = Page.Url.Split('?')[0];
+
+        await ClickUntilUrlAsync(Page.Locator("#case-edit"), @"/cases/[0-9a-f\-]+/edit$");
+        await Expect(Page.Locator("#case-edit-description .k-editor")).ToBeVisibleAsync(new() { Timeout = 15_000 });
+        await ShootAsync("working-a-case", "edit-case.png", proves: "Status and publishing");
+
+        await Page.GotoAsync($"{caseUrl}/research/{SeededResearchPageId}");
+        await WaitForTheCircuitAsync();
+        await Expect(Page.Locator("#research-page-title")).ToBeVisibleAsync(new() { Timeout = 20_000 });
+        await Page.Locator("[data-testid=map-block] .ben-map canvas").First.WaitForAsync(new() { Timeout = 20_000 });
+        await Page.WaitForTimeoutAsync(4_000);   // map tiles and the route's framing animation
+        await ShootAsync("working-a-case", "research-page.png", proves: "Who lived here before");
+        await ShootAsync("working-a-case", "research-map.png", selector: "section[data-kind=map]", proves: "Mount Olivet Cemetery");
+        await Page.EvaluateAsync("() => window.scrollTo(0, 0)");   // the map shot scrolled down to it; the phone shot is the page's top
+        await ShootAsync("working-a-case", "research-page-phone.png", proves: "Who lived here before", width: 390);
+    }
+
     [Test]
     [Description("working-a-case: the group's case list, and a case with its tabs.")]
     public async Task Capture_WorkingACase()

@@ -116,7 +116,7 @@ public class RequestReviewFlowTests
             new Ben.Data.WebApi.Services.Billing.SubscriptionLimitGuard(w.F),
             new Ben.Service.RepositoryService.Services.OrganizationSecurityService(w.F),
             new RequestReviewNotifier(w.F, new PlatformMessageService(w.F)),
-            Ben.Web.Tests.TestMailer.Quiet()), userId);
+            Ben.Web.Tests.TestMailer.Quiet(), new Ben.Data.WebApi.Services.CmsMarkupSanitizer()), userId);
     }
 
     private static async Task<List<string>> SubjectsToAsync(World w, Guid userId)

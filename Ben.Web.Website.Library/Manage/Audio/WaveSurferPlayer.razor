@@ -33,12 +33,14 @@
             position:relative;">
 
     @* ── Loading overlay ──────────────────────────────────────────────────── *@
+    @* Bootstrap's body colour, which the theme defines in light and dark. The Kendo variable it used is not defined here, so
+       the overlay fell back to white and every recording on a dark page loaded as a pale grey slab (member test pass M.5). *@
     @if (_loading)
     {
         <div class="ws-player-loading"
              style="position:absolute;inset:0;display:flex;align-items:center;
                     justify-content:center;gap:.5rem;z-index:2;
-                    background:rgba(var(--kendo-body-bg-rgb,255,255,255),.7);">
+                    background:rgba(var(--bs-body-bg-rgb),.7);">
             <span class="spinner-border spinner-border-sm" role="status"></span>
             @if (_loadingPercent > 0)
             {

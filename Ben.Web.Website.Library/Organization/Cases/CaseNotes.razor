@@ -15,7 +15,7 @@ else
         <span class="fw-semibold">Case Notes <span class="text-secondary small fw-normal">(internal — not visible to clients)</span></span>
         @if (May(Ben.Data.Common.Enums.OrganizationSecurityAction.Create))
         {
-            <button type="button" class="btn btn-primary btn-sm" @onclick="OpenNew"><BenIcon Name="plus" Class="me-1" />New Note</button>
+            <button type="button" class="btn btn-primary btn-sm" id="case-notes-new" @onclick="OpenNew"><BenIcon Name="plus" Class="me-1" />New Note</button>
         }
     </div>
 
@@ -50,7 +50,9 @@ else
                                 {
                                     <strong class="d-block mb-1">@n.Title</strong>
                                 }
-                                <div class="small" style="white-space:pre-wrap;">@n.Body</div>
+                                @* Sanitized HTML from the API — formatted since 2026-09-14, and older plain notes arrive
+                                   already turned into paragraphs (CaseNoteBodies). *@
+                                <div class="small case-note__body" data-testid="case-note-body">@((MarkupString)n.Body)</div>
                                 <div class="text-secondary mt-2" style="font-size:.75rem;">
                                     @(n.AuthorDisplayName ?? "Unknown") · @n.DateCreated.ToViewerLocalTime(UserState).ToDisplayDateTime()
                                     @if (n.DateUpdated.HasValue)
@@ -78,7 +80,7 @@ else
 }
 
 @* ── Add / Edit dialog ────────────────────────────────────────────────────── *@
-<BenModal @bind-Visible="@_showDialog" Title="@(_editNote is null ? "New Note" : "Edit Note")">
+<BenModal @bind-Visible="@_showDialog" Title="@(_editNote is null ? "New Note" : "Edit Note")" Size="lg">
     <ChildContent>
         <div class="row g-3">
             <div class="col-12">
@@ -86,12 +88,17 @@ else
                 <input id="casenotes-title-optional-f955" type="text" class="form-control" placeholder="e.g. Client background check" @bind="@_formTitle" @bind:event="oninput" />
             </div>
             <div class="col-12">
-                <label class="form-label fw-semibold" for="casenotes-body-bc4b">Body <span class="text-danger">*</span></label>
-                <textarea id="casenotes-body-bc4b" class="form-control" rows="6" placeholder="Internal note details…" @bind="@_formBody" @bind:event="oninput"></textarea>
+                @* A formatting editor, the case-prose toolbar (beta feedback, 2026-09-14). *@
+                <div class="form-label fw-semibold">Body <span class="text-danger">*</span></div>
+                <div id="casenotes-body-bc4b" data-testid="note-body-editor">
+                    <BenEditor @ref="_bodyEditor" @bind-Value="@_formBody" Height="260px" Tools="@CaseEditorTools.Prose" />
+                </div>
             </div>
-            <div class="col-12 d-flex align-items-center gap-2">
-                <input type="checkbox" class="form-check-input" id="note-pin" @bind="@_formPinned" />
-                <label for="note-pin" class="form-label mb-0">📌 Pin this note</label>
+            <div class="col-12">
+                <div class="form-check">
+                    <input type="checkbox" class="form-check-input" id="note-pin" @bind="@_formPinned" />
+                    <label for="note-pin" class="form-check-label">📌 Pin this note</label>
+                </div>
             </div>
         </div>
         @if (_dialogError is not null)
@@ -102,7 +109,7 @@ else
     <FooterContent>
         <button type="button" class="btn btn-outline-secondary" @onclick="@(() => _showDialog = false)">Cancel</button>
         <button type="button" class="btn btn-primary" @onclick="SaveNote"
-                disabled="@(_isBusy || string.IsNullOrWhiteSpace(_formBody))">
+                disabled="@_isBusy">
             <BenIcon Name="save" Class="me-1" />@(_isBusy ? "Saving…" : "Save")
         </button>
     </FooterContent>
@@ -164,6 +171,7 @@ else
     private CaseNoteDto? _editNote;
     private string? _formTitle;
     private string  _formBody  = "";
+    private BenEditor? _bodyEditor;
     private bool    _formPinned;
 
     private bool     _showDeleteConfirm;
@@ -217,7 +225,10 @@ else
 
     private async Task SaveNote()
     {
-        if (string.IsNullOrWhiteSpace(_formBody)) { _dialogError = "Body is required."; return; }
+        // What the editor holds now, not its last debounced report — see BenEditor.GetCurrentHtmlAsync.
+        if (_bodyEditor is not null) _formBody = await _bodyEditor.GetCurrentHtmlAsync() ?? _formBody;
+        // Asked of the words, not the string: an emptied editor still holds <p></p>.
+        if (!Ben.Data.Common.Text.PlainTextHtml.HasText(_formBody)) { _dialogError = "Write something in the note first."; return; }
         _isBusy = true; _dialogError = null;
         try
         {

@@ -22,7 +22,7 @@
         {
             <p class="mb-2"><strong>Want to join @OrgName?</strong></p>
             <a class="btn btn-outline-primary btn-sm"
-               href="@($"/login?returnUrl={Uri.EscapeDataString(NavManager.ToBaseRelativePath(NavManager.Uri) is var rel && rel.Length > 0 ? "/" + rel : "/")}")">
+               href="@Ben.Web.Website.Library.Kit.SignInLink.For(NavManager)">
                 Sign in to apply
             </a>
         }

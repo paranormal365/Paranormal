@@ -23,4 +23,13 @@ public record CaseTimelineEntryRecord
     public DateTime? DateUpdated { get; init; }
     public Guid CreatedByAppUserId { get; init; }
     public Guid? UpdatedByAppUserId { get; init; }
+
+    /// <summary>
+    /// The research page this row stands for, when it is one (2026-09-14): a published research page with a date appears on
+    /// the timeline where it happened. Such a row is changed on its page, not here.
+    /// </summary>
+    public Guid? ResearchEntryId { get; init; }
+
+    /// <summary>True for a row the timeline shows but does not own — a research page's.</summary>
+    public bool IsReadOnly { get; init; }
 }

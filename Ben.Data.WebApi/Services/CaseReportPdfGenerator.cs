@@ -11,6 +11,26 @@ public static class CaseReportPdfGenerator
     /// <summary>Without readouts: every cited session prints the "not on this server" sentence.</summary>
     public static byte[] Generate(CaseReport report) => Generate(report, new Dictionary<Guid, string?>());
 
+    /// <summary>The downloaded file's name: the report's title as plain letters, digits and hyphens.</summary>
+    /// <remarks>
+    /// The title went in with only its spaces swapped, so "Initial Assessment — Belmont Blvd residence" reached a client as
+    /// "report-Initial-Assessment-_-Belmont-Blvd-residence.pdf": the header's plain-text copy of a name cannot carry the dash,
+    /// and that copy is the one a download reads (client test pass, 2026-09-14).
+    /// </remarks>
+    public static string FileName(string? title)
+    {
+        var decomposed = (title ?? "").Normalize(System.Text.NormalizationForm.FormD);
+        var plain = new System.Text.StringBuilder();
+        foreach (var c in decomposed)
+        {
+            if (System.Globalization.CharUnicodeInfo.GetUnicodeCategory(c) == System.Globalization.UnicodeCategory.NonSpacingMark) continue;
+            plain.Append(c < 128 && char.IsLetterOrDigit(c) ? c : '-');
+        }
+        var slug = System.Text.RegularExpressions.Regex.Replace(plain.ToString(), "-{2,}", "-").Trim('-');
+        if (slug.Length > 80) slug = slug[..80].TrimEnd('-');
+        return slug.Length == 0 ? "report.pdf" : $"report-{slug}.pdf";
+    }
+
     public static byte[] Generate(CaseReport report, IReadOnlyDictionary<Guid, string?> readouts)
     {
         var doc    = new RadFixedDocument();

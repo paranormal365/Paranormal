@@ -28,7 +28,7 @@ namespace Ben.Web.Playwright.Tests;
 /// reaching anything. On localhost that window measured 3 ms. Over a real connection it is
 /// whatever the round trip is.</para>
 /// </remarks>
-// Fixtures that drive the Edit Case dialog on the one seeded case, or upload to it, cannot run
+// Fixtures that drive the Edit Case page on the one seeded case, or upload to it, cannot run
 // beside each other: each one changes the case, asserts, and restores, and in parallel one
 // fixture's restore lands in the middle of another's assertion. The 2026-09-07 full run failed
 // The_leak_warning_fires_before_save_not_after_it exactly that way, having passed twice in

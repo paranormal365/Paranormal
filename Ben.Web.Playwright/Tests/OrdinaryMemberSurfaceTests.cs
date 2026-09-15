@@ -115,7 +115,9 @@ public class OrdinaryMemberSurfaceTests : BenTestBase
     {
         if (!await OpenGroupAsync()) Assert.Ignore($"Seed org '{OrgName}' not present.");
 
-        await OpenTabAsync("Files", Main.GetByRole(AriaRole.Button, new() { Name = "Upload" }));
+        // Loaded when the list or the line saying who adds files is drawn — not Upload, which is offered only with the
+        // Files permission this member does not hold (member test pass M.6, 2026-09-14).
+        await OpenTabAsync("Files", Main.Locator("#org-files-who-adds, .k-grid").First);
         await WaitUntilLoadedAsync();
 
         var emptyGrid = Main.GetByText("No records available", new() { Exact = false });

@@ -93,7 +93,7 @@
     protected override async Task OnInitializedAsync()
     {
         if (!await UserState.WaitUntilAuthReadyAsync(RendererInfo.IsInteractive)) return;
-        if (!UserState.IsSuperAdmin) { NavManager.NavigateTo("/"); return; }
+        if (!UserState.IsSuperAdmin) { NavManager.NavigateTo(Ben.Web.Website.Library.Kit.SignInLink.ForRefusal(NavManager, UserState)); return; }
         await ReloadAsync();
     }
 

@@ -196,13 +196,13 @@ public class Phase4AdapterTests
         var orgId   = Guid.NewGuid();
         var eventId = Guid.NewGuid();
         var api     = ApiMock();
-        api.Setup(x => x.DeleteAsync($"/api/organizations/{orgId}/calendar/{eventId}",
+        api.Setup(x => x.DeleteExpectingReasonAsync($"/api/organizations/{orgId}/calendar/{eventId}",
                 It.IsAny<CancellationToken>()))
-           .ReturnsAsync(true);
+           .ReturnsAsync((true, (string?)null));
 
         await Build(api).DeleteCalendarEventAsync(orgId, eventId);
 
-        api.Verify(x => x.DeleteAsync(
+        api.Verify(x => x.DeleteExpectingReasonAsync(
             $"/api/organizations/{orgId}/calendar/{eventId}", It.IsAny<CancellationToken>()), Times.Once);
     }
 
