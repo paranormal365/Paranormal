@@ -88,7 +88,8 @@ public sealed class CanvasDeployScriptGuardTests
         Assert.Contains("Canvas:SiteBaseUrl", block);
         Assert.Contains("Canvas:MapTokenUrl", block);
         Assert.Contains("/auth/mapkit-token", block);
-        Assert.True(Regex.IsMatch(block, @"<base href=""\$CanvasBase"""),
+        // Inside a PowerShell double-quoted string the attribute's quotes are doubled: ""$CanvasBase"".
+        Assert.True(Regex.IsMatch(block, @"<base href=""{1,2}\$CanvasBase"),
             "the canvas's <base href> must be patched to its mount path, or the app loads its runtime from the site root");
     }
 
