@@ -67,6 +67,16 @@ internal static class Audio
         return copy;
     }
 
+    /// <summary>Scales in place so the loudest sample sits at −1 dBFS, as the product's clip export does.</summary>
+    public static void PeakNormalise(float[] s)
+    {
+        var peak = 0f;
+        foreach (var v in s) peak = Math.Max(peak, Math.Abs(v));
+        if (peak <= 0) return;
+        var gain = 0.891f / peak;
+        for (var i = 0; i < s.Length; i++) s[i] *= gain;
+    }
+
     public static float[] Slice(float[] s, double startSeconds, double endSeconds)
     {
         var a = Math.Clamp((int)(startSeconds * Rate), 0, s.Length);

@@ -33,5 +33,15 @@ not to be it.
   LibriSpeech); speech comes from macOS `say` voices.
 - 2026-09-15: bench built and run — findings in `EVP-Bench-2026-09-15.md`. Whisper invents nothing from steady noise
   but confidently turns reversed speech into phrases, its confidence cannot filter that, and it cannot read voices
-  below the noise level. The next detector to grade is a voice-activity detector, pending Ben's download approval;
-  after that, Ben's real recordings as backgrounds (`generate --backgrounds <folder>`).
+  below the noise level. - 2026-09-15: Ben approved Silero VAD, noting the whole app runs under IIS on Windows. Graded the same day: clean on
+  noise and knocks, ~125 ms per minute of audio on one thread, runs on the ONNX Runtime the API already loads — but, like
+  Whisper, it finds almost no voices below the noise level. Direction: VAD as a queue-sorting signal in the API; Whisper
+  (if at all) in a separate Windows service, never the IIS worker; phase 2 fine-tunes a small classifier on buried voices
+  from the generator. Next input needed: Ben's real recordings (`generate --backgrounds <folder>`).
+
+## Windows and IIS (Ben, 2026-09-15: "the whole app is being run from IIS and on a windows box")
+
+- Anything in-process must be small, CPU-only, single-threaded per request and on a runtime already proven there
+  (ONNX Runtime — the feed screener). Silero VAD qualifies.
+- Whisper does not: separate Windows service, queued, one job at a time; model loaded once, not per app-pool recycle.
+- Bench timings are from macOS; `score` runs on Windows, so the deciding numbers are measured on the server itself.
