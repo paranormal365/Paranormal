@@ -117,6 +117,10 @@ public class ReadDoesNotGrantDestructionTests
             // The verb the sweep missed: Create here had no per-row manage gate to save it, so
             // Investigation.Read scheduled visits until the read-only-member e2e caught the button.
             "OrgInvestigationsController.cs",
+            // Canvas plan review R25, 2026-09-14: case boards are saved by anybody with Cases
+            // Update, so the next copy-paste of "can they read the case?" onto a PUT would let
+            // every reader overwrite the board.
+            "CanvasDocumentController.cs",
         ];
 
         var offenders = new List<string>();
