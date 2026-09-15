@@ -122,6 +122,12 @@ The export writes files named by UUID plus a `manifest.json` that maps each one 
 `suggestedHumanReadableName`; rename them to the leading `NN-slug.png` before they land in
 `docs/ios-media/<device>/`, because the builder matches sections by that numeric prefix.
 
+**The iPhone guide is also on the website**, as the App Store listing's Marketing URL:
+`Ben.Web.Website/wwwroot/guides/IsHaunted-iOS-iPhone.pdf`, served at
+`https://ishaunted.com/guides/IsHaunted-iOS-iPhone.pdf`. It is a copy, not a link, so after
+rebuilding `IsHaunted-iOS-iPhone.pdf` copy it over the site's one too, or the listing keeps
+pointing at the old guide.
+
 **`BEN_API_BASE_URL` is not optional.** Without it the app uses its shipped address and the capture
 signs in to the LIVE SITE — which would put real accounts and real cases into a document whose
 first page says everything in it is simulated. Point it at the same isolated stack the website
