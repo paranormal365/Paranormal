@@ -10,14 +10,19 @@ namespace Ben.Web.Tests.Website;
 /// 12-hour hour gives 03 PM. Measured 2026-09-15 on Telerik 14.1 and 15.0.1; <c>AutoCorrectParts="false"</c> leaves a
 /// red field that never saves and moves the next digits into the year. <c>BenDateField</c> reads the typed text and
 /// refuses an impossible date with a sentence.</para>
+/// <para>The browser's own <c>type="date"</c> box fails too (measured the same day with <c>@bind</c>): a typed 09/31/2026 saved
+/// 01/01/0001 into a <c>DateTime</c> and erased a <c>DateTime?</c>. An impossible <c>type="datetime-local"</c> reaches the page as
+/// an empty value, which the code read as "none" — clearing a scheduled post so it went out at once, or checking somebody
+/// in as now. <c>type="time"</c> took 08:30 PM correctly and stays allowed.</para>
 /// <para><c>TelerikCalendar</c>, the month grid inside <c>BenDateField</c>, is not a typed input and stays allowed.</para>
 /// </remarks>
 public sealed class BenDateFieldGuardTests
 {
-    private static readonly string[] Banned = ["<TelerikDatePicker", "<TelerikDateTimePicker", "<TelerikTimePicker", "<TelerikDateInput"];
+    private static readonly string[] Banned =
+        ["<TelerikDatePicker", "<TelerikDateTimePicker", "<TelerikTimePicker", "<TelerikDateInput", "type=\"date\"", "type=\"datetime-local\""];
 
     [Fact]
-    public void No_razor_file_uses_a_Telerik_date_or_time_picker()
+    public void No_razor_file_uses_a_date_input_that_rewrites_what_was_typed()
     {
         var root = new DirectoryInfo(AppContext.BaseDirectory);
         while (root is not null && !File.Exists(Path.Combine(root.FullName, "Ben.slnx")))
@@ -42,7 +47,7 @@ public sealed class BenDateFieldGuardTests
         Assert.True(files.Any(f => File.ReadAllText(f).Contains("<BenDateField", StringComparison.Ordinal)),
             "No BenDateField found anywhere — the scan is not reading the pages it should.");
         Assert.True(offenders.Count == 0,
-            "Telerik's date and time pickers turn an impossible day or hour into a different one without saying so. "
+            "Telerik's date pickers and the browser's date boxes turn an impossible date into a different one, or none, without saying so. "
             + "Use <BenDateField Mode=\"DateEntryMode.Date|DateTime|Time\">. Found in:\n  " + string.Join("\n  ", offenders));
     }
 }

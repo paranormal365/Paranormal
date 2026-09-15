@@ -587,7 +587,8 @@ public class FeedTests : BenTestBase
 
         // Two days out in the reader's own clock, which is what the box speaks.
         var when = DateTime.Now.AddDays(2);
-        await Page.Locator("#composer-when").FillAsync(when.ToString("yyyy-MM-ddTHH:mm"));
+        await Page.Locator("#composer-when").FillAsync(when.ToString("MM/dd/yyyy hh:mm tt", System.Globalization.CultureInfo.InvariantCulture));
+        await Page.Locator("#composer-when").PressAsync("Tab");
         await Expect(Page.Locator("#feed-composer-scheduled")).ToBeVisibleAsync(new() { Timeout = 20_000 });
 
         var post = Page.GetByRole(AriaRole.Button, new() { Name = "Post", Exact = true });
@@ -617,7 +618,8 @@ public class FeedTests : BenTestBase
 
         await Page.Locator("#feed-composer").FillAsync($"{marker} second thoughts");
         await Page.GetByRole(AriaRole.Button, new() { Name = "Schedule this post" }).ClickAsync();
-        await Page.Locator("#composer-when").FillAsync(DateTime.Now.AddDays(2).ToString("yyyy-MM-ddTHH:mm"));
+        await Page.Locator("#composer-when").FillAsync(DateTime.Now.AddDays(2).ToString("MM/dd/yyyy hh:mm tt", System.Globalization.CultureInfo.InvariantCulture));
+        await Page.Locator("#composer-when").PressAsync("Tab");
         await Expect(Page.Locator("#feed-composer-scheduled")).ToBeVisibleAsync(new() { Timeout = 20_000 });
 
         var post = Page.GetByRole(AriaRole.Button, new() { Name = "Post", Exact = true });

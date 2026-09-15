@@ -189,8 +189,10 @@ public class NewGroupJourneyTests : BenTestBase
 
         await Page.Locator("#sub-status").SelectOptionAsync(new SelectOptionValue { Label = "Active (paid)" });
         await Page.Locator("#sub-tier").SelectOptionAsync(new SelectOptionValue { Index = 2 });  // Small group
-        await Page.Locator("#sub-start").FillAsync(DateTime.UtcNow.ToString("yyyy-MM-dd"));
-        await Page.Locator("#sub-end").FillAsync(DateTime.UtcNow.AddMonths(1).ToString("yyyy-MM-dd"));
+        await Page.Locator("#sub-start").FillAsync(DateTime.UtcNow.ToString("MM/dd/yyyy", System.Globalization.CultureInfo.InvariantCulture));
+        await Page.Locator("#sub-start").PressAsync("Tab");
+        await Page.Locator("#sub-end").FillAsync(DateTime.UtcNow.AddMonths(1).ToString("MM/dd/yyyy", System.Globalization.CultureInfo.InvariantCulture));
+        await Page.Locator("#sub-end").PressAsync("Tab");
         await Page.Locator("#sub-coupon").FillAsync("LAUNCH25");
         await Page.GetByRole(AriaRole.Button, new() { Name = "Save", Exact = true }).ClickAsync();
 
