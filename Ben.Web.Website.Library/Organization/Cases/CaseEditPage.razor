@@ -116,7 +116,16 @@
                                 <ul class="mb-1">
                                     @foreach (var w in _leakWarnings) { <li>@w</li> }
                                 </ul>
-                                <span class="small">This is a warning, not a refusal — Save again to publish with this label.</span>
+                                @* The sentence says which Save is next. The live check shows this list before any Save, and that
+                                   first Save still stops here once — so "Save again" is only true after it has. *@
+                                @if (LeakWarningSpent)
+                                {
+                                    <span class="small" id="case-leak-save-again">This is a warning, not a refusal — Save again to publish with this label.</span>
+                                }
+                                else
+                                {
+                                    <span class="small">This is a warning, not a refusal — Save stops here once so you can change the label, then publishes on the next Save.</span>
+                                }
                             </div>
                         }
 
@@ -286,6 +295,8 @@
     // as-is and any edit re-checks.
     private IReadOnlyList<string> _leakWarnings = [];
     private string? _leakWarnedInputs;
+    private string CurrentLeakInputs => $"{_editTitle.Trim()}\n{_editPseudonym.Trim()}";
+    private bool LeakWarningSpent => _leakWarnedInputs == CurrentLeakInputs;
 
     private bool _showPrivacyResult;
     private CasePrivacyRetrofitResult? _privacyResult;
@@ -386,13 +397,17 @@
 
     private async Task SaveAsync()
     {
+        // One save at a time. The button's disabled state only reaches the browser after a render, so a second click can
+        // arrive while the first save is still asking for the leak check; it used to run the check again, stop at the
+        // same warning, and leave a double-click having saved nothing (e2e suite, 2026-09-15).
+        if (_busy) return;
         if (string.IsNullOrWhiteSpace(_editTitle)) { _editError = "The case needs a label."; return; }
         // What the editor holds now, not its last debounced report — see BenEditor.GetCurrentHtmlAsync.
         if (_descriptionEditor is not null) _editDescription = await _descriptionEditor.GetCurrentHtmlAsync() ?? _editDescription;
         _busy = true; _editError = null;
         try
         {
-            var leakInputs = $"{_editTitle.Trim()}\n{_editPseudonym.Trim()}";
+            var leakInputs = CurrentLeakInputs;
             if (_editIsPublic && _leakWarnedInputs != leakInputs)
             {
                 var check = await AdminClient.GetPublishLeakWarningsAsync(OrgId, CaseId, _editTitle.Trim(), _editPseudonym.Trim());
@@ -440,6 +455,7 @@
 
     private async Task ApplyPrivacyAsync()
     {
+        if (_busy) return;
         _busy = true; _editError = null;
         try
         {

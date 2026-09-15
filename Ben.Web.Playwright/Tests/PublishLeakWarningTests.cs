@@ -69,7 +69,11 @@ public class PublishLeakWarningTests : BenTestBase
         // Either it saves, or the original label is itself one the check warns about and a second Save publishes it.
         var warning = Page.Locator("#case-title-leak-warning");
         await Expect(warning.Or(Page.Locator("#case-edit"))).ToBeVisibleAsync(new() { Timeout = 15_000 });
-        if (await warning.IsVisibleAsync()) await SaveButton.ClickAsync();
+        if (await warning.IsVisibleAsync())
+        {
+            await Expect(Page.Locator("#case-leak-save-again")).ToBeVisibleAsync(new() { Timeout = 15_000 });
+            await SaveButton.ClickAsync();
+        }
         await ExpectSavedAsync();
     }
 
@@ -98,6 +102,10 @@ public class PublishLeakWarningTests : BenTestBase
             await Expect(warning).ToBeVisibleAsync(new() { Timeout = 10_000 });
             await Expect(warning).ToContainTextAsync("\"Park\"");
             await Expect(Page).ToHaveURLAsync(new System.Text.RegularExpressions.Regex(@"/edit$")); // still editing — nothing saved
+
+            // The warning alone does not prove the first Save was handled: the live check draws it as soon as the label
+            // is left, before Save runs. "Save again" is drawn only once that Save has stopped at it.
+            await Expect(Page.Locator("#case-leak-save-again")).ToBeVisibleAsync(new() { Timeout = 10_000 });
 
             // Second save on the same text: warn-not-block means this one goes through.
             await SaveButton.ClickAsync();

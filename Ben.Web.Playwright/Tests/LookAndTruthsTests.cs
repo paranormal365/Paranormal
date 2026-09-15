@@ -277,7 +277,10 @@ public class LookAndTruthsTests : BenTestBase
         if (!await OpenOrgCaseAsync("Paranormal365", "Belmont"))
             Assert.Ignore("the seeded case this walks is not on this database");
 
-        // Read the address BEFORE opening the dialog, which covers the panel it lives in.
+        // Read the address BEFORE opening the edit page. The original-request card draws after the case header, so
+        // wait for its address row first — reading at once found nothing under full-suite load (2026-09-15).
+        await Expect(Main.Locator("dt", new() { HasTextString = "Address given" }).First)
+            .ToBeVisibleAsync(new() { Timeout = 15_000 });
         var street = await Page.EvaluateAsync<string?>(
             """
             (() => {
