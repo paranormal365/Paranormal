@@ -12491,7 +12491,10 @@ three components were rendering without styling somebody had written for them.
 the merge, or the root fills up again.
 
 
-## 241. The research document, next: a canvas you edit in the browser (PRODUCT — after `feature/beta-feedback-1` merges)
+## 241. The research document, next: a canvas you edit in the browser (PRODUCT — being built as a separate WASM project)
+
+**Ben, 2026-09-15:** research is being built as a new, separate WASM project. When it is finished and tested it is imported
+into `Ben.slnx`; then it is shaped to fit, and the API is shaped to match it. Nothing here is built ahead of that import.
 
 `feature/beta-feedback-1` ships research pages as a Notion-style stack of blocks (text, picture, file, link card, map), with
 private drafts, Publish, and a Files & links rail, built in `Ben.Web.Website.Library/Kit/Blocks`. Ben, 2026-09-14, during
@@ -12533,3 +12536,52 @@ typing at once loses the bold (4.5), because the tool waits for the server. So t
 5. **Storage shape** — card positions, sizes, groups and arrows beside today's block list (`BlockDocument` version 2), with
    the stack kept as the reading and print view, and old version-1 pages opening unchanged.
 6. **The reader** — does a published canvas read as a canvas (pan/zoom) for members, or flatten to the stack?
+
+---
+
+## 242. EVP analysis that can tell a voice from noise, and says how sure it is (FUTURE — business-critical; parked 2026-09-15 for Claude usage)
+
+Ben, 2026-09-15: a small AI service that processes audio when someone analyses it for EVPs, then (separately, later) one
+for long video feeds. His outline: spectrogram analysis (voices leave formants even when buried), anomaly detection over
+the quiet parts of a room, and an open-source speech model (Whisper) to decide whether a flagged burst is a spoken word.
+Ben: *"I don't want to steal claude, I just want claude to teach my AI to be better."* Parked because the work would
+likely exceed his Claude usage allowance — **"invaluable for my business"**, so it comes back.
+
+### Already built
+- `Ben.Data.WebApi/Services/Audio/EvpDetector.cs` — voice-band energy above an adaptive local noise floor; candidates land
+  Pending for a person to accept or dismiss; manual Scan only. `EvpDetectorTests` is its accuracy gate (synthetic fixture).
+- Spectrograms in the audio player (WaveSurfer workers).
+- Local model hosting: `OnnxNsfwScreener` (ONNX Runtime 1.29, model fetched by script, never committed, degrades loudly).
+
+### The design that came out of the conversation
+1. **A speech detector decides "is it speech", not Whisper** — pretrained Silero VAD (ONNX) on each candidate.
+2. **Whisper only suggests words, and only on the flagged 1–3 s clips** — run locally (whisper.cpp / Whisper.net, MIT) so
+   private-residence audio never leaves the server; show its no-speech probability and word confidence; hide weak ones.
+   **Whisper invents fluent phrases from pure noise** — the single biggest risk to credibility.
+3. **Controls** — the same pipeline over plain room tone and reversed audio; its false-word rate is shown, not hidden.
+4. **Blind review** — the investigator writes what they hear before the suggestion is revealed (priming makes people hear it).
+5. **Cleaned listen** (RNNoise / DeepFilterNet) offered beside the original, labelled processed — denoisers can create
+   speech-like artefacts.
+6. Runs in its own process (≈1 GB model memory stays out of the IIS app pool), started by a person like Scan.
+
+### How "Claude teaches the AI" — honestly
+- Claude cannot hear audio, and its guesses at spectrogram images must never become labels.
+- **Known-truth training material:** real room tone, tape hiss and static from Ben's recorders, with public speech
+  (e.g. LibriSpeech) mixed in at known times and loudness down to barely audible, plus non-speech impostors (knocks, steps,
+  pipes, dogs, handling). Every example carries its true answer.
+- Claude writes the generator, the fine-tuning pipeline for a small pretrained detector (not a CNN from scratch — no dataset
+  of confirmed EVPs can exist), the scoring harness (catch rate, false-speech rate on noise, quietest voice caught), and the
+  server integration.
+- **Investigators keep teaching it:** every Accept/Dismiss is a real-tape label that later re-tunes scoring (as FeedLearning
+  re-fits the feed).
+- Anthropic's terms restrict training models that compete with Claude on its outputs; a narrow audio detector built with
+  code Claude wrote is ordinary software work, but Ben should read the terms himself for a commercial product.
+
+### First step when it resumes (cheap, decides the rest)
+A throwaway console measurement, outside the product: Silero VAD and Whisper tiny/base/small over current detector candidates
+on real recordings, and over plain room tone as a control — how often each "hears words" in the control, and CPU time per
+clip on a Windows-class server. **Needs from Ben:** real recordings, including plain room tone and hiss from his recorders.
+
+### Video (separate item when it comes)
+MCP is a protocol for connecting tools to an assistant, not a model. Long-feed analysis is motion detection / background
+subtraction plus a small vision model; MCP could let an assistant use its results.

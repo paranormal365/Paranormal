@@ -133,8 +133,8 @@ public sealed partial class BenAdminClientAdapter
     public Task<AppUserDetailAdminRecord?> GetUserDetailAsync(Guid userId, CancellationToken token = default)
         => _api.GetAsync<AppUserDetailAdminRecord>($"/api/admin/app-users/{userId}/detail", token);
 
-    public Task<AppUserAdminRecord?> CreateUserAsync(AdminCreateUserRequest request, CancellationToken token = default)
-        => _api.PostAsync<AdminCreateUserRequest, AppUserAdminRecord>("/api/admin/app-users", request, token);
+    public Task<(AppUserAdminRecord? Result, string? Error)> CreateUserAsync(AdminCreateUserRequest request, CancellationToken token = default)
+        => _api.SendExpectingReasonAsync<AdminCreateUserRequest, AppUserAdminRecord>(HttpMethod.Post, "/api/admin/app-users", request, token);
 
     public Task<AppUserAdminRecord?> UpdateUserProfileAsync(Guid userId, AdminUpdateUserProfileRequest request, CancellationToken token = default)
         => _api.PutAsync<AdminUpdateUserProfileRequest, AppUserAdminRecord>($"/api/admin/app-users/{userId}/profile", request, token);
