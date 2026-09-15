@@ -11200,7 +11200,7 @@ the fold hands back a y the mouse cannot reach and the drags land on whatever is
 The test then reports "the map never reloaded" about a map nobody touched. Scroll it into view
 first.
 
-## 224. A date field silently takes an impossible day as its second digit (OPEN)
+## 224. A date field silently takes an impossible day as its second digit (FIXED 2026-09-15 — `fix/date-picker-impossible-day-224`)
 
 Found 2026-09-09 alongside item 221, deferred by Ben the same day. **Not started.**
 
@@ -11250,6 +11250,8 @@ Real keystrokes in Chromium against temporary pickers on `/styleguide`, value se
 Telerik's own XML docs say `AutoCorrectParts=true` turns "32" into the month's last day; it actually restarts the
 part with the second digit. Selection set from script (`setSelectionRange`) does not move Telerik's active part —
 only a real click does, which matters for any automated test.
+
+**Done, as (1)** — and wider than this entry knew. `Kit/BenDateField` (`DateEntry` parses; a sentence and the kept value on refusal; TelerikCalendar inline) replaced all 34 Telerik pickers **and** the fourteen `type="date"` and three `type="datetime-local"` boxes added since, which failed too: `@bind` saved 01/01/0001 into a `DateTime`, erased a `DateTime?`, and an impossible `datetime-local` read as "none" posted a scheduled post at once. `BenDateFieldGuardTests` bans all of them; `type="time"` stays (it took 08:30 PM correctly).
 
 **What is left:** (1) a Kit date field Blazor owns — free text parsed by our code with a sentence for an impossible
 date, and a calendar button (TelerikCalendar in a popup) — for date, date-and-time and time, migrating the 34 sites
