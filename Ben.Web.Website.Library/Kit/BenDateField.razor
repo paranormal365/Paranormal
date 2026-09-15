@@ -55,7 +55,10 @@
 </div>
 
 @code {
-    /// <summary>The bound value. <c>DateTime</c> or <c>DateTime?</c>; a nullable field may be left blank.</summary>
+    /// <summary>
+    /// The bound value: <c>DateTime</c>, <c>DateTimeOffset</c>, or either nullable (which may be left blank). An offset is
+    /// kept as stored: the field edits the clock time and writes it back with the same offset, as Telerik's picker did.
+    /// </summary>
     [Parameter] public TValue Value { get; set; } = default!;
     [Parameter] public EventCallback<TValue> ValueChanged { get; set; }
     [Parameter] public System.Linq.Expressions.Expression<Func<TValue>>? ValueExpression { get; set; }
@@ -73,7 +76,8 @@
     /// <summary>Latest value accepted.</summary>
     [Parameter] public DateTime? Max { get; set; }
 
-    private static readonly bool Nullable = typeof(TValue) == typeof(DateTime?);
+    private static readonly bool Nullable = typeof(TValue) == typeof(DateTime?) || typeof(TValue) == typeof(DateTimeOffset?);
+    private static readonly bool HasOffset = typeof(TValue) == typeof(DateTimeOffset) || typeof(TValue) == typeof(DateTimeOffset?);
 
     private string _text = string.Empty;
     private string? _error;
@@ -83,12 +87,17 @@
     private readonly string _fallbackId = "ben-date-" + Guid.NewGuid().ToString("N")[..8];
 
     private string ErrorId => $"{Id ?? _fallbackId}-error";
-    private DateTime? Current => Value is DateTime d ? d : null;
+    private DateTime? Current => Value switch
+    {
+        DateTime d => d,
+        DateTimeOffset o => o.DateTime,
+        _ => null,
+    };
 
     protected override void OnInitialized()
     {
-        if (typeof(TValue) != typeof(DateTime) && !Nullable)
-            throw new InvalidOperationException($"BenDateField binds DateTime or DateTime?, not {typeof(TValue).Name}.");
+        if (typeof(TValue) != typeof(DateTime) && typeof(TValue) != typeof(DateTimeOffset) && !Nullable)
+            throw new InvalidOperationException($"BenDateField binds DateTime or DateTimeOffset (or either nullable), not {typeof(TValue).Name}.");
     }
 
     protected override void OnParametersSet()
@@ -147,7 +156,15 @@
     {
         _shown = value;
         ShowText(typed, value is { } v ? DateEntry.Format(v, Mode) : string.Empty);
-        await ValueChanged.InvokeAsync(value is { } set ? (TValue)(object)set : default!);
+        await ValueChanged.InvokeAsync(ToValue(value));
+    }
+
+    private TValue ToValue(DateTime? value)
+    {
+        if (value is not { } set) return default!;
+        if (!HasOffset) return (TValue)(object)set;
+        var offset = Value is DateTimeOffset kept ? kept.Offset : TimeSpan.Zero;
+        return (TValue)(object)new DateTimeOffset(DateTime.SpecifyKind(set, DateTimeKind.Unspecified), offset);
     }
 
     /// <summary>
