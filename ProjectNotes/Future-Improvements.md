@@ -11233,6 +11233,29 @@ typing behaviour were wrong on the day this was found:
 **Related, and already fixed:** item 221, where an *empty* picker rebuilt the whole date on the
 first arrow press. That one was fixed by seeding every date field; this one survives a seeded field.
 
+### Measured 2026-09-15 (branch `fix/date-picker-impossible-day-224`) — every option on the tree above fails
+
+Real keystrokes in Chromium against temporary pickers on `/styleguide`, value seeded 09/15/2026, typing from the month:
+
+| Field | Typed | Shows | Bound value |
+|---|---|---|---|
+| `TelerikDatePicker` (today's call sites) | 0 9 3 1 | 09/01/2026 | 09/01/2026 — silent |
+| `TelerikDatePicker AutoCorrectParts="false"` | 0 9 3 1 | 09/31/2026, red `k-invalid` | 09/15/2026 — Save keeps the old date |
+| …then 3 0 to fix the day | | 09/31/**0030** — focus had moved to the year | 09/15/2026 |
+| `TelerikDateTimePicker` (MM/dd/yyyy hh:mm tt) | 0 9 3 1 | 09/01/2026 | 09/01/2026 — silent |
+| `TelerikTimePicker` (hh:mm tt) | 1 3 | 03:00 PM | 15:00 — silent |
+| native `<input type="date" @bind>` | 0 9 3 1 | 01/01/0001 | 09/03/2026 |
+| **Telerik 15.0.1** (probe build only, reverted) | same | identical to 14.1 | identical |
+
+Telerik's own XML docs say `AutoCorrectParts=true` turns "32" into the month's last day; it actually restarts the
+part with the second digit. Selection set from script (`setSelectionRange`) does not move Telerik's active part —
+only a real click does, which matters for any automated test.
+
+**What is left:** (1) a Kit date field Blazor owns — free text parsed by our code with a sentence for an impossible
+date, and a calendar button (TelerikCalendar in a popup) — for date, date-and-time and time, migrating the 34 sites
+with a guard; (2) intercepting Telerik's keystrokes in JS (fragile across Telerik versions; not recommended); (3) a
+support ticket to Telerik with the table above, and wait.
+
 ---
 
 ## 225. A desktop client, and the client library both front ends share (SHELVED 2026-09-10 — kept as a future enhancement)
