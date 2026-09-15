@@ -18,7 +18,7 @@ internal sealed record Judged(string Set, string File, double Start, double End,
 /// <summary>Grades detectors against the corpus and writes one report every detector is measured by.</summary>
 internal static partial class Bench
 {
-    public static string Run(string corpusDir, string? whisperModel, string? vadModel, int threads, int noiseWindowsPerControl)
+    public static string Run(string corpusDir, string? whisperModel, string? vadModel, string? voiceNetModel, int threads, int noiseWindowsPerControl)
     {
         var manifest = JsonSerializer.Deserialize<Manifest>(File.ReadAllText(Path.Combine(corpusDir, "manifest.json")))!;
         var audio = manifest.Files.ToDictionary(f => f.Name, f => Audio.ReadMono16k(Path.Combine(corpusDir, f.Name + ".wav")));
@@ -70,9 +70,18 @@ internal static partial class Bench
         report.AppendLine();
 
         if (vadModel is not null && File.Exists(vadModel))
-            VadStage(report, manifest, audio, highCandidates!, vadModel, noiseWindowsPerControl, minutes, controlMinutes);
+        {
+            using var vad = new SileroVad(vadModel);
+            ScorerStage(report, manifest, audio, highCandidates!, vad, noiseWindowsPerControl, minutes, controlMinutes);
+        }
         else
             report.AppendLine($"_Voice-activity detector not graded: no model at `{vadModel ?? "(none given)"}`._\n");
+
+        if (voiceNetModel is not null && File.Exists(voiceNetModel))
+        {
+            using var net = new VoiceNet(voiceNetModel);
+            ScorerStage(report, manifest, audio, highCandidates!, net, noiseWindowsPerControl, minutes, controlMinutes);
+        }
 
         if (whisperModel is null || !File.Exists(whisperModel))
         {
@@ -207,25 +216,24 @@ internal static partial class Bench
                           $"{seconds / audioSeconds:0.00} s per second of audio. This is an Apple M-series CPU; a Windows server CPU will be slower — measure there before promising a wait.");
     }
 
-    // ── Stage 1b: Silero VAD ──────────────────────────────────────────────────────
-    private sealed record VadClip(string Set, CorpusFile File, PlacedEvent? Event, string Truth, float[] Probabilities);
+    // ── Stage 1b: frame scorers (Silero VAD, VoiceNet) ─────────────────────────────
+    private sealed record ScoredClip(string Set, CorpusFile File, PlacedEvent? Event, string Truth, float[] Scores);
 
-    private static void VadStage(StringBuilder report, Manifest manifest, Dictionary<string, float[]> audio,
-        IReadOnlyDictionary<string, IReadOnlyList<EvpCandidate>> high, string modelPath, int noiseWindowsPerControl, double minutes, double controlMinutes)
+    private static void ScorerStage(StringBuilder report, Manifest manifest, Dictionary<string, float[]> audio,
+        IReadOnlyDictionary<string, IReadOnlyList<EvpCandidate>> high, IFrameScorer scorer, int noiseWindowsPerControl, double minutes, double controlMinutes)
     {
-        using var vad = new SileroVad(modelPath);
-        var clips = new List<VadClip>();
+        var clips = new List<ScoredClip>();
         var rng = new Random(manifest.Seed);   // the same noise windows Whisper is given
         var sw = Stopwatch.StartNew();
         double clipSeconds = 0;
 
-        VadClip Read(string set, CorpusFile f, double a, double b, string truth, PlacedEvent? e, bool reverse = false)
+        ScoredClip Read(string set, CorpusFile f, double a, double b, string truth, PlacedEvent? e, bool reverse = false)
         {
             var clip = Audio.Slice(audio[f.Name], a, b);
             if (reverse) Array.Reverse(clip);
             Audio.PeakNormalise(clip);
             clipSeconds += b - a;
-            return new VadClip(set, f, e, truth, vad.Probabilities(clip));
+            return new ScoredClip(set, f, e, truth, scorer.Score(clip));
         }
 
         foreach (var f in manifest.Files)
@@ -254,40 +262,43 @@ internal static partial class Bench
             }
         sw.Stop();
 
-        report.AppendLine("## 1b. Silero VAD (a voice-activity detector) — does this clip contain a voice?");
+        report.AppendLine($"## {scorer.Title}");
         report.AppendLine();
-        report.AppendLine("Rule: a voice if the model's speech probability stays at or above **T** for at least **R** ms in a row. " +
-                          "A reversed voice is still a human voice, so the VAD flagging it is correct; what it must not flag is noise and knocks. " +
-                          "Every clip is peak-normalised to −1 dBFS first, as the product already does for clips: the model scores quiet input lower " +
-                          "(one +6 dB file: 0.65 as recorded, 1.00 normalised).");
+        report.AppendLine(scorer.RuleText + " A reversed voice is still a human voice, so flagging it is correct; what must not be flagged is noise and knocks. " +
+                          "Every clip is peak-normalised to −1 dBFS first, as the product already does for clips.");
         report.AppendLine();
         report.AppendLine("| T | R | " + string.Join(" | ", Corpus.SpeechLevels.Select(l => $"voices {l:+0;-0} dB")) +
                           " | reversed voices | impostors | noise windows | High queue: voices kept | High queue: non-voices kept |");
         report.AppendLine("|---|---|" + string.Concat(Corpus.SpeechLevels.Select(_ => "---|")) + "---|---|---|---|---|");
-        foreach (var t in new[] { 0.3f, 0.5f, 0.7f })
-            foreach (var r in new[] { 32, 96, 192 })
-            {
-                bool IsVoice(VadClip c) => LongestRunMs(c.Probabilities, t) >= r;
-                var voices = Corpus.SpeechLevels.Select(l => Pct(clips.Where(c => c.Set == "voice" && c.Event!.LevelDb == l), IsVoice));
-                var queue = clips.Where(c => c.Set == "queue").ToList();
-                report.AppendLine($"| {t:0.0} | {r} | " + string.Join(" | ", voices) +
-                                  $" | {Pct(clips.Where(c => c.Set == "voice-reversed"), IsVoice)} | {Pct(clips.Where(c => c.Set == "impostor"), IsVoice)}" +
-                                  $" | {Pct(clips.Where(c => c.Set == "noise"), IsVoice)} | {Pct(queue.Where(c => c.Truth == "speech"), IsVoice)}" +
-                                  $" | {Pct(queue.Where(c => c.Truth != "speech"), IsVoice)} |");
-            }
+        foreach (var (t, r) in scorer.Rules)
+        {
+            bool IsVoice(ScoredClip c) => Holds(c.Scores, t, r, scorer.StepSeconds);
+            var voices = Corpus.SpeechLevels.Select(l => Pct(clips.Where(c => c.Set == "voice" && c.Event!.LevelDb == l), IsVoice));
+            var queue = clips.Where(c => c.Set == "queue").ToList();
+            report.AppendLine($"| {t:0.0} | {r} | " + string.Join(" | ", voices) +
+                              $" | {Pct(clips.Where(c => c.Set == "voice-reversed"), IsVoice)} | {Pct(clips.Where(c => c.Set == "impostor"), IsVoice)}" +
+                              $" | {Pct(clips.Where(c => c.Set == "noise"), IsVoice)} | {Pct(queue.Where(c => c.Truth == "speech"), IsVoice)}" +
+                              $" | {Pct(queue.Where(c => c.Truth != "speech"), IsVoice)} |");
+        }
         report.AppendLine();
-        report.AppendLine("Impostors by kind at T 0.5, R 96: " + string.Join(", ", clips.Where(c => c.Set == "impostor").GroupBy(c => c.Event!.Subtype)
-            .Select(g => $"{g.Key} {Pct(g, c => LongestRunMs(c.Probabilities, 0.5f) >= 96)}")) + ".");
+        var (ft, fr) = scorer.FileRule;
+        report.AppendLine($"Impostors by kind at T {ft:0.0}, R {fr}: " + string.Join(", ", clips.Where(c => c.Set == "impostor").GroupBy(c => c.Event!.Subtype)
+            .Select(g => $"{g.Key} {Pct(g, c => Holds(c.Scores, ft, fr, scorer.StepSeconds))}")) + ".");
         report.AppendLine();
 
-        // The VAD on whole files, as a first stage in its own right, graded exactly like EvpDetector above.
+        // Over whole files, as a first stage in its own right, graded exactly like EvpDetector above.
         var fileSw = Stopwatch.StartNew();
-        var regions = manifest.Files.ToDictionary(f => f.Name, f => { var whole = (float[])audio[f.Name].Clone(); Audio.PeakNormalise(whole); return VadRegions(vad.Probabilities(whole), 0.5f, 96, 0.35); });
+        var regions = manifest.Files.ToDictionary(f => f.Name, f =>
+        {
+            var whole = (float[])audio[f.Name].Clone();
+            Audio.PeakNormalise(whole);
+            return Regions(scorer.Score(whole), ft, fr, scorer.StepSeconds, scorer.WindowSeconds, 0.35);
+        });
         fileSw.Stop();
-        report.AppendLine("Silero VAD over whole files as the first stage (T 0.5, R 96 ms, gaps under 0.35 s merged):");
+        report.AppendLine($"Over whole files as the first stage (T {ft:0.0}, R {fr} ms, gaps under 0.35 s merged):");
         report.AppendLine();
         report.AppendLine("| " + string.Join(" | ", Corpus.SpeechLevels.Select(l => $"voices found at {l:+0;-0} dB")) +
-                          " | impostors flagged | false alarms / min (all) | false alarms / min (noise-only files) | ms per min of audio (1 thread) |");
+                          " | impostors flagged | false alarms / min (all) | false alarms / min (noise-only files) | ms per min of audio |");
         report.AppendLine("|" + string.Concat(Corpus.SpeechLevels.Select(_ => "---|")) + "---|---|---|---|");
         var found = Corpus.SpeechLevels.Select(level =>
         {
@@ -300,34 +311,34 @@ internal static partial class Bench
         var falseControl = manifest.Files.Where(f => f.Events.Count == 0).Sum(f => regions[f.Name].Count);
         report.AppendLine("| " + string.Join(" | ", found) + $" | {impostorHits}/{impostors.Count} | {falseAll / minutes:0.0} | {falseControl / controlMinutes:0.0} | {fileSw.Elapsed.TotalMilliseconds / minutes:0} |");
         report.AppendLine();
-        report.AppendLine($"Cost on clips: {clips.Count} clips, {clipSeconds:0} s of audio in {sw.Elapsed.TotalSeconds:0.0} s on one thread.");
+        report.AppendLine($"Cost on clips: {clips.Count} clips, {clipSeconds:0} s of audio in {sw.Elapsed.TotalSeconds:0.0} s.");
         report.AppendLine();
     }
 
-    private static int LongestRunMs(float[] probabilities, float threshold)
+    /// <summary>True when the score stays at or above <paramref name="threshold"/> for at least <paramref name="runMs"/> (and at least one step).</summary>
+    private static bool Holds(float[] scores, float threshold, int runMs, double stepSeconds)
     {
         int best = 0, run = 0;
-        foreach (var p in probabilities) { run = p >= threshold ? run + 1 : 0; best = Math.Max(best, run); }
-        return (int)(best * SileroVad.ChunkSeconds * 1000);
+        foreach (var p in scores) { run = p >= threshold ? run + 1 : 0; best = Math.Max(best, run); }
+        return best >= Math.Max(1, (int)Math.Ceiling(runMs / (stepSeconds * 1000)));
     }
 
-    private static List<(double Start, double End)> VadRegions(float[] probabilities, float threshold, int minMs, double mergeGapSeconds)
+    private static List<(double Start, double End)> Regions(float[] scores, float threshold, int minMs, double step, double window, double mergeGapSeconds)
     {
         var raw = new List<(double Start, double End)>();
-        var chunk = SileroVad.ChunkSeconds;
-        for (int i = 0; i < probabilities.Length;)
+        for (int i = 0; i < scores.Length;)
         {
-            if (probabilities[i] < threshold) { i++; continue; }
+            if (scores[i] < threshold) { i++; continue; }
             var j = i;
-            while (j < probabilities.Length && probabilities[j] >= threshold) j++;
-            raw.Add((i * chunk, j * chunk));
+            while (j < scores.Length && scores[j] >= threshold) j++;
+            if (j - i >= Math.Max(1, (int)Math.Ceiling(minMs / (step * 1000)))) raw.Add((i * step, (j - 1) * step + window));
             i = j;
         }
         var merged = new List<(double Start, double End)>();
         foreach (var g in raw)
-            if (merged.Count > 0 && g.Start - merged[^1].End < mergeGapSeconds) merged[^1] = (merged[^1].Start, g.End);
+            if (merged.Count > 0 && g.Start - merged[^1].End < mergeGapSeconds) merged[^1] = (merged[^1].Start, Math.Max(merged[^1].End, g.End));
             else merged.Add(g);
-        return merged.Where(g => (g.End - g.Start) * 1000 >= minMs).ToList();
+        return merged;
     }
 
     private static bool Overlaps(EvpCandidate c, PlacedEvent e) => c.StartSeconds < e.End && c.EndSeconds > e.Start;

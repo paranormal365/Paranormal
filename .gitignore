@@ -134,3 +134,7 @@ Ben.Data.WebApi/Models/nsfw/*.onnx
 # Item 242 lab: model files are downloaded, never committed; generated audio is scratch.
 tools/EvpLab/models/
 tools/EvpLab/out/
+tools/EvpLearn/.venv/
+tools/EvpLearn/data/
+tools/EvpLearn/runs/
+**/__pycache__/

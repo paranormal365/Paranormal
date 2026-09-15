@@ -39,6 +39,22 @@ not to be it.
   (if at all) in a separate Windows service, never the IIS worker; phase 2 fine-tunes a small classifier on buried voices
   from the generator. Next input needed: Ben's real recordings (`generate --backgrounds <folder>`).
 
+- 2026-09-15: Ben approved PyTorch and LibriSpeech ("This is not the server though" — the Mac is for building; the
+  server is where it runs and learns). `tools/EvpLearn` trained VoiceNet in 16 minutes: on the bench it hears every voice
+  down to −6 dB, 58% at −12 and 25% at −18, calls 0% of impostors and 1% of noise a voice, and as a first stage raises
+  0.1 false alarms a minute against today's detector's 5.9. Caveat: bench backgrounds share families with training —
+  real recordings decide it. Windows scripts written (`setup.ps1`, `train.ps1`), not yet run on Windows.
+
+## The learning half (`tools/EvpLearn`)
+
+- `evplearn/model.py` — VoiceNet: raw 16 kHz in, voice probability out; spectrogram inside the network.
+- `evplearn/data.py` — known-truth examples; speaker-disjoint LibriSpeech split; optional real backgrounds.
+- `train.py` — trains, keeps the best epoch, exports `voicenet.onnx`, refuses an export that disagrees with the model.
+- On the Windows server: install Python 3.10+ (python.org), then `setup.ps1` once and `train.ps1` per run (Task
+  Scheduler, off-hours, `-Threads` leaves cores for IIS). Grade with `tools/EvpLab score --voicenet <run>\voicenet.onnx`.
+- Still to build: the promotion gate (a new model replaces the live one only if it beats it on the bench's faint voices
+  without losing ground on impostors and noise), learning from investigators' Accept/Dismiss decisions, and the API side.
+
 ## Windows and IIS (Ben, 2026-09-15: "the whole app is being run from IIS and on a windows box")
 
 - Anything in-process must be small, CPU-only, single-threaded per request and on a runtime already proven there

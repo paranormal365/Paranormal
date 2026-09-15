@@ -3,7 +3,7 @@ using EvpLab;
 // Item 242, phase 1 — the measuring bench. See ProjectNotes/FeatureHistory/README-evp-ai-242.md.
 //
 //   dotnet run -c Release -- generate [--out out/corpus] [--seed 242] [--backgrounds <folder of real recordings>]
-//   dotnet run -c Release -- score    [--corpus out/corpus] [--whisper models/ggml-small.bin|none] [--vad models/silero_vad.onnx|none] [--threads 8] [--noise-windows 8]
+//   dotnet run -c Release -- score    [--corpus out/corpus] [--whisper models/ggml-small.bin|none] [--vad models/silero_vad.onnx|none] [--voicenet <run>/voicenet.onnx] [--threads 8] [--noise-windows 8]
 
 string Arg(string name, string fallback)
 {
@@ -24,7 +24,7 @@ switch (args.FirstOrDefault())
     case "score":
     {
         var corpus = Arg("--corpus", "out/corpus");
-        var text = Bench.Run(corpus, Arg("--whisper", "models/ggml-small.bin"), Arg("--vad", "models/silero_vad.onnx"), int.Parse(Arg("--threads", "8")), int.Parse(Arg("--noise-windows", "8")));
+        var text = Bench.Run(corpus, Arg("--whisper", "models/ggml-small.bin"), Arg("--vad", "models/silero_vad.onnx"), Arg("--voicenet", "none"), int.Parse(Arg("--threads", "8")), int.Parse(Arg("--noise-windows", "8")));
         var path = Path.Combine(corpus, $"report-{DateTime.Now:yyyyMMdd-HHmm}.md");
         File.WriteAllText(path, text);
         Console.WriteLine(text);

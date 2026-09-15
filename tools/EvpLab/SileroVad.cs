@@ -12,7 +12,7 @@ namespace EvpLab;
 /// wrapper also prepends the previous chunk's last 64 samples; leaving that out measurably lowers its scores, so this
 /// does the same. One instance per stream: the state belongs to the audio being read.
 /// </remarks>
-internal sealed class SileroVad : IDisposable
+internal sealed class SileroVad : IFrameScorer, IDisposable
 {
     public const int ChunkSamples = 512;
     private const int ContextSamples = 64;
@@ -57,6 +57,14 @@ internal sealed class SileroVad : IDisposable
         }
         return result;
     }
+
+    public string Title => "1b. Silero VAD (a voice-activity detector) — does this clip contain a voice?";
+    public string RuleText => "Rule: a voice if the speech probability stays at or above **T** for at least **R** ms in a row (32 ms steps).";
+    public double StepSeconds => ChunkSeconds;
+    public double WindowSeconds => ChunkSeconds;
+    public IReadOnlyList<(float T, int R)> Rules => [(0.3f, 32), (0.3f, 96), (0.3f, 192), (0.5f, 32), (0.5f, 96), (0.5f, 192), (0.7f, 32), (0.7f, 96), (0.7f, 192)];
+    public (float T, int R) FileRule => (0.5f, 96);
+    public float[] Score(float[] clip) => Probabilities(clip);
 
     public void Dispose() => _session.Dispose();
 }
