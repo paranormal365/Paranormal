@@ -130,3 +130,7 @@ Ben.Data.WebApi/Models/nsfw/*.onnx
 
 # Working-copy-only secrets, e.g. the App Review demo password
 *.local.md
+
+# Item 242 lab: model files are downloaded, never committed; generated audio is scratch.
+tools/EvpLab/models/
+tools/EvpLab/out/
