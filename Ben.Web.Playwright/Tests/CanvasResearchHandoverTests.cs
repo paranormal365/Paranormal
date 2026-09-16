@@ -24,10 +24,12 @@ public class CanvasResearchHandoverTests : BenTestBase
         await LoginAsync(SuperAdminEmail, SuperAdminPassword);
         if (!await OpenOrgCaseAsync("Paranormal365", "Belmont")) return false;
 
-        await OpenTabAsync("Research", Main.Locator("[data-testid=case-research-boards], [data-testid=case-research]").First);
+        // Whichever shape the tab is in: boards when the canvas is on, the block-editor pages when it is off. Waiting
+        // on the boards alone would fail the suite for a switch nobody turned on, which is what it did once.
+        var boards = Main.Locator("[data-testid=case-research-boards]");
+        await OpenTabAsync("Research", boards.Or(Main.Locator("#research-new-page")).First);
         await SkipAnyTourAsync();
 
-        var boards = Main.Locator("[data-testid=case-research-boards]");
         if (await boards.CountAsync() == 0) return false;   // the canvas is switched off on this database
         await Expect(boards).ToBeVisibleAsync(new() { Timeout = 15_000 });
         return true;
