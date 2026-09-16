@@ -270,13 +270,18 @@ final class LiveAudioCapture: AudioLevelSource, AudioRecording, @unchecked Senda
     /// The microphone was taken: finish the clip and put the engine away, so no stale tap survives.
     private func microphoneTaken() async {
         _ = await endRecording(keepingWatch: true)
-        if hasTap() {
-            engine.inputNode.removeTap(onBus: 0)
-            lock.lock(); tapInstalled = false; lock.unlock()
-        }
+        removeTapIfAny()
         engine.stop()
         engine.reset()
         eventSink.yield(.interrupted)
+    }
+
+    /// Synchronous on purpose: Swift 6 refuses an NSLock taken in an async function, and every other lock in this
+    /// class is behind a helper for the same reason.
+    private func removeTapIfAny() {
+        guard hasTap() else { return }
+        engine.inputNode.removeTap(onBus: 0)
+        lock.lock(); tapInstalled = false; lock.unlock()
     }
 
     /// The microphone is available again: rebuild the meter's tap at the format it now has.

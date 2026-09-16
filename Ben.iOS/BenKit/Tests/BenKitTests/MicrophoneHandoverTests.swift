@@ -77,7 +77,8 @@ struct MicrophoneHandoverTests {
         // Nothing is running, the clip that was running is listed, and the screen has words for why.
         #expect(session.recording == nil)
         #expect(session.captures.contains { $0.kind == .audio })
-        #expect(session.recordingProblem?.contains("camera") == true)
+        #expect(session.audioNote?.contains("camera") == true)
+        #expect(session.recordingProblem == nil, "an interruption is a note, not a warning")
     }
 
     @Test func soundCarriesOnAsANewClipWhenTheMicrophoneComesBack() async throws {
@@ -95,6 +96,27 @@ struct MicrophoneHandoverTests {
         #expect(session.recording != nil, "the session did not start recording again")
         #expect(recorder.files.count == 2, "the second clip went to a file of its own")
         #expect(recorder.files[0] != recorder.files[1])
+    }
+
+    /// A session that has ended is finished, whatever the microphone does afterwards.
+    @Test func nothingStartsAfterTheSessionHasEnded() async throws {
+        let recorder = InterruptibleRecorder()
+        let (session, _, root) = makeSession(recorder)
+        defer { try? FileManager.default.removeItem(at: root) }
+
+        await session.begin()
+        await session.startSession(at: Date())
+        recorder.microphoneTaken()
+        await settle()
+
+        await session.end()
+        let clipsAtEnd = recorder.files.count
+
+        recorder.microphoneReturned()
+        await settle()
+
+        #expect(session.recording == nil)
+        #expect(recorder.files.count == clipsAtEnd, "a clip was started on a session nobody is in")
     }
 
     @Test func nothingResumesWhenTheSessionWasNotRecording() async throws {

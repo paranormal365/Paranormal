@@ -46,6 +46,11 @@ public final class ActiveFieldSession {
     /// is not has lost the night.
     public private(set) var recordingProblem: String?
 
+    /// Something worth knowing about the sound that is nobody's fault — the camera borrowing the microphone and
+    /// handing it back. Kept apart from `recordingProblem` because a red warning about a thing that fixed itself
+    /// teaches people to ignore red warnings.
+    public private(set) var audioNote: String?
+
     public struct RecordingState: Sendable, Equatable {
         public var relativePath: String
         public var startedAt: Date
@@ -180,6 +185,13 @@ public final class ActiveFieldSession {
         await stopRecording()
         pump?.cancel()
         pump = nil
+
+        // The microphone watch goes too. Left running, a `.resumed` arriving after the session ended — the camera
+        // handing the microphone back a moment later — would start a new clip on a session nobody is in.
+        microphoneWatch?.cancel()
+        microphoneWatch = nil
+        wasRecordingWhenInterrupted = false
+
         await engine.stop()
     }
 
@@ -255,15 +267,18 @@ public final class ActiveFieldSession {
         // taps into and finds silent is worse than saying it failed.
         guard duration > 0.4, size > 1_024 else {
             try? FileManager.default.removeItem(at: url)
-            recordingProblem = becauseInterrupted
-                ? "The camera took the microphone before that clip had anything in it. Sound carries on now."
-                : "That recording came back empty — the microphone may be in use by something else."
+            if becauseInterrupted {
+                audioNote = "The camera took the microphone before that clip had anything in it."
+            } else {
+                recordingProblem = "That recording came back empty — the microphone may be in use by something else."
+            }
             return
         }
 
-        // An interruption is not a fault to fix, but it is worth saying: the clip ended where the camera started.
+        // An interruption is not a fault to fix, so it is a note rather than a warning: the clip ended where the
+        // camera started, and the next one begins when the microphone comes back.
         if becauseInterrupted {
-            recordingProblem = "The camera took the microphone, so the clip ends there. Sound carries on now."
+            audioNote = "The camera took the microphone, so that clip ends there."
         }
 
         await engine.noteCapture(kind: .audio, relativePath: state.relativePath,

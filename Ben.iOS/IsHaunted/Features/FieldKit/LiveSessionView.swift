@@ -269,6 +269,7 @@ struct LiveSessionView: View {
                 // Start. Ben: "They may want to set everything up first and then start."
                 Button {
                     Task {
+                        startProblem = nil          // a fresh attempt, not last time's answer
                         do {
                             try await store.beginRecording(sessionId)
                         } catch {

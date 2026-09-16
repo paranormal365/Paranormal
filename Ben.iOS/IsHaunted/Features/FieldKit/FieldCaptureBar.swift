@@ -65,6 +65,15 @@ struct FieldCaptureBar: View {
             if let problem = session.recordingProblem {
                 Label(problem, systemImage: "exclamationmark.triangle")
                     .font(.caption).foregroundStyle(Theme.danger)
+                    .accessibilityIdentifier("recording-problem")
+            }
+
+            // The camera borrowing the microphone is worth saying and is nobody's fault, so it is a note rather than
+            // a red warning: warnings about things that fixed themselves teach people to ignore warnings.
+            if let note = session.audioNote {
+                Label(note, systemImage: "info.circle")
+                    .font(.caption).foregroundStyle(Theme.fog)
+                    .accessibilityIdentifier("audio-note")
             }
 
             if session.captures.isEmpty {

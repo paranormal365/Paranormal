@@ -197,8 +197,11 @@ public final class FieldSessionStore {
             }
             .sorted { $0.startedAt < $1.startedAt }
 
+        // Photos, and anything timed whose length could not be read. Ben, 2026-09-16: a session holding ten seconds
+        // of video said nothing had been recorded, because a clip with no duration cannot sit on a track and was
+        // then in no list at all. It is pinned at the moment it was taken instead of disappearing.
         let stills = session.captures
-            .filter { $0.kind == .photo }
+            .filter { $0.kind == .photo || ($0.durationSeconds ?? 0) <= 0 }
             .map { CaptureMark(id: $0.id, at: $0.at, kind: $0.kind,
                                relativePath: $0.relativePath,
                                latitude: $0.latitude, longitude: $0.longitude,
