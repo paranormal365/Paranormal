@@ -166,10 +166,22 @@ public sealed class CanvasDocumentController : BenControllerBase
 
         // Somebody who may only read gets what was published, not what is being written now. The draft is the writer's
         // until they say otherwise, and they say so by publishing.
+        var access = canEdit ? await AccessToAsync(entity, userId, ct) : CanvasBoardAccess.Read;
+
+        // Somebody who may only add to the board is told which pieces are theirs, so the editor can leave those alone
+        // and lock the rest. Nobody else needs the list: full access changes anything, a reader changes nothing.
+        var mine = access == CanvasBoardAccess.Append
+            ? PieceOwners.Owned(PieceOwners.Read(entity.PieceOwnersJson), userId)
+                .Select(id => Guid.TryParse(id, out var pieceId) ? pieceId : Guid.Empty)
+                .Where(id => id != Guid.Empty)
+                .ToList()
+            : [];
+
         var record = _mapper.Map<CanvasDocumentRecord>(entity) with
         {
             CanEdit = canEdit,
-            Access = canEdit ? await AccessToAsync(entity, userId, ct) : CanvasBoardAccess.Read,
+            Access = access,
+            MyPieceIds = mine,
             IsPublished = entity.PublishedJson is not null,
             HasUnpublishedChanges = entity.PublishedJson is not null && entity.Revision > (entity.PublishedRevision ?? 0),
         };
@@ -658,6 +670,10 @@ public sealed class CanvasDocumentController : BenControllerBase
     {
         d.Id, d.CaseId, d.Name, d.Revision, d.PublishedUploadFileId, d.PublishedAtUtc,
         JsonLength = d.DocumentJson?.Length ?? 0,
+        // Whether the group can see it, and which revision they are reading, are the facts an audit row is asked for
+        // afterwards — "when did this stop being a draft" (Ben, 2026-09-16). Never the document itself.
+        IsPublished = d.PublishedJson is not null,
+        d.PublishedRevision,
     };
 
     /// <summary>

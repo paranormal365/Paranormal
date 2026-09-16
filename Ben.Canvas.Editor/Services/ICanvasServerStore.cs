@@ -20,7 +20,13 @@ public sealed record CanvasServerDocument(
     string? CreatedByName,
     DateTime DateCreated,
     DateTime? DateUpdated,
-    bool CanEdit = true);
+    bool CanEdit = true,
+
+    /// <summary>What the caller may do: 0 read, 1 add to it, 2 change anything (Ben, 2026-09-16).</summary>
+    int Access = 2,
+
+    /// <summary>The pieces the caller put on the board, when they may only add to it.</summary>
+    IReadOnlyList<Guid>? MyPieceIds = null);
 
 /// <summary>A board in a case's list: everything but the board itself.</summary>
 public sealed record CanvasServerSummary(

@@ -199,6 +199,23 @@ public sealed class CanvasServerSession(
         return await OpenRecordAsync(newer);
     }
 
+    /// <summary>
+    /// Takes the server's answer about what this person may do with the board: read it, add to it, or change
+    /// anything on it (Ben, 2026-09-16). The server is still the authority; this is what the screen allows.
+    /// </summary>
+    private void ApplyAccess(CanvasServerDocument record)
+    {
+        const int addOnly = 1;
+        if (record.CanEdit && record.Access == addOnly)
+        {
+            // The server names the pieces this person put there; everything else on the board is somebody else's.
+            var mine = (record.MyPieceIds ?? []).ToHashSet();
+            access.SetAddOnly(store.Document.Nodes.Select(n => n.Id).Where(id => !mine.Contains(id)));
+            return;
+        }
+        access.Set(record.CanEdit);
+    }
+
     private async Task<string?> CatchUpAsync(Guid serverId, CancellationToken ct)
     {
         var (record, problem) = await server.GetAsync(serverId, ct);
@@ -208,7 +225,7 @@ public sealed class CanvasServerSession(
             return problem;
         }
 
-        access.Set(record.CanEdit);
+        ApplyAccess(record);
         if (record.Revision <= store.Document.Revision) return null;
 
         if (documents.ChangedSinceServer)
@@ -229,7 +246,7 @@ public sealed class CanvasServerSession(
 
         document.CaseId = record.CaseId ?? document.CaseId;
         await documents.OpenFromServerAsync(document, record.Id, record.Revision, record.OrganizationId);
-        access.Set(record.CanEdit);
+        ApplyAccess(record);
         PendingConflict = null;
         Changed?.Invoke();
         return null;

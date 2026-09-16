@@ -169,6 +169,12 @@
         Layout.Changed += OnLayoutChanged;
         ServerSession.Changed += OnServerChanged;
         Access.Changed += OnServerChanged;
+
+        // A piece somebody else put on a case board stays theirs: the screen locks it, and the store refuses the
+        // command anyway, so a menu item or a keyboard shortcut cannot reach round the lock (Ben, 2026-09-16).
+        Store.MayChangePiece = Access.MayChange;
+        Store.ChangeRefused += OnChangeRefused;
+
         SignIn = (ICanvasSignInState?)Services.GetService(typeof(ICanvasSignInState));
         if (SignIn is not null) SignIn.Changed += OnSignInChanged;
     }
@@ -212,6 +218,8 @@
 
     private void OnPasteProblems(IReadOnlyList<string> problems) =>
         _ = InvokeAsync(() => Toasts.Warning(string.Join(" ", problems)));
+
+    private void OnChangeRefused() => _ = InvokeAsync(() => Toasts.Warning(BoardAccess.NotYours));
 
     private void OnStorageRefused() => _ = InvokeAsync(() => Toasts.Warning(CanvasCopy.Sentences.StorageRefused));
 

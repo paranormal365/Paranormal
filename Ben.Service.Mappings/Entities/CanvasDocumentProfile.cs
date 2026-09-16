@@ -23,6 +23,7 @@ public class CanvasDocumentProfile : Profile
             // Published means the group can see it at all (Ben, 2026-09-16): a board with nothing published is the
             // writer's draft. "Written on since" is a comparison, not a column, so it is worked out here.
             .ForMember(d => d.Access, o => o.Ignore())
+            .ForMember(d => d.MyPieceIds, o => o.Ignore())
             .ForMember(d => d.IsPublished, o => o.MapFrom(s => s.PublishedJson != null))
             .ForMember(d => d.HasUnpublishedChanges, o => o.MapFrom(s => s.PublishedJson != null && s.Revision > (s.PublishedRevision ?? 0)));
 

@@ -92,10 +92,45 @@ public sealed partial class CanvasStore
         OnChange?.Invoke(new CanvasChange(CanvasChangeKind.Reset, null));
     }
 
-    internal void Execute(IEditorCommand command, CanvasChangeKind kind)
+    /// <summary>
+    /// Asked before any change to a piece already on the board; null means everything may be changed.
+    /// </summary>
+    /// <remarks>
+    /// Ben, 2026-09-16: somebody who may add to a case's board may not rework what other people put there. The screen
+    /// locks those pieces, but a menu item, a keyboard shortcut or a script would otherwise reach round the lock, so
+    /// every command passes here too. The server is still the authority — this only stops work that would be refused.
+    /// Pieces not yet on the board are always allowed: adding is the whole point.
+    /// </remarks>
+    public Func<Guid, bool>? MayChangePiece { get; set; }
+
+    /// <summary>Raised when a command was refused because it touched somebody else's piece.</summary>
+    public event Action? ChangeRefused;
+
+    /// <summary>Runs a command, unless it would change a piece this person may not. False when it was refused.</summary>
+    internal bool Execute(IEditorCommand command, CanvasChangeKind kind)
     {
+        if (Refuses(command))
+        {
+            ChangeRefused?.Invoke();
+            return false;
+        }
+
         command.Execute();
         Record(command, kind);
+        return true;
+    }
+
+    /// <summary>True when the command would change a piece that is on the board and not this person's to change.</summary>
+    private bool Refuses(IEditorCommand command)
+    {
+        if (MayChangePiece is not { } mayChange || command is not ITouchesNodes touches) return false;
+
+        foreach (var id in touches.NodeIds.Distinct())
+        {
+            // Only what is already there: a command adding a piece names an id the board has never seen.
+            if (Document.Nodes.Any(n => n.Id == id) && !mayChange(id)) return true;
+        }
+        return false;
     }
 
     /// <summary>Pushes a command whose change has already been applied (a live drag's result).</summary>

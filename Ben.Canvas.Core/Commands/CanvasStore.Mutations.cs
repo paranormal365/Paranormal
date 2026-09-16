@@ -23,8 +23,7 @@ public sealed partial class CanvasStore
         RaiseToMinimum(node);
         if (node.GroupId is { } gid && FindGroup(gid) is null) node.GroupId = null;
         node.Z = AllocateZ();
-        Execute(new AddNodesCommand(Document, [node], [], $"Add {Describe.Kind(node.Type)}"), CanvasChangeKind.Document);
-        return true;
+        return Execute(new AddNodesCommand(Document, [node], [], $"Add {Describe.Kind(node.Type)}"), CanvasChangeKind.Document);
     }
 
     /// <summary>Removes blocks with their connectors as one undo step. Locked blocks can be removed.</summary>
@@ -32,8 +31,7 @@ public sealed partial class CanvasStore
     {
         var set = ids.Where(id => FindNode(id) is not null).ToHashSet();
         if (set.Count == 0) return false;
-        Execute(new RemoveNodesCommand(Document, set), CanvasChangeKind.Document);
-        return true;
+        return Execute(new RemoveNodesCommand(Document, set), CanvasChangeKind.Document);
     }
 
     /// <summary>Nudges blocks. Locked blocks stay where they are; false when nothing moved.</summary>
@@ -42,8 +40,7 @@ public sealed partial class CanvasStore
         if (!double.IsFinite(dx) || !double.IsFinite(dy) || (dx == 0 && dy == 0)) return false;
         var nodes = Resolve(ids).Where(n => !n.Locked).ToList();
         if (nodes.Count == 0) return false;
-        Execute(new MoveNodesCommand(nodes, dx, dy), CanvasChangeKind.NodeGeometry);
-        return true;
+        return Execute(new MoveNodesCommand(nodes, dx, dy), CanvasChangeKind.NodeGeometry);
     }
 
     /// <summary>Sets a block's rectangle, holding axes it cannot resize on and raising it to its minimum.</summary>
@@ -65,8 +62,7 @@ public sealed partial class CanvasStore
         var after = new WorldRect(x, y, width, height);
         if (before == after) return false;
 
-        Execute(new ResizeNodeCommand(node, before, after), CanvasChangeKind.NodeGeometry);
-        return true;
+        return Execute(new ResizeNodeCommand(node, before, after), CanvasChangeKind.NodeGeometry);
     }
 
     public bool BringToFront(IEnumerable<Guid> ids)
@@ -75,8 +71,7 @@ public sealed partial class CanvasStore
         if (nodes.Count == 0) return false;
         var before = nodes.Select(n => n.Z).ToArray();
         var after = nodes.Select(_ => AllocateZ()).ToArray();
-        Execute(new SetZOrderCommand(nodes, before, after, "Bring to front"), CanvasChangeKind.Document);
-        return true;
+        return Execute(new SetZOrderCommand(nodes, before, after, "Bring to front"), CanvasChangeKind.Document);
     }
 
     public bool SendToBack(IEnumerable<Guid> ids)
@@ -86,8 +81,7 @@ public sealed partial class CanvasStore
         var lowest = Document.Nodes.Min(n => n.Z);
         var before = nodes.Select(n => n.Z).ToArray();
         var after = nodes.Select((_, i) => lowest - nodes.Count + i).ToArray();
-        Execute(new SetZOrderCommand(nodes, before, after, "Send to back"), CanvasChangeKind.Document);
-        return true;
+        return Execute(new SetZOrderCommand(nodes, before, after, "Send to back"), CanvasChangeKind.Document);
     }
 
     /// <summary>Edits a block's data through a copy; pushes nothing when the edit changed nothing.</summary>
@@ -107,8 +101,7 @@ public sealed partial class CanvasStore
         var node = FindNode(id);
         if (node is null) return false;
         if (SameData(node.Data, data)) return false;
-        Execute(new UpdateNodeDataCommand(node, node.Data.Clone(), data.Clone()), CanvasChangeKind.NodeData);
-        return true;
+        return Execute(new UpdateNodeDataCommand(node, node.Data.Clone(), data.Clone()), CanvasChangeKind.NodeData);
     }
 
     /// <summary>
@@ -129,16 +122,14 @@ public sealed partial class CanvasStore
         if (colorKey is not null && !CanvasPalette.IsValid(colorKey)) return false;
         var nodes = Resolve(ids).ToList();
         if (nodes.Count == 0) return false;
-        Execute(new SetNodePropertyCommand<string?>(nodes, "Colour", n => n.ColorKey, (n, v) => n.ColorKey = v, colorKey), CanvasChangeKind.NodeData);
-        return true;
+        return Execute(new SetNodePropertyCommand<string?>(nodes, "Colour", n => n.ColorKey, (n, v) => n.ColorKey = v, colorKey), CanvasChangeKind.NodeData);
     }
 
     public bool SetLocked(IEnumerable<Guid> ids, bool locked)
     {
         var nodes = Resolve(ids).ToList();
         if (nodes.Count == 0) return false;
-        Execute(new SetNodePropertyCommand<bool>(nodes, locked ? "Lock" : "Unlock", n => n.Locked, (n, v) => n.Locked = v, locked), CanvasChangeKind.NodeData);
-        return true;
+        return Execute(new SetNodePropertyCommand<bool>(nodes, locked ? "Lock" : "Unlock", n => n.Locked, (n, v) => n.Locked = v, locked), CanvasChangeKind.NodeData);
     }
 
     // ── Connectors ──────────────────────────────────────────────────────
@@ -159,8 +150,7 @@ public sealed partial class CanvasStore
     {
         var edge = FindEdge(edgeId);
         if (edge is null) return false;
-        Execute(new RemoveEdgeCommand(Document, edge), CanvasChangeKind.Edges);
-        return true;
+        return Execute(new RemoveEdgeCommand(Document, edge), CanvasChangeKind.Edges);
     }
 
     public bool UpdateEdge(Guid edgeId, Action<CanvasEdge> mutate)
@@ -175,8 +165,7 @@ public sealed partial class CanvasStore
         var before = EdgeSnapshot.Of(edge);
         var after = EdgeSnapshot.Of(draft);
         if (before == after) return false;
-        Execute(new UpdateEdgeCommand(edge, before, after), CanvasChangeKind.Edges);
-        return true;
+        return Execute(new UpdateEdgeCommand(edge, before, after), CanvasChangeKind.Edges);
     }
 
     // ── Groups ──────────────────────────────────────────────────────────
@@ -210,8 +199,7 @@ public sealed partial class CanvasStore
     {
         var group = FindGroup(groupId);
         if (group is null) return false;
-        Execute(new RemoveGroupCommand(Document, group), CanvasChangeKind.Groups);
-        return true;
+        return Execute(new RemoveGroupCommand(Document, group), CanvasChangeKind.Groups);
     }
 
     /// <summary>Moves a group and its unlocked members as one undo step.</summary>
@@ -222,8 +210,7 @@ public sealed partial class CanvasStore
         var members = MembersOf(groupId).Where(n => !n.Locked).ToList();
         List<IEditorCommand> parts = [new MoveGroupRectCommand(group, dx, dy)];
         if (members.Count > 0) parts.Add(new MoveNodesCommand(members, dx, dy));
-        Execute(new CompositeCommand("Move group", parts), CanvasChangeKind.Groups);
-        return true;
+        return Execute(new CompositeCommand("Move group", parts), CanvasChangeKind.Groups);
     }
 
     /// <summary>Changes the group's rectangle only; members stay where they are.</summary>
@@ -238,8 +225,7 @@ public sealed partial class CanvasStore
             Math.Max(BlockRegistry.GroupMinWidth, Finite(width, group.Width)),
             Math.Max(BlockRegistry.GroupMinHeight, Finite(height, group.Height)));
         if (before == after) return false;
-        Execute(new ResizeGroupCommand(group, before, after), CanvasChangeKind.Groups);
-        return true;
+        return Execute(new ResizeGroupCommand(group, before, after), CanvasChangeKind.Groups);
     }
 
     public bool RenameGroup(Guid groupId, string? label)
@@ -248,16 +234,14 @@ public sealed partial class CanvasStore
         if (group is null) return false;
         var clean = string.IsNullOrWhiteSpace(label) ? "Group" : label.Trim();
         if (clean == group.Label) return false;
-        Execute(new SetGroupPropertyCommand<string>(group, "Rename group", g => g.Label, (g, v) => g.Label = v, clean), CanvasChangeKind.Groups);
-        return true;
+        return Execute(new SetGroupPropertyCommand<string>(group, "Rename group", g => g.Label, (g, v) => g.Label = v, clean), CanvasChangeKind.Groups);
     }
 
     public bool SetGroupColor(Guid groupId, string? colorKey)
     {
         var group = FindGroup(groupId);
         if (group is null || (colorKey is not null && !CanvasPalette.IsValid(colorKey)) || group.ColorKey == colorKey) return false;
-        Execute(new SetGroupPropertyCommand<string?>(group, "Change group colour", g => g.ColorKey, (g, v) => g.ColorKey = v, colorKey), CanvasChangeKind.Groups);
-        return true;
+        return Execute(new SetGroupPropertyCommand<string?>(group, "Change group colour", g => g.ColorKey, (g, v) => g.ColorKey = v, colorKey), CanvasChangeKind.Groups);
     }
 
     public bool AssignGroup(Guid nodeId, Guid? groupId)
@@ -265,8 +249,7 @@ public sealed partial class CanvasStore
         var node = FindNode(nodeId);
         if (node is null || node.GroupId == groupId) return false;
         if (groupId is { } gid && FindGroup(gid) is null) return false;
-        Execute(new AssignGroupCommand(node, node.GroupId, groupId), CanvasChangeKind.Groups);
-        return true;
+        return Execute(new AssignGroupCommand(node, node.GroupId, groupId), CanvasChangeKind.Groups);
     }
 
     // ── Paste and duplicate ─────────────────────────────────────────────
@@ -330,8 +313,7 @@ public sealed partial class CanvasStore
             .Where(e => e.FromNodeId != e.ToNodeId && ids.Contains(e.FromNodeId) && ids.Contains(e.ToNodeId))
             .ToList();
 
-        Execute(new AddNodesCommand(Document, nodes, keptEdges, description), CanvasChangeKind.Document);
-        return true;
+        return Execute(new AddNodesCommand(Document, nodes, keptEdges, description), CanvasChangeKind.Document);
     }
 
     // ── Live gestures ───────────────────────────────────────────────────

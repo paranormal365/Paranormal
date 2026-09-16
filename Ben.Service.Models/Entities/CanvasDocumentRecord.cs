@@ -42,6 +42,12 @@ public record CanvasDocumentRecord
     /// </summary>
     public CanvasBoardAccess Access { get; init; } = CanvasBoardAccess.Read;
 
+    /// <summary>
+    /// The pieces this caller put on the board, which stay theirs to rework even when they may only add to it. Empty
+    /// for somebody who may change everything or nothing, because neither has to ask.
+    /// </summary>
+    public IReadOnlyList<Guid> MyPieceIds { get; init; } = [];
+
     /// <summary>Published once and written on since — the group is reading an older board than the one being worked on.</summary>
     public bool HasUnpublishedChanges { get; init; }
 
