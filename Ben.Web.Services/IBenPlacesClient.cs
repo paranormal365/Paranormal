@@ -287,6 +287,15 @@ public interface IBenPlacesClient
     Task<ItemResult<FieldSessionMapPage>> GetMyFieldSessionMapAsync(
         MapBounds? bounds = null, CancellationToken token = default);
 
+    /// <summary>
+    /// Every session file on the server, newest first — what /admin/session-files lists.
+    /// </summary>
+    /// <remarks>
+    /// Read-only. Deleting a session is its owner's decision, or the orphan sweep for sessions
+    /// whose bytes are gone; neither belongs on a list whose job is to show what is there.
+    /// </remarks>
+    Task<LoadResult<SessionFileRecord>> GetSessionFilesAsync(CancellationToken token = default);
+
     /// <summary>Field sessions whose document cannot be read back. Changes nothing.</summary>
     Task<LoadResult<OrphanedFieldSessionRecord>> GetOrphanedFieldSessionsAsync(
         CancellationToken token = default);

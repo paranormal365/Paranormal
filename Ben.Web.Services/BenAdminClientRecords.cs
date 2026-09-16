@@ -1771,3 +1771,33 @@ public sealed record MailSettingsRecord(
 /// call for completely different fixes, and a tidied-up "could not send" tells you neither.
 /// </param>
 public sealed record MailTestResultRecord(bool Sent, string Message, string? ServerSaid);
+
+/// <summary>
+/// One session file on the server, as listed on /admin/session-files.
+/// </summary>
+/// <remarks>
+/// <b>Two names, because they are two different facts.</b> A device can be handed to a colleague
+/// to upload, and a session recorded while signed out has nobody's name on it at all — so
+/// <paramref name="RecordedByName"/> being null is an ordinary answer and is shown as one, never
+/// filled in from the uploader.
+/// </remarks>
+/// <param name="IsBundle">
+/// Whether it arrived as one <c>.ben</c>. False for anything the approved 1.0.2 build sent, which
+/// uploads a document and a file per recording.
+/// </param>
+public sealed record SessionFileRecord(
+    Guid SessionId,
+    bool IsBundle,
+    string FileName,
+    long FileSize,
+    string? LocationLabel,
+    DateTime StartedAt,
+    DateTime? EndedAt,
+    int ReadingCount,
+    int MarkerCount,
+    int FileCount,
+    string? RecordedByName,
+    string? UploadedByName,
+    Guid? InvestigationId,
+    string? InvestigationTitle,
+    DateTime? PublishedAtUtc);

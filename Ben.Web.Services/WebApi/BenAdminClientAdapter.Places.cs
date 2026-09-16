@@ -257,6 +257,11 @@ public sealed partial class BenAdminClientAdapter
     }
 
     /// <inheritdoc />
+    public Task<LoadResult<SessionFileRecord>> GetSessionFilesAsync(
+        CancellationToken token = default)
+        => _api.GetListAsync<SessionFileRecord>("/api/admin/session-files", token);
+
+    /// <inheritdoc />
     public Task<LoadResult<OrphanedFieldSessionRecord>> GetOrphanedFieldSessionsAsync(
         CancellationToken token = default)
         => _api.GetListAsync<OrphanedFieldSessionRecord>("/api/admin/orphaned-field-sessions", token);
