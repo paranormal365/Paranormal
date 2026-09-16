@@ -32,4 +32,21 @@ public interface ICanvasMediaStore
 
     /// <summary>A displayable address for any API route that needs the token (the link card image proxy); null for an address outside the API.</summary>
     Task<string?> GetDisplayUrlAsync(string apiUrl, CancellationToken ct = default);
+
+    /// <summary>
+    /// The files the case already holds, newest first — what a board can reach for instead of
+    /// being handed the same picture twice.
+    /// </summary>
+    /// <remarks>
+    /// Ben, 2026-09-16: "files can be picked from the case files, or if you drop a file, it will
+    /// upload to the case files". Dropping worked; reaching did not, so a photograph uploaded last
+    /// week had to be found on the computer and uploaded again — a second copy of the same
+    /// evidence, against the account's own storage.
+    /// </remarks>
+    Task<(IReadOnlyList<CanvasCaseFile> Files, string? Problem)> ListCaseFilesAsync(
+        Guid organizationId, Guid caseId, CancellationToken ct = default);
 }
+
+/// <summary>One file already on the case, as the board's picker lists it.</summary>
+public sealed record CanvasCaseFile(
+    Guid UploadFileId, string FileName, string ContentType, long FileSize, string? Description);

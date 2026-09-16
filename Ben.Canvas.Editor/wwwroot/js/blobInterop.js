@@ -60,3 +60,19 @@ export async function uploadFromUrl(url, token, sourceUrl, fileName, description
 export function revokeObjectUrl(url) {
   try { URL.revokeObjectURL(url); } catch { /* already gone */ }
 }
+
+/**
+ * Reads JSON from the API. Answers { status, body } so the caller decides what each status means,
+ * exactly as uploadFromUrl does — a refusal is a sentence the board shows, not an exception.
+ */
+export async function fetchJson(url, token) {
+  await slot();
+  try {
+    const response = await fetch(url, { headers: authHeaders(token), credentials: 'omit', cache: 'no-store' });
+    return { status: response.status, body: await response.text() };
+  } catch {
+    return { status: 0, body: null };
+  } finally {
+    release();
+  }
+}

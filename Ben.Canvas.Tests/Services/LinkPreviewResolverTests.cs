@@ -157,7 +157,12 @@ public sealed class LinkPreviewResolverTests
             return Task.FromResult<string?>("blob:case/" + uploadFileId);
         }
 
-        public Task<string?> GetDisplayUrlAsync(string apiUrl, CancellationToken ct = default)
+        // Not reached by these tests: neither exercises the picker.
+    public Task<(IReadOnlyList<CanvasCaseFile> Files, string? Problem)> ListCaseFilesAsync(
+        Guid organizationId, Guid caseId, CancellationToken ct = default)
+        => Task.FromResult<(IReadOnlyList<CanvasCaseFile>, string?)>(([], null));
+
+    public Task<string?> GetDisplayUrlAsync(string apiUrl, CancellationToken ct = default)
         {
             Fetched.Add(apiUrl);
             return Task.FromResult<string?>("blob:proxy/1");

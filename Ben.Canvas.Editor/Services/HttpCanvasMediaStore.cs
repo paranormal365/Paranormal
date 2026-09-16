@@ -48,6 +48,56 @@ public sealed class HttpCanvasMediaStore(IJSRuntime js, IOptions<CanvasEditorOpt
         return (null, text.Length is > 0 and < 400 && !text.StartsWith('{') && !text.StartsWith('<') ? text.Trim('"') : CanvasCopy.Sentences.ServerRefusedBoard);
     }
 
+    public async Task<(IReadOnlyList<CanvasCaseFile> Files, string? Problem)> ListCaseFilesAsync(
+        Guid organizationId, Guid caseId, CancellationToken ct = default)
+    {
+        if (!IsAvailable) return ([], CanvasCopy.Sentences.SignedOutSave);
+
+        var url = $"{Base}/api/orgs/{organizationId}/cases/{caseId}/files";
+        var module = await ModuleAsync();
+        var result = await module.InvokeAsync<UploadResult>("fetchJson", ct, url, await tokens!.GetAccessTokenAsync(false, ct));
+        // One retry on 401 with a fresh token, the same as an upload: a board left open over lunch
+        // meets an expired token on its first reach, not a real refusal.
+        if (result.Status == 401)
+            result = await module.InvokeAsync<UploadResult>("fetchJson", ct, url, await tokens.GetAccessTokenAsync(true, ct));
+
+        return result.Status switch
+        {
+            200 => (Read(result.Body), null),
+            0 => ([], CanvasCopy.Sentences.ServerUnreachable),
+            401 => ([], CanvasCopy.Sentences.SignInExpired),
+            403 => ([], CanvasCopy.Sentences.AddFilesForbidden),
+            _ => ([], CanvasCopy.Sentences.ServerRefusedBoard),
+        };
+
+        static IReadOnlyList<CanvasCaseFile> Read(string? body)
+        {
+            if (string.IsNullOrWhiteSpace(body)) return [];
+            try
+            {
+                var files = JsonSerializer.Deserialize<List<CaseFileListDto>>(body, HttpCanvasServerStore.Json) ?? [];
+                return files
+                    .Where(f => f.UploadFileId != Guid.Empty)
+                    .Select(f => new CanvasCaseFile(
+                        f.UploadFileId,
+                        string.IsNullOrWhiteSpace(f.FileName) ? "file" : f.FileName,
+                        f.ContentType ?? "application/octet-stream",
+                        f.FileSize,
+                        f.Description))
+                    .ToList();
+            }
+            catch (JsonException)
+            {
+                // An answer this cannot read is not a list of nothing — but the picker has nothing
+                // useful to draw either way, and the empty state says so in words.
+                return [];
+            }
+        }
+    }
+
+    private sealed record CaseFileListDto(
+        Guid UploadFileId, string? FileName, string? ContentType, long FileSize, string? Description);
+
     public Task<string?> GetDisplayUrlAsync(Guid uploadFileId, bool thumbnail, CancellationToken ct = default) =>
         Base is null ? Task.FromResult<string?>(null) : FetchAsync($"{Base}/api/upload-files/{uploadFileId}/{(thumbnail ? "thumbnail" : "download")}", ct);
 

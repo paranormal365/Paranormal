@@ -89,7 +89,12 @@ public sealed class CanvasServerSessionTests
         }
 
         public Task<string?> GetDisplayUrlAsync(Guid uploadFileId, bool thumbnail, CancellationToken ct = default) => Task.FromResult<string?>(null);
-        public Task<string?> GetDisplayUrlAsync(string apiUrl, CancellationToken ct = default) => Task.FromResult<string?>(null);
+        // Not reached by these tests: neither exercises the picker.
+    public Task<(IReadOnlyList<CanvasCaseFile> Files, string? Problem)> ListCaseFilesAsync(
+        Guid organizationId, Guid caseId, CancellationToken ct = default)
+        => Task.FromResult<(IReadOnlyList<CanvasCaseFile>, string?)>(([], null));
+
+    public Task<string?> GetDisplayUrlAsync(string apiUrl, CancellationToken ct = default) => Task.FromResult<string?>(null);
     }
 
     private sealed class Rig
