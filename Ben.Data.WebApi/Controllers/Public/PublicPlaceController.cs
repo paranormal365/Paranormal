@@ -96,7 +96,8 @@ public sealed class PublicPlaceController : ControllerBase
     /// </remarks>
     private static async Task<IReadOnlyList<PublicPlaceSessionRow>> PublishedSessionsAsync(
         BenDataContext db, Guid placeId, CancellationToken ct)
-        => await db.FieldSessionUploads.AsNoTracking()
+    {
+        var rows = await db.FieldSessionUploads.AsNoTracking()
             .Where(s => s.PlaceId == placeId && s.PublishedAtUtc != null)
             .OrderByDescending(s => s.StartedAt)
             .Select(s => new PublicPlaceSessionRow(
@@ -120,17 +121,30 @@ public sealed class PublicPlaceController : ControllerBase
                 // keeping its pictures up. See ArchiveMediaPublication, which owns the rule.
                 s.MediaReviewState == Ben.Data.Common.Enums.FeedMediaReviewState.Approved
                  && s.Place!.Kind == Ben.Data.Common.Enums.PlaceKind.PublicLocation
-                    // Same rule as ArchiveMediaPublication: a bundle member has no file of its
-                    // own, and the anonymous archive cannot serve a range of a .ben yet.
+                    // Same rule as ArchiveMediaPublication: a recording sent on its own goes by
+                    // its UploadFile's id, one inside the session's .ben by its row's id — the
+                    // media route takes either. The name and type are finished below, where
+                    // Path.GetFileName can run.
                     ? s.Files
-                        .Where(f => f.UploadFileId != null)
+                        .Where(f => f.UploadFileId != null || f.BundleEntryPath != null)
                         .OrderBy(f => f.RelativePath)
                         .Select(f => new ArchiveMediaItem(
-                            f.UploadFileId!.Value, f.RelativePath,
-                            f.UploadFile!.ContentType, f.UploadFile.FileName))
+                            f.UploadFileId ?? f.Id, f.RelativePath,
+                            f.UploadFile != null ? f.UploadFile.ContentType : (f.ContentType ?? ""),
+                            f.UploadFile != null ? f.UploadFile.FileName : f.RelativePath))
                         .ToList()
                     : new List<ArchiveMediaItem>()))
             .ToListAsync(ct);
+        return rows.Select(r => r with { Media = r.Media!.Select(Finish).ToList() }).ToList();
+    }
+
+    /// <summary>A bundle member's row carries a path, not a name, and may carry no type.</summary>
+    private static ArchiveMediaItem Finish(ArchiveMediaItem m) => m with
+    {
+        ContentType = string.IsNullOrEmpty(m.ContentType)
+            ? Services.FieldSessionFileGuard.ContentTypeFor(m.RelativePath) : m.ContentType,
+        FileName = Path.GetFileName(m.FileName),
+    };
 }
 
 /// <summary>What a visitor gets for one place.</summary>

@@ -69,6 +69,54 @@ public class PublicPlaceTests
         return Assert.IsType<PublicPlaceResponse>(Assert.IsType<OkObjectResult>(result.Result).Value);
     }
 
+    /// <summary>
+    /// The place page keeps its own copy of the archive's media rule, and it drifted: a recording
+    /// inside a session's .ben was left out here while the archive endpoint served it. Same shape
+    /// as ArchiveMediaPublicationTests — the id the page hands out is the row's, and the media
+    /// route takes it.
+    /// </summary>
+    [Fact]
+    public async Task A_recording_inside_a_published_sessions_file_is_listed_on_the_place_page()
+    {
+        var f = await SeedAsync();
+        var userId = Guid.NewGuid();
+        var sessionId = Guid.NewGuid();
+        var rowId = Guid.NewGuid();
+        await using (var db = await f.CreateDbContextAsync())
+        {
+            var now = DateTime.UtcNow;
+            db.AppUsers.Add(new AppUser
+            {
+                Id = userId, UserName = "r@t.com", Email = "r@t.com", DisplayName = "Recorder", DateCreated = now,
+            });
+            db.FieldSessionUploads.Add(new FieldSessionUpload
+            {
+                Id = sessionId, SubmittedByAppUserId = userId, RecordedByName = "Recorder",
+                PlaceId = PlaceId, PublishedAtUtc = now,
+                MediaReviewState = Ben.Data.Common.Enums.FeedMediaReviewState.Approved,
+                IsBundle = true, DocumentUploadFileId = Guid.NewGuid(),
+                StartedAt = now.AddHours(-2), DeviceModel = "iPhone 17", ReadingCount = 43, MarkerCount = 3,
+                DateCreated = now, CreatedByAppUserId = userId,
+            });
+            db.FieldSessionUploadFiles.Add(new FieldSessionUploadFile
+            {
+                Id = rowId, FieldSessionUploadId = sessionId, UploadFileId = null,
+                BundleEntryPath = "media/audio-001.m4a", RelativePath = "media/audio-001.m4a",
+                ContentType = "audio/mp4", FileSize = 715_004,
+                DateCreated = now, CreatedByAppUserId = userId,
+            });
+            await db.SaveChangesAsync();
+        }
+
+        var response = await GetAsync(f);
+
+        var session = Assert.Single(response.Sessions);
+        var media = Assert.Single(session.Media!);
+        Assert.Equal(rowId, media.UploadFileId);
+        Assert.Equal("audio/mp4", media.ContentType);
+        Assert.Equal("audio-001.m4a", media.FileName);
+    }
+
     // ── What a visitor must not see ───────────────────────────────────────────
 
     [Fact]

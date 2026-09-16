@@ -546,6 +546,16 @@
                 r.Id, r.Title, _place.Latitude, _place.Longitude, IsPast: true,
                 IsPublicPlace: _place.Kind == Ben.Data.Common.Enums.PlaceKind.PublicLocation))
             .ToList();
+
+        // A place whose only record is its archive — field sessions, no investigations — used to
+        // draw an empty map of the whole continent. The place itself is the pin then, so the map
+        // fits to it (seen on the walk, 2026-09-16).
+        if (_pins.Count == 0)
+        {
+            _pins.Add(new InvestigationMapPin(
+                _place.Id, _place.Name, _place.Latitude, _place.Longitude, IsPast: true,
+                IsPublicPlace: _place.Kind == Ben.Data.Common.Enums.PlaceKind.PublicLocation));
+        }
     }
 
     private RenderFragment SignedInTable(List<PlaceInvestigationRow> rows, bool showVisibility) =>@<div class="table-responsive">
