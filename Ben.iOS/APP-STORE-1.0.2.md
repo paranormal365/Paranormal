@@ -271,6 +271,18 @@ A grep of `IsHaunted/` and `BenKit/` finds no "paid plan", no price, no "subscri
 
 ## 5. Screenshots and previews
 
+> **1.0.3 has its own set: `Ben.iOS/screenshots-1.0.3/`.** One command per device, which does the
+> whole thing — boot, dark, build, the set, the iPhone's resize, the drive, the cut and the silent
+> audio track:
+>
+>     Ben.iOS/scripts/capture-app-store-media.sh iphone 1.0.3
+>     Ben.iOS/scripts/capture-app-store-media.sh ipad   1.0.3
+>
+> It needs the API up at localhost:5252 and refuses to start without it, because the Send screen
+> signs in. New frame: **15-fieldkit-camera** — the app takes photographs and clips itself now,
+> without handing the microphone to Apple's camera and leaving a hole in the recording. The rest of
+> the set is re-captured from the current build rather than carried over.
+
 `Ben.iOS/screenshots-1.0.2/` — see its README. Captured 2026-09-04 (item 214), **dark mode**, at the
 required sizes. Ten screenshots per device: five new Field Kit frames driven through a real
 scripted night (base level set, the needle swung to ~+60 mG, sentry armed, marks, the review, the
