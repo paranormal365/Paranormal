@@ -799,14 +799,15 @@ else
         _isSavingRoles = true; _rolesError = null; _successMessage = null;
 
         var wanted = _roleSelection.Where(kv => kv.Value).Select(kv => kv.Key).ToList();
-        var saved = await AdminClient.SetUserRolesAsync(UserId, wanted);
+        var (saved, error) = await AdminClient.SetUserRolesAsync(UserId, wanted);
 
         _isSavingRoles = false;
         if (saved is null)
         {
-            // The server's two refusals are both about SuperAdmin — your own, or the last one.
-            _rolesError = "The roles were not saved. You cannot remove your own SuperAdmin role, "
-                        + "or the last SuperAdmin on the site.";
+            // The server's own words. This used to name the two SuperAdmin rules whatever had actually gone wrong, so
+            // a save refused for any other reason — a role the site does not define, a session that had ended — read as
+            // a rule about SuperAdmin that had nothing to do with it (Ben, 2026-09-15).
+            _rolesError = error ?? "The roles were not saved, and the server did not say why. Try again in a moment.";
             return;
         }
 

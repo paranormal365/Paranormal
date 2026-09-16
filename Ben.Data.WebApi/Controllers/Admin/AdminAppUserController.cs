@@ -139,13 +139,13 @@ public sealed class AdminAppUserController : AdminEntityControllerBase<AppUser, 
         {
             var removed = await _userManager.RemoveFromRolesAsync(user, toRemove);
             if (!removed.Succeeded)
-                return BadRequest(removed.Errors.Select(e => e.Description));
+                return BadRequest(string.Join(" ", removed.Errors.Select(e => e.Description)));
         }
         if (toAdd.Count > 0)
         {
             var added = await _userManager.AddToRolesAsync(user, toAdd);
             if (!added.Succeeded)
-                return BadRequest(added.Errors.Select(e => e.Description));
+                return BadRequest(string.Join(" ", added.Errors.Select(e => e.Description)));
         }
 
         await _userManager.UpdateSecurityStampAsync(user);
