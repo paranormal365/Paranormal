@@ -1,5 +1,21 @@
 # App Store submission — IsHaunted 1.0.2 (build 5)
 
+> **The next submission is 1.0.3, not 1.0.2 (6).** Ben, 2026-09-16: "instead of it becoming
+> 1.0.2(6) bump it up to 1.0.3." 1.0.2 build 5 was approved, and what has landed since is not a
+> bug fix to it — the field kit's camera is the app's own now, sound carries across a video clip
+> with no gap, and the map says which way somebody was walking. That is a version, not a build.
+>
+> The project is already set to **MARKETING_VERSION 1.0.3, CURRENT_PROJECT_VERSION 6**. Build 6
+> rather than restarting at 1: a number that only ever goes up cannot collide with anything
+> uploaded before, whatever train it was on. The procedure in §6–§8 below is unchanged — read
+> "1.0.3" wherever it says 1.0.2, and open a new version in App Store Connect rather than adding
+> a build to the approved one.
+>
+> **Still to do before that upload:** the `.ben` single-file session bundle is only half built.
+> The old per-file upload endpoints stay until 1.0.3 is actually live (Ben, 2026-09-16: "keep
+> end points for now until we upload the next version of the app"), because the approved 1.0.2
+> on people's phones is still using them.
+
 Everything needed to build, upload and submit **1.0.2**, and every answer App Review has asked for
 so far. This supersedes `APP-STORE.md` for the submission itself; that file stays as the record of
 1.0.0 and the reasoning behind the listing.
