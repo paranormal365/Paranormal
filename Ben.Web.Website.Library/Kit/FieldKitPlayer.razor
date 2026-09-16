@@ -498,6 +498,13 @@
                                         @Elapsed(marker.At)
                                     </button>
                                     <span>@marker.Kind</span>
+                                    @* The reading that caused it, beside what it was. A list of
+                                       the moments the field moved that does not say HOW FAR is a
+                                       list somebody has to jump into one row at a time to read. *@
+                                    @if (MarkerFieldText(marker) is { } reading)
+                                    {
+                                        <span class="font-monospace small" data-testid="marker-field">@reading</span>
+                                    }
                                     @if (!string.IsNullOrWhiteSpace(marker.Room))
                                     {
                                         <span class="badge text-bg-secondary" data-testid="marker-room">@marker.Room</span>
@@ -854,7 +861,7 @@
 
         _markers = _readings
             .Where(r => r.Marker is not null)
-            .Select(r => new MarkerRow(r.At, Humanise(r.Marker!), r.Note, r.Room))
+            .Select(r => new MarkerRow(r.At, Humanise(r.Marker!), r.Note, r.Room, r.Microtesla))
             .ToList();
 
         _markerPoints = _readings
@@ -989,8 +996,11 @@
         // or there is no recording here — does the page keep time itself.
         if (RecordingCovering(_playhead) is { } key && MediaStartOf(key) is { } startsAt)
         {
-            await SeekMediaAsync(key, (_playhead - startsAt).TotalSeconds);
-            if (await PlayMediaAsync(key)) return;   // OnMediaPlay sets the state
+            // Seek and play in ONE call, so the wait for the element to be ready happens where it
+            // can actually be waited for. Two calls left a gap in which an element still loading
+            // dropped the seek and started from zero — which is what reported the beginning back
+            // as the playhead.
+            if (await PlayMediaFromAsync(key, (_playhead - startsAt).TotalSeconds)) return;
         }
 
         _clockKey = null;
@@ -1036,18 +1046,57 @@
     private DateTime? MediaStartOf(Guid fileId)
         => _session?.Files.FirstOrDefault(f => f.Id == fileId) is { } file ? MediaStart(file) : null;
 
-    /// <summary>The audio or video whose span contains the moment — the latest to have begun.</summary>
+    /// <summary>
+    /// The audio or video whose span contains the moment — the latest to have begun, and only if
+    /// it has not already finished.
+    /// </summary>
+    /// <remarks>
+    /// <para>
+    /// Ben, 2026-09-16: "If I scroll the playhead in the player then hit play, it starts over from
+    /// the beginning." This was why. A recording was treated as covering everything from its start
+    /// onwards, because nothing here knew how long one ran — so a two-minute clip at the top of a
+    /// twelve-minute session claimed every moment of it. Pressing play at minute six handed the
+    /// clock to that clip, which was seeked past its own end, started from the beginning instead,
+    /// and reported second zero back as the playhead.
+    /// </para>
+    /// <para>
+    /// The end comes from the browser now (<see cref="OnMediaDuration"/>). A recording whose
+    /// length is not known yet still counts as covering, because refusing it would mean the first
+    /// press of Play never used the recording at all — but the moment its metadata lands, its real
+    /// span is what decides.
+    /// </para>
+    /// <para>
+    /// There is no fallback to "the first recording" any more. That was the other half: with the
+    /// playhead before every recording, it handed back one that plainly did not cover the moment,
+    /// which is a seek to a negative offset — clamped to zero, and the beginning again. Nothing
+    /// covering the moment is an ordinary answer, and the page keeps time itself for it.
+    /// </para>
+    /// </remarks>
     private Guid? RecordingCovering(DateTime moment)
         => _session?.Files
             .Where(f => (IsAudio(f.RelativePath) || IsVideo(f.RelativePath)) && !_undecodable.Contains(f.Id))
             .Select(f => (f.Id, StartsAt: MediaStart(f)))
-            .Where(x => x.StartsAt is not null && x.StartsAt <= moment)
+            .Where(x => x.StartsAt is not null && x.StartsAt <= moment && !HasFinishedBy(x.Id, x.StartsAt!.Value, moment))
             .OrderByDescending(x => x.StartsAt)
             .Select(x => (Guid?)x.Id)
-            .FirstOrDefault()
-         ?? _session?.Files
-            .Where(f => (IsAudio(f.RelativePath) || IsVideo(f.RelativePath)) && !_undecodable.Contains(f.Id))
-            .Select(f => (Guid?)f.Id).FirstOrDefault();
+            .FirstOrDefault();
+
+    /// <summary>Whether a recording had already run out before this moment.</summary>
+    private bool HasFinishedBy(Guid fileId, DateTime startsAt, DateTime moment)
+        => _mediaDurations.TryGetValue(fileId, out var seconds)
+        && seconds > 0
+        && moment >= startsAt.AddSeconds(seconds);
+
+    /// <summary>How long each recording runs, as the browser reported it.</summary>
+    private readonly Dictionary<Guid, double> _mediaDurations = [];
+
+    /// <summary>The browser has read a recording's metadata and knows how long it is.</summary>
+    [JSInvokable]
+    public void OnMediaDuration(Guid key, double seconds)
+    {
+        if (double.IsNaN(seconds) || double.IsInfinity(seconds) || seconds <= 0) return;
+        _mediaDurations[key] = seconds;
+    }
 
     /// <summary>Files the browser reported it cannot decode; never chosen as the clock.</summary>
     private readonly HashSet<Guid> _undecodable = [];
@@ -1079,22 +1128,23 @@
         }
     }
 
-    private async Task<bool> PlayMediaAsync(Guid key)
+    private async Task PauseMediaAsync(Guid key)
+    {
+        if (_media is null || !_mediaRefs.TryGetValue(key, out var el)) return;
+        try { await _media.InvokeVoidAsync("pause", el); } catch (JSException) { }
+    }
+
+    /// <summary>Sends a recording to a moment and plays it from there, in one call.</summary>
+    private async Task<bool> PlayMediaFromAsync(Guid key, double seconds)
     {
         if (_media is null || !_mediaRefs.TryGetValue(key, out var el)) return false;
         try
         {
             await _media.InvokeVoidAsync("rate", el, (double)_rate);
-            var refusal = await _media.InvokeAsync<string?>("play", el);
+            var refusal = await _media.InvokeAsync<string?>("playFrom", el, seconds);
             return refusal is null;
         }
         catch (JSException) { return false; }
-    }
-
-    private async Task PauseMediaAsync(Guid key)
-    {
-        if (_media is null || !_mediaRefs.TryGetValue(key, out var el)) return;
-        try { await _media.InvokeVoidAsync("pause", el); } catch (JSException) { }
     }
 
     private async Task SeekMediaAsync(Guid key, double seconds)
@@ -1410,6 +1460,24 @@
     private string SoundText => Current?.SoundDbfs is double sound ? $"{sound:0} dB" : "—";
 
     /// <summary>
+    /// The field reading on a marked row, said the same way the playhead says it.
+    /// </summary>
+    /// <remarks>
+    /// Deviation when the session had a base, absolute when it did not — and it says which, for
+    /// the reason <see cref="FieldText"/> already does: "+50" and "480 abs" are not two readings
+    /// of the same thing, and putting them in one column without saying so invites somebody to
+    /// compare them. Null for a mark that carries no field reading at all, such as a photo or a
+    /// question, where a dash would imply an instrument that failed.
+    /// </remarks>
+    private string? MarkerFieldText(MarkerRow marker)
+    {
+        if (marker.Microtesla is not double value) return null;
+        return _baseline is double reference
+            ? $"{(value - reference) * 10:+0;-0;0} mG"
+            : $"{value * 10:0} mG abs";
+    }
+
+    /// <summary>
     /// The heading as a compass point and a bearing.
     /// </summary>
     /// <remarks>
@@ -1522,7 +1590,17 @@
 
     public sealed record TracePoint(string Label, double Milligauss);
     public sealed record GeoPoint(double Latitude, double Longitude, DateTime At);
-    private sealed record MarkerRow(DateTime At, string Kind, string? Note, string? Room);
+    /// <param name="Microtesla">
+    /// The magnetic reading on the record that triggered this, when there was one.
+    /// </param>
+    /// <remarks>
+    /// The number is on the row because "Magnetic spike at 00:04:12" does not say whether it was
+    /// worth crossing the room for. Ben, 2026-09-16, asking where a reported magnetometer reading
+    /// appears: it was on the chart and in the playhead readout, and the list of the very moments
+    /// it mattered said only that something happened.
+    /// </remarks>
+    private sealed record MarkerRow(
+        DateTime At, string Kind, string? Note, string? Room, double? Microtesla);
 
     /// <summary>
     /// The room at the playhead, when the operator named one.

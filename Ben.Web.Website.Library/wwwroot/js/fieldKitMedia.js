@@ -15,9 +15,18 @@ export function attach(el, dotnet, key) {
         play:       () => dotnet.invokeMethodAsync("OnMediaPlay", key, el.currentTime),
         pause:      () => dotnet.invokeMethodAsync("OnMediaPause", key),
         ended:      () => dotnet.invokeMethodAsync("OnMediaEnded", key),
+        // How long the recording runs, which only the browser knows. Without it the page has no
+        // idea where a recording ENDS, and treated one as covering the whole session from its
+        // start onwards — so scrubbing anywhere and pressing play handed the clock to a
+        // recording that had finished minutes earlier.
+        loadedmetadata: () => dotnet.invokeMethodAsync("OnMediaDuration", key, el.duration),
     };
     for (const name in handlers) el.addEventListener(name, handlers[name]);
     attached.set(el, handlers);
+
+    // Already loaded by the time this attached — preload="metadata" often wins the race — so the
+    // event has been and gone and nobody would ever hear the duration.
+    if (!isNaN(el.duration) && el.duration > 0) handlers.loadedmetadata();
 }
 
 export function detach(el) {
@@ -27,14 +36,49 @@ export function detach(el) {
     attached.delete(el);
 }
 
-// play() returns a promise the browser may reject when it decides the page has no user
-// activation. The page's Play button IS a click, and activation is sticky for the document, so
-// in practice it resolves; when it does not, the reason comes back as a sentence rather than an
-// exception, and the page falls back to its own tick loop.
-export async function play(el) {
+/**
+ * Seeks and then plays, in one call, waiting for the seek to actually land.
+ *
+ * Two calls could not do this. `seek` followed by `play` from the server is two round trips, and
+ * between them the element may still be loading — in which case the assignment to currentTime is
+ * dropped, play starts at zero, and the first timeupdate reports second zero as the playhead.
+ * That is the playback starting over from the beginning, and no amount of ordering on the C# side
+ * fixes it, because the wait that matters is inside the browser.
+ */
+export async function playFrom(el, seconds) {
     if (!el) return "no element";
-    try { await el.play(); return null; }
-    catch (e) { return (e && e.message) || "the browser refused to play"; }
+    try {
+        await ready(el);
+        const target = Math.max(0, Math.min(seconds, el.duration || seconds));
+        if (Math.abs(el.currentTime - target) > 0.25) await seekTo(el, target);
+        await el.play();
+        return null;
+    } catch (e) {
+        return (e && e.message) || "the browser refused to play";
+    }
+}
+
+/** Resolves once the element knows its own duration, or gives up after a moment. */
+function ready(el) {
+    if (!isNaN(el.duration) && el.duration > 0) return Promise.resolve();
+    if (el.preload === "none") el.load();
+    return new Promise(resolve => {
+        const done = () => { el.removeEventListener("loadedmetadata", done); resolve(); };
+        el.addEventListener("loadedmetadata", done, { once: true });
+        // Never hang the button on a file that will not load: playing from the wrong place beats
+        // a Play that does nothing at all, and the element reports where it really is anyway.
+        setTimeout(done, 1500);
+    });
+}
+
+/** Resolves when the element has finished moving, so play() starts from where it was sent. */
+function seekTo(el, seconds) {
+    return new Promise(resolve => {
+        const done = () => { el.removeEventListener("seeked", done); resolve(); };
+        el.addEventListener("seeked", done, { once: true });
+        el.currentTime = seconds;
+        setTimeout(done, 1000);
+    });
 }
 
 export function pause(el) {
