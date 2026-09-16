@@ -333,7 +333,7 @@ struct UploadSessionView: View {
             } header: {
                 Text("Recordings")
             } footer: {
-                Text("Sent one at a time, so a dropped connection costs one file rather than the night. Swipe to delete anything you don't want to keep.")
+                Text("Everything ticked goes up together as one .ben file. If the connection drops, press Send again — the server replaces its own copy rather than making a second. Swipe to delete anything you don't want to keep.")
             }
         }
     }
@@ -762,16 +762,6 @@ struct UploadSessionView: View {
         case .sent: Theme.ecto
         case .failed: Theme.danger
         default: Theme.fog
-        }
-    }
-
-    private func contentType(for path: String) -> String {
-        switch (path as NSString).pathExtension.lowercased() {
-        case "jpg", "jpeg": "image/jpeg"
-        case "mov": "video/quicktime"
-        case "mp4": "video/mp4"
-        case "m4a": "audio/mp4"
-        default: "application/octet-stream"
         }
     }
 }

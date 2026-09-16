@@ -15,7 +15,7 @@ public struct FieldUploadClient: Sendable {
     }
 
     /// What the server holds for a session, once its document has arrived.
-    public struct ServerSession: Sendable, Codable, Equatable {
+    public struct ServerSession: Sendable, Codable, Equatable, Identifiable {
         public var id: UUID
         public var investigationId: UUID?
         public var deviceSessionId: UUID
@@ -23,6 +23,22 @@ public struct FieldUploadClient: Sendable {
         public var markerCount: Int
         public var recordedByName: String?
         public var files: [ServerFile]
+
+        /// What the server has always sent and the phone never read, until a list of sessions
+        /// to pull back down needed a name and a date to choose by (2026-09-16). Optional so an
+        /// older answer still decodes.
+        public var locationLabel: String?
+        public var startedAt: Date?
+        public var endedAt: Date?
+        /// Whether the server holds it as one `.ben` — the only shape it can hand back. Sessions
+        /// sent by 1.0.2 are a document and loose recordings, and asking for those as a bundle is
+        /// refused; nil is a server from before the answer was given, which is offered anyway.
+        public var isBundle: Bool?
+
+        /// What to call it in a list.
+        public var title: String { locationLabel?.nilIfEmpty ?? "Field session" }
+        /// Whether Download is worth offering.
+        public var canBePulledBack: Bool { isBundle != false }
     }
 
     public struct ServerFile: Sendable, Codable, Equatable, Identifiable {

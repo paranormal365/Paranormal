@@ -106,6 +106,22 @@ public final class FieldSession {
     public var uploadedAt: Date?
     public var timezoneIdentifier: String
 
+    /// When this session arrived on this device as a `.ben`, rather than being recorded here.
+    ///
+    /// Ben, 2026-09-16: "someone else can share their .ben file with another person on the
+    /// iphone and the other person can view it like they had recorded it themselves." It plays
+    /// exactly as if they had; this is only the record that they did not. Optional, like every
+    /// attribute added after the first release — the one shape SwiftData migrates unasked.
+    public var importedAt: Date?
+
+    /// The device that recorded it, as its seal said — `identifierForVendor` of the phone the
+    /// session was made on. Nil for a session recorded here. Compared with this device's own id,
+    /// it is how the list tells "shared with you" from "yours, pulled back from the server".
+    public var sourceDeviceId: String?
+
+    /// The account the seal named as having recorded it, when the bundle said.
+    public var recordedByAccountId: UUID?
+
     @Relationship(deleteRule: .cascade, inverse: \FieldMarker.session)
     public var markers: [FieldMarker]
     @Relationship(deleteRule: .cascade, inverse: \FieldCapture.session)

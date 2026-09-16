@@ -11,10 +11,12 @@
 > "1.0.3" wherever it says 1.0.2, and open a new version in App Store Connect rather than adding
 > a build to the approved one.
 >
-> **Still to do before that upload:** the `.ben` single-file session bundle is only half built.
-> The old per-file upload endpoints stay until 1.0.3 is actually live (Ben, 2026-09-16: "keep
-> end points for now until we upload the next version of the app"), because the approved 1.0.2
-> on people's phones is still using them.
+> **The `.ben` bundle is whole as of 2026-09-16:** the phone seals a session into one file and
+> sends it, and it opens one too — handed over by AirDrop, Mail or Files, or pulled back down
+> from the server — and plays it exactly as the phone that recorded it did. The old per-file
+> upload endpoints stay until 1.0.3 is actually live (Ben, 2026-09-16: "keep end points for now
+> until we upload the next version of the app"), because the approved 1.0.2 on people's phones is
+> still using them.
 
 Everything needed to build, upload and submit **1.0.2**, and every answer App Review has asked for
 so far. This supersedes `APP-STORE.md` for the submission itself; that file stays as the record of

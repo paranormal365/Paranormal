@@ -250,7 +250,9 @@ struct AuthenticatedImage: View {
             }
         }
         .task {
-            guard let data = await loader.data(for: fileId), let decoded = UIImage(data: data) else {
+            // A 90-point tile: decoded at that size, not at the file's.
+            guard let data = await loader.data(for: fileId),
+                  let decoded = await Thumbnails.load(data, maxPixels: 320) else {
                 failed = true
                 return
             }

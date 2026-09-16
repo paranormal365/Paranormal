@@ -62,6 +62,14 @@ final class LiveDictation: DictationService, @unchecked Sendable {
 
                 let input = engine.inputNode
                 let format = input.outputFormat(forBus: 0)
+                // No microphone — the camera has it, or the session never came up — reports as a
+                // format with no channels, and installing a tap for it raises rather than throws.
+                guard format.sampleRate > 0, format.channelCount > 0 else {
+                    throw DictationError.unavailableOffline
+                }
+                // A tap left by a start that failed after this point would make the next install
+                // raise; removing one that is not there is allowed and costs nothing.
+                input.removeTap(onBus: 0)
                 input.installTap(onBus: 0, bufferSize: 1024, format: format) { buffer, _ in
                     request.append(buffer)
                 }
@@ -95,10 +103,11 @@ final class LiveDictation: DictationService, @unchecked Sendable {
         request?.endAudio()
         task?.finish()
 
-        if engine.isRunning {
-            engine.inputNode.removeTap(onBus: 0)
-            engine.stop()
-        }
+        // The tap comes off whether or not the engine got as far as running: `start` installs
+        // it before `engine.start()`, and a failure between the two would otherwise leave it in
+        // place for the next attempt to trip over.
+        engine.inputNode.removeTap(onBus: 0)
+        if engine.isRunning { engine.stop() }
         try? AVAudioSession.sharedInstance().setActive(false)
 
         // A beat for the recogniser to hand back its last revision — stopping mid-word otherwise

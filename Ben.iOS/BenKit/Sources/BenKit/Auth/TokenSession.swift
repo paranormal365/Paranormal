@@ -118,7 +118,11 @@ public actor TokenSession {
             // next attempt rather than signing somebody out for having no signal.
             return nil
         }
-        if response.statusCode >= 500 { return nil }
+        // "Not now" is not "no". A 5xx, a 429 or a 408 says nothing about the refresh token, so it is
+        // kept for the next attempt. `/refresh` sits behind the auth rate limiter, and a team sharing
+        // one venue Wi-Fi shares its partition — signing them all out for a 429 would end a night's
+        // investigation over a header.
+        if response.statusCode >= 500 || response.statusCode == 429 || response.statusCode == 408 { return nil }
         guard (200..<300).contains(response.statusCode),
               let refreshed = try? BenJSON.decoder.decode(AccessTokenResponse.self, from: data),
               !refreshed.accessToken.isEmpty
@@ -137,9 +141,17 @@ public actor TokenSession {
         return stored.accessToken
     }
 
-    /// A 401 despite a live-looking token means it was revoked server-side.
-    public func handleUnauthorized() {
-        if tokens != nil { endSession() }
+    /// A 401 despite a live-looking token means it was revoked server-side — IF it is the token
+    /// still held. A request can outlive a refresh, or a sign-in: it went out with the old token,
+    /// the session adopted a new one, and then the old one's 401 arrived. That 401 says nothing
+    /// about the token now held, and ending the session for it signed people out in the moment
+    /// they had just signed in (seen live on 2026-09-16: a stale keychain token's `api/me` refused
+    /// after `-autoSignIn` had already succeeded). `bearer` is the token the refused request
+    /// carried; nil keeps the old behaviour for a caller that cannot say.
+    public func handleUnauthorized(bearer: String? = nil) {
+        guard let current = tokens else { return }
+        if let bearer, bearer != current.accessToken { return }
+        endSession()
     }
 
     public func endSession() {

@@ -17,6 +17,7 @@ struct EventPassView: View {
     let hostedEventId: UUID
 
     @Environment(AppDependencies.self) private var dependencies
+    @Environment(\.scenePhase) private var scenePhase
 
     @State private var store: HostedEventsStore?
     @State private var pass: MyHostedEventPass?
@@ -63,6 +64,12 @@ struct EventPassView: View {
         }
         .onAppear(perform: brighten)
         .onDisappear(perform: restoreBrightness)
+        // The phone locked in the queue, or the app put away with the pass still up: the brightness
+        // goes back then too, and comes up again when the pass is back in front. `onDisappear`
+        // alone left a phone at full brightness until the next time this screen was closed.
+        .onChange(of: scenePhase) { _, phase in
+            if phase == .active { brighten() } else { restoreBrightness() }
+        }
     }
 
     @ViewBuilder
@@ -165,13 +172,18 @@ struct EventPassView: View {
 
     // ── the code, and the light to read it by ────────────────────────────────
 
+    /// One rendering context for every pass drawn. A `CIContext` is a GPU context and is meant to
+    /// be kept; making a new one for each code drew the same pass slower each time the screen
+    /// re-evaluated.
+    private static let renderer = CIContext()
+
     /// A QR code for the token, sharp at any size: generated small and scaled with no smoothing.
     static func qrImage(_ token: String) -> UIImage? {
         let filter = CIFilter.qrCodeGenerator()
         filter.message = Data(token.utf8)
         filter.correctionLevel = "M"
         guard let output = filter.outputImage?.transformed(by: CGAffineTransform(scaleX: 10, y: 10)),
-              let cgImage = CIContext().createCGImage(output, from: output.extent) else { return nil }
+              let cgImage = renderer.createCGImage(output, from: output.extent) else { return nil }
         return UIImage(cgImage: cgImage)
     }
 

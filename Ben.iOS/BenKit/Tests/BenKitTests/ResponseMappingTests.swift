@@ -7,6 +7,15 @@ struct ResponseMappingTests {
 
     // MARK: Prose extraction (SendListAsync's looksLikeProse, byte for byte)
 
+    /// A refusal the server writes as a JSON string literal arrives with its inner quotes escaped;
+    /// people were shown the backslashes.
+    @Test func aJSONStringLiteralRefusalIsReadAsTheSentenceItIs() {
+        let body = "\"a session cannot carry a \\\".json\\\" file.\""
+        #expect(ResponseMapping.prose(fromBody: body) == "a session cannot carry a \".json\" file.")
+        // Plain text is still plain text, quotes and all.
+        #expect(ResponseMapping.prose(fromBody: "Not \"quite\" JSON") == "Not \"quite\" JSON")
+    }
+
     @Test func proseSentenceSurvives() {
         #expect(ResponseMapping.prose(fromBody: "\"You are not a member of this group.\"\n")
                 == "You are not a member of this group.")

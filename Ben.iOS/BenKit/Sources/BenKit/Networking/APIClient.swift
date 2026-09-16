@@ -142,8 +142,11 @@ public actor APIClient {
     /// because a refresh could not reach the server just then — proves nothing about the session, and ending it
     /// would sign somebody out for having no signal.
     private func noteRefusal(_ response: HTTPURLResponse, to request: URLRequest) async {
-        guard response.statusCode == 401, request.value(forHTTPHeaderField: "Authorization") != nil else { return }
-        await tokens.handleUnauthorized()
+        guard response.statusCode == 401,
+              let header = request.value(forHTTPHeaderField: "Authorization") else { return }
+        // Which token was refused matters: one replaced since this request went out proves nothing.
+        let bearer = header.hasPrefix("Bearer ") ? String(header.dropFirst("Bearer ".count)) : header
+        await tokens.handleUnauthorized(bearer: bearer)
     }
 
     private func buildRequest(_ endpoint: Endpoint, omitBody: Bool = false) async -> URLRequest? {

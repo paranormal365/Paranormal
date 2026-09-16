@@ -11,6 +11,22 @@ import Foundation
 /// in memory to be exported.
 public struct ZipWriter {
 
+    /// The most this writer can address: plain ZIP counts bytes in 32 bits, and this writes no
+    /// Zip64 records — deliberately, because the server's reader refuses them too.
+    ///
+    /// A session past this is refused in a sentence rather than written wrong. Before this
+    /// existed, the size conversions below TRAPPED on a night of video past 4 GB, and "Export a
+    /// bundle" — which puts every recording in by default and rations nothing — is exactly where
+    /// a night that long would go.
+    public static let mostBytes: Int64 = Int64(UInt32.max)
+
+    /// Whether these sizes fit in one archive: each member, and all of them with their headers.
+    public static func fits(sizes: [Int64], headerBytes: Int = 0) -> Bool {
+        guard sizes.allSatisfy({ $0 >= 0 && $0 <= mostBytes }) else { return false }
+        let total = sizes.reduce(Int64(headerBytes)) { $0 + $1 }
+        return total <= mostBytes
+    }
+
     public struct Entry: Sendable {
         public var path: String
         public var source: Source
@@ -47,6 +63,13 @@ public struct ZipWriter {
         for entry in entries {
             let nameBytes = Array(entry.path.utf8)
             let (crc, size) = try checksum(entry.source)
+
+            // Checked before the 32-bit conversions below, which would trap rather than throw.
+            // Each header is 30 bytes plus the name locally and 46 plus the name centrally.
+            let headerBytes = Int64(30 + 46 + 2 * nameBytes.count)
+            guard Int64(size) <= Self.mostBytes,
+                  Int64(offset) + headerBytes + Int64(size) <= Self.mostBytes
+            else { throw ZipWriterError.tooLarge(entry.path) }
 
             var local = Data()
             local.append(littleEndian: UInt32(0x0403_4B50))   // local file header
@@ -139,6 +162,21 @@ public struct ZipWriter {
             while let chunk = try reader.read(upToCount: Self.chunkSize), !chunk.isEmpty {
                 try handle.write(contentsOf: chunk)
             }
+        }
+    }
+}
+
+/// Why an archive could not be written, in words a person can act on.
+public enum ZipWriterError: Error, LocalizedError, Equatable {
+    /// A member, or the archive with it, is past what a plain ZIP can address.
+    case tooLarge(String)
+
+    public var errorDescription: String? {
+        switch self {
+        case .tooLarge(let path):
+            let name = (path as NSString).lastPathComponent
+            return "This session is too big to go in one bundle — the recordings come to more than "
+                 + "4 GB at \(name). Leave a video out, or send the session in parts."
         }
     }
 }

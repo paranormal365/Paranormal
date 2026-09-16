@@ -1,4 +1,5 @@
 import SwiftUI
+import CoreLocation
 import AVKit
 import BenKit
 
@@ -17,6 +18,8 @@ struct SessionReviewView: View {
     @State private var player = AVPlayer()
     @State private var loadedMediaId: UUID?
     @State private var source: ReplaySource?
+    /// The walked path, converted once after the replay loads — not on every tick.
+    @State private var track: [CLLocationCoordinate2D] = []
     @State private var exporting = false
     @State private var uploading = false
     @State private var choosingPhoto = false
@@ -203,7 +206,8 @@ struct SessionReviewView: View {
     @ViewBuilder
     private var rightColumn: some View {
         VStack(spacing: 14) {
-            ReadingsChart(timeline: replay.timeline, playhead: replay.playhead) { moment in
+            ReadingsChart(timeline: replay.timeline, trace: replay.fieldTrace,
+                          playhead: replay.playhead) { moment in
                 replay.pause()
                 replay.seek(to: moment)
             }
@@ -211,7 +215,7 @@ struct SessionReviewView: View {
             .background(Theme.mist, in: RoundedRectangle(cornerRadius: 12))
 
             MovementMap(timeline: replay.timeline, frame: replay.frame,
-                        stills: source?.stills ?? [])
+                        stills: source?.stills ?? [], track: track)
 
             markerList
             sessionFacts
@@ -356,6 +360,16 @@ struct SessionReviewView: View {
                 if let investigation = summary.investigationTitle, !investigation.isEmpty {
                     LabeledContent("Investigation", value: investigation)
                 }
+                // A session that arrived as a .ben plays exactly as one recorded here, and says
+                // so here — the seal's whole point is that a night is not quietly re-attributed
+                // to whoever happens to be holding the phone.
+                if summary.wasRecordedElsewhere(thisDeviceId: DeviceModel.vendorIdentifier()) {
+                    LabeledContent("Source", value: "Shared with you — recorded on another device")
+                } else if summary.isImported {
+                    LabeledContent("Source", value: summary.serverSessionId != nil
+                                   ? "Downloaded from the server"
+                                   : "Opened from a file recorded on this device")
+                }
             }
             .font(.callout)
             .padding(12)
@@ -372,6 +386,7 @@ struct SessionReviewView: View {
         await replay.load(readingLog: source.log, markers: source.markers,
                           media: source.media, baselines: source.baselines,
                           startedAt: source.startedAt, endedAt: source.endedAt)
+        track = replay.walkedPath.compactMap(\.coordinate)
 
         // Asked only once the session exists on the server: a recording still sitting on the
         // phone has nothing to compare against, and there is no id to ask about. Failing quietly

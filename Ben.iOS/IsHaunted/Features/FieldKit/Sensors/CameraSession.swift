@@ -32,6 +32,7 @@ private final class ObserverBox: @unchecked Sendable {
 /// What the camera can refuse to do, in the words the screen shows.
 enum FieldCameraError: LocalizedError {
     case notRunning
+    case noClipRunning
     case photoFailed
     case clipFailed(String)
 
@@ -39,6 +40,8 @@ enum FieldCameraError: LocalizedError {
         switch self {
         case .notRunning:
             "The camera isn't running yet. Give it a moment and try again."
+        case .noClipRunning:
+            "No clip is recording."
         case .photoFailed:
             "The photo came back empty and wasn't saved."
         case .clipFailed(let reason):
@@ -195,6 +198,15 @@ final class FieldCameraSession {
         }
         if session.outputs.contains(movieOutput) == false {
             guard session.canAddOutput(movieOutput) else {
+                // Unwound before the throw, not left for finishClip — which is never called on
+                // this path. Left as it was, the microphone stayed attached to THIS session while
+                // the field recorder tried to take it back, and the preset stayed at 720p for the
+                // rest of the night.
+                if let audioInput {
+                    session.removeInput(audioInput)
+                    self.audioInput = nil
+                }
+                if session.canSetSessionPreset(.medium) { session.sessionPreset = .medium }
                 session.commitConfiguration()
                 throw FieldCameraError.clipFailed(
                     "This device won't record a clip while it is watching the room.")
@@ -219,7 +231,7 @@ final class FieldCameraSession {
 
     /// Ends the clip and hands back the file it wrote.
     func finishClip() async throws -> URL {
-        guard let capture = clipCapture else { throw FieldCameraError.notRunning }
+        guard let capture = clipCapture else { throw FieldCameraError.noClipRunning }
         defer {
             clipCapture = nil
             clipStartedAt = nil
@@ -328,12 +340,25 @@ final class FieldCameraSession {
         interruptionObservers.keep(centre.addObserver(
             forName: AVCaptureSession.runtimeErrorNotification,
             object: session, queue: .main
-        ) { [weak self] _ in
+        ) { [weak self] notification in
+            // Only the one error Apple says to restart after: media services were reset. Any
+            // other runtime error restarted the session unconditionally, and a session that fails
+            // for the same reason again raises the same notification again — a restart loop with
+            // the preview frozen the whole time. Everything else is said, and the shutter stays
+            // off until the camera is running again.
+            let error = notification.userInfo?[AVCaptureSessionErrorKey] as? AVError
+            let recoverable = error?.code == .mediaServicesWereReset
             Task { @MainActor in
                 guard let self else { return }
-                let session = self.session
-                self.queue.async { session.startRunning() }
-                self.isRunning = true
+                if recoverable {
+                    let session = self.session
+                    self.queue.async { session.startRunning() }
+                    self.isRunning = true
+                } else {
+                    self.isRunning = false
+                    self.problem = error?.localizedDescription
+                        ?? "The camera stopped. Close this and open it again."
+                }
             }
         })
     }

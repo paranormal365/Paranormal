@@ -469,6 +469,57 @@ struct FieldSessionEngineTests {
         #expect(events.first?.measurements?["marker"]?.value == .string("device_moved"))
     }
 
+    /// A phone propped against a wall reads a steady few hundredths of a g of its own. That is
+    /// its floor, and a knock is what rises above it — not above zero. The floor used to be stuck
+    /// at zero for ever (`max(0 * 0.995, min(0, sample))` is zero), so a resting phone above a
+    /// low threshold marked "the device was moved" on every single sample.
+    @Test func aPhoneRestingAboveTheThresholdIsNotAKnock() async throws {
+        let clock = ManualClock(start)
+        let (engine, log, directory) = await makeEngine(
+            policy: SamplingPolicy(heartbeatSeconds: 60, debounceSeconds: 1), clock: clock)
+        defer { try? FileManager.default.removeItem(at: directory) }
+
+        await engine.arm(SentryConfig(watchDeviceMovement: true, deviceMovementThresholdG: 0.01))
+
+        // Resting, at twice the threshold, for a minute.
+        for index in 0..<600 {
+            await engine.ingest(movement: DeviceMovementSample(
+                at: start.addingTimeInterval(Double(index) * 0.1), magnitudeG: 0.02))
+        }
+        #expect(try await log.readings().allSatisfy { $0.triggeredBy != .event })
+
+        // A real knock still is one.
+        await engine.ingest(movement: DeviceMovementSample(at: start.addingTimeInterval(61), magnitudeG: 0.2))
+        await engine.stop()
+        #expect(try await log.readings().count { $0.triggeredBy == .event } == 1)
+    }
+
+    /// The heartbeat is owed from every channel. It used to be paid only from the magnetometer
+    /// and the microphone, so a session with both switched off — the 2am battery saver — logged
+    /// nothing at all, and the walk it was still tracking never reached the log.
+    @Test func aLocationOnlySessionStillWritesItsHeartbeats() async throws {
+        let clock = ManualClock(start)
+        let (engine, log, directory) = await makeEngine(
+            policy: SamplingPolicy(heartbeatSeconds: 2), channels: [.location], clock: clock)
+        defer { try? FileManager.default.removeItem(at: directory) }
+
+        for second in stride(from: 0, through: 10, by: 1) {
+            await engine.ingest(position: PositionSample(
+                at: start.addingTimeInterval(Double(second)),
+                latitude: 36.16 + Double(second) * 0.0001, longitude: -86.78,
+                altitudeMeters: nil, accuracyMeters: 12, speedMps: 1.2, courseDegrees: 90))
+        }
+        await engine.stop()
+
+        let readings = try await log.readings()
+        // 2, 4, 6, 8, 10 — one every heartbeat, each carrying the fix and the course. Not one
+        // at 0: the first reading of a night belongs to the instruments, so the fix waits for a
+        // heartbeat to be overdue rather than writing a reading before anything else has spoken.
+        #expect(readings.count == 5)
+        #expect(readings.allSatisfy { $0.position?.latitude != nil })
+        #expect(readings.allSatisfy { $0.motion?.courseDegrees == 90 })
+    }
+
     @Test func aDeviceMovementSwitchedOffIsNotWatchedAtAll() async throws {
         let clock = ManualClock(start)
         let (engine, log, directory) = await makeEngine(

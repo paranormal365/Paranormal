@@ -122,6 +122,14 @@ final class ShareModel {
 struct ShareToEventView: View {
     @Bindable var model: ShareModel
 
+    /// Named for the hosts when the room has told us who they are, and plainly when it has not.
+    private var hostsTitle: String {
+        if let names = model.event?.hostNames, !names.isEmpty {
+            return "Also send to \(names.joined(separator: " and "))"
+        }
+        return "Also send to the organizers"
+    }
+
     var body: some View {
         NavigationStack {
             Form {
@@ -166,9 +174,7 @@ struct ShareToEventView: View {
                     }
 
                     Section {
-                        Toggle(model.event?.hostNames.isEmpty == false
-                               ? "Also send to \(model.event!.hostNames.joined(separator: " and "))"
-                               : "Also send to the organizers", isOn: $model.sendToHosts)
+                        Toggle(hostsTitle, isOn: $model.sendToHosts)
                     } footer: {
                         Text("They get a copy to keep. It's still yours.")
                     }

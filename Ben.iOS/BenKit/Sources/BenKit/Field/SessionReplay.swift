@@ -164,6 +164,13 @@ public struct ReplayFrame: Sendable, Equatable {
 public final class SessionReplay {
 
     public private(set) var timeline: ReplayTimeline = .empty
+    /// The field line, thinned for drawing — see `FieldTrace`. Worked out once here rather than
+    /// by the chart on every tick.
+    public private(set) var fieldTrace: FieldTrace = .empty
+    /// Every fix in order, the path the map draws. The same once-only rule as the trace: a long
+    /// night is thousands of fixes, and the map used to walk every reading for them ten times a
+    /// second.
+    public private(set) var walkedPath: [FieldReading.Position] = []
     public private(set) var playhead: Date = .distantPast
     public private(set) var frame = ReplayFrame(at: .distantPast)
     public private(set) var isPlaying = false
@@ -270,6 +277,9 @@ public final class SessionReplay {
                 markers: markers.sorted { $0.at < $1.at },
                 media: media.sorted { $0.startedAt < $1.startedAt },
                 baselines: baselines)
+            fieldTrace = FieldTrace(readings: timeline.readings,
+                                    baselineMicrotesla: baselines.magneticMicrotesla)
+            walkedPath = timeline.track.map(\.position)
             playhead = timeline.startedAt
             frame = makeFrame(at: playhead)
             isLoaded = true

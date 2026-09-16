@@ -167,10 +167,17 @@ struct FieldCameraCaptureView: View {
             if kind == .video && allowsVideo {
                 if camera.isRecordingClip {
                     let started = camera.clipStartedAt
-                    let url = try await camera.finishClip()
-                    // The microphone comes back before anything else: the sooner the session is
-                    // recording again, the shorter the seam between the clip and the next file.
+                    let finished: Result<URL, Error>
+                    do { finished = .success(try await camera.finishClip()) }
+                    catch { finished = .failure(error) }
+
+                    // The microphone comes back before anything else, and WHATEVER the clip did.
+                    // Before this it came back only after a clip that finished cleanly — a clip
+                    // that could not be finalised left the session lent out for good, refusing to
+                    // record for the rest of the night with no sentence saying why.
                     await session.takeMicrophoneBackFromTheClip()
+
+                    let url = try finished.get()
                     let seconds = started.map { Date().timeIntervalSince($0) }
                     await onCaptured(url, .video, seconds)
                     dismiss()
