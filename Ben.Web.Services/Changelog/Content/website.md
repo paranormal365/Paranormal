@@ -22,6 +22,7 @@ day-by-day account of building it would say nothing to anyone using it now.
 - The older research pages have been replaced by boards. Research is also a kind of timeline entry again, for a note about what you read that belongs on the day it happened.
 - Select a card on a board and four small + handles appear on its sides. Click one and the next card arrives there, already joined by an arrow and ready to type in; drag one onto empty board to put it where you let go, or onto another card to join those two. Ctrl+Shift and an arrow key does the same from the keyboard, and one Undo takes back the card and its arrow together.
 - Present walks a board a card at a time, full screen, with everything else dimmed — for the meeting where a case gets talked through. Nothing to set up first: the cards are the slides, and the order is the one the board already shows — your groups if you drew any, otherwise the arrows, then down the page. Arrows, space or Page Down move through it; Escape leaves. Presenting changes nothing, so somebody who can only read a case can still drive.
+- Zooming a map with a trackpad or wheel no longer scrolls the page out from under it part way through. The map keeps the gesture; the page stays where it was.
 - A board can reach for a file the case already has, instead of sending a second copy of a photograph you uploaded last week.
 - Recordings dropped on a board play where they sit — sound as a waveform, video in its own small screen at card size, resizable to whatever suits.
 

@@ -71,3 +71,55 @@ public class MapProviderGuardTests
             "These files bring back a retired map library:\n  " + string.Join("\n  ", offenders));
     }
 }
+
+/// <summary>
+/// A wheel over a map zooms the map and leaves the page where it was.
+/// </summary>
+/// <remarks>
+/// <para>
+/// Ben, 2026-09-16, on the home page: "When zooming in on a map, it zooms but then the page scrolls
+/// and the zoom stops." MapKit zooms on the wheel but does not stop the event, so the same gesture
+/// also reached the scrolling ancestor (<c>main.app-body</c> on this site). Measured before the fix:
+/// one wheel gesture over the map moved that ancestor 476 → 776, taking the map out from under the
+/// pointer mid-zoom.
+/// </para>
+/// <para>
+/// Three things have to stay true, and each one alone is not enough: the listener exists, it is
+/// registered non-passively (Chrome makes wheel listeners passive by default and would ignore the
+/// preventDefault), and it is taken off again when the map goes — a listener left on a container
+/// that is reused is a leak with teeth.
+/// </para>
+/// </remarks>
+public class MapWheelGuardTests
+{
+    private static string MapScript()
+    {
+        var dir = new DirectoryInfo(AppContext.BaseDirectory);
+        while (dir is not null && !File.Exists(Path.Combine(dir.FullName, "Ben.slnx"))) dir = dir.Parent;
+        Assert.NotNull(dir);
+        return File.ReadAllText(Path.Combine(dir!.FullName, "Ben.Web.Website.Library", "Kit", "Maps", "BenMap.razor.js"));
+    }
+
+    [Fact]
+    public void The_map_stops_a_wheel_gesture_reaching_the_page()
+    {
+        var script = MapScript();
+
+        Assert.Matches(@"addEventListener\('wheel'", script);
+        Assert.Matches(@"preventDefault\(\)", script);
+    }
+
+    /// <summary>A passive listener cannot preventDefault, and the browser says so in the console rather than obeying.</summary>
+    [Fact]
+    public void The_wheel_listener_is_registered_non_passively() =>
+        Assert.Matches(@"addEventListener\('wheel',[^)]*\{\s*passive:\s*false\s*\}", MapScript());
+
+    [Fact]
+    public void The_wheel_listener_is_removed_when_the_map_goes() =>
+        Assert.Matches(@"removeEventListener\('wheel'", MapScript());
+
+    /// <summary>The touch half: a pinch that reaches the map's limits does not chain out to the page.</summary>
+    [Fact]
+    public void The_map_container_contains_its_own_overscroll() =>
+        Assert.Matches(@"overscrollBehavior\s*=\s*'contain'", MapScript());
+}

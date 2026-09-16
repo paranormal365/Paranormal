@@ -125,6 +125,25 @@ export async function create(containerId, dotnetRef, options) {
     })
     entry.observer.observe(container)
 
+    // A wheel over the map zooms the map, and never scrolls the page behind it.
+    //
+    // Ben, 2026-09-16: "When zooming in on a map, it zooms but then the page scrolls and the zoom
+    // stops." MapKit zooms on the wheel, but it does not stop the event, so the same gesture also
+    // reached the scrolling ancestor — main.app-body on this site. The page slid, the map went out
+    // from under the pointer, and the zoom ended mid-gesture. Measured before the fix: one wheel
+    // gesture over the map moved that ancestor 476 → 776.
+    //
+    // preventDefault in the bubble phase: MapKit's own handlers have already run and zoomed by the
+    // time this sees the event, so the zoom is untouched and only the browser's scrolling is stopped.
+    // passive:false because a listener that intends to preventDefault has to say so — Chrome treats
+    // wheel listeners as passive by default and would ignore it.
+    //
+    // overscroll-behavior below is the touch half of the same thing: it stops a pinch or drag that
+    // reaches the map's own limits from chaining out to the page.
+    entry.onWheel = e => e.preventDefault()
+    container.addEventListener('wheel', entry.onWheel, { passive: false })
+    container.style.overscrollBehavior = 'contain'
+
     // Only a person's own gesture reports a viewport: MapKit fires region-change-end for the
     // programmatic framing too, so the flag around setPins/fit keeps those quiet.
     //
@@ -571,6 +590,7 @@ export function dispose(containerId) {
     const entry = _maps.get(containerId)
     if (!entry) return
     entry.observer?.disconnect()
+    if (entry.onWheel) entry.container?.removeEventListener('wheel', entry.onWheel)
     try { entry.map?.destroy() } catch { /* already gone with its container */ }
     _maps.delete(containerId)
 }
