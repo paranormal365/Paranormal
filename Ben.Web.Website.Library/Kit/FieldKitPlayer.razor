@@ -407,6 +407,9 @@
                                                       Longitude="@(MapPoint?.Longitude ?? _track[0].Longitude)"
                                                       Title="@PositionTitle"
                                                       Config="@_mapConfig"
+                                                      MarkerBearing="@CurrentBearing"
+                                                      MarkerLatitude="@CurrentPoint?.Latitude"
+                                                      MarkerLongitude="@CurrentPoint?.Longitude"
                                                       ReadOnly="true"
                                                       Height="240px" />
                                 }
@@ -795,6 +798,10 @@
                     && motion.ValueKind == JsonValueKind.Object)
                 {
                     reading.HeadingDegrees = Number(motion, "heading_degrees");
+                    // Which way they were MOVING, which is not which way they were pointed. Only
+                    // sessions recorded by 1.0.3 and later carry it; older ones fall back to the
+                    // bearing between their own fixes. See CurrentBearing.
+                    reading.CourseDegrees  = Number(motion, "course_degrees");
                 }
 
                 reading.Note = element.TryGetProperty("note", out var note)
@@ -1274,16 +1281,111 @@
 
     private Reading? Current => _readings.LastOrDefault(r => r.At <= _playhead);
 
+    /// <summary>
+    /// Where they were at the playhead — between two fixes, not at the last one.
+    /// </summary>
+    /// <remarks>
+    /// <para>
+    /// Ben, 2026-09-16, watching a session play back: "the green circle looks like it is bouncing.
+    /// It should just follow the data instead of bounce." It was answering with the last reading
+    /// at or before the playhead, so the marker sat still for a second and then jumped to the next
+    /// fix — a step every time, which reads as bouncing.
+    /// </para>
+    /// <para>
+    /// Position is the one channel that SHOULD be interpolated, and the app's own replay has said
+    /// so since it was written: instruments hold their last value, because smoothing a field trace
+    /// between samples would draw a reading nobody took — but somebody walking between two fixes
+    /// really was somewhere in between. Drawing them at the older fix is the invented answer here.
+    /// </para>
+    /// </remarks>
     private GeoPoint? CurrentPoint
     {
         get
         {
-            var reading = _readings.LastOrDefault(
+            var before = _readings.LastOrDefault(
                 r => r.At <= _playhead && r.Latitude is not null && r.Longitude is not null);
-            return reading is null
-                ? null
-                : new GeoPoint(reading.Latitude!.Value, reading.Longitude!.Value, reading.At);
+            if (before is null) return null;
+
+            var after = _readings.FirstOrDefault(
+                r => r.At > _playhead && r.Latitude is not null && r.Longitude is not null);
+
+            // Nothing ahead: the last fix is the honest answer, and holding there is right — the
+            // session ended, or they stopped moving and the phone stopped saying otherwise.
+            if (after is null)
+                return new GeoPoint(before.Latitude!.Value, before.Longitude!.Value, before.At);
+
+            var span = (after.At - before.At).TotalSeconds;
+            // A gap of minutes is not a walk, it is a phone that lost its fix. Sliding across it
+            // would draw somebody strolling through a wall at a constant speed for three minutes.
+            if (span <= 0 || span > MaxGlideSeconds)
+                return new GeoPoint(before.Latitude!.Value, before.Longitude!.Value, before.At);
+
+            var progress = Math.Clamp((_playhead - before.At).TotalSeconds / span, 0, 1);
+            return new GeoPoint(
+                before.Latitude!.Value + (after.Latitude!.Value - before.Latitude!.Value) * progress,
+                before.Longitude!.Value + (after.Longitude!.Value - before.Longitude!.Value) * progress,
+                _playhead);
         }
+    }
+
+    /// <summary>Longer than this between fixes and the marker holds rather than slides.</summary>
+    private const double MaxGlideSeconds = 30;
+
+    /// <summary>
+    /// Which way to point the arrow: where they were looking if the compass said, otherwise where
+    /// they were going.
+    /// </summary>
+    /// <remarks>
+    /// Three answers in order of what they are worth. The compass is what somebody was POINTED at,
+    /// which is what they were investigating. The fix's own course is where they were travelling,
+    /// which needs no compass and is what a phone has indoors. Failing both, the bearing between
+    /// the fixes either side of the playhead says the same thing from the track itself — and that
+    /// is the one that works for every session already recorded, which carry no course at all.
+    /// </remarks>
+    private double? CurrentBearing
+    {
+        get
+        {
+            var reading = _readings.LastOrDefault(
+                r => r.At <= _playhead && (r.HeadingDegrees is not null || r.CourseDegrees is not null));
+            if (reading?.HeadingDegrees is { } heading) return heading;
+            if (reading?.CourseDegrees is { } course) return course;
+
+            var before = _readings.LastOrDefault(
+                r => r.At <= _playhead && r.Latitude is not null && r.Longitude is not null);
+            var after = _readings.FirstOrDefault(
+                r => r.At > _playhead && r.Latitude is not null && r.Longitude is not null);
+            if (before is null || after is null) return _lastBearing;
+
+            var bearing = BearingBetween(
+                before.Latitude!.Value, before.Longitude!.Value,
+                after.Latitude!.Value, after.Longitude!.Value);
+
+            // Two fixes a metre apart are GPS noise, not a turn. Holding the last bearing stops
+            // the arrow spinning on the spot while somebody stands still.
+            var moved = MetresBetween(
+                new GeoPoint(before.Latitude!.Value, before.Longitude!.Value, before.At),
+                new GeoPoint(after.Latitude!.Value, after.Longitude!.Value, after.At));
+            if (moved < 2.0) return _lastBearing;
+
+            _lastBearing = bearing;
+            return bearing;
+        }
+    }
+
+    /// <summary>The last bearing worth drawing, held while somebody stands still.</summary>
+    private double? _lastBearing;
+
+    /// <summary>Initial bearing from one point to another, clockwise from north.</summary>
+    private static double BearingBetween(double fromLat, double fromLon, double toLat, double toLon)
+    {
+        var φ1 = fromLat * Math.PI / 180;
+        var φ2 = toLat * Math.PI / 180;
+        var Δλ = (toLon - fromLon) * Math.PI / 180;
+
+        var y = Math.Sin(Δλ) * Math.Cos(φ2);
+        var x = Math.Cos(φ1) * Math.Sin(φ2) - Math.Sin(φ1) * Math.Cos(φ2) * Math.Cos(Δλ);
+        return (Math.Atan2(y, x) * 180 / Math.PI + 360) % 360;
     }
 
     /// <summary>
@@ -1411,6 +1513,7 @@
         public double? Longitude { get; set; }
         public double? AccuracyMeters { get; set; }
         public double? HeadingDegrees { get; set; }
+        public double? CourseDegrees { get; set; }
         public string? Marker { get; set; }
         public string? Note { get; set; }
         /// <summary>The room the operator said they were in. See <c>CurrentRoom</c>.</summary>

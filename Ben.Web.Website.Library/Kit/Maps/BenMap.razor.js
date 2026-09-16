@@ -191,8 +191,25 @@ export function setPins(containerId, pins) {
     const apply = () => {
         const map = entry.map
         if (!map) return
+
+        // A playhead moving over a session sends a new pin four times a second, and rebuilding
+        // the annotation each time is what made the marker jump from fix to fix — Ben, 2026-09-16:
+        // "the green circle looks like it is bouncing. It should just follow the data instead of
+        // bounce." When the set is the same shape as the one already drawn, the existing
+        // annotations are MOVED instead, and a moved annotation glides.
+        if (canMoveInPlace(entry, pins)) {
+            pins.forEach((p, index) => moveAnnotation(entry.annotations[index], p))
+            return
+        }
+
         if (entry.annotations.length) map.removeAnnotations(entry.annotations)
         entry.annotations = (pins ?? []).map((p, index) => {
+            // A pin that carries a bearing is a direction, not a place: a flat arrow centred on
+            // the coordinate rather than a teardrop with something spinning inside it.
+            if (p.rotationDegrees !== null && p.rotationDegrees !== undefined) {
+                return arrowAnnotation(p, index)
+            }
+
             const a = new mapkit.MarkerAnnotation(new mapkit.Coordinate(p.latitude, p.longitude), {
                 title: p.title ?? '',
                 subtitle: p.subtitle ?? '',
@@ -228,6 +245,99 @@ function glyphImageFor(svgPath) {
     const svg = size => 'data:image/svg+xml;utf8,' + encodeURIComponent(
         `<svg xmlns="http://www.w3.org/2000/svg" width="${size}" height="${size}" viewBox="0 0 512 512"><path fill="#fff" d="${svgPath}"/></svg>`)
     return { 1: svg(20), 2: svg(40), 3: svg(60) }
+}
+
+// ── Where somebody is, and which way they are facing ─────────────────────────
+
+/** How long a step takes to glide. One playback tick, so the arrow arrives as the next one is sent. */
+const ARROW_GLIDE_MS = 260
+
+/**
+ * An arrow centred on the coordinate, rotated to a bearing.
+ *
+ * Built from an element rather than an image so the rotation can be a CSS transform: a transform
+ * is what the browser can interpolate, and interpolating it is the difference between an arrow
+ * that turns and one that flicks between headings. Ben, 2026-09-16: "if the person turns, it
+ * should just turn smoothly and if the next reading the person is walking, it should follow the
+ * path smoothly. Not bouncing."
+ */
+function arrowAnnotation(p, index) {
+    const annotation = new mapkit.Annotation(
+        new mapkit.Coordinate(p.latitude, p.longitude),
+        () => {
+            // Two elements on purpose. MapKit positions the element it is handed, using its own
+            // transform — so the rotation goes on an inner one it never touches. Sharing a
+            // transform with the map is how a marker ends up jumping to the corner of the tile.
+            const wrap = document.createElement('div')
+            wrap.style.width = '28px'
+            wrap.style.height = '28px'
+            wrap.style.marginLeft = '-14px'
+            wrap.style.marginTop = '-14px'
+
+            const turner = document.createElement('div')
+            turner.className = 'ben-map-arrow'
+            turner.style.width = '28px'
+            turner.style.height = '28px'
+            turner.style.willChange = 'transform'
+            turner.style.transition = `transform ${ARROW_GLIDE_MS}ms linear`
+            turner.style.transform = `rotate(${p.rotationDegrees}deg)`
+            turner.innerHTML =
+                `<svg viewBox="0 0 24 24" width="28" height="28" aria-hidden="true">
+                   <path d="M12 2 L20 21 L12 16.5 L4 21 Z"
+                         fill="${p.color ?? '#28c76f'}"
+                         stroke="rgba(0,0,0,.55)" stroke-width="1" stroke-linejoin="round"/>
+                 </svg>`
+            wrap.appendChild(turner)
+            return wrap
+        },
+        { title: p.title ?? '', subtitle: p.subtitle ?? '', data: { index } })
+
+    // Kept on the annotation so the next update can turn by the SHORTEST way round rather than
+    // unwinding 350 degrees to get from 355 to 5.
+    annotation.__benBearing = p.rotationDegrees
+    annotation.__benIsArrow = true
+    return annotation
+}
+
+/**
+ * Whether the incoming set can be moved onto the annotations already drawn.
+ *
+ * Same count, and each one the same KIND as the annotation holding its place. A set that differs
+ * in either is a different map and is rebuilt — moving a pin onto an arrow's annotation would
+ * change what the marker means while pretending to be an update.
+ */
+function canMoveInPlace(entry, pins) {
+    const incoming = pins ?? []
+    if (!entry.annotations.length || entry.annotations.length !== incoming.length) return false
+    return incoming.every((p, index) => {
+        const isArrow = p.rotationDegrees !== null && p.rotationDegrees !== undefined
+        return Boolean(entry.annotations[index]?.__benIsArrow) === isArrow
+    })
+}
+
+/** Moves one annotation to where its pin now is, turning the shortest way if it is an arrow. */
+function moveAnnotation(annotation, p) {
+    if (!annotation) return
+    // MapKit animates a coordinate change on an annotation that is already on the map, which is
+    // the whole reason this path exists: the same object moving reads as somebody walking.
+    annotation.coordinate = new mapkit.Coordinate(p.latitude, p.longitude)
+
+    if (!annotation.__benIsArrow) return
+    if (p.rotationDegrees === null || p.rotationDegrees === undefined) return
+
+    // Unwound rather than clamped to 0–360: CSS interpolates the NUMBER, so going from 350 to 10
+    // written plainly spins the arrow almost the whole way round the wrong way. Carrying the
+    // accumulated angle and adding the shortest difference turns it 20 degrees, which is what a
+    // person walking round a corner actually did.
+    const previous = annotation.__benBearing ?? p.rotationDegrees
+    let delta = (p.rotationDegrees - previous) % 360
+    if (delta > 180) delta -= 360
+    if (delta < -180) delta += 360
+
+    const unwound = previous + delta
+    annotation.__benBearing = unwound
+    const element = annotation.element?.querySelector?.('.ben-map-arrow') ?? annotation.element
+    if (element?.style) element.style.transform = `rotate(${unwound}deg)`
 }
 
 /** Draws, replaces or removes the one region circle a map may carry. */
