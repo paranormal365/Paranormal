@@ -59,13 +59,18 @@ struct FieldCaptureBar: View {
                         }
                     }
                 } label: {
-                    Label(session.recording == nil ? "Record" : "Stop audio",
-                          systemImage: session.recording == nil ? "mic" : "mic.slash")
+                    Label(audioButtonTitle,
+                          systemImage: camera.isRecordingClip ? "video"
+                                     : (session.recording == nil ? "mic" : "mic.slash"))
                         .frame(maxWidth: .infinity)
                         .padding(.vertical, 6)
                 }
                 .buttonStyle(.bordered)
                 .tint(session.recording == nil ? Theme.ecto : Theme.danger)
+                // While a clip holds the microphone there is nothing here to start or stop: the
+                // video is recording the sound, and pressing this would be two things fighting
+                // over one microphone — which is the whole bug this was built to end.
+                .disabled(camera.isRecordingClip)
                 .accessibilityIdentifier("toggle-audio-recording")
             }
 
@@ -109,7 +114,8 @@ struct FieldCaptureBar: View {
         .padding(12)
         .background(Theme.mist, in: RoundedRectangle(cornerRadius: 12))
         .fullScreenCover(isPresented: $showingCamera) {
-            FieldCameraCaptureView(camera: camera,
+            FieldCameraCaptureView(session: session,
+                                   camera: camera,
                                    wasRunning: cameraWasRunning,
                                    allowsVideo: session.channels.contains(.video),
                                    initialKind: cameraKind,
@@ -122,6 +128,11 @@ struct FieldCaptureBar: View {
                                     set: { if !$0 { errorMessage = nil } })) {
             Button("OK", role: .cancel) { errorMessage = nil }
         } message: { Text(errorMessage ?? "") }
+    }
+
+    private var audioButtonTitle: String {
+        if camera.isRecordingClip { return "On the clip" }
+        return session.recording == nil ? "Record" : "Stop audio"
     }
 
     @ViewBuilder

@@ -8,12 +8,15 @@ import BenKit
 /// it internal." Leaving was not only a preference: the system camera took this session's camera
 /// and its microphone, and coming back left a frozen preview and a session recording nothing.
 ///
-/// A clip carries no sound of its own — the session's audio track is already running and is the
-/// record of what was heard. Both land on the same timeline in the review, so the sound is there;
-/// it is simply not recorded twice, and the microphone never changes hands.
+/// A clip records the sound too, and the session's own recording steps aside for exactly as long
+/// as the clip runs. Ben, 2026-09-16: "the audio is just taken from the video file until stopped
+/// and then back to audio — so there is no gap in audio recording, just video added to a part."
+/// The microphone is lent before the clip starts and taken back the moment it stops.
 struct FieldCameraCaptureView: View {
     @Environment(\.dismiss) private var dismiss
 
+    /// The running session, which owns the microphone and lends it for the length of a clip.
+    let session: ActiveFieldSession
     let camera: FieldCameraSession
     /// Whether the camera was already running for this session, so leaving puts it back as found.
     let wasRunning: Bool
@@ -101,9 +104,11 @@ struct FieldCameraCaptureView: View {
             }
 
             if kind == .video && allowsVideo {
-                // Said plainly, because a silent clip looks like a fault to anybody who does not
-                // know the session is recording the sound itself.
-                Text("Sound stays on the session's own track — the clip itself is silent.")
+                // Said plainly, because the sound moving from one file to another and back is
+                // exactly the kind of thing somebody would otherwise read as a gap.
+                Text(camera.isRecordingClip
+                     ? "The clip is recording the sound. Your own recording starts again when you stop."
+                     : "The clip records the sound too — your recording picks it back up when you stop.")
                     .font(.caption2)
                     .foregroundStyle(Theme.bone.opacity(0.85))
                     .multilineTextAlignment(.center)
@@ -163,11 +168,24 @@ struct FieldCameraCaptureView: View {
                 if camera.isRecordingClip {
                     let started = camera.clipStartedAt
                     let url = try await camera.finishClip()
+                    // The microphone comes back before anything else: the sooner the session is
+                    // recording again, the shorter the seam between the clip and the next file.
+                    await session.takeMicrophoneBackFromTheClip()
                     let seconds = started.map { Date().timeIntervalSince($0) }
                     await onCaptured(url, .video, seconds)
                     dismiss()
                 } else {
-                    try camera.startClip()
+                    // Lent first, started second. The engine has to let go of the microphone
+                    // before a capture session can take it.
+                    await session.lendMicrophoneToTheClip()
+                    do {
+                        try camera.startClip(withSound: true)
+                    } catch {
+                        // Nothing is recording now, so the session takes its microphone straight
+                        // back rather than leaving the night silent.
+                        await session.takeMicrophoneBackFromTheClip()
+                        throw error
+                    }
                 }
             } else {
                 let url = try await camera.capturePhoto()

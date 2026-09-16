@@ -74,6 +74,9 @@ final class LiveAudioCapture: AudioLevelSource, AudioRecording, @unchecked Senda
     private var routeObserver: NSObjectProtocol?
     private var tapInstalled = false
 
+    /// True while a video clip has been lent the microphone, so nothing here fights it for one.
+    private var lent = false
+
     /// What the meter is feeding, kept so the tap can be rebuilt after the microphone comes back.
     private var levelHandler: (@Sendable (AVAudioPCMBuffer, (average: Double, peak: Double)) -> Void)?
 
@@ -267,8 +270,42 @@ final class LiveAudioCapture: AudioLevelSource, AudioRecording, @unchecked Senda
         }
     }
 
+    // MARK: - Lending the microphone to a video clip
+
+    /// Handed over on purpose: a clip is about to record the sound itself.
+    ///
+    /// The file is finalised first, then the tap, the engine and the audio session all go — a
+    /// capture session cannot take an input the engine is still holding. No `.interrupted` is
+    /// sent, and nothing that arrives while lent is acted on: the session asked for this and is
+    /// already handling it, and a second round of stop-and-resume would end the next clip too.
+    func releaseMicrophone() async {
+        setLent(true)
+        _ = await endRecording(keepingWatch: true)
+        removeTapIfAny()
+        engine.stop()
+        engine.reset()
+        try? AVAudioSession.sharedInstance()
+            .setActive(false, options: .notifyOthersOnDeactivation)
+    }
+
+    /// The clip has stopped. The meter's tap is rebuilt at whatever format the microphone has now.
+    func reclaimMicrophone() async {
+        setLent(false)
+        do {
+            try configureSession()
+            if let handler = levelHandler { try startEngine(handler) }
+        } catch {
+            // Same as a microphone coming back on its own: the next route change tries again,
+            // and throwing out of here would take the app down.
+        }
+    }
+
+    private func isLent() -> Bool { lock.lock(); defer { lock.unlock() }; return lent }
+    private func setLent(_ value: Bool) { lock.lock(); lent = value; lock.unlock() }
+
     /// The microphone was taken: finish the clip and put the engine away, so no stale tap survives.
     private func microphoneTaken() async {
+        guard !isLent() else { return }
         _ = await endRecording(keepingWatch: true)
         removeTapIfAny()
         engine.stop()
@@ -286,6 +323,7 @@ final class LiveAudioCapture: AudioLevelSource, AudioRecording, @unchecked Senda
 
     /// The microphone is available again: rebuild the meter's tap at the format it now has.
     private func microphoneReturned() async {
+        guard !isLent() else { return }
         do {
             try configureSession()
             if let handler = levelHandler {
@@ -299,6 +337,7 @@ final class LiveAudioCapture: AudioLevelSource, AudioRecording, @unchecked Senda
     }
 
     private func microphoneReturnedIfIdle() async {
+        guard !isLent() else { return }
         guard !hasTap() else { return }
         await microphoneReturned()
     }

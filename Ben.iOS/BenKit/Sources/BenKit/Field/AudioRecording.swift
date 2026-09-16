@@ -23,6 +23,21 @@ public protocol AudioRecording: Sendable {
     ///
     /// A recorder that cannot be interrupted — a stub, a silent one — says nothing, which the default provides.
     var events: AsyncStream<AudioRecordingEvent> { get }
+
+    /// Hands the microphone to the camera on purpose, because a video clip is about to record
+    /// the sound itself.
+    ///
+    /// Ben, 2026-09-16: "if we switch to recording video, the audio is just taken from the video
+    /// file until stopped and then back to audio — so there is no gap in audio recording." So the
+    /// microphone changes hands exactly once, deliberately, and the video file covers the stretch
+    /// in between. Everything is put away — engine and tap, not merely the file closed — because
+    /// two things holding one microphone is how a night ends up silent.
+    ///
+    /// No `.interrupted` event follows: this was asked for, and the session is already acting on it.
+    func releaseMicrophone() async
+
+    /// Takes the microphone back when the clip stops, so the session's own recording carries on.
+    func reclaimMicrophone() async
 }
 
 /// Something that happened to the microphone rather than something the app asked for.
@@ -38,6 +53,10 @@ public extension AudioRecording {
     var events: AsyncStream<AudioRecordingEvent> {
         AsyncStream { $0.finish() }
     }
+
+    /// A recorder with no engine of its own has nothing to hand over.
+    func releaseMicrophone() async {}
+    func reclaimMicrophone() async {}
 }
 
 /// What went wrong with a recording, in words a person can act on.

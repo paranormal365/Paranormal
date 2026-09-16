@@ -92,6 +92,12 @@ public final class ActiveFieldSession {
 
     /// True between the microphone being taken and handed back, when a clip had been running.
     private var wasRecordingWhenInterrupted = false
+
+    /// True while a video clip holds the microphone on purpose, having been lent it.
+    private var lentToTheClip = false
+    /// Whether the session's own recording was running when the clip borrowed the microphone —
+    /// so it starts again afterwards, and does not start on a session that had sound switched off.
+    private var wasRecordingWhenLent = false
     private let sensors: SensorSuite
     private let files: SessionFileStore
     private let now: @Sendable () -> Date
@@ -158,6 +164,10 @@ public final class ActiveFieldSession {
 
     /// The microphone was taken while a clip was running: keep the clip, and remember to carry on.
     private func recordingWasInterrupted() async {
+        // A microphone we handed over is not one that was taken. Belt and braces today — nothing
+        // is recording while it is lent, so the next guard would catch it anyway — but it states
+        // the invariant where somebody changing this would read it.
+        guard !lentToTheClip else { return }
         guard recording != nil else { return }
         wasRecordingWhenInterrupted = true
         await stopRecording(becauseInterrupted: true)
@@ -191,6 +201,10 @@ public final class ActiveFieldSession {
         microphoneWatch?.cancel()
         microphoneWatch = nil
         wasRecordingWhenInterrupted = false
+        // A clip that was still holding the microphone when the session ended does not get to
+        // start a recording on it afterwards.
+        lentToTheClip = false
+        wasRecordingWhenLent = false
 
         await engine.stop()
     }
@@ -230,6 +244,8 @@ public final class ActiveFieldSession {
 
     /// Starts recording sound into the session's own directory.
     public func startRecording() async {
+        // Nothing starts while a video clip holds the microphone — it is recording the sound.
+        guard !lentToTheClip else { return }
         guard recording == nil, let recorder = sensors.recorder else { return }
         recordingProblem = nil
         do {
@@ -248,12 +264,60 @@ public final class ActiveFieldSession {
 
     public func stopRecording() async { await stopRecording(becauseInterrupted: false) }
 
+    // MARK: - Lending the microphone to a video clip
+
+    /// The camera is about to record a clip that carries its own sound, so the microphone changes
+    /// hands once, on purpose.
+    ///
+    /// Ben, 2026-09-16: "the audio is just taken from the video file until stopped and then back
+    /// to audio — so there is no gap in audio recording, just video added to a part." The audio
+    /// clip running now is closed and kept; the video file covers the stretch that follows; the
+    /// session's own recording starts again as a new clip the moment the video stops. Laid end to
+    /// end on the review's one timeline, the sound has no hole in it.
+    public func lendMicrophoneToTheClip() async {
+        guard !lentToTheClip else { return }
+        lentToTheClip = true
+        wasRecordingWhenLent = recording != nil
+
+        if recording != nil { await stopRecording(reason: .lentToTheClip) }
+        // After the clip is closed, not before: the file has to be finalised while the engine
+        // still owns the microphone, or the m4a has no moov atom and will not play.
+        await sensors.recorder?.releaseMicrophone()
+    }
+
+    /// The clip has stopped. The microphone comes back and the session's sound carries on.
+    public func takeMicrophoneBackFromTheClip() async {
+        guard lentToTheClip else { return }
+        lentToTheClip = false
+        await sensors.recorder?.reclaimMicrophone()
+
+        let shouldResume = wasRecordingWhenLent
+        wasRecordingWhenLent = false
+        // Not on a session somebody has already ended, and not when sound was never running.
+        guard shouldResume, isRecording, channels.contains(.audio) else { return }
+        await startRecording()
+    }
+
     /// Closes the clip that is running.
     ///
     /// An interrupted clip is kept and listed exactly like one somebody stopped: what was recorded before the camera
     /// took the microphone is real, and it is the only copy. The difference is what is said afterwards — an
     /// interruption explains itself and is not a failure to fix.
     private func stopRecording(becauseInterrupted: Bool) async {
+        await stopRecording(reason: becauseInterrupted ? .taken : .asked)
+    }
+
+    /// Why a clip of sound ended. The file is kept either way; what differs is what is said.
+    private enum AudioStopReason {
+        /// Somebody pressed stop, or the session ended.
+        case asked
+        /// Something else took the microphone without asking.
+        case taken
+        /// A video clip was given it, and is recording the sound itself.
+        case lentToTheClip
+    }
+
+    private func stopRecording(reason: AudioStopReason) async {
         guard let state = recording, let recorder = sensors.recorder else { return }
         let duration = await recorder.endRecording()
         recording = nil
@@ -267,9 +331,12 @@ public final class ActiveFieldSession {
         // taps into and finds silent is worse than saying it failed.
         guard duration > 0.4, size > 1_024 else {
             try? FileManager.default.removeItem(at: url)
-            if becauseInterrupted {
+            switch reason {
+            case .taken:
                 audioNote = "The camera took the microphone before that clip had anything in it."
-            } else {
+            case .lentToTheClip:
+                audioNote = "The video started before that recording had anything in it."
+            case .asked:
                 recordingProblem = "That recording came back empty — the microphone may be in use by something else."
             }
             return
@@ -277,8 +344,14 @@ public final class ActiveFieldSession {
 
         // An interruption is not a fault to fix, so it is a note rather than a warning: the clip ended where the
         // camera started, and the next one begins when the microphone comes back.
-        if becauseInterrupted {
+        switch reason {
+        case .taken:
             audioNote = "The camera took the microphone, so that clip ends there."
+        case .lentToTheClip:
+            // Not a warning at all: this is the sound carrying on somewhere else for a while.
+            audioNote = "The video is recording the sound now. Your own recording starts again when it stops."
+        case .asked:
+            break
         }
 
         await engine.noteCapture(kind: .audio, relativePath: state.relativePath,

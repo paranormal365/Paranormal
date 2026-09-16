@@ -60,10 +60,16 @@ enum FieldCameraError: LocalizedError {
 /// was interrupted and nothing ever started it again, and the microphone went with it (Ben,
 /// 2026-09-16). One session, owned here, never handed over.
 ///
-/// **Clips carry no sound of their own.** The session's audio track is already running and is the
-/// record of what was heard; giving the camera the microphone as well is precisely the handover
-/// that lost the sound. Both land on the review's one timeline, so nothing is missing — it is
-/// just not stored twice.
+/// **A clip records the sound too, and the session's own recording steps aside for it.** Ben,
+/// 2026-09-16: "the audio is just taken from the video file until stopped and then back to audio
+/// — so there is no gap in audio recording, just video added to a part." The microphone changes
+/// hands once, deliberately: the audio clip running is closed and kept, the video covers the
+/// stretch that follows, and the session's recording starts again as a new clip the moment the
+/// video stops. Laid end to end on the review's one timeline, the sound has no hole in it.
+///
+/// The caller does the handover — `lendMicrophoneToTheClip()` before `startClip`, and
+/// `takeMicrophoneBackFromTheClip()` after `finishClip` — because only the session knows whether
+/// it was recording and where the next clip's file goes.
 @MainActor
 @Observable
 final class FieldCameraSession {
@@ -86,6 +92,8 @@ final class FieldCameraSession {
     /// they belong to is in flight.
     private var photoCaptures: [PhotoCapture] = []
     private var clipCapture: ClipCapture?
+    /// The microphone, attached only for the length of a clip and taken off again straight after.
+    private var audioInput: AVCaptureDeviceInput?
     private var rotation: AVCaptureDevice.RotationCoordinator?
     /// In a box of its own so `deinit` — which cannot touch main-actor state — can still hand
     /// the observers back. @Observable would otherwise make this a computed property that
@@ -149,8 +157,11 @@ final class FieldCameraSession {
         return try await capture.run(on: photoOutput, settings: settings)
     }
 
-    /// Starts a clip. Silent on purpose — see the type's remarks.
-    func startClip() throws {
+    /// Starts a clip that records the sound as well as the picture.
+    ///
+    /// The microphone must already have been lent to this by the session — see the type's
+    /// remarks. `withSound: false` exists for a session recording no audio at all.
+    func startClip(withSound: Bool = true) throws {
         guard isRunning else { throw FieldCameraError.notRunning }
         guard clipCapture == nil else { return }
 
@@ -160,6 +171,28 @@ final class FieldCameraSession {
         // what it used to.
         session.beginConfiguration()
         if session.canSetSessionPreset(.hd1280x720) { session.sessionPreset = .hd1280x720 }
+
+        if withSound, audioInput == nil {
+            // The category has to be one that records: the app's own audio session is left alone
+            // by this capture session (automaticallyConfiguresApplicationAudioSession is off, so
+            // it can never reconfigure the field recorder's), which means setting it here is
+            // nobody else's job. Without it the movie is written silently and says nothing.
+            let audio = AVAudioSession.sharedInstance()
+            try? audio.setCategory(.playAndRecord, mode: .videoRecording,
+                                   options: [.mixWithOthers, .defaultToSpeaker])
+            try? audio.setActive(true)
+
+            if let device = AVCaptureDevice.default(for: .audio),
+               let input = try? AVCaptureDeviceInput(device: device),
+               session.canAddInput(input) {
+                session.addInput(input)
+                audioInput = input
+            } else {
+                // Worth saying rather than quietly filming a silent clip: the session's own
+                // recording has already stepped aside for this.
+                problem = "The microphone wasn't available, so this clip has no sound."
+            }
+        }
         if session.outputs.contains(movieOutput) == false {
             guard session.canAddOutput(movieOutput) else {
                 session.commitConfiguration()
@@ -192,6 +225,12 @@ final class FieldCameraSession {
             clipStartedAt = nil
             session.beginConfiguration()
             if session.outputs.contains(movieOutput) { session.removeOutput(movieOutput) }
+            // The microphone goes back before the session reclaims it: an input still attached
+            // here is an input the field recorder's engine cannot have.
+            if let audioInput {
+                session.removeInput(audioInput)
+                self.audioInput = nil
+            }
             if session.canSetSessionPreset(.medium) { session.sessionPreset = .medium }
             session.commitConfiguration()
         }
@@ -208,7 +247,8 @@ final class FieldCameraSession {
         session.sessionPreset = .medium
         // The field session owns the audio session: its recorder is running and must keep
         // running. Letting AVCaptureSession configure the app's audio session is how the camera
-        // takes the microphone even with no audio input attached.
+        // takes the microphone even with no audio input attached — so it never does, and a clip
+        // sets the category itself for exactly as long as it holds the microphone.
         session.automaticallyConfiguresApplicationAudioSession = false
 
         var cameraDevice: AVCaptureDevice?
