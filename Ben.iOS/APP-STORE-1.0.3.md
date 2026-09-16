@@ -4,8 +4,12 @@ Everything needed to finish submitting **1.0.3**, and every answer App Review ha
 This supersedes `APP-STORE-1.0.2.md` for the submission itself; that file stays as the record of
 1.0.2 and its two rejections, and `APP-STORE.md` as the record of 1.0.0 and the listing copy.
 
-**State on 2026-09-16, 6:33 PM: the build is uploaded. What is left is the App Store Connect form
-work in §6, all of it Ben's.**
+**State on 2026-09-16, evening: SUBMITTED.** Ben created version 1.0.3 in App Store Connect,
+filled the page, selected build 1.0.3 (6) and submitted it for review. It is now *Waiting for
+Review*. While it waits: production stays at `12e55322` or later, the feed flag stays on,
+apple@apple.com stays working, rostered and booked on a hosted event, and the old per-file upload
+endpoints stay until 1.0.3 is live on the store (§1). The verdict lands in App Store Connect →
+1.0.3 → App Review; §7 says what to do with either answer.
 
 | | |
 |---|---|
@@ -305,10 +309,11 @@ Check App Store Connect → 1.0.3 → App Review → Resolution Center for the l
 - [x] Association file live: 200, `application/json`, no redirect
 - [x] Archive built from `master` at `12e55322`, clean tree
 - [x] Uploaded to App Store Connect, 2026-09-16 6:33 PM
-- [ ] Version 1.0.3 created in App Store Connect (§6 step 4)
-- [ ] Page filled, media uploaded, build 1.0.3 (6) selected (§6 steps 5–7)
-- [ ] Review notes pasted, demo account verified on production the day of submission
-- [ ] Submitted
+- [x] Version 1.0.3 created in App Store Connect (§6 step 4)
+- [x] Page filled, media uploaded, build 1.0.3 (6) selected (§6 steps 5–7)
+- [x] Review notes pasted
+- [x] Submitted 2026-09-16 — Waiting for Review
+- [ ] Approved and released; then retire the per-file upload endpoints the approved 1.0.2 still used
 
 ---
 
