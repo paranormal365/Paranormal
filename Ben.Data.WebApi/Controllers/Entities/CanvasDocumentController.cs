@@ -5,6 +5,7 @@ using AutoMapper;
 using Ben.Data.Common.Enums;
 using Ben.Data.Common.Interfaces;
 using Ben.Data.WebApi.Services;
+using Ben.Data.WebApi.Services.Canvas;
 using Ben.Data.WebApi.Services.Billing;
 using Ben.Service.Models.Entities;
 using Microsoft.AspNetCore.Authorization;
@@ -168,6 +169,7 @@ public sealed class CanvasDocumentController : BenControllerBase
         var record = _mapper.Map<CanvasDocumentRecord>(entity) with
         {
             CanEdit = canEdit,
+            Access = canEdit ? await AccessToAsync(entity, userId, ct) : CanvasBoardAccess.Read,
             IsPublished = entity.PublishedJson is not null,
             HasUnpublishedChanges = entity.PublishedJson is not null && entity.Revision > (entity.PublishedRevision ?? 0),
         };
@@ -265,9 +267,29 @@ public sealed class CanvasDocumentController : BenControllerBase
         // Every answer from here on passed the write checks above, so it can say the board is editable.
         if (loaded != entity.Revision) return Conflict(_mapper.Map<CanvasDocumentRecord>(entity) with { CanEdit = true });
 
+        // Ben, 2026-09-16: somebody who may edit the case may add to a board; changing what is already on it is for
+        // the person who put it there, a group administrator, or an administrator of the site.
+        var access = await AccessToAsync(entity, userId, ct);
+
+        // A board saved before this was recorded — or created in one go — has nobody written against its pieces. They
+        // belong to whoever wrote the board, not to the next person who saves it, which is what claiming the unclaimed
+        // would amount to.
+        var owners = PieceOwners.Read(entity.PieceOwnersJson);
+        if (entity.PieceOwnersJson is null)
+        {
+            using var stored = JsonDocument.Parse(entity.DocumentJson);
+            owners = PieceOwners.Read(PieceOwners.Write([], CanvasAdditiveGuard.IdsIn(stored.RootElement), entity.CreatedByAppUserId));
+        }
+        if (access == CanvasBoardAccess.Append
+            && CanvasAdditiveGuard.WhyRefused(entity.DocumentJson, body, PieceOwners.Owned(owners, userId)) is { } refusal)
+        {
+            return BadRequest(refusal);
+        }
+
         var before = Slim(entity);
         entity.Name               = NameOf(body);
         entity.DocumentJson       = SanitizeDocument(body);
+        entity.PieceOwnersJson    = PieceOwners.Write(owners, CanvasAdditiveGuard.IdsIn(body), userId);
         entity.DateUpdated        = DateTime.UtcNow;
         entity.UpdatedByAppUserId = userId;
 
@@ -506,6 +528,34 @@ public sealed class CanvasDocumentController : BenControllerBase
         if (User.IsInRole(RoleNames.SuperAdmin)) return true;
         var readAction = OrganizationSecurityAction.Read;
         return await _security.HasAccessAsync(GetCurrentUserId(), orgId, OrganizationSecurityTable.Case, readAction, ct);
+    }
+
+    /// <summary>
+    /// What this person may do with this board: read it, add to it, or change anything on it.
+    /// </summary>
+    /// <remarks>
+    /// Ben, 2026-09-16: "only the author or organization admin or site admin or super admin can edit the board and
+    /// change existing pieces", and somebody who may edit the case may add to it. A personal board has one answer —
+    /// its author's — because nobody else can reach it at all.
+    /// </remarks>
+    private async Task<CanvasBoardAccess> AccessToAsync(CanvasDocument entity, Guid userId, CancellationToken ct)
+    {
+        if (entity.Case is not { } onCase)
+            return entity.CreatedByAppUserId == userId ? CanvasBoardAccess.Full : CanvasBoardAccess.Read;
+
+        if (entity.CreatedByAppUserId == userId) return CanvasBoardAccess.Full;
+        if (User.IsInRole(RoleNames.SuperAdmin) || User.IsInRole(RoleNames.Admin)) return CanvasBoardAccess.Full;
+
+        await using var db = await _db.CreateDbContextAsync(ct);
+        var role = await db.OrganizationUserMemberships.AsNoTracking()
+            .Where(m => m.OrganizationId == onCase.OrganizationId && m.AppUserId == userId && m.IsActive)
+            .Select(m => (OrganizationMemberRole?)m.Role)
+            .FirstOrDefaultAsync(ct);
+        if (role is OrganizationMemberRole.Owner or OrganizationMemberRole.Administrator) return CanvasBoardAccess.Full;
+
+        return await MayChangeCaseAsync(onCase.OrganizationId, ct)
+            ? CanvasBoardAccess.Append
+            : CanvasBoardAccess.Read;
     }
 
     /// <summary>A personal board is its author's; a case board is anybody's who can read the case.</summary>

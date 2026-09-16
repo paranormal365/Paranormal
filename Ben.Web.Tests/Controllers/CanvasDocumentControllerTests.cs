@@ -318,20 +318,104 @@ public sealed class CanvasDocumentControllerTests
         Assert.Contains("A second night", writer.DocumentJson);
     }
 
+    /// <summary>
+    /// Ben, 2026-09-16: a member who may edit "can edit the board additively", and "only the author or organization
+    /// admin or site admin or super admin can edit the board and change existing pieces".
+    /// </summary>
     [Fact]
-    public async Task Once_published_another_member_who_may_update_the_case_can_write_on_it()
+    public async Task Another_member_may_add_to_a_published_board_but_not_change_what_is_there()
     {
         var w = await SeedAsync();
-        var board = await CreateOnCaseAsync(w, w.EditorId, "Shared board");
-        var publishing = Build(w.Factory, w.EditorId);
-        IngestSucceeds(publishing);
-        Assert.IsType<OkObjectResult>((await publishing.Controller.Publish(board.Id, Upload(PngBytes()), default)).Result);
+        var board = await MarkPublishedAsync(w, await CreateOnCaseAsync(w, w.EditorId, "Erin's board"));
+        var erinsCard = FirstNodeId(await ReadDocumentAsync(w, board.Id));
 
-        var byAnother = await Build(w.Factory, w.NoDeleteId, ifMatch: "\"1\"")
-            .Controller.Update(board.Id, Board("Shared board", "<p>Nora adds the deed</p>"), default);
+        // Adding a card of their own: allowed, and it becomes theirs to rework later.
+        var added = await Build(w.Factory, w.NoDeleteId, "\"1\"").Controller
+            .Update(board.Id, WithExtraNode(await ReadDocumentAsync(w, board.Id), "Nora's note"), default);
+        Assert.IsType<OkObjectResult>(added.Result);
 
-        Assert.Contains("Nora adds the deed", ((CanvasDocumentRecord)Assert.IsType<OkObjectResult>(byAnother.Result).Value!).DocumentJson);
+        // Moving Erin's card: refused, in words that say whose it is.
+        var moved = await Build(w.Factory, w.NoDeleteId, "\"2\"").Controller
+            .Update(board.Id, WithNodeMoved(await ReadDocumentAsync(w, board.Id), erinsCard), default);
+        Assert.Contains("somebody else's work", (string)Assert.IsType<BadRequestObjectResult>(moved.Result).Value!);
+
+        // Taking Erin's card away: refused too.
+        var removed = await Build(w.Factory, w.NoDeleteId, "\"2\"").Controller
+            .Update(board.Id, WithNodeRemoved(await ReadDocumentAsync(w, board.Id), erinsCard), default);
+        Assert.Contains("somebody else's work", (string)Assert.IsType<BadRequestObjectResult>(removed.Result).Value!);
     }
+
+    [Fact]
+    public async Task The_author_and_a_group_administrator_may_change_what_is_already_there()
+    {
+        var w = await SeedAsync();
+        var board = await MarkPublishedAsync(w, await CreateOnCaseAsync(w, w.EditorId, "Erin's board"));
+        var card = FirstNodeId(await ReadDocumentAsync(w, board.Id));
+
+        // The author moves their own card.
+        Assert.IsType<OkObjectResult>((await Build(w.Factory, w.EditorId, "\"1\"").Controller
+            .Update(board.Id, WithNodeMoved(await ReadDocumentAsync(w, board.Id), card), default)).Result);
+
+        // A site administrator moves it as well.
+        Assert.IsType<OkObjectResult>((await Build(w.Factory, w.NoDeleteId, "\"2\"", superAdmin: true).Controller
+            .Update(board.Id, WithNodeMoved(await ReadDocumentAsync(w, board.Id), card), default)).Result);
+    }
+
+    [Fact]
+    public async Task Opening_a_board_says_what_this_person_may_do_with_it()
+    {
+        var w = await SeedAsync();
+        var board = await MarkPublishedAsync(w, await CreateOnCaseAsync(w, w.EditorId, "Erin's board"));
+
+        async Task<CanvasBoardAccess> AccessFor(Guid who, bool superAdmin = false)
+            => ((CanvasDocumentRecord)Assert.IsType<OkObjectResult>(
+                (await Build(w.Factory, who, superAdmin: superAdmin).Controller.GetById(board.Id, default)).Result).Value!).Access;
+
+        Assert.Equal(CanvasBoardAccess.Full, await AccessFor(w.EditorId));
+        Assert.Equal(CanvasBoardAccess.Append, await AccessFor(w.NoDeleteId));
+        Assert.Equal(CanvasBoardAccess.Read, await AccessFor(w.ViewerId));
+        Assert.Equal(CanvasBoardAccess.Full, await AccessFor(w.ViewerId, superAdmin: true));
+    }
+
+    // ── helpers for the additive rule ─────────────────────────────────────────
+
+    private static async Task<JsonElement> ReadDocumentAsync(World w, Guid boardId)
+    {
+        await using var db = await w.Factory.CreateDbContextAsync();
+        var json = (await db.CanvasDocuments.AsNoTracking().SingleAsync(d => d.Id == boardId)).DocumentJson;
+        return JsonDocument.Parse(json).RootElement.Clone();
+    }
+
+    private static string FirstNodeId(JsonElement document)
+        => document.GetProperty("nodes")[0].GetProperty("id").GetString()!;
+
+    private static JsonElement Edit(JsonElement document, Action<System.Text.Json.Nodes.JsonNode> change)
+    {
+        var node = System.Text.Json.Nodes.JsonNode.Parse(document.GetRawText())!;
+        change(node);
+        return JsonDocument.Parse(node.ToJsonString()).RootElement.Clone();
+    }
+
+    private static JsonElement WithExtraNode(JsonElement document, string title) => Edit(document, node =>
+    {
+        var added = "{\"id\":\"" + Guid.NewGuid() + "\",\"type\":\"Card\",\"x\":10,\"y\":10,\"width\":200,\"height\":120,"
+                  + "\"data\":{\"templateId\":\"evidence\",\"title\":"
+                  + System.Text.Json.JsonSerializer.Serialize(title) + ",\"fields\":{}}}";
+        node["nodes"]!.AsArray().Add(System.Text.Json.Nodes.JsonNode.Parse(added));
+    });
+
+    private static JsonElement WithNodeMoved(JsonElement document, string id) => Edit(document, node =>
+    {
+        foreach (var candidate in node["nodes"]!.AsArray())
+            if (candidate!["id"]!.GetValue<string>() == id) candidate["x"] = 999;
+    });
+
+    private static JsonElement WithNodeRemoved(JsonElement document, string id) => Edit(document, node =>
+    {
+        var nodes = node["nodes"]!.AsArray();
+        for (var i = nodes.Count - 1; i >= 0; i--)
+            if (nodes[i]!["id"]!.GetValue<string>() == id) nodes.RemoveAt(i);
+    });
 
     [Fact]
     public async Task An_outsider_cannot_list_or_read_a_case_board()
@@ -497,7 +581,7 @@ public sealed class CanvasDocumentControllerTests
     public async Task Saving_with_the_loaded_revision_bumps_it()
     {
         var w = await SeedAsync();
-        var board = await CreatePublishedOnCaseAsync(w);
+        var board = await CreatePublishedOnCaseAsync(w, w.NoDeleteId);
 
         var built = Build(w.Factory, w.NoDeleteId, ifMatch: "\"1\"");
         var ok = Assert.IsType<OkObjectResult>((await built.Controller.Update(board.Id, Board("Renamed"), default)).Result);
@@ -717,7 +801,7 @@ public sealed class CanvasDocumentControllerTests
         // The first save has read revision 1 and passed the compare; before its UPDATE reaches the
         // database, the second save — which also read revision 1 — runs to completion.
         hook.Next = async () =>
-            second = await Build(w.Factory, w.NoDeleteId, "\"1\"").Controller.Update(board.Id, Board("Second"), default);
+            second = await Build(w.Factory, w.NoDeleteId, "\"1\"", superAdmin: true).Controller.Update(board.Id, Board("Second"), default);
 
         var first = await Build(w.Factory, w.EditorId, "\"1\"").Controller.Update(board.Id, Board("First"), default);
 

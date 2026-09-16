@@ -42,6 +42,16 @@ namespace Ben.Data.Source.Entities
         public int Revision { get; set; }
 
         /// <summary>
+        /// Who put each piece on the board: a JSON object of piece id to the person who first saved it.
+        /// </summary>
+        /// <remarks>
+        /// A member who may add to somebody else's board may also rework what they added themselves, and that needs
+        /// an answer to "who put this here" that the document itself does not carry. Written as the board is saved,
+        /// for ids that were not there before; never rewritten, so it survives somebody else editing around it.
+        /// </remarks>
+        public string? PieceOwnersJson { get; set; }
+
+        /// <summary>
         /// The board as the group last saw it, or null while it has never been published.
         /// </summary>
         /// <remarks>

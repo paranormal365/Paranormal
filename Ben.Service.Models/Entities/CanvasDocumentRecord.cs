@@ -1,3 +1,5 @@
+using Ben.Data.Common.Enums;
+
 namespace Ben.Service.Models.Entities;
 
 /// <summary>
@@ -34,6 +36,11 @@ public record CanvasDocumentRecord
 
     /// <summary>Whether the group can see this board at all: a board nobody has published is its writer's alone.</summary>
     public bool IsPublished { get; init; }
+
+    /// <summary>
+    /// What this caller may do with the board: read it, add to it, or change anything on it (Ben, 2026-09-16).
+    /// </summary>
+    public CanvasBoardAccess Access { get; init; } = CanvasBoardAccess.Read;
 
     /// <summary>Published once and written on since — the group is reading an older board than the one being worked on.</summary>
     public bool HasUnpublishedChanges { get; init; }
@@ -93,6 +100,11 @@ public record CanvasDocumentSummaryRecord
 
     /// <summary>Whether the group can see this board at all: a board nobody has published is its writer's alone.</summary>
     public bool IsPublished { get; init; }
+
+    /// <summary>
+    /// What this caller may do with the board: read it, add to it, or change anything on it (Ben, 2026-09-16).
+    /// </summary>
+    public CanvasBoardAccess Access { get; init; } = CanvasBoardAccess.Read;
 
     /// <summary>Published once and written on since — the group is reading an older board than the one being worked on.</summary>
     public bool HasUnpublishedChanges { get; init; }

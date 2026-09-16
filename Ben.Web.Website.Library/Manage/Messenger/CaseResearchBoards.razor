@@ -6,6 +6,7 @@
 @using Microsoft.Extensions.Hosting
 @inject IBenAdminClient AdminClient
 @inject IBenUserState UserState
+@inject IMediaUrlBuilder MediaUrls
 @inject NavigationManager NavManager
 @inject Microsoft.Extensions.Configuration.IConfiguration Configuration
 @inject Microsoft.Extensions.Hosting.IHostEnvironment HostEnvironment
@@ -44,7 +45,17 @@
                 {
                     <button type="button" class="list-group-item list-group-item-action d-flex align-items-center gap-3"
                             @onclick="@(() => OpenAsync(board.Id))" disabled="@_opening">
-                        <BenIcon Name="layout" Class="text-secondary" />
+                        @* The published picture, as a thumbnail that opens the board rather than the picture: the
+                           board is the thing, and the picture is how it looks from the list (Ben, 2026-09-16). *@
+                        @if (board.PublishedUploadFileId is { } picture)
+                        {
+                            <img src="@MediaUrls.Thumbnail(picture)" alt="" loading="lazy" width="72" height="48"
+                                 class="rounded border object-fit-cover flex-shrink-0" />
+                        }
+                        else
+                        {
+                            <BenIcon Name="layout" Class="text-secondary" />
+                        }
                         <span class="me-auto text-start">
                             <span class="d-block">@board.Name</span>
                             <span class="text-secondary small">
