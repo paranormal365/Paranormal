@@ -39,6 +39,11 @@ public class CanvasPresentationTests : BenTestBase
 
         await Page.WaitForURLAsync(new System.Text.RegularExpressions.Regex(@"localhost:5125"), new() { Timeout = 30_000 });
         await Expect(Page.Locator("[data-bc-ready=true]")).ToBeVisibleAsync(new() { Timeout = 60_000 });
+        // The header still says "Untitled board" for a moment after the canvas reports ready; a
+        // test that reads the title before the document's own has landed compares the placeholder
+        // with the real name and calls presenting a change (seen once under load, 2026-09-16).
+        await Expect(Page.Locator(".bc-header__title"))
+            .ToContainTextAsync("Previous owners", new() { Timeout = 15_000 });
     }
 
     private async Task StartPresentingAsync()
