@@ -208,6 +208,11 @@ public interface IBenCaseClient
     // ── Case Research ─────────────────────────────────────────────────────────
 
     Task<LoadResult<CaseResearchEntryDto>> GetCaseResearchAsync(Guid orgId, Guid caseId, CancellationToken token = default);
+
+    /// <summary>
+    /// The case's canvas boards: every published one, plus the caller's own unpublished drafts (item 243).
+    /// </summary>
+    Task<LoadResult<CanvasDocumentSummaryRecord>> GetCaseBoardsAsync(Guid caseId, CancellationToken token = default);
     Task<CaseResearchEntryDto?> AddCaseResearchAsync(Guid orgId, Guid caseId, UpsertResearchRequest request, CancellationToken token = default);
     Task<CaseResearchEntryDto?> UploadCaseResearchFileAsync(Guid orgId, Guid caseId, string title, string? description, Stream content, string fileName, string contentType, CancellationToken token = default);
     Task<CaseResearchEntryDto?> UpdateCaseResearchAsync(Guid orgId, Guid caseId, Guid entryId, UpsertResearchRequest request, CancellationToken token = default);

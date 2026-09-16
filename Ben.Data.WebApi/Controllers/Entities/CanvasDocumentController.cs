@@ -104,7 +104,10 @@ public sealed class CanvasDocumentController : BenControllerBase
         {
             if (await OrgOfCaseAsync(db, onCase, ct) is not { } orgId) return NotFound();
             if (!await CanReadCaseAsync(orgId, ct)) return Forbid();
-            query = db.CanvasDocuments.AsNoTracking().Include(d => d.Case).Where(d => d.CaseId == onCase);
+            // A board nobody has published is its writer's own: research is thought about before it is evidence, and a
+            // case list full of other people's unfinished boards is worse than a short one (Ben, 2026-09-16).
+            query = db.CanvasDocuments.AsNoTracking().Include(d => d.Case)
+                .Where(d => d.CaseId == onCase && (d.PublishedJson != null || d.CreatedByAppUserId == userId));
         }
         else
         {
@@ -114,7 +117,12 @@ public sealed class CanvasDocumentController : BenControllerBase
         var entities = await query.OrderByDescending(d => d.DateUpdated ?? d.DateCreated).ToListAsync(ct);
         // Every board in one list has the same answer: all on one case, or all the caller's own.
         var canEdit = caseId is null || await MayChangeCaseAsync(entities.FirstOrDefault()?.Case?.OrganizationId, ct);
-        var records = entities.Select(e => _mapper.Map<CanvasDocumentSummaryRecord>(e) with { CanEdit = canEdit }).ToList();
+        var records = entities.Select(e => _mapper.Map<CanvasDocumentSummaryRecord>(e) with
+        {
+            CanEdit = canEdit,
+            IsPublished = e.PublishedJson is not null,
+            HasUnpublishedChanges = e.PublishedJson is not null && e.Revision > (e.PublishedRevision ?? 0),
+        }).ToList();
 
         // Names only where the list holds more than one person's work; one query for all of them.
         if (caseId.HasValue && records.Count > 0)
@@ -145,14 +153,28 @@ public sealed class CanvasDocumentController : BenControllerBase
         var entity = await db.CanvasDocuments.AsNoTracking().Include(d => d.Case)
             .FirstOrDefaultAsync(d => d.Id == id, ct);
 
-        // Not found rather than forbidden: whether a board exists is not an outsider's to learn.
+        // Not found rather than forbidden: whether a board exists is not an outsider's to learn — and an unpublished
+        // board is not there for anybody but the person writing it.
         if (entity is null || !await MayReadAsync(entity, userId, ct)) return NotFound();
+        if (entity.PublishedJson is null && entity.CreatedByAppUserId != userId) return NotFound();
 
         SetETag(entity.Revision);
         var canEdit = entity.Case is { } onCase
             ? await MayChangeCaseAsync(onCase.OrganizationId, ct)
             : entity.CreatedByAppUserId == userId;
-        return Ok(_mapper.Map<CanvasDocumentRecord>(entity) with { CanEdit = canEdit });
+
+        // Somebody who may only read gets what was published, not what is being written now. The draft is the writer's
+        // until they say otherwise, and they say so by publishing.
+        var record = _mapper.Map<CanvasDocumentRecord>(entity) with
+        {
+            CanEdit = canEdit,
+            IsPublished = entity.PublishedJson is not null,
+            HasUnpublishedChanges = entity.PublishedJson is not null && entity.Revision > (entity.PublishedRevision ?? 0),
+        };
+        if (!canEdit && entity.PublishedJson is { } published)
+            record = record with { DocumentJson = published, Revision = entity.PublishedRevision ?? entity.Revision };
+
+        return Ok(record);
     }
 
     // POST /api/canvas-documents[?caseId=]
@@ -233,6 +255,10 @@ public sealed class CanvasDocumentController : BenControllerBase
         {
             if (await _limits.WhyReadOnlyAsync(onCase.OrganizationId, ct) is { } readOnly) return BadRequest(readOnly);
             if (!await MayOnCaseAsync(onCase.OrganizationId, OrganizationSecurityAction.Update, ct)) return Forbid();
+
+            // Before it is published the board is the writer's draft, so only they may write on it. Ben chose the rest
+            // (2026-09-16): once published it is the case's, and anybody who may update the case may work on it.
+            if (entity.PublishedJson is null && entity.CreatedByAppUserId != userId) return NotFound();
         }
 
         if (ReadIfMatch() is not { } loaded) return StatusCode(428, IfMatchRequired);
@@ -399,6 +425,13 @@ public sealed class CanvasDocumentController : BenControllerBase
         board.PublishedUploadFileId = uploadFileId;
         board.PublishedAtUtc        = now;
         board.PublishedByAppUserId  = userId;
+
+        // Publishing is what shows the board to the group at all (Ben, 2026-09-16), so the board itself is copied
+        // across, not only its picture. The revision does not move: publishing is not a save, and a save racing with
+        // it must still be judged against the revision its writer loaded.
+        board.PublishedJson     = board.DocumentJson;
+        board.PublishedRevision = board.Revision;
+
         board.DateUpdated           = now;
         board.UpdatedByAppUserId    = userId;
         await db.SaveChangesAsync(ct);
@@ -407,7 +440,12 @@ public sealed class CanvasDocumentController : BenControllerBase
         await TryAuditAsync(_audit.LogUpdateAsync(nameof(CanvasDocument), board.Id, before, Slim(board), userId, AppSources.WebApi));
 
         SetETag(board.Revision);
-        return Ok(_mapper.Map<CanvasDocumentRecord>(board) with { CanEdit = true });
+        return Ok(_mapper.Map<CanvasDocumentRecord>(board) with
+        {
+            CanEdit = true,
+            IsPublished = true,
+            HasUnpublishedChanges = false,
+        });
     }
 
     /// <summary>The eight bytes every PNG starts with. The content type is the client's claim; this is the file's.</summary>

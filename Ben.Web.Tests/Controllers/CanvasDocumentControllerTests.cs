@@ -189,6 +189,30 @@ public sealed class CanvasDocumentControllerTests
         return (CanvasDocumentRecord)Assert.IsType<CreatedAtActionResult>(result.Result).Value!;
     }
 
+    /// <summary>Marks a board published in the database, for tests where filing a real picture is beside the point.</summary>
+    private static async Task<CanvasDocumentRecord> MarkPublishedAsync(World w, CanvasDocumentRecord board)
+    {
+        await using var db = await w.Factory.CreateDbContextAsync();
+        var entity = await db.CanvasDocuments.SingleAsync(d => d.Id == board.Id);
+        entity.PublishedJson = entity.DocumentJson;
+        entity.PublishedRevision = entity.Revision;
+        await db.SaveChangesAsync();
+        return board;
+    }
+
+    /// <summary>
+    /// A board the group can see. Publishing is what shows a board to anybody but its writer (Ben, 2026-09-16), so a
+    /// test about reading or saving mechanics starts from a published one.
+    /// </summary>
+    private static async Task<CanvasDocumentRecord> CreatePublishedOnCaseAsync(World w, Guid? asUser = null, string title = "Henderson board")
+    {
+        var board = await CreateOnCaseAsync(w, asUser, title);
+        var built = Build(w.Factory, asUser ?? w.EditorId);
+        IngestSucceeds(built);
+        Assert.IsType<OkObjectResult>((await built.Controller.Publish(board.Id, Upload(PngBytes()), default)).Result);
+        return board;
+    }
+
     // ── the door ──────────────────────────────────────────────────────────────
 
     [Fact]
@@ -226,19 +250,87 @@ public sealed class CanvasDocumentControllerTests
 
     // ── reading ───────────────────────────────────────────────────────────────
 
+    /// <summary>
+    /// Ben, 2026-09-16: a board is research being written, and "they can keep the drafts which are not displayed to
+    /// the members until it is published". So a case's list holds what has been published, plus the reader's own
+    /// unfinished boards — never somebody else's draft.
+    /// </summary>
     [Fact]
-    public async Task GetAll_by_case_returns_every_members_document_not_only_mine()
+    public async Task GetAll_by_case_returns_published_boards_and_the_callers_own_drafts()
     {
         var w = await SeedAsync();
-        await CreateOnCaseAsync(w, w.EditorId, "Erin's board");
-        await CreateOnCaseAsync(w, w.NoDeleteId, "Nora's board");
+        var erins = await CreateOnCaseAsync(w, w.EditorId, "Erin's board");
+        await CreateOnCaseAsync(w, w.NoDeleteId, "Nora's draft");
 
-        var result = await Build(w.Factory, w.ViewerId).Controller.GetAll(w.CaseId, default);
+        var publishing = Build(w.Factory, w.EditorId);
+        IngestSucceeds(publishing);
+        Assert.IsType<OkObjectResult>((await publishing.Controller.Publish(erins.Id, Upload(PngBytes()), default)).Result);
 
-        var list = ((IEnumerable<CanvasDocumentSummaryRecord>)Assert.IsType<OkObjectResult>(result.Result).Value!).ToList();
-        Assert.Equal(2, list.Count);
-        Assert.Contains(list, r => r.Name == "Erin's board" && r.CreatedByName == "Erin Editor");
-        Assert.Contains(list, r => r.Name == "Nora's board" && r.CreatedByName == "Nora Nodelete");
+        // Nora sees Erin's published board and her own draft; Erin's list holds her published board alone.
+        var nora = ((IEnumerable<CanvasDocumentSummaryRecord>)Assert.IsType<OkObjectResult>(
+            (await Build(w.Factory, w.NoDeleteId).Controller.GetAll(w.CaseId, default)).Result).Value!).ToList();
+        Assert.Equal(2, nora.Count);
+        Assert.Contains(nora, r => r.Name == "Erin's board" && r.CreatedByName == "Erin Editor" && r.IsPublished);
+        Assert.Contains(nora, r => r.Name == "Nora's draft" && !r.IsPublished);
+
+        var erin = ((IEnumerable<CanvasDocumentSummaryRecord>)Assert.IsType<OkObjectResult>(
+            (await Build(w.Factory, w.EditorId).Controller.GetAll(w.CaseId, default)).Result).Value!).ToList();
+        Assert.Equal(["Erin's board"], erin.Select(r => r.Name));
+    }
+
+    [Fact]
+    public async Task An_unpublished_board_is_not_another_members_to_open_or_write_on()
+    {
+        var w = await SeedAsync();
+        var draft = await CreateOnCaseAsync(w, w.EditorId, "Half a thought");
+
+        var other = Build(w.Factory, w.NoDeleteId, ifMatch: "\"1\"").Controller;
+
+        // Not found rather than forbidden: an unfinished board is not there for anybody else at all.
+        Assert.IsType<NotFoundResult>((await other.GetById(draft.Id, default)).Result);
+        Assert.IsType<NotFoundResult>((await other.Update(draft.Id, Board("Taken over"), default)).Result);
+    }
+
+    [Fact]
+    public async Task Publishing_shows_the_board_to_the_group_and_later_writing_is_a_draft_again()
+    {
+        var w = await SeedAsync();
+        var board = await CreateOnCaseAsync(w, w.EditorId, "The Henderson history");
+
+        var publishing = Build(w.Factory, w.EditorId);
+        IngestSucceeds(publishing);
+        Assert.IsType<OkObjectResult>((await publishing.Controller.Publish(board.Id, Upload(PngBytes()), default)).Result);
+
+        // Written on since: the writer works on their copy, the group still reads what was published.
+        var saved = Assert.IsType<OkObjectResult>((await Build(w.Factory, w.EditorId, ifMatch: "\"1\"")
+            .Controller.Update(board.Id, Board("The Henderson history", "<p>A second night</p>"), default)).Result);
+        Assert.Equal(2, ((CanvasDocumentRecord)saved.Value!).Revision);
+
+        var read = (CanvasDocumentRecord)Assert.IsType<OkObjectResult>(
+            (await Build(w.Factory, w.ViewerId).Controller.GetById(board.Id, default)).Result).Value!;
+        Assert.True(read.IsPublished);
+        Assert.True(read.HasUnpublishedChanges);
+        Assert.DoesNotContain("A second night", read.DocumentJson);
+
+        // And the writer sees their own working copy.
+        var writer = (CanvasDocumentRecord)Assert.IsType<OkObjectResult>(
+            (await Build(w.Factory, w.EditorId).Controller.GetById(board.Id, default)).Result).Value!;
+        Assert.Contains("A second night", writer.DocumentJson);
+    }
+
+    [Fact]
+    public async Task Once_published_another_member_who_may_update_the_case_can_write_on_it()
+    {
+        var w = await SeedAsync();
+        var board = await CreateOnCaseAsync(w, w.EditorId, "Shared board");
+        var publishing = Build(w.Factory, w.EditorId);
+        IngestSucceeds(publishing);
+        Assert.IsType<OkObjectResult>((await publishing.Controller.Publish(board.Id, Upload(PngBytes()), default)).Result);
+
+        var byAnother = await Build(w.Factory, w.NoDeleteId, ifMatch: "\"1\"")
+            .Controller.Update(board.Id, Board("Shared board", "<p>Nora adds the deed</p>"), default);
+
+        Assert.Contains("Nora adds the deed", ((CanvasDocumentRecord)Assert.IsType<OkObjectResult>(byAnother.Result).Value!).DocumentJson);
     }
 
     [Fact]
@@ -256,7 +348,7 @@ public sealed class CanvasDocumentControllerTests
     public async Task Reading_a_board_sends_its_revision_as_an_etag_and_its_group()
     {
         var w = await SeedAsync();
-        var board = await CreateOnCaseAsync(w);
+        var board = await CreatePublishedOnCaseAsync(w);
         var built = Build(w.Factory, w.ViewerId);
 
         var ok = Assert.IsType<OkObjectResult>((await built.Controller.GetById(board.Id, default)).Result);
@@ -273,7 +365,7 @@ public sealed class CanvasDocumentControllerTests
     public async Task A_viewer_can_read_and_not_write()
     {
         var w = await SeedAsync();
-        var board = await CreateOnCaseAsync(w);
+        var board = await CreatePublishedOnCaseAsync(w);
 
         var viewer = Build(w.Factory, w.ViewerId, ifMatch: "\"1\"");
         Assert.IsType<OkObjectResult>((await viewer.Controller.GetById(board.Id, default)).Result);
@@ -307,7 +399,7 @@ public sealed class CanvasDocumentControllerTests
     public async Task A_reader_is_told_the_board_is_view_only()
     {
         var w = await SeedAsync();
-        var board = await CreateOnCaseAsync(w);
+        var board = await CreatePublishedOnCaseAsync(w);
         var viewer = Build(w.Factory, w.ViewerId).Controller;
 
         var list = (IEnumerable<CanvasDocumentSummaryRecord>)Assert.IsType<OkObjectResult>((await viewer.GetAll(w.CaseId, default)).Result).Value!;
@@ -405,7 +497,7 @@ public sealed class CanvasDocumentControllerTests
     public async Task Saving_with_the_loaded_revision_bumps_it()
     {
         var w = await SeedAsync();
-        var board = await CreateOnCaseAsync(w);
+        var board = await CreatePublishedOnCaseAsync(w);
 
         var built = Build(w.Factory, w.NoDeleteId, ifMatch: "\"1\"");
         var ok = Assert.IsType<OkObjectResult>((await built.Controller.Update(board.Id, Board("Renamed"), default)).Result);
@@ -435,7 +527,7 @@ public sealed class CanvasDocumentControllerTests
     public async Task Saving_with_a_stale_revision_answers_409_with_the_server_copy()
     {
         var w = await SeedAsync();
-        var board = await CreateOnCaseAsync(w);
+        var board = await CreatePublishedOnCaseAsync(w);
         Assert.IsType<OkObjectResult>((await Build(w.Factory, w.EditorId, "\"1\"").Controller
             .Update(board.Id, Board("Theirs"), default)).Result);
 
@@ -565,8 +657,9 @@ public sealed class CanvasDocumentControllerTests
 
         var created = (CanvasDocumentRecord)Assert.IsType<CreatedAtActionResult>(
             (await Build(w.Factory, w.EditorId).Controller.Create(w.CaseId, hostile, default)).Result).Value!;
+        // Read back by the person who wrote it: what is on trial here is the cleaning, not who may see a draft.
         var read = (CanvasDocumentRecord)Assert.IsType<OkObjectResult>(
-            (await Build(w.Factory, w.ViewerId).Controller.GetById(created.Id, default)).Result).Value!;
+            (await Build(w.Factory, w.EditorId).Controller.GetById(created.Id, default)).Result).Value!;
 
         Assert.DoesNotContain("onerror", read.DocumentJson, StringComparison.OrdinalIgnoreCase);
         Assert.DoesNotContain("<script", read.DocumentJson, StringComparison.OrdinalIgnoreCase);
@@ -583,7 +676,7 @@ public sealed class CanvasDocumentControllerTests
     public async Task A_save_through_PUT_is_sanitised_too()
     {
         var w = await SeedAsync();
-        var board = await CreateOnCaseAsync(w);
+        var board = await CreatePublishedOnCaseAsync(w);
 
         var ok = Assert.IsType<OkObjectResult>((await Build(w.Factory, w.EditorId, "\"1\"").Controller
             .Update(board.Id, Board(html: "<a href=\"javascript:alert(1)\">x</a><img src=x onerror=alert(1)>"), default)).Result);
@@ -618,7 +711,7 @@ public sealed class CanvasDocumentControllerTests
         var hook = new OneShotBeforeSave();
         await using var sqlite = await SqliteTestDb.CreateAsync(hook);
         var w = await SeedAsync(sqlite.Factory);
-        var board = await CreateOnCaseAsync(w);
+        var board = await MarkPublishedAsync(w, await CreateOnCaseAsync(w));
 
         ActionResult<CanvasDocumentRecord>? second = null;
         // The first save has read revision 1 and passed the compare; before its UPDATE reaches the

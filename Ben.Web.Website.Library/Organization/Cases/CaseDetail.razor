@@ -306,9 +306,19 @@
             </BenTab>
 
             @* ── Research ─────────────────────────────────────────────────────── *@
+            @* Ben, 2026-09-16: research is written on the canvas now, on the writer's own machine, and kept to
+               themselves until they publish it. With the canvas switched off the tab falls back to the block-editor
+               research pages, so a site that has not turned it on is not left without research at all. *@
             <BenTab Title="Research" Id="research">
                 <div class="mt-2">
-                    <CaseResearch OrgId="@OrgId" CaseId="@CaseId" Permissions="@_perms" />
+                    @if (Features.IsOn(SiteFeatures.CanvasEditor))
+                    {
+                        <Ben.Web.Website.Library.Manage.Messenger.CaseResearchBoards OrgId="@OrgId" CaseId="@CaseId" Permissions="@_perms" />
+                    }
+                    else
+                    {
+                        <CaseResearch OrgId="@OrgId" CaseId="@CaseId" Permissions="@_perms" />
+                    }
                 </div>
             </BenTab>
             @* ── Notes ───────────────────────────────────────────────────────────── *@
@@ -317,26 +327,6 @@
                     <CaseNotes OrgId="@OrgId" CaseId="@CaseId" Permissions="@_perms" />
                 </div>
             </BenTab>
-
-            @* ── Research Notes ──────────────────────────────────────────────────── *@
-            @* The canvas board for this case, in the editor that runs on the person's own machine.
-               Behind the same switch as the page it links to, for the reason the Video tab below
-               records: a link that always shows and sometimes works is worse than no link. *@
-            @if (Features.IsOn(SiteFeatures.CanvasEditor))
-            {
-                <BenTab Title="Research Notes" Id="research-notes">
-                    <div class="mt-3">
-                        <p class="text-muted small mb-2">
-                            A board of everything this case is made of — cards, notes, pictures, maps, links and files,
-                            placed where they belong. It opens in its own editor.
-                        </p>
-                        <a href="/organizations/@OrgId/cases/@CaseId/research-notes"
-                           class="btn btn-sm btn-outline-primary" id="case-research-notes">
-                            Open Research Notes →
-                        </a>
-                    </div>
-                </BenTab>
-            }
 
             @* ── Video Editor ────────────────────────────────────────────────────── *@
             @* Shown only when the editor is on. The page behind this link is gated, so with the

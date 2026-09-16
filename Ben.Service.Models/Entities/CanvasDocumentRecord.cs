@@ -32,6 +32,12 @@ public record CanvasDocumentRecord
     /// <summary>Starts at 1 and rises by one per accepted save. Send it back as <c>If-Match</c>.</summary>
     public int Revision { get; init; }
 
+    /// <summary>Whether the group can see this board at all: a board nobody has published is its writer's alone.</summary>
+    public bool IsPublished { get; init; }
+
+    /// <summary>Published once and written on since — the group is reading an older board than the one being worked on.</summary>
+    public bool HasUnpublishedChanges { get; init; }
+
     /// <summary>The upload holding the last published PNG snapshot, if any.</summary>
     public Guid? PublishedUploadFileId { get; init; }
 
@@ -84,6 +90,12 @@ public record CanvasDocumentSummaryRecord
 
     /// <summary>The board's current revision.</summary>
     public int Revision { get; init; }
+
+    /// <summary>Whether the group can see this board at all: a board nobody has published is its writer's alone.</summary>
+    public bool IsPublished { get; init; }
+
+    /// <summary>Published once and written on since — the group is reading an older board than the one being worked on.</summary>
+    public bool HasUnpublishedChanges { get; init; }
 
     /// <summary>The upload holding the last published PNG snapshot, if any.</summary>
     public Guid? PublishedUploadFileId { get; init; }

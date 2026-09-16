@@ -41,6 +41,23 @@ namespace Ben.Data.Source.Entities
         /// <summary>Starts at 1; every accepted save adds one. The optimistic-concurrency token.</summary>
         public int Revision { get; set; }
 
+        /// <summary>
+        /// The board as the group last saw it, or null while it has never been published.
+        /// </summary>
+        /// <remarks>
+        /// <para>Ben, 2026-09-16: research is written on the writer's own machine and kept to themselves until it is
+        /// ready — "they can keep the drafts which are not displayed to the members until it is published". So
+        /// <see cref="DocumentJson"/> is the working draft and this is what everybody else reads. A board with nothing
+        /// here is not in the case's list at all: an unfinished thought is not evidence, and a list full of them is
+        /// worse than an empty one.</para>
+        /// <para>Publishing copies the draft here and records the revision it came from, so "published, and written on
+        /// since" is a fact the list can state rather than a guess.</para>
+        /// </remarks>
+        public string? PublishedJson { get; set; }
+
+        /// <summary><see cref="Revision"/> as it stood when <see cref="PublishedJson"/> was taken.</summary>
+        public int? PublishedRevision { get; set; }
+
         /// <summary>The PNG snapshot last published to the case, if any.</summary>
         public Guid? PublishedUploadFileId { get; set; }
 

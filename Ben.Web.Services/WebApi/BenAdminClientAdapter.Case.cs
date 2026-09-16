@@ -295,6 +295,9 @@ public sealed partial class BenAdminClientAdapter
     public Task<LoadResult<CaseResearchEntryDto>> GetCaseResearchAsync(Guid orgId, Guid caseId, CancellationToken token = default)
         => _api.GetListAsync<CaseResearchEntryDto>($"/api/orgs/{orgId}/cases/{caseId}/research", token);
 
+    public Task<LoadResult<CanvasDocumentSummaryRecord>> GetCaseBoardsAsync(Guid caseId, CancellationToken token = default)
+        => _api.GetListAsync<CanvasDocumentSummaryRecord>($"/api/canvas-documents?caseId={caseId}", token);
+
     public Task<CaseResearchEntryDto?> AddCaseResearchAsync(Guid orgId, Guid caseId, UpsertResearchRequest request, CancellationToken token = default)
         => _api.PostAsync<UpsertResearchRequest, CaseResearchEntryDto>($"/api/orgs/{orgId}/cases/{caseId}/research", request, token);
 
