@@ -302,6 +302,11 @@ public sealed class CanvasServerSession(
             {
                 ImageData i => (i.AssetId, i.OpfsExt, i.UploadFileId, $"board-image-{i.AssetId:N}{i.OpfsExt}"),
                 FileData f => (f.AssetId, f.OpfsExt, f.UploadFileId, string.IsNullOrWhiteSpace(f.FileName) ? $"board-file-{f.AssetId:N}{f.OpfsExt}" : f.FileName),
+                // Recordings go up with everything else. Left out of this switch they would stay on
+                // the device that dropped them: the board would save, the author would keep hearing
+                // them, and everybody else would open a block with nothing in it.
+                AudioData a => (a.AssetId, a.OpfsExt, a.UploadFileId, string.IsNullOrWhiteSpace(a.FileName) ? $"board-audio-{a.AssetId:N}{a.OpfsExt}" : a.FileName),
+                VideoData v => (v.AssetId, v.OpfsExt, v.UploadFileId, string.IsNullOrWhiteSpace(v.FileName) ? $"board-video-{v.AssetId:N}{v.OpfsExt}" : v.FileName),
                 _ => (null, null, null, ""),
             };
             if (assetId is not { } id || uploaded is not null) continue;
@@ -320,6 +325,8 @@ public sealed class CanvasServerSession(
             {
                 if (data is ImageData image) image.UploadFileId = upload.UploadFileId;
                 else if (data is FileData file) file.UploadFileId = upload.UploadFileId;
+                else if (data is AudioData audio) audio.UploadFileId = upload.UploadFileId;
+                else if (data is VideoData video) video.UploadFileId = upload.UploadFileId;
             });
         }
 

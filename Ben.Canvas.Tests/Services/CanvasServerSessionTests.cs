@@ -292,6 +292,42 @@ public sealed class CanvasServerSessionTests
         Assert.Contains("uploadFileId", rig.Server.Saves[0].Json, StringComparison.OrdinalIgnoreCase);
     }
 
+    /// <summary>
+    /// A recording dropped on a board goes to the case with everything else.
+    /// </summary>
+    /// <remarks>
+    /// Left out of the upload switch it would stay on the device that dropped it: the board saves,
+    /// the author goes on hearing it because their own copy is still there, and everybody else
+    /// opens a block with nothing in it. That is the worst shape a bug can take on an evidence
+    /// board — invisible to the only person who could notice.
+    /// </remarks>
+    [Theory]
+    [InlineData("evp-001.m4a")]
+    [InlineData("porch.mp4")]
+    public async Task A_recording_is_uploaded_to_the_case_like_any_other_file(string fileName)
+    {
+        var rig = await new Rig().StartedAsync();
+        var asset = Guid.NewGuid();
+        var ext = Path.GetExtension(fileName);
+        rig.Device.Files.Add(asset, ext, DateTime.UtcNow);
+
+        NodeData data = fileName.EndsWith(".m4a", StringComparison.Ordinal)
+            ? new AudioData { AssetId = asset, OpfsExt = ext, FileName = fileName }
+            : new VideoData { AssetId = asset, OpfsExt = ext, FileName = fileName };
+        var type = data is AudioData ? CanvasNodeType.Audio : CanvasNodeType.Video;
+
+        rig.Device.Store.AddNode(new CanvasNode { Type = type, Width = 340, Height = 132, Data = data });
+
+        await rig.Session.SaveToCaseAsync();
+
+        Assert.Equal(fileName, Assert.Single(rig.Media.Uploads).Name);
+
+        // And the block now points at the case's copy, or the next person to open the board would
+        // be told the recording is not there.
+        var saved = rig.Device.Store.Document.Nodes[0].Data;
+        Assert.NotNull(saved is AudioData a ? a.UploadFileId : ((VideoData)saved).UploadFileId);
+    }
+
     [Fact]
     public async Task A_failed_upload_stops_the_save_and_says_which_file()
     {
