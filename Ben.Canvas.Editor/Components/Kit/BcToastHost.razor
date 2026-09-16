@@ -1,0 +1,47 @@
+@implements IDisposable
+@inject BcToastService Toasts
+
+@*
+    Copied from Ben.Web.Website.Library/Kit/BenToastHost.razor, because Kit cannot be referenced
+    from WebAssembly (Razor SDK plus the Ben.Web.Services FrameworkReference). Keep markup and
+    Bootstrap class names identical so the site look carries.
+
+    Bootstrap's Toast plugin is not used: it hides and removes elements itself, which would leave
+    Blazor's render tree describing nodes that are no longer there. The service owns the list and
+    this component renders it.
+*@
+
+<div class="toast-container position-fixed bottom-0 end-0 p-3 bc-toasts">
+    @foreach (var toast in _toasts)
+    {
+        <div class="toast show" role="@(toast.Level == BcToastLevel.Error ? "alert" : "status")"
+             aria-live="@(toast.Level == BcToastLevel.Error ? "assertive" : "polite")" aria-atomic="true">
+            <div class="toast-header @toast.HeaderClass">
+                <BcIcon Name="@toast.Icon" Class="me-2" />
+                <strong class="me-auto">@(toast.Title ?? toast.DefaultTitle)</strong>
+                <button type="button" class="btn-close btn-close-white" aria-label="Close"
+                        @onclick="() => Toasts.Dismiss(toast.Id)"></button>
+            </div>
+            <div class="toast-body">@toast.Message</div>
+        </div>
+    }
+</div>
+
+@code {
+    private IReadOnlyList<BcToast> _toasts = Array.Empty<BcToast>();
+
+    protected override void OnInitialized()
+    {
+        Toasts.Changed += OnChanged;
+        _toasts = Toasts.Current;
+    }
+
+    // Auto-dismiss fires on a timer thread, so marshal onto the renderer before touching state.
+    private void OnChanged() => InvokeAsync(() =>
+    {
+        _toasts = Toasts.Current;
+        StateHasChanged();
+    });
+
+    public void Dispose() => Toasts.Changed -= OnChanged;
+}

@@ -1,8 +1,7 @@
 # Running the case canvas locally (Windows)
 
-The canvas editor lives in `Z:\_GitHub\VandyBen\Ben.Web.Website.Library.Manage\Messenger` until it
-joins `Ben.slnx`; its server half is on the `feature/canvas-editor` branch in the
-`Paranormal-canvas` worktree. Everything below runs against the disposable **`IsHauntedDb_e2e`**
+The canvas editor lives in this repository (`Ben.Canvas.Core`, `Ben.Canvas.Editor`, `Ben.Wasm.Canvas`), vendored 2026-09-16 from the MessageEditor repo — see Ben.Canvas.VENDORED.md. It is part of `Ben.slnx`, and its server half — the boards API, link unfurling and the
+`features.canvas-editor` switch — is on `develop`. Everything below runs against the disposable **`IsHauntedDb_e2e`**
 database on the local SQL Server — never `IsHauntedDb` (production) and never the UAT database.
 
 ## 1. The API on 5252
@@ -35,7 +34,7 @@ The seeded passwords live only in that file. Read them from there; never commit 
 ## 2. The canvas host on 5125
 
 ```powershell
-dotnet run --project Z:\_GitHub\VandyBen\Ben.Web.Website.Library.Manage\Messenger\Ben.Wasm.Canvas
+dotnet run --project Ben.Wasm.Canvas
 ```
 
 ## 3. The website on 5078 (only for map tiles and checking published files)

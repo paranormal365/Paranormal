@@ -1,0 +1,66 @@
+@*
+    The editor's header bar: back link, board title, save state, actions, then whatever the host puts in
+    its status slot (the sign-in chip).
+
+    Modelled on the site's editor chrome (Ben.Web.Website.Library/Organization/Cases/
+    CaseVideoEditorPage.razor:44-64) so the canvas reads as part of the same product. Later milestones
+    extend this file: the phone layout (M5), and Save to case and Publish (M6), gated on the server seam
+    being available rather than on a flag.
+*@
+
+<div class="bc-header">
+    @if (BackContent is not null)
+    {
+        @BackContent
+        <span class="vr" aria-hidden="true"></span>
+    }
+    <h1 class="bc-header__title text-truncate">@DocumentTitle</h1>
+    <SaveStateIndicator State="SaveState" AutosavePending="AutosavePending" OnRetry="@(() => OnAction.InvokeAsync("save-retry"))" OnResolveConflict="@(() => OnAction.InvokeAsync("resolve-conflict"))" />
+    <div class="bc-header__actions">
+        <button type="button" class="bc-header__button" data-bc-action="undo" disabled="@(!CanUndo)"
+                aria-label="@UndoName" title="@UndoName" @onclick="@(() => OnAction.InvokeAsync("undo"))">
+            <BcIcon Name="rotate-ccw" />
+        </button>
+        <button type="button" class="bc-header__button" data-bc-action="redo" disabled="@(!CanRedo)"
+                aria-label="@RedoName" title="@RedoName" @onclick="@(() => OnAction.InvokeAsync("redo"))">
+            <BcIcon Name="rotate-cw" />
+        </button>
+        @ActionsContent
+        <button type="button" class="bc-header__button bc-header__props" data-bc-action="properties"
+                aria-controls="bc-props" aria-expanded="@(PropertiesOpen ? "true" : "false")" aria-pressed="@(PropertiesOpen ? "true" : "false")"
+                aria-label="Properties" title="Properties" @onclick="@(() => OnAction.InvokeAsync("toggle-props"))">
+            <BcIcon Name="sidebar" />
+        </button>
+        <button type="button" class="bc-header__button" data-bc-action="help"
+                aria-label="Keyboard shortcuts" title="Keyboard shortcuts" @onclick="@(() => OnAction.InvokeAsync("help"))">
+            <BcIcon Name="help-circle" />
+        </button>
+    </div>
+    @HostStatusContent
+</div>
+
+@code {
+    /// <summary>The board's title.</summary>
+    [Parameter] public string DocumentTitle { get; set; } = "Untitled board";
+
+    /// <summary>The host's link back to where the board came from.</summary>
+    [Parameter] public RenderFragment? BackContent { get; set; }
+
+    /// <summary>The host's trailing slot, typically the sign-in chip.</summary>
+    [Parameter] public RenderFragment? HostStatusContent { get; set; }
+
+    /// <summary>Extra actions the editor adds (export, save to case, publish).</summary>
+    [Parameter] public RenderFragment? ActionsContent { get; set; }
+
+    [Parameter] public SaveState SaveState { get; set; } = SaveState.Clean;
+    [Parameter] public bool AutosavePending { get; set; }
+    [Parameter] public bool CanUndo { get; set; }
+    [Parameter] public bool CanRedo { get; set; }
+    [Parameter] public string? UndoDescription { get; set; }
+    [Parameter] public string? RedoDescription { get; set; }
+    [Parameter] public bool PropertiesOpen { get; set; } = true;
+    [Parameter] public EventCallback<string> OnAction { get; set; }
+
+    private string UndoName => UndoDescription is null ? "Undo" : $"Undo {UndoDescription.ToLowerInvariant()}";
+    private string RedoName => RedoDescription is null ? "Redo" : $"Redo {RedoDescription.ToLowerInvariant()}";
+}

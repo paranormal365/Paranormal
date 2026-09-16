@@ -1,0 +1,14 @@
+@*
+    No FocusOnNavigate: the site removed it (Ben.Web.Website/Components/Routes.razor:13-21) because it
+    paints a focus ring on arrival, and the editor has no page-level heading to move focus to.
+*@
+<Router AppAssembly="@typeof(App).Assembly" AdditionalAssemblies="@(new[] { typeof(Ben.Canvas.Editor.Components.CanvasEditor).Assembly })">
+    <Found Context="routeData">
+        <RouteView RouteData="@routeData" DefaultLayout="@typeof(Layout.MainLayout)" />
+    </Found>
+    <NotFound>
+        <LayoutView Layout="@typeof(Layout.MainLayout)">
+            <p class="p-3">Nothing here.</p>
+        </LayoutView>
+    </NotFound>
+</Router>

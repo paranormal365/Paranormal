@@ -7,7 +7,7 @@ importantly, the site's **origin**: MapKit tokens are minted for one origin and 
 anywhere else, and the canvas's sign-in, save and publish calls go to `/webapi` with no CORS.
 
 Until the canvas project joins `Ben.slnx` (plan M8) it lives outside this repository, in
-`Z:\_GitHub\VandyBen\Ben.Web.Website.Library.Manage\Messenger\Ben.Wasm.Canvas`, so every deploy
+`Ben.Wasm.Canvas`, so every deploy
 names it with `-CanvasProjectPath`.
 
 ## Build it
@@ -16,7 +16,7 @@ Stage first. `-StageOnly` publishes and patches into `artifacts\canvas\` and tou
 server, so it needs no elevation:
 
 ```powershell
-.\scripts\deploy-ishaunted.ps1 -Apps canvas -StageOnly -CanvasProjectPath 'Z:\_GitHub\VandyBen\Ben.Web.Website.Library.Manage\Messenger\Ben.Wasm.Canvas'
+.\scripts\deploy-ishaunted.ps1 -Apps canvas -StageOnly -CanvasProjectPath 'Ben.Wasm.Canvas'
 ```
 
 The script refuses outright when there is no `Ben.Wasm.Canvas.csproj` at that path, rather than
@@ -122,7 +122,7 @@ prompt before the next:
 1. `Set-Location Z:\_GitHub\Paranormal365\Paranormal\Paranormal-canvas`
 2. `dotnet ef database update --project Ben.Data.Source --startup-project Ben.Data.WebApi --connection "data source=localhost;initial catalog=IsHauntedDb;integrated security=True;persist security info=False;encrypt=True;trustservercertificate=True;"`
 3. `.\scripts\setup-iis-ishaunted.ps1`
-4. `.\scripts\deploy-ishaunted.ps1 -Apps webapi,canvas,website -CanvasProjectPath 'Z:\_GitHub\VandyBen\Ben.Web.Website.Library.Manage\Messenger\Ben.Wasm.Canvas'`
+4. `.\scripts\deploy-ishaunted.ps1 -Apps webapi,canvas,website -CanvasProjectPath 'Ben.Wasm.Canvas'`
    — the website is included because `Ben.Web.Services` changed (the canvas flag and
    `StandaloneCanvasAddress`).
 5. In the browser: sign in at `https://ishaunted.com/`, open Site settings, turn on

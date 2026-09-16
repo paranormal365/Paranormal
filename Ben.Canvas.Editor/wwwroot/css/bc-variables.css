@@ -1,0 +1,92 @@
+/*
+ * bc-variables.css
+ * ─────────────────────────────────────────────────────────────────────────────
+ * Literal fallbacks for every --bc-* custom property the canvas editor reads.
+ *
+ * WHY THIS FILE EXISTS
+ * A var() whose token nothing defines does not fall back to "no colour": the
+ * whole declaration becomes invalid at computed-value time and the property
+ * drops to its initial value, silently. A panel loses its background, a border
+ * disappears, and nothing in the console says why. Every token the editor's CSS
+ * asks for is defined here first, with the Night skin's dark values, and
+ * bc-theme.css then re-points each one at the site's --bs-* palette.
+ *
+ * HOST STYLESHEET ORDER (mandatory)
+ *   1. fonts/fonts.css
+ *   2. Ben.Wasm.Canvas.styles.css          (scoped component CSS)
+ *   3. kendo-theme-bootstrap/all.css
+ *   4. css/site-palette.css                (the site's --bs-* tokens)
+ *   5. theme/telerik-night.css             (Kendo remap, as the site loads it)
+ *   6. bc-variables.css                    ← this file
+ *   7. bc-theme.css                        (must win over this file)
+ *   8. bc-kit.css
+ *   9. css/bootstrap-subset.css
+ *  10. css/app.css
+ * The site itself loads Kendo, then telerik-night, then the editor theme
+ * (Ben.Web.Website/Components/App.razor:53-67), so both hosts agree.
+ *
+ * SetAtRuntime - properties written by the board's JavaScript, never declared
+ * here (the token guard exempts them):
+ *   --bc-zoom --bc-pan-x --bc-pan-y --bc-dx --bc-dy --bc-rx --bc-ry --bc-rw --bc-rh
+ * ─────────────────────────────────────────────────────────────────────────────
+ */
+
+:root {
+    /* ── Ground, text and accent ───────────────────────────────────────── */
+    --bc-accent:          #8796b9;
+    --bc-border:          #495057;
+    --bc-surface-1:       #212529;
+    --bc-surface-2:       #2b3035;
+    --bc-surface-3:       #343a40;
+    --bc-text:            #dee2e6;
+    --bc-text-muted:      rgba(222, 226, 230, .75);
+    --bc-accent-muted:    rgba(55, 80, 138, .28);
+
+    /* ── States ─────────────────────────────────────────────────────────── */
+    --bc-danger-text:     #c78dba;
+    --bc-danger-bg:       rgba(168, 85, 147, .12);
+    --bc-attention:       #c4be85;
+
+    /* ── Board ──────────────────────────────────────────────────────────── */
+    --bc-grid-dot:        rgba(222, 226, 230, .12);
+    --bc-node-shadow:     0 2px 8px rgba(0, 0, 0, .35);
+    --bc-node-shadow-lifted: 0 10px 24px rgba(0, 0, 0, .45);
+    --bc-radius:          .5rem;
+    --bc-radius-sm:       .375rem;
+    --bc-handle-size:     10px;
+    --bc-handle-hit:      24px;
+    --bc-edge-width:      2px;
+    --bc-edge-color:      rgba(222, 226, 230, .55);
+    --bc-edge-selected:   #8796b9;
+    --bc-group-fill:      rgba(55, 80, 138, .08);
+    --bc-group-stroke:    rgba(55, 80, 138, .6);
+    --bc-selection-stroke: #37508a;
+    --bc-focus-ring:      #37508a;
+
+    /* ── Chrome sizes ───────────────────────────────────────────────────── */
+    --bc-toolbar-h:       44px;
+    --bc-rail-w:          56px;
+    --bc-props-w:         320px;
+    --bc-sheet-h:         45vh;
+    --bc-tap:             44px;
+
+    /* ── Per-type accents (a node's left bar, so type reads without colour
+          flooding the whole card) ────────────────────────────────────────── */
+    --bc-type-card:       #37508a;
+    --bc-type-message:    #489e48;
+    --bc-type-map:        #66366c;
+    --bc-type-image:      #aaa256;
+    --bc-type-link:       #8796b9;
+    --bc-type-text:       rgba(222, 226, 230, .75);
+    --bc-type-file:       rgba(222, 226, 230, .75);
+    --bc-type-group:      #37508a;
+
+    /* ── Palette a person picks for a block, group or connector (keys 1..6) ── */
+    --bc-color-1:         #37508a;
+    --bc-color-2:         #489e48;
+    --bc-color-3:         #a85593;
+    --bc-color-4:         #aaa256;
+    --bc-color-5:         #66366c;
+    --bc-color-6:         #6c757d;
+    --bc-sticky-bg:       #3a3526;
+}

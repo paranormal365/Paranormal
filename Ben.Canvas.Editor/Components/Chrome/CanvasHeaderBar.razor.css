@@ -1,0 +1,54 @@
+.bc-header {
+    grid-area: header;
+    display: flex;
+    flex-wrap: nowrap;
+    align-items: center;
+    gap: .75rem;
+    min-height: var(--bc-toolbar-h);
+    padding: 0 .75rem;
+    border-bottom: 1px solid var(--bc-border);
+    background: var(--bc-surface-2);
+    color: var(--bc-text);
+    z-index: 10;
+    touch-action: manipulation;
+}
+
+/* An h1 for the document outline, sized as the site's editor pages size their title (h6). */
+.bc-header__title {
+    margin: 0;
+    max-width: 300px;
+    min-width: 0;
+    font-size: 1rem;
+    font-weight: 600;
+    line-height: 1.2;
+}
+
+.bc-header__actions {
+    display: flex;
+    align-items: center;
+    gap: .25rem;
+    margin-left: auto;
+}
+
+/* ::deep because Export and Import arrive through ActionsContent, rendered (and scoped) by the editor. */
+.bc-header ::deep .bc-header__button {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    width: var(--bc-tap);
+    height: var(--bc-tap);
+    border: 0;
+    border-radius: var(--bc-radius-sm);
+    background: transparent;
+    color: var(--bc-text);
+}
+
+.bc-header ::deep .bc-header__button:hover:not(:disabled) { background: var(--bc-surface-3); }
+.bc-header ::deep .bc-header__button:disabled { opacity: .4; }
+
+.bc-header ::deep .bc-header__button:focus-visible {
+    outline: 2px solid var(--bc-focus-ring);
+    outline-offset: 1px;
+}
+
+.bc-header__props[aria-pressed="true"] { color: var(--bc-accent); }

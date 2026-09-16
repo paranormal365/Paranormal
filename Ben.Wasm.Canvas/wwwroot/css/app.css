@@ -1,0 +1,274 @@
+/* The standalone canvas host's own shell: page ground, the full-viewport main, the login card, the
+   theme toggle, the sign-in chip, Blazor's error bar and the loading ring. Copied from
+   Ben.Wasm.Video/wwwroot/css/app.css with the .bwv-* classes renamed .bwc-*. Every colour comes from
+   the --bs-* palette. */
+
+html {
+    -webkit-text-size-adjust: 100%;
+}
+
+html, body {
+    font-family: var(--bs-body-font-family);
+    height: 100%;
+    margin: 0;
+    padding: 0;
+    overflow: hidden;
+    background-color: var(--bs-body-bg);
+    color: var(--bs-body-color);
+    /* Tells the browser to draw form controls, scrollbars and the caret for the active theme. Without
+       it a dark page keeps light scrollbars - the giveaway that a page is painted dark rather than
+       themed dark. */
+    color-scheme: light dark;
+}
+
+:root[data-bs-theme="dark"] { color-scheme: dark; }
+:root[data-bs-theme="light"] { color-scheme: light; }
+
+h1:focus {
+    outline: none;
+}
+
+a {
+    color: var(--bs-link-color);
+}
+
+:focus-visible {
+    outline: 2px solid var(--bs-primary);
+    outline-offset: 2px;
+}
+
+.valid.modified:not([type=checkbox]) { outline: 1px solid var(--bs-success); }
+.invalid { outline: 1px solid var(--bs-danger); }
+.validation-message { color: var(--bs-danger); }
+
+/* ── Shell ────────────────────────────────────────────────────────────────── */
+/* The editor fills the viewport. 100dvh after the 100vh fallback so the iPhone's collapsing browser
+   bars do not leave the board taller than the screen; overscroll-behavior stops the page itself
+   rubber-banding under a pinch. */
+.bwc-main {
+    height: 100vh;
+    height: 100dvh;
+    width: 100vw;
+    overflow: hidden;
+    overscroll-behavior: none;
+    padding-top: env(safe-area-inset-top);
+    box-sizing: border-box;
+}
+
+/* ── Blazor's own bars ────────────────────────────────────────────────────── */
+#blazor-error-ui {
+    color-scheme: light only;
+    background: lightyellow;
+    color: #212529;
+    bottom: 0;
+    box-shadow: 0 -1px 2px rgba(0, 0, 0, .2);
+    box-sizing: border-box;
+    display: none;
+    left: 0;
+    padding: .6rem 1.25rem .7rem 1.25rem;
+    position: fixed;
+    width: 100%;
+    z-index: 1100;
+}
+
+#blazor-error-ui .dismiss {
+    cursor: pointer;
+    position: absolute;
+    right: .75rem;
+    top: .5rem;
+}
+
+.loading-progress {
+    position: absolute;
+    display: block;
+    width: 8rem;
+    height: 8rem;
+    inset: 20vh 0 auto 0;
+    margin: 0 auto 0 auto;
+}
+
+.loading-progress circle {
+    fill: none;
+    stroke: var(--bs-border-color);
+    stroke-width: .6rem;
+    transform-origin: 50% 50%;
+    transform: rotate(-90deg);
+}
+
+.loading-progress circle:last-child {
+    stroke: var(--bs-primary);
+    stroke-dasharray: calc(3.141 * var(--blazor-load-percentage, 0%) * .8), 500%;
+    transition: stroke-dasharray .05s ease-in-out;
+}
+
+.loading-progress-text {
+    position: absolute;
+    color: var(--bs-body-color);
+    text-align: center;
+    font-weight: bold;
+    inset: calc(20vh + 3.25rem) 0 auto .2rem;
+}
+
+.loading-progress-text:after {
+    content: var(--blazor-load-percentage-text, "Loading");
+}
+
+/* ── Login page ───────────────────────────────────────────────────────────── */
+/* The only screen that is not the board, so it is where "does this look like the site?" is first
+   judged. Built from the palette: a card, a label, an input and a button do not justify 563 KB. */
+.bwc-login {
+    /* The width keeps a 1rem gutter on a phone; at 24rem wide a 390px screen otherwise put the card's
+       edges against the glass. */
+    box-sizing: border-box;
+    width: calc(100% - 2rem);
+    max-width: 24rem;
+    margin: 12vh auto 0;
+    padding: 1.75rem;
+    font-size: .95rem;
+    color: var(--bs-body-color);
+    background-color: var(--bs-tertiary-bg);
+    border: 1px solid var(--bs-border-color);
+    border-radius: var(--bs-border-radius);
+}
+
+.bwc-login h1 {
+    margin: 0 0 .35rem;
+    font-size: 1.5rem;
+    color: var(--bs-emphasis-color);
+}
+
+.bwc-login label {
+    display: block;
+    margin-top: .85rem;
+    font-weight: 600;
+}
+
+.bwc-login input {
+    width: 100%;
+    min-height: 44px;
+    margin-top: .3rem;
+    padding: .375rem .75rem;
+    box-sizing: border-box;
+    font: inherit;
+    color: var(--bs-body-color);
+    background-color: var(--bs-body-bg);
+    border: 1px solid var(--bs-border-color);
+    border-radius: var(--bs-border-radius);
+    line-height: var(--bs-body-line-height);
+}
+
+.bwc-login input:focus {
+    outline: none;
+    border-color: var(--bs-primary);
+    box-shadow: 0 0 0 .25rem rgba(var(--bs-primary-rgb), .25);
+}
+
+.bwc-login button {
+    margin-top: 1.25rem;
+    min-height: 44px;
+    padding: .375rem 1.4rem;
+    font: inherit;
+    color: #fff;
+    background-color: var(--bs-primary);
+    border: 1px solid var(--bs-primary);
+    border-radius: var(--bs-border-radius);
+    cursor: pointer;
+}
+
+.bwc-login button:disabled {
+    opacity: .65;
+    cursor: default;
+}
+
+.bwc-login__hint  { color: var(--bs-secondary-color); }
+.bwc-login__error { color: var(--bs-danger); }
+.bwc-login__ok    { color: var(--bs-success); }
+
+/* Scoped under .bwc-login: the Kendo base theme zeroes paragraph margins with a rule that outranks a
+   bare class, which left "Back to the board" touching the Sign in button. */
+.bwc-login .bwc-login__back,
+.bwc-login .bwc-login__links {
+    margin-top: 1.1rem;
+    font-size: .82rem;
+}
+
+.bwc-login__links a { margin-right: .2rem; }
+
+/* ── Theme toggle (standalone host only) ──────────────────────────────────── */
+/* The glyph is chosen by CSS off the root attribute, so flipping it involves no re-render. It sits
+   bottom-left, clear of the header's sign-in chip and of the editor's own controls. */
+.bwc-theme-toggle {
+    position: fixed;
+    left: calc(.6rem + env(safe-area-inset-left));
+    bottom: calc(.6rem + env(safe-area-inset-bottom));
+    z-index: 20;
+    width: 2.75rem;
+    height: 2.75rem;
+    padding: 0;
+    line-height: 1;
+    font-size: 1rem;
+    color: var(--bs-secondary-color);
+    background: var(--bs-tertiary-bg);
+    border: 1px solid var(--bs-border-color);
+    border-radius: 50%;
+    cursor: pointer;
+}
+
+.bwc-theme-toggle:hover {
+    color: var(--bs-body-color);
+}
+
+.bwc-theme-toggle::before { content: "\263D"; }
+:root[data-bs-theme="dark"] .bwc-theme-toggle::before { content: "\2600"; }
+
+/* ── Sign-in chip ─────────────────────────────────────────────────────────── */
+.bwc-signin {
+    display: inline-flex;
+    align-items: center;
+    gap: .35rem;
+    font-size: .8rem;
+    white-space: nowrap;
+}
+
+.bwc-signin__action {
+    min-height: 32px;
+    background: none;
+    border: 1px solid var(--bs-border-color);
+    border-radius: 999px;
+    padding: .12rem .75rem;
+    font: inherit;
+    color: inherit;
+    cursor: pointer;
+}
+
+.bwc-signin__action:hover { border-color: currentColor; }
+
+/* Signed in is a state, not an action: the dot carries it so the button can stay a button. */
+.bwc-signin__dot {
+    width: .5rem;
+    height: .5rem;
+    border-radius: 50%;
+    background: var(--bs-success);
+}
+
+/* A phone's page must not bounce or scroll behind the board: position:fixed on body is what actually
+   stops iOS Safari rubber-banding. Wider screens keep normal flow. */
+html, body {
+    overscroll-behavior: none;
+}
+
+@media (max-width: 767.98px) {
+    html, body {
+        position: fixed;
+        inset: 0;
+        overflow: hidden;
+    }
+}
+/* On a phone the bottom edge is the editor's tool bar, so the theme switch sits above it instead of on
+   top of the Add button. */
+@media (max-width: 767.98px) {
+    .bwc-theme-toggle {
+        bottom: calc(56px + .6rem + env(safe-area-inset-bottom));
+        z-index: 9; /* under the editor's bar (10) and its sheets (20) */
+    }
+}

@@ -1,0 +1,109 @@
+@page "/login"
+@inject AuthService Auth
+@inject TokenStore Tokens
+@inject NavigationManager Nav
+@inject IConfiguration Config
+
+<PageTitle>Sign in - IsHaunted Canvas</PageTitle>
+
+@* Copied from Ben.Wasm.Video/Pages/Login.razor. Plain Blazor-bound inputs by deliberate convention:
+   Telerik inputs ignore synthetically set values, which makes automated verification lie, and a login
+   form is exactly where that must not happen. *@
+<div class="bwc-login">
+    <h1>Sign in</h1>
+    <p class="bwc-login__hint">
+        Uses your regular IsHaunted account. Signing in lets you save boards to a case and publish them.
+    </p>
+
+    <EditForm Model="this" OnValidSubmit="SubmitAsync">
+        <label for="email">Email</label>
+        <InputText id="email" type="email" @bind-Value="Email" autocomplete="username" />
+
+        <label for="password">Password</label>
+        <InputText id="password" type="password" @bind-Value="Password" autocomplete="current-password" />
+
+        @* Only once the server has said the password was right and a code is what is missing. *@
+        @if (_needsCode)
+        {
+            <label for="code">Authenticator code</label>
+            <InputText id="code" @bind-Value="TwoFactorCode" autocomplete="one-time-code"
+                       inputmode="numeric" placeholder="000000" />
+            <p class="bwc-login__hint">A recovery code works here too.</p>
+        }
+
+        <button type="submit" disabled="@_busy">@(_busy ? "Signing in…" : _needsCode ? "Verify" : "Sign in")</button>
+    </EditForm>
+
+    @if (_error is not null)
+    {
+        <p class="bwc-login__error" role="alert">@_error</p>
+    }
+
+    @* Always offered: editing works perfectly well signed out. *@
+    <p class="bwc-login__back">
+        @if (Tokens.IsAuthenticated)
+        {
+            <span class="bwc-login__ok">Signed in.</span>
+        }
+        <a href="@EditorUrl">Back to the board</a>
+    </p>
+
+    @* Both live on the site: this app has no account pages of its own. *@
+    @if (SiteUrl is not null)
+    {
+        <p class="bwc-login__links">
+            <a href="@($"{SiteUrl}/forgot-password")" target="_blank" rel="noopener">Forgotten your password?</a>
+            <span aria-hidden="true"> · </span>
+            <a href="@($"{SiteUrl}/register")" target="_blank" rel="noopener">Create an account</a>
+        </p>
+    }
+</div>
+
+@code {
+    private bool _busy;
+    private string? _error;
+    private bool _needsCode;
+
+    public string Email { get; set; } = string.Empty;
+    public string Password { get; set; } = string.Empty;
+    public string TwoFactorCode { get; set; } = string.Empty;
+
+    /// <summary>
+    /// This app's own root. Not "/": in production the editor is served under /editors/canvas/, where
+    /// "/" is the site's root, so signing in would navigate straight out of the editor.
+    /// </summary>
+    private string EditorUrl => Nav.BaseUri;
+
+    /// <summary>The site the account belongs to, for the pages this app does not have.</summary>
+    private string? SiteUrl
+    {
+        get
+        {
+            var site = Config["Canvas:SiteBaseUrl"]?.Trim().TrimEnd('/');
+            return string.IsNullOrEmpty(site) ? null : site;
+        }
+    }
+
+    private async Task SubmitAsync()
+    {
+        _busy = true; _error = null;
+        try
+        {
+            var result = await Auth.SignInAsync(Email, Password, _needsCode ? TwoFactorCode : null);
+
+            if (result.RequiresTwoFactor)
+            {
+                _needsCode = true;
+                _error = null;
+                return;
+            }
+
+            _error = result.Problem;
+            if (_error is null) Nav.NavigateTo(EditorUrl);
+        }
+        finally
+        {
+            _busy = false;
+        }
+    }
+}

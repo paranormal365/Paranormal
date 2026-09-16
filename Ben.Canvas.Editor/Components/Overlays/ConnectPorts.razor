@@ -1,0 +1,16 @@
+@*
+    Four connect ports at a block's side midpoints. Dragging from one draws a connector; the side the drag
+    started from is kept and the far end picks its side automatically.
+*@
+
+@foreach (var side in Sides)
+{
+    <button type="button" class="bc-port bc-port--@side.ToLowerInvariant()" data-bc-port="@side" data-bc-node="@NodeId"
+            aria-label="@($"Connect from the {side.ToLowerInvariant()}")" title="@($"Connect from the {side.ToLowerInvariant()}")"></button>
+}
+
+@code {
+    private static readonly string[] Sides = ["Top", "Right", "Bottom", "Left"];
+
+    [Parameter, EditorRequired] public Guid NodeId { get; set; }
+}

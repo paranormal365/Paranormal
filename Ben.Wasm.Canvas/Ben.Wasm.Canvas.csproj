@@ -1,0 +1,36 @@
+<Project Sdk="Microsoft.NET.Sdk.BlazorWebAssembly">
+
+  <!--
+    The standalone WebAssembly host for the canvas editor. Static files, no server process of its
+    own: deployed as an IIS Application at /editors/canvas/, beside /editors/video/.
+  -->
+
+  <PropertyGroup>
+    <TargetFramework>net10.0</TargetFramework>
+    <Nullable>enable</Nullable>
+    <ImplicitUsings>enable</ImplicitUsings>
+    <OverrideHtmlAssetPlaceholders>true</OverrideHtmlAssetPlaceholders>
+    <TreatWarningsAsErrors>true</TreatWarningsAsErrors>
+
+    <!--
+      A board stores world coordinates, zoom and dates as text. Under a French or German browser
+      locale the current culture writes 2.5 as "2,5", so a board saved on one iPad would not open
+      identically on another - the same class of bug that broke the video editor's exports for
+      non-English browsers. Invariant globalization closes the whole class; dates shown to people go
+      through Core's explicit-pattern formatter instead of ToString("g"). It also drops the ICU data
+      download.
+    -->
+    <InvariantGlobalization>true</InvariantGlobalization>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <PackageReference Include="Microsoft.AspNetCore.Components.WebAssembly" Version="10.0.11" />
+    <PackageReference Include="Microsoft.AspNetCore.Components.WebAssembly.DevServer" Version="10.0.11" PrivateAssets="all" />
+    <PackageReference Include="Telerik.UI.for.Blazor" Version="14.1.0" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <ProjectReference Include="..\Ben.Canvas.Editor\Ben.Canvas.Editor.csproj" />
+  </ItemGroup>
+
+</Project>

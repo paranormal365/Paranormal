@@ -1,0 +1,86 @@
+@*
+    A card filled out from a template. At rest it lists the fields in template order, with state in words
+    and a glyph ("Yes" and a tick), never colour alone. While editing, each field gets the control for its
+    kind. A card whose template this editor does not have still shows what was typed.
+*@
+@inherits BlockRendererBase
+
+@if (Template is null)
+{
+    <p class="bc-card__notice">This card uses a template this editor does not have.</p>
+    <dl class="bc-card__fields">
+        @foreach (var (key, value) in Card.Fields)
+        {
+            <dt>@key</dt><dd>@value</dd>
+        }
+    </dl>
+}
+else if (Editing)
+{
+    <div class="bc-card__edit">
+        <label class="bc-field" for="@FieldId("title")"><span class="bc-field__label">Title</span>
+            <input @ref="FirstField" id="@FieldId("title")" class="form-control form-control-sm" @bind="Card.Title" @bind:event="oninput" placeholder="@Template.Name" />
+        </label>
+        @foreach (var field in Template.Fields)
+        {
+            <CardFieldControl Field="field" Fields="Card.Fields" InputId="@FieldId(field.Key)" />
+        }
+    </div>
+}
+else
+{
+    <div class="bc-card">
+        <p class="bc-card__title @(string.IsNullOrWhiteSpace(Card.Title) ? "bc-card__title--empty" : null)">@(string.IsNullOrWhiteSpace(Card.Title) ? Template.Name : Card.Title)</p>
+        <dl class="bc-card__fields">
+            @foreach (var field in Template.Fields)
+            {
+                var value = Card.Fields.GetValueOrDefault(field.Key);
+                <dt>@field.Label</dt>
+                <dd>
+                    @switch (field.Kind)
+                    {
+                        case CardFieldKind.Checkbox:
+                            if (value == "true")
+                            {
+                                <BcIcon Name="check-square" Class="bc-card__tick" /><span> Yes</span>
+                            }
+                            else
+                            {
+                                <span class="bc-card__empty">No</span>
+                            }
+                            break;
+                        case CardFieldKind.Date:
+                            if (BcDateFormat.TryParseCardValue(value, out var date))
+                            {
+                                @BcDateFormat.Date(date)
+                            }
+                            else
+                            {
+                                <span class="bc-card__empty">Not set</span>
+                            }
+                            break;
+                        default:
+                            if (string.IsNullOrWhiteSpace(value))
+                            {
+                                <span class="bc-card__empty">@(field.Required ? "Required" : "Not set")</span>
+                            }
+                            else
+                            {
+                                @value
+                            }
+                            break;
+                    }
+                </dd>
+            }
+        </dl>
+    </div>
+}
+
+@code {
+    private CardData Card => Data as CardData ?? new CardData();
+
+    private CardTemplate? Template =>
+        Options.Value.CardTemplates.FirstOrDefault(t => t.Id == Card.TemplateId);
+
+    private string FieldId(string key) => $"bc-card-{Node.Id:N}-{key}";
+}

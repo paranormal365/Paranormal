@@ -37,7 +37,7 @@
     always run webapi -> editor -> canvas -> files -> website, so the visible cut-over happens last.
 
 .PARAMETER CanvasProjectPath
-    The Ben.Wasm.Canvas project folder. Empty means Repo\Ben.Wasm.Canvas, its home once the canvas
+    The Ben.Wasm.Canvas project folder. Empty means Repo\Ben.Wasm.Canvas, where it lives.
     joins Ben.slnx (plan M8); until then pass the Messenger path, see docs\deploy-canvas.md.
 
 .EXAMPLE
@@ -753,7 +753,7 @@ if ($Apps -contains 'canvas') {
     # The canvas project lives outside this repository until it joins Ben.slnx (plan M8). Refuse a
     # wrong path here, with the fix in the sentence, rather than publishing nothing or the wrong app.
     if (-not (Test-Path (Join-Path $CanvasProjectPath 'Ben.Wasm.Canvas.csproj'))) {
-        throw "no Ben.Wasm.Canvas.csproj at $CanvasProjectPath - until the canvas joins Ben.slnx pass -CanvasProjectPath 'Z:\_GitHub\VandyBen\Ben.Web.Website.Library.Manage\Messenger\Ben.Wasm.Canvas'"
+        throw "no Ben.Wasm.Canvas.csproj at $CanvasProjectPath - the canvas lives in this repository now; pass -CanvasProjectPath only to publish one from elsewhere, e.g. 'Ben.Wasm.Canvas'"
     }
     if (-not $SkipBuild) { Invoke-Publish $CanvasProjectPath $canvasOut }
 

@@ -1,0 +1,78 @@
+.bc-editor {
+    display: grid;
+    grid-template-areas:
+        "header header header"
+        "rail board props";
+    grid-template-columns: var(--bc-rail-w) minmax(0, 1fr) 0;
+    grid-template-rows: auto minmax(0, 1fr);
+    height: 100%;
+    min-height: 0;
+    overflow: hidden;
+    overscroll-behavior: none;
+    background: var(--bc-surface-1);
+    color: var(--bc-text);
+}
+
+.bc-editor--props {
+    grid-template-columns: var(--bc-rail-w) minmax(0, 1fr) var(--bc-props-w);
+}
+
+.bc-editor__body {
+    grid-area: board;
+    position: relative;
+    min-height: 0;
+    min-width: 0;
+    overflow: hidden;
+}
+
+/* ── iPad in portrait: properties lay over the board instead of taking a column ───────────── */
+@media (min-width: 768px) and (max-width: 1023.98px) {
+    .bc-editor,
+    .bc-editor--props {
+        position: relative;
+        grid-template-columns: var(--bc-rail-w) minmax(0, 1fr) 0;
+    }
+
+    .bc-editor ::deep .bc-props {
+        position: absolute;
+        top: var(--bc-toolbar-h);
+        right: 0;
+        bottom: 0;
+        width: var(--bc-props-w);
+        box-shadow: var(--bc-node-shadow-lifted);
+    }
+
+    /* The zoom controls stay reachable beside the open panel. */
+    .bc-editor--props ::deep .bc-zoom {
+        right: calc(var(--bc-props-w) + 1rem);
+    }
+}
+
+/* ── Phone: header, board, bottom bar; properties live in a sheet ─────────────────────────── */
+@media (max-width: 767.98px) {
+    .bc-editor,
+    .bc-editor--props {
+        grid-template-areas:
+            "header"
+            "board"
+            "bar";
+        grid-template-columns: minmax(0, 1fr);
+        grid-template-rows: auto minmax(0, 1fr) auto;
+    }
+
+    /* Undo, redo and the file actions are in the bar and More; properties open from More. */
+    .bc-editor ::deep .bc-header__actions > [data-bc-action] {
+        display: none;
+    }
+
+    .bc-editor ::deep .bc-header {
+        padding-left: max(.5rem, env(safe-area-inset-left, 0px));
+        padding-right: max(.5rem, env(safe-area-inset-right, 0px));
+    }
+
+    .bc-editor ::deep .bc-sheet .bc-props {
+        border-left: 0;
+        padding: .25rem 1rem 1rem;
+        background: transparent;
+    }
+}

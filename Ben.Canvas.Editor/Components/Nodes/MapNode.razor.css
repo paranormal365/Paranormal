@@ -1,0 +1,43 @@
+.bc-map {
+    display: flex;
+    flex-direction: column;
+    gap: .25rem;
+    height: 100%;
+    overflow: auto;
+    font-size: .8125rem;
+}
+
+.bc-map__place { display: flex; align-items: center; gap: .375rem; font-weight: 600; }
+.bc-map__empty { color: var(--bc-text-muted); font-weight: 400; }
+.bc-map__coords { margin: 0; color: var(--bc-text-muted); font-variant-numeric: tabular-nums; }
+.bc-map__pins { margin: 0; padding-left: 1.25rem; }
+.bc-map__more { color: var(--bc-text-muted); list-style: none; }
+.bc-map__note { margin: auto 0 0; color: var(--bc-text-muted); font-size: .75rem; }
+.bc-map__error { margin: 0; color: var(--bc-danger-text); font-size: .75rem; }
+
+/* The still picture fills the box; Apple's logo and legal notice sit in its corners and must stay visible. */
+.bc-map__picture { position: relative; flex: 1 1 auto; min-height: 0; overflow: hidden; border-radius: var(--bc-radius-sm); background: var(--bc-surface-3); }
+.bc-map__img { width: 100%; height: 100%; object-fit: contain; display: block; }
+.bc-map__live { flex: 1 1 auto; min-height: 120px; border-radius: var(--bc-radius-sm); overflow: hidden; touch-action: none; }
+.bc-map--live-on { overflow: hidden; }
+
+.bc-map__bar { display: flex; flex-wrap: wrap; align-items: center; gap: .5rem; }
+.bc-map__toggle,
+.bc-map__apple {
+    display: inline-flex;
+    align-items: center;
+    gap: .25rem;
+    min-height: 28px;
+    padding: 0 .5rem;
+    border: 1px solid var(--bc-border);
+    border-radius: var(--bc-radius-sm);
+    background: var(--bc-surface-3);
+    color: var(--bc-text);
+    font-size: .75rem;
+    text-decoration: none;
+}
+.bc-map__toggle:focus-visible,
+.bc-map__apple:focus-visible { outline: 2px solid var(--bc-focus-ring); outline-offset: 1px; }
+@media (pointer: coarse) {
+    .bc-map__toggle, .bc-map__apple { min-height: 44px; }
+}

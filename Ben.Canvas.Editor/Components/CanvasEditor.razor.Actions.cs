@@ -1,0 +1,297 @@
+using Ben.Canvas.Core.Text;
+using Ben.Canvas.Core.Blocks;
+using Ben.Canvas.Core.Geometry;
+using Ben.Canvas.Core.Model;
+using Ben.Canvas.Editor.Services;
+using Microsoft.Extensions.Logging;
+
+namespace Ben.Canvas.Editor.Components;
+
+public partial class CanvasEditor
+{
+    /// <summary>
+    /// The single entry for buttons, menu items and keys. An unknown action is logged, never thrown, so a
+    /// stale button in a host cannot break the editor.
+    /// </summary>
+    public async Task RunActionAsync(string action)
+    {
+        if (!Access.CanEdit && ChangesTheBoard(action))
+        {
+            Announcer.Say(Access.Reason ?? CanvasCopy.Sentences.ViewOnly);
+            return;
+        }
+
+        switch (action)
+        {
+            case "undo":
+                if (Store.Undo()) Announcer.Say(Words.UndoOf(Store.RedoDescription));
+                break;
+            case "redo":
+                if (Store.Redo()) Announcer.Say(Words.RedoOf(Store.UndoDescription));
+                break;
+            case "zoom-in":
+                await Bridge.SyncViewportAsync();
+                Viewport.ZoomAboutCentre(1.25);
+                await Bridge.PushViewportAsync(animate: true);
+                break;
+            case "zoom-out":
+                await Bridge.SyncViewportAsync();
+                Viewport.ZoomAboutCentre(0.8);
+                await Bridge.PushViewportAsync(animate: true);
+                break;
+            case "zoom-reset":
+                await Bridge.SyncViewportAsync();
+                Viewport.ResetZoom();
+                await Bridge.PushViewportAsync(animate: true);
+                break;
+            case "fit":
+                FitToContent();
+                await Bridge.PushViewportAsync(animate: true);
+                break;
+            case "toggle-props":
+                await Layout.SetPropsOpenAsync(!Layout.PropsOpen);
+                break;
+            case "help":
+                Layout.Close();
+                _helpOpen = true;
+                break;
+            case "add-menu":
+                Layout.Open(CanvasLayoutState.SheetAdd);
+                break;
+            case "more":
+                Layout.Open(CanvasLayoutState.SheetMore);
+                break;
+            case "sheet-close":
+                Layout.Close();
+                break;
+            case "edit":
+                if (SingleSelected() is { } editing) await BeginEditAsync(editing.Id);
+                break;
+            case "duplicate":
+                var copies = Store.Duplicate(Selection.NodeIds);
+                if (copies.Count > 0) Selection.SelectMany(copies);
+                break;
+            case "delete":
+                DeleteSelection();
+                break;
+            case "lock":
+                ToggleLock();
+                break;
+            case "front":
+                Store.BringToFront(Selection.NodeIds);
+                break;
+            case "back":
+                Store.SendToBack(Selection.NodeIds);
+                break;
+            case "group":
+                if (Store.Group(Selection.NodeIds) is { } group) Selection.SelectGroup(group.Id);
+                break;
+            case "ungroup":
+                Ungroup();
+                break;
+            case "rename":
+                if (Selection.GroupId is { } gid) Selection.BeginRenameGroup(gid);
+                break;
+            case "connect":
+                EnterConnectMode();
+                break;
+            case "add-card-here":
+                AddBlock(CanvasNodeType.Card, _menuWorld);
+                break;
+            case "add-text-here":
+                AddBlock(CanvasNodeType.Text, _menuWorld);
+                break;
+            case "save-server":
+            case "save-retry":
+                await SaveToCaseAsync();
+                break;
+            case "publish":
+                _publishOpen = ServerSession.CanSaveToCase;
+                break;
+            case "publish-confirmed":
+                var publishProblem = await ServerSession.PublishAsync(scene => Snapshots.DrawAsync(_root, scene));
+                _publishOpen = false;
+                if (publishProblem is null)
+                {
+                    Toasts.Success(CanvasCopy.Sentences.PublishDone);
+                    Announcer.Say(CanvasCopy.Sentences.PublishDone);
+                }
+                else ShowServerProblem(publishProblem);
+
+                break;
+            case "resolve-conflict":
+                _conflictOpen = ServerSession.PendingConflict is not null;
+                break;
+            case "conflict-mine":
+                _conflictOpen = false;
+                if (await ServerSession.KeepMineAsync() is { } keepProblem) ShowServerProblem(keepProblem);
+                else Announcer.Say(CanvasCopy.Sentences.SavedToCase);
+                break;
+            case "conflict-theirs":
+                _conflictOpen = false;
+                if (await ServerSession.TakeTheirsAsync() is { } takeProblem) Toasts.Warning(takeProblem);
+                else
+                {
+                    Selection.Clear();
+                    Announcer.Say(CanvasCopy.Sentences.TookTheirs);
+                }
+
+                break;
+            case "conflict-export":
+                // The dialog stays open: exporting keeps a copy, the choice still has to be made.
+                await RunActionAsync("export");
+                break;
+            case "paste":
+                // The Paste button is handled by the browser's own click (pasteInterop.js), where reading the
+                // clipboard is allowed; nothing to do here.
+                break;
+            case "export":
+                var export = await Packages.ExportAsync();
+                if (export.Problems.Count > 0) Toasts.Warning(string.Join(" ", export.Problems));
+                if (export.DownloadUrl is not null)
+                {
+                    _downloadUrl = export.DownloadUrl;
+                    _downloadName = export.FileName;
+                    _downloadOpen = true;
+                }
+
+                break;
+            case "import":
+                await Packages.ChooseFileAsync(_importInput);
+                break;
+            case "save":
+                // Ctrl+S saves to the case when the board can be; otherwise it keeps the device copy current.
+                if (ServerSession.CanSaveToCase) await SaveToCaseAsync();
+                else await Documents.SaveAsync();
+                break;
+            default:
+                if (action.StartsWith("add-", StringComparison.Ordinal)
+                    && Enum.TryParse<CanvasNodeType>(action[4..], ignoreCase: true, out var type))
+                {
+                    AddBlock(type, null);
+                    break;
+                }
+
+                LoggerFactory.CreateLogger<CanvasEditor>().LogWarning("Unknown canvas action {Action}.", action);
+                break;
+        }
+
+        StateHasChanged();
+    }
+
+    /// <summary>
+    /// The actions a view-only board refuses (R33): everything that changes the board or sends it to the case.
+    /// Moving around, selecting, reading, help and export stay allowed.
+    /// </summary>
+    internal static bool ChangesTheBoard(string action) =>
+        action.StartsWith("add-", StringComparison.Ordinal) && action != "add-menu"
+        || action is "undo" or "redo" or "edit" or "duplicate" or "delete" or "lock" or "front" or "back" or "group"
+            or "ungroup" or "rename" or "connect" or "paste" or "import" or "save-server" or "save-retry" or "publish"
+            or "publish-confirmed" or "conflict-mine";
+
+    private async Task SaveToCaseAsync()
+    {
+        if (await ServerSession.SaveToCaseAsync() is { } problem) ShowServerProblem(problem);
+        else Announcer.Say(CanvasCopy.Sentences.SavedToCase);
+    }
+
+    /// <summary>A conflict opens the choice; anything else is a toast that keeps the device copy's reassurance.</summary>
+    private void ShowServerProblem(string problem)
+    {
+        if (ServerSession.PendingConflict is not null)
+        {
+            _conflictOpen = true;
+            return;
+        }
+
+        Toasts.Warning(CanvasCopy.Sentences.SaveFailed(problem));
+    }
+
+    private CanvasNode? SingleSelected() =>
+        Selection.NodeIds.Count == 1 ? Store.FindNode(Selection.NodeIds.First()) : null;
+
+    private void FitToContent()
+    {
+        var bounds = WorldRect.Bounds(Store.Document.Nodes.Select(CanvasHitTester.RectOf)
+            .Concat(Store.Document.Groups.Select(CanvasHitTester.RectOf)));
+        if (bounds.IsEmpty) Viewport.Set(CanvasViewport.Identity);
+        else Viewport.Fit(bounds);
+    }
+
+    /// <summary>Adds a block at a point, or centred in view; repeated adds cascade so they never stack exactly.</summary>
+    private void AddBlock(CanvasNodeType type, CanvasPoint? at)
+    {
+        if (!Options.Value.EnabledBlocks.Contains(type)) return;
+        var d = BlockRegistry.Get(type);
+
+        CanvasPoint centre;
+        if (at is { } point)
+        {
+            centre = point;
+            _addCascade = 0;
+        }
+        else
+        {
+            var now = DateTime.UtcNow;
+            _addCascade = now - _lastAddAt < TimeSpan.FromSeconds(2) ? _addCascade + 1 : 0;
+            _lastAddAt = now;
+            var mid = Viewport.WorldCentre();
+            centre = new CanvasPoint(mid.X + _addCascade * CanvasStoreCascade, mid.Y + _addCascade * CanvasStoreCascade);
+        }
+
+        var node = new CanvasNode
+        {
+            Type = type,
+            X = centre.X - d.DefaultWidth / 2,
+            Y = centre.Y - d.DefaultHeight / 2,
+            Width = d.DefaultWidth,
+            Height = d.DefaultHeight,
+            Data = d.CreateDefaultData(DateTime.UtcNow),
+        };
+
+        if (Store.AddNode(node))
+        {
+            Selection.Select(node.Id);
+            Selection.FocusedNodeId = node.Id;
+        }
+    }
+
+    private const double CanvasStoreCascade = Core.Commands.CanvasStore.CascadeOffset;
+
+    private void DeleteSelection()
+    {
+        if (Selection.NodeIds.Count > 0)
+        {
+            var count = Selection.NodeIds.Count;
+            if (Store.RemoveNodes(Selection.NodeIds.ToList())) Announcer.Say(Words.Deleted(count));
+        }
+        else if (Selection.EdgeId is { } edgeId)
+        {
+            Store.Disconnect(edgeId);
+        }
+        else if (Selection.GroupId is { } groupId)
+        {
+            Store.Ungroup(groupId);
+        }
+    }
+
+    private void ToggleLock()
+    {
+        var nodes = Selection.NodeIds.Select(Store.FindNode).OfType<CanvasNode>().ToList();
+        if (nodes.Count == 0) return;
+        var lockAll = nodes.Any(n => !n.Locked);
+        if (Store.SetLocked(nodes.Select(n => n.Id), lockAll)) Announcer.Say(lockAll ? Words.Locked : Words.Unlocked);
+    }
+
+    private void Ungroup()
+    {
+        if (Selection.GroupId is { } gid)
+        {
+            Store.Ungroup(gid);
+            return;
+        }
+
+        var groups = Selection.NodeIds.Select(Store.FindNode).OfType<CanvasNode>().Select(n => n.GroupId).OfType<Guid>().Distinct().ToList();
+        foreach (var group in groups) Store.Ungroup(group);
+    }
+}

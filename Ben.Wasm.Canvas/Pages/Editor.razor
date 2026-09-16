@@ -1,0 +1,73 @@
+@page "/"
+@page "/editor"
+@implements IDisposable
+@inject AccountInfoService Account
+@inject TokenStore Tokens
+@inject CanvasHandoffService Handoff
+@inject IConfiguration Config
+
+<PageTitle>IsHaunted Canvas</PageTitle>
+
+<CanvasEditor CaseId="@_caseId"
+              OrganizationId="@_orgId"
+              OpenServerDocumentId="@_openId"
+              ShowDiagnostics="@_showDiagnostics"
+              HostStatusContent="@SignInChipFragment"
+              BackContent="@BackLink" />
+
+@code {
+    private Guid? _caseId;
+    private Guid? _orgId;
+    private Guid? _openId;
+    private bool _showDiagnostics;
+
+    private RenderFragment SignInChipFragment => __builder =>
+    {
+        <SignInChip />
+    };
+
+    /// <summary>
+    /// A link back to the case the board came from, when the site handed over enough to build one.
+    /// </summary>
+    private RenderFragment? BackLink
+    {
+        get
+        {
+            var site = Config["Canvas:SiteBaseUrl"]?.Trim().TrimEnd('/');
+            if (string.IsNullOrEmpty(site) || _orgId is null || _caseId is null) return null;
+
+            var href = $"{site}/organizations/{_orgId:D}/cases/{_caseId:D}";
+            return __builder =>
+            {
+                <a class="bc-header__back btn btn-link btn-sm" href="@href">Back to case</a>
+            };
+        }
+    }
+
+    protected override async Task OnInitializedAsync()
+    {
+        Tokens.Changed += OnTokensChanged;
+
+        // Before anything asks whether we are signed in: the link the site hands out carries a
+        // one-minute code, and exchanging it first means the editor comes up already signed in
+        // instead of flashing a sign-in prompt at somebody who signed in on the site seconds ago.
+        var handoff = await Handoff.ApplyAsync();
+        _openId = handoff.DocumentId;
+        _caseId = handoff.CaseId;
+        _orgId = handoff.OrganizationId;
+
+        await RefreshAsync();
+    }
+
+    /// <summary>Sign-in happens on another page, so the answer is asked again when tokens change.</summary>
+    private void OnTokensChanged() => _ = InvokeAsync(RefreshAsync);
+
+    private async Task RefreshAsync()
+    {
+        // Also fills Account.Email, which is what the editor shows as the signed-in name.
+        _showDiagnostics = await Account.IsAdministratorAsync();
+        StateHasChanged();
+    }
+
+    public void Dispose() => Tokens.Changed -= OnTokensChanged;
+}

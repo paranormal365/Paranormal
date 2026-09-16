@@ -1,0 +1,91 @@
+@*
+    Connectors: one SVG in world coordinates beneath the blocks.
+
+    Each connector is a wide invisible hit path over a thin visible line, because a two-pixel line is
+    impossible to click and impossible to tap. Arrowheads are plain paths rather than SVG markers: a marker
+    needs a document id, and url(#id) references resolve against <base href>, which breaks under a sub-path.
+    Labels are SVG text with a stroke halo; WebKit misplaces foreignObject inside transformed ancestors.
+*@
+@implements IDisposable
+@inject CanvasStore Store
+@inject SelectionState Selection
+
+<svg class="bc-edges" aria-label="Connectors" role="group">
+    @foreach (var edge in Store.Document.Edges)
+    {
+        var from = Store.FindNode(edge.FromNodeId);
+        var to = Store.FindNode(edge.ToNodeId);
+        if (from is null || to is null) continue;
+
+        var path = EdgeGeometry.Resolve(CanvasHitTester.RectOf(from), CanvasHitTester.RectOf(to), edge.FromSide, edge.ToSide);
+        var d = path.ToSvgPath();
+        var selected = Selection.EdgeId == edge.Id;
+
+        <g @key="edge.Id" class="@EdgeClass(edge)" data-bc-edge="@edge.Id" data-bc-selected="@(selected ? "true" : null)"
+           role="img" tabindex="@(selected ? "0" : "-1")" aria-label="@EdgeLabel(edge, from, to)">
+            <path class="bc-edge__hit" d="@d" />
+            <path class="bc-edge__line" d="@d" />
+            <path class="bc-edge__focus" d="@d" />
+            @if (edge.Arrow is EdgeArrow.End or EdgeArrow.Both)
+            {
+                <path class="bc-edge__head" d="@ArrowHead(path, true)" />
+            }
+            @if (edge.Arrow == EdgeArrow.Both)
+            {
+                <path class="bc-edge__head" d="@ArrowHead(path, false)" />
+            }
+            @if (!string.IsNullOrWhiteSpace(edge.Label))
+            {
+                @* <!text> is SVG's text element; the ! stops Razor reading it as its own <text> tag. *@
+                <!text class="bc-edge__label" x="@CssNumber.F(path.MidPoint.X)" y="@CssNumber.F(path.MidPoint.Y)"
+                      text-anchor="middle" dominant-baseline="middle">@edge.Label</!text>
+            }
+        </g>
+    }
+    <path class="bc-connect-preview" />
+</svg>
+
+@code {
+    protected override void OnInitialized()
+    {
+        Store.OnChange += Changed;
+        Selection.OnChanged += Refresh;
+    }
+
+    private static string EdgeClass(CanvasEdge edge) =>
+        CanvasPalette.IsValid(edge.ColorKey) ? $"bc-edge bc-edge--c{edge.ColorKey}" : "bc-edge";
+
+    private static string EdgeLabel(CanvasEdge edge, CanvasNode from, CanvasNode to)
+    {
+        var label = $"Connector from {NodeWords.Title(from)} to {NodeWords.Title(to)}";
+        return string.IsNullOrWhiteSpace(edge.Label) ? label : $"{label}: {edge.Label}";
+    }
+
+    /// <summary>A closed triangle at one end, pointing along the curve's tangent there.</summary>
+    internal static string ArrowHead(EdgePath path, bool atEnd, double size = 10)
+    {
+        var tip = atEnd ? path.P3 : path.P0;
+        var control = atEnd ? path.P2 : path.P1;
+        var dx = tip.X - control.X;
+        var dy = tip.Y - control.Y;
+        var length = Math.Sqrt(dx * dx + dy * dy);
+        if (length < 1e-6) { dx = 1; dy = 0; length = 1; }
+        var ux = dx / length;
+        var uy = dy / length;
+        var baseX = tip.X - ux * size;
+        var baseY = tip.Y - uy * size;
+        var half = size * 0.55;
+        return FormattableString.Invariant(
+            $"M {CssNumber.F(tip.X)} {CssNumber.F(tip.Y)} L {CssNumber.F(baseX - uy * half)} {CssNumber.F(baseY + ux * half)} L {CssNumber.F(baseX + uy * half)} {CssNumber.F(baseY - ux * half)} Z");
+    }
+
+    private void Changed(CanvasChange change) => _ = InvokeAsync(StateHasChanged);
+
+    private void Refresh() => _ = InvokeAsync(StateHasChanged);
+
+    public void Dispose()
+    {
+        Store.OnChange -= Changed;
+        Selection.OnChanged -= Refresh;
+    }
+}

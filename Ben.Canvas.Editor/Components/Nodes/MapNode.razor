@@ -1,0 +1,190 @@
+@*
+    A map box (R35). At rest it is a still picture of the place, loaded from Apple through the site's signer each
+    time the box is shown and cached only by the browser - never stored with the board, because Apple's terms keep
+    map data temporary. "Live map" swaps in Apple's interactive map; "Picture" puts the still back. Open in Apple
+    Maps is always there. Without the site's map signer (a local-only editor, or no place yet) the box is the
+    address card: the place, its coordinates and its pins.
+*@
+@inherits BlockRendererBase
+@implements IAsyncDisposable
+@inject IJSRuntime JS
+
+<div class="@(_live ? "bc-map bc-map--live-on" : "bc-map")">
+    @if (ShowsPicture && !_live)
+    {
+        <div class="bc-map__picture">
+            @* Both schemes are named; CSS shows the one matching the site's theme, and a lazy image that is not shown is never fetched. *@
+            <img class="bc-map__img bc-map__img--light" src="@PictureUrl("light")" alt="@PictureAlt" loading="lazy" draggable="false" decoding="async" />
+            <img class="bc-map__img bc-map__img--dark" src="@PictureUrl("dark")" alt="@PictureAlt" loading="lazy" draggable="false" decoding="async" />
+        </div>
+    }
+    else if (_live)
+    {
+        <div class="bc-map__live" @ref="_liveElement"></div>
+        @if (_liveFailed)
+        {
+            <p class="bc-map__note">@CanvasCopy.Sentences.MapUnavailable</p>
+        }
+    }
+    else
+    {
+        <div class="bc-map__place">
+            <BcIcon Name="map-pin" />
+            <span class="@(string.IsNullOrWhiteSpace(Map.Address) ? "bc-map__empty" : null)">@(string.IsNullOrWhiteSpace(Map.Address) ? "No place set yet" : Map.Address)</span>
+        </div>
+        @if (HasCoordinates)
+        {
+            <p class="bc-map__coords">@Coordinates(Map.Latitude, Map.Longitude)</p>
+        }
+        @if (Map.Pins.Count > 0)
+        {
+            <ul class="bc-map__pins">
+                @foreach (var pin in Map.Pins.Take(3))
+                {
+                    <li>@(string.IsNullOrWhiteSpace(pin.Title) ? Coordinates(pin.Latitude, pin.Longitude) : pin.Title)</li>
+                }
+                @if (Map.Pins.Count > 3)
+                {
+                    <li class="bc-map__more">and @(Map.Pins.Count - 3) more</li>
+                }
+            </ul>
+        }
+    }
+
+    @if (Editing)
+    {
+        <label class="bc-field" for="@($"bc-map-addr-{Node.Id:N}")"><span class="bc-field__label">Address</span>
+            <input @ref="FirstField" id="@($"bc-map-addr-{Node.Id:N}")" class="form-control form-control-sm" @bind="Map.Address" @bind:event="oninput" />
+        </label>
+        <label class="bc-field" for="@($"bc-map-ll-{Node.Id:N}")"><span class="bc-field__label">Coordinates</span>
+            <input id="@($"bc-map-ll-{Node.Id:N}")" class="form-control form-control-sm" value="@(HasCoordinates ? Coordinates(Map.Latitude, Map.Longitude) : "")"
+                   aria-describedby="@(_coordinatesError ? $"bc-map-err-{Node.Id:N}" : null)" @onchange="OnCoordinates" />
+        </label>
+        @if (_coordinatesError)
+        {
+            <p id="@($"bc-map-err-{Node.Id:N}")" class="bc-map__error">Those coordinates were not understood. Try "36.16, -86.78".</p>
+        }
+    }
+    else if (HasCoordinates)
+    {
+        <div class="bc-map__bar">
+            @if (CanGoLive)
+            {
+                <button type="button" class="bc-map__toggle" aria-pressed="@(_live ? "true" : "false")" @onclick="ToggleLiveAsync">
+                    <BcIcon Name="@(_live ? "image" : "map")" /><span>@(_live ? "Picture" : "Live map")</span>
+                </button>
+            }
+            <a class="bc-map__apple" href="@AppleMapsUrl(Map)" target="_blank" rel="noopener noreferrer" aria-label="Open this place in Apple Maps in a new tab">
+                <BcIcon Name="external-link" /><span>Open in Apple Maps</span>
+            </a>
+        </div>
+    }
+</div>
+
+@code {
+    private bool _coordinatesError;
+    private bool _live;
+    private bool _mounted;
+    private bool _liveFailed;
+    private ElementReference _liveElement;
+    private IJSObjectReference? _module;
+
+    private MapData Map => Data as MapData ?? new MapData();
+
+    private bool HasCoordinates => Map.Latitude != 0 || Map.Longitude != 0;
+
+    private bool ShowsPicture => HasCoordinates && !string.IsNullOrWhiteSpace(Options.Value.MapSnapshotUrl) && !Editing;
+
+    private bool CanGoLive => !string.IsNullOrWhiteSpace(Options.Value.MapTokenUrl);
+
+    private string PictureAlt => $"Map of {(string.IsNullOrWhiteSpace(Map.Address) ? Coordinates(Map.Latitude, Map.Longitude) : Map.Address)}";
+
+    internal static string Coordinates(double lat, double lng) =>
+        string.Create(System.Globalization.CultureInfo.InvariantCulture, $"{lat:F5}, {lng:F5}");
+
+    /// <summary>The site's signer for a still of this box: its place, zoom and size, in the given scheme.</summary>
+    internal string PictureUrl(string scheme) => SnapshotAddress(Options.Value.MapSnapshotUrl!, Map, Node.Width, Node.Height, scheme);
+
+    internal static string SnapshotAddress(string signer, MapData map, double width, double height, string scheme)
+    {
+        var w = (int)Math.Clamp(Math.Round(width), 50, 640);
+        var h = (int)Math.Clamp(Math.Round(height - 60), 50, 640);
+        var z = (int)Math.Clamp(Math.Round(map.Zoom), 3, 20);
+        return string.Create(System.Globalization.CultureInfo.InvariantCulture,
+            $"{signer}?lat={map.Latitude:F6}&lng={map.Longitude:F6}&z={z}&w={w}&h={h}&scheme={scheme}");
+    }
+
+    /// <summary>Apple Maps' own address for the place, which opens the Maps app on an iPhone or iPad.</summary>
+    internal static string AppleMapsUrl(MapData map)
+    {
+        var ll = string.Create(System.Globalization.CultureInfo.InvariantCulture, $"{map.Latitude:F6},{map.Longitude:F6}");
+        var q = Uri.EscapeDataString(string.IsNullOrWhiteSpace(map.Address) ? "Place" : map.Address);
+        return $"https://maps.apple.com/?ll={ll}&q={q}";
+    }
+
+    private async Task ToggleLiveAsync()
+    {
+        if (_live)
+        {
+            await UnmountAsync();
+            _live = false;
+            return;
+        }
+
+        _live = true;
+        _liveFailed = false;
+    }
+
+    protected override async Task OnAfterRenderAsync(bool firstRender)
+    {
+        await base.OnAfterRenderAsync(firstRender);
+        if (!_live || _mounted || !OperatingSystem.IsBrowser()) return;
+
+        _mounted = true;
+        try
+        {
+            _module ??= await CanvasModules.ImportAsync(JS, "js/mapInterop.js");
+            var ok = await _module.InvokeAsync<bool>("mount", _liveElement, Options.Value.MapTokenUrl, Map.Latitude, Map.Longitude, Map.Zoom, Map.Address ?? "");
+            if (!ok) { _liveFailed = true; StateHasChanged(); }
+        }
+        catch (JSException)
+        {
+            _liveFailed = true;
+            StateHasChanged();
+        }
+    }
+
+    private async Task UnmountAsync()
+    {
+        if (!_mounted || _module is null) { _mounted = false; return; }
+        _mounted = false;
+        try { await _module.InvokeVoidAsync("unmount", _liveElement); }
+        catch (Exception ex) when (ex is JSException or JSDisconnectedException or ObjectDisposedException) { }
+    }
+
+    private void OnCoordinates(ChangeEventArgs e)
+    {
+        var text = e.Value?.ToString();
+        if (string.IsNullOrWhiteSpace(text)) { _coordinatesError = false; return; }
+        if (CoordinateDetector.TryParse(text, out var lat, out var lng))
+        {
+            Map.Latitude = lat;
+            Map.Longitude = lng;
+            _coordinatesError = false;
+        }
+        else
+        {
+            _coordinatesError = true;
+        }
+    }
+
+    public async ValueTask DisposeAsync()
+    {
+        await UnmountAsync();
+        if (_module is not null)
+        {
+            try { await _module.DisposeAsync(); }
+            catch (Exception ex) when (ex is JSDisconnectedException or ObjectDisposedException) { }
+        }
+    }
+}

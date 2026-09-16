@@ -1,0 +1,87 @@
+@*
+    A link card. Somebody else's site gets a grey left bar and its host name; an address of ours reads as
+    IsHaunted. The card itself is not a link, so dragging it never navigates; a separate open button does.
+    The picture, when there is one, comes through the API's re-encoding proxy and never from the page's host.
+*@
+@inherits BlockRendererBase
+@inject ICanvasMediaStore Media
+
+<div class="bc-link @(Link.Tier == LinkPreviewTier.OurRecords ? null : "bc-link--away")">
+    @if (Picture is not null)
+    {
+        <img class="bc-link__image" src="@Picture" alt="" draggable="false" decoding="async" />
+    }
+    <div class="bc-link__text">
+        <span class="bc-link__kind">@(Link.SiteName ?? Host ?? "Link")</span>
+        <span class="bc-link__title">@(Link.Title ?? Trimmed)</span>
+        @if (!string.IsNullOrWhiteSpace(Link.Description))
+        {
+            <span class="bc-link__sub">@Link.Description</span>
+        }
+    </div>
+    @if (SafeHttpUrl.Normalize(Link.Url) is { } href)
+    {
+        <a class="bc-link__open" href="@href" target="_blank" rel="noopener noreferrer nofollow" aria-label="@($"Open {Host} in a new tab")" title="Open in a new tab">
+            <BcIcon Name="external-link" />
+        </a>
+    }
+    @if (Editing)
+    {
+        <label class="bc-field bc-link__edit" for="@($"bc-link-url-{Node.Id:N}")"><span class="bc-field__label">Address</span>
+            <input @ref="FirstField" id="@($"bc-link-url-{Node.Id:N}")" type="url" class="form-control form-control-sm" value="@Link.Url"
+                   @onchange="@(e => SetUrl(e.Value?.ToString()))" />
+        </label>
+    }
+</div>
+
+@code {
+    /// <summary>The proxied picture address, when the host provides one (M6).</summary>
+    [Parameter] public string? ImageSrc { get; set; }
+
+    private LinkData Link => Data as LinkData ?? new LinkData();
+
+    private string? _fetched;
+    private string? _fetchedFor;
+
+    /// <summary>The picture: the host's own address when given, otherwise the proxy fetched with the token.</summary>
+    private string? Picture => ImageSrc ?? _fetched;
+
+    protected override async Task OnParametersSetAsync()
+    {
+        var proxy = ImageProxyUrl(Options.Value.ApiBaseUrl, Link.ImageSourceUrl);
+        if (ImageSrc is not null || proxy == _fetchedFor) return;
+        _fetchedFor = proxy;
+        // The proxy needs the bearer token, which a bare img src never sends, so the picture arrives as a blob: address.
+        _fetched = proxy is null ? null : await Media.GetDisplayUrlAsync(proxy);
+    }
+
+    /// <summary>A new address is a new card: its old preview goes, and the resolver asks for the new one.</summary>
+    private void SetUrl(string? value)
+    {
+        var url = (value ?? "").Trim();
+        if (url == Link.Url) return;
+        Link.Url = url;
+        Link.Title = Link.Description = Link.SiteName = Link.ImageSourceUrl = null;
+        Link.FetchedAtUtc = null;
+        Link.Tier = LinkPreviewTier.None;
+    }
+
+    private string? Host => NodeWords.HostOf(Link.Url);
+
+    private string Trimmed
+    {
+        get
+        {
+            var url = Link.Url ?? "";
+            var i = url.IndexOf("://", StringComparison.Ordinal);
+            var trimmed = i >= 0 ? url[(i + 3)..] : url;
+            return string.IsNullOrWhiteSpace(trimmed) ? "No address yet" : trimmed.TrimEnd('/');
+        }
+    }
+
+    /// <summary>The address of the API's image proxy for a page's picture; the only place it is built.</summary>
+    public static string? ImageProxyUrl(string? apiBaseUrl, string? imageSourceUrl) =>
+        string.IsNullOrWhiteSpace(apiBaseUrl) || !SafeHttpUrl.IsHttps(imageSourceUrl)
+            ? null
+            : $"{apiBaseUrl.TrimEnd('/')}/api/link-unfurl/image?url={Uri.EscapeDataString(imageSourceUrl!)}";
+}

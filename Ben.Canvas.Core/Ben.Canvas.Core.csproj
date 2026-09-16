@@ -1,0 +1,20 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <!--
+    The canvas editor's pure half: the document model and the maths behind it. No Blazor, no
+    Telerik, no JavaScript - so every decision the editor makes can be tested without a browser,
+    and a host that is not a Blazor app could still read and write a board.
+
+    Zero PackageReferences by design. System.Text.Json comes with the shared framework. If a change
+    here needs a package, treat that as a sign the code does not belong in Core.
+  -->
+
+  <PropertyGroup>
+    <TargetFramework>net10.0</TargetFramework>
+    <Nullable>enable</Nullable>
+    <ImplicitUsings>enable</ImplicitUsings>
+    <TreatWarningsAsErrors>true</TreatWarningsAsErrors>
+    <RootNamespace>Ben.Canvas.Core</RootNamespace>
+  </PropertyGroup>
+
+</Project>

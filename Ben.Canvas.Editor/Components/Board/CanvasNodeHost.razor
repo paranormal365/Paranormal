@@ -1,0 +1,80 @@
+@*
+    One block's render gate and edit session.
+
+    A board of hundreds of blocks re-renders only the blocks whose version, selection, focus or edit state
+    moved. The version comes from CanvasStore.VersionOf, which is bumped for every change a block is named
+    in - including a live move - so a block never stays drawn where it used to be.
+
+    While a block is being edited its body works on a copy of the data. When editing ends (Escape, a tap
+    elsewhere, another selection) the copy is committed once, so a whole edit is one undo step, and an edit
+    that changed nothing records nothing.
+*@
+@inject CanvasStore Store
+@inject IOptions<CanvasEditorOptions> Options
+@inject AnnouncerService Announcer
+
+<NodeFrame Node="Node" EditData="_draft" Selected="Selected" Focused="Focused" Editing="Editing" Candidate="Candidate" GroupLabel="@GroupLabel" />
+
+@code {
+    private int _renderedVersion = -1;
+    private bool _renderedSelected;
+    private bool _renderedFocused;
+    private bool _renderedEditing;
+    private bool _renderedCandidate;
+    private string? _renderedGroup;
+    private NodeData? _draft;
+
+    [Parameter, EditorRequired] public CanvasNode Node { get; set; } = default!;
+    [Parameter] public int Version { get; set; }
+    [Parameter] public bool Selected { get; set; }
+    [Parameter] public bool Focused { get; set; }
+    [Parameter] public bool Editing { get; set; }
+    [Parameter] public bool Candidate { get; set; }
+    [Parameter] public string? GroupLabel { get; set; }
+
+    protected override void OnParametersSet()
+    {
+        if (Editing && _draft is null)
+        {
+            _draft = Node.Data.Clone();
+        }
+        else if (!Editing && _draft is not null)
+        {
+            var draft = _draft;
+            _draft = null;
+            Commit(draft);
+        }
+    }
+
+    private void Commit(NodeData draft)
+    {
+        if (draft is MessageData message)
+        {
+            message.Html = PasteHtmlAllowList.Normalize(message.Html);
+            if (message.Html.Length > Options.Value.MaxHtmlChars)
+            {
+                Announcer.Say("That message is too long to keep, so the change was not saved.");
+                return;
+            }
+        }
+
+        if (draft is TextData text && text.Text.Length > Options.Value.MaxTextChars)
+            text.Text = text.Text[..Options.Value.MaxTextChars];
+
+        Store.ReplaceNodeData(Node.Id, draft);
+    }
+
+    protected override bool ShouldRender() =>
+        Version != _renderedVersion || Selected != _renderedSelected || Focused != _renderedFocused
+        || Editing != _renderedEditing || Candidate != _renderedCandidate || GroupLabel != _renderedGroup;
+
+    protected override void OnAfterRender(bool firstRender)
+    {
+        _renderedVersion = Version;
+        _renderedSelected = Selected;
+        _renderedFocused = Focused;
+        _renderedEditing = Editing;
+        _renderedCandidate = Candidate;
+        _renderedGroup = GroupLabel;
+    }
+}

@@ -1,0 +1,75 @@
+@*
+    The outside of every block: its box, its head row and its body.
+
+    State is shown three ways at once - colour, a glyph and words in the accessible name - because colour
+    alone does not reach everyone. The element carries no id and no z-index; the data-bc-* attributes are
+    the gesture script's whole contract with it.
+*@
+@inject CanvasStore Store
+@inject SelectionState Selection
+
+<div class="@CssClass" role="group" tabindex="@(Focused ? "0" : "-1")"
+     aria-label="@NodeWords.Aria(Node, Selected, GroupLabel)"
+     data-bc-node="@Node.Id"
+     data-bc-locked="@(Node.Locked ? "true" : null)"
+     data-bc-selected="@(Selected ? "true" : null)"
+     style="@Style" @ref="_element">
+    <div class="bc-node__head">
+        <BcIcon Name="@Descriptor.IconName" Class="bc-node__icon" />
+        <span class="bc-node__title">@NodeWords.Title(Node)</span>
+        @if (Node.Locked)
+        {
+            <BcIcon Name="lock" Class="bc-node__lock" />
+            <span class="visually-hidden">Locked</span>
+        }
+    </div>
+    <div class="bc-node__body" @onkeydown="OnBodyKeyDown">
+        <DynamicComponent Type="@BlockRendererMap.RendererFor(Node.Type)" Parameters="@RendererParameters" />
+    </div>
+</div>
+
+@code {
+    private ElementReference _element;
+
+    /// <summary>Escape anywhere inside a block being edited finishes the edit.</summary>
+    private void OnBodyKeyDown(KeyboardEventArgs e)
+    {
+        if (Editing && e.Key == "Escape") Selection.EndEdit();
+    }
+
+    [Parameter, EditorRequired] public CanvasNode Node { get; set; } = default!;
+
+    /// <summary>The copy an edit session works on; the live data when null.</summary>
+    [Parameter] public NodeData? EditData { get; set; }
+    [Parameter] public bool Selected { get; set; }
+    [Parameter] public bool Focused { get; set; }
+    [Parameter] public bool Editing { get; set; }
+    [Parameter] public bool Candidate { get; set; }
+    [Parameter] public string? GroupLabel { get; set; }
+
+    public ElementReference Element => _element;
+
+    private BlockDescriptor Descriptor => BlockRegistry.Get(Node.Type);
+
+    private string CssClass =>
+        "bc-node bc-node--" + Node.Type.ToString().ToLowerInvariant()
+        + (Editing ? " bc-node--editing" : "")
+        + (Candidate ? " bc-node--candidate" : "");
+
+    private string Style
+    {
+        get
+        {
+            var style = FormattableString.Invariant(
+                $"left:{CssNumber.F(Node.X)}px;top:{CssNumber.F(Node.Y)}px;width:{CssNumber.F(Node.Width)}px;height:{CssNumber.F(Node.Height)}px");
+            return CanvasPalette.IsValid(Node.ColorKey) ? style + $";--bc-node-color:var(--bc-color-{Node.ColorKey})" : style;
+        }
+    }
+
+    private Dictionary<string, object?> RendererParameters => new()
+    {
+        [nameof(BlockRendererBase.Node)] = Node,
+        [nameof(BlockRendererBase.Data)] = EditData ?? Node.Data,
+        [nameof(BlockRendererBase.Editing)] = Editing,
+    };
+}

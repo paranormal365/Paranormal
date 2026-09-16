@@ -1,0 +1,31 @@
+.bc-file {
+    display: flex;
+    align-items: center;
+    gap: .5rem;
+    height: 100%;
+}
+
+.bc-file__text {
+    display: flex;
+    flex-direction: column;
+    min-width: 0;
+    flex: 1 1 auto;
+}
+
+.bc-file__name {
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+    font-weight: 600;
+}
+
+.bc-file__meta { color: var(--bc-text-muted); font-size: .75rem; }
+
+.bc-file__download {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    width: var(--bc-tap);
+    height: var(--bc-tap);
+    color: var(--bc-text);
+}

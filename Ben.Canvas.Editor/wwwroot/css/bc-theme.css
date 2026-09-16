@@ -1,0 +1,101 @@
+/*
+ * bc-theme.css
+ * ─────────────────────────────────────────────────────────────────────────────
+ * Makes the canvas editor wear the site's theme.
+ *
+ * Every --bc-* token is re-pointed at the template's Bootstrap custom
+ * properties, so one palette drives the editor and the site. Because --bs-* are
+ * themselves theme-dependent, the editor follows the light/dark toggle with no
+ * second block here and no JavaScript. The mechanism is the video editor's
+ * (Ben.Video.Editor/wwwroot/css/ben-video-theme.css), which settled it.
+ *
+ * HOST STYLESHEET ORDER (mandatory) - see bc-variables.css. This file must load
+ * after bc-variables.css and after the Kendo theme and site palette.
+ *
+ * SCOPE - deliberately :root, not .bc-editor. Telerik renders popups in a portal
+ * at the document root, so a scoped override would theme the editor while
+ * leaving its own date picker on the stock theme.
+ * ─────────────────────────────────────────────────────────────────────────────
+ */
+
+:root {
+    /* Not --bs-primary raw. The brand navy is a fill colour, and the editor also uses its accent as
+       text; #37508a on the dark ground is navy on navy. Mixing toward the body colour lifts it in
+       dark and deepens it in light, so one expression stays legible in both themes. */
+    --bc-accent:          color-mix(in srgb, var(--bs-primary, #37508a) 65%, var(--bs-body-color, #dee2e6) 35%);
+    --bc-border:          var(--bs-border-color, #495057);
+
+    /* The template's own surface ladder reads correctly in both themes: in dark it gets lighter as
+       panels rise, in light it gets darker as they recess. Fixed greys would invert in one. */
+    --bc-surface-1:       var(--bs-body-bg, #212529);
+    --bc-surface-2:       var(--bs-tertiary-bg, #2b3035);
+    --bc-surface-3:       var(--bs-secondary-bg, #343a40);
+
+    --bc-text:            var(--bs-body-color, #dee2e6);
+    --bc-text-muted:      var(--bs-secondary-color, rgba(222, 226, 230, .75));
+
+    /* A wash of the brand rather than a fixed navy, so a selected card stays legible on either ground. */
+    --bc-accent-muted:    rgba(var(--bs-primary-rgb, 55, 80, 138), .28);
+
+    /* Same mixing as the accent, for the same reason: the raw danger and warning colours are
+       unreadable as text on one of the two grounds. */
+    --bc-danger-text:     color-mix(in srgb, var(--bs-danger, #a85593) 65%, var(--bs-body-color, #dee2e6) 35%);
+    --bc-danger-bg:       rgba(var(--bs-danger-rgb, 168, 85, 147), .12);
+    --bc-attention:       color-mix(in srgb, var(--bs-warning, #aaa256) 60%, var(--bs-body-color, #dee2e6) 40%);
+
+    --bc-selection-stroke: var(--bs-primary, #37508a);
+    --bc-focus-ring:      var(--bs-primary, #37508a);
+
+    /* Connectors are drawn in the body colour at half strength: visible on both grounds, and quieter
+       than the cards they join. */
+    --bc-edge-color:      color-mix(in srgb, var(--bs-body-color, #dee2e6) 55%, transparent);
+    --bc-edge-selected:   var(--bc-accent);
+    --bc-group-fill:      rgba(var(--bs-primary-rgb, 55, 80, 138), .08);
+    --bc-group-stroke:    color-mix(in srgb, var(--bs-primary, #37508a) 60%, transparent);
+
+    /* The dotted ground has to be felt rather than seen, in either theme. */
+    --bc-grid-dot:        color-mix(in srgb, var(--bs-body-color, #dee2e6) 14%, transparent);
+
+    --bc-type-card:       var(--bs-primary, #37508a);
+    --bc-type-message:    var(--bs-success, #489e48);
+    --bc-type-map:        var(--bs-info, #66366c);
+    --bc-type-image:      var(--bs-warning, #aaa256);
+    --bc-type-link:       var(--bs-link-color, #8796b9);
+    --bc-type-text:       var(--bs-secondary-color, rgba(222, 226, 230, .75));
+    --bc-type-file:       var(--bs-secondary-color, rgba(222, 226, 230, .75));
+    --bc-type-group:      var(--bs-primary, #37508a);
+
+    --bc-color-1:         var(--bs-primary, #37508a);
+    --bc-color-2:         var(--bs-success, #489e48);
+    --bc-color-3:         var(--bs-danger, #a85593);
+    --bc-color-4:         var(--bs-warning, #aaa256);
+    --bc-color-5:         var(--bs-info, #66366c);
+    --bc-color-6:         var(--bs-secondary-color, #6c757d);
+    /* A sticky note reads as one in both themes without a fixed light colour. */
+    --bc-sticky-bg:       color-mix(in srgb, var(--bs-warning, #aaa256) 18%, var(--bc-surface-2));
+
+    /* Kendo tokens the editor's Telerik controls read that the site's bridge does not define.
+       Deliberately only the neutral ones; the site sets primary and the semantic colours in
+       telerik-night.css, and redefining them here would restyle every Telerik widget on the site. */
+    --kendo-color-on-primary:       #fff;
+    --kendo-color-primary-rgb:      var(--bs-primary-rgb, 55, 80, 138);
+    --kendo-color-surface-hovered:  var(--bs-secondary-bg, #343a40);
+    --kendo-color-on-surface:       var(--bs-body-color, #dee2e6);
+    --kendo-color-subtle-text:      var(--bs-secondary-color, rgba(222, 226, 230, .75));
+    --kendo-color-subtle:           var(--bs-secondary-color, rgba(222, 226, 230, .75));
+    --kendo-color-base-subtle:      var(--bs-secondary-bg, #343a40);
+}
+
+/* The editor fills its host: its own root paints the ground, and the page behind must not show a
+   different one through the gaps. */
+.bc-editor {
+    background: var(--bc-surface-1);
+    color: var(--bc-text);
+    font-family: var(--bs-body-font-family);
+}
+
+/* A rich text box sits on the card's own ground, not on Kendo's. */
+.bc-editor .k-editor .k-content {
+    background: var(--bc-surface-2);
+    color: var(--bc-text);
+}

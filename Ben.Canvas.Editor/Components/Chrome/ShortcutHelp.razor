@@ -1,0 +1,52 @@
+@*
+    Every shortcut, in one table. Chrome and Edge keep Ctrl+1..8 and Ctrl+L for themselves, so none of those
+    appear here.
+*@
+
+<BcModal Visible="Visible" VisibleChanged="VisibleChanged" Title="Keyboard shortcuts" Size="lg">
+    <p class="small text-muted">Ctrl means ⌘ on a Mac.</p>
+    <table class="bc-shortcuts">
+        <tbody>
+            @foreach (var (keys, what) in Rows)
+            {
+                <tr><th scope="row"><kbd>@keys</kbd></th><td>@what</td></tr>
+            }
+        </tbody>
+    </table>
+</BcModal>
+
+@code {
+    [Parameter] public bool Visible { get; set; }
+    [Parameter] public EventCallback<bool> VisibleChanged { get; set; }
+
+    internal static readonly (string Keys, string What)[] Rows =
+    [
+        ("Ctrl+Z", "Undo"),
+        ("Ctrl+Shift+Z or Ctrl+Y", "Redo"),
+        ("Ctrl+C / Ctrl+X", "Copy / cut the selection"),
+        ("Ctrl+D", "Duplicate"),
+        ("Ctrl+A", "Select everything"),
+        ("Ctrl+G / Ctrl+Shift+G", "Group / ungroup"),
+        ("Ctrl+Shift+L", "Lock or unlock"),
+        ("Ctrl+] / Ctrl+[", "Bring to front / send to back"),
+        ("Ctrl+0", "Zoom to 100%"),
+        ("Ctrl+= / Ctrl+-", "Zoom in / out"),
+        ("Shift+1 or Home", "Fit the board"),
+        ("Ctrl+S", "Save"),
+        ("Delete", "Delete the selection"),
+        ("Escape", "Clear the selection"),
+        ("Arrows (Shift for 10)", "Move the selection"),
+        ("Enter", "Edit the selected item"),
+        ("F2", "Rename"),
+        ("R, then arrows", "Resize the selected item"),
+        ("C, then arrows and Enter", "Connect to another item"),
+        ("T / N / M / I / L", "Add a note, card, message, image or link"),
+        ("] / [", "Next or previous connector"),
+        ("?", "Show these shortcuts"),
+        ("Space + drag", "Pan the board"),
+        ("Ctrl + wheel, or pinch", "Zoom"),
+        ("Middle button drag", "Pan the board"),
+        ("Double-click the board", "Add a note there"),
+        ("Right-click", "More actions"),
+    ];
+}

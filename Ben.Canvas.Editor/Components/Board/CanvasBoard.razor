@@ -1,0 +1,108 @@
+@*
+    The infinite board: groups, connectors and blocks inside one transformed world layer.
+
+    Three rules shape this component.
+    - The style attribute on .bc-board is written once, at first render, and never again. After the
+      gesture script attaches it owns --bc-pan-x, --bc-pan-y and --bc-zoom; a later render that wrote the
+      attribute would wipe them. C# camera changes go through BoardGestureBridge.PushViewportAsync.
+    - Blocks are drawn in paint order (the document's Z) with no inline z-index, so DOM order is the order
+      they stack in.
+    - Nothing renders while a drag or resize is running: the script is moving pixels, and a render would
+      rewrite the style attributes it is previewing on.
+
+    No Blazor pointer handlers anywhere on the board; the one delegated script listener owns them.
+*@
+@implements IDisposable
+@inject CanvasStore Store
+@inject SelectionState Selection
+@inject CanvasViewportState Viewport
+@inject IOptions<CanvasEditorOptions> Options
+
+<div class="bc-board" tabindex="0" role="application" aria-roledescription="canvas"
+     aria-label="@($"Board: {Store.Document.Title}")" aria-describedby="bc-board-help"
+     style="@_initialStyle" @ref="_board">
+    <div class="bc-world">
+        <GroupLayer />
+        <EdgeLayer />
+        <div class="bc-nodes">
+            @foreach (var node in VisibleNodes())
+            {
+                <CanvasNodeHost @key="node.Id" Node="node"
+                                Version="@Store.VersionOf(node.Id)"
+                                Selected="@Selection.IsSelected(node.Id)"
+                                Focused="@(Selection.FocusedNodeId == node.Id || (Selection.FocusedNodeId is null && node.Id == _firstId))"
+                                Editing="@(Selection.EditingNodeId == node.Id)"
+                                Candidate="@(ConnectCandidateId == node.Id)"
+                                GroupLabel="@GroupLabelOf(node)" />
+            }
+        </div>
+        <SelectionOverlay />
+        <div class="bc-guide-x" aria-hidden="true"></div>
+        <div class="bc-guide-y" aria-hidden="true"></div>
+    </div>
+    <div class="bc-marquee" aria-hidden="true"></div>
+</div>
+<p id="bc-board-help" class="visually-hidden">@Words.BoardHelp</p>
+
+@code {
+    private ElementReference _board;
+    private string _initialStyle = "";
+    private Guid? _firstId;
+
+    /// <summary>The board element the gesture script attaches to.</summary>
+    public ElementReference BoardElement => _board;
+
+    /// <summary>The block keyboard connect mode is offering, drawn with a candidate outline.</summary>
+    [Parameter] public Guid? ConnectCandidateId { get; set; }
+
+    protected override void OnInitialized()
+    {
+        var vp = Viewport.Current;
+        _initialStyle = FormattableString.Invariant(
+            $"--bc-pan-x:{CssNumber.F(vp.PanX)}px;--bc-pan-y:{CssNumber.F(vp.PanY)}px;--bc-zoom:{CssNumber.F(vp.Zoom)}");
+
+        Store.OnChange += OnStoreChanged;
+        Selection.OnChanged += OnOtherChanged;
+        Viewport.OnChanged += OnViewportChanged;
+    }
+
+    protected override bool ShouldRender() => !Viewport.GestureActive;
+
+    private IEnumerable<CanvasNode> VisibleNodes()
+    {
+        var ordered = Store.NodesInPaintOrder();
+        _firstId = ordered.Count > 0 ? ordered[0].Id : null;
+        if (ordered.Count <= Options.Value.VirtualiseAbove) return ordered;
+
+        var visible = VisibleNodeFilter.Visible(ordered, Viewport.VisibleWorldRect()).Select(n => n.Id).ToHashSet();
+        // Selected and focused blocks always render, so keyboard focus is never lost off screen.
+        return ordered.Where(n => visible.Contains(n.Id) || Selection.IsSelected(n.Id) || Selection.FocusedNodeId == n.Id);
+    }
+
+    private string? GroupLabelOf(CanvasNode node) =>
+        node.GroupId is { } gid ? Store.FindGroup(gid)?.Label : null;
+
+    private void OnStoreChanged(CanvasChange change)
+    {
+        if (change.Kind is CanvasChangeKind.Document or CanvasChangeKind.Reset or CanvasChangeKind.Groups)
+            Selection.Prune(Store.Document);
+        if (Viewport.GestureActive) return;
+        _ = InvokeAsync(StateHasChanged);
+    }
+
+    private void OnOtherChanged() => _ = InvokeAsync(StateHasChanged);
+
+    private void OnViewportChanged()
+    {
+        // Only a very large board renders differently when the camera moves.
+        if (Store.Document.Nodes.Count > Options.Value.VirtualiseAbove || !Viewport.GestureActive)
+            _ = InvokeAsync(StateHasChanged);
+    }
+
+    public void Dispose()
+    {
+        Store.OnChange -= OnStoreChanged;
+        Selection.OnChanged -= OnOtherChanged;
+        Viewport.OnChanged -= OnViewportChanged;
+    }
+}

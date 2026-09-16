@@ -1,0 +1,138 @@
+@page "/organizations/{OrgId:guid}/cases/{CaseId:guid}/research-notes"
+
+@using Ben.Data.Common.Enums
+@using Ben.Web.Services
+@using Ben.Web.Services.WebApi
+@using Ben.Web.Website.Library.Kit
+@using Microsoft.Extensions.Hosting
+@inject IBenAdminClient AdminClient
+@inject IBenUserState UserState
+@inject NavigationManager NavManager
+@inject Microsoft.Extensions.Configuration.IConfiguration Configuration
+@inject Microsoft.Extensions.Hosting.IHostEnvironment HostEnvironment
+
+@*
+    Research Notes: the case's board, opened in the canvas editor.
+
+    The editor is a WebAssembly application of its own (Ben.Wasm.Canvas), mounted at /editors/canvas/ in production and
+    served from localhost:5125 in development. It runs on the person's own machine and talks to the API only to load,
+    save, publish a picture, and turn a pasted link into a card — so this page hands over rather than hosting it.
+
+    The handover carries a one-use code in the URL's fragment, exactly as the video editor's does: browsers never send a
+    fragment to a server, so the code stays out of access logs and out of any Referer. A refused or missing code is not
+    a dead end — the canvas opens and asks for a sign-in.
+*@
+
+<FeatureGate Flag="@SiteFeatures.CanvasEditor">
+    <PageTitle>Research Notes</PageTitle>
+
+    <div class="container py-4" style="max-width:720px" data-testid="research-notes-page">
+
+        <a href="@CaseHref" class="text-secondary small">← @(_case?.DisplayLabel ?? "Case")</a>
+        <h3 class="mt-2 mb-3">Research Notes<HelpLink Slug="working-a-case" /></h3>
+
+        @if (!_ready)
+        {
+            <BenLoaderOverlay Visible="true" Text="Loading…" />
+        }
+        else if (_needsSignIn)
+        {
+            <p class="text-secondary">Sign in to open this case's research notes.</p>
+            <a class="btn btn-primary" href="@SignInLink.For(NavManager)">Sign in</a>
+        }
+        else if (_error is not null)
+        {
+            <div class="alert alert-danger">@_error</div>
+        }
+        else
+        {
+            <p class="text-secondary">
+                A board for everything this case is made of: cards, notes, pictures, maps, links and files, placed
+                where they belong and joined by lines. It opens in its own editor and saves back onto the case.
+            </p>
+
+            @if (!_mayEdit)
+            {
+                <p class="text-secondary small" id="research-notes-read-only">
+                    You can read this case's board. Changing it needs permission to update cases in this group.
+                </p>
+            }
+
+            <button type="button" class="btn btn-primary" id="research-notes-open"
+                    @onclick="OpenAsync" disabled="@_opening">
+                <BenIcon Name="edit-3" Class="me-1" />@(_opening ? "Opening…" : "Open research notes")
+            </button>
+        }
+    </div>
+</FeatureGate>
+
+@code {
+    [Parameter] public Guid OrgId { get; set; }
+    [Parameter] public Guid CaseId { get; set; }
+
+    private CaseRecord? _case;
+    private bool _ready;
+    private bool _needsSignIn;
+    private bool _mayEdit;
+    private bool _opening;
+    private string? _error;
+
+    private string CaseHref => $"/organizations/{OrgId}/cases/{CaseId}";
+
+    /// <summary>Where the canvas is: the mount in production, a dev server on a development machine.</summary>
+    private string CanvasUrl => StandaloneCanvasAddress.For(
+        HostEnvironment.IsDevelopment(), Configuration["CanvasEditor:StandaloneUrl"]);
+
+    protected override async Task OnInitializedAsync()
+    {
+        if (!await UserState.WaitUntilAuthReadyAsync(RendererInfo.IsInteractive)) return;
+
+        if (!UserState.IsAuthenticated)
+        {
+            _needsSignIn = true;
+            _ready = true;
+            return;
+        }
+
+        _case = await AdminClient.GetOrgCaseAsync(OrgId, CaseId);
+        if (_case is null)
+        {
+            _error = "That case is not here, or it is not yours to open.";
+            _ready = true;
+            return;
+        }
+
+        var permissions = await AdminClient.GetMyOrgPermissionsAsync(OrgId);
+        _mayEdit = permissions?.May(OrganizationPermissionArea.Cases, OrganizationSecurityAction.Update) == true;
+        _ready = true;
+    }
+
+    /// <summary>
+    /// Opens the canvas already signed in, on this case.
+    /// </summary>
+    /// <remarks>
+    /// Same tab: a window.open after an await has lost its user gesture and is what popup blockers exist to stop. The
+    /// canvas puts a "Back to case" link in its own header from the case and organisation handed over here.
+    /// </remarks>
+    private async Task OpenAsync()
+    {
+        _opening = true;
+
+        string? code = null;
+        try
+        {
+            code = (await AdminClient.GetEditorHandoffCodeAsync())?.Code;
+        }
+        catch
+        {
+            // Nothing to say here: the canvas is still reachable, it will just ask for a sign-in.
+        }
+
+        var fragment = new List<string>();
+        if (!string.IsNullOrWhiteSpace(code)) fragment.Add($"handoff={Uri.EscapeDataString(code)}");
+        fragment.Add($"case={CaseId:D}");
+        fragment.Add($"org={OrgId:D}");
+
+        NavManager.NavigateTo(CanvasUrl + "#" + string.Join("&", fragment), forceLoad: true);
+    }
+}

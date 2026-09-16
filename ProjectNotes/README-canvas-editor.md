@@ -1,0 +1,384 @@
+# IsHaunted Case Canvas — acceptance notes
+
+One section per milestone: what can be opened, the commands that prove it, and what is not built yet.
+A milestone is ticked only with its date and evidence.
+
+## M1 Core engine — done 2026-09-14
+
+**What exists.** `Ben.Canvas.Core` holds the board format and everything that edits it, with no browser
+and no packages: the document model and typed block data, one serializer with additive migrations,
+every editing command with undo and redo, live drag and resize sessions, viewport and pinch maths, hit
+testing for blocks and curves, snapping, resize handles, connector geometry, the block registry and
+options, the keyboard map, address, place and picture detection, the paste classifier and placer, the
+message HTML normaliser, persistence policies, the copy catalogue and invariant formatting.
+
+**Proof.**
+
+```
+dotnet build Z:\_GitHub\VandyBen\Ben.Web.Website.Library.Manage\Ben.Web.Website.Library.Manage.slnx -warnaserror
+dotnet test  Z:\_GitHub\VandyBen\Ben.Web.Website.Library.Manage\Ben.Web.Website.Library.Manage.slnx --filter "FullyQualifiedName~Ben.Canvas.Tests"
+```
+
+Build: 0 warnings, 0 errors. Tests: 496 passed, 0 failed.
+
+| Folder | Tests |
+|---|---|
+| Model (model, registry, options, serializer, migrations) | 79 |
+| Geometry | 70 |
+| Paste (detectors, HTML normaliser, classifier, placer) | 62 |
+| Input (key map) | 61 |
+| Commands (store, groups, live drag) | 58 |
+| Persistence | 24 |
+| Formatting | 13 |
+| Text | 6 |
+| Hosting, Guards, Components (from M0) | 123 |
+
+**Red first.** The tests were shown failing against 27 deliberate breaks, one per step, each restored
+byte for byte afterwards (script and table kept with the session evidence). Every break was caught.
+Examples: removing the redo clear fails `A_new_command_clears_redo`; skipping message HTML cleaning on
+read fails `An_imported_message_loses_its_script_handlers`; a live move that does not bump block
+versions fails `A_live_move_bumps_the_version_of_each_dragged_node`; keeping pasted ids fails
+`Pasting_the_same_payload_twice_gives_new_ids`.
+
+**Review corrections applied here.**
+
+- R2a: message HTML is normalised by a pure C# allow-list on every read, and unsafe link addresses are
+  dropped. No `img`, `figure` or `figcaption` in messages (R23).
+- R7: block versions are bumped for every change a block is named in, including live moves, commit and
+  cancel; readers use `VersionOf`, which answers 0 for an unnumbered block; loading raises
+  `LoadGeneration`.
+- R8, R18: compact serializer options for storage and the clipboard, and source-generated metadata for
+  the persisted types.
+
+**Deferred, with where it lands.** Keyboard script contract scans and gesture bridge tests: M2. Block
+renderer coverage: M3. Paste service, the browser-side sanitiser and the export package: M4.
+
+**Deviation.** Adding an ASP.NET framework reference to Core is refused by the build itself (the
+WebAssembly host has no runtime pack for it), so the purity test's red demonstration used a banned
+identifier instead.
+
+### Red-first table
+
+| Step | Break | Tests that failed |
+|---|---|---|
+| M1-02 | Text\CanvasCopy.cs | Nothing_shouts_or_apologises, Sentences_end_with_a_full_stop_or_question_mark |
+| M1-03 | Formatting\BcFormatting.cs | A_French_culture_still_writes_a_dot |
+| M1-04 | Model\CanvasModel.cs | Palette_accepts_one_to_six_and_nothing_else(key: |
+| M1-05 | Model\NodeData.cs | Clone_is_deep(type: |
+| M1-06 | Geometry\Viewport.cs | Zooming_about_a_point_keeps_that_world_point_under_the_cursor, The_world_point_under_the_focal_point_does_not_move, Moving_both_fingers_pans_by_the_focal_delta |
+| M1-07 | Blocks\BlockRegistry.cs | Default_data_kind_matches_the_type(type:, Minimums_match_the_designed_values(type:, Disabled_blocks_are_not_offered_in_the_palette, Every_node_type_has_a_descriptor |
+| M1-08a | Serialization\CanvasSerializer.cs | Enums_are_written_as_names_so_inserting_a_value_cannot_shift_them |
+| M1-08b | Serialization\CanvasSerializer.cs | Json_that_is_not_a_board_is_refused(json: |
+| M1-09a | Serialization\CanvasDocumentMigrations.cs | An_edge_to_a_missing_node_is_dropped |
+| M1-09b (R2a) | Serialization\CanvasDocumentMigrations.cs | An_imported_message_loses_its_script_handlers |
+| M1-10 | Commands\CanvasStore.cs | A_new_command_clears_redo |
+| M1-11 | Commands\Commands.cs | Undoing_a_move_after_a_resize_keeps_the_new_size |
+| M1-12 | Commands\Commands.cs | Removing_a_node_takes_its_edges_and_undo_brings_both_back |
+| M1-13 | Geometry\HitTesting.cs | The_front_most_of_two_overlapping_nodes_wins |
+| M1-14 | Geometry\Snapping.cs | Snap_returns_the_adjusted_leading_edge_when_the_centre_matches |
+| M1-15 | Geometry\Snapping.cs | Dragging_the_right_handle_keeps_the_left_edge_fixed |
+| M1-16 | Geometry\EdgeGeometry.cs | A_node_to_the_left_connects_left_to_right, An_explicit_side_is_honoured, A_node_to_the_right_connects_right_to_left, Control_points_are_at_least_40px_out |
+| M1-17a | Commands\LiveSessions.cs | A_drag_pushes_one_undo_entry_not_one_per_move, Cancel_restores_every_node, A_live_move_bumps_the_version_of_each_dragged_node, A_drag_that_ends_where_it_started_pushes_nothing |
+| M1-17b (R7) | Commands\LiveSessions.cs | A_live_move_bumps_the_version_of_each_dragged_node |
+| M1-18 | Input\CanvasKeyMap.cs | Ctrl_Y_is_redo |
+| M1-21 | Paste\PasteClassifier.cs | Pasting_the_same_payload_twice_gives_new_ids |
+| M1-22 | Commands\CanvasStore.cs | An_asset_referenced_only_by_the_undo_stack_is_kept |
+| R2a | Paste\PasteHtmlAllowList.cs | Only_allowed_markup_survives(input:, A_safe_link_keeps_its_address_and_opens_safely |
+| M1-01 (retry) | Text\CanvasCopy.cs | The_core_library_has_no_package_or_browser_references |
+| M1-17c (retry) | Commands\LiveSessions.cs | Dragging_a_node_out_of_a_group_clears_it, Dropping_a_node_into_a_group_joins_it_in_the_same_undo_step |
+| M1-19 (retry) | Paste\Detectors.cs | A_trailing_full_stop_is_not_part_of_the_link |
+| M1-20 (retry) | Paste\PasteClassifier.cs | A_lone_url_is_a_link_not_text |
+
+## M2 Desktop board — done 2026-09-14
+
+**What Ben can open.** `http://localhost:5125/`: header with save state, undo, redo, properties and
+shortcuts; a rail to add cards, notes, messages, maps, images and links; the dotted board with zoom controls
+and a minimap; a properties panel. Blocks drag, resize from eight handles, connect from four ports, lock,
+duplicate, delete and undo. The camera pans (Space-drag, middle button, trackpad), zooms (Ctrl+wheel,
+Safari pinch, buttons) and fits. Right-click opens a menu, `?` lists every shortcut, and the keyboard alone
+can move (arrows), resize (R) and connect (C then Enter). A reload empties the board until M4.
+
+**Proof.**
+
+| Run | Result |
+|---|---|
+| `dotnet build` of the slnx with `-warnaserror` | 0 warnings, 0 errors |
+| Canvas unit, component and guard tests | 576 passed |
+| Playwright `Category=Editing` and `Category=Shell` (Desktop, Tablet, Phone shells) | 42 passed |
+| Screenshot walk, desktop 1440 x 900, dark and light | 8 images |
+
+**Red first.** 23 deliberate breaks, all caught (script kept with the session evidence). The one first
+missed - removing the board's render gate - was caught once its unit test also changed the selection during
+a gesture. The 300-block browser test does not go red when the gate is removed, because nothing reaches C#
+during a drag at all; it pins that zero-interop behaviour, and the unit test carries the gate.
+
+**Bugs the tests found.** A block's group label was passed as the literal word "GroupLabel"; the editor's
+icons had no size in the standalone host, so each 300 x 150 icon covered the next rail button; the Playwright
+helper returned a locator that followed the selection instead of a block.
+
+**Deviations.** Block labels live in the editor (`NodeWords`) rather than Core, and arrowheads are built in
+`EdgeLayer`; both were planned for Core in M3-01. Connectors follow a drag in the script (R9) from the edge
+list `BeginMove` returns.
+
+## M3 Blocks, connectors and groups — done 2026-09-15
+
+**What Ben can open.** `http://localhost:5125/`: every block has its own head, icon and accent bar. A card
+fills in the Evidence template (description, date, category, verified) and one Ctrl+Z undoes the whole
+edit. A note links web addresses. A message is written with bold, italic, underline, lists and links. A map
+box takes an address and coordinates. A link card shows the site's name with the grey "somebody else's
+site" bar and an explicit open button. Connectors take a label, a colour, arrows and fixed sides. Groups
+move their members, take a name (F2) and a colour, and a block dropped inside one joins it.
+
+**Proof.**
+
+| Run | Result |
+|---|---|
+| `dotnet build` of the slnx with `-warnaserror` | 0 warnings, 0 errors |
+| Canvas unit, component and guard tests | 608 passed |
+| Playwright `Category=Editing` and `Category=Shell` | 59 passed (17 of them new block tests) |
+| Screenshot walk (`BlocksWalk`), 1440 x 900, dark and light | 6 images: node types, connectors, group |
+
+**Red first.** 14 deliberate breaks, all caught:
+
+| Step | Break | Test that failed |
+|---|---|---|
+| M3-06 | a note's web address not linked | A_note_links_web_addresses_and_nothing_else |
+| M3-06 | a note rendered as markup | A_note_never_renders_markup |
+| M3-06 | a file size formatted with the machine's culture | A_file_shows_its_size_with_a_dot_under_fr_FR |
+| M3-07 | card fields sorted by label | The_evidence_card_lists_its_four_fields_in_order |
+| M3-07 | a ticked box shown without words | A_ticked_checkbox_says_yes_with_a_glyph |
+| M3-07 | an unknown template's values hidden | An_unknown_template_still_shows_what_was_typed |
+| M3-08 | message HTML shown without the allow-list | A_message_at_rest_shows_clean_markup_and_an_iso_time |
+| M3-08 | initials from one word | Initials_come_from_the_first_two_words |
+| M3-09 | the away bar on our own records | An_our_records_link_has_no_away_bar |
+| M3-09 | a double slash in the image proxy address | The_image_goes_through_the_webapi_proxy |
+| M3-09 | a javascript: address offered as a link | A_javascript_url_gets_no_open_link |
+| M3-09 | the map's "more pins" count | A_map_shows_its_address_and_pin_count |
+| M3-04 | an edit that changed nothing recorded | Opening_and_closing_an_edit_without_changes_records_nothing |
+| M3-13 | the connector's To side unlabelled | A_selected_connector_offers_label_colour_arrow_and_sides |
+
+**Bugs the tests and the walk found.** A double-click on a block went to the board, because the board holds
+pointer capture; it now looks up the element under the pointer and releases capture on pointer-up. The
+message editor had no room once a block was in edit mode; editing blocks now scroll. The walk showed a
+message losing its last words when the pointer left within the editor's 100 ms debounce; the editor now
+sends every change (`DebounceDelay="0"`).
+
+**Deviations.** Card fields are edited inside the card, not in the properties panel. Dates use the browser's
+own date input rather than TelerikDatePicker, so the card also works in a static render. Block labels live in
+the editor (`NodeWords`). Not built in M3: hover-revealed ports; dragging a connector's ends to re-attach
+(use the From and To side lists); live maps (M6); stored pictures and files (M4); rich link previews (M6).
+## M4 Smart paste, saving on this device, export and import — done 2026-09-15
+
+**What Ben can open.** `http://localhost:5125/`: Ctrl+V a screenshot and it becomes a picture the shape of
+the screenshot; paste a web address and it becomes a link card; paste formatted text from a web page and it
+becomes a message that keeps bold but loses scripts; paste two paragraphs for a note, or coordinates for a map
+box. Drag files onto the board and they land where they are dropped. Ctrl+C, Ctrl+X and Ctrl+V copy, cut and
+paste blocks, the copy landing 24 px from the original. The Paste button in the rail reads the clipboard. The
+header says "Saved on this device" about two seconds after an edit, a reload brings back the board and its
+zoom, and closing the tab with unsaved work asks first. Export board downloads `{title}.ishcanvas`; Import
+board brings it back with its pictures. An iPhone HEIC photo is refused with the Share advice.
+
+**How it works (and why).**
+- Board bodies are kept in IndexedDB (`bc-docs`); localStorage holds only the board list, the open board and
+  each board's view, because ishaunted.com shares its 5 MB localStorage with the video editor (R8).
+- Pictures and files are stored as files on the device (OPFS `bc-assets/{assetId}{ext}`), falling back to an
+  IndexedDB store of Blobs where the browser cannot write OPFS files, such as Safari before 26 (R4). The board
+  holds only the asset id; pictures are displayed through `blob:` addresses. No base64.
+- Clipboard and drop data are read synchronously before any wait (R5). A board shortcut moves focus to an
+  off-screen textarea for the one key press, so Safari fires copy, cut and paste (R16). JPEG, PNG and WebP are
+  redrawn before they are stored, which removes EXIF and the GPS position in it (R24).
+- The .ishcanvas ZIP is built and read in the browser from Blob slices, so a 300 MB export never passes through
+  .NET memory; pictures are stored and only document.json is deflated; over 300 MB is refused naming the largest
+  files; touch devices get a Download button because iOS downloads only from a tap (R12). Core's CanvasPackage
+  is the reference for the same format, and the browser tests prove each side reads what the other writes.
+- Autosave waits two seconds after the last edit and never runs while a block is being dragged (R18). A write
+  the browser refuses is said once and never shown as saved. A browser that will not promise to keep the site's
+  storage is mentioned once per device. The sweep deletes stored files no board, open board or undo history
+  names, leaves anything younger than an hour alone (another tab may not have saved it), and refuses to run if
+  the board list cannot be read.
+
+**Proof.**
+
+| Run | Result |
+|---|---|
+| `dotnet build` of the slnx with `-warnaserror` | 0 warnings, 0 errors |
+| Canvas unit, component and guard tests | 659 passed (50 new) |
+| Playwright `Persistence` and `Paste` (new) | 25 passed |
+| Playwright `Editing` and `Shell` (regression) | 59 passed |
+
+**Red first.** 23 deliberate breaks, all caught. 21 are caught by unit, component and guard tests (package size
+limit, file-name cleaning, unreadable board list, autosave mid-drag, refusal said once, sweep grace, sweep keeps
+undo, stale pointer, persistence mentioned once, leave-page guard only on change, pasted HTML sanitised, unused
+files deleted, copy steps 24 px, maps switched off, cut only after copy, export packs each file once, import
+cleans the board, Paste button uses the native click, module export names, callback names, scripts never build
+nodes). 2 need a browser: photos not redrawn (the stored bytes kept their Exif block) and paste taking over a
+note being typed (a second block appeared).
+
+**What the checks themselves got wrong first.** The Paste-button test first rendered the component, but the
+static renderer never writes Blazor click handlers, so it could not fail; it is now a source check. The first
+browser break runs edited a script without rebuilding: the page checks each script against its build
+fingerprint, blocked the edited one, and paste never started, so one test "failed" and one "passed" for that
+reason alone. Browser breaks are now rebuilt and the host restarted before every run.
+
+**Deviations.** Copy and cut live in pasteInterop.js beside paste, sharing the off-screen textarea, instead of a
+separate clipboardInterop.js. Pasted HTML is cleaned by Core's allow-list (the one sanitiser, also run whenever a
+board is read) instead of a second browser sanitiser. Pictures inside pasted formatted text are dropped rather
+than turned into link cards, so no request reaches a third party. The WebKit Cmd+V test waits for M5, when the
+Safari-engine browser is installed with Ben's permission. Not built in M4: a board list to switch between boards
+on the device, and link previews beyond the site name (M6).
+## M5 iPad and iPhone — done 2026-09-15
+
+**What Ben can open.** `http://localhost:5125/` at any width. 1024 px and wider: the tool rail on the left and
+the properties panel on the right, as before. iPad portrait (768 to 1023 px): the same rail, and the properties
+panel lies over the board instead of squeezing it. iPhone (below 768 px): a bottom bar with Add, Paste, Undo,
+Redo and More; properties, the Add list and More slide up from the bottom as a sheet that can be dragged to half
+or full height or down to close, and stays above the on-screen keyboard. Pinch zooms about the fingers, one
+finger pans the board or drags a block, a long press opens the menu, a double tap on the board makes a note,
+and Apple Pencil draws a selection box. Add > Photo opens the iOS photo picker. When iOS will not let the board
+read the clipboard, a paste box opens where a long press and Paste works. The page never bounces or scrolls
+sideways, and every button is at least 44 px.
+
+**How it works (and why).**
+- One layout service answers four media queries (phone, iPad portrait, coarse pointer, reduced motion); CSS
+  decides what is visible on first paint, the service only feeds behaviour and ARIA. Closing the panel and the
+  sheet height are kept on the device (`bc-layout`); a sheet never reopens collapsed.
+- The sheet is a non-modal dialog, so the board above it stays usable. Its grip is a real button (a tap takes it
+  between half and full, for keyboard and VoiceOver users) and can be dragged; during the drag the script only
+  writes `--bc-sheet-dy`, and C# hears once at the end. WebKit ignores `interactive-widget`, so a
+  `visualViewport` listener writes `--bc-kb-inset` to lift the sheet above the keyboard (R6).
+- A long press that opens the menu swallows the click the finger-lift makes, or the menu would close at once.
+- A Paste button tap or a picked photo lands where the last long press was (for ten seconds); a keyboard paste
+  does not.
+- Safari (WebKit) has no OffscreenCanvas, so photos are redrawn on a detached canvas instead; its IndexedDB
+  cannot hold Blobs, so the fallback store keeps the bytes and the type.
+
+**Proof.**
+
+| Run | Result |
+|---|---|
+| `dotnet build` of the slnx with `-warnaserror` | 0 warnings, 0 errors |
+| Canvas unit, component and guard tests | 672 passed (13 new) |
+| Playwright, every category (Chromium desktop, tablet, phone; CDP touch; WebKit iPhone 13 and iPad gen 7) | 137 passed, 0 failed; 37 skipped because they belong to another device size |
+
+**Red first.** 14 deliberate breaks, all caught, plus one real bug found while taking the screenshots. 11 by unit, component and guard tests (phone query, collapsed
+sheet refused, sheet turns into the panel, layout kept on the device, grip tap cycles, sheet not modal, phone bar
+tools and order, long-press point only for buttons and photos, clipboard refusal opens the paste box, media
+watcher export, sheet callback name). 3 need a browser: the long press menu closing on finger-lift, the Safari
+fallback store writing Blobs (a pasted photo was lost in WebKit), and the theme switch sitting on the phone bar
+(the first check looked only at the bar's buttons, so a new test measures the switch against the bar). The screenshots showed Export as a small white browser button: the header's scoped styles never reached Export and Import, which the editor hands to the header. A new test compares every header button with Undo; it failed (36 x 26 px, grey) and passes after the fix (M4 bug).
+
+**Deviations.** The layout snapshot reuses M1's `LayoutSnapshot` instead of a new `CanvasLayoutSnapshot`. The
+sheet drag lives in `boardGestures.js` beside the board gestures. The rail and bar Paste buttons are covered by
+the one delegated native listener from M4, so there is no second binding.
+
+**What only a real iPhone or iPad proves (Ben chose automated checks only).** The iOS Paste permission bubble,
+the real on-screen keyboard over the sheet, and Safari deleting site data after seven days unused. Playwright
+WebKit on Windows is not iOS Safari; a problem there would first show up for a real person.
+## M6 The case: save, reopen, conflicts, publish, link cards and maps — editor side done 2026-09-15
+
+**What Ben can open.** With the e2e API running (`scripts\run-webapi-e2e.ps1` in the Paranormal-canvas worktree) and
+signed in, `http://localhost:5125/#case={case}&org={org}` opens that case's newest board, or a new one for it. Save
+to case sends the board (and first uploads any pasted pictures and files into the case's Files); the header then
+says "Saved to case". Opening the board on a clean device brings it back from the case. If somebody else saved a
+newer copy first, a dialog offers Keep mine, Take theirs or Export mine first, and nothing is overwritten until the
+choice. Publish asks first, then files a PNG picture of the whole board in the case. A pasted web address becomes a
+card with the page's title, description and picture when a preview can be made, and keeps its site and address
+when not. A map box shows a still Apple map of the place with Open in Apple Maps, and Live map loads Apple's
+interactive map in the box. People who can read a case but not change it get a view-only board.
+
+**How it works (and why).**
+- `CanvasServerSession` owns the flow; the device copy is always written first, so no server answer can lose work,
+  and autosave never writes to the server. The server's revision goes back as `If-Match`; a 409 carries the server's
+  copy. A board the server cleaned (message HTML) is reopened from its copy.
+- Pictures and files upload in the browser from the device copy, and case pictures display through `blob:`
+  addresses fetched with the bearer token (R17); the token is only ever sent under the API base (R15).
+- View-only (R33): the API's new `CanEdit` (or a 403) sets `BoardAccess`; every change is refused in C# and the
+  script pans instead of moving; the rail and empty state offer nothing to add; properties are disabled.
+- Publish draws the picture from the document on a canvas (`BoardSnapshot` + `snapshotInterop.js`), so every block
+  is in it however big the board (R11), at most 4096 px and 16 million pixels for Safari.
+- Maps (R35): Apple's developer agreement allows map data only temporary storage, so the still picture is signed by
+  the website (`/auth/mapkit-snapshot`, Referer-limited to our pages, canvas flag gated) and fetched from Apple each
+  time the box is shown; nothing map-related is stored with the board or in the published picture (map boxes are
+  drawn as their address there).
+
+**Proof.**
+
+| Run | Result |
+|---|---|
+| `dotnet build` of the slnx with `-warnaserror` | 0 warnings, 0 errors |
+| Canvas unit, component and guard tests | 761 passed (89 new) |
+| Playwright, every category, with the e2e API (Server category new, 6 tests) | 145 passed, 0 failed; 41 skipped (other device sizes) |
+| API worktree: board controller, MapKit signer and snapshot request tests | 51 + 29 passed |
+
+**Red first.** 19 editor breaks, all caught (two only after a stronger break and a stronger assertion); a browser
+break of the conflict choice caught by the Server tests; server breaks caught for `CanEdit` and the snapshot
+Referer check.
+
+**What the checks themselves got wrong first.** The M4 paste test said a link card may reach no server "before
+M6"; it now checks the real rule, that the browser never contacts the linked site. A break restored with Copy-Item
+kept the backup's old timestamp, the incremental build skipped it, and a correct test "failed" against the stale
+build.
+
+**Deviations.** Publishing draws the board itself instead of vendoring html-to-image (no download, no Safari
+foreignObject trouble). Map pictures are never stored (Apple's terms) and there is no `IMapConfig` seam; the map
+addresses come from `CanvasEditorOptions`. The server session is its own service beside the device store. Not done
+here: a browser test of the view-only board (no seeded read-only BenCo account; covered by unit tests), and live map
+tiles in development (the website on 5078 needs MapKit signing keys).
+
+## M7 Live at ishaunted.com/editors/canvas — everything but the rollout done 2026-09-15
+
+**What Ben will open.** `https://ishaunted.com/editors/canvas/` on desktop, iPad and iPhone: dark, in the site's
+look, with a Sign in chip. After he turns on "Feature — Canvas editor" in Site settings, signing in there lets him
+save a board to a case. Until that switch is on, the API answers 404 to the board and link addresses, so the
+feature is invisible even though the files are live.
+
+**What is done, and proven.**
+
+| Run | Result |
+|---|---|
+| `dotnet test Ben.Web.Tests --filter CanvasDeployScriptGuardTests` (worktree) | 13 passed |
+| `dotnet vstest ... TestCategory=Layout` | 22 passed, 0 failed, 26 skipped (other device sizes) |
+| `deploy-ishaunted.ps1 -Apps canvas -StageOnly` | exit 0, artifacts inspected by hand (below) |
+| `BEN_CANVAS_WALK=1 dotnet vstest ... CanvasWalk` | 6 passed, 90 pictures, 0 console errors, 0 responses of 500 or worse, no third-party hosts |
+
+**The staged canvas, checked file by file rather than from the script's own log.**
+`<base href="/editors/canvas/">`; the three patched settings (`WebApiBaseUrl https://ishaunted.com/webapi`,
+`SiteBaseUrl https://ishaunted.com`, `MapTokenUrl https://ishaunted.com/auth/mapkit-token`); no
+`appsettings.Development.json`; no `.br` or `.gz` twin of either patched file; `web.config` carrying X-Frame-Options,
+Content-Security-Policy, X-Content-Type-Options and Referrer-Policy, and mentioning cross-origin isolation only in
+the comment that says why it is deliberately absent — `require-corp` would blank the map tiles. `build-info.json`
+stamp `bd6072e8…`, commit `e96c74a2`.
+
+**Pre-flight before the rollout.** The canvas branch is not behind master or the deploy branch (0 and 0), and the
+commit the live API reports (`2ff3def9`) is an ancestor of it, so deploying the website cannot roll back the other
+session's work. `dotnet ef migrations list` against production shows exactly one pending migration,
+`20260914235349_AddCanvasEditor`, whose `Up()` runs two `CreateTable` calls (`CanvasDocuments`, `LinkUnfurlCache`)
+and their keys and indexes — nothing existing is altered, and the two `DropTable` calls are in `Down()`.
+
+**The screenshot walk.** `CanvasWalk` imports one board (all seven block types, a group, a labelled connector and a
+two-headed one) and photographs it at 1440x900, 768x1024 and 390x844 in both themes: empty board, the blocks, a
+selected block with its handles, properties (a column on desktop and iPad, a sheet on the iPhone), the colour
+swatches, a selected connector, a group, the press-and-hold menu, the zoom controls and minimap, the help panel, the
+HEIC refusal, the two save states, Export and Import, and the sign-in card. Every picture carries the sentence it is
+there to show plus the console errors, 500s and outside hosts seen since the previous one, and `WalkReport` writes
+report.md when the last of the six fixtures finishes. The board is imported rather than built by clicking, so all
+three sizes show identical content and only the layout differs.
+
+**Still to run, and why.**
+- The rollout itself: Ben runs the production migration, `setup-iis-ishaunted.ps1` and
+  `deploy-ishaunted.ps1 -Apps webapi,canvas,website -CanvasProjectPath …` in an elevated shell. Per R26 the UAT
+  database is not touched; it belongs to the other session.
+- The production probes (base href, build stamp, no `.br` twins, headers, 401 anonymous and 404 signed-in while the
+  flag is off), the Playwright run against the deployed mount in Chromium and WebKit, and the device checklist all
+  need the site to be live first.
+- The three server pictures in the walk (saved to case, the newer-copy choice, the publish question) are marked
+  NOT TAKEN. The second run did try, with the seeded password read straight from the worktree's own
+  `appsettings.Development.json`, and the API answered `401 LockedOut`: the seeded BenCo account is locked out on
+  the shared e2e database, which another session also signs in to. The lock clears itself, and the same three
+  things are already proven by the Server category (7 of 7 on the final M6 build), so the walk was left as it is
+  rather than restarting that API underneath the other session.
+
+**What came up along the way.** Every block type prints its title twice, once in the head row and again as the
+first line of its body — the map box repeats its pin icon as well. It is not new in M7, but the walk pictures make
+it plain, and on a 390px iPhone the repeat costs real height. Raised as its own piece of work rather than changed
+during a rollout.

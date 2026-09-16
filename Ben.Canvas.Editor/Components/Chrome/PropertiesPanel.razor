@@ -1,0 +1,214 @@
+@*
+    Properties of what is selected. Numbers commit on change as one undo step each. Escape returns focus to
+    the block being edited.
+*@
+@implements IDisposable
+@inject CanvasStore Store
+@inject SelectionState Selection
+
+<aside id="bc-props" class="bc-props" aria-label="Properties" @onkeydown="OnKeyDown">
+    @* A disabled fieldset turns every control read-only at once on a view-only board (R33); the values stay readable. *@
+    <fieldset class="bc-props__fields" disabled="@ReadOnly">
+    @if (SelectedNode is { } node)
+    {
+        var d = BlockRegistry.Get(node.Type);
+        <header class="bc-props__head">
+            <BcIcon Name="@d.IconName" />
+            <h2 class="bc-props__title">@d.DisplayName</h2>
+        </header>
+
+        <div class="bc-props__grid">
+            <label class="bc-field" for="bc-prop-x"><span class="bc-field__label">X</span>
+                <input id="bc-prop-x" type="number" class="form-control form-control-sm" value="@Round(node.X)" @onchange="@(e => MoveTo(node, e.Value, null))" disabled="@node.Locked" />
+            </label>
+            <label class="bc-field" for="bc-prop-y"><span class="bc-field__label">Y</span>
+                <input id="bc-prop-y" type="number" class="form-control form-control-sm" value="@Round(node.Y)" @onchange="@(e => MoveTo(node, null, e.Value))" disabled="@node.Locked" />
+            </label>
+            <label class="bc-field" for="bc-prop-w"><span class="bc-field__label">Width</span>
+                <input id="bc-prop-w" type="number" class="form-control form-control-sm" value="@Round(node.Width)" min="@Round(d.MinWidth)" @onchange="@(e => Resize(node, e.Value, null))" disabled="@(node.Locked || !d.ResizableWidth)" />
+            </label>
+            <label class="bc-field" for="bc-prop-h"><span class="bc-field__label">Height</span>
+                <input id="bc-prop-h" type="number" class="form-control form-control-sm" value="@Round(node.Height)" min="@Round(d.MinHeight)" @onchange="@(e => Resize(node, null, e.Value))" disabled="@(node.Locked || !d.ResizableHeight)" />
+            </label>
+        </div>
+
+        <fieldset class="bc-props__section">
+            <legend class="bc-field__label">Colour</legend>
+            <div class="bc-swatches">
+                <button type="button" class="bc-swatch bc-swatch--default @(node.ColorKey is null ? "bc-swatch--on" : null)" aria-pressed="@(node.ColorKey is null ? "true" : "false")"
+                        aria-label="Default colour" title="Default" @onclick="@(() => Store.SetColor([node.Id], null))"></button>
+                @foreach (var key in CanvasPalette.Keys)
+                {
+                    <button type="button" class="bc-swatch bc-swatch--@key @(node.ColorKey == key ? "bc-swatch--on" : null)" aria-pressed="@(node.ColorKey == key ? "true" : "false")"
+                            aria-label="@($"Colour {ColourName(key)}")" title="@ColourName(key)" @onclick="@(() => Store.SetColor([node.Id], key))"></button>
+                }
+            </div>
+        </fieldset>
+
+        <label class="bc-check" for="bc-prop-lock">
+            <input id="bc-prop-lock" type="checkbox" class="form-check-input" checked="@node.Locked" @onchange="@(e => Store.SetLocked([node.Id], e.Value is true))" />
+            <span>Locked</span>
+        </label>
+
+        <div class="bc-props__actions">
+            <button type="button" class="btn btn-outline-secondary btn-sm" @onclick="@(() => Store.BringToFront([node.Id]))">@CanvasCopy.Buttons.BringToFront</button>
+            <button type="button" class="btn btn-outline-secondary btn-sm" @onclick="@(() => Store.SendToBack([node.Id]))">@CanvasCopy.Buttons.SendToBack</button>
+            <button type="button" class="btn btn-outline-secondary btn-sm" @onclick="@(() => OnAction.InvokeAsync("duplicate"))">@CanvasCopy.Buttons.Duplicate</button>
+            <button type="button" class="btn btn-outline-danger btn-sm" @onclick="@(() => OnAction.InvokeAsync("delete"))">@CanvasCopy.Buttons.Delete</button>
+        </div>
+    }
+    else if (Selection.NodeIds.Count > 1)
+    {
+        <header class="bc-props__head"><h2 class="bc-props__title">@Selection.NodeIds.Count items selected</h2></header>
+        <div class="bc-props__actions">
+            <button type="button" class="btn btn-outline-secondary btn-sm" @onclick="@(() => OnAction.InvokeAsync("group"))">@CanvasCopy.Buttons.Group</button>
+            <button type="button" class="btn btn-outline-secondary btn-sm" @onclick="@(() => OnAction.InvokeAsync("lock"))">@CanvasCopy.Buttons.Lock</button>
+            <button type="button" class="btn btn-outline-danger btn-sm" @onclick="@(() => OnAction.InvokeAsync("delete"))">@CanvasCopy.Buttons.Delete</button>
+        </div>
+    }
+    else if (Selection.EdgeId is { } edgeId && Store.FindEdge(edgeId) is { } edge)
+    {
+        <header class="bc-props__head"><h2 class="bc-props__title">Connector</h2></header>
+        <label class="bc-field" for="bc-prop-edge-label"><span class="bc-field__label">Label</span>
+            <input id="bc-prop-edge-label" type="text" class="form-control form-control-sm" value="@edge.Label" @onchange="@(e => Store.UpdateEdge(edge.Id, x => x.Label = e.Value?.ToString()))" />
+        </label>
+        <label class="bc-field" for="bc-prop-edge-arrow"><span class="bc-field__label">Arrow</span>
+            <select id="bc-prop-edge-arrow" class="form-select form-select-sm" @onchange="@(e => SetArrow(edge.Id, e.Value))">
+                <option value="None" selected="@(edge.Arrow == EdgeArrow.None)">No arrow</option>
+                <option value="End" selected="@(edge.Arrow == EdgeArrow.End)">Arrow at the end</option>
+                <option value="Both" selected="@(edge.Arrow == EdgeArrow.Both)">Arrows at both ends</option>
+            </select>
+        </label>
+        <label class="bc-field" for="bc-prop-edge-from"><span class="bc-field__label">From side</span>
+            <select id="bc-prop-edge-from" class="form-select form-select-sm" @onchange="@(e => SetSide(edge.Id, e.Value, from: true))">
+                @foreach (var (value, text) in SideChoices)
+                {
+                    <option value="@value" selected="@((edge.FromSide?.ToString() ?? "") == value)">@text</option>
+                }
+            </select>
+        </label>
+        <label class="bc-field" for="bc-prop-edge-to"><span class="bc-field__label">To side</span>
+            <select id="bc-prop-edge-to" class="form-select form-select-sm" @onchange="@(e => SetSide(edge.Id, e.Value, from: false))">
+                @foreach (var (value, text) in SideChoices)
+                {
+                    <option value="@value" selected="@((edge.ToSide?.ToString() ?? "") == value)">@text</option>
+                }
+            </select>
+        </label>
+        <fieldset class="bc-props__section">
+            <legend class="bc-field__label">Colour</legend>
+            <div class="bc-swatches">
+                <button type="button" class="bc-swatch bc-swatch--default @(edge.ColorKey is null ? "bc-swatch--on" : null)" aria-pressed="@(edge.ColorKey is null ? "true" : "false")"
+                        aria-label="Default colour" title="Default" @onclick="@(() => Store.UpdateEdge(edge.Id, x => x.ColorKey = null))"></button>
+                @foreach (var key in CanvasPalette.Keys)
+                {
+                    <button type="button" class="bc-swatch bc-swatch--@key @(edge.ColorKey == key ? "bc-swatch--on" : null)" aria-pressed="@(edge.ColorKey == key ? "true" : "false")"
+                            aria-label="@($"Colour {ColourName(key)}")" title="@ColourName(key)" @onclick="@(() => Store.UpdateEdge(edge.Id, x => x.ColorKey = key))"></button>
+                }
+            </div>
+        </fieldset>
+        <div class="bc-props__actions">
+            <button type="button" class="btn btn-outline-danger btn-sm" @onclick="@(() => Store.Disconnect(edge.Id))">Delete connector</button>
+        </div>
+    }
+    else if (Selection.GroupId is { } groupId && Store.FindGroup(groupId) is { } group)
+    {
+        <header class="bc-props__head"><BcIcon Name="@BlockRegistry.GroupIconName" /><h2 class="bc-props__title">Group</h2></header>
+        <label class="bc-field" for="bc-prop-group-name"><span class="bc-field__label">Name</span>
+            <input id="bc-prop-group-name" type="text" class="form-control form-control-sm" value="@group.Label" @onchange="@(e => Store.RenameGroup(group.Id, e.Value?.ToString()))" />
+        </label>
+        <fieldset class="bc-props__section">
+            <legend class="bc-field__label">Colour</legend>
+            <div class="bc-swatches">
+                <button type="button" class="bc-swatch bc-swatch--default @(group.ColorKey is null ? "bc-swatch--on" : null)" aria-pressed="@(group.ColorKey is null ? "true" : "false")"
+                        aria-label="Default colour" title="Default" @onclick="@(() => Store.SetGroupColor(group.Id, null))"></button>
+                @foreach (var key in CanvasPalette.Keys)
+                {
+                    <button type="button" class="bc-swatch bc-swatch--@key @(group.ColorKey == key ? "bc-swatch--on" : null)" aria-pressed="@(group.ColorKey == key ? "true" : "false")"
+                            aria-label="@($"Colour {ColourName(key)}")" title="@ColourName(key)" @onclick="@(() => Store.SetGroupColor(group.Id, key))"></button>
+                }
+            </div>
+        </fieldset>
+        <p class="bc-props__hint">@Store.MembersOf(group.Id).Count() item(s)</p>
+        <div class="bc-props__actions">
+            <button type="button" class="btn btn-outline-secondary btn-sm" @onclick="@(() => Store.Ungroup(group.Id))">@CanvasCopy.Buttons.Ungroup</button>
+        </div>
+    }
+    else
+    {
+        <p class="bc-props__hint">Select an item to see its properties.</p>
+        <dl class="bc-props__stats">
+            <dt>Items</dt><dd>@Store.Document.Nodes.Count</dd>
+            <dt>Connectors</dt><dd>@Store.Document.Edges.Count</dd>
+        </dl>
+    }
+    </fieldset>
+</aside>
+
+@code {
+    [Parameter] public EventCallback<string> OnAction { get; set; }
+
+    /// <summary>A view-only board: every control is disabled.</summary>
+    [Parameter] public bool ReadOnly { get; set; }
+
+    /// <summary>Escape inside the panel: return focus to the block.</summary>
+    [Parameter] public EventCallback OnEscape { get; set; }
+
+    private CanvasNode? SelectedNode => Selection.NodeIds.Count == 1 ? Store.FindNode(Selection.NodeIds.First()) : null;
+
+    protected override void OnInitialized()
+    {
+        Store.OnChange += Changed;
+        Selection.OnChanged += Refresh;
+    }
+
+    private static string Round(double v) => Math.Round(v).ToString(System.Globalization.CultureInfo.InvariantCulture);
+
+    private static string ColourName(string key) => key switch
+    {
+        "1" => "Blue", "2" => "Green", "3" => "Red", "4" => "Yellow", "5" => "Teal", _ => "Grey",
+    };
+
+    private static double? Parse(object? value) =>
+        double.TryParse(value?.ToString(), System.Globalization.NumberStyles.Float, System.Globalization.CultureInfo.InvariantCulture, out var v) && double.IsFinite(v) ? v : null;
+
+    private void MoveTo(CanvasNode node, object? x, object? y)
+    {
+        var nx = x is null ? node.X : Parse(x) ?? node.X;
+        var ny = y is null ? node.Y : Parse(y) ?? node.Y;
+        Store.MoveNodes([node.Id], nx - node.X, ny - node.Y);
+    }
+
+    private void Resize(CanvasNode node, object? w, object? h)
+    {
+        var nw = w is null ? node.Width : Parse(w) ?? node.Width;
+        var nh = h is null ? node.Height : Parse(h) ?? node.Height;
+        Store.ResizeNode(node.Id, node.X, node.Y, nw, nh);
+    }
+
+    private static readonly (string Value, string Text)[] SideChoices =
+        [("", "Automatic"), ("Top", "Top"), ("Right", "Right"), ("Bottom", "Bottom"), ("Left", "Left")];
+
+    private void SetSide(Guid edgeId, object? value, bool from)
+    {
+        CanvasSide? side = Enum.TryParse<CanvasSide>(value?.ToString(), out var parsed) ? parsed : null;
+        Store.UpdateEdge(edgeId, e => { if (from) e.FromSide = side; else e.ToSide = side; });
+    }
+
+    private void SetArrow(Guid edgeId, object? value)
+    {
+        if (Enum.TryParse<EdgeArrow>(value?.ToString(), out var arrow)) Store.UpdateEdge(edgeId, e => e.Arrow = arrow);
+    }
+
+    private Task OnKeyDown(KeyboardEventArgs e) => e.Key == "Escape" ? OnEscape.InvokeAsync() : Task.CompletedTask;
+
+    private void Changed(CanvasChange change) => _ = InvokeAsync(StateHasChanged);
+
+    private void Refresh() => _ = InvokeAsync(StateHasChanged);
+
+    public void Dispose()
+    {
+        Store.OnChange -= Changed;
+        Selection.OnChanged -= Refresh;
+    }
+}

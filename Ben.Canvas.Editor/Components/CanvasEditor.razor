@@ -1,0 +1,454 @@
+@*
+    The canvas editor's root: the component every host mounts.
+
+    The parameters below are the whole host contract, pinned by CanvasEditorContractTests. There is
+    deliberately no EnablePublish flag: server buttons are gated on each seam's IsAvailable, never on
+    a host remembering to pass a boolean (the lesson of Ben.Video.Editor's IProjectServerStore).
+
+    The root fills its container and the host supplies the height. An editor that asks for
+    height:100% inside an auto-height ancestor sizes itself to its content instead of the window,
+    which is how the site's old in-page video editor ended up the height of its toolbar.
+
+    Every button, key and menu item goes through RunActionAsync, so a button and its shortcut can never
+    do two different things.
+*@
+@implements IAsyncDisposable
+@implements IKeyboardCommandTarget
+@inject CanvasStore Store
+@inject SelectionState Selection
+@inject CanvasViewportState Viewport
+@inject BoardGestureBridge Bridge
+@inject KeyboardShortcutService Keyboard
+@inject AnnouncerService Announcer
+@inject IOptions<CanvasEditorOptions> Options
+@inject CanvasDocumentStore Documents
+@inject CanvasAssetStore Assets
+@inject PasteService Paste
+@inject UnloadGuardService UnloadGuard
+@inject CanvasPackageService Packages
+@inject BcToastService Toasts
+@inject CanvasLayoutState Layout
+@inject CanvasServerSession ServerSession
+@inject BoardAccess Access
+@inject IServiceProvider Services
+@inject LinkPreviewResolver Links
+@inject BoardSnapshotService Snapshots
+@inject ILoggerFactory LoggerFactory
+
+<div class="@RootClass" data-bc-ready="@(_ready ? "true" : null)" @ref="_root">
+    <CanvasHeaderBar DocumentTitle="@Store.Document.Title"
+                     BackContent="@BackContent"
+                     HostStatusContent="@HostStatusContent"
+                     SaveState="@Documents.State"
+                     AutosavePending="@Documents.AutosavePending"
+                     ActionsContent="@FileActions"
+                     CanUndo="@Store.CanUndo" CanRedo="@Store.CanRedo"
+                     UndoDescription="@Store.UndoDescription" RedoDescription="@Store.RedoDescription"
+                     PropertiesOpen="@Layout.PropsOpen"
+                     OnAction="RunActionAsync" />
+    <ToolRail OnAction="RunActionAsync" ReadOnly="@(!Access.CanEdit)" CanUndo="@Store.CanUndo" CanRedo="@Store.CanRedo" UndoDescription="@Store.UndoDescription" RedoDescription="@Store.RedoDescription" />
+    <div class="bc-editor__body bc-board-wrap">
+        <CanvasBoard @ref="_board" ConnectCandidateId="@ConnectCandidate" />
+        <BoardEmptyState Visible="@((_ready || !OperatingSystem.IsBrowser()) && Store.Document.Nodes.Count == 0)" OnAction="RunActionAsync" ReadOnly="@(!Access.CanEdit)" />
+        <ZoomControls Zoom="@Viewport.Current.Zoom" OnAction="RunActionAsync" />
+        @if (Options.Value.ShowMinimap)
+        {
+            <Minimap OnViewportMoved="@(() => Bridge.PushViewportAsync())" />
+        }
+    </div>
+    @if (Layout.IsPhone)
+    {
+        @switch (Layout.OpenSheet)
+        {
+            case CanvasLayoutState.SheetProperties:
+                <BottomSheet Label="Properties" OnClose="CloseSheetAsync">
+                    <PropertiesPanel OnAction="RunActionAsync" OnEscape="CloseSheetAsync" ReadOnly="@(!Access.CanEdit)" />
+                </BottomSheet>
+                break;
+            case CanvasLayoutState.SheetAdd:
+                <BottomSheet Label="Add" OnClose="CloseSheetAsync">@AddSheet</BottomSheet>
+                break;
+            case CanvasLayoutState.SheetMore:
+                <BottomSheet Label="More" OnClose="CloseSheetAsync">@MoreSheet</BottomSheet>
+                break;
+            case CanvasLayoutState.SheetPaste:
+                <BottomSheet Label="Paste" OnClose="CloseSheetAsync">@PasteSheet</BottomSheet>
+                break;
+        }
+    }
+    else if (Layout.PropsOpen)
+    {
+        <PropertiesPanel OnAction="RunActionAsync" OnEscape="ReturnFocusToBoardAsync" ReadOnly="@(!Access.CanEdit)" />
+    }
+    <LiveAnnouncer />
+    <ShortcutHelp @bind-Visible="_helpOpen" />
+    <BcContextMenu TItem="MenuItem" @ref="_menu" Data="_menuItems" TextField="Text" OnClick="OnMenuPickAsync" />
+    <BcToastHost />
+    <textarea id="bc-paste-catcher" class="bc-paste-catcher" @ref="_catcher" tabindex="-1" aria-hidden="true"></textarea>
+    <input type="file" id="bc-import" class="visually-hidden" accept=".ishcanvas,application/zip" tabindex="-1"
+           @ref="_importInput" @onchange="OnImportChosenAsync" />
+    @* The photo picker lives outside every sheet, so closing the Add sheet never removes it while iOS is showing Photos. HEIC is left out of accept so the picker hands over a JPEG. *@
+    <input type="file" id="bc-photo" class="visually-hidden" accept="image/jpeg,image/png,image/gif,image/webp" multiple tabindex="-1" />
+    <BcConfirmDialog @bind-Visible="_publishOpen" Title="@CanvasCopy.Titles.PublishConfirm" Message="@CanvasCopy.Sentences.PublishConfirmBody"
+                     ConfirmText="@CanvasCopy.Buttons.Publish" BusyText="Publishing…" Destructive="false" Busy="@ServerSession.Busy"
+                     OnConfirm="@(() => RunActionAsync("publish-confirmed"))" />
+    <BcModal @bind-Visible="_conflictOpen" Title="@CanvasCopy.Titles.NewerCopy" Static="true">
+        <ChildContent>
+            <p>@CanvasCopy.Sentences.ServerConflict</p>
+        </ChildContent>
+        <FooterContent>
+            <button type="button" class="btn btn-outline-secondary" data-bc-action="conflict-export" @onclick="@(() => RunActionAsync("conflict-export"))">@CanvasCopy.Buttons.ExportMineFirst</button>
+            <button type="button" class="btn btn-outline-primary" data-bc-action="conflict-theirs" @onclick="@(() => RunActionAsync("conflict-theirs"))">@CanvasCopy.Buttons.TakeTheirs</button>
+            <button type="button" class="btn btn-primary" data-bc-action="conflict-mine" @onclick="@(() => RunActionAsync("conflict-mine"))">@CanvasCopy.Buttons.KeepMine</button>
+        </FooterContent>
+    </BcModal>
+    <BcModal @bind-Visible="_downloadOpen" Title="@CanvasCopy.Buttons.ExportBoard" OnClose="OnDownloadClosedAsync">
+        <ChildContent>
+            <p>@CanvasCopy.Sentences.ExportReady</p>
+        </ChildContent>
+        <FooterContent>
+            <a class="btn btn-primary" href="@_downloadUrl" download="@_downloadName" @onclick="CloseDownload">@CanvasCopy.Buttons.Download</a>
+        </FooterContent>
+    </BcModal>
+</div>
+
+@code {
+    /// <summary>New boards created while this is set belong to this case.</summary>
+    [Parameter] public Guid? CaseId { get; set; }
+
+    /// <summary>The organisation that owns <see cref="CaseId"/>; uploads go under it.</summary>
+    [Parameter] public Guid? OrganizationId { get; set; }
+
+    /// <summary>A server board to open once the editor has restored its local state.</summary>
+    [Parameter] public Guid? OpenServerDocumentId { get; set; }
+
+    /// <summary>Whether operator diagnostics are drawn. A display decision, not a security boundary.</summary>
+    [Parameter] public bool ShowDiagnostics { get; set; }
+
+    /// <summary>The header's trailing slot, typically the host's sign-in chip.</summary>
+    [Parameter] public RenderFragment? HostStatusContent { get; set; }
+
+    /// <summary>The header's back link to wherever the board was opened from.</summary>
+    [Parameter] public RenderFragment? BackContent { get; set; }
+
+    private CanvasBoard? _board;
+    private BcContextMenu<MenuItem>? _menu;
+    private List<MenuItem> _menuItems = [];
+    private CanvasPoint _menuWorld;
+    private bool _helpOpen;
+    private ElementReference _catcher;
+    private ElementReference _importInput;
+    private bool _ready;
+    private bool _downloadOpen;
+    private bool _conflictOpen;
+    private bool _publishOpen;
+    private ElementReference _root;
+    private string? _downloadUrl;
+    private string? _downloadName;
+    private DateTime _lastAddAt;
+    private int _addCascade;
+
+    private string RootClass => Layout.PropsOpen ? "bc-editor bc-editor--props" : "bc-editor";
+
+    /// <summary>A context menu entry: the words shown and the action it runs.</summary>
+    public sealed record MenuItem(string Text, string Action);
+
+    protected override void OnInitialized()
+    {
+        Store.OnChange += OnStoreChanged;
+        Viewport.OnChanged += OnViewportChanged;
+        Bridge.EditRequested += OnEditRequested;
+        Bridge.RenameGroupRequested += OnRenameGroupRequested;
+        Bridge.ContextMenuRequested += OnContextMenuRequested;
+        Documents.Changed += OnDocumentsChanged;
+        Documents.StorageRefused += OnStorageRefused;
+        Documents.PersistenceNotGranted += OnPersistenceNotGranted;
+        Paste.Problems += OnPasteProblems;
+        Paste.PermissionDenied += OnPasteDenied;
+        Paste.Placed += OnPastePlaced;
+        Layout.Changed += OnLayoutChanged;
+        ServerSession.Changed += OnServerChanged;
+        Access.Changed += OnServerChanged;
+        SignIn = (ICanvasSignInState?)Services.GetService(typeof(ICanvasSignInState));
+        if (SignIn is not null) SignIn.Changed += OnSignInChanged;
+    }
+
+    /// <summary>Optional: a host without sign-in registers none.</summary>
+    private ICanvasSignInState? SignIn { get; set; }
+
+    private void OnServerChanged() => _ = InvokeAsync(StateHasChanged);
+
+    private void OnStoreChanged(CanvasChange change)
+    {
+        if (Viewport.GestureActive) return;
+        // A pasted or edited link card gets its preview; cards already asked are skipped, so this stays cheap.
+        if (_ready && change.Kind is CanvasChangeKind.Document or CanvasChangeKind.NodeData) _ = ResolveLinksAsync(includeStale: false);
+        _ = InvokeAsync(StateHasChanged);
+    }
+
+    private async Task ResolveLinksAsync(bool includeStale)
+    {
+        try
+        {
+            await Links.ResolveAsync(includeStale);
+        }
+        catch (Exception ex)
+        {
+            LoggerFactory.CreateLogger<CanvasEditor>().LogWarning(ex, "Link cards could not be resolved.");
+        }
+    }
+
+    private void OnViewportChanged()
+    {
+        Documents.SaveViewSoon(Viewport.Current);
+        _ = InvokeAsync(StateHasChanged);
+    }
+
+    private void OnDocumentsChanged()
+    {
+        if (Viewport.GestureActive) return;
+        _ = InvokeAsync(StateHasChanged);
+    }
+
+    private void OnPasteProblems(IReadOnlyList<string> problems) =>
+        _ = InvokeAsync(() => Toasts.Warning(string.Join(" ", problems)));
+
+    private void OnStorageRefused() => _ = InvokeAsync(() => Toasts.Warning(CanvasCopy.Sentences.StorageRefused));
+
+    private void OnPersistenceNotGranted() => _ = InvokeAsync(() => Toasts.Info(CanvasCopy.Sentences.StorageNotPersistent));
+
+    /// <summary>Export and import, beside undo and redo. The import label opens the hidden file input natively, which iOS requires.</summary>
+    private RenderFragment FileActions => __builder =>
+    {
+        @if (!Access.CanEdit)
+        {
+            <span class="bc-header__viewonly" role="status" title="@Access.Reason"><BcIcon Name="eye" /><span>@CanvasCopy.Buttons.ViewOnly</span></span>
+        }
+        else if (Store.Document.CaseId is not null)
+        {
+            var why = ServerSession.CanSaveToCase ? CanvasCopy.Buttons.SaveToCase : CanvasCopy.Sentences.SignedOutSave;
+            <button type="button" class="btn btn-primary btn-sm bc-header__save" data-bc-action="save-server" disabled="@(!ServerSession.CanSaveToCase || ServerSession.Busy)"
+                    title="@why" @onclick="@(() => RunActionAsync("save-server"))">
+                <BcIcon Name="save" /><span class="bc-header__save-text">@CanvasCopy.Buttons.SaveToCase</span>
+            </button>
+            @if (ServerSession.CanSaveToCase)
+            {
+                <button type="button" class="btn btn-outline-primary btn-sm bc-header__save" data-bc-action="publish" disabled="@ServerSession.Busy"
+                        title="@CanvasCopy.Titles.PublishConfirm" @onclick="@(() => RunActionAsync("publish"))">
+                    <BcIcon Name="upload-cloud" /><span class="bc-header__save-text">@CanvasCopy.Buttons.Publish</span>
+                </button>
+            }
+        }
+        <button type="button" class="bc-header__button" data-bc-action="export" aria-label="@CanvasCopy.Buttons.ExportBoard" title="@CanvasCopy.Buttons.ExportBoard"
+                @onclick="@(() => RunActionAsync("export"))">
+            <BcIcon Name="download" />
+        </button>
+        <label for="bc-import" class="bc-header__button" data-bc-action="import" role="button" tabindex="0"
+               aria-label="@CanvasCopy.Buttons.ImportBoard" title="@CanvasCopy.Buttons.ImportBoard" @onkeydown="OnImportKeyAsync">
+            <BcIcon Name="upload" />
+        </label>
+    };
+
+    private static readonly (CanvasNodeType Type, string Name)[] AddChoices =
+        [(CanvasNodeType.Card, "Card"), (CanvasNodeType.Text, "Note"), (CanvasNodeType.Message, "Message"), (CanvasNodeType.Map, "Map"), (CanvasNodeType.Image, "Image"), (CanvasNodeType.Link, "Link")];
+
+    /// <summary>The phone's Add list. Photo is a label for the permanent picker, so the tap opens Photos natively.</summary>
+    private RenderFragment AddSheet => __builder =>
+    {
+        <div class="bc-sheet-list">
+            @foreach (var (type, name) in AddChoices.Where(c => Options.Value.EnabledBlocks.Contains(c.Type)))
+            {
+                var kind = type.ToString().ToLowerInvariant();
+                <button type="button" class="bc-sheet-list__row" data-bc-action="add-@kind" @onclick="@(() => AddFromSheetAsync(kind))">
+                    <BcIcon Name="@BlockRegistry.Get(type).IconName" /><span>@name</span>
+                </button>
+            }
+            @if (Options.Value.EnabledBlocks.Contains(CanvasNodeType.Image))
+            {
+                <label for="bc-photo" class="bc-sheet-list__row" data-bc-action="add-photo" @onclick="CloseSheetAsync">
+                    <BcIcon Name="camera" /><span>@CanvasCopy.Buttons.Photo</span>
+                </label>
+            }
+        </div>
+    };
+
+    private RenderFragment MoreSheet => __builder =>
+    {
+        <div class="bc-sheet-list">
+            @if (Selection.NodeIds.Count == 1)
+            {
+                <button type="button" class="bc-sheet-list__row" data-bc-action="edit" @onclick="@(() => RunActionAsync("edit"))">
+                    <BcIcon Name="sliders" /><span>Properties</span>
+                </button>
+            }
+            @if (Selection.NodeIds.Count > 0)
+            {
+                <button type="button" class="bc-sheet-list__row" data-bc-action="duplicate" @onclick="@(() => RunFromSheetAsync("duplicate"))">
+                    <BcIcon Name="copy" /><span>@CanvasCopy.Buttons.Duplicate</span>
+                </button>
+                <button type="button" class="bc-sheet-list__row" data-bc-action="delete" @onclick="@(() => RunFromSheetAsync("delete"))">
+                    <BcIcon Name="trash-2" /><span>@CanvasCopy.Buttons.Delete</span>
+                </button>
+            }
+            <button type="button" class="bc-sheet-list__row" data-bc-action="fit" @onclick="@(() => RunFromSheetAsync("fit"))">
+                <BcIcon Name="maximize" /><span>@CanvasCopy.Buttons.Fit</span>
+            </button>
+            <button type="button" class="bc-sheet-list__row" data-bc-action="export" @onclick="@(() => RunFromSheetAsync("export"))">
+                <BcIcon Name="download" /><span>@CanvasCopy.Buttons.ExportBoard</span>
+            </button>
+            <label for="bc-import" class="bc-sheet-list__row" data-bc-action="import" @onclick="CloseSheetAsync">
+                <BcIcon Name="upload" /><span>@CanvasCopy.Buttons.ImportBoard</span>
+            </label>
+            <button type="button" class="bc-sheet-list__row" data-bc-action="help" @onclick="@(() => RunActionAsync("help"))">
+                <BcIcon Name="help-circle" /><span>Help</span>
+            </button>
+        </div>
+    };
+
+    /// <summary>
+    /// Where a refused clipboard read goes on a phone: a box to paste into with the system's own Paste, which
+    /// never needs a permission.
+    /// </summary>
+    private RenderFragment PasteSheet => __builder =>
+    {
+        <div class="bc-paste-sheet">
+            <p>@CanvasCopy.Sentences.PasteRefusedSheet</p>
+            <textarea class="bc-paste-box form-control" rows="4" aria-label="Paste here"></textarea>
+        </div>
+    };
+
+    private async Task AddFromSheetAsync(string kind)
+    {
+        Layout.Close();
+        await RunActionAsync("add-" + kind);
+    }
+
+    private async Task RunFromSheetAsync(string action)
+    {
+        Layout.Close();
+        await RunActionAsync(action);
+    }
+
+    private Task CloseSheetAsync()
+    {
+        Layout.Close();
+        return Task.CompletedTask;
+    }
+
+    private void OnLayoutChanged() => _ = InvokeAsync(StateHasChanged);
+
+    private void OnPasteDenied() => _ = InvokeAsync(() =>
+    {
+        if (Layout.IsPhone) Layout.Open(CanvasLayoutState.SheetPaste);
+        else Toasts.Warning(CanvasCopy.Sentences.Permission);
+    });
+
+    private void OnPastePlaced() => _ = InvokeAsync(() =>
+    {
+        if (Layout.OpenSheet == CanvasLayoutState.SheetPaste) Layout.Close();
+    });
+    private async Task OnImportKeyAsync(KeyboardEventArgs e)
+    {
+        if (e.Key is "Enter" or " ") await RunActionAsync("import");
+    }
+
+    private async Task OnImportChosenAsync(ChangeEventArgs _)
+    {
+        var outcome = await Packages.ImportAsync(_importInput);
+        if (outcome.Problems.Count > 0) Toasts.Warning(string.Join(" ", outcome.Problems));
+        if (outcome.Imported)
+        {
+            Selection.Clear();
+            FitToContent();
+            await Bridge.PushViewportAsync();
+            Announcer.Say(CanvasCopy.Sentences.Imported);
+        }
+
+        StateHasChanged();
+    }
+
+    private void CloseDownload() => _downloadOpen = false;
+
+    private async Task OnDownloadClosedAsync()
+    {
+        await Packages.ReleaseDownloadAsync(_downloadUrl);
+        _downloadUrl = null;
+    }
+
+
+    private void OnEditRequested(Guid nodeId) => _ = InvokeAsync(() => BeginEditAsync(nodeId));
+
+    private void OnRenameGroupRequested(Guid groupId) => _ = InvokeAsync(() =>
+    {
+        Selection.BeginRenameGroup(groupId);
+        StateHasChanged();
+    });
+
+    private void OnContextMenuRequested(PointerMenu menu) => _ = InvokeAsync(async () =>
+    {
+        _menuWorld = new CanvasPoint(menu.WorldX, menu.WorldY);
+        Paste.SetMenuPoint(_menuWorld);
+        _menuItems = MenuFor(menu);
+        StateHasChanged();
+        if (_menu is not null) await _menu.ShowAsync(menu.ClientX, menu.ClientY);
+    });
+
+    private List<MenuItem> MenuFor(PointerMenu menu)
+    {
+        if (menu.NodeId is { } nodeId && Store.FindNode(nodeId) is { } node)
+        {
+            return
+            [
+                new("Edit", "edit"),
+                new(CanvasCopy.Buttons.Duplicate, "duplicate"),
+                new(node.Locked ? CanvasCopy.Buttons.Unlock : CanvasCopy.Buttons.Lock, "lock"),
+                new(CanvasCopy.Buttons.BringToFront, "front"),
+                new(CanvasCopy.Buttons.SendToBack, "back"),
+                new("Connect from here", "connect"),
+                new(CanvasCopy.Buttons.Delete, "delete"),
+            ];
+        }
+
+        if (menu.EdgeId is not null) return [new("Delete connector", "delete")];
+        if (menu.GroupId is not null) return [new("Rename group", "rename"), new(CanvasCopy.Buttons.Ungroup, "ungroup")];
+
+        return
+        [
+            new("Add card here", "add-card-here"),
+            new("Add note here", "add-text-here"),
+            new(CanvasCopy.Buttons.Fit, "fit"),
+        ];
+    }
+
+    private Task OnMenuPickAsync(MenuItem item) => RunActionAsync(item.Action);
+
+    private async Task ReturnFocusToBoardAsync()
+    {
+        Selection.EndEdit();
+        if (_board is not null)
+        {
+            try { await _board.BoardElement.FocusAsync(); }
+            catch (Exception) { /* not rendered interactively */ }
+        }
+    }
+
+    private async Task BeginEditAsync(Guid nodeId)
+    {
+        if (Store.FindNode(nodeId) is null) return;
+        if (!Access.CanEdit)
+        {
+            // A view-only board still shows the properties, read-only, so its details can be read.
+            Selection.Select(nodeId);
+            if (Layout.IsPhone) Layout.Open(CanvasLayoutState.SheetProperties);
+            else await Layout.SetPropsOpenAsync(true);
+            StateHasChanged();
+            return;
+        }
+
+        Selection.BeginEdit(nodeId);
+        if (Layout.IsPhone) Layout.Open(CanvasLayoutState.SheetProperties);
+        else await Layout.SetPropsOpenAsync(true);
+        StateHasChanged();
+        await Task.CompletedTask;
+    }
+}

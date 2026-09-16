@@ -1,0 +1,46 @@
+.bc-image-wrap {
+    display: flex;
+    flex-direction: column;
+    height: 100%;
+    margin: -.5rem;
+}
+
+.bc-image {
+    display: block;
+    flex: 1 1 auto;
+    min-height: 0;
+    width: 100%;
+    height: 100%;
+    user-select: none;
+    -webkit-user-drag: none;
+}
+
+.bc-image--contain { object-fit: contain; }
+.bc-image--cover { object-fit: cover; }
+
+.bc-image__placeholder {
+    flex: 1 1 auto;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    gap: .375rem;
+    padding: .5rem;
+    color: var(--bc-text-muted);
+    font-size: .8125rem;
+    text-align: center;
+}
+
+.bc-image__caption {
+    padding: .25rem .5rem;
+    color: var(--bc-text-muted);
+    font-size: .75rem;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+
+.bc-image__edit {
+    padding: .375rem .5rem;
+    background: var(--bc-surface-3);
+}
