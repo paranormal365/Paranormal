@@ -120,11 +120,14 @@ public sealed class PublicPlaceController : ControllerBase
                 // keeping its pictures up. See ArchiveMediaPublication, which owns the rule.
                 s.MediaReviewState == Ben.Data.Common.Enums.FeedMediaReviewState.Approved
                  && s.Place!.Kind == Ben.Data.Common.Enums.PlaceKind.PublicLocation
+                    // Same rule as ArchiveMediaPublication: a bundle member has no file of its
+                    // own, and the anonymous archive cannot serve a range of a .ben yet.
                     ? s.Files
+                        .Where(f => f.UploadFileId != null)
                         .OrderBy(f => f.RelativePath)
                         .Select(f => new ArchiveMediaItem(
-                            f.UploadFileId, f.RelativePath,
-                            f.UploadFile.ContentType, f.UploadFile.FileName))
+                            f.UploadFileId!.Value, f.RelativePath,
+                            f.UploadFile!.ContentType, f.UploadFile.FileName))
                         .ToList()
                     : new List<ArchiveMediaItem>()))
             .ToListAsync(ct);

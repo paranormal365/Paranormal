@@ -182,7 +182,10 @@ public sealed class FieldSessionUploadController : BenControllerBase
         // of, and bytes nobody can name again are the one part of this nobody can clean up later.
         var fileIds = await db.FieldSessionUploadFiles.AsNoTracking()
             .Where(f => f.FieldSessionUploadId == sessionId)
-            .Select(f => f.UploadFileId)
+            // A bundle member has no file of its own. Its bytes go when the session's single
+            // .ben does, which is the document file added on the next line.
+            .Where(f => f.UploadFileId != null)
+            .Select(f => f.UploadFileId!.Value)
             .ToListAsync(ct);
         fileIds.Add(session.DocumentUploadFileId);
         fileIds = fileIds.Distinct().ToList();

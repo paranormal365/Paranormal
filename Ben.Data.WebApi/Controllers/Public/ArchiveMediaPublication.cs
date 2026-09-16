@@ -57,11 +57,16 @@ public static class ArchiveMediaPublication
                      && s.Place!.Kind == PlaceKind.PublicLocation
                      && s.MediaReviewState == FeedMediaReviewState.Approved)
             .SelectMany(s => s.Files)
+            // A recording inside a .ben bundle has no UploadFile of its own, and the anonymous
+            // archive has no way yet to serve a byte range of a session file. Publishing such a
+            // session is refused at the door rather than letting it appear here with no media —
+            // see FieldSessionPublishController.
+            .Where(f => f.UploadFileId != null)
             .OrderBy(f => f.RelativePath)
             .Select(f => new ArchiveMediaItem(
-                f.UploadFileId,
+                f.UploadFileId!.Value,
                 f.RelativePath,
-                f.UploadFile.ContentType,
+                f.UploadFile!.ContentType,
                 f.UploadFile.FileName))
             .ToListAsync(ct);
 }

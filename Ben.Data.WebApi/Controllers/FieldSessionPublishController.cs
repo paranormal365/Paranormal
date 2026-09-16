@@ -262,6 +262,16 @@ public sealed class FieldSessionPublishController : BenControllerBase
                 "Only public locations have an open archive. A session recorded at somebody's "
               + "home stays with you and your group — that is what the private lane is for.");
 
+        // A session that arrived as one .ben carries its recordings inside that file, and the
+        // open archive can only serve files of their own so far. Published anyway, it would
+        // appear with its readings and no sound — which is worse than being told it cannot go
+        // yet. Refused at the door until the archive can serve a range of a bundle.
+        if (session.IsBundle)
+            return BadRequest(
+                "This session can't go in the open archive yet. It was sent as a single session "
+              + "file, and the archive can't play what's inside one of those — it will be able "
+              + "to shortly.");
+
         session.PlaceId = place.Id;
         // Re-publishing an already-public session keeps its original date: the answer to "when
         // did this become public" must not move because somebody pressed the button twice.

@@ -381,7 +381,10 @@ public sealed class AppUserPurge
 
         ids.AddRange(await db.FieldSessionUploadFiles.AsNoTracking()
             .Where(f => personalSessionIds.Contains(f.FieldSessionUploadId))
-            .Select(f => f.UploadFileId)
+            // Bundle members have no file of their own: the session's single .ben carries
+            // their bytes and is already in this list as the document.
+            .Where(f => f.UploadFileId != null)
+            .Select(f => f.UploadFileId!.Value)
             .ToListAsync(ct));
 
         return ids.Distinct().ToList();

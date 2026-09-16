@@ -4131,6 +4131,11 @@ namespace Ben.Data.Source.Context
                 .HasIndex(e => new { e.FieldSessionUploadId, e.RelativePath }).IsUnique();
             modelBuilder.Entity<FieldSessionUploadFile>().Property(e => e.RelativePath).HasMaxLength(500);
             modelBuilder.Entity<FieldSessionUploadFile>().Property(e => e.Sha256).HasMaxLength(64);
+            // Bounded, like every other string here: a path inside a .ben is a file name and maybe
+            // a folder, and a content type is a content type. nvarchar(max) for either would be a
+            // column that says nothing about what belongs in it.
+            modelBuilder.Entity<FieldSessionUploadFile>().Property(e => e.BundleEntryPath).HasMaxLength(512);
+            modelBuilder.Entity<FieldSessionUploadFile>().Property(e => e.ContentType).HasMaxLength(128);
             modelBuilder.Entity<FieldSessionUploadFile>()
                 .HasOne(e => e.FieldSessionUpload).WithMany(e => e.Files)
                 .HasForeignKey(e => e.FieldSessionUploadId).OnDelete(DeleteBehavior.Cascade);

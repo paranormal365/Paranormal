@@ -143,7 +143,10 @@ public sealed class OrganizationPurge
         fileIds.AddRange(await db.FieldSessionUploadFiles.AsNoTracking()
             .Where(f => f.FieldSessionUpload.InvestigationId != null
                      && investigationIds.Contains(f.FieldSessionUpload.InvestigationId.Value))
-            .Select(f => f.UploadFileId).ToListAsync(ct));
+            // A bundle member has no file of its own — its bytes are inside the session's
+            // single .ben, which is removed with the session document above.
+            .Where(f => f.UploadFileId != null)
+            .Select(f => f.UploadFileId!.Value).ToListAsync(ct));
 
         var distinct = fileIds.Distinct().ToList();
 
