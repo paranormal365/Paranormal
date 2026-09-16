@@ -153,7 +153,10 @@ public sealed partial class BenAdminClientAdapter
             401 => "Your session has ended. Sign in again, then set the roles.",
             403 => "Only a SuperAdmin can change site roles.",
             404 => "That account no longer exists.",
-            _   => null,
+            // Anything else is the server failing rather than refusing. Naming the code is the difference between
+            // "try again" and knowing to look in the error log — which is where a 500 has already written itself.
+            0   => "The request did not reach the server. Check the connection and try again.",
+            _   => $"The roles were not saved: the server answered {status}. Administration → System → Error Log has the detail.",
         });
     }
 

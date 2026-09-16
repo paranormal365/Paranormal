@@ -135,20 +135,30 @@ public sealed class AdminAppUserController : AdminEntityControllerBase<AppUser, 
         if (toAdd.Count == 0 && toRemove.Count == 0)
             return Ok(new AppUserRolesAdminRecord(id, before));
 
-        if (toRemove.Count > 0)
+        // Identity THROWS rather than failing for two ordinary states — a role whose lookup name does not match its
+        // name, and a membership that is already there or already gone — and an exception here reaches the page as a
+        // 500 with no body, which reads as "the server did not say why" (Ben, 2026-09-15). Named instead.
+        try
         {
-            var removed = await _userManager.RemoveFromRolesAsync(user, toRemove);
-            if (!removed.Succeeded)
-                return BadRequest(string.Join(" ", removed.Errors.Select(e => e.Description)));
-        }
-        if (toAdd.Count > 0)
-        {
-            var added = await _userManager.AddToRolesAsync(user, toAdd);
-            if (!added.Succeeded)
-                return BadRequest(string.Join(" ", added.Errors.Select(e => e.Description)));
-        }
+            if (toRemove.Count > 0)
+            {
+                var removed = await _userManager.RemoveFromRolesAsync(user, toRemove);
+                if (!removed.Succeeded)
+                    return BadRequest(string.Join(" ", removed.Errors.Select(e => e.Description)));
+            }
+            if (toAdd.Count > 0)
+            {
+                var added = await _userManager.AddToRolesAsync(user, toAdd);
+                if (!added.Succeeded)
+                    return BadRequest(string.Join(" ", added.Errors.Select(e => e.Description)));
+            }
 
-        await _userManager.UpdateSecurityStampAsync(user);
+            await _userManager.UpdateSecurityStampAsync(user);
+        }
+        catch (InvalidOperationException ex)
+        {
+            return BadRequest($"The account system refused the change: {ex.Message}");
+        }
 
         var after = before.Except(toRemove, StringComparer.OrdinalIgnoreCase)
             .Concat(toAdd)
