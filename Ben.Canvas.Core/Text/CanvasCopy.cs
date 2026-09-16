@@ -97,8 +97,9 @@ public static class CanvasCopy
         public const string TooLargeFile =
             "That file is over 100 MB. Upload it to the case's Files tab instead and paste the link here.";
 
+        // Not "Safari": the board cannot know which browser refused, and this was read in Chrome.
         public const string Permission =
-            "Safari did not let the board read the clipboard. Tap Paste again and choose Allow, or press and hold the board and pick Paste.";
+            "The browser did not let the board read the clipboard. Tap Paste again and choose Allow, or paste with Ctrl+V or Cmd+V on the board.";
 
         public const string NothingToPaste = "There is nothing on the clipboard the board can use.";
 
@@ -128,6 +129,10 @@ public static class CanvasCopy
 
         public const string StorageRefused =
             "This browser is not letting the board store anything (private browsing, or storage is full). Export the board to keep it.";
+
+        /// <summary>The browser threw while the board was being written, rather than refusing: the save did not happen.</summary>
+        public const string LocalSaveFailed =
+            "This device could not save the board just now. Keep working — it will try again with your next change, and you can export a copy from the toolbar.";
 
         public const string SignedOutSave = "Sign in to save this board to the case.";
 

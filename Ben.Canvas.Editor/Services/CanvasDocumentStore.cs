@@ -250,7 +250,21 @@ public sealed class CanvasDocumentStore : IAsyncDisposable
 
         document.SavedAtUtc = now;
         var json = CanvasSerializer.Serialize(document, compact: true);
-        var written = await _module.InvokeAsync<bool>("docPut", DocumentIndex.EntryKey(localId), json);
+        bool written;
+        try
+        {
+            written = await _module.InvokeAsync<bool>("docPut", DocumentIndex.EntryKey(localId), json);
+        }
+        catch (Exception ex) when (ex is JSException or JSDisconnectedException or TaskCanceledException)
+        {
+            // A write that threw — IndexedDB gone mid-transaction, the circuit dropped — used to escape to the
+            // autosave's log-only catch and leave the header on "Saving…" for ever. It is said, and the next
+            // change tries again.
+            _log.LogWarning(ex, "Saving the board on this device threw.");
+            State = new SaveState(SaveStateKind.Editing, Problem: Core.Text.CanvasCopy.Sentences.LocalSaveFailed);
+            Changed?.Invoke();
+            return false;
+        }
         if (!written)
         {
             LocalWriteRefused = true;

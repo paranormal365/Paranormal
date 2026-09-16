@@ -202,7 +202,9 @@ public sealed class ProductWalk : BenTestBase
     /// <summary>Follows the first link on the page whose address starts with <paramref name="prefix"/>.</summary>
     private async Task FollowAsync(string prefix)
     {
-        var link = Main.Locator($"a[href^='{prefix}']").First;
+        // Not the "New …" link that sits first on a list page: the step is after a thing that exists, and
+        // "one user" used to photograph the New User form (2026-09-16).
+        var link = Main.Locator($"a[href^='{prefix}']:not([href$='/new'])").First;
         await Expect(link).ToBeVisibleAsync(new() { Timeout = 20_000 });
         var href = (await link.GetAttributeAsync("href"))!;
         await ClickUntilUrlAsync(link, Regex.Escape(href.Split('?')[0]));
