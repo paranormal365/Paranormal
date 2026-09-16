@@ -8,13 +8,26 @@
 
 ## What this actually is
 
-**Stock 7.12.11, built here rather than taken from npm.** That matters, because the bundle does not
-match npm's own `dist/wavesurfer.esm.js` for any 7.x release — ours is 42,533 bytes, and every
-published 7.x dist from 7.7.0 to the current 7.12.12 is smaller (25,934 → 41,736). Somebody
-comparing hashes against unpkg will conclude it has been tampered with. It has not: it was built
-from the 7.12.11 source tree with a rollup config written for Blazor
-(`rollup.blazor.config.js`, `rollup-plugin-web-worker-loader`), which bundles differently from
-upstream's own build.
+**Stock 7.12.11, built here rather than taken from npm — and the same code either way.**
+
+Its SHA-256 does not match npm's `dist/wavesurfer.esm.js` for 7.12.11, so a hash check against
+unpkg fails and looks alarming. It is not alarming. Compared byte for byte:
+
+| | ours | npm 7.12.11 dist |
+|---|---|---|
+| size | 42,533 | 42,771 |
+| exports | `export{w as default}` | same |
+| worker handling | one `createObjectURL`, no `new Worker` | same |
+| distinct string literals | 110 | 110 |
+
+The 238 bytes are minifier output, not code: this build's terser omits the redundant parentheses
+around function expressions that npm's build emits (`(function(…)` against `((function(…)`). The
+one string literal that differs between the two files differs only by that same pair of brackets,
+inside a snippet of code held as a string.
+
+So **replacing this with npm's own 7.12.11 dist is a swap of identical code**, not a gamble. It
+was built here because the source tree was checked out for a Blazor rollup config
+(`rollup.blazor.config.js`, `rollup-plugin-web-worker-loader`) — but the result is stock.
 
 The source tree was `Ben.Web.WebApp/wwwroot/ts/wavesurfer/` and went when that project did. It is
 still in history and can be read or restored:
@@ -48,8 +61,13 @@ So: do not "tidy" this into `_content/`. If it ever does move, the import in
 
 ## Updating it
 
-Either rebuild from the source tree above at a newer tag, or switch to a stock npm dist and check
-the spectrogram still draws — that is the part that depends on how the workers are bundled
-(`spectrogram-worker.js` and `spectrogram-draw-worker.js` sit beside the bundle here). Update the
-version and hash above either way, and open an audio preview before believing it works: a broken
-module load looks like a working page until somebody clicks play.
+Take npm's own dist for the version you want —
+`https://unpkg.com/wavesurfer.js@<version>/dist/wavesurfer.esm.js` — and update the version and
+hash above. The comparison in the table was
+run to establish that this is a plain swap; there is no local patch to carry forward. The worker
+files beside the bundle (`spectrogram-worker.js`, `spectrogram-draw-worker.js`,
+`noise-gate-processor.js`) are separate assets and are not inside it, so check them against the
+same release.
+
+Then open an audio preview before believing it works: a broken module load looks like a working
+page until somebody clicks play.
