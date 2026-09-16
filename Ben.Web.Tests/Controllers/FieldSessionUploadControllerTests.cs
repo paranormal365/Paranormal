@@ -3,6 +3,7 @@ using Ben.Data.Common.Enums;
 using Ben.Data.Source.Context;
 using Ben.Data.Source.Entities;
 using Ben.Data.WebApi.Controllers;
+using Ben.Data.WebApi.Services.FieldSessions;
 using Microsoft.AspNetCore.Http;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.EntityFrameworkCore;
@@ -381,6 +382,82 @@ public sealed class FieldSessionUploadControllerTests
         var sessions = Assert.IsAssignableFrom<IEnumerable<FieldSessionRecord>>(
             Assert.IsType<OkObjectResult>(mine.Result).Value).ToList();
         Assert.Single(sessions);
+    }
+
+    /// <summary>
+    /// The phone seals every bundle it sends: data.json, the recordings, and seal.json last. The
+    /// seal is part of the format, and the door refused it as "a .json file" — with it, every
+    /// sealed upload (seen live on the simulator, 2026-09-16). And a session that arrived as one
+    /// file says so, so a phone listing what it could pull back offers Download only where the
+    /// server can answer.
+    /// </summary>
+    [Fact]
+    public async Task A_sealed_bundle_is_accepted_and_listed_as_one()
+    {
+        var factory = await SeedAsync();
+        var bytes = Bundle(
+            ("data.json", Encoding.UTF8.GetBytes(ValidDocument())),
+            ("media/audio-001.m4a", PlausibleM4a()),
+            ("seal.json", """{"version":1,"sessionId":"00000000-0000-0000-0000-000000000001","entries":[]}"""u8.ToArray()));
+
+        var result = await Build(factory, StrangerId).SubmitBundle(
+            Upload(bytes, "session.ben", BenBundle.ContentType), Guid.NewGuid(),
+            investigationId: null, StrangerId, "A Stranger", default);
+
+        var record = Assert.IsType<FieldSessionRecord>(Assert.IsType<OkObjectResult>(result.Result).Value);
+        Assert.True(record.IsBundle);
+        Assert.Equal("media/audio-001.m4a", Assert.Single(record.Files).RelativePath);
+
+        var mine = await Build(factory, StrangerId).GetMine(default);
+        var listed = Assert.Single(Assert.IsAssignableFrom<IEnumerable<FieldSessionRecord>>(
+            Assert.IsType<OkObjectResult>(mine.Result).Value));
+        Assert.True(listed.IsBundle);
+    }
+
+    /// <summary>The seal's exception is for the seal alone; the recordings' rule has not softened.</summary>
+    [Fact]
+    public async Task A_json_file_among_the_recordings_is_still_refused()
+    {
+        var factory = await SeedAsync();
+        var bytes = Bundle(
+            ("data.json", Encoding.UTF8.GetBytes(ValidDocument())),
+            ("media/notes.json", """{"note":"not a recording"}"""u8.ToArray()));
+
+        var result = await Build(factory, StrangerId).SubmitBundle(
+            Upload(bytes, "session.ben", BenBundle.ContentType), Guid.NewGuid(),
+            investigationId: null, StrangerId, "A Stranger", default);
+
+        var refusal = Assert.IsType<BadRequestObjectResult>(result.Result);
+        Assert.Contains(".json", refusal.Value?.ToString() ?? "");
+    }
+
+    /// <summary>A document-style session — the shape 1.0.2 sends — is not a bundle, and says so.</summary>
+    [Fact]
+    public async Task A_document_upload_is_listed_as_not_a_bundle()
+    {
+        var factory = await SeedAsync();
+        var result = await Build(factory, StrangerId).SubmitDocument(
+            Document(ValidDocument()), Guid.NewGuid(),
+            investigationId: null, StrangerId, "A Stranger", default);
+
+        var record = Assert.IsType<FieldSessionRecord>(Assert.IsType<OkObjectResult>(result.Result).Value);
+        Assert.False(record.IsBundle);
+    }
+
+    /// <summary>A stored-only zip exactly as the phone writes one — see <see cref="Services.BenBundleTests.StoredZip"/>.</summary>
+    private static byte[] Bundle(params (string Path, byte[] Bytes)[] entries)
+    {
+        using var zip = Services.BenBundleTests.StoredZip.Write(entries);
+        return zip.ToArray();
+    }
+
+    /// <summary>Enough of an MPEG-4 file for the file guard: a box size and "ftyp", then padding.</summary>
+    private static byte[] PlausibleM4a()
+    {
+        var bytes = new byte[256];
+        bytes[3] = 0x18;
+        Encoding.ASCII.GetBytes("ftypM4A ").CopyTo(bytes, 4);
+        return bytes;
     }
 
     [Fact]

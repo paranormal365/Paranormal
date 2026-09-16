@@ -31,6 +31,17 @@ public sealed class BenBundle
     /// <summary>The document every bundle must carry, describing the session.</summary>
     public const string DocumentEntryPath = "data.json";
 
+    /// <summary>
+    /// The seal the phone writes last: every member with its SHA-256, and a digest over the list,
+    /// so a bundle that lost or changed bytes can be told from one that is still what was sealed.
+    /// Part of the format, not a recording — it used to be handed to the file guard with the
+    /// recordings, which refused it as "a .json file", and every sealed upload with it.
+    /// </summary>
+    public const string SealEntryPath = "seal.json";
+
+    /// <summary>A seal lists at most a few hundred members; anything past this is not a seal.</summary>
+    public const long MaxSealBytes = 256 * 1024;
+
     /// <summary>What a session bundle is called, and what it is.</summary>
     public const string FileExtension = ".ben";
     public const string ContentType = "application/vnd.ishaunted.field-session";
@@ -64,9 +75,15 @@ public sealed class BenBundle
     public BenBundleEntry? Document =>
         _entries.TryGetValue(DocumentEntryPath, out var entry) ? entry : null;
 
-    /// <summary>Everything that is not the document — the recordings.</summary>
+    /// <summary>The seal's place in the bundle, or null for a bundle sent without one.</summary>
+    public BenBundleEntry? Seal =>
+        _entries.TryGetValue(SealEntryPath, out var entry) ? entry : null;
+
+    /// <summary>Everything that is not the document or the seal — the recordings.</summary>
     public IEnumerable<BenBundleEntry> Recordings =>
-        _entries.Values.Where(e => e.Path != DocumentEntryPath).OrderBy(e => e.Path, StringComparer.Ordinal);
+        _entries.Values
+            .Where(e => e.Path != DocumentEntryPath && e.Path != SealEntryPath)
+            .OrderBy(e => e.Path, StringComparer.Ordinal);
 
     public BenBundleEntry? Find(string path) =>
         _entries.TryGetValue(path, out var entry) ? entry : null;

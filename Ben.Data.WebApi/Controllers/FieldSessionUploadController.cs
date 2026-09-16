@@ -936,7 +936,8 @@ public sealed partial class FieldSessionUploadController : BenControllerBase
                 .Select(f => new FieldSessionFileRecord(
                     f.Id, f.RelativePath, f.UploadFile?.FileSize ?? 0,
                     f.Sha256, f.DigestMatched, f.DateCreated))
-                .ToList());
+                .ToList(),
+            session.IsBundle);
 }
 
 /// <summary>The few facts read out of a session document so sessions can be listed without
@@ -1007,7 +1008,12 @@ public sealed record FieldSessionRecord(
     // because a person must be able to see the answer for their OWN session — a publication
     // nobody can see the state of is one nobody can knowingly retract.
     Guid? PlaceId, DateTime? PublishedAtUtc,
-    IReadOnlyList<FieldSessionFileRecord> Files);
+    IReadOnlyList<FieldSessionFileRecord> Files,
+    // Whether the server holds this session as one .ben — the only shape GET {id}/bundle can hand
+    // back. Said here so a phone listing what it could pull down offers Download only where it
+    // would be answered; a 1.0.2 session (a document and loose recordings) is listed without one.
+    // Trailing and defaulted: additive for the app that is in review.
+    bool IsBundle = false);
 
 /// <summary>A session and its document, for playing back.</summary>
 public sealed record FieldSessionDetail(FieldSessionRecord Session, string Document);

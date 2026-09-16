@@ -38,6 +38,40 @@ public class BenBundleTests
     }
 
     /// <summary>
+    /// The seal the phone writes last is part of the format, beside the document. Listed among the
+    /// recordings it went to the file guard, which refused it as "a .json file" — and with it
+    /// every sealed upload (seen live on the simulator, 2026-09-16).
+    /// </summary>
+    [Fact]
+    public async Task TheSealIsPartOfTheFormatNotARecording()
+    {
+        await using var file = StoredZip.Write(
+            ("data.json", """{"schema":"device-data-v1"}"""u8.ToArray()),
+            ("media/audio-001.m4a", new byte[64]),
+            ("seal.json", """{"version":1,"entries":[]}"""u8.ToArray()));
+
+        var bundle = await BenBundle.ReadAsync(file);
+
+        Assert.NotNull(bundle.Seal);
+        Assert.Equal(BenBundle.SealEntryPath, bundle.Seal!.Path);
+        Assert.Equal("media/audio-001.m4a", Assert.Single(bundle.Recordings).Path);
+    }
+
+    /// <summary>Only the seal at the root is the seal; the same name under media/ is a file like any other.</summary>
+    [Fact]
+    public async Task ASealNamedFileAmongTheRecordingsIsARecording()
+    {
+        await using var file = StoredZip.Write(
+            ("data.json", """{"schema":"device-data-v1"}"""u8.ToArray()),
+            ("media/seal.json", """{}"""u8.ToArray()));
+
+        var bundle = await BenBundle.ReadAsync(file);
+
+        Assert.Null(bundle.Seal);
+        Assert.Equal("media/seal.json", Assert.Single(bundle.Recordings).Path);
+    }
+
+    /// <summary>
     /// The offset has to land on the member's FIRST byte. Off by the thirty bytes of a local
     /// header and every recording plays back as noise, which is the kind of bug that looks like a
     /// broken microphone.
@@ -186,7 +220,7 @@ public class BenBundleTests
     /// The phone's ZIP writer, rewritten here so the reader is tested against the shape it will
     /// actually meet: stored entries, 32-bit sizes, no data descriptor, no Zip64.
     /// </summary>
-    private static class StoredZip
+    internal static class StoredZip
     {
         public static MemoryStream Write(params (string Path, byte[] Bytes)[] entries)
             => Write(false, entries);

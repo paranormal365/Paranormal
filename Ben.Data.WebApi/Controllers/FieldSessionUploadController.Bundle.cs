@@ -122,6 +122,21 @@ public sealed partial class FieldSessionUploadController
                     "That doesn't look like a session a Field Kit recorded: " + implausible);
             }
 
+            // The seal, when the phone wrote one, is read for shape only: small, and JSON. What it
+            // promises — that every member is still what was sealed — is the next phone's to check
+            // when the bundle is handed back; the server keeps it exactly as sent. It is not a
+            // recording, and handing it to the file guard as one refused every sealed upload.
+            if (bundle.Seal is { } sealEntry)
+            {
+                if (sealEntry.Length > BenBundle.MaxSealBytes)
+                {
+                    throw new BenBundleFormatException(
+                        "That session file's seal is far larger than a seal can be, so the file isn't trusted.");
+                }
+                await using var sealStream = await _bundles.OpenEntryAsync(storagePath, BenBundle.SealEntryPath, ct);
+                using var _ = await System.Text.Json.JsonDocument.ParseAsync(sealStream!, cancellationToken: ct);
+            }
+
             // Every recording inside is held to the same rule as one sent on its own: the right
             // kind of file, the right size, and bytes that actually are what the name claims. A
             // bundle is a container somebody else can write, so the door cannot be softer just
