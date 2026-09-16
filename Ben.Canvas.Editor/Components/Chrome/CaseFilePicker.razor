@@ -1,0 +1,190 @@
+@*
+    The case's own files, offered to the board.
+
+    Ben, 2026-09-16: "files can be picked from the case files, or if you drop a file, it will upload
+    to the case files". Dropping already worked. Without this, a photograph uploaded to the case last
+    week had to be found on the computer again and sent a second time — two copies of one piece of
+    evidence, both counted against the account's storage.
+
+    A picked file is ALREADY on the case, so the block it makes carries its UploadFileId and no
+    AssetId: nothing is stored on the device and nothing is uploaded again.
+*@
+@inject ICanvasMediaStore Media
+
+<BcModal @bind-Visible="Visible" Title="@CanvasCopy.Titles.CaseFiles" Size="lg" Scrollable="true">
+    <ChildContent>
+        @if (_loading)
+        {
+            <p class="bc-picker__note" data-bc-picker="loading">@CanvasCopy.Sentences.CaseFilesLoading</p>
+        }
+        else if (_problem is not null)
+        {
+            <p class="bc-picker__note bc-picker__note--bad" role="alert" data-bc-picker="problem">@_problem</p>
+            <button type="button" class="btn btn-outline-secondary btn-sm" data-bc-action="case-files-retry" @onclick="LoadAsync">@CanvasCopy.Buttons.TryAgain</button>
+        }
+        else if (_files.Count == 0)
+        {
+            <p class="bc-picker__note" data-bc-picker="empty">@CanvasCopy.Sentences.CaseFilesEmpty</p>
+        }
+        else
+        {
+            <label class="visually-hidden" for="bc-picker-search">@CanvasCopy.Labels.SearchFiles</label>
+            <input id="bc-picker-search" type="search" class="form-control bc-picker__search"
+                   placeholder="@CanvasCopy.Labels.SearchFiles" autocomplete="off"
+                   value="@_search" @oninput="OnSearch" />
+
+            @if (Shown.Count == 0)
+            {
+                <p class="bc-picker__note" data-bc-picker="no-match">@CanvasCopy.Sentences.CaseFilesNoMatch</p>
+            }
+            else
+            {
+                <ul class="bc-picker__list" data-bc-picker="list">
+                    @foreach (var file in Shown)
+                    {
+                        var kind = CaseFileBlockKind.For(file.FileName, file.ContentType);
+                        <li>
+                            <button type="button" class="bc-picker__item" data-bc-file="@file.UploadFileId"
+                                    @onclick="@(() => PickAsync(file))">
+                                <span class="bc-picker__thumb">
+                                    @if (_thumbs.TryGetValue(file.UploadFileId, out var thumb) && thumb is not null)
+                                    {
+                                        <img src="@thumb" alt="" loading="lazy" />
+                                    }
+                                    else
+                                    {
+                                        <BcIcon Name="@IconFor(kind)" />
+                                    }
+                                </span>
+                                <span class="bc-picker__text">
+                                    <span class="bc-picker__name">@file.FileName</span>
+                                    <span class="bc-picker__meta">@WordFor(kind) · @BcFileSize.Format(file.FileSize)</span>
+                                </span>
+                            </button>
+                        </li>
+                    }
+                </ul>
+            }
+        }
+    </ChildContent>
+</BcModal>
+
+@code {
+    /// <summary>Whether the picker is shown. Two-way bindable.</summary>
+    [Parameter] public bool Visible { get; set; }
+    [Parameter] public EventCallback<bool> VisibleChanged { get; set; }
+
+    /// <summary>The case whose files are listed, and the organisation that owns it.</summary>
+    [Parameter] public Guid? OrganizationId { get; set; }
+    [Parameter] public Guid? CaseId { get; set; }
+
+    /// <summary>The file somebody chose. The picker closes itself first, so the block lands on a clear board.</summary>
+    [Parameter] public EventCallback<CanvasCaseFile> OnPick { get; set; }
+
+    private IReadOnlyList<CanvasCaseFile> _files = [];
+    private readonly Dictionary<Guid, string?> _thumbs = [];
+    private string? _problem;
+    private string _search = "";
+    private bool _loading;
+    private bool _wasVisible;
+
+    /// <summary>Pictures the picker has not asked about yet, newest first and capped: a case can hold hundreds.</summary>
+    private const int ThumbnailBudget = 48;
+
+    private List<CanvasCaseFile> Shown =>
+        string.IsNullOrWhiteSpace(_search)
+            ? _files.ToList()
+            : _files.Where(f => f.FileName.Contains(_search.Trim(), StringComparison.OrdinalIgnoreCase)
+                             || (f.Description ?? "").Contains(_search.Trim(), StringComparison.OrdinalIgnoreCase))
+                    .ToList();
+
+    protected override async Task OnParametersSetAsync()
+    {
+        // Opening reloads: a file added from the phone since the board opened should be there.
+        if (Visible && !_wasVisible) await LoadAsync();
+        _wasVisible = Visible;
+    }
+
+    private async Task LoadAsync()
+    {
+        if (OrganizationId is not { } org || CaseId is not { } which)
+        {
+            _problem = CanvasCopy.Sentences.CaseFilesNoCase;
+            return;
+        }
+
+        _loading = true;
+        _problem = null;
+        StateHasChanged();
+
+        var (files, problem) = await Media.ListCaseFilesAsync(org, which);
+        _files = files;
+        _problem = problem;
+        _loading = false;
+        StateHasChanged();
+
+        await LoadThumbnailsAsync();
+    }
+
+    /// <summary>
+    /// Pictures get their own thumbnail so the list is recognisable; everything else keeps its icon.
+    /// </summary>
+    /// <remarks>
+    /// One at a time, and only the first few: each is a fetch with a bearer token behind it, and a
+    /// case with three hundred photographs would otherwise open by asking for three hundred of them.
+    /// The store caches what it fetches, so the block drawn afterwards costs nothing.
+    /// </remarks>
+    private async Task LoadThumbnailsAsync()
+    {
+        var pictures = _files
+            .Where(f => CaseFileBlockKind.For(f.FileName, f.ContentType) == CanvasNodeType.Image)
+            .Where(f => !_thumbs.ContainsKey(f.UploadFileId))
+            .Take(ThumbnailBudget)
+            .ToList();
+
+        foreach (var picture in pictures)
+        {
+            _thumbs[picture.UploadFileId] = await Media.GetDisplayUrlAsync(picture.UploadFileId, thumbnail: true);
+            if (!Visible) return;
+            StateHasChanged();
+        }
+    }
+
+    private void OnSearch(ChangeEventArgs e) => _search = e.Value?.ToString() ?? "";
+
+    private async Task PickAsync(CanvasCaseFile file)
+    {
+        await CloseAsync();
+        await OnPick.InvokeAsync(file);
+    }
+
+    /// <summary>
+    /// Closes the picker here rather than waiting for the binding to come back, so the block lands on
+    /// a board nothing is covering. BcModal's own close routes (backdrop, Escape, the X) raise
+    /// VisibleChanged themselves and arrive here through OnParametersSetAsync.
+    /// </summary>
+    private async Task CloseAsync()
+    {
+        if (!Visible) return;
+        Visible = false;
+        _wasVisible = false;
+        _search = "";
+        await VisibleChanged.InvokeAsync(false);
+    }
+
+    private static string IconFor(CanvasNodeType kind) => kind switch
+    {
+        CanvasNodeType.Image => "image",
+        CanvasNodeType.Audio => "music",
+        CanvasNodeType.Video => "film",
+        _ => "file-text",
+    };
+
+    private static string WordFor(CanvasNodeType kind) => kind switch
+    {
+        CanvasNodeType.Image => CanvasCopy.Kinds.Picture,
+        CanvasNodeType.Audio => CanvasCopy.Kinds.Recording,
+        CanvasNodeType.Video => CanvasCopy.Kinds.Video,
+        _ => CanvasCopy.Kinds.File,
+    };
+}

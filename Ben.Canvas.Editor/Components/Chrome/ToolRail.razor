@@ -18,6 +18,16 @@
     @if (!ReadOnly)
     {
     <span class="bc-rail__divider" aria-hidden="true"></span>
+    @* Ben, 2026-09-16: "files can be picked from the case files". Dropping one uploads it; this
+       reaches for one the case already has, so a photograph taken last week is not sent twice. *@
+    @if (CanPickCaseFiles)
+    {
+        <button type="button" class="bc-rail__button" data-bc-action="case-files"
+                aria-label="Add from the case's files" title="Add from the case's files"
+                @onclick="@(() => OnAction.InvokeAsync("case-files"))">
+            <BcIcon Name="folder" />
+        </button>
+    }
     @* No Blazor click: pasteInterop.js reads the clipboard inside this button's own click, which iOS requires. *@
     <button type="button" class="bc-rail__button" data-bc-action="paste" aria-label="Paste" title="Paste">
         <BcIcon Name="clipboard" />
@@ -56,6 +66,17 @@
 
     /// <summary>A view-only board: no add or paste buttons.</summary>
     [Parameter] public bool ReadOnly { get; set; }
+
+    /// <summary>
+    /// Whether this board belongs to a case whose files can be reached — the API is there, somebody
+    /// is signed in, and the board knows which case it is on.
+    /// </summary>
+    /// <remarks>
+    /// Hidden rather than shown-and-refused: a board opened from a file on somebody's machine has no
+    /// case behind it, and a button that always answers "there is nothing here" teaches people to
+    /// stop pressing buttons.
+    /// </remarks>
+    [Parameter] public bool CanPickCaseFiles { get; set; }
     [Parameter] public bool CanRedo { get; set; }
     [Parameter] public string? UndoDescription { get; set; }
     [Parameter] public string? RedoDescription { get; set; }

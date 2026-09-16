@@ -95,6 +95,10 @@ public partial class CanvasEditor
             case "connect":
                 EnterConnectMode();
                 break;
+            case "case-files":
+                Layout.Close();
+                _caseFilesOpen = CanPickCaseFiles;
+                break;
             case "add-card-here":
                 AddBlock(CanvasNodeType.Card, _menuWorld);
                 break;
@@ -187,7 +191,7 @@ public partial class CanvasEditor
         action.StartsWith("add-", StringComparison.Ordinal) && action != "add-menu"
         || action is "undo" or "redo" or "edit" or "duplicate" or "delete" or "lock" or "front" or "back" or "group"
             or "ungroup" or "rename" or "connect" or "paste" or "import" or "save-server" or "save-retry" or "publish"
-            or "publish-confirmed" or "conflict-mine";
+            or "publish-confirmed" or "conflict-mine" or "case-files";
 
     private async Task SaveToCaseAsync()
     {
@@ -219,7 +223,14 @@ public partial class CanvasEditor
     }
 
     /// <summary>Adds a block at a point, or centred in view; repeated adds cascade so they never stack exactly.</summary>
-    private void AddBlock(CanvasNodeType type, CanvasPoint? at)
+    private void AddBlock(CanvasNodeType type, CanvasPoint? at) =>
+        AddBlock(type, at, _ => null);
+
+    /// <summary>
+    /// The same, with the chance to fill the block in: <paramref name="fill"/> is handed the default
+    /// data and returns what the block should hold, or null to keep the default.
+    /// </summary>
+    private void AddBlock(CanvasNodeType type, CanvasPoint? at, Func<NodeData, NodeData?> fill)
     {
         if (!Options.Value.EnabledBlocks.Contains(type)) return;
         var d = BlockRegistry.Get(type);
@@ -249,11 +260,36 @@ public partial class CanvasEditor
             Data = d.CreateDefaultData(DateTime.UtcNow),
         };
 
+        if (fill(node.Data) is { } filled) node.Data = filled;
+
         if (Store.AddNode(node))
         {
             Selection.Select(node.Id);
             Selection.FocusedNodeId = node.Id;
         }
+    }
+
+    /// <summary>
+    /// Puts a file the case already holds onto the board.
+    /// </summary>
+    /// <remarks>
+    /// The block carries the case's <c>UploadFileId</c> and no <c>AssetId</c>: the bytes are on the
+    /// server already, so nothing is copied to this device and the next save has nothing to upload.
+    /// That is the whole point of picking rather than dropping — one copy of one piece of evidence.
+    /// </remarks>
+    private void AddCaseFile(CanvasCaseFile file)
+    {
+        var kind = CaseFileBlockKind.For(file.FileName, file.ContentType);
+
+        // A host that has turned a block off still gets the file, as a chip. Silently dropping what
+        // somebody just chose is the one outcome worth ruling out.
+        if (!Options.Value.EnabledBlocks.Contains(kind)) kind = CanvasNodeType.File;
+        if (!Options.Value.EnabledBlocks.Contains(kind)) return;
+
+        AddBlock(kind, null, data => CaseFileBlocks.Fill(data, file));
+
+        // The device copy saves itself: CanvasDocumentStore listens to the store's changes.
+        Announcer.Say(CanvasCopy.Sentences.AddedFromCase(file.FileName));
     }
 
     private const double CanvasStoreCascade = Core.Commands.CanvasStore.CascadeOffset;

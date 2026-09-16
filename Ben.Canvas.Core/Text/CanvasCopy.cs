@@ -26,6 +26,25 @@ public static class CanvasCopy
         public const string EmptyBoard = "This board is empty";
         public const string PublishConfirm = "Publish this board?";
         public const string NewerCopy = "A newer copy is on the case";
+        public const string CaseFiles = "The case's files";
+    }
+
+    /// <summary>Field labels and placeholders.</summary>
+    public static class Labels
+    {
+        public const string SearchFiles = "Search these files";
+    }
+
+    /// <summary>
+    /// What a block is called when the words have to name one. Not "Words": that name already
+    /// belongs to the board's announcements (Ben.Canvas.Editor.Services.Words).
+    /// </summary>
+    public static class Kinds
+    {
+        public const string Picture = "Picture";
+        public const string Recording = "Recording";
+        public const string Video = "Video";
+        public const string File = "File";
     }
 
     /// <summary>Button and menu labels: short, no end punctuation.</summary>
@@ -62,6 +81,8 @@ public static class CanvasCopy
         public const string ImportAFile = "Import a file";
         public const string Download = "Download";
         public const string ViewOnly = "View only";
+        public const string CaseFiles = "Case files";
+        public const string TryAgain = "Try again";
     }
 
     /// <summary>Whole sentences: refusals, confirmations and explanations.</summary>
@@ -181,6 +202,21 @@ public static class CanvasCopy
             string.Format(Invariant, "Somebody saved a newer copy of this board (revision {0}).", revision);
 
         public const string AddFilesForbidden = "Your account is not allowed to add files to this case.";
+
+        // ── The case's own files, offered to the board ──────────────────────
+
+        public const string CaseFilesLoading = "Looking at what the case already holds.";
+
+        public const string CaseFilesEmpty =
+            "This case has no files yet. Drop one on the board and it is added to the case as well.";
+
+        public const string CaseFilesNoMatch = "No file on this case has that in its name.";
+
+        public const string CaseFilesNoCase =
+            "This board is not on a case yet, so there are no case files to reach for. Save it to a case first.";
+
+        public static string AddedFromCase(string name) =>
+            string.Format(Invariant, "Added {0} from the case's files.", name);
 
         public const string ViewOnly =
             "You can view this board but not change it. Ask the case manager for edit access, or export a copy.";
