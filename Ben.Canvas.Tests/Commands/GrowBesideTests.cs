@@ -170,4 +170,38 @@ public sealed class AddConnectedTests
         Assert.Null(small.AddConnected(from.Id, CanvasSide.Right, TestBoards.Node()));
         Assert.Empty(small.Document.Edges);
     }
+
+    /// <summary>
+    /// A grown block and its connector survive the round trip the case save makes, and appear in the
+    /// picture that publishing puts on the case.
+    /// </summary>
+    /// <remarks>
+    /// Ben asked, 2026-09-16: "will this still be able to save and publish?" Nothing here is a new
+    /// kind of thing — an ordinary block and an ordinary connector — but that is exactly the claim
+    /// worth holding down, because a board whose newest half did not reach the case would look fine
+    /// on the machine that made it.
+    /// </remarks>
+    [Fact]
+    public void What_was_grown_is_saved_and_published_like_everything_else()
+    {
+        var from = TestBoards.Node(CanvasNodeType.Card, 100, 100);
+        var store = TestBoards.StoreWith(from);
+        var made = store.AddConnected(from.Id, CanvasSide.Right, TestBoards.Node(CanvasNodeType.Card));
+        Assert.NotNull(made);
+
+        // Saved: the document the server is sent reads back with both halves.
+        var json = Ben.Canvas.Core.Serialization.CanvasSerializer.Serialize(store.Document, compact: true);
+        var read = Ben.Canvas.Core.Serialization.CanvasSerializer.Deserialize(json);
+        Assert.NotNull(read);
+        Assert.Equal(2, read!.Nodes.Count);
+        var readEdge = Assert.Single(read.Edges);
+        Assert.Equal(from.Id, readEdge.FromNodeId);
+        Assert.Equal(made!.Value.Node.Id, readEdge.ToNodeId);
+
+        // Published: the picture drawn for the case has the block and the arrow between them.
+        var scene = Ben.Canvas.Core.Persistence.BoardSnapshot.Build(read);
+        Assert.Equal(2, scene.Blocks.Count);
+        var connector = Assert.Single(scene.Connectors);
+        Assert.Single(connector.Heads);
+    }
 }
