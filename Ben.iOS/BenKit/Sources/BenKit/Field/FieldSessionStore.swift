@@ -1,5 +1,8 @@
 import Foundation
 import SwiftData
+#if canImport(UIKit)
+import UIKit
+#endif
 
 /// The field sessions on this device, and the one that is recording right now.
 ///
@@ -595,6 +598,32 @@ public enum DeviceModel {
         }
         let text = String(cString: machine + [0])
         return text.isEmpty ? "unknown" : text
+    }
+
+    /// Apple's identifier for this app on this device — what a sealed bundle carries to say which
+    /// device recorded it.
+    ///
+    /// Ben, 2026-09-16: "Maybe the apple assigned ID and if they sign up for an account on our
+    /// site after recording a session, we could tell it was them who recorded it when they upload
+    /// it." `identifierForVendor` is the one Apple hands out without asking anybody for anything:
+    /// no permission prompt, no tracking consent, and no relationship to the advertising id.
+    ///
+    /// **A device, not a person, and best-effort at that.** Apple resets it once every app from
+    /// this vendor is removed from the device, and two people sharing a phone share it. Good for
+    /// "this was recorded on your own phone" and for noticing that an imported bundle was NOT;
+    /// never good for "only you could have recorded this".
+    ///
+    /// Nil where there is no such thing — the test host, a Mac — rather than inventing one.
+    ///
+    /// Main-actor because UIDevice is: reading it is cheap and always happens on the way into a
+    /// send, so hopping for it costs nothing and pretending otherwise is a data race.
+    @MainActor
+    public static func vendorIdentifier() -> String? {
+        #if canImport(UIKit)
+        return UIDevice.current.identifierForVendor?.uuidString
+        #else
+        return nil
+        #endif
     }
 }
 

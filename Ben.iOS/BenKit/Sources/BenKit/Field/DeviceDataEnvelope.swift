@@ -60,11 +60,28 @@ public struct DeviceDataEnvelope: Codable, Sendable, Equatable {
         public var timezone: String?
         public var trigger: Trigger
 
+        /// The account signed in on the device when this was recorded, if any.
+        ///
+        /// Ben, 2026-09-16: "Is there a way to include a fingerprint inside the .ben file to
+        /// validate who recorded the session? Not their name, but maybe the id."
+        ///
+        /// **This is a claim, not a proof.** A bundle is a ZIP somebody else can open and write
+        /// to, so an id sitting in it says who the file SAYS recorded the session. What makes it
+        /// checkable is the seal beside it — see `SessionSeal` — and what would make it provable
+        /// is that seal being signed by a key the account registered. An id alone travels with a
+        /// session handed between phones and answers "whose night is this?"; it does not answer
+        /// "could this have been faked?".
+        ///
+        /// The id and not the name: a display name changes, and the point is to identify an
+        /// account rather than to label a file with a person.
+        public var recordedByAccountId: UUID?
+
         public init(startedAt: Date, endedAt: Date? = nil,
                     batteryPercentAtStart: Double? = nil,
                     locationLabel: String? = nil, propertyArea: String? = nil,
                     timezone: String? = TimeZone.current.identifier,
-                    trigger: Trigger) {
+                    trigger: Trigger,
+                    recordedByAccountId: UUID? = nil) {
             self.startedAt = startedAt
             self.endedAt = endedAt
             self.batteryPercentAtStart = batteryPercentAtStart
@@ -72,10 +89,12 @@ public struct DeviceDataEnvelope: Codable, Sendable, Equatable {
             self.propertyArea = propertyArea
             self.timezone = timezone
             self.trigger = trigger
+            self.recordedByAccountId = recordedByAccountId
         }
 
         private enum CodingKeys: String, CodingKey {
             case timezone, trigger
+            case recordedByAccountId = "recorded_by_account_id"
             case startedAt = "started_at"
             case endedAt = "ended_at"
             case batteryPercentAtStart = "battery_percent_at_start"

@@ -564,38 +564,20 @@ struct UploadSessionView: View {
             let plan = currentPlan
             let window = (plan?.isWholeSession == false) ? plan?.window : nil
 
-            // The document first: it creates the record everything else attaches to.
-            var document = try await buildDocument(window: window)
+            // ── Everything the night is going to be, prepared before anything is sent ──
+            //
+            // Ben, 2026-09-16: "I specifically asked that we zip the whole session and unzip it
+            // after upload, but want to reference it as a single file." So the recordings are cut
+            // and shrunk into scratch first, the whole session is sealed into one .ben, and that
+            // one file goes.
+            //
+            // The trade this makes, plainly: the two-phase upload it replaces meant one dropped
+            // connection cost one file. One file means a drop costs the send. What makes that
+            // bearable is that a resend is safe — the device's own session id makes the server
+            // replace its own record rather than make a second — so retrying is pressing Send
+            // again, not untangling which half arrived.
+            var substitutes: [String: URL] = [:]
 
-            // Each cut recording's readings still count their offsets from a beginning that will
-            // not be in the uploaded file. Left alone, the player would place the audio as far
-            // from its readings as the amount cut off the front.
-            for decision in plan?.cut ?? [] {
-                if case .cut(let from, _) = decision.outcome {
-                    document = DeviceDataExporter.rebaseAudioOffsets(
-                        forFilename: decision.media.relativePath, by: from, in: document)
-                }
-            }
-
-            let me = dependencies.session.me
-
-            let result = await dependencies.fieldUpload.submitDocument(
-                document,
-                deviceSessionId: sessionId,
-                investigationId: chosenInvestigationId,
-                recordedByAppUserId: me?.userId,
-                // The server resolves the name from the account — the app knows who signed in,
-                // not what everyone else calls them.
-                recordedByName: nil)
-
-            guard case .success(let server) = result else {
-                if case .failure(let error) = result { errorMessage = error.message }
-                return
-            }
-            store.markUploaded(sessionId, serverSessionId: server.id)
-
-            // Then the files, one at a time. A failure here is recorded against that file and
-            // the rest carry on — losing the night because file three dropped would be absurd.
             for capture in captures where chosen.contains(capture.id) {
                 guard store.hasLocalFile(capture.relativePath, in: sessionId) else { continue }
 
@@ -630,29 +612,62 @@ struct UploadSessionView: View {
                     if case .converted(let smaller) = result { url = smaller }
                 }
 
-                // The digest is of what is actually SENT. Sending the original's digest with a
-                // cut file would make the server report every trimmed recording as damaged.
-                let digest = try? DeviceDataExporter.sha256(of: url)
-                let outcome = await dependencies.fieldUpload.submitFile(
-                    sessionId: server.id, fileURL: url,
-                    relativePath: capture.relativePath,
-                    contentType: contentType(for: capture.relativePath),
-                    sha256: digest)
+                if url != original { substitutes[capture.relativePath] = url }
+            }
 
-                switch outcome {
-                case .success(let file):
-                    progress[capture.id] = file.digestMatched
-                        ? .sent
-                        : .failed("Arrived damaged — send it again.")
-                    store.markFileUploaded(
-                        capture.id, in: sessionId,
-                        problem: file.digestMatched ? nil : "The file arrived damaged.")
-                case .failure(let error):
-                    progress[capture.id] = .failed(error.message)
-                    store.markFileUploaded(capture.id, in: sessionId, problem: error.message)
+            // The document, with the same window and the same choices the bundle will carry.
+            var document = try await buildDocument(window: window)
+
+            // Each cut recording's readings still count their offsets from a beginning that will
+            // not be in the uploaded file. Left alone, the player would place the audio as far
+            // from its readings as the amount cut off the front.
+            for decision in plan?.cut ?? [] {
+                if case .cut(let from, _) = decision.outcome {
+                    document = DeviceDataExporter.rebaseAudioOffsets(
+                        forFilename: decision.media.relativePath, by: from, in: document)
                 }
             }
 
+            let me = dependencies.session.me
+
+            // Sealed, then sent. The exporter is the one place a bundle is made, so what the
+            // site receives is the same shape as what "Export a bundle" hands to the Files app —
+            // and the same shape another phone can be given and open.
+            let bundle = try await DeviceDataExporter(files: store.files).export(
+                exportRequest(window: window, substitutes: substitutes),
+                log: ReadingLog(fileURL: store.files.readingLogURL(for: sessionId)),
+                to: scratch,
+                document: document)
+
+            let result = await dependencies.fieldUpload.submitBundle(
+                at: bundle.url,
+                deviceSessionId: sessionId,
+                investigationId: chosenInvestigationId,
+                recordedByAppUserId: me?.userId,
+                // The server resolves the name from the account — the app knows who signed in,
+                // not what everyone else calls them.
+                recordedByName: nil)
+
+            guard case .success(let server) = result else {
+                if case .failure(let error) = result { errorMessage = error.message }
+                // One file means one outcome: nothing arrived, so nothing is marked as having.
+                for capture in captures where progress[capture.id] == .sending {
+                    progress[capture.id] = .failed(
+                        (try? result.get()) == nil
+                            ? "The session didn't finish sending. Try again."
+                            : "")
+                }
+                return
+            }
+            store.markUploaded(sessionId, serverSessionId: server.id)
+
+            // The whole bundle landed, so every recording in it did. Marked one by one because
+            // that is what the screen lists and what the store remembers per file.
+            for capture in captures where chosen.contains(capture.id) {
+                guard progress[capture.id] == .sending else { continue }
+                progress[capture.id] = .sent
+                store.markFileUploaded(capture.id, in: sessionId)
+            }
             finished = true
             captures = store.captures(for: sessionId)
             // Only offered when there is genuinely nothing left to lose.
@@ -663,6 +678,40 @@ struct UploadSessionView: View {
         } catch {
             errorMessage = error.localizedDescription
         }
+    }
+
+    /// Everything that describes what is being sent, in one place.
+    ///
+    /// Shared by the document build and the bundle build so a `.ben` and the `data.json` inside it
+    /// can never disagree about the window, the label or which recordings are going.
+    private func exportRequest(
+        window: SessionWindow?, substitutes: [String: URL] = [:]
+    ) throws -> DeviceDataExporter.Request {
+        guard let summary else { throw FieldSessionError.unavailable }
+        // A clip is named for what it is — "back bedroom (20:00–30:00)" — on the server's list,
+        // in the player's title and in the report. A whole session keeps its name.
+        let label = window.map {
+            SessionTrimPlan.clipLabel(base: summary.locationLabel, window: $0,
+                                      sessionStart: summary.startedAt, isWholeSession: false)
+        } ?? summary.locationLabel
+
+        return DeviceDataExporter.Request(
+            sessionId: sessionId,
+            startedAt: summary.startedAt,
+            endedAt: summary.endedAt,
+            locationLabel: label,
+            deviceModel: DeviceModel.identifier(),
+            timezone: TimeZone.current.identifier,
+            batteryPercentAtStart: nil,
+            trigger: SamplingPolicy.default.trigger(),
+            includedMedia: captures.filter { chosen.contains($0.id) }.map(\.relativePath),
+            substitutes: substitutes,
+            // Who and what, for the seal. The account is whoever is signed in now, which for a
+            // session recorded before anybody signed up is nobody — and the device id is the
+            // part that still connects that night to them afterwards.
+            recordedByAccountId: dependencies.session.me?.userId,
+            deviceId: DeviceModel.vendorIdentifier(),
+            window: window)
     }
 
     private func buildDocument(window: SessionWindow? = nil) async throws -> Data {
