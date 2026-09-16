@@ -92,6 +92,12 @@ public abstract record PasteIntent
     public sealed record Internal(CanvasClipboardPayload Payload) : PasteIntent;
     public sealed record Image(Guid AssetId, string Ext, int? Width, int? Height) : PasteIntent;
     public sealed record File(Guid AssetId, string? Ext, string FileName, long Size, string ContentType) : PasteIntent;
+
+    /// <summary>A recording that should play on the board rather than sit on it as a chip.</summary>
+    public sealed record Audio(Guid AssetId, string? Ext, string FileName, long Size, string ContentType) : PasteIntent;
+
+    /// <inheritdoc cref="Audio" />
+    public sealed record Video(Guid AssetId, string? Ext, string FileName, long Size, string ContentType) : PasteIntent;
     public sealed record Link(string Url) : PasteIntent;
     public sealed record Map(double Latitude, double Longitude) : PasteIntent;
     public sealed record Html(string Markup, string PlainText) : PasteIntent;

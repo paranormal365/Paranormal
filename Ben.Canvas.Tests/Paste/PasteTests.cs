@@ -273,6 +273,55 @@ public sealed class PasteClassifierTests
         Assert.Equal("notes.pdf", file.FileName);
     }
 
+    /// <summary>
+    /// Ben, 2026-09-16: "This is a visual board not just a board for notes." A recording dropped on
+    /// the board plays there; it does not arrive as a chip to open somewhere else.
+    /// </summary>
+    [Theory]
+    [InlineData("evp-001.m4a", "audio/mp4")]
+    [InlineData("evp-001.wav", "")]
+    [InlineData("hiss.mp3", "audio/mpeg")]
+    // The name says nothing and the browser does: an audio file handed over by some share sheets
+    // arrives with no extension at all.
+    [InlineData("recording", "audio/x-m4a")]
+    public void A_dropped_recording_becomes_something_that_plays(string name, string mime)
+    {
+        var intent = Assert.Single(
+            PasteClassifier.Classify(Envelope(File(TestBoards.PdfHead, name, mime: mime)), Options).Intents);
+
+        var audio = Assert.IsType<PasteIntent.Audio>(intent);
+        Assert.Equal(name, audio.FileName);
+    }
+
+    [Theory]
+    [InlineData("porch.mp4", "video/mp4")]
+    [InlineData("porch.mov", "")]
+    [InlineData("clip", "video/webm")]
+    public void A_dropped_clip_becomes_something_that_plays(string name, string mime)
+    {
+        var intent = Assert.Single(
+            PasteClassifier.Classify(Envelope(File(TestBoards.PdfHead, name, mime: mime)), Options).Intents);
+
+        Assert.IsType<PasteIntent.Video>(intent);
+    }
+
+    /// <summary>
+    /// Anything unrecognised stays a file, which is the safe way round: a chip that should have
+    /// been a player is a disappointment, while a player fed something it cannot decode is a
+    /// broken box on an evidence board.
+    /// </summary>
+    [Theory]
+    [InlineData("notes.pdf", "application/pdf")]
+    [InlineData("deed.docx", "application/vnd.openxmlformats-officedocument.wordprocessingml.document")]
+    [InlineData("readings.csv", "text/csv")]
+    public void Anything_else_is_still_a_file(string name, string mime)
+    {
+        var intent = Assert.Single(
+            PasteClassifier.Classify(Envelope(File(TestBoards.PdfHead, name, mime: mime)), Options).Intents);
+
+        Assert.IsType<PasteIntent.File>(intent);
+    }
+
     [Fact]
     public void A_file_that_could_not_be_stored_is_reported_by_name()
     {

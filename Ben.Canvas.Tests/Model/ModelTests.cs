@@ -113,7 +113,7 @@ public sealed class NodeDataTests
             .OrderBy(n => n, StringComparer.Ordinal)
             .ToArray();
 
-        Assert.Equal(["card", "file", "image", "link", "map", "message", "text"], names);
+        Assert.Equal(["audio", "card", "file", "image", "link", "map", "message", "text", "video"], names);
     }
 
     [Fact]
@@ -166,7 +166,7 @@ public sealed class BlockRegistryTests
         var options = new CanvasEditorOptions();
         options.EnabledBlocks.Remove(CanvasNodeType.Map);
         Assert.DoesNotContain(BlockRegistry.Enabled(options), d => d.Type == CanvasNodeType.Map);
-        Assert.Equal(6, BlockRegistry.Enabled(options).Count);
+        Assert.Equal(8, BlockRegistry.Enabled(options).Count);
     }
 
     [Fact]

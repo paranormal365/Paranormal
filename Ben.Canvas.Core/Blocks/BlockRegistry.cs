@@ -41,6 +41,13 @@ public static class BlockRegistry
         new(CanvasNodeType.Link, "Link", "link", 320, 140, 220, 110, true, false, _ => new LinkData()),
         new(CanvasNodeType.Text, "Note", "edit-3", 220, 120, 160, 80, true, true, _ => new TextData()),
         new(CanvasNodeType.File, "File", "file", 260, 72, 200, 72, false, false, _ => new FileData()),
+        // Sound is a waveform and a play button — wide enough to scrub, no taller than it needs.
+        new(CanvasNodeType.Audio, "Audio", "music", 340, 132, 240, 116, true, false, _ => new AudioData()),
+        // A CARD's size, not the film's. Ben, 2026-09-16: "The video should be card sized, not
+        // original sized... so it doesn't take up the screen... maybe can resize the card to fit
+        // the size the end user wants." A phone films 1080×1920; opened at its own size one clip
+        // would bury the board. So: a modest 16:9 box, resizable in both directions from there.
+        new(CanvasNodeType.Video, "Video", "video", 320, 200, 200, 130, true, true, _ => new VideoData()),
     ];
 
     public static BlockDescriptor Get(CanvasNodeType type) =>

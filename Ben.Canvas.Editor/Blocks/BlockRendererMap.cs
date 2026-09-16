@@ -25,6 +25,8 @@ public static class BlockRendererMap
         [CanvasNodeType.Link] = typeof(LinkNode),
         [CanvasNodeType.Text] = typeof(TextNode),
         [CanvasNodeType.File] = typeof(FileNode),
+        [CanvasNodeType.Audio] = typeof(AudioNode),
+        [CanvasNodeType.Video] = typeof(VideoNode),
     };
 
     public static Type RendererFor(CanvasNodeType type) =>

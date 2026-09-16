@@ -182,7 +182,51 @@ public static partial class PasteClassifier
             return;
         }
 
-        intents.Add(new PasteIntent.File(fileId, file.Ext, string.IsNullOrWhiteSpace(name) ? "file" + (file.Ext ?? "") : name, file.Size, mime));
+        var shownName = string.IsNullOrWhiteSpace(name) ? "file" + (file.Ext ?? "") : name;
+
+        // A recording becomes something that plays, the same way a picture becomes something you
+        // can see. Ben, 2026-09-16: "This is a visual board not just a board for notes." Sound on
+        // a paranormal board IS the evidence; handing it over as a chip to open elsewhere is the
+        // one thing the board should not do with it.
+        if (MediaKind(name, mime) is { } kind)
+        {
+            intents.Add(kind == CanvasNodeType.Audio
+                ? new PasteIntent.Audio(fileId, file.Ext, shownName, file.Size, mime)
+                : new PasteIntent.Video(fileId, file.Ext, shownName, file.Size, mime));
+            return;
+        }
+
+        intents.Add(new PasteIntent.File(fileId, file.Ext, shownName, file.Size, mime));
+    }
+
+    /// <summary>
+    /// Whether a file is a recording this board can play, and which sort.
+    /// </summary>
+    /// <remarks>
+    /// By name AND by declared type, because both lie sometimes: a browser hands over an .m4a as
+    /// <c>audio/mp4</c>, as <c>audio/x-m4a</c>, or as nothing at all depending on where it came
+    /// from. Anything not recognised stays a file, which is the safe way round — a chip that
+    /// should have been a player is a disappointment, a player fed something it cannot decode is
+    /// a broken box.
+    /// </remarks>
+    internal static CanvasNodeType? MediaKind(string? fileName, string? mimeType)
+    {
+        var ext = System.IO.Path.GetExtension(fileName ?? "").ToLowerInvariant();
+        var mime = (mimeType ?? "").Split(';')[0].Trim().ToLowerInvariant();
+
+        if (ext is ".mp3" or ".m4a" or ".wav" or ".aac" or ".ogg" or ".oga" or ".flac"
+            || mime.StartsWith("audio/", StringComparison.Ordinal))
+        {
+            return CanvasNodeType.Audio;
+        }
+
+        if (ext is ".mp4" or ".mov" or ".m4v" or ".webm"
+            || mime.StartsWith("video/", StringComparison.Ordinal))
+        {
+            return CanvasNodeType.Video;
+        }
+
+        return null;
     }
 
     private static string DisplayName(string name) => string.IsNullOrWhiteSpace(name) ? "That file" : name;
@@ -246,6 +290,16 @@ public static class PastePlacer
                 PasteIntent.File file => Node(CanvasNodeType.File, x, y, new FileData
                 {
                     AssetId = file.AssetId, OpfsExt = file.Ext, FileName = file.FileName, Size = file.Size, ContentType = file.ContentType,
+                }),
+                // At the registry's size, not the recording's: a video opened at a phone's own
+                // 1080×1920 would bury the board under one clip. Resizable from there.
+                PasteIntent.Audio audio => Node(CanvasNodeType.Audio, x, y, new AudioData
+                {
+                    AssetId = audio.AssetId, OpfsExt = audio.Ext, FileName = audio.FileName, Size = audio.Size, ContentType = audio.ContentType,
+                }),
+                PasteIntent.Video video => Node(CanvasNodeType.Video, x, y, new VideoData
+                {
+                    AssetId = video.AssetId, OpfsExt = video.Ext, FileName = video.FileName, Size = video.Size, ContentType = video.ContentType,
                 }),
                 PasteIntent.Link link => Node(CanvasNodeType.Link, x, y, new LinkData { Url = link.Url, Tier = LinkPreviewTier.None }),
                 PasteIntent.Map map => Node(CanvasNodeType.Map, x, y, new MapData

@@ -24,6 +24,8 @@ namespace Ben.Canvas.Core.Model;
 [JsonDerivedType(typeof(LinkData), "link")]
 [JsonDerivedType(typeof(TextData), "text")]
 [JsonDerivedType(typeof(FileData), "file")]
+[JsonDerivedType(typeof(AudioData), "audio")]
+[JsonDerivedType(typeof(VideoData), "video")]
 public abstract class NodeData
 {
     /// <summary>A deep copy.</summary>
@@ -148,4 +150,59 @@ public sealed class FileData : NodeData
     public string ContentType { get; set; } = "";
 
     public override NodeData Clone() => (FileData)MemberwiseClone();
+}
+
+/// <summary>
+/// A recording that plays where it sits: sound drawn as a waveform, video in its own small screen.
+/// </summary>
+/// <remarks>
+/// <para>
+/// Ben, 2026-09-16: "This is a visual board not just a board for notes." A recording shown as a file
+/// chip is something you have to take somewhere else to hear — and on a paranormal board the sound
+/// IS the evidence, so it has to be playable where the thinking is happening.
+/// </para>
+/// <para>
+/// The same fields as a file, because underneath it is one: held on this device until the board is
+/// saved, and a file on the case like any other afterwards. Only how it is drawn differs.
+/// </para>
+/// </remarks>
+public sealed class AudioData : NodeData
+{
+    /// <summary>The recording stored on this device (bc-assets/{AssetId}{OpfsExt}).</summary>
+    public Guid? AssetId { get; set; }
+
+    public string? OpfsExt { get; set; }
+
+    /// <summary>The recording uploaded to the case, once the board is saved to the server.</summary>
+    public Guid? UploadFileId { get; set; }
+
+    public string FileName { get; set; } = "";
+    public long Size { get; set; }
+    public string ContentType { get; set; } = "";
+    public string? Caption { get; set; }
+
+    public override NodeData Clone() => (AudioData)MemberwiseClone();
+}
+
+/// <inheritdoc cref="AudioData" />
+/// <remarks>
+/// Dropped in at a card's size rather than the film's own, and resizable from there. Ben,
+/// 2026-09-16: "The video should be card sized, not original sized... so it doesn't take up the
+/// screen... maybe can resize the card to fit the size the end user wants." A phone's video is
+/// 1080 by 1920; opening one at its own size would bury the board under a single clip.
+/// </remarks>
+public sealed class VideoData : NodeData
+{
+    public Guid? AssetId { get; set; }
+
+    public string? OpfsExt { get; set; }
+
+    public Guid? UploadFileId { get; set; }
+
+    public string FileName { get; set; } = "";
+    public long Size { get; set; }
+    public string ContentType { get; set; } = "";
+    public string? Caption { get; set; }
+
+    public override NodeData Clone() => (VideoData)MemberwiseClone();
 }
