@@ -382,3 +382,71 @@ three sizes show identical content and only the layout differs.
 first line of its body — the map box repeats its pin icon as well. It is not new in M7, but the walk pictures make
 it plain, and on a 390px iPhone the repeat costs real height. Raised as its own piece of work rather than changed
 during a rollout.
+
+## M8 Research is boards, and a board can be presented — done 2026-09-16
+
+**What changed, and why it is a milestone rather than a feature.** The site had two ways to write up
+a case: the block-editor research pages (2026-09-14) and the canvas boards. Ben chose the boards, so
+the pages are gone, and with them `features.canvas-editor` — a switch whose off position leaves a case
+with no research at all is a trap, not a choice. Research also returns to the timeline's Add Entry
+list: a board is not a dated moment, so a note about what the deeds said needs the timeline again.
+
+**What Ben asked to keep, and where it lives now.** "I like that researchers can create their own
+pages and publish them independently. I also like the smart copy-and-paste." Neither was the block
+editor's:
+
+- a draft nobody else sees — `CanvasDocumentController` lists every published board plus the caller's
+  own drafts, and hands a reader the published copy rather than what is being written now;
+- paste that knows what you pasted — `PasteClassifier` reads a link, picture, recording or file and
+  makes the right block, judging a picture by its first bytes rather than its name.
+
+**One behaviour genuinely changed.** A picture on an unpublished research page was its author's alone.
+A file dropped on an unpublished board goes to the case's Files at once, where the group can see it —
+because dropped files going to the case files is what Ben asked for. The board's contents stay private
+until published; the file does not.
+
+**Growing the next card.** A block's four side handles do two things now: dragged they aim a connector
+as before, clicked they make the next block on that side already joined, at the same size, kind and
+colour, open for typing. Drag one onto empty board and it lands where you let go. Ctrl+Shift+Arrow is
+the keyboard form — not Alt+Arrow, which is Back and Forward in Chrome on Windows. `AddConnected` adds
+the block and the connector as ONE command, so one Undo takes back the whole gesture.
+
+**Presenting.** `Present` walks the board full screen with everything else dimmed. Nothing is prepared:
+`SlideOrder` reads the running order off the board — groups if any exist (Miro's frames), otherwise
+the arrows, then down the page — so growing one card out of another writes the deck as the thinking
+happens. It changes nothing: no command, no undo entry, no edit, so a board can be presented by
+somebody who may only read the case, which is the meeting it exists for.
+
+**Proof.**
+
+```
+dotnet build Ben.slnx                      # 0 warnings, 0 errors
+dotnet test  Ben.Canvas.Tests              # 862 passed
+dotnet test  Ben.Web.Tests                 # 6182 passed, 2 skipped
+./scripts/run-e2e.sh --filter "TestCategory=Canvas"
+```
+
+The e2e harness starts the canvas as a fourth host (5125) beside api, web and wasm. The two Research
+tab fixtures had skipped on every run until now — no canvas host, plus a deliberate skip for the flag.
+
+**Three things only the doing found.**
+
+1. *The handover was broken and every test passed.* The API's development CORS list did not name the
+   canvas host, so the one-use code could not be exchanged and the editor opened SIGNED OUT on
+   whatever board the browser had kept on the device. The tests checked that the editor appeared, not
+   that it arrived signed in. Fixed; guarded on the settings file; the fixture now asserts both, and
+   a second fixture asserts the case's own board opens with its five blocks.
+2. *Every card stayed lit while presenting.* `CanvasNodeHost`'s render gate exists so a board of
+   hundreds redraws only what moved, and presentation was not one of the things it watched. On stage
+   is a parameter now, and part of the gate.
+3. *The repo guards earned their keep twice* — the view-only action list insisted presenting must be
+   refused (it must not), and the theme guard caught a literal shadow in the new bar's CSS.
+
+**Docs.** The help's Research section rewritten for boards, presenting and the side handles; three new
+pictures and a GIF shot from the seeded board; What's New and the service changelog; the product and
+persona PDFs rebuilt. The seeder plants a published board — four joined cards and a note — so a fresh
+install has something to show, with a test that reads it back through the editor's own reader.
+
+**The migration destroys rows.** `RetireResearchPages` drops `CaseResearchEntries` and
+`CaseResearchAttachments`; `Down` rebuilds them empty. Both runbooks carry the copy-first step.
+Applied to `IsHauntedDb_player` only; production gets it with the deploy.
