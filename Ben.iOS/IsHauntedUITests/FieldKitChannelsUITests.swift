@@ -79,22 +79,25 @@ final class FieldKitChannelsUITests: XCTestCase {
 
         recordingSession(app)
 
-        // The consequence, on the live screen: the button exists. It is disabled on a simulator,
-        // which has no camera — existence is the thing this decides, not hittability.
-        XCTAssertTrue(app.buttons["capture-video"].waitForExistence(timeout: 15),
-                      "a session opened for video should offer the video button")
-        XCTAssertTrue(app.buttons["capture-photo"].exists,
-                      "photographs are always offered, whatever the channels say")
+        // The consequence, on the live screen: one camera button, and its label says clips are on
+        // offer. Photo and Video stopped being separate buttons when the capture stopped being two
+        // different Apple apps — the mode is a switch on our own camera screen now.
+        let camera = app.buttons["capture-camera"]
+        XCTAssertTrue(camera.waitForExistence(timeout: 15),
+                      "every session offers the camera")
+        XCTAssertEqual(camera.label, "Camera",
+                       "a session opened for video should say the camera does clips too")
     }
 
-    func testWithoutChoosingVideoTheButtonIsNotThere() throws {
+    func testWithoutChoosingVideoTheButtonOffersPhotographsOnly() throws {
         // The other half, and the one that makes the test above mean anything: left alone, the
-        // defaults produce a session with no video button.
+        // defaults produce a session whose camera button offers photographs only.
         let app = openStartSheet()
         recordingSession(app)
 
-        XCTAssertTrue(app.buttons["capture-photo"].waitForExistence(timeout: 15))
-        XCTAssertFalse(app.buttons["capture-video"].exists,
-                       "video is opt-in; an untouched start sheet must not turn it on")
+        let camera = app.buttons["capture-camera"]
+        XCTAssertTrue(camera.waitForExistence(timeout: 15))
+        XCTAssertEqual(camera.label, "Photo",
+                       "video is opt-in; an untouched start sheet must not offer clips")
     }
 }

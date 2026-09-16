@@ -215,6 +215,10 @@
           "description": "0-360, clockwise from true north.",
           "type": ["number", "null"], "minimum": 0, "maximum": 360
         },
+        "course_degrees": {
+          "description": "0-360, clockwise from true north: the direction the device was MOVING, which is not the direction it was pointed. A compass gives heading without a fix; a fix gives course without a compass. Send whichever the device has.",
+          "type": ["number", "null"], "minimum": 0, "maximum": 360
+        },
         "speed_mps":     { "type": ["number", "null"], "minimum": 0 },
         "accel_x_mps2":  { "type": ["number", "null"] },
         "accel_y_mps2":  { "type": ["number", "null"] },

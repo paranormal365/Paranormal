@@ -448,7 +448,10 @@ final class LiveLocation: NSObject, LocationSource, CLLocationManagerDelegate, @
             longitude: location.coordinate.longitude,
             altitudeMeters: location.verticalAccuracy >= 0 ? location.altitude : nil,
             accuracyMeters: accuracy,
-            speedMps: location.speed >= 0 ? location.speed : nil)
+            speedMps: location.speed >= 0 ? location.speed : nil,
+            // A negative course means the fix could not work out a direction — standing still
+            // does that. Passed on as unknown rather than as due north.
+            courseDegrees: location.course >= 0 ? location.course : nil)
 
         lock.lock(); let targets = Array(positionContinuations.values); lock.unlock()
         for continuation in targets { continuation.yield(sample) }

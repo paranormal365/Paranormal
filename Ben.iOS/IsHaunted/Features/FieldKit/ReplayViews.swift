@@ -219,15 +219,24 @@ struct MovementMap: View {
                         .stroke(Theme.ecto.opacity(0.4), lineWidth: 1)
                 }
                 Annotation("", coordinate: here) {
+                    // The arrow sits OUTSIDE the dot rather than inside it: a 9pt glyph inside a
+                    // 14pt circle was a smudge at map scale, and which way it pointed — the whole
+                    // point of drawing it — could not be read.
                     ZStack {
-                        Circle().fill(Theme.ecto).frame(width: 14, height: 14)
-                        if let heading = frame.headingDegrees {
+                        if let facing = frame.facing {
                             Image(systemName: "location.north.fill")
-                                .font(.system(size: 9))
-                                .foregroundStyle(Theme.ink)
-                                .rotationEffect(.degrees(heading))
+                                .font(.system(size: 22, weight: .bold))
+                                .foregroundStyle(Theme.ecto)
+                                .shadow(color: .black.opacity(0.6), radius: 2)
+                                .rotationEffect(.degrees(facing.degrees))
+                                .accessibilityLabel(
+                                    "\(facing.what) \(PositionReadout.compass(facing.degrees))")
+                        } else {
+                            Circle().fill(Theme.ecto).frame(width: 14, height: 14)
+                                .shadow(color: .black.opacity(0.6), radius: 2)
                         }
                     }
+                    .accessibilityIdentifier("replay-here")
                 }
             }
         }

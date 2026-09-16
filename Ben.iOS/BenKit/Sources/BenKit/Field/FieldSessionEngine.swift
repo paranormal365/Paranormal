@@ -417,7 +417,8 @@ public actor FieldSessionEngine {
                              accuracyMeters: fix.accuracyMeters)
         }
 
-        var motion = FieldReading.Motion(headingDegrees: latest.headingDegrees,
+        let motion = FieldReading.Motion(headingDegrees: latest.headingDegrees,
+                                         courseDegrees: latest.position?.courseDegrees,
                                          speedMps: latest.position?.speedMps)
 
         return FieldReading(

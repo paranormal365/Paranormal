@@ -270,10 +270,16 @@ struct SessionReviewView: View {
             readout("Sound",
                     value: replay.frame.soundDbfs.map { String(format: "%.0f dB", $0) } ?? "—",
                     icon: "waveform")
-            readout("Heading",
-                    value: replay.frame.headingDegrees
-                        .map { "\(PositionReadout.compass($0)) \(Int($0))°" } ?? "—",
-                    icon: "safari")
+            // Titled by what the number IS at this moment: the compass says which way they were
+            // looking, and with no compass — which is most of a night indoors — the fix says
+            // which way they were walking. Calling both "Heading" would let one be read as the
+            // other, and they are different facts.
+            readout(replay.frame.facing?.what.capitalized ?? "Heading",
+                    value: replay.frame.facing
+                        .map { "\(PositionReadout.compass($0.degrees)) \(Int($0.degrees))°" } ?? "—",
+                    icon: replay.frame.facing.map {
+                        $0.what == "walking" ? "figure.walk" : "safari"
+                    } ?? "safari")
         }
     }
 

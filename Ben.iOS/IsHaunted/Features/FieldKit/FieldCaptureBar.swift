@@ -43,12 +43,14 @@ struct FieldCaptureBar: View {
             }
 
             HStack(spacing: 10) {
-                captureButton("Photo", icon: "camera", kind: .photo)
-                // Only when this session is set up for video — one fewer thing to fumble past
-                // at 3am when it is not what you came to do.
-                if session.channels.contains(.video) {
-                    captureButton("Video", icon: "video", kind: .video)
-                }
+                // One way in, not two. Photo and Video were separate buttons because each one
+                // launched a different Apple app; now that the camera is ours, both are the same
+                // screen with a switch on it — and two buttons plus the audio one left "Stop
+                // audio" wrapping onto a second line in the dark. Ben, 2026-09-16: "there may not
+                // be a need to have a Photo or Video button on the Field Kit because it was when
+                // I clicked those buttons when it pulled up the Apple Photo and Video app."
+                captureButton(session.channels.contains(.video) ? "Camera" : "Photo",
+                              icon: "camera", kind: .photo)
 
                 Button {
                     Task {
@@ -149,7 +151,7 @@ struct FieldCaptureBar: View {
         .buttonStyle(.bordered)
         // Never disabled: a device with no camera says so on the capture screen, in a sentence.
         // A dead button explains nothing.
-        .accessibilityIdentifier("capture-\(kind.rawValue)")
+        .accessibilityIdentifier("capture-camera")
     }
 
     /// Moves the captured file into the session and records what it is.
