@@ -1,6 +1,6 @@
 # App Store media — IsHaunted 1.0.3
 
-Ten frames per device and one preview per device, dark, captured through a real scripted night on
+Six frames per device and one preview per device, dark, captured through a real scripted night on
 the simulator. Run with one command per device:
 
 ```
@@ -13,12 +13,18 @@ one, frame 14 photographs the signed-out fallback rather than the trimmer.
 
 ## What is new since 1.0.2
 
-**`15-fieldkit-camera` — the camera is the app's own.** In 1.0.2, taking a photograph handed the
-microphone to Apple's camera, which stopped the recording and left a hole in the sound. Now the
-capture happens inside the session: the sound carries straight through, and a clip's own audio
-fills the gap while it runs. There was no screen worth photographing before; this is it.
+**The camera is the app's own.** In 1.0.2, taking a photograph handed the microphone to Apple's
+camera, which stopped the recording and left a hole in the sound. Now the capture happens inside the
+session: the sound carries straight through, and a clip's own audio fills the gap while it runs.
+**It cannot be photographed here**: a simulator has no camera, and the frame came out as a black
+screen with "No camera is available on this device" on it, so the capture skips that frame on a
+simulator. A `15-fieldkit-camera` frame needs the capture run on a real phone.
 
-The preview shows the same thing happening rather than only the needle swinging — the drive takes a
+**`04-field-kit` shows the new doors on the Field Kit screen** — *Open a .ben file*, and (when the
+account has any) *On the server, not on this phone*. A session is one sealed `.ben` now, opened from
+a file somebody sent or pulled back from the server, and it plays exactly as it did for them.
+
+The preview shows the session happening rather than only the needle swinging — the drive takes a
 photograph part way through and carries on.
 
 Everything else in the set is re-captured from the current build rather than carried over, so no
@@ -44,12 +50,18 @@ untouched.
 
 Windows: iPhone `[30 s, +28]`, iPad `[27 s, +28]`, chosen from poster frames.
 
-## Two things the capture taught, still true
+## Three things the capture taught, still true
 
 - `TEST_RUNNER_*` variables must be **exported in the shell**. Passed as `xcodebuild KEY=value` they
   never reach the runner, and the test skips itself while the build reports success.
 - The screenshot test **relaunches after `-autoSignIn` lands**, so the Keychain-restored session is
   the one used. Left as launched, the iPad reached the Send screen with "Your session ended".
+- **A held session beats the credentials you passed.** The Keychain survives a reinstall and
+  `-autoSignIn` is a no-op over a restored session, so a simulator last used as somebody else
+  photographs that person — or, once their token dies mid-run, the signed-out Send screen (the first
+  iPhone run on 2026-09-16). The test now confirms the account on Profile, signs a stranger out and
+  asks again, and fails loudly if it still isn't the one it was told. A clean simulator
+  (`xcrun simctl keychain <udid> reset` after an uninstall) is still the surest start.
 
 ## Before uploading
 

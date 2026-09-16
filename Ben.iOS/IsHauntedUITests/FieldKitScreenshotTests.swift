@@ -48,12 +48,47 @@ final class FieldKitScreenshotTests: XCTestCase {
         Thread.sleep(forTimeInterval: seconds)
     }
 
+    /// The account every frame after this one is photographed as.
+    private var captureEmail: String {
+        ProcessInfo.processInfo.environment["BEN_CLIENT_EMAIL"] ?? "daniel.park@benco.dev"
+    }
+
+    /// Makes sure the sign-in actually landed, and as the right person.
+    ///
+    /// Whoever the simulator was signed in as LAST is still signed in: the Keychain survives a
+    /// reinstall, and `SessionStore.signIn` returns at once unless the state is signed out, so
+    /// `-autoSignIn` is a no-op over a restored session. The 2026-09-16 iPhone set photographed the
+    /// Send screen signed out that way — a held session from another account, dead by the time the
+    /// frame came round. Sign that session out and ask again; and if it still never lands, say so
+    /// rather than shipping a set of somebody else's phone.
+    private func waitUntilSignedIn() {
+        if confirmSignedIn(as: captureEmail) { return }
+        if app.descendants(matching: .any)["Sign out"].firstMatch.exists {
+            app.descendants(matching: .any)["Sign out"].firstMatch.tap()
+            settle(3)
+            app.terminate()
+            app.launch()
+            settle(6)
+            if confirmSignedIn(as: captureEmail) { return }
+        }
+        XCTFail("Signing in as \(captureEmail) never landed — the Field Kit set would be captured as "
+                + "somebody else, or signed out. Check BEN_CLIENT_EMAIL / BEN_CLIENT_PASSWORD and that "
+                + "BEN_API_BASE_URL is serving them.")
+    }
+
+    private func confirmSignedIn(as email: String) -> Bool {
+        guard AppNavigator.openSection("Profile", in: app, timeout: 20) else { return false }
+        return app.staticTexts.matching(NSPredicate(format: "label CONTAINS[c] %@", email))
+            .firstMatch.waitForExistence(timeout: 30)
+    }
+
     func testCaptureTheFieldKitSet() throws {
         // Let -autoSignIn land its token in the Keychain, then relaunch WITHOUT it — the way a
         // real user's session starts. Left as launched, the iPad capture on 2026-09-04 reached
         // the Send screen with "Your session ended" and photographed the signed-out fallback.
         settle(6)
         if app.launchArguments.contains("-autoSignIn") {
+            waitUntilSignedIn()
             app.terminate()
             app.launchArguments.removeAll { $0 == "-autoSignIn" || $0.contains(":") && $0.contains("@") }
             app.launch()
@@ -135,7 +170,11 @@ final class FieldKitScreenshotTests: XCTestCase {
             camera.tap()
             if app.buttons["camera-shutter"].waitForExistence(timeout: 10) {
                 settle(2)
-                snap("15-fieldkit-camera")     // photo or clip, without leaving the session
+                // A simulator has no camera and photographs a black screen with a sentence on it — no
+                // frame at all beats that in the store set. On a device the capture goes through.
+                if !app.staticTexts["No camera is available on this device."].exists {
+                    snap("15-fieldkit-camera")     // photo or clip, without leaving the session
+                }
             }
             if app.buttons["camera-close"].firstMatch.exists { app.buttons["camera-close"].firstMatch.tap() }
             settle(1)
