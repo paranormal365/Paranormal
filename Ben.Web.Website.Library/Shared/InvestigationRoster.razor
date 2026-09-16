@@ -46,9 +46,7 @@
                 <label class="form-label small mb-1" for="investigationroster-when-did-you-get-ab36">When did you get there?</label>
                 @* Editable rather than assumed-now. Most sites have no signal, so checking in the
                    next morning and correcting the time is the ordinary path, not an edge case. *@
-                <input id="investigationroster-when-did-you-get-ab36" type="datetime-local" class="form-control" style="max-width:260px;"
-                       value="@_statedArrival"
-                       @oninput="@(e => _statedArrival = e.Value?.ToString() ?? string.Empty)" />
+                <BenDateField Mode="DateEntryMode.DateTime" Id="investigationroster-when-did-you-get-ab36" Width="260px" @bind-Value="_statedArrival" />
                 <div class="form-text">Leave as-is if you are checking in now.</div>
 
                 <div class="d-flex gap-2 mt-2">
@@ -343,7 +341,7 @@
 
     private bool _showCheckIn;
     private bool _checkingIn;
-    private string _statedArrival = string.Empty;
+    private DateTime? _statedArrival;
     private string? _error;
 
     private PeriodicTimer? _timer;
@@ -359,7 +357,7 @@
         var isNewInvestigation = InvestigationId != _loadedFor;
         _loadedFor   = InvestigationId;
         _loadedToken = ReloadToken;
-        if (isNewInvestigation) _statedArrival = DateTime.Now.ToString("yyyy-MM-ddTHH:mm");
+        if (isNewInvestigation) { var now = DateTime.Now; _statedArrival = new DateTime(now.Year, now.Month, now.Day, now.Hour, now.Minute, 0); }
         await LoadAsync();
     }
 
@@ -527,9 +525,7 @@
 
         // Parsed as local time and sent as UTC, because the field is what the person is reading
         // off their own watch.
-        DateTime? stated = DateTime.TryParse(_statedArrival, out var parsed)
-            ? parsed.ToUniversalTime()
-            : null;
+        DateTime? stated = _statedArrival?.ToUniversalTime();
 
         var result = await AdminClient.CheckInToInvestigationAsync(OrgId, InvestigationId, stated);
 

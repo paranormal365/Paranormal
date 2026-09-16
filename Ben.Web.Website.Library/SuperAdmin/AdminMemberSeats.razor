@@ -90,11 +90,11 @@
             </div>
             <div class="col-6">
                 <label class="form-label fw-semibold" for="seat-start">Period start</label>
-                <input id="seat-start" type="date" class="form-control" @bind="@_formStart" />
+                <BenDateField Mode="DateEntryMode.Date" Id="seat-start" @bind-Value="@_formStart" />
             </div>
             <div class="col-6">
                 <label class="form-label fw-semibold" for="seat-end">Period end</label>
-                <input id="seat-end" type="date" class="form-control" @bind="@_formEnd" />
+                <BenDateField Mode="DateEntryMode.Date" Id="seat-end" @bind-Value="@_formEnd" />
             </div>
         </div>
         @if (_error is not null)

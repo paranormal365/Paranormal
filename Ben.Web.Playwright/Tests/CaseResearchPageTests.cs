@@ -244,7 +244,7 @@ public class CaseResearchPageTests : ResearchPageTestBase
         await Page.Locator("#research-page-when-add").ClickAsync();
         var when = Page.Locator("#research-page-when");
         await Expect(when).ToHaveValueAsync(new System.Text.RegularExpressions.Regex(@"^\d{2}/\d{2}/\d{4}$"), new() { Timeout = 10_000 });
-        await Page.Locator(".k-datepicker:has(#research-page-when) button[aria-label='Open']").ClickAsync();
+        await Page.Locator(".ben-date-field:has(#research-page-when) .ben-date-field__open").ClickAsync();
         var firstOfMonth = Page.Locator(".k-calendar .k-calendar-td:not(.k-other-month)").First;
         await Expect(firstOfMonth).ToBeVisibleAsync(new() { Timeout = 10_000 });
         var day = DateTime.Parse((await firstOfMonth.GetAttributeAsync("title"))!, System.Globalization.CultureInfo.GetCultureInfo("en-US"));
