@@ -16,6 +16,38 @@ known it is worth naming, because that is what somebody can check on their own p
 **Shape:** `## yyyy-MM-dd` headings, newest first, each followed by `- ` lines. Nothing else is
 read.
 
+## 2026-09-16
+
+- A session somebody sends you as a `.ben` file — by AirDrop, in a message, from Files — opens in the
+  app and plays exactly as it did for them: the same trace, map, marks and recordings, with a line on
+  the review screen saying where it came from.
+- Open a .ben file on the Field Kit screen picks a saved one from Files.
+- On the server, not on this phone, further down the Field Kit screen, lists the sessions you sent from
+  another device or cleared from this one, and Download brings a whole night back. Older sessions sent
+  before session files existed are counted rather than offered a download that would be refused.
+- A session file that lost or changed bytes on the way is refused when opened, rather than opened with
+  a hole in it. The same session is not imported twice.
+- Exporting a session writes one `.ben` file and hands it to the share sheet.
+- Sending a sealed session could be refused by the server; it is accepted again.
+- Signing in on a phone that still held an old, expired session no longer ends the new session a moment
+  later.
+- A busy or rate-limited server no longer signs you out when it cannot refresh your session just then.
+- The review chart says when no field base level was set, even when a sound base was.
+- Replaying a long night is smoother: the chart and the map no longer rework every reading on every
+  tick.
+- A phone propped against a wall no longer marks "the device was moved" on every sample when its
+  resting level sits above a low threshold; a real knock still is one.
+- A session recording only where you are — field and sound switched off — still writes its readings.
+- Dictation could stop working for the rest of a session after one failed start; it recovers now.
+- Filming a clip while sound was recording could leave the microphone with the clip when the clip
+  failed to finish; the session takes it back either way.
+- Property photos, room photos and case photos are drawn at the size shown rather than decoded at
+  full size, so a session with many photos no longer runs the phone out of memory.
+- Your pass turns the brightness back down when the app is put away or the phone locked, not only
+  when the pass is closed.
+- A session too big to go in one file (more than 4 GB of recordings) says so before exporting or
+  sending, instead of writing a file that cannot be opened.
+
 ## 2026-09-13
 
 - On What I'm going to, Pass now opens your pass. It had opened the event's screen, so the pass could only be

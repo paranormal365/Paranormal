@@ -129,6 +129,14 @@ into an instrument, and it is the part a new developer should read first and mos
 <p>The home screen lists past sessions and starts a new one. A session is a recording in the
 fullest sense: not a single measurement, but <b>every reading from every enabled sensor, for as
 long as it runs</b>.</p>
+
+<p>Two more doors sit on this screen. <b>Open a .ben file</b> brings in a session somebody sent —
+a <code>.ben</code> is one sealed file holding the readings, the marks and the recordings — and it
+plays here exactly as it did for them; tapping such a file anywhere on the phone does the same.
+<b>On the server, not on this phone</b> lists this account's sessions that were sent from another
+device or cleared from this one, and Download brings a whole night back. An imported session is
+the same three things a local recording leaves behind (the readings log, the rows, the media), so
+nothing downstream knows the difference; only a Source line on the review says where it came from.</p>
 """),
 
     ("Naming a session", "41-name-the-session", """
@@ -288,7 +296,8 @@ night's work into something a client, a colleague or a stranger can actually ass
 
     ("Ending a session", "53-session-review", """
 <p>Stopping opens the review: what was captured, how long it ran, what was marked. From here the
-session can be exported, attached to a case, or published to a public place's archive.</p>
+session can be sent to the server or exported — both as one sealed <code>.ben</code> file — attached
+to a case, or published to a public place's archive.</p>
 """),
 
     ("Events", "60-events", """

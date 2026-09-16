@@ -263,9 +263,11 @@ everything recorded up to that moment intact. Its end time is left unknown, beca
 Recording works offline; **sending needs a connection**. When you have one, choose the
 investigation it belongs to — which chooses its case too — and pick which recordings go with it.
 
-Files go up **one at a time**, so a dropped connection costs one file rather than the night, and
-anything that failed can be sent again without re-sending what already arrived. Each file
-travels with a checksum, and a file that arrives damaged is flagged rather than quietly accepted.
+Everything you tick goes up together as **one `.ben` file** — the readings, the marks and the
+recordings, sealed with a checksum of every part. If the connection drops, press **Send** again:
+the server replaces its own copy rather than making a second, and a file that arrives damaged is
+refused rather than quietly accepted. On the website the session appears as that one file, not as
+a wall of separate uploads.
 
 Who can send a recording to an investigation: anyone who was **on** it, any active **member of
 the group** running it, and — when the investigation or its case is **public** — anybody at all.
@@ -340,9 +342,40 @@ suggests, so the real upload is usually smaller.
 
 ### Exporting a session
 
-A session can also be exported as a **.zip in the IsHaunted device data format** — the same
-published format any instrument maker can write. That file can go by AirDrop, email or Files to
-anyone, whether or not they use this site.
+From a session's review screen, **Export a bundle** writes the whole night as one **`.ben` file**
+and hands it to the share sheet, so it can go by AirDrop, Messages, Mail or Files to anyone. Inside
+it is the published IsHaunted device data format — the same one any instrument maker can write —
+so it is readable outside this app too.
+
+The file carries a **seal**: a checksum of every part, and the id of the phone and the account that
+recorded it. A copy that lost or changed bytes on the way fails its seal and is refused when opened,
+rather than opened with a hole in it. The seal says which device made the recording; it is not a
+signature, and it never carries anybody's name.
+
+### Opening a session somebody sent you — or pulling your own back down
+
+A `.ben` that reaches your phone opens in the app, and **plays exactly as it did for the person who
+recorded it**: the same trace, the same map, the same marks and recordings, with the review screen,
+the replay, the trimmer and the export all working as if the night had been recorded on your phone.
+The only difference is a line on the review screen that says where it came from.
+
+There are three ways in, and they all lead to the same place:
+
+- **Tap the file** wherever it arrived — an AirDrop, a message, a mail attachment, Files. The
+  app is offered to open it.
+- **Open a .ben file** on the Field Kit screen shows the Files browser, for a file already saved.
+- **On the server, not on this phone**, further down the Field Kit screen, lists the sessions you
+  have sent up that are not on this phone — sent from another device, or cleared from this one.
+  **Download** brings the whole night back, and the app already knows it is on the server. Only
+  sessions that were sent as one file are offered; anything sent before session files existed is
+  counted underneath, and is still on the website.
+
+![An imported session on the review screen: the trace, the map, the marks, and where it came from](/help/media/the-mobile-apps/iphone-review-imported.png)
+
+A session that is **already on this phone** is not imported twice; the app says which one it is.
+Imported sessions show in the list with *shared with you*, *from the server* or *opened from a file*
+under the name, and the review screen's facts carry a **Source** line to match — so a night somebody
+handed you is never quietly attributed to you.
 
 ## Sharing what you found — the field archive
 

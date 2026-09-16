@@ -1102,9 +1102,11 @@ everything recorded up to that moment intact. Its end time is left unknown, beca
 <h3>Sending a session to your group</h3>
 <p>Recording works offline; <strong>sending needs a connection</strong>. When you have one, choose the
 investigation it belongs to — which chooses its case too — and pick which recordings go with it.</p>
-<p>Files go up <strong>one at a time</strong>, so a dropped connection costs one file rather than the night, and
-anything that failed can be sent again without re-sending what already arrived. Each file
-travels with a checksum, and a file that arrives damaged is flagged rather than quietly accepted.</p>
+<p>Everything you tick goes up together as <strong>one <code>.ben</code> file</strong> — the readings, the marks and the
+recordings, sealed with a checksum of every part. If the connection drops, press <strong>Send</strong> again:
+the server replaces its own copy rather than making a second, and a file that arrives damaged is
+refused rather than quietly accepted. On the website the session appears as that one file, not as
+a wall of separate uploads.</p>
 <p>Who can send a recording to an investigation: anyone who was <strong>on</strong> it, any active <strong>member of
 the group</strong> running it, and — when the investigation or its case is <strong>public</strong> — anybody at all.
 An open investigation is an invitation, and a dozen visitors with phones is much of the value of
@@ -1162,9 +1164,35 @@ is over, there are two ways through, and the screen offers whichever one fits th
 <p>Sizes on that screen are estimates. A dark, still room compresses better than the estimate
 suggests, so the real upload is usually smaller.</p>
 <h3>Exporting a session</h3>
-<p>A session can also be exported as a <strong>.zip in the IsHaunted device data format</strong> — the same
-published format any instrument maker can write. That file can go by AirDrop, email or Files to
-anyone, whether or not they use this site.</p>
+<p>From a session's review screen, <strong>Export a bundle</strong> writes the whole night as one <strong><code>.ben</code> file</strong>
+and hands it to the share sheet, so it can go by AirDrop, Messages, Mail or Files to anyone. Inside
+it is the published IsHaunted device data format — the same one any instrument maker can write —
+so it is readable outside this app too.</p>
+<p>The file carries a <strong>seal</strong>: a checksum of every part, and the id of the phone and the account that
+recorded it. A copy that lost or changed bytes on the way fails its seal and is refused when opened,
+rather than opened with a hole in it. The seal says which device made the recording; it is not a
+signature, and it never carries anybody's name.</p>
+<h3>Opening a session somebody sent you — or pulling your own back down</h3>
+<p>A <code>.ben</code> that reaches your phone opens in the app, and <strong>plays exactly as it did for the person who
+recorded it</strong>: the same trace, the same map, the same marks and recordings, with the review screen,
+the replay, the trimmer and the export all working as if the night had been recorded on your phone.
+The only difference is a line on the review screen that says where it came from.</p>
+<p>There are three ways in, and they all lead to the same place:</p>
+<ul>
+<li><strong>Tap the file</strong> wherever it arrived — an AirDrop, a message, a mail attachment, Files. The
+  app is offered to open it.</li>
+<li><strong>Open a .ben file</strong> on the Field Kit screen shows the Files browser, for a file already saved.</li>
+<li><strong>On the server, not on this phone</strong>, further down the Field Kit screen, lists the sessions you
+  have sent up that are not on this phone — sent from another device, or cleared from this one.
+  <strong>Download</strong> brings the whole night back, and the app already knows it is on the server. Only
+  sessions that were sent as one file are offered; anything sent before session files existed is
+  counted underneath, and is still on the website.</li>
+</ul>
+<p><img alt="An imported session on the review screen: the trace, the map, the marks, and where it came from" src="../Ben.Web.Website/wwwroot/help/media/the-mobile-apps/iphone-review-imported.png" /></p>
+<p>A session that is <strong>already on this phone</strong> is not imported twice; the app says which one it is.
+Imported sessions show in the list with <em>shared with you</em>, <em>from the server</em> or <em>opened from a file</em>
+under the name, and the review screen's facts carry a <strong>Source</strong> line to match — so a night somebody
+handed you is never quietly attributed to you.</p>
 <h2>Sharing what you found — the field archive</h2>
 <p>A session normally belongs to you, or to the investigation you recorded it for. There is a third
 option, and it is the reason the app is worth having without a group at all.</p>
