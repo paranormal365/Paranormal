@@ -117,10 +117,12 @@ UPLOADS_DIR="$ROOT_DIR/.uploads-${DB_NAME}"
 API_BIND="http://127.0.0.1:5252"
 WEB_BIND="http://127.0.0.1:5078"
 WASM_BIND="http://127.0.0.1:5180"
+CANVAS_BIND="http://127.0.0.1:5125"
 
 API_URL="http://localhost:5252"
 WEB_URL="http://localhost:5078"
 WASM_URL="http://localhost:5180"
+CANVAS_URL="http://localhost:5125"
 
 KEEP=0
 PASSTHROUGH=()
@@ -138,7 +140,7 @@ cleanup() {
   if [[ $KEEP -eq 1 ]]; then
     echo ""
     echo "Hosts left running (--keep). Logs: $LOG_DIR"
-    echo "  api  $API_URL   web  $WEB_URL   wasm $WASM_URL"
+    echo "  api  $API_URL   web  $WEB_URL   wasm $WASM_URL   canvas $CANVAS_URL"
     echo "  database: $DB_NAME"
     return
   fi
@@ -150,18 +152,19 @@ cleanup() {
   pkill -f "Ben.Data.WebApi" 2>/dev/null || true
   pkill -f "Ben.Web.Website" 2>/dev/null || true
   pkill -f "Ben.Wasm.Video"  2>/dev/null || true
+  pkill -f "Ben.Wasm.Canvas" 2>/dev/null || true
 }
 trap cleanup EXIT
 
 port_busy() { curl -fsS -o /dev/null --max-time 2 "$1" 2>/dev/null; }
 
 echo "── Checking the ports are free ─────────────────────────────────────────"
-for url in "$API_URL/api/public/build" "$WEB_URL/" "$WASM_URL/"; do
+for url in "$API_URL/api/public/build" "$WEB_URL/" "$WASM_URL/" "$CANVAS_URL/"; do
   if port_busy "$url"; then
     echo "REFUSING: something is already serving ${url%%/api*}."
     echo "That host is pointed at whatever database it was started with — probably the shared one."
     echo "Running against it would defeat the isolation this script exists for. Stop it first:"
-    echo "    pkill -f 'Ben.Data.WebApi'; pkill -f 'Ben.Web.Website'; pkill -f 'Ben.Wasm.Video'"
+    echo "    pkill -f 'Ben.Data.WebApi'; pkill -f 'Ben.Web.Website'; pkill -f 'Ben.Wasm.Video'; pkill -f 'Ben.Wasm.Canvas'"
     exit 1
   fi
 done
@@ -209,6 +212,9 @@ start_host web  "$ROOT_DIR/Ben.Web.Website"  "$WEB_BIND"  "$WEB_URL/" ""
 # dotnet.js, not "/": the WASM host answers 200 on its root while serving a stale or half-built
 # framework, and eight video-editor tests then fail for reasons that look like product bugs.
 start_host wasm "$ROOT_DIR/Ben.Wasm.Video"   "$WASM_BIND" "$WASM_URL/_framework/dotnet.js" ""
+# The canvas is a fourth host, and research lives on it since 2026-09-16: without this the Research
+# tab's tests skip, which is the failure mode that hides a broken handover behind a green run.
+start_host canvas "$ROOT_DIR/Ben.Wasm.Canvas" "$CANVAS_BIND" "$CANVAS_URL/_framework/dotnet.js" ""
 
 if grep -q "DATABASE IS BEHIND" "$LOG_DIR/api.log" 2>/dev/null; then
   echo "WARNING: the API says the schema is behind — see $LOG_DIR/api.log"

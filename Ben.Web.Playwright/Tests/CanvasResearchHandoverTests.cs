@@ -11,35 +11,31 @@ namespace Ben.Web.Playwright.Tests;
 /// is published. The site's half of that is this handover: a one-use code in the URL's fragment, the case and group
 /// beside it, and the canvas opening on them.</para>
 ///
-/// <para><b>Needs the canvas host running</b> at <c>localhost:5125</c> (<c>dotnet run --project Ben.Wasm.Canvas</c>)
-/// and <c>features.canvas-editor</c> switched on. Neither is true on a plain e2e run, so this fixture skips rather
-/// than fails when the tab is not there — the suite must not go red for a switch nobody turned on.</para>
+/// <para><b>Needs the canvas host running</b> at <c>localhost:5125</c>. <c>scripts/run-e2e.sh</c> starts it as a
+/// fourth host, so a full run exercises this for real. There is no switch to turn on any more: research IS boards
+/// since 2026-09-16, and this fixture fails rather than skips — a skip here would hide a broken handover behind a
+/// green run, which is exactly what it did while the flag existed.</para>
 /// </remarks>
 [TestFixture]
 [Category("Canvas")]
 public class CanvasResearchHandoverTests : BenTestBase
 {
-    private async Task<bool> OpenResearchTabAsync()
+    private async Task OpenResearchTabAsync()
     {
         await LoginAsync(SuperAdminEmail, SuperAdminPassword);
-        if (!await OpenOrgCaseAsync("Paranormal365", "Belmont")) return false;
+        Assert.That(await OpenOrgCaseAsync("Paranormal365", "Belmont"), Is.True,
+            "the seeded Belmont case is not on this database, so there is nothing to open research on");
 
-        // Whichever shape the tab is in: boards when the canvas is on, the block-editor pages when it is off. Waiting
-        // on the boards alone would fail the suite for a switch nobody turned on, which is what it did once.
         var boards = Main.Locator("[data-testid=case-research-boards]");
-        await OpenTabAsync("Research", boards.Or(Main.Locator("#research-new-page")).First);
+        await OpenTabAsync("Research", boards);
         await SkipAnyTourAsync();
-
-        if (await boards.CountAsync() == 0) return false;   // the canvas is switched off on this database
         await Expect(boards).ToBeVisibleAsync(new() { Timeout = 15_000 });
-        return true;
     }
 
     [Test]
     public async Task The_Research_tab_lists_boards_and_offers_a_new_one()
     {
-        if (!await OpenResearchTabAsync())
-            Assert.Ignore("The canvas editor is switched off on this database, or the seeded case is not here.");
+        await OpenResearchTabAsync();
 
         await Expect(Page.Locator("#research-new-board")).ToBeVisibleAsync(new() { Timeout = 15_000 });
     }
@@ -47,8 +43,7 @@ public class CanvasResearchHandoverTests : BenTestBase
     [Test]
     public async Task Starting_a_board_opens_the_canvas_on_this_case_already_signed_in()
     {
-        if (!await OpenResearchTabAsync())
-            Assert.Ignore("The canvas editor is switched off on this database, or the seeded case is not here.");
+        await OpenResearchTabAsync();
 
         var caseUrl = Page.Url;
         await Page.Locator("#research-new-board").ClickAsync();
