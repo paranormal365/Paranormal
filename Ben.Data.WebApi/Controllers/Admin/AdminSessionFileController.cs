@@ -1,5 +1,6 @@
 using Ben.Data.Common.Constants;
 using Ben.Data.Source.Context;
+using Ben.Data.WebApi.Services.FieldSessions;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.EntityFrameworkCore;
@@ -50,7 +51,7 @@ public sealed class AdminSessionFileController(
             // driven home from and sent the next morning belongs where it happened in the list.
             .OrderByDescending(s => s.StartedAt)
             .Take(MaxRows)
-            .Select(s => new SessionFileRecord(
+            .Select(s => new Row(
                 s.Id,
                 s.IsBundle,
                 s.DocumentUploadFile.FileName,
@@ -70,8 +71,34 @@ public sealed class AdminSessionFileController(
                 s.PublishedAtUtc))
             .ToListAsync(ct);
 
-        return Ok(rows);
+        // The name is worked out after the query rather than inside it: a session that arrived
+        // before bundles existed has no file name worth showing — its stored file is called
+        // data.json, as is every other one, which is precisely what a list of them looked like.
+        return Ok(rows.Select(r => new SessionFileRecord(
+            r.SessionId,
+            r.IsBundle,
+            SessionFileName.For(r.IsBundle, r.StoredFileName, r.StartedAt, r.LocationLabel),
+            r.FileSize,
+            r.LocationLabel,
+            r.StartedAt,
+            r.EndedAt,
+            r.ReadingCount,
+            r.MarkerCount,
+            r.FileCount,
+            r.RecordedByName,
+            r.UploadedByName,
+            r.InvestigationId,
+            r.InvestigationTitle,
+            r.PublishedAtUtc)).ToList());
     }
+
+    /// <summary>What the query can answer on its own, before the name is worked out.</summary>
+    private sealed record Row(
+        Guid SessionId, bool IsBundle, string StoredFileName, long FileSize,
+        string? LocationLabel, DateTime StartedAt, DateTime? EndedAt,
+        int ReadingCount, int MarkerCount, int FileCount,
+        string? RecordedByName, string? UploadedByName,
+        Guid? InvestigationId, string? InvestigationTitle, DateTime? PublishedAtUtc);
 }
 
 /// <param name="IsBundle">
