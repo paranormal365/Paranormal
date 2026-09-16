@@ -27,6 +27,26 @@ publish `/editors/canvas/`. The editor itself was the missing half.
    records: a link that always shows and sometimes works is worse than no link.
 4. **Points the canvas docs and the deploy script's error at the in-repo path** instead of Ben's other machine.
 
+## What changed after the vendor (2026-09-16)
+
+Ben: "the research page should use this WASM so the research can be created on the end user's machine and they can
+work on it and save drafts. They can keep the drafts which are not displayed to the members until it is published."
+He then settled the rest: the published picture is a thumbnail that opens the board; a reader gets it read-only;
+somebody who may edit the case may add to it; only the author, a group administrator or a site administrator may
+change pieces already there; anybody who may create on the case may start a board. Existing block-editor research
+pages are replaced outright rather than migrated.
+
+- **Server**: a board carries the published copy beside the working one. Unpublished, it is absent from the case's
+  list, 404 to anybody else, and theirs alone to write on. Publishing copies the board across, not only its picture.
+  `PieceOwnersJson` records who added each piece; `CanvasAdditiveGuard` refuses a save that reworks or removes
+  somebody else's, in words that say whose it is. Migrations `CanvasPublishedDocument` and `CanvasPieceOwners`.
+- **Editor**: the board says which pieces are the reader's; the rest are locked to the pointer script, and the store
+  refuses any command that would touch them, so a menu or a shortcut cannot reach round the lock.
+- **Site**: the Research tab lists boards with their state and a thumbnail, and hands the case to the canvas with a
+  one-use code in the URL fragment. Walked end to end on 2026-09-16 against the e2e stack and the canvas host:
+  handover carries the code, case and group; a draft is invisible to another member; publishing reveals it; a plain
+  member is told read-only.
+
 ## What is not done yet
 
 - **The site still has its own research pages** (the block editor shipped in `feature/beta-feedback-1`). Both are

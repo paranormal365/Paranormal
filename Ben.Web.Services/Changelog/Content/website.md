@@ -16,6 +16,10 @@ read. Add today's heading at the top when you ship something people can see.
 The history before 2026-08-22 is summarised rather than listed: the site was not yet open, and a
 day-by-day account of building it would say nothing to anyone using it now.
 
+## 2026-09-16
+
+- Research on a case is now a board you lay out yourself: cards, notes, pictures, maps, links and files, placed where they belong. It opens in its own editor, keeps what you are writing on your own machine, and stays yours until you publish it. Once published the group sees it, and anybody who can edit the case can add to it — changing what somebody else put there is for whoever put it there, a group administrator, or an administrator of the site.
+
 ## 2026-09-15
 
 - When a site role cannot be saved, the page now says exactly why instead of naming a SuperAdmin rule that may have nothing to do with it.

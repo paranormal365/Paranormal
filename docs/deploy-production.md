@@ -105,6 +105,24 @@ applications, and the sidecar zips are staged under `/files` instead of inside t
 Newest first. Each entry is what the database or the site settings need for that release, in the order to do it. Remove
 nothing: a server that skipped a release needs the older entries too.
 
+### 2026-09-16 — the case canvas becomes the Research tab
+
+1. Apply the migrations, in order, before deploying — `dotnet ef database update` applies all of them:
+   - `AddCanvasEditor` — the boards table and the link-unfurl cache.
+   - `CanvasPublishedDocument` — the published copy of a board and the revision it came from.
+   - `CanvasPieceOwners` — who put each piece on a board.
+   Additive only; no existing row changes.
+2. **Deploy the canvas application too**: `.\scripts\deploy-ishaunted.ps1 -Apps webapi,canvas,website`. It publishes
+   `Ben.Wasm.Canvas` to `/editors/canvas/`, which `setup-iis-ishaunted.ps1` creates as its own IIS application on the
+   static pool. A site that skips it has a Research tab whose boards open a 404.
+3. **The canvas is off until you turn it on**: Site Settings → Features → *Canvas editor*. While it is off the Research
+   tab keeps showing the block-editor research pages and the boards API answers 404, so deploying changes nothing.
+   Turning it on replaces the Research tab with boards for everybody at once.
+4. **What changes for people when it is on**: research is written in the canvas on their own machine; a board is theirs
+   alone until they publish it; publishing shows it to the group and files a picture on the case. A member who may edit
+   the case can add to somebody else's board but not rework it — that is for the author, a group administrator, or a
+   site administrator.
+
 ### 2026-09-14 — beta feedback (research pages, formatted notes and messages, plans off sale)
 
 1. Apply the two migrations, in order, before deploying — `dotnet ef database update` applies both:
