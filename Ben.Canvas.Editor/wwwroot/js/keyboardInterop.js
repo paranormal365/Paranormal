@@ -54,6 +54,9 @@ export function register(ref) {
       || (onBoard && !ctrl && !e.altKey && BOARD_KEYS.includes(e.key))
       || (ctrl && !e.altKey && CTRL_KEYS.includes(e.key))
       || (ctrl && e.shiftKey && (e.key === 'l' || e.key === 'L'))
+      // Ctrl+Shift+Arrow grows the next block beside this one; unclaimed it would drag the page's
+      // text selection about instead.
+      || (ctrl && e.shiftKey && e.key.startsWith('Arrow'))
     if (claimed) e.preventDefault()
 
     dotnetRef?.invokeMethodAsync('OnKeyDown', key, ctrl, e.shiftKey, e.altKey, onBoard)

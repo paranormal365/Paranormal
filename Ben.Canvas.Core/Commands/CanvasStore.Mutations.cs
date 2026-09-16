@@ -146,6 +146,57 @@ public sealed partial class CanvasStore
         return edge;
     }
 
+    /// <summary>
+    /// Adds a block beside an existing one and joins the two, as a single undo step.
+    /// </summary>
+    /// <param name="fromId">The block the new one grows out of.</param>
+    /// <param name="side">Which side of it to grow from.</param>
+    /// <param name="node">The new block, already carrying its type and data. Its position is set here.</param>
+    /// <param name="at">
+    /// Where to put the new block's centre, when somebody dragged to a spot and let go there. Null
+    /// lets <see cref="BesidePlacement"/> choose — straight out from the side, clear of everything.
+    /// </param>
+    /// <returns>The new block and the connector, or null when nothing was added.</returns>
+    /// <remarks>
+    /// Ben, 2026-09-16: "Can we make it like Miro?" One step, not two, is the point: on those boards
+    /// this is one gesture, so one Undo has to take back the whole of it. Two commands would leave a
+    /// connector to a block that is no longer there — and then a second Undo to finish the job.
+    /// </remarks>
+    public (CanvasNode Node, CanvasEdge Edge)? AddConnected(Guid fromId, CanvasSide side, CanvasNode node, CanvasPoint? at = null)
+    {
+        ArgumentNullException.ThrowIfNull(node);
+        if (FindNode(fromId) is not { } from) return null;
+        if (Document.Nodes.Count >= MaxNodes) return null;
+        if (Document.Nodes.Any(n => n.Id == node.Id)) return null;
+
+        RaiseToMinimum(node);
+
+        var rect = at is { } point
+            ? new WorldRect(point.X - node.Width / 2, point.Y - node.Height / 2, node.Width, node.Height)
+            : BesidePlacement.For(
+                CanvasHitTester.RectOf(from), side, node.Width, node.Height,
+                Document.Nodes.Select(CanvasHitTester.RectOf));
+
+        node.X = rect.X;
+        node.Y = rect.Y;
+        if (node.GroupId is { } gid && FindGroup(gid) is null) node.GroupId = null;
+        node.Z = AllocateZ();
+
+        var edge = new CanvasEdge
+        {
+            FromNodeId = fromId,
+            ToNodeId = node.Id,
+            FromSide = side,
+            // A block dropped where somebody let go can end up anywhere, so let the drawing pick the
+            // side that faces the source rather than insisting on the one opposite the gesture.
+            ToSide = at is null ? BesidePlacement.Opposite(side) : null,
+        };
+
+        return Execute(new AddNodesCommand(Document, [node], [edge], $"Add {Describe.Kind(node.Type)}"), CanvasChangeKind.Document)
+            ? (node, edge)
+            : null;
+    }
+
     public bool Disconnect(Guid edgeId)
     {
         var edge = FindEdge(edgeId);

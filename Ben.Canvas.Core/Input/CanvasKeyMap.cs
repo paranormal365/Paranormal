@@ -38,6 +38,12 @@ public enum CanvasCommand
     AddLink,
     NextConnector,
     PreviousConnector,
+
+    // Ben, 2026-09-16: "Can we make it like Miro?" — the next block, already joined to this one.
+    GrowLeft,
+    GrowRight,
+    GrowUp,
+    GrowDown,
 }
 
 /// <summary>
@@ -63,6 +69,19 @@ public static class CanvasKeyMap
 
         if (ctrl)
         {
+            // Ctrl+Shift+Arrow, not Alt+Arrow: Alt+Left and Alt+Right are Back and Forward in Chrome
+            // on Windows, and the site's own browsers are Windows ones.
+            if (shift)
+            {
+                switch (key)
+                {
+                    case "ArrowLeft": return CanvasCommand.GrowLeft;
+                    case "ArrowRight": return CanvasCommand.GrowRight;
+                    case "ArrowUp": return CanvasCommand.GrowUp;
+                    case "ArrowDown": return CanvasCommand.GrowDown;
+                }
+            }
+
             return Lower(key) switch
             {
                 "a" when !shift => CanvasCommand.SelectAll,

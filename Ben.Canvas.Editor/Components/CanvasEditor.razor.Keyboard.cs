@@ -33,7 +33,8 @@ public partial class CanvasEditor
 
         // A view-only board (R33): arrows, Enter, F2, R and C would change it without going through RunActionAsync.
         if (!Access.CanEdit && command is CanvasCommand.MoveLeft or CanvasCommand.MoveRight or CanvasCommand.MoveUp or CanvasCommand.MoveDown
-                or CanvasCommand.EditSelected or CanvasCommand.Rename or CanvasCommand.ResizeMode or CanvasCommand.ConnectMode)
+                or CanvasCommand.EditSelected or CanvasCommand.Rename or CanvasCommand.ResizeMode or CanvasCommand.ConnectMode
+                or CanvasCommand.GrowLeft or CanvasCommand.GrowRight or CanvasCommand.GrowUp or CanvasCommand.GrowDown)
         {
             Announcer.Say(Access.Reason ?? Ben.Canvas.Core.Text.CanvasCopy.Sentences.ViewOnly);
             return;
@@ -57,6 +58,18 @@ public partial class CanvasEditor
                 break;
             case CanvasCommand.MoveDown:
                 Nudge(0, step);
+                break;
+            case CanvasCommand.GrowLeft:
+                GrowFromSelection(CanvasSide.Left);
+                break;
+            case CanvasCommand.GrowRight:
+                GrowFromSelection(CanvasSide.Right);
+                break;
+            case CanvasCommand.GrowUp:
+                GrowFromSelection(CanvasSide.Top);
+                break;
+            case CanvasCommand.GrowDown:
+                GrowFromSelection(CanvasSide.Bottom);
                 break;
             case CanvasCommand.ClearSelection:
                 await Bridge.CancelAsync();
@@ -150,6 +163,25 @@ public partial class CanvasEditor
         }
 
         StateHasChanged();
+    }
+
+    /// <summary>
+    /// Ctrl+Shift+Arrow: the next block on that side of the selected one, already joined to it.
+    /// </summary>
+    /// <remarks>
+    /// The keyboard half of the side handles. Nothing selected, or several, and there is no one block
+    /// to grow from — said out loud rather than silently ignored, because a shortcut that does nothing
+    /// reads as broken.
+    /// </remarks>
+    private void GrowFromSelection(CanvasSide side)
+    {
+        if (SingleSelected() is not { } node)
+        {
+            Announcer.Say(Words.GrowNeedsOneBlock);
+            return;
+        }
+
+        Bridge.GrowFrom(node.Id, side);
     }
 
     private void Nudge(double dx, double dy)

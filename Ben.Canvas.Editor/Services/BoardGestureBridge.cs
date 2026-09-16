@@ -31,7 +31,7 @@ public sealed record ResizeEnd(Guid? NodeId, Guid? GroupId, string Handle, doubl
 
 public sealed record MarqueeEnd(double X, double Y, double Width, double Height, bool Additive);
 
-public sealed record TapInfo(Guid? NodeId, Guid? EdgeId, Guid? GroupId, double WorldX, double WorldY, bool Shift, bool Ctrl, string PointerType, bool LockedDrag);
+public sealed record TapInfo(Guid? NodeId, Guid? EdgeId, Guid? GroupId, double WorldX, double WorldY, bool Shift, bool Ctrl, string PointerType, bool LockedDrag, string? Port = null);
 
 public sealed record ConnectEnd(Guid FromNodeId, string FromSide, Guid? ToNodeId, string? ToPort, double WorldX, double WorldY);
 
@@ -257,6 +257,14 @@ public sealed class BoardGestureBridge : IAsyncDisposable
     [JSInvokable]
     public Task OnTap(TapInfo tap) => Guard(() =>
     {
+        // A side handle pressed and released without a drag asks for the next block on that side
+        // (Ben, 2026-09-16: "Can we make it like Miro?"). Dragging the same handle still aims.
+        if (tap.NodeId is { } grower && ParseSide(tap.Port) is { } growSide && _store.FindNode(grower) is not null)
+        {
+            GrowFrom(grower, growSide);
+            return Task.CompletedTask;
+        }
+
         if (tap.NodeId is { } nodeId && _store.FindNode(nodeId) is not null)
         {
             if (_selection.EditingNodeId == nodeId) return Task.CompletedTask;
@@ -321,6 +329,17 @@ public sealed class BoardGestureBridge : IAsyncDisposable
     {
         _viewport.SetGestureActive(false);
         if (RefuseViewOnly()) return Task.CompletedTask;
+
+        // Let go over nothing and the connector gets something to land on, made where it was dropped.
+        // A drag that ends back inside the block it started from is not a place to put anything, so
+        // that one is placed beside instead.
+        if (end.ToNodeId is null && ParseSide(end.FromSide) is { } dropSide && _store.FindNode(end.FromNodeId) is { } source)
+        {
+            var inside = CanvasHitTester.RectOf(source).Contains(end.WorldX, end.WorldY);
+            GrowFrom(end.FromNodeId, dropSide, inside ? null : new CanvasPoint(end.WorldX, end.WorldY));
+            return Task.CompletedTask;
+        }
+
         if (end.ToNodeId is not { } to || to == end.FromNodeId) return Task.CompletedTask;
 
         var edge = _store.Connect(end.FromNodeId, to, ParseSide(end.FromSide), ParseSide(end.ToPort));
@@ -389,6 +408,62 @@ public sealed class BoardGestureBridge : IAsyncDisposable
 
     private static EdgeInfo Info(CanvasEdge e) => new(e.Id, e.FromNodeId, e.ToNodeId, e.FromSide?.ToString(), e.ToSide?.ToString());
 
+    /// <summary>
+    /// The kinds a side handle can make, in the order it falls back through.
+    /// </summary>
+    /// <remarks>
+    /// Only the blocks that mean something empty. A handle that made an empty picture, recording or
+    /// file would make a box with nothing in it and no way to fill it from here; a map at least has
+    /// somewhere to search, but a train of thought is written in notes and cards, so those come first.
+    /// </remarks>
+    private static readonly CanvasNodeType[] GrowKinds =
+        [CanvasNodeType.Card, CanvasNodeType.Text, CanvasNodeType.Message];
+
+    /// <summary>
+    /// Makes the next block out of an existing one's side and joins them, then opens it for typing.
+    /// </summary>
+    /// <param name="at">Where it was dropped, or null to have it placed beside.</param>
+    /// <remarks>
+    /// Ben, 2026-09-16: "Can we make it like Miro?" The new block is the same kind as the one it came
+    /// from — a card grows cards, a note grows notes — because on a board of one kind of thing, being
+    /// handed a different kind is a correction to make rather than a thought to write down.
+    /// </remarks>
+    public void GrowFrom(Guid fromId, CanvasSide side, CanvasPoint? at = null)
+    {
+        if (RefuseViewOnly()) return;
+        if (_store.FindNode(fromId) is not { } from) return;
+
+        var type = GrowKinds.Contains(from.Type) && _options.EnabledBlocks.Contains(from.Type)
+            ? from.Type
+            : GrowKinds.FirstOrDefault(_options.EnabledBlocks.Contains, CanvasNodeType.Text);
+        if (!_options.EnabledBlocks.Contains(type)) return;
+
+        // The same size as the block it grew from, when it is the same kind: a board of cards
+        // somebody has made taller stays a board of blocks that match.
+        var descriptor = BlockRegistry.Get(type);
+        var width = type == from.Type && descriptor.ResizableWidth ? from.Width : descriptor.DefaultWidth;
+        var height = type == from.Type && descriptor.ResizableHeight ? from.Height : descriptor.DefaultHeight;
+
+        var node = new CanvasNode
+        {
+            Type = type,
+            Width = width,
+            Height = height,
+            ColorKey = type == from.Type ? from.ColorKey : null,
+            Data = descriptor.CreateDefaultData(DateTime.UtcNow),
+        };
+
+        if (_store.AddConnected(fromId, side, node, at) is null) return;
+
+        _selection.Select(node.Id);
+        _selection.FocusedNodeId = node.Id;
+        _announcer.Say(Words.GrewFrom(descriptor.DisplayName, side, Title(fromId)));
+
+        // Straight into typing, as on the boards this copies: the gesture was "and then this", and
+        // stopping to click the new block before writing in it loses the thought.
+        EditRequested?.Invoke(node.Id);
+    }
+
     internal static CanvasSide? ParseSide(string? side) =>
         Enum.TryParse<CanvasSide>(side, ignoreCase: true, out var parsed) && Enum.IsDefined(parsed) ? parsed : null;
 
@@ -433,6 +508,11 @@ public static class Words
     public static string MovedTo(double x, double y) => $"Moved to {N(x)}, {N(y)}.";
     public static string ResizedTo(double w, double h) => $"Resized to {N(w)} by {N(h)}.";
     public static string Connected(string a, string b) => $"Connected {a} to {b}.";
+
+    public const string GrowNeedsOneBlock = "Select one block first, then Ctrl+Shift and an arrow key to add the next one beside it.";
+
+    public static string GrewFrom(string kind, CanvasSide side, string from) =>
+        $"Added {kind.ToLowerInvariant()} to the {side.ToString().ToLowerInvariant()} of {from}, connected.";
     public static string Deleted(int n) => n == 1 ? "Deleted 1 item." : $"Deleted {n} items.";
     public static string UndoOf(string? description) => $"Undo: {description ?? "nothing"}.";
     public static string RedoOf(string? description) => $"Redo: {description ?? "nothing"}.";

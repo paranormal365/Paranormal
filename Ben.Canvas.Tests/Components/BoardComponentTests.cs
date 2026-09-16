@@ -163,12 +163,16 @@ public sealed class SelectionOverlayTests
         Assert.Equal(["r", "l"], Regex.Matches(html, @"data-bc-handle=""([a-z]+)""").Select(m => m.Groups[1].Value));
     }
 
+    /// <summary>
+    /// A side handle says both of the things it does, because it does two: clicked it makes the next
+    /// block there, dragged it aims a connector (Ben, 2026-09-16: "Can we make it like Miro?").
+    /// </summary>
     [Fact]
     public async Task Ports_have_spoken_names_and_side_values()
     {
         var html = await RenderSelected(TestBoards.Node());
         Assert.Contains("data-bc-port=\"Right\"", html);
-        Assert.Contains("aria-label=\"Connect from the right\"", html);
+        Assert.Contains("aria-label=\"Add a block to the right, or drag to connect\"", html);
         Assert.Equal(4, Regex.Matches(html, "data-bc-port=").Count);
     }
 }

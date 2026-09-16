@@ -799,6 +799,9 @@ function tapPayload(state, g, clientX, clientY) {
     return {
         nodeId: g.target === 'node' || g.target === 'port' || g.target === 'handle' ? (g.nodeId || null) : null,
         edgeId: g.edgeId || null,
+        // Which side handle was pressed, when one was. A press that never became a drag is a request
+        // for the next block on that side, so C# has to know which side was asked for.
+        port: g.target === 'port' ? (g.port || null) : null,
         groupId: g.groupId || null,
         worldX: world.x, worldY: world.y,
         shift: !!g.shift, ctrl: !!g.ctrl,

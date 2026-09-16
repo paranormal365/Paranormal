@@ -146,6 +146,38 @@ public sealed class CanvasKeyMapTests
     [Fact]
     public void Shift_1_is_normalised_to_1() => Assert.Contains("Digit1", Script());
 
+    [Theory]
+    [InlineData("ArrowLeft", CanvasCommand.GrowLeft)]
+    [InlineData("ArrowRight", CanvasCommand.GrowRight)]
+    [InlineData("ArrowUp", CanvasCommand.GrowUp)]
+    [InlineData("ArrowDown", CanvasCommand.GrowDown)]
+    public void Ctrl_shift_arrow_grows_the_next_block(string key, CanvasCommand expected) =>
+        Assert.Equal(expected, CanvasKeyMap.Resolve(key, ctrl: true, shift: true, alt: false, boardFocused: true));
+
+    /// <summary>Without Shift the arrows still only move things, and Alt is still nobody's.</summary>
+    [Theory]
+    [InlineData(true, false, false, CanvasCommand.None)]
+    [InlineData(false, false, false, CanvasCommand.MoveRight)]
+    [InlineData(false, true, false, CanvasCommand.MoveRight)]
+    [InlineData(false, true, true, CanvasCommand.None)]
+    public void The_arrows_keep_their_old_jobs(bool ctrl, bool shift, bool alt, CanvasCommand expected) =>
+        Assert.Equal(expected, CanvasKeyMap.Resolve("ArrowRight", ctrl, shift, alt, boardFocused: true));
+
+    /// <summary>
+    /// Alt+Arrow is Back and Forward in Chrome on Windows — the site's own production browsers — so
+    /// the grow chord is deliberately Ctrl+Shift+Arrow and Alt claims nothing at all.
+    /// </summary>
+    [Fact]
+    public void Alt_claims_nothing()
+    {
+        foreach (var key in new[] { "ArrowLeft", "ArrowRight", "ArrowUp", "ArrowDown", "n", "Enter" })
+            Assert.Equal(CanvasCommand.None, CanvasKeyMap.Resolve(key, ctrl: false, shift: false, alt: true, boardFocused: true));
+    }
+
+    [Fact]
+    public void The_script_claims_ctrl_shift_arrow_so_it_does_not_drag_a_selection() =>
+        Assert.Matches(@"ctrl && e\.shiftKey && e\.key\.startsWith\('Arrow'\)", Script());
+
     [Fact]
     public void Ctrl_v_is_never_claimed()
     {
