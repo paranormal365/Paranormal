@@ -362,6 +362,10 @@
         {
             new NavItem("All Cases",          "folder",   "/admin/cases"),
             new NavItem("All Investigations", "calendar", "/admin/investigations"),
+            // Beside the cases and investigations rather than down in Content: a list of
+            // everybody's recorded nights is the work the site exists for, not a taxonomy or a
+            // moderation queue. Ben, 2026-09-16.
+            new NavItem("Session Files",      "package",  "/admin/session-files"),
         }),
         new NavItem("Content", "layers", children: new[]
         {
@@ -380,9 +384,6 @@
             new NavItem("Duplicate Places",     "map-pin", "/admin/place-duplicates"),
             // Item 235 phase 9: who runs a place, when a code could not settle it.
             new NavItem("Venue Claims",         "key",    "/admin/venue-claims"),
-            // Every session that has been sent up, newest first, with the one button that opens
-            // the player. Ben, 2026-09-16.
-            new NavItem("Session Files",        "package", "/admin/session-files"),
             // Sessions whose readings are not on this server — a Playwright run against a shared
             // database leaves the row here and the bytes on the machine that ran it.
             new NavItem("Orphaned Sessions",    "slash",  "/admin/orphaned-sessions"),
