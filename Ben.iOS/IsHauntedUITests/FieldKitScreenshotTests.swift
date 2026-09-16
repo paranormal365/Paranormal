@@ -2,6 +2,9 @@ import XCTest
 
 /// The Field Kit screenshots for the App Store — driven through a real scripted night (item 214).
 ///
+/// Updated for 1.0.3 (2026-09-16) with the camera frame: the app takes photographs and clips itself
+/// now, without handing the microphone to Apple's camera and leaving a hole in the recording.
+///
 /// Ben: *"Create records for the app in order to display when building the simulation. Include
 /// all functionality of the field kit and make sure you are using dark mode and you have to
 /// simulate setting a base level and there be changes in the gauge."*
@@ -117,6 +120,27 @@ final class FieldKitScreenshotTests: XCTestCase {
         settle(1)
         app.swipeUp(); settle(1)
         snap("12-fieldkit-marks")              // the marker log: automatic and by hand
+
+        // ── The camera, which is ours now (1.0.3) ─────────────────────────
+        //
+        // The headline change since 1.0.2: a photograph or a clip is taken inside the app, with the
+        // session still running and the sound carrying straight on through it. The old build left
+        // for Apple's camera, which took the microphone with it and put a hole in the recording, so
+        // there was nothing here worth photographing. The simulator has no camera, so the frame is
+        // the capture screen itself — its shutter, its photo/clip choice and the session still live
+        // behind it — which is the thing that is new.
+        let camera = app.buttons["capture-camera"].firstMatch
+        if !camera.isHittable { app.swipeUp() }
+        if camera.waitForExistence(timeout: 5) {
+            camera.tap()
+            if app.buttons["camera-shutter"].waitForExistence(timeout: 10) {
+                settle(2)
+                snap("15-fieldkit-camera")     // photo or clip, without leaving the session
+            }
+            if app.buttons["camera-close"].firstMatch.exists { app.buttons["camera-close"].firstMatch.tap() }
+            settle(1)
+        }
+        app.swipeDown(); settle(1)
 
         // ── Stop, and the review ──────────────────────────────────────────
         app.swipeDown(); settle(1)
