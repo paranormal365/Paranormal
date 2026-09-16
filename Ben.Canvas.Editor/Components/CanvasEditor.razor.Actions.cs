@@ -297,26 +297,19 @@ public partial class CanvasEditor
         if (!Options.Value.EnabledBlocks.Contains(type)) return;
         var d = BlockRegistry.Get(type);
 
-        CanvasPoint centre;
-        if (at is { } point)
-        {
-            centre = point;
-            _addCascade = 0;
-        }
-        else
-        {
-            var now = DateTime.UtcNow;
-            _addCascade = now - _lastAddAt < TimeSpan.FromSeconds(2) ? _addCascade + 1 : 0;
-            _lastAddAt = now;
-            var mid = Viewport.WorldCentre();
-            centre = new CanvasPoint(mid.X + _addCascade * CanvasStoreCascade, mid.Y + _addCascade * CanvasStoreCascade);
-        }
+        // Where it was asked for, exactly — a context menu names a spot. Otherwise the middle of the
+        // view, or the nearest clear ground to it: a block added from the sheet used to land on
+        // whatever sat at the centre (Ben, 2026-09-16: "Add a free space nudge when adding a new card").
+        var rect = at is { } point
+            ? new WorldRect(point.X - d.DefaultWidth / 2, point.Y - d.DefaultHeight / 2, d.DefaultWidth, d.DefaultHeight)
+            : FreePlacement.Near(Viewport.WorldCentre(), d.DefaultWidth, d.DefaultHeight,
+                                 Store.Document.Nodes.Select(CanvasHitTester.RectOf));
 
         var node = new CanvasNode
         {
             Type = type,
-            X = centre.X - d.DefaultWidth / 2,
-            Y = centre.Y - d.DefaultHeight / 2,
+            X = rect.X,
+            Y = rect.Y,
             Width = d.DefaultWidth,
             Height = d.DefaultHeight,
             Data = d.CreateDefaultData(DateTime.UtcNow),
@@ -354,7 +347,6 @@ public partial class CanvasEditor
         Announcer.Say(CanvasCopy.Sentences.AddedFromCase(file.FileName));
     }
 
-    private const double CanvasStoreCascade = Core.Commands.CanvasStore.CascadeOffset;
 
     private void DeleteSelection()
     {
