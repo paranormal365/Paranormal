@@ -358,6 +358,24 @@ public class AdminAppUserControllerTests
             It.IsAny<Guid>(), It.IsAny<string>()), Times.Once);
     }
 
+    /// <summary>
+    /// Identity throws rather than failing when a role row's lookup name does not match its name, or when a membership
+    /// is already there. That reached the Site Roles page as a 500 with no body, which the page could only report as
+    /// "the server did not say why" (Ben, 2026-09-15).
+    /// </summary>
+    [Fact]
+    public async Task SetRoles_SaysWhatTheAccountSystemThrew_RatherThanFailingWithNothing()
+    {
+        var (rig, user) = await BuildForRolesAsync([], callerId: Guid.NewGuid());
+        rig.UserMgr.Setup(x => x.AddToRolesAsync(It.IsAny<AppUser>(), It.IsAny<IEnumerable<string>>()))
+                   .ThrowsAsync(new InvalidOperationException("Role SuperAdmin does not exist."));
+
+        var result = await rig.Ctrl.SetRoles(user.Id, new AdminSetUserRolesRequest(["SuperAdmin"]), default);
+
+        var bad = Assert.IsType<BadRequestObjectResult>(result.Result);
+        Assert.Contains("Role SuperAdmin does not exist.", Assert.IsType<string>(bad.Value));
+    }
+
     [Fact]
     public async Task SetRoles_CanonicalisesCase_ToTheStoredRoleName()
     {
