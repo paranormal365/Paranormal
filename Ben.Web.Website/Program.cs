@@ -573,12 +573,12 @@ app.MapGet(Ben.Web.Website.Library.Kit.Maps.MapsOptions.TokenPath,
 // A still picture of a place for the canvas editor's map boxes (canvas plan R35): a redirect to a signed Apple
 // Maps Web Snapshot, so the browser fetches the picture from Apple and nothing is stored here (Apple's terms keep
 // map data temporary). The signed address expires with the token lifetime; the redirect is cached privately for
-// a little less. 404 when maps are unconfigured, when the canvas editor is switched off, or when the request is
-// not from our own pages - see MapKitSnapshotRequest.
+// a little less. 404 when maps are unconfigured or when the request is not from our own pages - see
+// MapKitSnapshotRequest.
 app.MapGet("/auth/mapkit-snapshot",
-    (HttpContext ctx, Ben.Web.Website.Services.MapKitTokenService tokens, IConfiguration config, Ben.Web.Services.SiteFeaturesProvider features) =>
+    (HttpContext ctx, Ben.Web.Website.Services.MapKitTokenService tokens, IConfiguration config) =>
 {
-    if (!tokens.IsConfigured || !features.IsOn(Ben.Web.Services.SiteFeatures.CanvasEditor)) return Results.NotFound();
+    if (!tokens.IsConfigured) return Results.NotFound();
 
     var q = ctx.Request.Query;
     var ask = Ben.Web.Website.Services.MapKitSnapshotRequest.Read(

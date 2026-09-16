@@ -243,7 +243,6 @@ public sealed record CasePurgePreview(
     int Files,
     int Notes,
     int Messages,
-    int ResearchEntries,
     int Reports,
     int Investigations,
     int Contacts,

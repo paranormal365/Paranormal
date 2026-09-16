@@ -306,19 +306,12 @@
             </BenTab>
 
             @* ── Research ─────────────────────────────────────────────────────── *@
-            @* Ben, 2026-09-16: research is written on the canvas now, on the writer's own machine, and kept to
-               themselves until they publish it. With the canvas switched off the tab falls back to the block-editor
-               research pages, so a site that has not turned it on is not left without research at all. *@
+            @* Research is written on the canvas: on the writer's own machine, and theirs alone until they publish it.
+               There is no second editor behind a switch any more — Ben, 2026-09-16, chose to retire the flag rather
+               than carry two of them, and nobody was using the site yet, so nothing written needed keeping. *@
             <BenTab Title="Research" Id="research">
                 <div class="mt-2">
-                    @if (Features.IsOn(SiteFeatures.CanvasEditor))
-                    {
-                        <Ben.Web.Website.Library.Manage.Messenger.CaseResearchBoards OrgId="@OrgId" CaseId="@CaseId" Permissions="@_perms" />
-                    }
-                    else
-                    {
-                        <CaseResearch OrgId="@OrgId" CaseId="@CaseId" Permissions="@_perms" />
-                    }
+                    <Ben.Web.Website.Library.Manage.Messenger.CaseResearchBoards OrgId="@OrgId" CaseId="@CaseId" Permissions="@_perms" />
                 </div>
             </BenTab>
             @* ── Notes ───────────────────────────────────────────────────────────── *@

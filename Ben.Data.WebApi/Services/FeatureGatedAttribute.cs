@@ -21,9 +21,10 @@ namespace Ben.Data.WebApi.Services;
 ///
 /// <para>This used to pass <c>whenUnset: true</c> for every key. That was indistinguishable from
 /// the rule while every gated flag defaulted on, and wrong the first time an unbuilt one was gated:
-/// <c>features.canvas-editor</c> has no row on a site where nobody has touched it, so the canvas
+/// <c>features.canvas-editor</c> had no row on a site where nobody had touched it, so the canvas
 /// API and its link-unfurl fetcher would have answered from the moment the API deployed while the
-/// admin page showed the switch as Off (canvas plan review R1, 2026-09-14).</para>
+/// admin page showed the switch as Off (canvas plan review R1, 2026-09-14). That flag has since gone
+/// — the canvas is not optional any more — but the rule it taught is the one this class follows.</para>
 ///
 /// <para><c>[Authorize]</c> still answers an anonymous caller with 401 first — authorization
 /// filters run before action filters — so a deploy's anonymous smoke probe sees 401 either way and

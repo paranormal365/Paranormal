@@ -47,7 +47,6 @@ public sealed class SiteFeaturesProvider
             [SiteFeatures.Voting]       = true,
             [SiteFeatures.PublicFeed]   = false,
             [SiteFeatures.Publications] = false,
-            [SiteFeatures.CanvasEditor] = false,
         };
 
     // A scope factory rather than the client itself: this is a singleton and IBenAdminClient is
@@ -196,17 +195,10 @@ public static class SiteFeatures
     public const string PublicFeed   = "features.public-feed";
     public const string Publications = "features.publications";
 
-    /// <summary>
-    /// The canvas editor at /editors/canvas and its link previews. Off by default; the API refuses
-    /// the boards' addresses while it is off.
-    /// </summary>
-    public const string CanvasEditor = "features.canvas-editor";
-
     /// <summary>Every declared key, for the guard test and the admin help text.</summary>
     public static readonly IReadOnlyList<string> All =
     [
         VideoEditor, Equipment, Events, Discovery, CmsPages,
         MediaLibrary, OrgMessaging, Voting, PublicFeed, Publications,
-        CanvasEditor,
     ];
 }

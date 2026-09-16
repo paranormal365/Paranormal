@@ -171,12 +171,25 @@ public sealed class CanvasDeployScriptGuardTests
         Assert.Contains("\"http://localhost:5125/\"", source);
     }
 
+    /// <summary>
+    /// The canvas is behind no feature switch, and nothing may quietly put it back behind one.
+    /// </summary>
+    /// <remarks>
+    /// It had one until 2026-09-16, while there were two ways to write up a case and a site had to
+    /// choose. Research is boards now, so a site with the switch off would have no research at all —
+    /// and a flag whose off position breaks the product is not a choice, it is a trap.
+    /// </remarks>
     [Fact]
-    public void SiteFeatures_declares_the_canvas_editor_flag()
+    public void No_canvas_feature_flag_is_declared_anywhere()
     {
-        var source = RepoFile("Ben.Web.Services/SiteFeaturesProvider.cs");
-        Assert.Contains("CanvasEditor", source);
-        Assert.Contains("\"features.canvas-editor\"", source);
+        foreach (var file in new[]
+                 {
+                     "Ben.Web.Services/SiteFeaturesProvider.cs",
+                     "Ben.Data.WebApi/Services/SiteSettingsService.cs",
+                 })
+        {
+            Assert.DoesNotContain("features.canvas-editor", RepoFile(file), StringComparison.Ordinal);
+        }
     }
 
     [Fact]

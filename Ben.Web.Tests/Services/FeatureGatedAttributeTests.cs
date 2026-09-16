@@ -91,21 +91,23 @@ public sealed class FeatureGatedAttributeTests
     [Fact]
     public async Task A_flag_that_defaults_off_is_off_while_nobody_has_set_it()
     {
-        var gate = new FeatureGatedAttribute(SiteSettingKeys.FeatureCanvasEditor);
+        // Publications, since the canvas flag went on 2026-09-16: boards became the only way research
+        // is written, and a switch whose off position leaves a case with no research is not a choice.
+        var gate = new FeatureGatedAttribute(SiteSettingKeys.FeaturePublications);
 
         var (unsetResult, ranWhenUnset) = await Support.FeatureGateProbe.RunAsync(
             gate, await Support.FeatureGateProbe.SettingsAsync());
         Assert.False(ranWhenUnset,
-            "features.canvas-editor has no settings row and defaults off, yet the gated action ran — "
+            "features.publications has no settings row and defaults off, yet the gated action ran — "
             + "the gate is reading an unset flag as on");
         Assert.IsType<NotFoundResult>(unsetResult);
 
         var (_, ranWhenOn) = await Support.FeatureGateProbe.RunAsync(
-            gate, await Support.FeatureGateProbe.SettingsAsync(SiteSettingKeys.FeatureCanvasEditor, "true"));
+            gate, await Support.FeatureGateProbe.SettingsAsync(SiteSettingKeys.FeaturePublications, "true"));
         Assert.True(ranWhenOn, "switching the flag on must let the action run");
     }
 
-    /// <summary>Every flag gated before the canvas editor defaults on, so R1's change moved none of them.</summary>
+    /// <summary>The flags that were gated before any of this defaulted on, and still do.</summary>
     [Theory]
     [InlineData(SiteSettingKeys.FeatureCmsPages)]
     [InlineData(SiteSettingKeys.FeatureEvents)]

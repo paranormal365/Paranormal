@@ -46,7 +46,6 @@ namespace Ben.Data.WebApi.Controllers.Entities;
 [ApiController]
 [Route("api/canvas-documents")]
 [Authorize]
-[FeatureGated(SiteSettingKeys.FeatureCanvasEditor)]
 public sealed class CanvasDocumentController : BenControllerBase
 {
     /// <summary>What a board with no usable title is called.</summary>

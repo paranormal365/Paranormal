@@ -131,23 +131,16 @@ public sealed class LinkUnfurlControllerTests
 
     // ── the door ──────────────────────────────────────────────────────────────
 
+    /// <summary>
+    /// Sign-in is the door. The canvas flag that used to gate this went with the flag itself on
+    /// 2026-09-16, when boards became the only way research is written and an off switch would have
+    /// meant no research at all.
+    /// </summary>
     [Fact]
-    public void Controller_requires_sign_in_and_is_gated_on_the_canvas_flag()
+    public void Controller_requires_sign_in_and_is_behind_no_feature_switch()
     {
         Assert.NotNull(typeof(LinkUnfurlController).GetCustomAttribute<AuthorizeAttribute>());
-        Assert.Equal(SiteSettingKeys.FeatureCanvasEditor,
-            Support.FeatureGateProbe.KeyOf(Support.FeatureGateProbe.GateOn<LinkUnfurlController>()));
-    }
-
-    /// <summary>R1: with the flag's row never written, a signed-in caller gets 404 and nothing is fetched.</summary>
-    [Fact]
-    public async Task A_signed_in_caller_gets_404_while_the_flag_has_never_been_set()
-    {
-        var (result, ran) = await Support.FeatureGateProbe.RunAsync(
-            Support.FeatureGateProbe.GateOn<LinkUnfurlController>(), await Support.FeatureGateProbe.SettingsAsync());
-
-        Assert.False(ran, "link unfurl answered with the canvas flag unset; the fetcher must stay dark until it is switched on");
-        Assert.IsType<NotFoundResult>(result);
+        Assert.Null(typeof(LinkUnfurlController).GetCustomAttribute<Ben.Data.WebApi.Services.FeatureGatedAttribute>(inherit: true));
     }
 
     [Theory]

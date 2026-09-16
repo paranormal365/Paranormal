@@ -198,18 +198,6 @@ public static class SiteSettingKeys
     public const string FeaturePublications = "features.publications";
 
     /// <summary>
-    /// The canvas editor: the standalone board editor at /editors/canvas and the Canvas tab on a
-    /// case, plus the link previews it fetches. Off until the editor ships.
-    /// </summary>
-    /// <remarks>
-    /// Off by default for a stronger reason than the other unbuilt features: it gates
-    /// <c>/api/link-unfurl</c>, the one endpoint that makes this server fetch an address a stranger
-    /// chose. A default of on would put that fetcher live the moment the API deployed, before
-    /// anybody had decided to switch the editor on.
-    /// </remarks>
-    public const string FeatureCanvasEditor = "features.canvas-editor";
-
-    /// <summary>
     /// Every setting the site knows about: its key, the human label, and the description shown in
     /// the admin page. Order here is the order they appear.
     /// </summary>
@@ -298,8 +286,6 @@ public static class SiteSettingKeys
             "The site-wide feed any signed-in member can post to, with mentions, hashtags and following. Off by default. Turning it on also turns on the moderation queue, which is where reported posts arrive."),
         (FeaturePublications, "Feature — Publications",
             "Long-form publications a group writes and readers subscribe to. Off by default. Subscriptions are free; nothing here charges anyone."),
-        (FeatureCanvasEditor, "Feature — Canvas editor",
-            "The board editor for cases: cards, notes, maps, images and links on an infinite canvas, plus the link previews it fetches. Off by default until the editor ships; turning it off makes the API refuse the boards' addresses. Saved boards stay in the database."),
     ];
 
     /// <summary>
@@ -348,7 +334,7 @@ public static class SiteSettingKeys
         ("Features",
          "Whole sections of the site, on or off. Turning one off stops its addresses working, not "
          + "just its links — and nothing stored is deleted.",
-         [FeatureVideoEditor, FeatureCanvasEditor, FeatureEquipment, FeatureEvents, FeatureDiscovery, FeatureCmsPages,
+         [FeatureVideoEditor, FeatureEquipment, FeatureEvents, FeatureDiscovery, FeatureCmsPages,
           FeatureMediaLibrary, FeatureOrgMessaging, FeatureVoting, FeaturePublicFeed,
           FeaturePublications]),
     ];
@@ -412,7 +398,6 @@ public static class SiteSettingKeys
         (FeatureVoting,       true),
         (FeaturePublicFeed,   false),
         (FeaturePublications, false),
-        (FeatureCanvasEditor, false),
     ];
 
     /// <summary>Just the feature keys, in declaration order.</summary>

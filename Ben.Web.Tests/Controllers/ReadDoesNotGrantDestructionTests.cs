@@ -108,7 +108,7 @@ public class ReadDoesNotGrantDestructionTests
         var root = Path.Combine(dir!.FullName, "Ben.Data.WebApi", "Controllers", "Entities");
         string[] guarded =
         [
-            "CaseNoteController.cs", "CaseFileController.cs", "CaseResearchController.cs",
+            "CaseNoteController.cs", "CaseFileController.cs",
             // Added when the sweep of 2026-08-26 reached the client-facing surfaces. The report
             // controller is the one that mattered most: sixteen endpoints on Case.Read, including
             // publishing a report to the client and deleting a published one.

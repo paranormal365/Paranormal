@@ -207,26 +207,15 @@ public interface IBenCaseClient
 
     // ── Case Research ─────────────────────────────────────────────────────────
 
-    Task<LoadResult<CaseResearchEntryDto>> GetCaseResearchAsync(Guid orgId, Guid caseId, CancellationToken token = default);
-
     /// <summary>
     /// The case's canvas boards: every published one, plus the caller's own unpublished drafts (item 243).
     /// </summary>
+    /// <remarks>
+    /// The whole of research, since 2026-09-16. The block-editor research pages that stood here until
+    /// then are gone: two ways to write up a case is one more than anybody needed, and the boards are
+    /// the one Ben kept.
+    /// </remarks>
     Task<LoadResult<CanvasDocumentSummaryRecord>> GetCaseBoardsAsync(Guid caseId, CancellationToken token = default);
-    Task<CaseResearchEntryDto?> AddCaseResearchAsync(Guid orgId, Guid caseId, UpsertResearchRequest request, CancellationToken token = default);
-    Task<CaseResearchEntryDto?> UploadCaseResearchFileAsync(Guid orgId, Guid caseId, string title, string? description, Stream content, string fileName, string contentType, CancellationToken token = default);
-    Task<CaseResearchEntryDto?> UpdateCaseResearchAsync(Guid orgId, Guid caseId, Guid entryId, UpsertResearchRequest request, CancellationToken token = default);
-    Task<bool> DeleteCaseResearchAsync(Guid orgId, Guid caseId, Guid entryId, CancellationToken token = default);
-
-    // ── Research pages (2026-09-14) ──────────────────────────────────────────
-    /// <summary>A new research page, with the server's refusal sentence when there is one.</summary>
-    Task<(CaseResearchEntryDto? Result, string? Error)> CreateCaseResearchPageAsync(Guid orgId, Guid caseId, string title, CancellationToken token = default);
-    Task<ItemResult<CaseResearchPageDto>> GetCaseResearchPageAsync(Guid orgId, Guid caseId, Guid entryId, CancellationToken token = default);
-    Task<ResearchDraftSaveOutcome> SaveCaseResearchDraftAsync(Guid orgId, Guid caseId, Guid entryId, SaveResearchDraftRequest request, CancellationToken token = default);
-    Task<(CaseResearchPageDto? Result, string? Error)> PublishCaseResearchPageAsync(Guid orgId, Guid caseId, Guid entryId, CancellationToken token = default);
-    Task<(CaseResearchAttachmentDto? Result, string? Error)> UploadCaseResearchAttachmentAsync(Guid orgId, Guid caseId, Guid entryId, Stream content, string fileName, string contentType, CancellationToken token = default);
-    Task<(CaseResearchAttachmentDto? Result, string? Error)> AddCaseResearchLinkAsync(Guid orgId, Guid caseId, Guid entryId, AddResearchLinkRequest request, CancellationToken token = default);
-    Task<(bool Ok, string? Error)> DeleteCaseResearchAttachmentAsync(Guid orgId, Guid caseId, Guid entryId, Guid attachmentId, CancellationToken token = default);
 
     // ── Case Files (Files/Evidence tab) ──────────────────────────────────────
 

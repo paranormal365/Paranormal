@@ -488,13 +488,6 @@ internal static class DevelopmentDataSeeder
             }
         }
 
-        // Outside the block above, which runs only when the case is first made: a database seeded before research pages
-        // existed gets its page too.
-        if (tgh is not null
-            && await db.Cases.Where(c => c.OrganizationId == tgh.Id && c.StreetAddress1 == "4512 Belmont Blvd")
-                             .Select(c => (Guid?)c.Id).FirstOrDefaultAsync() is { } belmontId)
-            await SeedResearchPageAsync(db, belmontId, sarah, now);
-
         // Both organizations are created above if missing, so this is defensive rather than
         // expected — but the compiler is right that FirstOrDefaultAsync can return null, and a seed
         // that throws takes the whole API startup down with it.
@@ -1131,72 +1124,6 @@ internal static class DevelopmentDataSeeder
 
     private static DateTime TennesseeTimeToUtc(DateTime placeTime) =>
         TimeZoneInfo.ConvertTimeToUtc(DateTime.SpecifyKind(placeTime, DateTimeKind.Unspecified), TimeZoneInfo.FindSystemTimeZoneById(TennesseeZone));
-
-    /// <summary>
-    /// One published, dated research page on the Belmont case, with a text, link and map block.
-    /// </summary>
-    /// <remarks>
-    /// Research pages arrived with the beta feedback of 2026-09-14. Without one here a fresh install shows an empty Research
-    /// tab, the timeline has no research row to open, and the help pictures and the product walk have nothing to show. The
-    /// map's places are public places in Nashville, not the case's address — the block exists to show somewhere else.
-    /// The link card carries only the address and a title: a seed must not pretend a page was read. No picture: the only
-    /// photograph in the seed media is of a different place, and a picture captioned as this house would be untrue.
-    /// </remarks>
-    private static async Task SeedResearchPageAsync(BenDataContext db, Guid caseId, AppUser author, DateTime now)
-    {
-        var entryId = new Guid("12000001-0000-0000-0000-000000000001");
-        if (await db.CaseResearchEntries.AnyAsync(r => r.Id == entryId)) return;
-        var blocks = new List<Ben.Data.Common.Blocks.Block>
-        {
-            new()
-            {
-                Id = "seed-text-1", Kind = Ben.Data.Common.Blocks.BlockKinds.Text,
-                Html = "<h3>Who lived here before</h3><p>The county deed index lists four owners since the house was built in 1924. "
-                     + "The second owners kept it for thirty-one years; both are buried at Mount Olivet.</p>"
-                     + "<ul><li>Deed book 1162, page 88 — sale in 1951</li><li>Obituary, March 1982</li></ul>",
-            },
-        };
-
-        const string archives = "https://www.nashville.gov/departments/metro-archives";
-        blocks.Add(new()
-        {
-            Id = "seed-link-1", Kind = Ben.Data.Common.Blocks.BlockKinds.Link,
-            Url = archives, Title = "Metro Nashville Archives", PreviewDomain = "www.nashville.gov",
-        });
-        blocks.Add(new()
-        {
-            Id = "seed-map-1", Kind = Ben.Data.Common.Blocks.BlockKinds.Map,
-            MapRoute = Ben.Data.Common.Blocks.BlockMapRoutes.Driving,
-            MapStops =
-            [
-                new(36.1622, -86.7815, "Nashville Public Library", "Microfilm of the city directories, 1920–1980."),
-                new(36.1447, -86.7437, "Mount Olivet Cemetery", "Where the second owners are buried."),
-            ],
-        });
-
-        var document = new Ben.Data.Common.Blocks.BlockDocument { Blocks = blocks };
-        var json = Ben.Data.Common.Blocks.BlockDocumentSerializer.Serialize(document);
-        var published = now.AddDays(-5);
-        db.CaseResearchEntries.Add(new CaseResearchEntry
-        {
-            Id = entryId, CaseId = caseId, ResearchType = CaseResearchType.Note,
-            Title = "Previous owners and where they are buried",
-            EventDateTime = new DateTime(1951, 6, 12, 15, 0, 0, DateTimeKind.Utc),
-            PublishedBlocksJson = json, PublishedRevision = 1, DraftRevision = 1,
-            PublishedUtc = published, PublishedByAppUserId = author.Id,
-            Excerpt = Ben.Data.Common.Blocks.BlockDocumentSerializer.PlainTextExcerpt(document),
-            SortOrder = 10,
-            DateCreated = now.AddDays(-6), CreatedByAppUserId = author.Id,
-        });
-        db.CaseResearchAttachments.Add(new CaseResearchAttachment
-        {
-            Id = Guid.NewGuid(), ResearchEntryId = entryId, Kind = CaseResearchAttachmentKind.Link,
-            Url = archives, Title = "Metro Nashville Archives", SortOrder = 20,
-            DateCreated = now.AddDays(-6), CreatedByAppUserId = author.Id,
-        });
-        await db.SaveChangesAsync();
-        Console.WriteLine("[DevDataSeeder] Seeded a published research page on the Belmont case.");
-    }
 
     /// <summary>
     /// Ensures the owner is the org Owner and optionally adds an Admin and a Member membership.

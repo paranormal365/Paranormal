@@ -298,8 +298,6 @@ public sealed class OrganizationPurge
             await db.CaseMessages.Where(x => caseIds.Contains(x.CaseId)).ExecuteDeleteAsync(ct);
             await db.CaseNotes.Where(x => caseIds.Contains(x.CaseId)).ExecuteDeleteAsync(ct);
             await db.CaseRelatedPeople.Where(x => caseIds.Contains(x.CaseId)).ExecuteDeleteAsync(ct);
-            await db.CaseResearchAttachments.Where(x => caseIds.Contains(x.ResearchEntry.CaseId)).ExecuteDeleteAsync(ct);
-            await db.CaseResearchEntries.Where(x => caseIds.Contains(x.CaseId)).ExecuteDeleteAsync(ct);
             await db.CaseTimelineEntries.Where(x => caseIds.Contains(x.CaseId)).ExecuteDeleteAsync(ct);
             await db.CaseTransferLogs.Where(x => caseIds.Contains(x.CaseId)).ExecuteDeleteAsync(ct);
             await db.CaseVotes.Where(x => caseIds.Contains(x.CaseId)).ExecuteDeleteAsync(ct);

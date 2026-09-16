@@ -27,7 +27,7 @@ public sealed class LinkPreviewRetentionJob(
         var now = DateTime.UtcNow;
 
         var expired = await db.LinkPreviews.AsNoTracking()
-            .Where(p => p.ExpiresUtc < now && !db.CaseResearchAttachments.Any(a => a.LinkPreviewId == p.Id))
+            .Where(p => p.ExpiresUtc < now)
             .OrderBy(p => p.ExpiresUtc)
             .Take(BatchSize)
             .Select(p => new { p.Id, p.ThumbnailStoragePath })

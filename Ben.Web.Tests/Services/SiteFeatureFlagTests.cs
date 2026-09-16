@@ -87,16 +87,10 @@ public sealed class SiteFeatureFlagTests
         Assert.False(SiteSettingKeys.DefaultFor(SiteSettingKeys.FeaturePublicFeed));
         Assert.False(SiteSettingKeys.DefaultFor(SiteSettingKeys.FeaturePublications));
 
-        // The canvas editor (2026-09-14) is unbuilt too, and its flag also gates the link-unfurl
-        // fetcher: a default of on would switch on server-side fetching of strangers' pages the
-        // moment the API deployed.
-        Assert.False(SiteSettingKeys.DefaultFor(SiteSettingKeys.FeatureCanvasEditor));
-
         // ...and everything that already works must stay working when the flags ship.
         foreach (var (key, defaultWhenUnset) in SiteSettingKeys.FeatureDefaults)
         {
-            if (key is SiteSettingKeys.FeaturePublicFeed or SiteSettingKeys.FeaturePublications
-                    or SiteSettingKeys.FeatureCanvasEditor)
+            if (key is SiteSettingKeys.FeaturePublicFeed or SiteSettingKeys.FeaturePublications)
                 continue;
 
             Assert.True(defaultWhenUnset,

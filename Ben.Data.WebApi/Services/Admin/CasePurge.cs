@@ -33,7 +33,6 @@ public sealed record CasePurgePreview(
     int Files,
     int Notes,
     int Messages,
-    int ResearchEntries,
     int Reports,
     int Investigations,
     int Contacts,
@@ -148,7 +147,6 @@ public sealed class CasePurge
             Files:            await db.CaseFiles.AsNoTracking().CountAsync(x => x.CaseId == caseId, ct),
             Notes:            await db.CaseNotes.AsNoTracking().CountAsync(x => x.CaseId == caseId, ct),
             Messages:         await db.CaseMessages.AsNoTracking().CountAsync(x => x.CaseId == caseId, ct),
-            ResearchEntries:  await db.CaseResearchEntries.AsNoTracking().CountAsync(x => x.CaseId == caseId, ct),
             Reports:          reportIds.Count,
             Investigations:   investigationIds.Count,
             Contacts:         await db.CaseContacts.AsNoTracking().CountAsync(x => x.CaseId == caseId, ct),
@@ -277,8 +275,6 @@ public sealed class CasePurge
             await db.CaseRelatedPeople.Where(x => x.CaseId == caseId).ExecuteDeleteAsync(ct);
             // A research page's rail goes with the page (the database cascades it too; named so a provider without
             // cascades removes it in the same order).
-            await db.CaseResearchAttachments.Where(x => x.ResearchEntry.CaseId == caseId).ExecuteDeleteAsync(ct);
-            await db.CaseResearchEntries.Where(x => x.CaseId == caseId).ExecuteDeleteAsync(ct);
             await db.CaseTransferLogs.Where(x => x.CaseId == caseId).ExecuteDeleteAsync(ct);
             await db.CaseVotes.Where(x => x.CaseId == caseId).ExecuteDeleteAsync(ct);
             // The consent a feed post recorded against this case. Its CaseId is required, so it

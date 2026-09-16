@@ -88,14 +88,16 @@ addresses once somebody signs in.
 Only production is migrated from this machine. The UAT database belongs to the Mac session and is
 left alone.
 
-## The switch
+## There is no switch
 
-After deploying, **Feature — Canvas editor** is **off**: the API answers 404 on every canvas and
-link-unfurl address for a signed-in person (an anonymous caller still gets 401, because sign-in is
-checked first). A SuperAdmin turns it on in Site settings, in the Features section.
+There was one — **Feature — Canvas editor**, off by default — while there were two ways to write up
+a case and a site had to choose between them. It went on 2026-09-16 with the block-editor research
+pages: boards *are* research now, so a site with the switch off would have had no research at all.
 
-The flag also gates the link-unfurl fetcher — the one endpoint that makes this server fetch a page
-somebody pasted — so it is off until somebody decides otherwise.
+That also means the link-unfurl fetcher — the one endpoint that makes this server fetch a page
+somebody pasted — is on for signed-in people as soon as the API is deployed. Its own guards are what
+hold it: authenticated callers only, a rate limit per person, private and loopback addresses
+refused, redirects re-vetted, 512 KB and five seconds.
 
 ## Check it
 
@@ -107,16 +109,14 @@ The deploy's smoke section should show OK for:
 - `canvas API` — `/webapi/api/canvas-documents` answers 401 (only when `webapi` was deployed too).
 
 Then by hand: open `https://ishaunted.com/editors/canvas/`, it is dark with the site look; sign in;
-with the flag on, open a case board and **Save to case**; paste an https link and see a title.
-
-A signed-in probe while the flag is still off must answer 404:
-`GET https://ishaunted.com/webapi/api/link-unfurl?url=https://example.com` with a bearer token.
+open a case board and **Save to case**; paste an https link and see a title.
 
 ## Rollout
 
-The assistant first runs, unelevated, the `migrations list` above and shows that exactly
-`AddCanvasEditor` is pending, and that `feature/canvas-editor` contains everything production is
-running. Then Ben runs these, one at a time, in an **elevated** Windows PowerShell, waiting for the
+The assistant first runs, unelevated, the `migrations list` above and shows which migrations are
+pending — `AddCanvasEditor` and, since 2026-09-16, `RetireResearchPages`, **which drops the research
+tables and their rows** (see `deploy-production.md`, "One migration that destroys rows", for the copy
+to take first) — and that the branch contains everything production is running. Then Ben runs these, one at a time, in an **elevated** Windows PowerShell, waiting for the
 prompt before the next:
 
 1. `Set-Location Z:\_GitHub\Paranormal365\Paranormal\Paranormal-canvas`

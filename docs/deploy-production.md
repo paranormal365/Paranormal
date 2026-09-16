@@ -64,6 +64,23 @@ Nothing applies migrations at startup, so anything marked `(Pending)` has to be 
 `dotnet ef database update` before deploying. `scripts\create-database.sql` is older than the
 migrations and should not be used for this.
 
+### One migration that destroys rows
+
+`RetireResearchPages` (2026-09-16) **drops `CaseResearchEntries` and `CaseResearchAttachments`**.
+Research is written on canvas boards now, and the block-editor pages that stood beside them are
+gone. Its `Down` rebuilds the two tables **empty** — the schema comes back, the writing does not.
+
+Before applying it to a database anybody has written research in:
+
+```powershell
+# Keep a copy. Any form will do; this one is readable and needs nothing installed.
+sqlcmd -S <server> -d <database> -Q "SELECT * FROM CaseResearchEntries" -o research-entries.txt -W -s"|"
+sqlcmd -S <server> -d <database> -Q "SELECT * FROM CaseResearchAttachments" -o research-attachments.txt -W -s"|"
+```
+
+Files those pages referenced are **not** touched: they are `UploadFiles` rows reached through the
+case's Files tab, and they stay exactly where they are.
+
 If you forget, the API says so. It checks on startup and logs
 `DATABASE IS BEHIND: N migration(s) have not been applied — <names>`, naming them and the command
 to run. It is a warning, not a refusal: most of the site works fine while one new table is

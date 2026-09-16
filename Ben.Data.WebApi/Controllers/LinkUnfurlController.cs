@@ -41,7 +41,6 @@ namespace Ben.Data.WebApi.Controllers;
 [ApiController]
 [Route("api/link-unfurl")]
 [Authorize]
-[FeatureGated(SiteSettingKeys.FeatureCanvasEditor)]
 public sealed class LinkUnfurlController : BenControllerBase
 {
     /// <summary>The largest picture fetched, in bytes.</summary>

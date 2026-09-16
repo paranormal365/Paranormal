@@ -215,24 +215,20 @@ public sealed class CanvasDocumentControllerTests
 
     // ── the door ──────────────────────────────────────────────────────────────
 
+    /// <summary>
+    /// Sign-in is the whole door now: the canvas is not behind a switch any more.
+    /// </summary>
+    /// <remarks>
+    /// It was, while there were two ways to write up a case and a site had to choose. The block-editor
+    /// research pages went on 2026-09-16 and boards became research itself, so a site with the switch
+    /// off would have had no research at all — a flag whose off position breaks the product is not a
+    /// choice worth keeping.
+    /// </remarks>
     [Fact]
-    public void The_controller_requires_sign_in_and_is_gated_on_the_canvas_flag()
+    public void The_controller_requires_sign_in_and_is_behind_no_feature_switch()
     {
         Assert.NotNull(typeof(CanvasDocumentController).GetCustomAttribute<AuthorizeAttribute>());
-        Assert.Equal(SiteSettingKeys.FeatureCanvasEditor,
-            Support.FeatureGateProbe.KeyOf(Support.FeatureGateProbe.GateOn<CanvasDocumentController>()));
-    }
-
-    /// <summary>R1: a signed-in person on a site where nobody has written the flag's row gets 404.</summary>
-    [Fact]
-    public async Task A_signed_in_caller_gets_404_while_the_flag_has_never_been_set()
-    {
-        var (result, ran) = await Support.FeatureGateProbe.RunAsync(
-            Support.FeatureGateProbe.GateOn<CanvasDocumentController>(),
-            await Support.FeatureGateProbe.SettingsAsync());
-
-        Assert.False(ran, "the canvas API answered a signed-in caller with the flag unset; it defaults off");
-        Assert.IsType<NotFoundResult>(result);
+        Assert.Null(typeof(CanvasDocumentController).GetCustomAttribute<Ben.Data.WebApi.Services.FeatureGatedAttribute>(inherit: true));
     }
 
     [Fact]

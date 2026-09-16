@@ -437,9 +437,9 @@
     private sealed record BinderTypeOption(string Label, CaseTimelineEntryType Value);
 
     // Named from the shared helper (W-A11) rather than typed here, so a fifth kind added to the
-    // enum cannot be listed under one name in this panel and another on the timeline. No Research:
-    // research is written on the case's Research tab, as a page with its own date (beta feedback,
-    // 2026-09-14) — see CaseTimelineEntryTypes.Pickable.
+    // enum cannot be listed under one name in this panel and another on the timeline. Three kinds,
+    // not every kind: a binder row is what happened on the night. Research is a thing somebody read
+    // afterwards, and it goes on the timeline proper or on a board.
     private static readonly List<BinderTypeOption> _binderEntryTypes =
     [
         new(CaseTimelineEntryTypes.ShortName(CaseTimelineEntryType.InvestigatorNote),  CaseTimelineEntryType.InvestigatorNote),
