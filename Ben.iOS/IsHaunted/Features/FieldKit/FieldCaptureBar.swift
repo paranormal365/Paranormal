@@ -11,9 +11,16 @@ struct FieldCaptureBar: View {
     @Environment(AppDependencies.self) private var dependencies
 
     let session: ActiveFieldSession
+    /// The session's own camera — the same one the viewfinder shows. Photos and clips are taken
+    /// by it rather than by the system camera, so nothing takes this session's camera or its
+    /// microphone away mid-recording.
+    let camera: FieldCameraSession
 
     @State private var showingCamera = false
     @State private var cameraKind: CaptureKind = .photo
+    /// Whether the camera was already running when the capture screen was opened, read once at
+    /// the tap — so closing the screen puts the camera back exactly as it was found.
+    @State private var cameraWasRunning = false
     @State private var errorMessage: String?
 
     private var files: SessionFileStore { dependencies.fieldKit.files }
@@ -102,9 +109,13 @@ struct FieldCaptureBar: View {
         .padding(12)
         .background(Theme.mist, in: RoundedRectangle(cornerRadius: 12))
         .fullScreenCover(isPresented: $showingCamera) {
-            FieldCameraPicker(kind: cameraKind) { url, duration in
-                await adopt(url, kind: cameraKind, duration: duration)
-            }
+            FieldCameraCaptureView(camera: camera,
+                                   wasRunning: cameraWasRunning,
+                                   allowsVideo: session.channels.contains(.video),
+                                   initialKind: cameraKind,
+                                   onCaptured: { url, kind, duration in
+                                       await adopt(url, kind: kind, duration: duration)
+                                   })
         }
         .alert("Couldn't save that capture",
                isPresented: Binding(get: { errorMessage != nil },
@@ -117,6 +128,7 @@ struct FieldCaptureBar: View {
     private func captureButton(_ title: String, icon: String, kind: CaptureKind) -> some View {
         Button {
             cameraKind = kind
+            cameraWasRunning = camera.isRunning
             showingCamera = true
         } label: {
             Label(title, systemImage: icon)
@@ -124,7 +136,8 @@ struct FieldCaptureBar: View {
                 .padding(.vertical, 6)
         }
         .buttonStyle(.bordered)
-        .disabled(!UIImagePickerController.isSourceTypeAvailable(.camera))
+        // Never disabled: a device with no camera says so on the capture screen, in a sentence.
+        // A dead button explains nothing.
         .accessibilityIdentifier("capture-\(kind.rawValue)")
     }
 
@@ -167,61 +180,5 @@ struct FieldCaptureBar: View {
                                                countStyle: .file))
         if capture.latitude != nil { parts.append("located") }
         return parts.joined(separator: " · ")
-    }
-}
-
-/// The camera, handing back a file rather than an image in memory.
-///
-/// Same shape as the feed's picker — a captured video arrives as a URL and is MOVED, never read
-/// into memory, because a 200 MB clip must not sit on the heap of a phone that is also logging
-/// a magnetometer.
-struct FieldCameraPicker: UIViewControllerRepresentable {
-    @Environment(\.dismiss) private var dismiss
-    let kind: CaptureKind
-    let onCaptured: (URL, Double?) async -> Void
-
-    func makeUIViewController(context: Context) -> UIImagePickerController {
-        let picker = UIImagePickerController()
-        picker.sourceType = .camera
-        picker.mediaTypes = kind == .video ? ["public.movie"] : ["public.image"]
-        if kind == .video { picker.videoQuality = .typeHigh }
-        picker.delegate = context.coordinator
-        return picker
-    }
-
-    func updateUIViewController(_ controller: UIImagePickerController, context: Context) {}
-
-    func makeCoordinator() -> Coordinator { Coordinator(self) }
-
-    final class Coordinator: NSObject, UIImagePickerControllerDelegate,
-                             UINavigationControllerDelegate {
-        private let parent: FieldCameraPicker
-        init(_ parent: FieldCameraPicker) { self.parent = parent }
-
-        func imagePickerController(
-            _ picker: UIImagePickerController,
-            didFinishPickingMediaWithInfo info: [UIImagePickerController.InfoKey: Any]
-        ) {
-            if let movie = info[.mediaURL] as? URL {
-                Task {
-                    // load(.duration) replaced the synchronous property, which blocked the
-                    // calling thread while the container was parsed. A capture that failed to
-                    // yield a duration is still a capture — nil, never a lost recording.
-                    let duration = try? await AVURLAsset(url: movie).load(.duration).seconds
-                    await parent.onCaptured(movie, (duration?.isFinite == true) ? duration : nil)
-                }
-            } else if let image = info[.originalImage] as? UIImage,
-                      let data = image.jpegData(compressionQuality: 0.85) {
-                let scratch = FileManager.default.temporaryDirectory
-                    .appendingPathComponent("field-\(UUID().uuidString).jpg")
-                try? data.write(to: scratch)
-                Task { await parent.onCaptured(scratch, nil) }
-            }
-            parent.dismiss()
-        }
-
-        func imagePickerControllerDidCancel(_ picker: UIImagePickerController) {
-            parent.dismiss()
-        }
     }
 }

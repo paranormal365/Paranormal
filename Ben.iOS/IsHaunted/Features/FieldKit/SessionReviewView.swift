@@ -50,7 +50,9 @@ struct SessionReviewView: View {
                         rightColumn
                     }
                     .padding(.horizontal, 16)
-                    .padding(.bottom, 24)
+                    // Clears the floating tab bar. At 24 the last card — usually the map and
+                    // what it says about position — ended up underneath it and unreadable.
+                    .padding(.bottom, 88)
                 }
             }
         }

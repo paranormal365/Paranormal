@@ -133,7 +133,37 @@ struct MovementMap: View {
     @State private var camera: MapCameraPosition = .automatic
 
     var body: some View {
-        map.overlay(alignment: .topLeading) { roomPlate }
+        // A session with no fix used to be drawn as a map of the whole continent with a caption
+        // over it, which reads as "somewhere in North America" rather than "nowhere". Nothing
+        // recorded gets a card that says so, not a map of a place nobody went.
+        if hasSomewhere {
+            map.overlay(alignment: .topLeading) { roomPlate }
+        } else {
+            nowhere
+        }
+    }
+
+    private var hasSomewhere: Bool {
+        !track.isEmpty
+            || frame.position?.coordinate != nil
+            || !markersWithPlaces.isEmpty
+            || stills.contains { $0.coordinate != nil }
+    }
+
+    private var nowhere: some View {
+        VStack(spacing: 6) {
+            Image(systemName: "location.slash")
+                .font(.title3).foregroundStyle(Theme.fog)
+            Text("No position was recorded for this session.")
+                .font(.caption).foregroundStyle(Theme.bone)
+            Text("Location was switched off, or a fix never arrived — indoors it often doesn't.")
+                .font(.caption2).foregroundStyle(Theme.fog)
+                .multilineTextAlignment(.center)
+        }
+        .frame(maxWidth: .infinity)
+        .padding(.vertical, 28).padding(.horizontal, 16)
+        .background(Theme.mist, in: RoundedRectangle(cornerRadius: 12))
+        .accessibilityIdentifier("replay-no-position")
     }
 
     /// The room, over the map, because it is the one thing on this screen a fix cannot tell

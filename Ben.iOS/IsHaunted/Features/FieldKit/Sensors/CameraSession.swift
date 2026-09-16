@@ -9,13 +9,61 @@ import UIKit
 import SwiftUI
 import BenKit
 
-/// The camera as an instrument: a live view you can aim, and a judgement about whether anything
-/// in front of it moved.
+/// Notification observers, held somewhere `deinit` is allowed to reach them.
+private final class ObserverBox: @unchecked Sendable {
+    private let lock = NSLock()
+    private var observers: [NSObjectProtocol] = []
+
+    var isEmpty: Bool { lock.lock(); defer { lock.unlock() }; return observers.isEmpty }
+
+    func keep(_ observer: NSObjectProtocol) {
+        lock.lock(); observers.append(observer); lock.unlock()
+    }
+
+    func release() {
+        lock.lock()
+        let held = observers
+        observers = []
+        lock.unlock()
+        for observer in held { NotificationCenter.default.removeObserver(observer) }
+    }
+}
+
+/// What the camera can refuse to do, in the words the screen shows.
+enum FieldCameraError: LocalizedError {
+    case notRunning
+    case photoFailed
+    case clipFailed(String)
+
+    var errorDescription: String? {
+        switch self {
+        case .notRunning:
+            "The camera isn't running yet. Give it a moment and try again."
+        case .photoFailed:
+            "The photo came back empty and wasn't saved."
+        case .clipFailed(let reason):
+            reason
+        }
+    }
+}
+
+/// The camera as an instrument: a live view you can aim, a judgement about whether anything in
+/// front of it moved, and the photos and clips themselves.
 ///
 /// A phone left in a corner is useless if you could not see what it was pointing at when you put
 /// it down, so the preview exists to be aimed by. The motion detection is deliberately crude —
 /// it compares how much of a downsampled frame changed — because anything cleverer would make
 /// promises about WHAT moved that a phone in the dark cannot keep.
+///
+/// Photos and clips are taken by this same session rather than by the system camera, because the
+/// app leaving for another one is what broke a session: the picker took the camera, this session
+/// was interrupted and nothing ever started it again, and the microphone went with it (Ben,
+/// 2026-09-16). One session, owned here, never handed over.
+///
+/// **Clips carry no sound of their own.** The session's audio track is already running and is the
+/// record of what was heard; giving the camera the microphone as well is precisely the handover
+/// that lost the sound. Both land on the review's one timeline, so nothing is missing — it is
+/// just not stored twice.
 @MainActor
 @Observable
 final class FieldCameraSession {
@@ -24,12 +72,32 @@ final class FieldCameraSession {
     private(set) var isRunning = false
     private(set) var problem: String?
 
+    /// The clip being recorded now, and when it started, so the screen can count it up.
+    private(set) var clipStartedAt: Date?
+    var isRecordingClip: Bool { clipStartedAt != nil }
+
     private let output = AVCaptureVideoDataOutput()
+    private let photoOutput = AVCapturePhotoOutput()
+    private let movieOutput = AVCaptureMovieFileOutput()
     private let delegate = FrameDelegate()
     private let queue = DispatchQueue(label: "com.ishaunted.field.camera")
 
+    /// Delegates AVFoundation calls back on its own queue. Held here for as long as the capture
+    /// they belong to is in flight.
+    private var photoCaptures: [PhotoCapture] = []
+    private var clipCapture: ClipCapture?
+    private var rotation: AVCaptureDevice.RotationCoordinator?
+    /// In a box of its own so `deinit` — which cannot touch main-actor state — can still hand
+    /// the observers back. @Observable would otherwise make this a computed property that
+    /// nothing outside the actor may read.
+    @ObservationIgnored private let interruptionObservers = ObserverBox()
+
     init() {
         delegate.owner = self
+    }
+
+    deinit {
+        interruptionObservers.release()
     }
 
     /// A stream of "how much of the view changed", for the engine to judge against a threshold.
@@ -62,14 +130,91 @@ final class FieldCameraSession {
         isRunning = false
     }
 
+    // MARK: - Taking something
+
+    /// One photo, written to a file of its own. The caller moves it into the session.
+    func capturePhoto() async throws -> URL {
+        guard isRunning else { throw FieldCameraError.notRunning }
+
+        let capture = PhotoCapture()
+        photoCaptures.append(capture)
+        defer { photoCaptures.removeAll { $0 === capture } }
+
+        let settings = AVCapturePhotoSettings()
+        if let connection = photoOutput.connection(with: .video),
+           let angle = rotation?.videoRotationAngleForHorizonLevelCapture,
+           connection.isVideoRotationAngleSupported(angle) {
+            connection.videoRotationAngle = angle
+        }
+        return try await capture.run(on: photoOutput, settings: settings)
+    }
+
+    /// Starts a clip. Silent on purpose — see the type's remarks.
+    func startClip() throws {
+        guard isRunning else { throw FieldCameraError.notRunning }
+        guard clipCapture == nil else { return }
+
+        // Up from the watching preset for the length of the clip only: a 480p feed is fine to
+        // aim by and to difference frames against, and is not what anybody wants to look at
+        // afterwards. It goes back down when the clip ends, so an all-night session still costs
+        // what it used to.
+        session.beginConfiguration()
+        if session.canSetSessionPreset(.hd1280x720) { session.sessionPreset = .hd1280x720 }
+        if session.outputs.contains(movieOutput) == false {
+            guard session.canAddOutput(movieOutput) else {
+                session.commitConfiguration()
+                throw FieldCameraError.clipFailed(
+                    "This device won't record a clip while it is watching the room.")
+            }
+            session.addOutput(movieOutput)
+        }
+        session.commitConfiguration()
+
+        if let connection = movieOutput.connection(with: .video),
+           let angle = rotation?.videoRotationAngleForHorizonLevelCapture,
+           connection.isVideoRotationAngleSupported(angle) {
+            connection.videoRotationAngle = angle
+        }
+
+        let url = FileManager.default.temporaryDirectory
+            .appendingPathComponent("field-\(UUID().uuidString).mov")
+        let capture = ClipCapture()
+        clipCapture = capture
+        clipStartedAt = Date()
+        movieOutput.startRecording(to: url, recordingDelegate: capture)
+    }
+
+    /// Ends the clip and hands back the file it wrote.
+    func finishClip() async throws -> URL {
+        guard let capture = clipCapture else { throw FieldCameraError.notRunning }
+        defer {
+            clipCapture = nil
+            clipStartedAt = nil
+            session.beginConfiguration()
+            if session.outputs.contains(movieOutput) { session.removeOutput(movieOutput) }
+            if session.canSetSessionPreset(.medium) { session.sessionPreset = .medium }
+            session.commitConfiguration()
+        }
+        movieOutput.stopRecording()
+        return try await capture.fileWhenFinished()
+    }
+
     private func configureAndRun() {
         guard !isRunning else { return }
         session.beginConfiguration()
         // Low, on purpose: this feed is for aiming and for spotting movement, not for the
-        // recording. High resolution here would cost battery all night for nothing.
+        // recording. High resolution here would cost battery all night for nothing — a clip
+        // raises it for its own length and puts it back.
         session.sessionPreset = .medium
+        // The field session owns the audio session: its recorder is running and must keep
+        // running. Letting AVCaptureSession configure the app's audio session is how the camera
+        // takes the microphone even with no audio input attached.
+        session.automaticallyConfiguresApplicationAudioSession = false
 
-        if session.inputs.isEmpty {
+        var cameraDevice: AVCaptureDevice?
+        if let existing = (session.inputs.first as? AVCaptureDeviceInput)?.device {
+            cameraDevice = existing
+        } else {
             guard let device = AVCaptureDevice.default(.builtInWideAngleCamera,
                                                        for: .video, position: .back),
                   let input = try? AVCaptureDeviceInput(device: device),
@@ -80,9 +225,10 @@ final class FieldCameraSession {
                 return
             }
             session.addInput(input)
+            cameraDevice = device
         }
 
-        if session.outputs.isEmpty {
+        if session.outputs.contains(output) == false {
             output.alwaysDiscardsLateVideoFrames = true
             output.videoSettings = [
                 kCVPixelBufferPixelFormatTypeKey as String: kCVPixelFormatType_32BGRA,
@@ -91,12 +237,152 @@ final class FieldCameraSession {
             if session.canAddOutput(output) { session.addOutput(output) }
         }
 
+        if session.outputs.contains(photoOutput) == false, session.canAddOutput(photoOutput) {
+            session.addOutput(photoOutput)
+        }
+
         session.commitConfiguration()
+
+        if let cameraDevice, rotation == nil {
+            rotation = AVCaptureDevice.RotationCoordinator(device: cameraDevice, previewLayer: nil)
+        }
+        watchForInterruptions()
 
         let session = session
         queue.async { session.startRunning() }
         isRunning = true
         problem = nil
+    }
+
+    /// A phone call, another app taking the camera, or the system reclaiming it leaves a preview
+    /// frozen and a session that nobody restarts. Before this, coming back from the system
+    /// camera left a black rectangle where the room used to be.
+    private func watchForInterruptions() {
+        guard interruptionObservers.isEmpty else { return }
+        let centre = NotificationCenter.default
+
+        interruptionObservers.keep(centre.addObserver(
+            forName: AVCaptureSession.wasInterruptedNotification,
+            object: session, queue: .main
+        ) { [weak self] _ in
+            Task { @MainActor in
+                guard let self else { return }
+                self.isRunning = false
+                self.problem = "Something else is using the camera."
+            }
+        })
+
+        interruptionObservers.keep(centre.addObserver(
+            forName: AVCaptureSession.interruptionEndedNotification,
+            object: session, queue: .main
+        ) { [weak self] _ in
+            Task { @MainActor in
+                guard let self else { return }
+                self.problem = nil
+                let session = self.session
+                self.queue.async { session.startRunning() }
+                self.isRunning = true
+            }
+        })
+
+        interruptionObservers.keep(centre.addObserver(
+            forName: AVCaptureSession.runtimeErrorNotification,
+            object: session, queue: .main
+        ) { [weak self] _ in
+            Task { @MainActor in
+                guard let self else { return }
+                let session = self.session
+                self.queue.async { session.startRunning() }
+                self.isRunning = true
+            }
+        })
+    }
+}
+
+/// One photo, from `capturePhoto` to a file on disk.
+///
+/// A capture object per photo: AVFoundation holds its delegate only until that capture finishes,
+/// and a shared one would have to reason about two shutters at once for no gain.
+private final class PhotoCapture: NSObject, AVCapturePhotoCaptureDelegate, @unchecked Sendable {
+    private let lock = NSLock()
+    private var continuation: CheckedContinuation<URL, Error>?
+
+    func run(on output: AVCapturePhotoOutput,
+             settings: AVCapturePhotoSettings) async throws -> URL {
+        try await withCheckedThrowingContinuation { continuation in
+            lock.lock(); self.continuation = continuation; lock.unlock()
+            output.capturePhoto(with: settings, delegate: self)
+        }
+    }
+
+    func photoOutput(_ output: AVCapturePhotoOutput,
+                     didFinishProcessingPhoto photo: AVCapturePhoto, error: Error?) {
+        lock.lock()
+        let continuation = self.continuation
+        self.continuation = nil
+        lock.unlock()
+        guard let continuation else { return }
+
+        if let error { continuation.resume(throwing: error); return }
+        guard let data = photo.fileDataRepresentation() else {
+            continuation.resume(throwing: FieldCameraError.photoFailed); return
+        }
+        // The session's own directory is where this ends up, but the move is the caller's job —
+        // it is the only thing that knows which session asked.
+        let url = FileManager.default.temporaryDirectory
+            .appendingPathComponent("field-\(UUID().uuidString).jpg")
+        do {
+            try data.write(to: url)
+            continuation.resume(returning: url)
+        } catch {
+            continuation.resume(throwing: error)
+        }
+    }
+}
+
+/// One clip, from `startRecording` to the file it wrote.
+///
+/// The file arrives after `stopRecording` returns, not with it, so the wait belongs here.
+private final class ClipCapture: NSObject, AVCaptureFileOutputRecordingDelegate,
+                                @unchecked Sendable {
+    private let lock = NSLock()
+    private var continuation: CheckedContinuation<URL, Error>?
+    private var finished: Result<URL, Error>?
+
+    func fileWhenFinished() async throws -> URL {
+        try await withCheckedThrowingContinuation { continuation in
+            lock.lock()
+            if let finished {
+                lock.unlock()
+                continuation.resume(with: finished)
+                return
+            }
+            self.continuation = continuation
+            lock.unlock()
+        }
+    }
+
+    func fileOutput(_ output: AVCaptureFileOutput,
+                    didFinishRecordingTo outputFileURL: URL,
+                    from connections: [AVCaptureConnection], error: Error?) {
+        // A clip that stopped with an error still has the frames it managed to write, and
+        // AVFoundation says so with `finishedRecordingSuccessfully`. Throwing away usable
+        // footage because the stop was untidy is how a recording gets lost.
+        let salvageable = (error as NSError?)?
+            .userInfo[AVErrorRecordingSuccessfullyFinishedKey] as? Bool ?? true
+        let result: Result<URL, Error>
+        if let error, !salvageable {
+            result = .failure(error)
+        } else {
+            result = .success(outputFileURL)
+        }
+
+        lock.lock()
+        let continuation = self.continuation
+        self.continuation = nil
+        self.finished = result
+        lock.unlock()
+        continuation?.resume(with: result)
     }
 }
 
