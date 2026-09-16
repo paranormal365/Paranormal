@@ -140,7 +140,8 @@ public interface IBenUserClient
     /// <param name="roles">Every role they should hold afterwards; anything not listed is removed.</param>
     /// <param name="token">Propagates cancellation from the Blazor component.</param>
     /// <returns>The roles now held, or <c>null</c> when the server refused.</returns>
-    Task<AppUserRolesAdminRecord?> SetUserRolesAsync(Guid userId, IReadOnlyList<string> roles, CancellationToken token = default);
+    /// <summary>Sets the whole set of site roles, or returns the server's reason for refusing.</summary>
+    Task<(AppUserRolesAdminRecord? Result, string? Error)> SetUserRolesAsync(Guid userId, IReadOnlyList<string> roles, CancellationToken token = default);
 
     // ── Impersonation ─────────────────────────────────────────────────────────
 

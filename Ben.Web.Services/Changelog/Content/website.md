@@ -18,6 +18,7 @@ day-by-day account of building it would say nothing to anyone using it now.
 
 ## 2026-09-15
 
+- When a site role cannot be saved, the page now says exactly why instead of naming a SuperAdmin rule that may have nothing to do with it.
 - Dates and times are typed the way you write them, like 09/15/2026 8:00 PM. A date that does not exist, such as September 31, is refused with a sentence saying why, instead of quietly becoming a different day; the calendar button is still there.
 - When an administrator's new account is refused, the page now says exactly why instead of a general apology.
 

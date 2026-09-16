@@ -139,8 +139,23 @@ public sealed partial class BenAdminClientAdapter
     public Task<AppUserAdminRecord?> UpdateUserProfileAsync(Guid userId, AdminUpdateUserProfileRequest request, CancellationToken token = default)
         => _api.PutAsync<AdminUpdateUserProfileRequest, AppUserAdminRecord>($"/api/admin/app-users/{userId}/profile", request, token);
 
-    public Task<AppUserRolesAdminRecord?> SetUserRolesAsync(Guid userId, IReadOnlyList<string> roles, CancellationToken token = default)
-        => _api.PutAsync<AdminSetUserRolesRequest, AppUserRolesAdminRecord>($"/api/admin/app-users/{userId}/roles", new AdminSetUserRolesRequest(roles), token);
+    public async Task<(AppUserRolesAdminRecord? Result, string? Error)> SetUserRolesAsync(Guid userId, IReadOnlyList<string> roles, CancellationToken token = default)
+    {
+        var (result, error, status) = await _api.SendWithStatusAsync<AdminSetUserRolesRequest, AppUserRolesAdminRecord>(
+            HttpMethod.Put, $"/api/admin/app-users/{userId}/roles", new AdminSetUserRolesRequest(roles), token);
+
+        if (result is not null) return (result, null);
+
+        // A refusal we wrote arrives as a sentence. The two that never carry one are worth naming rather than
+        // reporting as silence: a session that has ended reads as "nothing happened" otherwise.
+        return (null, error ?? status switch
+        {
+            401 => "Your session has ended. Sign in again, then set the roles.",
+            403 => "Only a SuperAdmin can change site roles.",
+            404 => "That account no longer exists.",
+            _   => null,
+        });
+    }
 
     public Task<bool> ImpersonateUserAsync(Guid targetUserId, string targetUserEmail, CancellationToken token = default)
         => _auth.ImpersonateAsync(targetUserId, targetUserEmail, token);
