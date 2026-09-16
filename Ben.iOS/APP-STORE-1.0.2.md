@@ -1,5 +1,8 @@
 # App Store submission — IsHaunted 1.0.2 (build 5)
 
+> **1.0.3 has its own document: `APP-STORE-1.0.3.md`** — uploaded 2026-09-16 as 1.0.3 (6); the
+> App Store Connect steps that remain are listed there. This file is the record of 1.0.2.
+>
 > **The next submission is 1.0.3, not 1.0.2 (6).** Ben, 2026-09-16: "instead of it becoming
 > 1.0.2(6) bump it up to 1.0.3." 1.0.2 build 5 was approved, and what has landed since is not a
 > bug fix to it — the field kit's camera is the app's own now, sound carries across a video clip
