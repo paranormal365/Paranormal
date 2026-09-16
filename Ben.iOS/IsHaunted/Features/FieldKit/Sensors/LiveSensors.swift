@@ -71,7 +71,21 @@ final class LiveAudioCapture: AudioLevelSource, AudioRecording, @unchecked Senda
     private var file: AVAudioFile?
     private var recordingStartedAt: Date?
     private var interruptionObserver: NSObjectProtocol?
+    private var routeObserver: NSObjectProtocol?
     private var tapInstalled = false
+
+    /// What the meter is feeding, kept so the tap can be rebuilt after the microphone comes back.
+    private var levelHandler: (@Sendable (AVAudioPCMBuffer, (average: Double, peak: Double)) -> Void)?
+
+    private let eventFeed: AsyncStream<AudioRecordingEvent>
+    private let eventSink: AsyncStream<AudioRecordingEvent>.Continuation
+
+    /// Interruptions and the microphone coming back. See `AudioRecording.events`.
+    var events: AsyncStream<AudioRecordingEvent> { eventFeed }
+
+    init() {
+        (eventFeed, eventSink) = AsyncStream.makeStream(of: AudioRecordingEvent.self)
+    }
 
     var isAvailable: Bool { true }
 
@@ -119,6 +133,9 @@ final class LiveAudioCapture: AudioLevelSource, AudioRecording, @unchecked Senda
                 continuation.finish()
                 return
             }
+            // Watched from the meter as well as from a recording: the gauge going dead when somebody takes a video is
+            // what Ben saw first, and the meter runs whether a clip is being written or not.
+            watchForInterruptions()
             continuation.onTermination = { [weak self] _ in self?.teardown() }
         }
     }
@@ -151,16 +168,28 @@ final class LiveAudioCapture: AudioLevelSource, AudioRecording, @unchecked Senda
     }
 
     @discardableResult
-    func endRecording() async -> TimeInterval {
+    func endRecording() async -> TimeInterval { await endRecording(keepingWatch: false) }
+
+    /// Closes the clip. An interruption keeps the watch in place, because the microphone is expected back.
+    @discardableResult
+    private func endRecording(keepingWatch: Bool) async -> TimeInterval {
         // Releasing the AVAudioFile is what finalises the container. Dropped without this, an
         // m4a has no moov atom and will not play anywhere.
         let startedAt = releaseFile()
 
+        if !keepingWatch { stopWatching() }
+        return startedAt.map { Date().timeIntervalSince($0) } ?? 0
+    }
+
+    private func stopWatching() {
         if let interruptionObserver {
             NotificationCenter.default.removeObserver(interruptionObserver)
             self.interruptionObserver = nil
         }
-        return startedAt.map { Date().timeIntervalSince($0) } ?? 0
+        if let routeObserver {
+            NotificationCenter.default.removeObserver(routeObserver)
+            self.routeObserver = nil
+        }
     }
 
     // MARK: - Plumbing
@@ -183,7 +212,7 @@ final class LiveAudioCapture: AudioLevelSource, AudioRecording, @unchecked Senda
         input.installTap(onBus: 0, bufferSize: 2048, format: format) { buffer, _ in
             handler(buffer, Self.levels(of: buffer) ?? (-60, -60))
         }
-        lock.lock(); tapInstalled = true; lock.unlock()
+        lock.lock(); tapInstalled = true; levelHandler = handler; lock.unlock()
         if !engine.isRunning { try engine.start() }
     }
 
@@ -200,26 +229,81 @@ final class LiveAudioCapture: AudioLevelSource, AudioRecording, @unchecked Senda
         try? target.write(from: buffer)
     }
 
+    /// Watches for the microphone being taken and handed back.
+    ///
+    /// Ben, 2026-09-16: recording a video and returning left the sound dead, and the session crashed. Both come from
+    /// the same place. The system camera takes the audio session, which arrives as an interruption; the old code
+    /// closed the file and stopped there, so nothing recorded again — and the tap it left installed belonged to an
+    /// input whose format the camera had changed, which is what AVAudioEngine throws over.
+    ///
+    /// So: on the way in, close the file and take the engine down properly. On the way out — and on any route change,
+    /// because a camera handing the microphone back does not always send `.ended` — rebuild the tap from the input's
+    /// current format and say so, and the session starts the next clip.
     private func watchForInterruptions() {
+        guard interruptionObserver == nil else { return }
+
         interruptionObserver = NotificationCenter.default.addObserver(
             forName: AVAudioSession.interruptionNotification,
             object: AVAudioSession.sharedInstance(), queue: .main
         ) { [weak self] notification in
             guard let raw = notification.userInfo?[AVAudioSessionInterruptionTypeKey] as? UInt,
                   let type = AVAudioSession.InterruptionType(rawValue: raw) else { return }
-            if type == .began {
-                // Close the file rather than leaving a half-written container behind. What was
-                // recorded up to the interruption stays playable.
-                Task { await self?.endRecording() }
+            switch type {
+            case .began:
+                Task { await self?.microphoneTaken() }
+            case .ended:
+                Task { await self?.microphoneReturned() }
+            @unknown default:
+                break
             }
         }
+
+        routeObserver = NotificationCenter.default.addObserver(
+            forName: AVAudioSession.routeChangeNotification,
+            object: AVAudioSession.sharedInstance(), queue: .main
+        ) { [weak self] _ in
+            // A route change while the engine is down is the camera giving the microphone back.
+            Task { await self?.microphoneReturnedIfIdle() }
+        }
+    }
+
+    /// The microphone was taken: finish the clip and put the engine away, so no stale tap survives.
+    private func microphoneTaken() async {
+        _ = await endRecording(keepingWatch: true)
+        if hasTap() {
+            engine.inputNode.removeTap(onBus: 0)
+            lock.lock(); tapInstalled = false; lock.unlock()
+        }
+        engine.stop()
+        engine.reset()
+        eventSink.yield(.interrupted)
+    }
+
+    /// The microphone is available again: rebuild the meter's tap at the format it now has.
+    private func microphoneReturned() async {
+        do {
+            try configureSession()
+            if let handler = levelHandler {
+                try startEngine(handler)
+            }
+            eventSink.yield(.resumed)
+        } catch {
+            // Nothing to do here but stay quiet: the next route change tries again, and the screen already says
+            // sound stopped. Throwing from a notification would take the app down, which is what we are fixing.
+        }
+    }
+
+    private func microphoneReturnedIfIdle() async {
+        guard !hasTap() else { return }
+        await microphoneReturned()
     }
 
     private func teardown() {
         _ = releaseFile()
+        stopWatching()
         if hasTap() {
             engine.inputNode.removeTap(onBus: 0)
-            lock.lock(); tapInstalled = false; lock.unlock()
+            lock.lock(); tapInstalled = false; levelHandler = nil; lock.unlock()
         }
         engine.stop()
         try? AVAudioSession.sharedInstance().setActive(false)

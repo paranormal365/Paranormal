@@ -241,8 +241,11 @@ struct SessionReviewView: View {
                 VStack(spacing: 6) {
                     Image(systemName: "moon.stars")
                         .font(.title2).foregroundStyle(Theme.fog)
+                    // Ben, 2026-09-16: a session with ten seconds of video said "Nothing was recorded", because this
+                    // asked about the timeline's clips and a video whose length could not be read never reaches it.
+                    // The sentence now says only what it knows: no clip runs through the playhead.
                     Text(replay.timeline.media.isEmpty
-                         ? "Nothing was recorded in this session."
+                         ? "No sound or video was recorded in this session."
                          : "No recording at this moment.")
                         .font(.caption).foregroundStyle(Theme.fog)
                 }

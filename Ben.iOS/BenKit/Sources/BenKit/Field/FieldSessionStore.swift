@@ -414,8 +414,19 @@ public final class FieldSessionStore {
     /// empty timeline in front of its first reading.
     public func beginRecording(_ id: UUID) async throws {
         guard let context else { throw FieldSessionError.unavailable }
-        guard let session = try fetch(id, in: context) else { return }
-        guard session.outcome == .pending else { return }   // idempotent: a double tap is not two starts
+        guard let session = try fetch(id, in: context) else { throw FieldSessionError.sessionMissing }
+
+        // A double tap is not two starts. It is not a failure either — the session is already running, which is what
+        // was asked for — but the screen may not know: a row left at `recording` with instruments that never started
+        // is exactly the "I hit start and nothing happens" Ben reported on 2026-09-16, so the live session is brought
+        // up to match. Every other state is refused out loud rather than silently.
+        if session.outcome == .recording {
+            if active?.sessionId == id, active?.isRecording != true {
+                await active?.startSession(at: session.startedAt)
+            }
+            return
+        }
+        guard session.outcome == .pending else { throw FieldSessionError.cannotStart(session.outcome) }
         let at = now()
         session.startedAt = at
         session.outcome = .recording
@@ -542,9 +553,29 @@ public struct ReplaySource: Sendable {
 public enum FieldSessionError: Error, LocalizedError {
     case unavailable
 
+    /// Start was pressed on a session that is not waiting to start.
+    ///
+    /// Ben, 2026-09-16: "I can set the base, but when I hit start, nothing happens." Start returned quietly whenever
+    /// the row was not `pending` — which is what a session left behind by a crash looks like, since recovery closes
+    /// it as interrupted. Nothing was said, and the bar sat on "not started" for ever.
+    case cannotStart(FieldSessionOutcome)
+
+    /// Start was pressed on a session this device no longer has.
+    case sessionMissing
+
     public var errorDescription: String? {
         switch self {
         case .unavailable: "Field sessions can't be stored on this device."
+        case .sessionMissing: "That session isn't on this phone any more."
+        case .cannotStart(let outcome):
+            switch outcome {
+            case .recording: "This session is already running."
+            case .ended: "This session has already finished. Start a new one."
+            case .interrupted:
+                "This session was interrupted — the app closed while it was running — so it cannot be started again. "
+                + "Start a new one; nothing recorded is lost."
+            case .pending: "This session could not be started."
+            }
         }
     }
 }

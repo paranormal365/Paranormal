@@ -17,6 +17,9 @@ struct LiveSessionView: View {
     @State private var showingSettings = false
     @State private var camera = FieldCameraSession()
     @State private var blackout = false
+
+    /// Why Start refused, shown on the bar. Nil while nothing has refused.
+    @State private var startProblem: String?
     @State private var showingEVP = false
     @State private var brightnessBeforeBlackout: CGFloat?
     @State private var showingLocationExplainer = false
@@ -231,6 +234,12 @@ struct LiveSessionView: View {
                     Text("over report level")
                         .font(.caption2.bold()).foregroundStyle(Theme.warning)
                 }
+                if let startProblem {
+                    Text(startProblem)
+                        .font(.caption2).foregroundStyle(Theme.danger)
+                        .fixedSize(horizontal: false, vertical: true)
+                        .accessibilityIdentifier("start-problem")
+                }
             }
             Spacer()
             Button {
@@ -260,7 +269,14 @@ struct LiveSessionView: View {
                 // Start. Ben: "They may want to set everything up first and then start."
                 Button {
                     Task {
-                        try? await store.beginRecording(sessionId)
+                        do {
+                            try await store.beginRecording(sessionId)
+                        } catch {
+                            // Ben, 2026-09-16: "I can set the base, but when I hit start, nothing happens." It was
+                            // `try?`: every reason Start could refuse — a session a crash had left behind, a database
+                            // that would not open — was swallowed, and the bar stayed on "not started".
+                            startProblem = error.localizedDescription
+                        }
                     }
                 } label: {
                     Label("Start", systemImage: "record.circle")

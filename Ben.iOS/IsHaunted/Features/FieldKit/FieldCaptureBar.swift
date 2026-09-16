@@ -123,8 +123,19 @@ struct FieldCaptureBar: View {
     private func adopt(_ url: URL, kind: CaptureKind, duration: Double?) async {
         do {
             let adopted = try files.adopt(url, for: session.sessionId, kind: kind)
+
+            // A clip with no length never reaches the replay's timeline, and the review screen then says nothing was
+            // recorded — which is what Ben saw after filming ten seconds (2026-09-16). The picker's answer is used
+            // when it has one; otherwise the length is read from the file now in the session's own directory.
+            var length = duration
+            if length == nil, kind == .video {
+                let moved = files.fileURL(for: session.sessionId, relativePath: adopted.relativePath)
+                let seconds = try? await AVURLAsset(url: moved).load(.duration).seconds
+                length = (seconds?.isFinite == true && (seconds ?? 0) > 0) ? seconds : nil
+            }
+
             await session.noteCapture(kind: kind, relativePath: adopted.relativePath,
-                                      byteCount: adopted.byteCount, durationSeconds: duration)
+                                      byteCount: adopted.byteCount, durationSeconds: length)
         } catch {
             errorMessage = error.localizedDescription
         }

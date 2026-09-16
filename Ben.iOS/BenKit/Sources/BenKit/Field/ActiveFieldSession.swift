@@ -83,6 +83,10 @@ public final class ActiveFieldSession {
 
     private let engine: FieldSessionEngine
     private var pump: Task<Void, Never>?
+    private var microphoneWatch: Task<Void, Never>?
+
+    /// True between the microphone being taken and handed back, when a clip had been running.
+    private var wasRecordingWhenInterrupted = false
     private let sensors: SensorSuite
     private let files: SessionFileStore
     private let now: @Sendable () -> Date
@@ -124,6 +128,40 @@ public final class ActiveFieldSession {
                 }
             }
         }
+        watchTheMicrophone()
+    }
+
+    /// Keeps the sound going across whatever takes the microphone — the camera, a call, another app.
+    ///
+    /// Ben, 2026-09-16: recording a video and coming back left the sound dead for the rest of the session. The clip
+    /// that was running is closed on the way in, so what was recorded stays playable and is listed as a capture; when
+    /// the microphone comes back a new clip starts, which is how a night of audio is already shaped. The session does
+    /// this rather than the recorder because only the session knows where the next clip's file goes.
+    private func watchTheMicrophone() {
+        guard let recorder = sensors.recorder else { return }
+        let events = recorder.events
+        microphoneWatch = Task { [weak self] in
+            for await event in events {
+                guard let self else { return }
+                switch event {
+                case .interrupted: await self.recordingWasInterrupted()
+                case .resumed: await self.resumeRecordingIfItWasRunning()
+                }
+            }
+        }
+    }
+
+    /// The microphone was taken while a clip was running: keep the clip, and remember to carry on.
+    private func recordingWasInterrupted() async {
+        guard recording != nil else { return }
+        wasRecordingWhenInterrupted = true
+        await stopRecording(becauseInterrupted: true)
+    }
+
+    private func resumeRecordingIfItWasRunning() async {
+        guard wasRecordingWhenInterrupted, isRecording else { return }
+        wasRecordingWhenInterrupted = false
+        await startRecording()
     }
 
     /// Start, on the live screen. The clock begins, the log opens, and the audio recording —
@@ -196,7 +234,14 @@ public final class ActiveFieldSession {
         }
     }
 
-    public func stopRecording() async {
+    public func stopRecording() async { await stopRecording(becauseInterrupted: false) }
+
+    /// Closes the clip that is running.
+    ///
+    /// An interrupted clip is kept and listed exactly like one somebody stopped: what was recorded before the camera
+    /// took the microphone is real, and it is the only copy. The difference is what is said afterwards — an
+    /// interruption explains itself and is not a failure to fix.
+    private func stopRecording(becauseInterrupted: Bool) async {
         guard let state = recording, let recorder = sensors.recorder else { return }
         let duration = await recorder.endRecording()
         recording = nil
@@ -210,9 +255,15 @@ public final class ActiveFieldSession {
         // taps into and finds silent is worse than saying it failed.
         guard duration > 0.4, size > 1_024 else {
             try? FileManager.default.removeItem(at: url)
-            recordingProblem = "That recording came back empty — the microphone may be in use "
-                             + "by something else."
+            recordingProblem = becauseInterrupted
+                ? "The camera took the microphone before that clip had anything in it. Sound carries on now."
+                : "That recording came back empty — the microphone may be in use by something else."
             return
+        }
+
+        // An interruption is not a fault to fix, but it is worth saying: the clip ended where the camera started.
+        if becauseInterrupted {
+            recordingProblem = "The camera took the microphone, so the clip ends there. Sound carries on now."
         }
 
         await engine.noteCapture(kind: .audio, relativePath: state.relativePath,
