@@ -247,11 +247,23 @@ public sealed partial class FieldSessionUploadController
         // container, so what is recorded here is what the container IS — when it arrived, how
         // long the session runs, and that it is a session file rather than a recording.
         //
-        // The members keep whatever EXIF the phone wrote, because stripping one would mean
-        // rewriting the bundle and no longer serving the file that was sent. Stripping belongs on
-        // the phone, at the moment it builds the bundle, and that is part of 1.0.3 — a field
-        // photograph's position already travels in the document, so the copy inside the JPEG is
-        // duplicate as well as unwanted.
+        // The members keep whatever EXIF the phone wrote, and that is a gap — but not the one it
+        // first looks like. Ben, 2026-09-16: "the app records the location and even direction they
+        // are pointing... isn't that the same thing the EXIF contains?" It is. A field session's
+        // position and heading are recorded ON PURPOSE and drawn on a map; nothing about them is
+        // secret from the person who recorded them, and MediaIngestService keeps them in
+        // UploadFileMetadata for every upload regardless.
+        //
+        // What stripping is actually for is the SERVE boundary: "the group keeps the facts, the
+        // served file does not carry them". A share link can be made with positions withheld, and
+        // SharedSessionDocument nulls every coordinate in the document to honour that. A JPEG in
+        // that same share whose EXIF still carries a fix defeats it — the viewer opens the photo
+        // and reads the address the document refused to give. The per-file door closes this by
+        // serving a sanitized copy; a bundle currently would not.
+        //
+        // The fix belongs on the phone, when it builds the bundle: the original stays on the
+        // device, so nothing is lost, and the position stays in data.json where the withholding
+        // can reach it. Part of 1.0.3, with the rest of the sending side.
         db.UploadFileMetadata.Add(new UploadFileMetadata
         {
             Id = Guid.NewGuid(),
