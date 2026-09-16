@@ -16,10 +16,10 @@ namespace Ben.Data.WebApi.Services.LinkPreviews;
 /// pages, group messages, case messages and the feed, and keyed by the address, so a link posted in three places is
 /// fetched once.</para>
 /// <para><b>Who can make it fetch:</b> only a signed-in person, only by posting or pasting, at most
-/// <see cref="FetchesPerMinute"/> times a minute each. An anonymous reader of a card never causes a fetch. Our own
+/// <see cref="LinkPreviewService.FetchesPerMinute"/> times a minute each. An anonymous reader of a card never causes a fetch. Our own
 /// addresses are never fetched — the public link-preview endpoint describes those from our records.</para>
 /// <para><b>What is kept:</b> the title, description and site name, and the page's picture copied small onto our own
-/// storage (<see cref="ThumbnailRelativeUrl"/>) so that no reader's browser loads a stranger's image and so a card
+/// storage (<see cref="LinkPreviewService.ThumbnailRelativeUrl(Guid)"/>) so that no reader's browser loads a stranger's image and so a card
 /// still has its picture when the other site moves it. A page that could not be read leaves a row marked unfetched,
 /// so the card shows the host and the same broken link is not tried again for a week.</para>
 /// </remarks>

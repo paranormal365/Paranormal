@@ -96,7 +96,8 @@ public sealed class BoardSnapshotPrivacyTests
             new Ben.Data.WebApi.Services.Billing.SubscriptionLimitGuard(w.Factory),
             new Ben.Service.RepositoryService.Services.OrganizationSecurityService(w.Factory),
             new RequestReviewNotifier(w.Factory, new PlatformMessageService(w.Factory)),
-            TestMailer.Quiet());
+            TestMailer.Quiet(),
+            new Ben.Data.WebApi.Services.CmsMarkupSanitizer());
         ctrl.ControllerContext = new ControllerContext
         {
             HttpContext = new DefaultHttpContext
