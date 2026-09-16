@@ -95,6 +95,33 @@ public partial class CanvasEditor
             case "connect":
                 EnterConnectMode();
                 break;
+            // ── Presenting ──────────────────────────────────────────────────
+            //
+            // Ben, 2026-09-16: "presentation mode like miro where you can create the cards like
+            // slides." Nothing is made first: SlideOrder reads the running order off the board.
+            case "present":
+                Layout.Close();
+                await Layout.SetPropsOpenAsync(false);
+                Selection.Clear();
+                if (Presentation.Start(SingleSelected()?.Id)) await ShowCurrentSlideAsync();
+                else Announcer.Say(CanvasCopy.Sentences.NothingToPresent);
+                break;
+            case "present-next":
+                if (Presentation.Next()) await ShowCurrentSlideAsync();
+                break;
+            case "present-previous":
+                if (Presentation.Previous()) await ShowCurrentSlideAsync();
+                break;
+            case "present-stop":
+                if (Presentation.Active)
+                {
+                    Presentation.Stop();
+                    FitToContent();
+                    await Bridge.PushViewportAsync(animate: true);
+                    Announcer.Say(CanvasCopy.Sentences.PresentingStopped);
+                }
+
+                break;
             case "case-files":
                 Layout.Close();
                 _caseFilesOpen = CanPickCaseFiles;
@@ -193,6 +220,17 @@ public partial class CanvasEditor
             or "ungroup" or "rename" or "connect" or "paste" or "import" or "save-server" or "save-retry" or "publish"
             or "publish-confirmed" or "conflict-mine" or "case-files";
 
+    /// <summary>
+    /// Presenting is reading, not writing — so a view-only board presents like any other.
+    /// </summary>
+    /// <remarks>
+    /// Deliberately absent from <see cref="ChangesTheBoard"/>, and worth saying out loud: the meeting
+    /// where a case is talked through is exactly the room where somebody without edit access is
+    /// driving, and refusing them the walk would make the feature useless where it matters most.
+    /// </remarks>
+    internal static bool IsPresenting(string action) =>
+        action is "present" or "present-next" or "present-previous" or "present-stop";
+
     private async Task SaveToCaseAsync()
     {
         if (await ServerSession.SaveToCaseAsync() is { } problem) ShowServerProblem(problem);
@@ -209,6 +247,30 @@ public partial class CanvasEditor
         }
 
         Toasts.Warning(CanvasCopy.Sentences.SaveFailed(problem));
+    }
+
+    /// <summary>
+    /// Moves the view to the stop being shown, and says where the walk has got to.
+    /// </summary>
+    /// <remarks>
+    /// The rectangle is read from the store at each step rather than from the slide taken when the
+    /// walk began, so a card somebody moves while the board is on screen is still framed. A card that
+    /// has been deleted has no rectangle at all, and the walk stops rather than fitting the view to
+    /// an empty patch of board.
+    /// </remarks>
+    private async Task ShowCurrentSlideAsync()
+    {
+        if (Presentation.CurrentRect() is not { } rect)
+        {
+            Presentation.Stop();
+            Toasts.Warning(CanvasCopy.Sentences.SlideGone);
+            return;
+        }
+
+        Viewport.Fit(rect);
+        await Bridge.PushViewportAsync(animate: true);
+        if (Presentation.Current is { } slide)
+            Announcer.Say(Words.Showing(Presentation.Index + 1, Presentation.Count, slide.Title));
     }
 
     private CanvasNode? SingleSelected() =>

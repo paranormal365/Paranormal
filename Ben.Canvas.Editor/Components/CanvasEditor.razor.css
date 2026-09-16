@@ -17,6 +17,53 @@
     grid-template-columns: var(--bc-rail-w) minmax(0, 1fr) var(--bc-props-w);
 }
 
+/*
+    Presenting (Ben, 2026-09-16). Everything that is for making a board goes away — the header, the
+    rail, the properties, the phone's bar, the zoom buttons and the minimap — because the room is
+    meant to be looking at the card. CSS does the hiding rather than Blazor, so the switch cannot
+    leave a half-dressed editor behind if a render is skipped, and nothing is unmounted and rebuilt
+    on the way in and out.
+*/
+.bc-editor--presenting {
+    grid-template-columns: 0 minmax(0, 1fr) 0;
+}
+
+.bc-editor--presenting ::deep .bc-header,
+.bc-editor--presenting ::deep .bc-rail,
+.bc-editor--presenting ::deep .bc-bar,
+.bc-editor--presenting ::deep .bc-props,
+.bc-editor--presenting ::deep .bc-zoom,
+.bc-editor--presenting ::deep .bc-minimap,
+.bc-editor--presenting ::deep .bc-empty,
+/* A toast over a presentation is a note to the author shown to the room. They wait. */
+.bc-editor--presenting ::deep .bc-toasts {
+    display: none !important;
+}
+
+/*
+    Off-stage blocks stay drawn and stay where they are — the walk moves the camera, and a card
+    sliding in from a board that is otherwise blank tells the room nothing about where it sits. They
+    are dimmed instead, so the eye lands on the one being talked about.
+*/
+.bc-editor--presenting ::deep .bc-node {
+    opacity: .28;
+    transition: opacity .25s ease;
+}
+
+.bc-editor--presenting ::deep .bc-node--onstage {
+    opacity: 1;
+}
+
+/* Selection furniture is for editing; a highlighted card mid-talk reads as a mistake. */
+.bc-editor--presenting ::deep .bc-overlay,
+.bc-editor--presenting ::deep .bc-selection {
+    display: none !important;
+}
+
+@media (prefers-reduced-motion: reduce) {
+    .bc-editor--presenting ::deep .bc-node { transition: none; }
+}
+
 .bc-editor__body {
     grid-area: board;
     position: relative;

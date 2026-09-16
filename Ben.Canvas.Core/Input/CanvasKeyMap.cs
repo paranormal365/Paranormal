@@ -44,6 +44,9 @@ public enum CanvasCommand
     GrowRight,
     GrowUp,
     GrowDown,
+
+    /// <summary>Walk the board a card at a time, for showing it to somebody.</summary>
+    Present,
 }
 
 /// <summary>
@@ -134,6 +137,7 @@ public static class CanvasKeyMap
                 "m" => CanvasCommand.AddMessage,
                 "i" => CanvasCommand.AddImage,
                 "l" => CanvasCommand.AddLink,
+                "p" => CanvasCommand.Present,
                 _ => CanvasCommand.None,
             },
         };

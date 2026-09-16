@@ -215,6 +215,16 @@ public static class CanvasCopy
         public const string CaseFilesNoCase =
             "This board is not on a case yet, so there are no case files to reach for. Save it to a case first.";
 
+        // ── Presenting ──────────────────────────────────────────────────────
+
+        public const string NothingToPresent =
+            "There is nothing on this board to present yet. Add a card, then try again.";
+
+        public const string SlideGone =
+            "That card is no longer on the board, so the walk stopped.";
+
+        public const string PresentingStopped = "Stopped presenting.";
+
         public static string AddedFromCase(string name) =>
             string.Format(Invariant, "Added {0} from the case's files.", name);
 

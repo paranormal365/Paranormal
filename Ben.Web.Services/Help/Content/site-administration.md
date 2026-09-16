@@ -559,7 +559,7 @@ a test row, a case opened against the wrong group.
 Read the preview first. It has two halves, and they are two different things happening.
 
 **Destroyed.** Everything that exists only because the case does: its timeline, files, notes,
-messages, research, reports, investigations, contacts, votes, transfer records and any client
+messages, research boards, reports, investigations, contacts, votes, transfer records and any client
 access rows. Files the case took its own copy of are destroyed with it.
 
 **Kept, with the case reference removed.** Anything that belongs to somebody else and merely

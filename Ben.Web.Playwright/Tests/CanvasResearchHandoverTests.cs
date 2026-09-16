@@ -63,5 +63,29 @@ public class CanvasResearchHandoverTests : BenTestBase
         // And the editor comes up rather than the sign-in page.
         await Expect(Page.Locator(".bc-board, [data-bc-board], .bc-shell").First)
             .ToBeVisibleAsync(new() { Timeout = 30_000 });
+
+        // ...ALREADY SIGNED IN. This is the half that matters and the half that was broken while
+        // nobody looked: the API's development CORS list did not name the canvas host, so the code
+        // exchange failed and the editor opened signed out, on whatever board that browser happened
+        // to have kept on the device. Everything above still passed (2026-09-16).
+        await Expect(Page.GetByRole(AriaRole.Button, new() { Name = "Sign in" }))
+            .ToHaveCountAsync(0, new() { Timeout = 30_000 });
+    }
+
+    /// <summary>The board that opens is the case's, with what somebody wrote on it.</summary>
+    [Test]
+    public async Task Opening_a_board_from_the_case_shows_what_is_on_it()
+    {
+        await OpenResearchTabAsync();
+
+        var seeded = Main.Locator("[data-testid=case-research-boards]").GetByText("Previous owners and where they are buried");
+        await Expect(seeded).ToBeVisibleAsync(new() { Timeout = 15_000 });
+        await seeded.ClickAsync();
+
+        await Page.WaitForURLAsync(new System.Text.RegularExpressions.Regex(@"localhost:5125"), new() { Timeout = 30_000 });
+        await Expect(Page.Locator("[data-bc-ready=true]")).ToBeVisibleAsync(new() { Timeout = 60_000 });
+
+        await Expect(Page.Locator(".bc-node")).ToHaveCountAsync(5, new() { Timeout = 30_000 });
+        await Expect(Page.Locator(".bc-header__title")).ToContainTextAsync("Previous owners");
     }
 }

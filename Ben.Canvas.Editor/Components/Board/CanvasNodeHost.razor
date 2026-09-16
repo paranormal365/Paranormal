@@ -13,7 +13,7 @@
 @inject IOptions<CanvasEditorOptions> Options
 @inject AnnouncerService Announcer
 
-<NodeFrame Node="Node" EditData="_draft" Selected="Selected" Focused="Focused" Editing="Editing" Candidate="Candidate" GroupLabel="@GroupLabel" />
+<NodeFrame Node="Node" EditData="_draft" Selected="Selected" Focused="Focused" Editing="Editing" Candidate="Candidate" GroupLabel="@GroupLabel" OnStage="OnStage" />
 
 @code {
     private int _renderedVersion = -1;
@@ -22,6 +22,7 @@
     private bool _renderedEditing;
     private bool _renderedCandidate;
     private string? _renderedGroup;
+    private bool _renderedOnStage = true;
     private NodeData? _draft;
 
     [Parameter, EditorRequired] public CanvasNode Node { get; set; } = default!;
@@ -31,6 +32,17 @@
     [Parameter] public bool Editing { get; set; }
     [Parameter] public bool Candidate { get; set; }
     [Parameter] public string? GroupLabel { get; set; }
+
+    /// <summary>
+    /// Whether this block is the one being talked about, while the board is being presented.
+    /// </summary>
+    /// <remarks>
+    /// A parameter rather than something the frame reads for itself, because the render gate below is
+    /// the whole reason this component exists: a block that reads presentation state directly would
+    /// keep the class it was drawn with and the dimming would never move. That is exactly what
+    /// happened the first time (2026-09-16) — every card stayed lit.
+    /// </remarks>
+    [Parameter] public bool OnStage { get; set; } = true;
 
     protected override void OnParametersSet()
     {
@@ -66,7 +78,8 @@
 
     protected override bool ShouldRender() =>
         Version != _renderedVersion || Selected != _renderedSelected || Focused != _renderedFocused
-        || Editing != _renderedEditing || Candidate != _renderedCandidate || GroupLabel != _renderedGroup;
+        || Editing != _renderedEditing || Candidate != _renderedCandidate || GroupLabel != _renderedGroup
+        || OnStage != _renderedOnStage;
 
     protected override void OnAfterRender(bool firstRender)
     {
@@ -76,5 +89,6 @@
         _renderedEditing = Editing;
         _renderedCandidate = Candidate;
         _renderedGroup = GroupLabel;
+        _renderedOnStage = OnStage;
     }
 }

@@ -141,7 +141,7 @@ public sealed class CanvasKeyMapTests
 
     [Fact]
     public void Space_is_left_to_the_gesture_module() =>
-        Assert.Matches(@"e\.key === ' ' \|\| e\.key === 'Spacebar'\) return", Script());
+        Assert.Matches(@"e\.key === ' ' \|\| e\.key === 'Spacebar'\) && !presenting\) return", Script());
 
     [Fact]
     public void Shift_1_is_normalised_to_1() => Assert.Contains("Digit1", Script());
@@ -172,6 +172,31 @@ public sealed class CanvasKeyMapTests
     {
         foreach (var key in new[] { "ArrowLeft", "ArrowRight", "ArrowUp", "ArrowDown", "n", "Enter" })
             Assert.Equal(CanvasCommand.None, CanvasKeyMap.Resolve(key, ctrl: false, shift: false, alt: true, boardFocused: true));
+    }
+
+    /// <summary>P presents, like the other bare letters that add a block: one key, one intent.</summary>
+    [Theory]
+    [InlineData("p")]
+    [InlineData("P")]
+    public void P_presents_the_board_while_the_board_has_focus(string key)
+    {
+        Assert.Equal(CanvasCommand.Present, CanvasKeyMap.Resolve(key, ctrl: false, shift: false, alt: false, boardFocused: true));
+
+        // ...and does nothing while somebody is typing in a card, like every other bare letter.
+        Assert.Equal(CanvasCommand.None, CanvasKeyMap.Resolve(key, ctrl: false, shift: false, alt: false, boardFocused: false));
+    }
+
+    /// <summary>
+    /// While a board is being presented the script claims the slide keys wherever the focus is, and
+    /// hands space over instead of leaving it to the panning gesture.
+    /// </summary>
+    [Fact]
+    public void The_script_hands_the_slide_keys_to_a_presentation()
+    {
+        var script = Script();
+        Assert.Matches(@"bc-editor--presenting", script);
+        Assert.Matches(@"presenting && \(e\.key\.startsWith\('Arrow'\)", script);
+        Assert.Matches(@"e\.key === ' ' \|\| e\.key === 'Spacebar'\) && !presenting\) return", script);
     }
 
     [Fact]

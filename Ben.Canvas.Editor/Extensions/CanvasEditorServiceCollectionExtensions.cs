@@ -68,6 +68,9 @@ public static class CanvasEditorServiceCollectionExtensions
         services.TryAddScoped<AnnouncerService>();
         services.TryAddScoped<BoardGestureBridge>();
         services.TryAddScoped<KeyboardShortcutService>();
+        // Walking a board a card at a time. Changes nothing, so a reader may present a board they
+        // cannot edit — which is the meeting the feature exists for (Ben, 2026-09-16).
+        services.TryAddScoped<PresentationState>();
 
         // M4: the device store, paste and files.
         services.TryAddScoped<CanvasAssetStore>();

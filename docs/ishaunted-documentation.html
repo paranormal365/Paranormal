@@ -124,7 +124,7 @@ h1, h2, h3 { break-after: avoid-page; }
     <div class="cover-meta">
       <div>Product Documentation</div>
       <div>18 documents &middot; 6 sections</div>
-      <div>14 September 2026</div>
+      <div>16 September 2026</div>
     </div>
   </div>
   <div class="status">
@@ -1868,10 +1868,8 @@ to leave another way, the page asks first; <strong>Cancel</strong> leaves withou
 same editor for its description.</p>
 <p><img alt="The Edit Case page" src="../Ben.Web.Website/wwwroot/help/media/working-a-case/edit-case.png" />
 <em>Edit Case: the description in the wide column, status and publishing beside it.</em></p>
-<p><strong>Timeline</strong> is the working record. Entries are client reports, investigator notes, evidence and
-instrument readings; research is written on the case's <strong>Research</strong> tab instead, where each page
-carries its own date and time. Research entries written on the timeline before that change are
-still there, under the <strong>Research</strong> filter. Every entry has a visibility: internal to the group,
+<p><strong>Timeline</strong> is the working record. Entries are client reports, investigator notes, evidence,
+instrument readings and research. Every entry has a visibility: internal to the group,
 shared with the client, or public. Choose deliberately — "internal" means not shared onward, not hidden
 from its author.</p>
 <p><strong>Investigations</strong> covers scheduled visits, attendees and RSVPs, and each visit's binder.</p>
@@ -1885,93 +1883,121 @@ store. Filter the timeline by investigation to see just that visit.</p>
 <h2>Instrument readings</h2>
 <p>Readings recorded during a visit go in as <strong>Instrument Reading</strong> entries. Record the value, its
 unit, and what the ambient baseline was — a reading without its baseline cannot be judged later.</p>
-<h2>Research pages</h2>
-<p>The case's <strong>Research</strong> tab lists its research. <strong>Link</strong> and <strong>File</strong> are quick entries for a web address or a
-document. <strong>New page</strong> asks for a title, then opens a research page of its own: the place to write up what a deed,
-an obituary, a newspaper archive or a walk round a cemetery told you, with the pictures, files, links and places
-beside the words.</p>
-<p><img alt="A research page with words, a link and a map" src="../Ben.Web.Website/wwwroot/help/media/working-a-case/research-page.png" />
-<em>A published research page, as its author sees it: the page on the left, its files and links beside it.</em></p>
-<p><img alt="Building a research page" src="../Ben.Web.Website/wwwroot/help/media/working-a-case/research-page.gif" />
-<em>A new page: a title, a few words, a map with two places joined by a straight line, then Publish.</em></p>
-<p>A page is a stack of blocks. <strong>Add</strong> at the foot of the page offers five kinds:</p>
+<h2>Research boards</h2>
+<p>The case's <strong>Research</strong> tab lists its boards. A board is a space to think on: cards, notes, pictures,
+files, recordings, links and maps, laid out and joined up the way the thinking actually went. It is
+where you write up what a deed, an obituary, a newspaper archive or a walk round a cemetery told you.</p>
+<p><strong>New board</strong> opens the board editor on this case, already signed in. <strong>Open</strong> returns to one.</p>
+<p><img alt="A case's research boards" src="../Ben.Web.Website/wwwroot/help/media/working-a-case/research-boards.png" />
+<em>The Research tab: the boards on this case, who wrote each one, and whether it has been published.</em></p>
+<h3>Putting things on a board</h3>
+<p><strong>Add</strong> on the left offers a card, a note, a message, a map, a picture or a link. Double-click an
+empty part of the board to drop a note where you clicked.</p>
+<p><strong>Paste anywhere.</strong> The board reads what you pasted and makes the right thing from it: a web address
+becomes a link card with the page's title and picture, a photo becomes a picture, a recording becomes
+something that plays where it sits, a document becomes a file, and text becomes a note.</p>
+<p><strong>Drop files on the board</strong> and the same happens — and they are added to the case's <strong>Files</strong> at the
+same time, so a photograph only ever exists once.</p>
+<p><strong>The case files button</strong> (the folder, on the left) reaches the other way: it lists what the case
+already holds so you can put a photograph from last week's visit straight onto the board without
+finding it on your computer and sending it a second time.</p>
+<h3>One card after another</h3>
+<p>Select a card and four small <strong>+</strong> handles appear, one on each side. That is how a train of thought
+gets laid down:</p>
 <table>
 <thead>
 <tr>
-<th>Block</th>
-<th>What it holds</th>
+<th></th>
+<th></th>
 </tr>
 </thead>
 <tbody>
 <tr>
-<td>Text</td>
-<td>Words, with bold, lists, headings and links.</td>
+<td><strong>Click a handle</strong></td>
+<td>the next card appears on that side, already joined by an arrow, ready to type in.</td>
 </tr>
 <tr>
-<td>Picture</td>
-<td>A photo or a scan.</td>
+<td><strong>Drag a handle onto empty board</strong></td>
+<td>the same card, where you let go.</td>
 </tr>
 <tr>
-<td>File</td>
-<td>A document to download.</td>
+<td><strong>Drag a handle onto another card</strong></td>
+<td>joins those two instead of making a new one.</td>
 </tr>
 <tr>
-<td>Link</td>
-<td>A web page, shown as a card with its title, description and picture.</td>
-</tr>
-<tr>
-<td>Map</td>
-<td>Places on a map, numbered, with a route between them if you want one.</td>
+<td><strong>Ctrl+Shift and an arrow key</strong></td>
+<td>the same as clicking that side's handle.</td>
 </tr>
 </tbody>
 </table>
-<p>Paste works anywhere on the page. A picture or file you paste becomes its own block, a web address becomes a link
-card, and text becomes a text block — or, inside a text block, goes where the cursor is. Dropping files onto the page
-does the same. On a phone, <strong>Picture</strong> offers the camera.</p>
-<p><img alt="A research page on a phone" src="../Ben.Web.Website/wwwroot/help/media/working-a-case/research-page-phone.png" />
-<em>On a phone the page is one column, and Files and links folds behind a button above it.</em></p>
-<p>Drag a block by its handle to move it; on a touch screen, press and hold the handle first. The handle's menu also has
-<strong>Move up</strong>, <strong>Move down</strong>, <strong>Add text below</strong> and <strong>Delete block</strong>, and with the handle focused, Alt and the arrow
-keys move the block.</p>
-<h3>Files and links</h3>
-<p>Everything pasted, dropped or added is also kept in <strong>Files and links</strong>, beside the page (above it, behind a button,
-on a phone). <strong>Insert</strong> puts one on the page: a link goes in at the cursor of the text you are writing, a picture or
-file as a block of its own. Deleting a block leaves its file or link in the list. <strong>Remove</strong> deletes it from the list;
-a file still shown on the page has to come off the page first — and, if the published page shows it, that change
-published — so a reader never meets a missing picture.</p>
-<h3>Saving, drafts and publishing</h3>
-<p>The page saves itself a minute after you stop, and when you leave it. <strong>Save now</strong> saves at once. The status beside
-the buttons says whether everything is saved, and if a save fails, <strong>Try again</strong> is right there. Leaving with changes
-that could not be saved asks first.</p>
-<p>A new page is a draft that only you can see. <strong>Publish</strong> makes it readable by everyone who can read the case. Later
-changes are a new draft — the page says <em>Draft differs from published</em> — and the group keeps reading the published
-version until you publish again. While you hold unpublished changes, somebody else opening the page reads the
-published version and is told who is editing it; saving is stopped if the page changed underneath you, so newer work
-is never overwritten.</p>
-<h3>When it happened, and the timeline</h3>
-<p><strong>When this happened</strong> dates the page. A published page with a date appears on the case's <strong>Timeline</strong> in its place,
-as a research entry that opens the page; it is changed on the page, not on the timeline. It is internal to the group,
-like the page, and it does not appear in an investigation's binder. An undated page, or a page that has never been
-published, stays off the timeline.</p>
+<p>The new card is the same kind, size and colour as the one it grew from, and one <strong>Undo</strong> takes back
+both the card and its arrow.</p>
+<p><img alt="Growing the next card from a side handle" src="../Ben.Web.Website/wwwroot/help/media/working-a-case/board-grow.png" />
+<em>A card's four handles, and the card one of them made — joined, and waiting for words.</em></p>
+<p><img alt="Growing a card, then presenting the board" src="../Ben.Web.Website/wwwroot/help/media/working-a-case/board-grow-and-present.gif" />
+<em>A handle makes the next card, one Undo takes it back, and the board is presented a card at a time.</em></p>
+<h3>Drafts and publishing</h3>
+<p><strong>A new board is yours alone.</strong> Nobody else on the case sees it, or knows it exists, until you
+publish it — research is thought about before it is evidence. The board saves itself on your own
+machine as you work, and <strong>Save to case</strong> puts it on the server.</p>
+<p><strong>Publish</strong> shows it to everyone who can read the case, and adds a picture of the whole board to the
+case's files. Carry on afterwards and your changes are yours again until you publish once more; the
+group keeps reading the published version in the meantime, and the list says <em>published, and written
+on since</em>.</p>
+<h3>Presenting a board</h3>
+<p><strong>Present</strong> (the play button, top right) walks the board a card at a time, full screen, with
+everything else dimmed. It is for the meeting where the case gets talked through.</p>
+<p>There is nothing to prepare: <strong>the cards are the slides</strong>. The order comes from the board itself —</p>
+<ol>
+<li>if you have drawn <strong>groups</strong> round parts of the board, those are the slides, in the order they sit;</li>
+<li>otherwise <strong>the arrows</strong> decide: a chain of joined cards is walked from its start to its end;</li>
+<li>anything left over reads <strong>down the page</strong>, top to bottom.</li>
+</ol>
+<p>So growing one card out of another with the side handles builds the running order as you think.</p>
+<table>
+<thead>
+<tr>
+<th></th>
+<th></th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><strong>Right arrow</strong>, space, Page Down</td>
+<td>next card</td>
+</tr>
+<tr>
+<td><strong>Left arrow</strong>, Page Up, backspace</td>
+<td>previous card</td>
+</tr>
+<tr>
+<td><strong>Home</strong> / <strong>End</strong></td>
+<td>first / last card</td>
+</tr>
+<tr>
+<td><strong>Escape</strong></td>
+<td>stop presenting</td>
+</tr>
+</tbody>
+</table>
+<p>Select a card before pressing Present and the walk starts there. Presenting changes nothing on the
+board, so somebody who can only read a case can still be the one driving the meeting.</p>
+<p><img alt="Presenting a board" src="../Ben.Web.Website/wwwroot/help/media/working-a-case/board-presenting.png" />
+<em>Presenting: one card, everything else dimmed, and where you are in the deck.</em></p>
 <h3>Link cards</h3>
-<p>A link card shows the page's title, description, site and picture. The picture is a small copy kept on our own
-storage, so reading a card never sends anybody to the other site. We fetch the page once, when somebody signed in adds
-the link, and never for somebody who is only reading. Some addresses cannot be fetched — a private network, a page
-that is not a web page, a site too slow to answer — and those cards show the address instead.</p>
-<p>The same cards appear under links in group messages, case messages and feed posts. While you are writing, the card is
-fetched once the address is clearly finished — made with the link button, followed by a space, or followed by Enter —
-or when you move out of the box with a complete web address at the end of it; never while you are still typing one.</p>
-<h3>Map blocks</h3>
-<p>A map block starts empty, and never takes the case's address: the places on it are the ones you choose. Search for a
-town, an address or a cemetery and add the result, or tap the map to add a place where you tapped. Up to ten places;
-each can be named and given a note, moved up or down, or removed.</p>
-<p>With two places or more, <strong>Route between the places</strong> draws <strong>Straight lines</strong>, a <strong>Walking</strong> route or a <strong>Driving</strong>
-route through them, in order. Below the map, each leg shows its distance and, for walking and driving, its time, with a
-total underneath. Where no walking or driving path exists between two places — through woods, across a cemetery — that
-leg is drawn as a dashed straight line and says so. Routes are worked out each time the page is read, so they follow
-the roads as they are. <strong>Open in Maps</strong> opens the places, or the route from the first to the last, in Apple Maps.</p>
-<p><img alt="A map block with two numbered places and a driving route" src="../Ben.Web.Website/wwwroot/help/media/working-a-case/research-map.png" />
-<em>Two places the author chose, with the driving route between them and its distance and time.</em></p>
+<p>A link card shows the page's title, description, site and picture. The picture is a small copy kept on
+our own storage, so reading a card never sends anybody to the other site. We fetch the page once, when
+somebody signed in adds the link, and never for somebody who is only reading. Some addresses cannot be
+fetched — a private network, a page that is not a web page, a site too slow to answer — and those
+cards show the address instead.</p>
+<p>The same cards appear under links in group messages, case messages and feed posts.</p>
+<h3>Map boxes</h3>
+<p>A map box starts empty, and never takes the case's address: the place on it is the one you choose.
+Search for a town, an address or a cemetery, or tap the map. A published board draws a map box as its
+address rather than as map tiles, because map imagery may not be kept.</p>
+<h3>On a phone</h3>
+<p>The board works on a phone: <strong>Add</strong> and <strong>Paste</strong> sit along the bottom, pinch to zoom, drag to pan,
+and press and hold a card for the rest of its actions.</p>
 <h2>Showing your finding on your public page</h2>
 <p>A report is written for your client, and by default that is the only person who ever sees it. If
 you want the world to read what you concluded, tick <strong>Show this on our public case page</strong> on the
@@ -3696,6 +3722,10 @@ has decided its people stay unidentified to clients.</p>
 </tr>
 </tbody>
 </table>
+<p>A <strong>Viewer</strong> reads and never changes anything, whatever roles or permissions they are given: roles can widen what they
+may <em>see</em>, never what they may do. They can read the calendar and the group's messages, but cannot add, move or delete an
+event, send a message, schedule or change an investigation, add to a timeline, or vote on a request. To let somebody
+contribute, make them a Member.</p>
 <h2>The roles every group starts with</h2>
 <p>Every group begins with seven ready-made roles — <strong>Case Manager Role, Equipment Manager Role,
 CMS Manager Role, Client Manager Role, Content Manager Role, Historian Role, Secretary Role</strong> —
@@ -3868,6 +3898,9 @@ Declining tells the client, and lets them send it elsewhere without rewriting it
 <em>The calendar carries investigations and the group's own events.</em></p>
 <p>The group's <strong>Calendar</strong> holds meetings, training, anything with a time attached. Investigations
 are scheduled from the case they belong to, not here.</p>
+<p><strong>Moving an event.</strong> Drag an event to another day or time, or drag its end to make it longer or shorter. A line above the
+calendar says where it went, with <strong>Undo</strong>. A repeating event is moved from its editor instead, because dragging one date
+would move every date in the series. Deleting an event — with the ✕ on it or <strong>Delete</strong> in its editor — asks first.</p>
 <p><strong>Where it happens.</strong> Type a free-text location, or pick one of the group's saved addresses. Prefer
 the saved address: it is stored as a reference rather than copied text, so correcting the address
 once corrects every event held there. A <strong>meeting link</strong> can sit alongside it — paste a Zoom, Teams
@@ -5768,7 +5801,7 @@ close a case and keep it — so this page exists for the mistakes closing cannot
 a test row, a case opened against the wrong group.</p>
 <p>Read the preview first. It has two halves, and they are two different things happening.</p>
 <p><strong>Destroyed.</strong> Everything that exists only because the case does: its timeline, files, notes,
-messages, research, reports, investigations, contacts, votes, transfer records and any client
+messages, research boards, reports, investigations, contacts, votes, transfer records and any client
 access rows. Files the case took its own copy of are destroyed with it.</p>
 <p><strong>Kept, with the case reference removed.</strong> Anything that belongs to somebody else and merely
 mentions the case. In particular, <strong>field sessions survive</strong> — a recording belongs to the person

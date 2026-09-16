@@ -28,6 +28,31 @@ public partial class CanvasEditor
             if (await HandleModeKeyAsync(key, shift)) { StateHasChanged(); return; }
         }
 
+        // While a board is being presented the keyboard belongs to the walk: the arrows move between
+        // cards rather than nudging one, and Escape leaves. Ahead of the key map on purpose — a
+        // presenter reaching for the right arrow must never move somebody's card by 1px instead.
+        if (Presentation.Active && !ctrl && !alt)
+        {
+            switch (key)
+            {
+                case "ArrowRight" or "ArrowDown" or "PageDown" or " " or "Spacebar" or "Enter":
+                    await RunActionAsync("present-next");
+                    return;
+                case "ArrowLeft" or "ArrowUp" or "PageUp" or "Backspace":
+                    await RunActionAsync("present-previous");
+                    return;
+                case "Escape":
+                    await RunActionAsync("present-stop");
+                    return;
+                case "Home":
+                    if (Presentation.MoveTo(0)) await ShowCurrentSlideAsync();
+                    return;
+                case "End":
+                    if (Presentation.MoveTo(Presentation.Count - 1)) await ShowCurrentSlideAsync();
+                    return;
+            }
+        }
+
         var command = CanvasKeyMap.Resolve(key, ctrl, shift, alt, onBoard);
         var step = shift ? 10 : 1;
 
@@ -58,6 +83,9 @@ public partial class CanvasEditor
                 break;
             case CanvasCommand.MoveDown:
                 Nudge(0, step);
+                break;
+            case CanvasCommand.Present:
+                await RunActionAsync("present");
                 break;
             case CanvasCommand.GrowLeft:
                 GrowFromSelection(CanvasSide.Left);

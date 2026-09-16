@@ -44,12 +44,37 @@ public sealed class BoardAccessTests
         var source = File.ReadAllText(Path.Combine(RepoFiles.EditorRoot(), "Components", "CanvasEditor.razor.Actions.cs"));
         var actions = Regex.Matches(source, "case \"([a-z-]+)\":").Select(m => m.Groups[1].Value).Distinct().ToList();
         string[] allowed = ["zoom-in", "zoom-out", "zoom-reset", "fit", "toggle-props", "help", "add-menu", "more", "sheet-close",
-            "resolve-conflict", "conflict-theirs", "conflict-export", "export", "save", "add-card-here", "add-text-here"];
+            "resolve-conflict", "conflict-theirs", "conflict-export", "export", "save", "add-card-here", "add-text-here",
+            // Presenting is reading: it moves the camera and nothing else, and the meeting where a case
+            // is talked through is exactly the room where the person driving may only read it.
+            "present", "present-next", "present-previous", "present-stop"];
 
         Assert.All(actions.Except(allowed), a => Assert.True(CanvasEditor.ChangesTheBoard(a), $"{a} changes the board but a view-only board would allow it."));
         Assert.All(["zoom-in", "fit", "export", "help", "more", "add-menu"], a => Assert.False(CanvasEditor.ChangesTheBoard(a), $"{a} must stay allowed."));
         Assert.True(CanvasEditor.ChangesTheBoard("add-card"));
         Assert.True(CanvasEditor.ChangesTheBoard("add-card-here"));
+    }
+
+    /// <summary>
+    /// The presenting actions are allowed on a view-only board, and the editor names them as a set.
+    /// </summary>
+    /// <remarks>
+    /// The allow-list above would also pass if somebody quietly dropped presenting from the editor
+    /// altogether. This says the four are there, are refused by nothing, and are the same four the
+    /// editor calls presenting.
+    /// </remarks>
+    [Fact]
+    public void Presenting_is_allowed_on_a_board_somebody_may_only_read()
+    {
+        string[] presenting = ["present", "present-next", "present-previous", "present-stop"];
+
+        Assert.All(presenting, a => Assert.True(CanvasEditor.IsPresenting(a), $"{a} is no longer one of the presenting actions."));
+        Assert.All(presenting, a => Assert.False(CanvasEditor.ChangesTheBoard(a), $"{a} would be refused on a board somebody may only read."));
+
+        var source = File.ReadAllText(Path.Combine(RepoFiles.EditorRoot(), "Components", "CanvasEditor.razor.Actions.cs"));
+        Assert.All(presenting, a => Assert.Contains($"case \"{a}\":", source, StringComparison.Ordinal));
+
+        Assert.False(CanvasEditor.IsPresenting("delete"));
     }
 
     private static (BoardGestureBridge Bridge, Core.Commands.CanvasStore Store, BoardAccess Access, AnnouncerService Announcer) Bridge()

@@ -509,6 +509,9 @@ public static class Words
     public static string ResizedTo(double w, double h) => $"Resized to {N(w)} by {N(h)}.";
     public static string Connected(string a, string b) => $"Connected {a} to {b}.";
 
+    public static string Showing(int position, int count, string title) =>
+        $"Showing {position} of {count}: {title}.";
+
     public const string GrowNeedsOneBlock = "Select one block first, then Ctrl+Shift and an arrow key to add the next one beside it.";
 
     public static string GrewFrom(string kind, CanvasSide side, string from) =>

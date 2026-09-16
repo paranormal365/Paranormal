@@ -1458,39 +1458,51 @@ public sealed class HelpMediaCapture : BenTestBase
 
     // ── Group members ─────────────────────────────────────────────────────────
 
-    /// <summary>The research page the development seed puts on the Belmont case.</summary>
-    private const string SeededResearchPageId = "12000001-0000-0000-0000-000000000001";
-
     /// <summary>
-    /// working-a-case: the Edit Case page, and a research page — whole, on a phone, and its map block.
+    /// working-a-case: the Edit Case page, the case's boards, and a board being grown and presented.
     /// </summary>
     /// <remarks>
-    /// Beta feedback, 2026-09-14. The research page is the seeded one (text, a link and a two-place driving map),
-    /// so the shots change nothing. Opened as Sarah, who manages the case, so the page shows as its author sees it: the
-    /// save status, Save now and Publish, and Files and links beside it.
+    /// The board is the seeded one on the Belmont case — four cards joined in a chain and a note beside them — so the
+    /// shots change nothing. Opened as Sarah, who manages the case, so it shows as its author sees it. The growing
+    /// shot selects a card to bring its side handles up; the presenting shot starts the walk and steps once, so the
+    /// picture shows a card being talked about rather than the first one.
     /// </remarks>
     [Test]
-    [Description("working-a-case: the Edit Case page and a research page with its map.")]
-    public async Task Capture_EditCaseAndResearchPages()
+    [Description("working-a-case: the Edit Case page, research boards, growing a card and presenting.")]
+    public async Task Capture_EditCaseAndResearchBoards()
     {
         await LoginAsync(UserEmail, UserPassword);
         if (!await OpenOrgCaseAsync("Paranormal365", "Belmont"))
             Assert.Ignore("The seeded Belmont case is not in this database.");
-        var caseUrl = Page.Url.Split('?')[0];
 
         await ClickUntilUrlAsync(Page.Locator("#case-edit"), @"/cases/[0-9a-f\-]+/edit$");
         await Expect(Page.Locator("#case-edit-description .k-editor")).ToBeVisibleAsync(new() { Timeout = 15_000 });
         await ShootAsync("working-a-case", "edit-case.png", proves: "Status and publishing");
 
-        await Page.GotoAsync($"{caseUrl}/research/{SeededResearchPageId}");
-        await WaitForTheCircuitAsync();
-        await Expect(Page.Locator("#research-page-title")).ToBeVisibleAsync(new() { Timeout = 20_000 });
-        await Page.Locator("[data-testid=map-block] .ben-map canvas").First.WaitForAsync(new() { Timeout = 20_000 });
-        await Page.WaitForTimeoutAsync(4_000);   // map tiles and the route's framing animation
-        await ShootAsync("working-a-case", "research-page.png", proves: "Who lived here before");
-        await ShootAsync("working-a-case", "research-map.png", selector: "section[data-kind=map]", proves: "Mount Olivet Cemetery");
-        await Page.EvaluateAsync("() => window.scrollTo(0, 0)");   // the map shot scrolled down to it; the phone shot is the page's top
-        await ShootAsync("working-a-case", "research-page-phone.png", proves: "Who lived here before", width: 390);
+        await Page.GoBackAsync();
+        var boards = Main.Locator("[data-testid=case-research-boards]");
+        await OpenTabAsync("Research", boards);
+        await SkipAnyTourAsync();
+        await ShootAsync("working-a-case", "research-boards.png", proves: "Previous owners and where they are buried");
+
+        // Into the canvas itself. A separate application on its own host, so the wait is for the editor's own
+        // ready flag rather than for anything the site renders.
+        await boards.GetByText("Previous owners and where they are buried").ClickAsync();
+        await Page.WaitForURLAsync(new System.Text.RegularExpressions.Regex(@"localhost:5125"), new() { Timeout = 30_000 });
+        await Expect(Page.Locator("[data-bc-ready=true]")).ToBeVisibleAsync(new() { Timeout = 60_000 });
+        await Page.WaitForTimeoutAsync(2_000);   // the board's first framing animation
+
+        // A selected card wears the four side handles; that is the picture the help text describes.
+        await Page.Locator(".bc-node").First.ClickAsync();
+        await Expect(Page.Locator(".bc-port").First).ToBeVisibleAsync(new() { Timeout = 15_000 });
+        await ShootAsync("working-a-case", "board-grow.png", proves: "Built 1924");
+
+        await Page.Locator("[data-bc-action=present]").ClickAsync();
+        await Expect(Page.Locator(".bc-present")).ToBeVisibleAsync(new() { Timeout = 15_000 });
+        await Page.Keyboard.PressAsync("ArrowRight");
+        await Page.WaitForTimeoutAsync(1_500);   // the walk's move to the next card
+        await ShootAsync("working-a-case", "board-presenting.png", proves: "Sold 1951");
+        await Page.Keyboard.PressAsync("Escape");
     }
 
     [Test]

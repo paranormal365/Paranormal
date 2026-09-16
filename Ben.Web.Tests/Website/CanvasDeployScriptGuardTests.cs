@@ -192,6 +192,28 @@ public sealed class CanvasDeployScriptGuardTests
         }
     }
 
+    /// <summary>
+    /// The API lets the canvas host talk to it in development.
+    /// </summary>
+    /// <remarks>
+    /// <b>This was broken and nothing said so.</b> The canvas runs on its own port in development, so
+    /// the handover from a case's Research tab exchanges its one-use code cross-origin. With the canvas
+    /// origin missing from the development CORS list, that exchange was refused by the browser, the
+    /// editor opened SIGNED OUT on whatever board the device happened to be holding, and every test
+    /// still passed — they checked that the editor appeared, not that it had arrived signed in
+    /// (found while re-shooting the help pictures, 2026-09-16).
+    ///
+    /// Production needs no entry: the canvas is served from the same origin there, under /editors/canvas/.
+    /// </remarks>
+    [Fact]
+    public void The_development_CORS_list_names_the_canvas_host()
+    {
+        var settings = RepoFile("Ben.Data.WebApi/appsettings.Development.json");
+        var canvas = Ben.Web.Services.StandaloneCanvasAddress.DevelopmentUrl.TrimEnd('/');
+
+        Assert.Contains(canvas, settings, StringComparison.Ordinal);
+    }
+
     [Fact]
     public void DeployDocs_describe_the_canvas()
     {

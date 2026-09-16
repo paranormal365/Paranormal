@@ -328,9 +328,7 @@ public sealed class ProductWalk : BenTestBase
         {
             await OpenCaseNamedAsync(org, "Belmont");
             await GoAsync(new Uri(Page.Url).AbsolutePath + "?tab=research");
-        }, Main.Locator("[data-testid=research-page-link]"));
-        await StepAsync("a published research page, to read", () => ClickUntilUrlAsync(Main.Locator("[data-testid=research-page-link]").First, "/research/"),
-            Main.Locator("[data-testid=block-reader]"));
+        }, Main.Locator("[data-testid=case-research-boards]"));
         await StepAsync("a published case: vote and take it back", async () =>
         {
             await GoAsync("/o/paranormal365/cases");
@@ -432,11 +430,10 @@ public sealed class ProductWalk : BenTestBase
         }, Main.Locator("#case-edit-description .k-editor"));
         await StepAsync("leaving Edit Case unchanged goes back to the case", () => ClickUntilUrlAsync(Main.Locator("#case-edit-cancel"), $@"/organizations/{org}/cases/[0-9a-f\-]{{36}}$"));
         await StepAsync("case notes, formatted", () => GoAsync(new Uri(Page.Url).AbsolutePath + "?tab=notes"), Main.Locator("#case-notes-new"));
-        await StepAsync("the timeline, with its research page", () => GoAsync(new Uri(Page.Url).AbsolutePath + "?tab=timeline"),
-            Main.Locator("[data-testid=timeline-open-research-page]"));
-        await StepAsync("research, with New page", () => GoAsync(new Uri(Page.Url).AbsolutePath + "?tab=research"), Main.Locator("#research-new-page"));
-        await StepAsync("a research page, as somebody who may edit it", () => ClickUntilUrlAsync(Main.Locator("[data-testid=research-page-link]").First, "/research/"),
-            Main.Locator("[data-testid=block-page]"));
+        await StepAsync("the timeline", () => GoAsync(new Uri(Page.Url).AbsolutePath + "?tab=timeline"));
+        // The boards themselves live in another application on another host, so the walk stops at the door: it is
+        // checking the site's own pages, and CanvasResearchHandoverTests covers what is through it.
+        await StepAsync("research, with New board", () => GoAsync(new Uri(Page.Url).AbsolutePath + "?tab=research"), Main.Locator("#research-new-board"));
         var caseAddress = $"/organizations/{org}/cases";
         await StepAsync("an investigation from the list", async () =>
         {

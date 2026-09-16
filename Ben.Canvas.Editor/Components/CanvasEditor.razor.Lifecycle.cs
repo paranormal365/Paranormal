@@ -146,6 +146,7 @@ public partial class CanvasEditor
         Layout.Changed -= OnLayoutChanged;
         ServerSession.Changed -= OnServerChanged;
         Access.Changed -= OnServerChanged;
+        Presentation.Changed -= OnPresentationChanged;
         if (SignIn is not null) SignIn.Changed -= OnSignInChanged;
 
         try { await Documents.FlushAsync(); } catch (Exception) { }

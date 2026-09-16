@@ -33,6 +33,7 @@
 @inject IServiceProvider Services
 @inject LinkPreviewResolver Links
 @inject ICanvasMediaStore Media
+@inject PresentationState Presentation
 @inject BoardSnapshotService Snapshots
 @inject ILoggerFactory LoggerFactory
 
@@ -46,12 +47,19 @@
                      CanUndo="@Store.CanUndo" CanRedo="@Store.CanRedo"
                      UndoDescription="@Store.UndoDescription" RedoDescription="@Store.RedoDescription"
                      PropertiesOpen="@Layout.PropsOpen"
+                     CanPresent="@(Store.Document.Nodes.Count > 0)"
                      OnAction="RunActionAsync" />
     <ToolRail OnAction="RunActionAsync" ReadOnly="@(!Access.CanEdit)" CanPickCaseFiles="@CanPickCaseFiles" CanUndo="@Store.CanUndo" CanRedo="@Store.CanRedo" UndoDescription="@Store.UndoDescription" RedoDescription="@Store.RedoDescription" />
     <div class="bc-editor__body bc-board-wrap">
         <CanvasBoard @ref="_board" ConnectCandidateId="@ConnectCandidate" />
         <BoardEmptyState Visible="@((_ready || !OperatingSystem.IsBrowser()) && Store.Document.Nodes.Count == 0)" OnAction="RunActionAsync" ReadOnly="@(!Access.CanEdit)" />
         <ZoomControls Zoom="@Viewport.Current.Zoom" OnAction="RunActionAsync" />
+        @if (Presentation.Active)
+        {
+            <PresentationBar Index="@Presentation.Index" Count="@Presentation.Count" Title="@(Presentation.Current?.Title)"
+                             HasNext="@Presentation.HasNext" HasPrevious="@Presentation.HasPrevious"
+                             OnAction="RunActionAsync" />
+        }
         @if (Options.Value.ShowMinimap)
         {
             <Minimap OnViewportMoved="@(() => Bridge.PushViewportAsync())" />
@@ -151,7 +159,10 @@
     private DateTime _lastAddAt;
     private int _addCascade;
 
-    private string RootClass => Layout.PropsOpen ? "bc-editor bc-editor--props" : "bc-editor";
+    private string RootClass =>
+        Presentation.Active ? "bc-editor bc-editor--presenting"
+        : Layout.PropsOpen ? "bc-editor bc-editor--props"
+        : "bc-editor";
 
     // The board's own case, not the host's parameter: the editor can be opened on one case and then
     // have another case's board opened into it, and the files offered must follow the board.
@@ -181,6 +192,7 @@
         Layout.Changed += OnLayoutChanged;
         ServerSession.Changed += OnServerChanged;
         Access.Changed += OnServerChanged;
+        Presentation.Changed += OnPresentationChanged;
 
         // A piece somebody else put on a case board stays theirs: the screen locks it, and the store refuses the
         // command anyway, so a menu item or a keyboard shortcut cannot reach round the lock (Ben, 2026-09-16).
@@ -195,6 +207,9 @@
     private ICanvasSignInState? SignIn { get; set; }
 
     private void OnServerChanged() => _ = InvokeAsync(StateHasChanged);
+
+    /// <summary>The walk moved: the bar, the dimming and the root's class all follow from its state.</summary>
+    private void OnPresentationChanged() => _ = InvokeAsync(StateHasChanged);
 
     private void OnStoreChanged(CanvasChange change)
     {

@@ -23,7 +23,7 @@ function aPopupIsOpen() {
 let dotnetRef = null
 let handler = null
 
-const BOARD_KEYS = ['r', 'R', 'c', 'C', 't', 'T', 'n', 'N', 'm', 'M', 'i', 'I', 'l', 'L', '[', ']', '?', 'Enter', 'F2']
+const BOARD_KEYS = ['r', 'R', 'c', 'C', 't', 'T', 'n', 'N', 'm', 'M', 'i', 'I', 'l', 'L', 'p', 'P', '[', ']', '?', 'Enter', 'F2']
 const CTRL_KEYS = ['z', 'Z', 'y', 'Y', 'd', 'D', 'a', 'A', 's', 'S', 'g', 'G', '0', '=', '+', '-', '[', ']', '{', '}']
 
 export function register(ref) {
@@ -41,7 +41,10 @@ export function register(ref) {
 
     if (e.key === 'Escape' && aPopupIsOpen()) return
 
-    if (e.key === ' ' || e.key === 'Spacebar') return
+    // Space is the gesture module's, for panning — except while a board is being presented, where
+    // there is nothing to pan and space is how a room expects to advance a slide.
+    const presenting = !!document.querySelector('.bc-editor--presenting')
+    if ((e.key === ' ' || e.key === 'Spacebar') && !presenting) return
 
     const ctrl = e.ctrlKey || e.metaKey
     const onBoard = !!active?.closest('.bc-board')
@@ -50,7 +53,11 @@ export function register(ref) {
     if (e.shiftKey && !ctrl && e.code === 'Digit1') key = '1'
     if (ctrl && e.shiftKey && key === '+') key = '='
 
-    const claimed = (onBoard && (e.key === 'Delete' || e.key === 'Backspace' || e.key.startsWith('Arrow') || e.key === 'Home'))
+    // Presenting claims the keys a slide show uses, wherever the focus happens to be: a presenter
+    // pressing space must not scroll the page out from under the card.
+    const claimed = (presenting && (e.key.startsWith('Arrow') || e.key === ' ' || e.key === 'Spacebar'
+                                    || e.key === 'PageUp' || e.key === 'PageDown' || e.key === 'Home' || e.key === 'End'))
+      || (onBoard && (e.key === 'Delete' || e.key === 'Backspace' || e.key.startsWith('Arrow') || e.key === 'Home'))
       || (onBoard && !ctrl && !e.altKey && BOARD_KEYS.includes(e.key))
       || (ctrl && !e.altKey && CTRL_KEYS.includes(e.key))
       || (ctrl && e.shiftKey && (e.key === 'l' || e.key === 'L'))

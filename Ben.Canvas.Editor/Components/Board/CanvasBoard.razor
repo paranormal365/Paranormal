@@ -14,6 +14,7 @@
 *@
 @implements IDisposable
 @inject CanvasStore Store
+@inject PresentationState Presentation
 @inject SelectionState Selection
 @inject CanvasViewportState Viewport
 @inject IOptions<CanvasEditorOptions> Options
@@ -33,7 +34,8 @@
                                 Focused="@(Selection.FocusedNodeId == node.Id || (Selection.FocusedNodeId is null && node.Id == _firstId))"
                                 Editing="@(Selection.EditingNodeId == node.Id)"
                                 Candidate="@(ConnectCandidateId == node.Id)"
-                                GroupLabel="@GroupLabelOf(node)" />
+                                GroupLabel="@GroupLabelOf(node)"
+                                OnStage="@Presentation.IsOnStage(node)" />
             }
         </div>
         <SelectionOverlay />
@@ -64,6 +66,8 @@
         Store.OnChange += OnStoreChanged;
         Selection.OnChanged += OnOtherChanged;
         Viewport.OnChanged += OnViewportChanged;
+        // The walk moves which block is on stage, and only this component passes that down.
+        Presentation.Changed += OnOtherChanged;
     }
 
     protected override bool ShouldRender() => !Viewport.GestureActive;
@@ -101,6 +105,7 @@
 
     public void Dispose()
     {
+        Presentation.Changed -= OnOtherChanged;
         Store.OnChange -= OnStoreChanged;
         Selection.OnChanged -= OnOtherChanged;
         Viewport.OnChanged -= OnViewportChanged;

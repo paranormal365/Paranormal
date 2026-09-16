@@ -4,12 +4,12 @@ using NUnit.Framework;
 namespace Ben.Web.Playwright.Tests;
 
 /// <summary>
-/// Research is not offered as a kind of new timeline entry; entries already written as research still show and can
-/// still be picked out, and instrument readings can be picked out at last.
+/// Every kind of timeline entry can be added, research included, and every kind can be filtered for.
 /// </summary>
 /// <remarks>
-/// Beta feedback, 2026-09-14: research has its own tab, and its pages carry their own date and time. The seeded demo
-/// cases each have one legacy research entry on their timeline, which is what proves the old rows survive.
+/// Research came off the list on 2026-09-14, when research pages carried their own dates, and went back on
+/// 2026-09-16 when those pages were retired for boards. A board is not a dated moment, so a note about what the
+/// deeds said needs the timeline again.
 /// </remarks>
 [TestFixture]
 [Category("CaseManagement")]
@@ -32,7 +32,7 @@ public class CaseTimelineTypeTests : BenTestBase
     }
 
     [Test]
-    public async Task AddEntry_DoesNotOfferResearch()
+    public async Task AddEntry_OffersEveryKindIncludingResearch()
     {
         await OpenFirstSeededCaseTimelineAsync();
 
@@ -43,13 +43,13 @@ public class CaseTimelineTypeTests : BenTestBase
         var options = await modal.Locator("select").First.Locator("option").AllInnerTextsAsync();
         var names = options.Select(o => o.Trim()).Where(o => o.Length > 0).ToList();
 
-        Assert.That(names, Does.Not.Contain("Research"), "Research is still offered for a new timeline entry");
+        Assert.That(names, Does.Contain("Research"), "Research is no longer offered for a new timeline entry");
         Assert.That(names, Does.Contain("Investigator note"));
         Assert.That(names, Does.Contain("Instrument reading"));
     }
 
     [Test]
-    public async Task FilterRow_KeepsResearch_AndAddsInstrumentReading()
+    public async Task FilterRow_OffersResearchAndInstrumentReading()
     {
         await OpenFirstSeededCaseTimelineAsync();
 

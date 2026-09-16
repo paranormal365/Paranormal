@@ -26,6 +26,16 @@
             <BcIcon Name="rotate-cw" />
         </button>
         @ActionsContent
+        @* Ben, 2026-09-16: "presentation mode like miro where you can create the cards like slides."
+           Shown to readers too — presenting changes nothing, and the meeting is where a case is talked through. *@
+        @if (CanPresent)
+        {
+            <button type="button" class="bc-header__button" data-bc-action="present"
+                    aria-label="Present this board" title="Present this board"
+                    @onclick="@(() => OnAction.InvokeAsync("present"))">
+                <BcIcon Name="play" />
+            </button>
+        }
         <button type="button" class="bc-header__button bc-header__props" data-bc-action="properties"
                 aria-controls="bc-props" aria-expanded="@(PropertiesOpen ? "true" : "false")" aria-pressed="@(PropertiesOpen ? "true" : "false")"
                 aria-label="Properties" title="Properties" @onclick="@(() => OnAction.InvokeAsync("toggle-props"))">
@@ -58,7 +68,10 @@
     [Parameter] public bool CanRedo { get; set; }
     [Parameter] public string? UndoDescription { get; set; }
     [Parameter] public string? RedoDescription { get; set; }
-    [Parameter] public bool PropertiesOpen { get; set; } = true;
+    [Parameter] public bool PropertiesOpen { get; set; }
+
+    /// <summary>Whether there is anything on the board to walk through.</summary>
+    [Parameter] public bool CanPresent { get; set; } = true;
     [Parameter] public EventCallback<string> OnAction { get; set; }
 
     private string UndoName => UndoDescription is null ? "Undo" : $"Undo {UndoDescription.ToLowerInvariant()}";

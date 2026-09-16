@@ -51,6 +51,9 @@
     [Parameter] public bool Candidate { get; set; }
     [Parameter] public string? GroupLabel { get; set; }
 
+    /// <summary>While the board is presented, whether this is the block being talked about.</summary>
+    [Parameter] public bool OnStage { get; set; } = true;
+
     public ElementReference Element => _element;
 
     private BlockDescriptor Descriptor => BlockRegistry.Get(Node.Type);
@@ -58,7 +61,10 @@
     private string CssClass =>
         "bc-node bc-node--" + Node.Type.ToString().ToLowerInvariant()
         + (Editing ? " bc-node--editing" : "")
-        + (Candidate ? " bc-node--candidate" : "");
+        + (Candidate ? " bc-node--candidate" : "")
+        // While a board is being presented this marks the card being talked about; the CSS dims the
+        // rest. Always true when nobody is presenting, so the class costs nothing the rest of the time.
+        + (OnStage ? " bc-node--onstage" : "");
 
     private string Style
     {

@@ -18,6 +18,12 @@ read.
 This stream deliberately does not repeat the website's list. A change people meet as a page
 belongs there; this is for the part underneath.
 
+## 2026-09-16
+
+- Research boards on a case have their own addresses: a group's boards, one board, and publishing one. A board nobody has published is not in the list for anybody but the person writing it.
+- The older research pages and their attachments have been removed, along with their addresses. Files those pages referred to are untouched: they are the case's files and stay on the case's Files tab.
+- The canvas is no longer behind a site switch. It answers signed-in callers wherever the service is running.
+
 ## 2026-09-14
 
 - A client's list of cases now says which request each case was accepted from, as a new field that older apps ignore.

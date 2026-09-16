@@ -70,10 +70,8 @@ same editor for its description.
 ![The Edit Case page](/help/media/working-a-case/edit-case.png)
 *Edit Case: the description in the wide column, status and publishing beside it.*
 
-**Timeline** is the working record. Entries are client reports, investigator notes, evidence and
-instrument readings; research is written on the case's **Research** tab instead, where each page
-carries its own date and time. Research entries written on the timeline before that change are
-still there, under the **Research** filter. Every entry has a visibility: internal to the group,
+**Timeline** is the working record. Entries are client reports, investigator notes, evidence,
+instrument readings and research. Every entry has a visibility: internal to the group,
 shared with the client, or public. Choose deliberately — "internal" means not shared onward, not hidden
 from its author.
 
@@ -94,93 +92,111 @@ store. Filter the timeline by investigation to see just that visit.
 Readings recorded during a visit go in as **Instrument Reading** entries. Record the value, its
 unit, and what the ambient baseline was — a reading without its baseline cannot be judged later.
 
-## Research pages
+## Research boards
 
-The case's **Research** tab lists its research. **Link** and **File** are quick entries for a web address or a
-document. **New page** asks for a title, then opens a research page of its own: the place to write up what a deed,
-an obituary, a newspaper archive or a walk round a cemetery told you, with the pictures, files, links and places
-beside the words.
+The case's **Research** tab lists its boards. A board is a space to think on: cards, notes, pictures,
+files, recordings, links and maps, laid out and joined up the way the thinking actually went. It is
+where you write up what a deed, an obituary, a newspaper archive or a walk round a cemetery told you.
 
-![A research page with words, a link and a map](/help/media/working-a-case/research-page.png)
-*A published research page, as its author sees it: the page on the left, its files and links beside it.*
+**New board** opens the board editor on this case, already signed in. **Open** returns to one.
 
-![Building a research page](/help/media/working-a-case/research-page.gif)
-*A new page: a title, a few words, a map with two places joined by a straight line, then Publish.*
+![A case's research boards](/help/media/working-a-case/research-boards.png)
+*The Research tab: the boards on this case, who wrote each one, and whether it has been published.*
 
-A page is a stack of blocks. **Add** at the foot of the page offers five kinds:
+### Putting things on a board
 
-| Block | What it holds |
+**Add** on the left offers a card, a note, a message, a map, a picture or a link. Double-click an
+empty part of the board to drop a note where you clicked.
+
+**Paste anywhere.** The board reads what you pasted and makes the right thing from it: a web address
+becomes a link card with the page's title and picture, a photo becomes a picture, a recording becomes
+something that plays where it sits, a document becomes a file, and text becomes a note.
+
+**Drop files on the board** and the same happens — and they are added to the case's **Files** at the
+same time, so a photograph only ever exists once.
+
+**The case files button** (the folder, on the left) reaches the other way: it lists what the case
+already holds so you can put a photograph from last week's visit straight onto the board without
+finding it on your computer and sending it a second time.
+
+### One card after another
+
+Select a card and four small **+** handles appear, one on each side. That is how a train of thought
+gets laid down:
+
+| | |
 |---|---|
-| Text | Words, with bold, lists, headings and links. |
-| Picture | A photo or a scan. |
-| File | A document to download. |
-| Link | A web page, shown as a card with its title, description and picture. |
-| Map | Places on a map, numbered, with a route between them if you want one. |
+| **Click a handle** | the next card appears on that side, already joined by an arrow, ready to type in. |
+| **Drag a handle onto empty board** | the same card, where you let go. |
+| **Drag a handle onto another card** | joins those two instead of making a new one. |
+| **Ctrl+Shift and an arrow key** | the same as clicking that side's handle. |
 
-Paste works anywhere on the page. A picture or file you paste becomes its own block, a web address becomes a link
-card, and text becomes a text block — or, inside a text block, goes where the cursor is. Dropping files onto the page
-does the same. On a phone, **Picture** offers the camera.
+The new card is the same kind, size and colour as the one it grew from, and one **Undo** takes back
+both the card and its arrow.
 
-![A research page on a phone](/help/media/working-a-case/research-page-phone.png)
-*On a phone the page is one column, and Files and links folds behind a button above it.*
+![Growing the next card from a side handle](/help/media/working-a-case/board-grow.png)
+*A card's four handles, and the card one of them made — joined, and waiting for words.*
 
-Every block has one handle beside it (⋮). Drag the handle to move the block; on a touch screen, press and hold it
-first. Click or tap the handle for **Move up**, **Move down**, **Add text below** and **Delete block**, and with the
-handle focused, Alt and the arrow keys move the block.
+![Growing a card, then presenting the board](/help/media/working-a-case/board-grow-and-present.gif)
+*A handle makes the next card, one Undo takes it back, and the board is presented a card at a time.*
 
-### Files and links
+### Drafts and publishing
 
-Everything pasted, dropped or added is also kept in **Files and links**, beside the page (above it, behind a button,
-on a phone). **Insert** puts one on the page: a link goes in at the cursor of the text you are writing, a picture or
-file as a block of its own. Deleting a block leaves its file or link in the list. **Remove** deletes it from the list;
-a file still shown on the page has to come off the page first — and, if the published page shows it, that change
-published — so a reader never meets a missing picture.
+**A new board is yours alone.** Nobody else on the case sees it, or knows it exists, until you
+publish it — research is thought about before it is evidence. The board saves itself on your own
+machine as you work, and **Save to case** puts it on the server.
 
-### Saving, drafts and publishing
+**Publish** shows it to everyone who can read the case, and adds a picture of the whole board to the
+case's files. Carry on afterwards and your changes are yours again until you publish once more; the
+group keeps reading the published version in the meantime, and the list says *published, and written
+on since*.
 
-The page saves itself a minute after you stop, and when you leave it. **Save now** saves at once. The status beside
-the buttons says whether everything is saved, and if a save fails, **Try again** is right there. Leaving with changes
-that could not be saved asks first.
+### Presenting a board
 
-A new page is a draft that only you can see. **Publish** makes it readable by everyone who can read the case. Later
-changes are a new draft — the page says *Draft differs from published* — and the group keeps reading the published
-version until you publish again. While you hold unpublished changes, somebody else opening the page reads the
-published version and is told who is editing it; saving is stopped if the page changed underneath you, so newer work
-is never overwritten.
+**Present** (the play button, top right) walks the board a card at a time, full screen, with
+everything else dimmed. It is for the meeting where the case gets talked through.
 
-### When it happened, and the timeline
+There is nothing to prepare: **the cards are the slides**. The order comes from the board itself —
 
-A new page is undated. **Add a date** opens a date and a time, starting from the current hour, to change to
-the moment the page is about; **Remove date** undates it again. A published page with a date appears on the case's
-**Timeline** in its place, as a research entry that opens the page; it is changed on the page, not on the timeline.
-It is internal to the group, like the page, and it does not appear in an investigation's binder. An undated page, or a
-page that has never been published, stays off the timeline.
+1. if you have drawn **groups** round parts of the board, those are the slides, in the order they sit;
+2. otherwise **the arrows** decide: a chain of joined cards is walked from its start to its end;
+3. anything left over reads **down the page**, top to bottom.
+
+So growing one card out of another with the side handles builds the running order as you think.
+
+| | |
+|---|---|
+| **Right arrow**, space, Page Down | next card |
+| **Left arrow**, Page Up, backspace | previous card |
+| **Home** / **End** | first / last card |
+| **Escape** | stop presenting |
+
+Select a card before pressing Present and the walk starts there. Presenting changes nothing on the
+board, so somebody who can only read a case can still be the one driving the meeting.
+
+![Presenting a board](/help/media/working-a-case/board-presenting.png)
+*Presenting: one card, everything else dimmed, and where you are in the deck.*
 
 ### Link cards
 
-A link card shows the page's title, description, site and picture. The picture is a small copy kept on our own
-storage, so reading a card never sends anybody to the other site. We fetch the page once, when somebody signed in adds
-the link, and never for somebody who is only reading. Some addresses cannot be fetched — a private network, a page
-that is not a web page, a site too slow to answer — and those cards show the address instead.
+A link card shows the page's title, description, site and picture. The picture is a small copy kept on
+our own storage, so reading a card never sends anybody to the other site. We fetch the page once, when
+somebody signed in adds the link, and never for somebody who is only reading. Some addresses cannot be
+fetched — a private network, a page that is not a web page, a site too slow to answer — and those
+cards show the address instead.
 
-The same cards appear under links in group messages, case messages and feed posts. While you are writing, the card is
-fetched once the address is clearly finished — made with the link button, followed by a space, or followed by Enter —
-or when you move out of the box with a complete web address at the end of it; never while you are still typing one.
+The same cards appear under links in group messages, case messages and feed posts.
 
-### Map blocks
+### Map boxes
 
-A map block starts empty, and never takes the case's address: the places on it are the ones you choose. Search for a
-town, an address or a cemetery and add the result, or tap the map to add a place where you tapped. Up to ten places;
-each can be named and given a note, moved up or down, or removed.
+A map box starts empty, and never takes the case's address: the place on it is the one you choose.
+Search for a town, an address or a cemetery, or tap the map. A published board draws a map box as its
+address rather than as map tiles, because map imagery may not be kept.
 
-With two places or more, **Route between the places** draws **Straight lines**, a **Walking** route or a **Driving**
-route through them, in order. Below the map, each leg shows its distance and, for walking and driving, its time, with a
-total underneath. Where no walking or driving path exists between two places — through woods, across a cemetery — that
-leg is drawn as a dashed straight line and says so. Routes are worked out each time the page is read, so they follow
-the roads as they are. **Open in Maps** opens the places, or the route from the first to the last, in Apple Maps.
+### On a phone
 
-![A map block with two numbered places and a driving route](/help/media/working-a-case/research-map.png)
-*Two places the author chose, with the driving route between them and its distance and time.*
+The board works on a phone: **Add** and **Paste** sit along the bottom, pinch to zoom, drag to pan,
+and press and hold a card for the rest of its actions.
 
 ## Showing your finding on your public page
 
