@@ -77,7 +77,7 @@
     private bool _busy;
     private string? _error;
 
-    private string SignInUrl => $"/login?returnUrl={Uri.EscapeDataString(NavManager.Uri)}";
+    private string SignInUrl => SignInLink.For(NavManager);
 
     /// <summary>
     /// Waits for auth to resolve before the foot line decides what to say.

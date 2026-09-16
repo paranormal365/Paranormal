@@ -50,13 +50,13 @@
                         <div class="col-sm-6">
                             <label class="form-label" for="signup-first">First name</label>
                             <InputText id="signup-first" class="form-control" @bind-Value="_form.FirstName" @bind-Value:after="TidyFirstName"
-                                       autocomplete="given-name" placeholder="Sarah" />
+                                       autocomplete="given-name" placeholder="e.g. Casey" />
                             <ValidationMessage For="@(() => _form.FirstName)" class="text-danger small" />
                         </div>
                         <div class="col-sm-6">
                             <label class="form-label" for="signup-last">Last name</label>
                             <InputText id="signup-last" class="form-control" @bind-Value="_form.LastName" @bind-Value:after="TidyLastName"
-                                       autocomplete="family-name" placeholder="Mitchell" />
+                                       autocomplete="family-name" placeholder="e.g. Miller" />
                             <ValidationMessage For="@(() => _form.LastName)" class="text-danger small" />
                         </div>
                     </div>
@@ -64,7 +64,7 @@
                     <div class="mb-3">
                         <label class="form-label" for="signup-name">Display name</label>
                         <InputText id="signup-name" class="form-control" @bind-Value="_form.DisplayName"
-                                   autocomplete="name" placeholder="Sarah Mitchell" />
+                                   autocomplete="name" placeholder="e.g. Casey Miller" />
                         <div class="form-text">What people see on your posts and your profile. You can change this later.</div>
                         <ValidationMessage For="@(() => _form.DisplayName)" class="text-danger small" />
                     </div>
@@ -78,7 +78,7 @@
                                    @oninput="OnHandleInput"
                                    autocomplete="off" spellcheck="false"
                                    maxlength="@UserHandle.MaxLength"
-                                   placeholder="sarahmitchell" />
+                                   placeholder="e.g. caseymiller" />
                         </div>
                         <div class="form-text">
                             How people mention you — <code>@@@(string.IsNullOrEmpty(_form.Handle) ? "yourname" : _form.Handle)</code>.

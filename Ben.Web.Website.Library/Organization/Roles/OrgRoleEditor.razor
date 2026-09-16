@@ -158,9 +158,7 @@ else if (_role is not null)
                         <Template>
                             @{
                                 var row = (OrganizationRoleMembershipRecord)context;
-                                <button type="button" class="btn @(ThemeConstants.Button.FillMode.Outline == ThemeConstants.Button.FillMode.Solid ? "btn-danger" : "btn-outline-danger") btn-sm" @onclick="@(() => RemoveMemberAsync(row))"><BenIcon Name="trash-2" Class="me-1" />
-                                    Remove
-                                </button>
+                                <BenGridAction Icon="user-x" Label="Remove" Tone="GridActionTone.Danger" OnClick="@(() => RemoveMemberAsync(row))" />
                             }
                         </Template>
                     </GridColumn>

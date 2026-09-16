@@ -22,8 +22,12 @@ public sealed class CaseNoteController : BenControllerBase
     private readonly Services.Billing.SubscriptionLimitGuard _limits;
 
     public CaseNoteController(IDbContextFactory<BenDataContext> db, IMapper mapper, Services.Billing.SubscriptionLimitGuard limits,
-        Ben.Service.RepositoryService.GenericInterfaces.IOrganizationSecurityService security)
-    { _db = db; _mapper = mapper; _limits = limits; _security = security; }
+        Ben.Service.RepositoryService.GenericInterfaces.IOrganizationSecurityService security,
+        Services.ICmsMarkupSanitizer sanitizer)
+    { _db = db; _mapper = mapper; _limits = limits; _security = security; _sanitizer = sanitizer; }
+
+    /// <summary>Note bodies are stored and returned as sanitized HTML (beta feedback, 2026-09-14) — see CaseNoteBodies.</summary>
+    private readonly Services.ICmsMarkupSanitizer _sanitizer;
 
     private readonly Ben.Service.RepositoryService.GenericInterfaces.IOrganizationSecurityService _security;
 
@@ -39,7 +43,10 @@ public sealed class CaseNoteController : BenControllerBase
             .OrderByDescending(n => n.IsPinned)
             .ThenByDescending(n => n.DateCreated)
             .ToListAsync(ct);
-        return Ok(_mapper.Map<IEnumerable<CaseNoteRecord>>(notes));
+        // Converted as read as well as when saved: a note written as plain text before 2026-09-14 that the one-time
+        // conversion has not reached yet is still drawn safely, with its line breaks.
+        return Ok(_mapper.Map<IEnumerable<CaseNoteRecord>>(notes)
+            .Select(n => n with { Body = Services.CaseNoteBodies.ToHtml(n.Body, _sanitizer) }));
     }
 
     [HttpPost]
@@ -51,7 +58,7 @@ public sealed class CaseNoteController : BenControllerBase
         await using var db = await _db.CreateDbContextAsync(ct);
         if (!await db.Cases.AnyAsync(c => c.Id == caseId && c.OrganizationId == orgId, ct))
             return NotFound("Case not found.");
-        if (string.IsNullOrWhiteSpace(request.Body)) return BadRequest("Body is required.");
+        if (!Ben.Data.Common.Text.PlainTextHtml.HasText(request.Body)) return BadRequest("Write something in the note first.");
         if (await _limits.WhyReadOnlyAsync(orgId, ct) is { } readOnly) return BadRequest(readOnly);
 
         var note = new CaseNote
@@ -60,7 +67,7 @@ public sealed class CaseNoteController : BenControllerBase
             CaseId             = caseId,
             AuthorAppUserId    = userId,
             Title              = request.Title?.Trim(),
-            Body               = request.Body.Trim(),
+            Body               = Services.CaseNoteBodies.ToHtml(request.Body, _sanitizer),
             IsPinned           = request.IsPinned,
             DateCreated        = DateTime.UtcNow,
             CreatedByAppUserId = userId,
@@ -88,9 +95,9 @@ public sealed class CaseNoteController : BenControllerBase
         bool isAuthor = note.AuthorAppUserId == userId;
         if (!isAuthor && !await IsOrgAdminAsync(orgId, ct)) return Forbid();
 
-        if (string.IsNullOrWhiteSpace(request.Body)) return BadRequest("Body is required.");
+        if (!Ben.Data.Common.Text.PlainTextHtml.HasText(request.Body)) return BadRequest("Write something in the note first.");
         note.Title              = request.Title?.Trim();
-        note.Body               = request.Body.Trim();
+        note.Body               = Services.CaseNoteBodies.ToHtml(request.Body, _sanitizer);
         note.IsPinned           = request.IsPinned;
         note.DateUpdated        = DateTime.UtcNow;
         note.UpdatedByAppUserId = userId == Guid.Empty ? null : userId;

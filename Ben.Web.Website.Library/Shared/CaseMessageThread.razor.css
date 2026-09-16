@@ -1,0 +1,17 @@
+/* Formatted messages (2026-09-14). The editor's paragraphs would otherwise leave a margin under every bubble's
+   last line, and a link in your own blue bubble would be blue on blue. */
+.case-bubble ::deep p:last-child,
+.case-bubble ::deep ul:last-child,
+.case-bubble ::deep ol:last-child {
+    margin-bottom: 0;
+}
+
+.case-bubble ::deep ul,
+.case-bubble ::deep ol {
+    padding-left: 1.25rem;
+}
+
+.case-bubble--own ::deep a {
+    color: #fff;
+    text-decoration: underline;
+}

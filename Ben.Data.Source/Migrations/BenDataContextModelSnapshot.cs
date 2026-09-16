@@ -787,6 +787,9 @@ namespace Ben.Data.Source.Migrations
                         .HasMaxLength(4000)
                         .HasColumnType("nvarchar(4000)");
 
+                    b.Property<string>("BodyHtml")
+                        .HasColumnType("nvarchar(max)");
+
                     b.Property<Guid>("CaseId")
                         .HasColumnType("uniqueidentifier");
 
@@ -1087,6 +1090,63 @@ namespace Ben.Data.Source.Migrations
                     b.ToTable("CaseReportSectionFiles");
                 });
 
+            modelBuilder.Entity("Ben.Data.Source.Entities.CaseResearchAttachment", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("uniqueidentifier");
+
+                    b.Property<Guid>("CreatedByAppUserId")
+                        .HasColumnType("uniqueidentifier");
+
+                    b.Property<DateTime>("DateCreated")
+                        .HasColumnType("datetime2");
+
+                    b.Property<DateTime?>("DateUpdated")
+                        .HasColumnType("datetime2");
+
+                    b.Property<int>("Kind")
+                        .HasColumnType("int");
+
+                    b.Property<Guid?>("LinkPreviewId")
+                        .HasColumnType("uniqueidentifier");
+
+                    b.Property<Guid>("ResearchEntryId")
+                        .HasColumnType("uniqueidentifier");
+
+                    b.Property<int>("SortOrder")
+                        .HasColumnType("int");
+
+                    b.Property<string>("Title")
+                        .IsRequired()
+                        .HasMaxLength(300)
+                        .HasColumnType("nvarchar(300)");
+
+                    b.Property<Guid?>("UpdatedByAppUserId")
+                        .HasColumnType("uniqueidentifier");
+
+                    b.Property<Guid?>("UploadFileId")
+                        .HasColumnType("uniqueidentifier");
+
+                    b.Property<string>("Url")
+                        .HasMaxLength(2000)
+                        .HasColumnType("nvarchar(2000)");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("CreatedByAppUserId");
+
+                    b.HasIndex("LinkPreviewId");
+
+                    b.HasIndex("UpdatedByAppUserId");
+
+                    b.HasIndex("UploadFileId");
+
+                    b.HasIndex("ResearchEntryId", "SortOrder");
+
+                    b.ToTable("CaseResearchAttachments");
+                });
+
             modelBuilder.Entity("Ben.Data.Source.Entities.CaseResearchEntry", b =>
                 {
                     b.Property<Guid>("Id")
@@ -1106,6 +1166,40 @@ namespace Ben.Data.Source.Migrations
                         .HasColumnType("datetime2");
 
                     b.Property<DateTime?>("DateUpdated")
+                        .HasColumnType("datetime2");
+
+                    b.Property<Guid?>("DraftAuthorAppUserId")
+                        .HasColumnType("uniqueidentifier");
+
+                    b.Property<string>("DraftBlocksJson")
+                        .HasColumnType("nvarchar(max)");
+
+                    b.Property<int>("DraftRevision")
+                        .HasColumnType("int");
+
+                    b.Property<Guid?>("DraftSaveId")
+                        .HasColumnType("uniqueidentifier");
+
+                    b.Property<DateTime?>("DraftSavedUtc")
+                        .HasColumnType("datetime2");
+
+                    b.Property<DateTime?>("EventDateTime")
+                        .HasColumnType("datetime2");
+
+                    b.Property<string>("Excerpt")
+                        .HasMaxLength(300)
+                        .HasColumnType("nvarchar(300)");
+
+                    b.Property<string>("PublishedBlocksJson")
+                        .HasColumnType("nvarchar(max)");
+
+                    b.Property<Guid?>("PublishedByAppUserId")
+                        .HasColumnType("uniqueidentifier");
+
+                    b.Property<int?>("PublishedRevision")
+                        .HasColumnType("int");
+
+                    b.Property<DateTime?>("PublishedUtc")
                         .HasColumnType("datetime2");
 
                     b.Property<int>("ResearchType")
@@ -1136,6 +1230,8 @@ namespace Ben.Data.Source.Migrations
                     b.HasIndex("UpdatedByAppUserId");
 
                     b.HasIndex("UploadFileId");
+
+                    b.HasIndex("CaseId", "PublishedUtc");
 
                     b.HasIndex("CaseId", "SortOrder");
 
@@ -9095,6 +9191,73 @@ namespace Ben.Data.Source.Migrations
                     b.ToTable("SiteSettings");
                 });
 
+            modelBuilder.Entity("Ben.Data.Source.Entities.StoredLinkPreview", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("uniqueidentifier");
+
+                    b.Property<string>("Description")
+                        .HasMaxLength(500)
+                        .HasColumnType("nvarchar(500)");
+
+                    b.Property<string>("Domain")
+                        .IsRequired()
+                        .HasMaxLength(255)
+                        .HasColumnType("nvarchar(255)");
+
+                    b.Property<DateTime>("ExpiresUtc")
+                        .HasColumnType("datetime2");
+
+                    b.Property<string>("FailureReason")
+                        .HasMaxLength(300)
+                        .HasColumnType("nvarchar(300)");
+
+                    b.Property<bool>("Fetched")
+                        .HasColumnType("bit");
+
+                    b.Property<Guid?>("FetchedByAppUserId")
+                        .HasColumnType("uniqueidentifier");
+
+                    b.Property<DateTime>("FetchedUtc")
+                        .HasColumnType("datetime2");
+
+                    b.Property<string>("SiteName")
+                        .HasMaxLength(100)
+                        .HasColumnType("nvarchar(100)");
+
+                    b.Property<string>("ThumbnailContentType")
+                        .HasMaxLength(100)
+                        .HasColumnType("nvarchar(100)");
+
+                    b.Property<string>("ThumbnailStoragePath")
+                        .HasMaxLength(500)
+                        .HasColumnType("nvarchar(500)");
+
+                    b.Property<string>("Title")
+                        .HasMaxLength(200)
+                        .HasColumnType("nvarchar(200)");
+
+                    b.Property<string>("Url")
+                        .IsRequired()
+                        .HasMaxLength(2000)
+                        .HasColumnType("nvarchar(2000)");
+
+                    b.Property<string>("UrlHash")
+                        .IsRequired()
+                        .HasMaxLength(64)
+                        .HasColumnType("nvarchar(64)");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("ExpiresUtc");
+
+                    b.HasIndex("UrlHash")
+                        .IsUnique();
+
+                    b.ToTable("LinkPreviews");
+                });
+
             modelBuilder.Entity("Ben.Data.Source.Entities.SubscriptionContractTerms", b =>
                 {
                     b.Property<Guid>("Id")
@@ -12391,6 +12554,46 @@ namespace Ben.Data.Source.Migrations
                         .IsRequired();
 
                     b.Navigation("Section");
+
+                    b.Navigation("UploadFile");
+                });
+
+            modelBuilder.Entity("Ben.Data.Source.Entities.CaseResearchAttachment", b =>
+                {
+                    b.HasOne("Ben.Data.Source.Entities.AppUser", "CreatedByAppUser")
+                        .WithMany()
+                        .HasForeignKey("CreatedByAppUserId")
+                        .OnDelete(DeleteBehavior.NoAction)
+                        .IsRequired();
+
+                    b.HasOne("Ben.Data.Source.Entities.StoredLinkPreview", "LinkPreview")
+                        .WithMany()
+                        .HasForeignKey("LinkPreviewId")
+                        .OnDelete(DeleteBehavior.NoAction);
+
+                    b.HasOne("Ben.Data.Source.Entities.CaseResearchEntry", "ResearchEntry")
+                        .WithMany("Attachments")
+                        .HasForeignKey("ResearchEntryId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
+
+                    b.HasOne("Ben.Data.Source.Entities.AppUser", "UpdatedByAppUser")
+                        .WithMany()
+                        .HasForeignKey("UpdatedByAppUserId")
+                        .OnDelete(DeleteBehavior.NoAction);
+
+                    b.HasOne("Ben.Data.Source.Entities.UploadFile", "UploadFile")
+                        .WithMany()
+                        .HasForeignKey("UploadFileId")
+                        .OnDelete(DeleteBehavior.NoAction);
+
+                    b.Navigation("CreatedByAppUser");
+
+                    b.Navigation("LinkPreview");
+
+                    b.Navigation("ResearchEntry");
+
+                    b.Navigation("UpdatedByAppUser");
 
                     b.Navigation("UploadFile");
                 });
@@ -18107,6 +18310,11 @@ namespace Ben.Data.Source.Migrations
                     b.Navigation("FieldSessions");
 
                     b.Navigation("Files");
+                });
+
+            modelBuilder.Entity("Ben.Data.Source.Entities.CaseResearchEntry", b =>
+                {
+                    b.Navigation("Attachments");
                 });
 
             modelBuilder.Entity("Ben.Data.Source.Entities.CaseTimelineEntry", b =>

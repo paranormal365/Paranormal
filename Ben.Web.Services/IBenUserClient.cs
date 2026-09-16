@@ -122,7 +122,8 @@ public interface IBenUserClient
     /// <param name="request">The new user fields including email, password, display name and role flags.</param>
     /// <param name="token">Propagates cancellation from the Blazor component.</param>
     /// <returns>The created <see cref="AppUserAdminRecord"/>, or <c>null</c> if creation failed.</returns>
-    Task<AppUserAdminRecord?> CreateUserAsync(AdminCreateUserRequest request, CancellationToken token = default);
+    /// <summary>Creates an account, or returns the server's reason for refusing (a taken email, a username with a space, a weak password).</summary>
+    Task<(AppUserAdminRecord? Result, string? Error)> CreateUserAsync(AdminCreateUserRequest request, CancellationToken token = default);
 
     /// <summary>Updates editable profile fields for a user including audit timestamps.</summary>
     /// <param name="userId">The <see cref="Guid"/> primary key of the user to update.</param>
@@ -139,7 +140,8 @@ public interface IBenUserClient
     /// <param name="roles">Every role they should hold afterwards; anything not listed is removed.</param>
     /// <param name="token">Propagates cancellation from the Blazor component.</param>
     /// <returns>The roles now held, or <c>null</c> when the server refused.</returns>
-    Task<AppUserRolesAdminRecord?> SetUserRolesAsync(Guid userId, IReadOnlyList<string> roles, CancellationToken token = default);
+    /// <summary>Sets the whole set of site roles, or returns the server's reason for refusing.</summary>
+    Task<(AppUserRolesAdminRecord? Result, string? Error)> SetUserRolesAsync(Guid userId, IReadOnlyList<string> roles, CancellationToken token = default);
 
     // ── Impersonation ─────────────────────────────────────────────────────────
 

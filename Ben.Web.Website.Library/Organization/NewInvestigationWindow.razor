@@ -29,13 +29,12 @@
                    who types and clicks Save without leaving the field would be told the title is
                    missing while looking straight at it. *@
                 <input id="newinvestigationwindow-title-48f3" class="form-control" value="@_title" @oninput="@(e => _title = e.Value?.ToString() ?? "")"
-                       placeholder="Night investigation" />
+                       placeholder="e.g. Night investigation" />
             </div>
 
             <div class="col-md-6">
                 <label class="form-label fw-semibold" for="newinvestigationwindow-when-60b5">Starts</label>
-                <input id="newinvestigationwindow-when-60b5" type="datetime-local" class="form-control" value="@_whenText"
-                       @oninput="@(e => _whenText = e.Value?.ToString() ?? "")" />
+                <BenDateField Mode="DateEntryMode.DateTime" Id="newinvestigationwindow-when-60b5" @bind-Value="_when" />
             </div>
 
             @* One arrival and one departure, allowed to cross midnight — 3pm until 8am the next
@@ -44,8 +43,7 @@
                 <label class="form-label fw-semibold" for="newinvestigationwindow-ends-7c31">Ends (optional)</label>
                 @if (_multiDay)
                 {
-                    <input id="newinvestigationwindow-ends-7c31" type="datetime-local" class="form-control" value="@_endText"
-                           @oninput="@(e => _endText = e.Value?.ToString() ?? "")" />
+                    <BenDateField Mode="DateEntryMode.DateTime" Id="newinvestigationwindow-ends-7c31" @bind-Value="_end" />
                 }
                 else
                 {
@@ -249,8 +247,8 @@
 
     private string _title = "";
     private string _description = "";
-    private string _whenText = DateTime.Now.AddDays(1).ToString("yyyy-MM-ddTHH:mm");
-    private string _endText = "";
+    private DateTime? _when = TomorrowToTheMinute();
+    private DateTime? _end;
     private string _endTimeText = "";
     private bool   _multiDay;
     private PlaceKind _kind = PlaceKind.PublicLocation;
@@ -276,10 +274,10 @@
     /// </summary>
     private DateTime? EffectiveEnd()
     {
-        if (!DateTime.TryParse(_whenText, out var start)) return null;
+        if (_when is not { } start) return null;
 
         if (_multiDay)
-            return DateTime.TryParse(_endText, out var end) && end > start ? end : null;
+            return _end is { } end && end > start ? end : null;
 
         return TimeSpan.TryParse(_endTimeText, out var timeOfDay)
             ? Ben.Web.Services.InvestigationWindow.SingleDayEnd(start, timeOfDay)
@@ -297,20 +295,25 @@
 
         if (on)
         {
-            var seed = carried ?? (DateTime.TryParse(_whenText, out var start) ? start.AddDays(1) : (DateTime?)null);
-            _endText = seed?.ToString("yyyy-MM-ddTHH:mm") ?? "";
+            _end = carried ?? _when?.AddDays(1);
             _endTimeText = "";
         }
         else
         {
             _endTimeText = carried?.ToString("HH:mm") ?? "";
-            _endText = "";
+            _end = null;
         }
+    }
+
+    private static DateTime TomorrowToTheMinute()
+    {
+        var t = DateTime.Now.AddDays(1);
+        return new DateTime(t.Year, t.Month, t.Day, t.Hour, t.Minute, 0);
     }
 
     private bool CanSave =>
         !string.IsNullOrWhiteSpace(_title)
-        && DateTime.TryParse(_whenText, out _)
+        && _when is not null
         && (_chosenPlace is not null
             || !string.IsNullOrWhiteSpace(_name)
             || !string.IsNullOrWhiteSpace(_street));
@@ -430,7 +433,7 @@
         {
             var request = new CreateOrgInvestigationRequest(
                 Title: _title.Trim(),
-                ScheduledDateTime: DateTime.Parse(_whenText).ToUniversalTime(),
+                ScheduledDateTime: _when!.Value.ToUniversalTime(),
                 EndDateTime: EffectiveEnd()?.ToUniversalTime(),
                 Description: string.IsNullOrWhiteSpace(_description) ? null : _description.Trim(),
                 PlaceId: _chosenPlace?.Id,

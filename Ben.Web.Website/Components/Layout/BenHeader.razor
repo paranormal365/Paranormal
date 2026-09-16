@@ -1,6 +1,7 @@
 @implements IDisposable
 
 @inject IWebApiTokenStore TokenStore
+@inject NavigationManager Nav
 
 @*
     The template's app-header.
@@ -85,7 +86,7 @@
            call to action sitting in a row of chrome icons. The label is small and inherits the
            icon's colour so it reads as one control; text-nowrap because it wraps inside the
            header's fixed-height row otherwise. *@
-        <a class="btn btn-system ben-signin text-nowrap d-flex align-items-center gap-1" href="/login">
+        <a class="btn btn-system ben-signin text-nowrap d-flex align-items-center gap-1" href="@Ben.Web.Website.Library.Kit.SignInLink.For(Nav)">
             <BenIcon Name="log-in" Class="sa-icon-2x" />
             <span class="ben-signin-text d-none d-sm-inline">Sign In</span>
         </a>
@@ -99,9 +100,20 @@
 
     [Parameter] public EventCallback OnSignOut { get; set; }
 
-    protected override void OnInitialized() => TokenStore.StateChanged += OnAuthChanged;
+    protected override void OnInitialized()
+    {
+        TokenStore.StateChanged += OnAuthChanged;
+        Nav.LocationChanged += OnLocationChanged;   // Sign In carries the page it is on
+    }
 
     private void OnAuthChanged() => InvokeAsync(StateHasChanged);
 
-    public void Dispose() => TokenStore.StateChanged -= OnAuthChanged;
+    private void OnLocationChanged(object? sender, Microsoft.AspNetCore.Components.Routing.LocationChangedEventArgs e)
+        => InvokeAsync(StateHasChanged);
+
+    public void Dispose()
+    {
+        TokenStore.StateChanged -= OnAuthChanged;
+        Nav.LocationChanged -= OnLocationChanged;
+    }
 }

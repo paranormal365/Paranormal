@@ -29,7 +29,7 @@
         <div class="flex-grow-1">
             The public feed has <strong>@reminder.FeedPostCount post@(reminder.FeedPostCount == 1 ? "" : "s")</strong>
             and is switched <strong>off</strong> — nobody outside this reminder can see any of it.
-            The switch is at <a href="/admin/site-settings">Site Settings</a>.
+            The switch is at <a class="alert-link" href="/admin/site-settings">Site Settings</a>.
             Screening is currently
             <strong>@(reminder.ScreeningIsAutomatic ? "automatic" : "manual-only — every photo and video waits for a moderator")</strong>.
         </div>
@@ -50,7 +50,7 @@
         <div class="flex-grow-1">
             Please confirm your email address. We sent a link to <strong>@address</strong> when this
             account was made; until you follow it we can't email you, including a password reset.
-            <a href="/profile" class="ms-1">Send it again from your profile</a>.
+            <a href="/profile" class="alert-link ms-1">Send it again from your profile</a>.
         </div>
         <button type="button" class="btn-close" aria-label="Dismiss"
                 @onclick="DismissUnconfirmedAddressAsync"></button>
@@ -65,7 +65,9 @@
             <strong>@item.OrganizationName</strong> has work waiting:
             @if (item.PendingClientRequests > 0)
             {
-                <a href="/organizations/@item.OrganizationId?tab=requests">
+                @* The requests page, not the hub's Requests tab: the count is for anyone who can read the queue, and the tab is an
+                   admin's — a member followed this to the group's Details (UI test pass 6.14). *@
+                <a class="alert-link" href="/organizations/@item.OrganizationId/pending-requests">
                     @item.PendingClientRequests investigation request@(item.PendingClientRequests == 1 ? "" : "s")
                 </a>
             }
@@ -75,7 +77,7 @@
             }
             @if (item.PendingMembershipRequests > 0)
             {
-                <a href="/organizations/@item.OrganizationId?tab=members">
+                <a class="alert-link" href="/organizations/@item.OrganizationId?tab=members">
                     @item.PendingMembershipRequests membership application@(item.PendingMembershipRequests == 1 ? "" : "s")
                 </a>
             }

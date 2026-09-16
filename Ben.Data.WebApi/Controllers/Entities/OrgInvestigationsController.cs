@@ -27,6 +27,14 @@ namespace Ben.Data.WebApi.Controllers.Entities;
 [Authorize]
 public sealed class OrgInvestigationsController : BenControllerBase
 {
+    /// <summary>A Viewer here reads and changes nothing — see <see cref="Ben.Data.WebApi.Services.Access.FileAudienceAccess.IsOrgViewerAsync"/>.</summary>
+    private async Task<bool> IsViewerAsync(Guid orgId, CancellationToken ct)
+    {
+        if (User.IsInRole(Ben.Data.Common.Constants.RoleNames.SuperAdmin)) return false;
+        await using var viewerDb = await _db.CreateDbContextAsync(ct);
+        return await Ben.Data.WebApi.Services.Access.FileAudienceAccess.IsOrgViewerAsync(viewerDb, orgId, GetCurrentUserId(), ct);
+    }
+
     private readonly IDbContextFactory<BenDataContext> _db;
     private readonly IMapper _mapper;
     private readonly IAuditLogService _auditLog;
@@ -318,6 +326,7 @@ public sealed class OrgInvestigationsController : BenControllerBase
         Guid orgId, Guid id, [FromBody] CheckInRequest request, CancellationToken ct)
     {
         if (!await IsMemberAsync(orgId, ct)) return Forbid();
+        if (await IsViewerAsync(orgId, ct)) return ViewerReadOnly();
 
         var userId = GetCurrentUserId();
         await using var db = await _db.CreateDbContextAsync(ct);
@@ -365,6 +374,7 @@ public sealed class OrgInvestigationsController : BenControllerBase
         Guid orgId, Guid id, Guid attendeeId, [FromBody] OverrideAttendanceRequest request, CancellationToken ct)
     {
         if (!await IsMemberAsync(orgId, ct)) return Forbid();
+        if (await IsViewerAsync(orgId, ct)) return ViewerReadOnly();
 
         var userId = GetCurrentUserId();
         await using var db = await _db.CreateDbContextAsync(ct);
@@ -413,6 +423,7 @@ public sealed class OrgInvestigationsController : BenControllerBase
         Guid orgId, Guid id, Guid attendeeId, [FromBody] SetLeadRequest request, CancellationToken ct)
     {
         if (!await IsMemberAsync(orgId, ct)) return Forbid();
+        if (await IsViewerAsync(orgId, ct)) return ViewerReadOnly();
 
         var userId = GetCurrentUserId();
         await using var db = await _db.CreateDbContextAsync(ct);
@@ -503,6 +514,7 @@ public sealed class OrgInvestigationsController : BenControllerBase
         [FromBody] AssignDutyRequest request, CancellationToken ct)
     {
         if (!await IsMemberAsync(orgId, ct)) return Forbid();
+        if (await IsViewerAsync(orgId, ct)) return ViewerReadOnly();
         var userId = GetCurrentUserId();
         await using var db = await _db.CreateDbContextAsync(ct);
 
@@ -601,6 +613,7 @@ public sealed class OrgInvestigationsController : BenControllerBase
         Guid orgId, Guid id, Guid attendeeId, Guid dutyId, CancellationToken ct)
     {
         if (!await IsMemberAsync(orgId, ct)) return Forbid();
+        if (await IsViewerAsync(orgId, ct)) return ViewerReadOnly();
         var userId = GetCurrentUserId();
         await using var db = await _db.CreateDbContextAsync(ct);
 
@@ -677,6 +690,7 @@ public sealed class OrgInvestigationsController : BenControllerBase
         Guid orgId, Guid id, [FromBody] UpsertFindingRequest request, CancellationToken ct)
     {
         if (!await IsMemberAsync(orgId, ct)) return Forbid();
+        if (await IsViewerAsync(orgId, ct)) return ViewerReadOnly();
 
         var narrative = request.Narrative?.Trim();
         if (string.IsNullOrWhiteSpace(narrative))
@@ -733,6 +747,7 @@ public sealed class OrgInvestigationsController : BenControllerBase
     public async Task<IActionResult> DeleteMyFinding(Guid orgId, Guid id, CancellationToken ct)
     {
         if (!await IsMemberAsync(orgId, ct)) return Forbid();
+        if (await IsViewerAsync(orgId, ct)) return ViewerReadOnly();
 
         var userId = GetCurrentUserId();
         await using var db = await _db.CreateDbContextAsync(ct);

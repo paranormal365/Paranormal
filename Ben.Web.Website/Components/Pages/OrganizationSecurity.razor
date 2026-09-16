@@ -269,7 +269,7 @@
         if (!await TokenStore.WaitUntilAuthReadyAsync(RendererInfo.IsInteractive)) return;
         if (!TokenStore.IsAuthenticated)
         {
-            NavManager.NavigateTo("/login");
+            NavManager.NavigateTo(Ben.Web.Website.Library.Kit.SignInLink.For(NavManager));
             return;
         }
 

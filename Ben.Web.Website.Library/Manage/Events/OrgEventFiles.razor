@@ -61,7 +61,7 @@
                 <div class="col-6 col-md-3">
                     <label class="form-label small mb-1" for="file-folder">Folder</label>
                     <input class="form-control" id="file-folder" maxlength="80" list="file-folders"
-                           placeholder="Guest pack" @bind="_folder" />
+                           placeholder="e.g. Guest pack" @bind="_folder" />
                     <datalist id="file-folders">
                         @foreach (var f in Folders)
                         {
@@ -81,7 +81,7 @@
                 <div class="col-12">
                     <label class="form-label small mb-1" for="file-description">What it is</label>
                     <input class="form-control" id="file-description" maxlength="500"
-                           placeholder="Parking, the door code and what to bring" @bind="_description" />
+                           placeholder="e.g. Parking, the door code and what to bring" @bind="_description" />
                 </div>
             </div>
             <button type="button" class="btn btn-primary mt-3" id="file-upload"

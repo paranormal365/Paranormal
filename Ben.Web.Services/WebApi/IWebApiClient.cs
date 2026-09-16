@@ -83,6 +83,18 @@ public interface IWebApiClient
         HttpMethod method, string relativeUrl, TRequest payload, CancellationToken token = default);
 
     /// <summary>
+    /// As <see cref="SendExpectingReasonAsync"/>, and also the HTTP status — for a caller that acts differently on a
+    /// conflict than on any other refusal.
+    /// </summary>
+    /// <remarks>
+    /// Added for research-page autosave (2026-09-14): a 409 means somebody else's work would be overwritten and the
+    /// editor must stop saving and say so, while a 400 is a sentence to show and a failure to retry. A null
+    /// <paramref name="payload"/> sends no body.
+    /// </remarks>
+    Task<(TResponse? Result, string? Error, int Status)> SendWithStatusAsync<TRequest, TResponse>(
+        HttpMethod method, string relativeUrl, TRequest? payload, CancellationToken token = default);
+
+    /// <summary>
     /// Posts, and returns either the result or <b>a typed 409 body</b> the caller can act on.
     /// </summary>
     /// <remarks>

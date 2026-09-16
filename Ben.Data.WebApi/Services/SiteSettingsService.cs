@@ -59,6 +59,17 @@ public static class SiteSettingKeys
     /// </remarks>
     public const string EventCreditsEnabled = "events.credits-enabled";
 
+    /// <summary>Whether plans and member seats are on sale (beta feedback, 2026-09-14).</summary>
+    /// <remarks>
+    /// <para>Ben asked for a way to take buying off the site without taking the prices down: before launch, or
+    /// while prices are being reconsidered. Off keeps every price readable, removes the buttons that start a
+    /// payment, says in one sentence that plans aren't on sale, and has the API refuse to start a checkout for a
+    /// plan or a seat. Subscriptions already running are untouched; event credits keep their own switch.</para>
+    /// <para>Unset reads as ON, like every other policy switch here: the site has been selling plans since
+    /// 2026-08-30, and introducing the switch must not stop that.</para>
+    /// </remarks>
+    public const string PlanPurchasesEnabled = "billing.purchases-enabled";
+
     /// <summary>What one event credit costs, in dollars (item 235).</summary>
     /// <remarks>
     /// Ben set it at 99 on 2026-09-11. A setting rather than a constant so the price moves without
@@ -227,6 +238,10 @@ public static class SiteSettingKeys
             "When on, a group whose plan does not include hosting events can buy a credit to publish "
             + "one. One credit covers one event, and it lapses a year after it is bought. Turning "
             + "this off stops new purchases; credits already held are unaffected."),
+        (PlanPurchasesEnabled, "Sell plans and seats",
+            "When on, groups can subscribe to a plan and extra members can pay for their seats. When off, "
+            + "prices stay on the pricing page but the buttons to buy are removed, and nobody can start a "
+            + "payment for a plan or a seat. Plans already paid for carry on; event credits have their own switch."),
         (EventCreditPriceUsd, "Event credit price ($)",
             "What one event credit costs. Leave empty for the standard $99. Changing it never "
             + "affects a credit somebody already bought — each one remembers what was paid."),
@@ -310,6 +325,10 @@ public static class SiteSettingKeys
         ("Who may sign up",
          "Which doors into the site are open. Closing one never affects anybody already through it.",
          [AllowOrganizationSelfRegistration, AllowTourBusinessSignUps]),
+
+        ("Selling plans",
+         "Whether plans and member seats can be bought on the site.",
+         [PlanPurchasesEnabled]),
 
         ("Events",
          "What it costs a group to put an event on, when their plan does not already include it.",
@@ -424,7 +443,8 @@ public static class SiteSettingKeys
             FeatureDefaults.Select(f => f.Key)
                 .Append(AllowOrganizationSelfRegistration)
                 .Append(AllowTourBusinessSignUps)
-                .Append(EventCreditsEnabled),
+                .Append(EventCreditsEnabled)
+                .Append(PlanPurchasesEnabled),
             StringComparer.Ordinal);
 
 }

@@ -33,7 +33,7 @@
 
             <div class="col-12">
                 <label class="form-label fw-semibold" for="organizationcreateedit-name-c1c9">Name <span class="text-danger">*</span></label>
-                <input id="organizationcreateedit-name-c1c9" type="text" class="form-control" placeholder="My Organization" @bind="@_form.Name" @bind:event="oninput" />
+                <input id="organizationcreateedit-name-c1c9" type="text" class="form-control" placeholder="e.g. My Organization" @bind="@_form.Name" @bind:event="oninput" />
             </div>
 
             <div class="col-12">
@@ -85,7 +85,7 @@
         if (!await UserState.WaitUntilAuthReadyAsync(RendererInfo.IsInteractive)) return;
         if (!UserState.IsAuthenticated)
         {
-            NavManager.NavigateTo("/login");
+            NavManager.NavigateTo(Ben.Web.Website.Library.Kit.SignInLink.For(NavManager));
             return;
         }
 

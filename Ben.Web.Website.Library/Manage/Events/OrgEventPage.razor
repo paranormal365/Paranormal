@@ -259,7 +259,7 @@
                             <div class="col-12 col-md-6">
                                 <label class="form-label" for="event-tagline">One line under it</label>
                                 <input id="event-tagline" class="form-control" @bind="_form.Tagline"
-                                       placeholder="Three nights at the Thomas House" />
+                                       placeholder="e.g. Three nights at the Thomas House" />
                             </div>
                             <div class="col-12">
                                 @* The rich editor is not a labelable control, so the label names the
@@ -275,11 +275,11 @@
 
                             <div class="col-6 col-md-3">
                                 <label class="form-label" for="event-from">First @ev.DateNoun</label>
-                                <input id="event-from" type="date" class="form-control" @bind="_form.StartsOn" />
+                                <BenDateField Mode="DateEntryMode.Date" Id="event-from" @bind-Value="_form.StartsOn" />
                             </div>
                             <div class="col-6 col-md-3">
                                 <label class="form-label" for="event-to">Last @ev.DateNoun</label>
-                                <input id="event-to" type="date" class="form-control" @bind="_form.EndsOn" />
+                                <BenDateField Mode="DateEntryMode.Date" Id="event-to" @bind-Value="_form.EndsOn" />
                             </div>
                             <div class="col-6 col-md-3">
                                 <label class="form-label" for="event-start-time">Usually starts</label>
@@ -459,7 +459,7 @@
                                 <label class="form-label" for="event-access">Getting in and getting around</label>
                                 <textarea id="event-access" class="form-control" rows="3" maxlength="2000"
                                           @bind="_form.AccessNotes"
-                                          placeholder="Stairs only to the ballroom. Low lighting all night. Parking behind the hotel."></textarea>
+                                          placeholder="e.g. Stairs only to the ballroom. Low lighting all night. Parking behind the hotel."></textarea>
                                 <div class="form-text">
                                     Shown on the event's page and in the letter a guest gets when their place is
                                     confirmed, so anybody it matters to knows before they book and before they travel.
@@ -580,7 +580,7 @@
                                 {
                                     <label class="form-label" for="event-venue-message">Anything they should know</label>
                                     <textarea id="event-venue-message" class="form-control mb-2" rows="3" maxlength="2000"
-                                              placeholder="About forty guests, two nights, a séance in the ballroom on the Saturday."
+                                              placeholder="e.g. About forty guests, two nights, a séance in the ballroom on the Saturday."
                                               @bind="_venueMessage"></textarea>
                                     <button type="button" class="btn btn-primary" id="event-venue-ask"
                                             disabled="@_busy" @onclick="AskTheVenueAsync">
@@ -638,13 +638,12 @@
                                         Who agreed it
                                     </label>
                                     <input id="event-venue-contact" class="form-control" maxlength="160"
-                                           placeholder="Mrs Cole, the manager"
+                                           placeholder="e.g. Mrs Cole, the manager"
                                            @bind="_form.VenueContactName" />
                                 </div>
                                 <div class="col-6 col-md-3">
                                     <label class="form-label" for="event-venue-agreed">When</label>
-                                    <input id="event-venue-agreed" type="date" class="form-control"
-                                           @bind="_form.VenueAgreedOn" />
+                                    <BenDateField Mode="DateEntryMode.Date" Id="event-venue-agreed" @bind-Value="_form.VenueAgreedOn" />
                                 </div>
                                 <div class="col-6 col-md-4">
                                     <label class="form-label" for="event-venue-reference">
@@ -706,8 +705,7 @@
                                 <label class="form-label" for="event-bookings-close">
                                     Bookings close
                                 </label>
-                                <input id="event-bookings-close" type="date" class="form-control"
-                                       @bind="_form.BookingsCloseOn" />
+                                <BenDateField Mode="DateEntryMode.Date" Id="event-bookings-close" @bind-Value="_form.BookingsCloseOn" />
                                 <div class="form-text">
                                     Empty means they never do. Requests already waiting are still
                                     yours to decide after it.
@@ -787,8 +785,7 @@
                                 <label class="form-label" for="event-go-no-go">
                                     Decide by
                                 </label>
-                                <input id="event-go-no-go" type="date" class="form-control"
-                                       @bind="_form.GoNoGoDeadline" />
+                                <BenDateField Mode="DateEntryMode.Date" Id="event-go-no-go" @bind-Value="_form.GoNoGoDeadline" />
                                 <div class="form-text">
                                     We'll remind you a week and a day before.
                                 </div>

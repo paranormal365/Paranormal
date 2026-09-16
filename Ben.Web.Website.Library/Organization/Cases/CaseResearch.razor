@@ -7,6 +7,7 @@
 @inject IBenAdminClient AdminClient
 @inject IBenUserState UserState
 @inject IJSRuntime JS
+@inject NavigationManager NavManager
 
 @if (_loading) { <BenLoaderOverlay Visible="true" Text="Loading research…" /> }
 else
@@ -15,7 +16,8 @@ else
     <div class="d-flex gap-2 flex-wrap mb-3">
         @if (May(Ben.Data.Common.Enums.OrganizationSecurityAction.Create))
         {
-            <button type="button" class="btn btn-secondary btn-sm" @onclick="@(() => OpenDialog(CaseResearchType.Note))"><BenIcon Name="plus" Class="me-1" />Note</button>
+            @* A note is a research page now (2026-09-14): it asks only for a title here and opens the page. *@
+            <button type="button" class="btn btn-primary btn-sm" id="research-new-page" @onclick="OpenNewPage"><BenIcon Name="file-plus" Class="me-1" />New page</button>
             <button type="button" class="btn btn-secondary btn-sm" @onclick="@(() => OpenDialog(CaseResearchType.Link))"><BenIcon Name="link" Class="me-1" />Link</button>
             <InputFile OnChange="OnFileSelected" accept="*" style="display:none;" id="research-file-upload" />
             <label for="research-file-upload" class="k-button k-button-sm k-button-outline k-button-outline-base" style="cursor:pointer;">
@@ -47,16 +49,39 @@ else
                 <div class="card-body">
                     <div class="d-flex align-items-start justify-content-between gap-2">
                         <div class="flex-grow-1">
-                            <div class="d-flex align-items-center gap-2 mb-1">
-                                <span class="badge @TypeBadge(e.ResearchType)">@e.ResearchType</span>
-                                <span class="fw-semibold small">@e.Title</span>
+                            <div class="d-flex flex-wrap align-items-center gap-2 mb-1">
+                                <span class="badge @TypeBadge(e.ResearchType)">@(e.ResearchType == CaseResearchType.Note ? "Page" : e.ResearchType.ToString())</span>
+                                @if (e.ResearchType == CaseResearchType.Note)
+                                {
+                                    <a class="fw-semibold small" href="@PageHref(e)" data-testid="research-page-link">@e.Title</a>
+                                    @if (e.PublishedUtc is null)
+                                    {
+                                        <span class="badge bg-secondary">Draft</span>
+                                    }
+                                    else if (e.HasUnpublishedDraft)
+                                    {
+                                        <span class="badge text-bg-warning">@(e.DraftIsMine ? "Your draft differs" : "Being edited")</span>
+                                    }
+                                    @if (e.EventDateTime is { } when)
+                                    {
+                                        <span class="small text-secondary"><BenIcon Name="calendar" Class="me-1" />@when.ToViewerLocalTime(UserState).ToDisplayDateTime()</span>
+                                    }
+                                }
+                                else
+                                {
+                                    <span class="fw-semibold small">@e.Title</span>
+                                }
                             </div>
+                            @if (e.ResearchType == CaseResearchType.Note && !string.IsNullOrWhiteSpace(e.Excerpt))
+                            {
+                                <div class="small text-secondary mt-1" data-testid="research-page-excerpt">@e.Excerpt</div>
+                            }
 
                             @if (e.ResearchType == CaseResearchType.Link && !string.IsNullOrEmpty(e.Url))
                             {
                                 <a href="@e.Url" target="_blank" rel="noopener noreferrer" class="small">@e.Url</a>
                             }
-                            @if (!string.IsNullOrWhiteSpace(e.Body))
+                            @if (e.ResearchType != CaseResearchType.Note && !string.IsNullOrWhiteSpace(e.Body))
                             {
                                 <div class="small text-secondary mt-1">@((MarkupString)e.Body)</div>
                             }
@@ -75,11 +100,18 @@ else
                         <div class="d-flex gap-1 flex-shrink-0">
                             @if (May(Ben.Data.Common.Enums.OrganizationSecurityAction.Update))
                             {
-                                <button type="button" class="btn btn-secondary btn-sm" @onclick="@(() => OpenEdit(e))"><BenIcon Name="edit-2" /></button>
+                                @if (e.ResearchType == CaseResearchType.Note)
+                                {
+                                    <a class="btn btn-secondary btn-sm" href="@PageHref(e)" title="Open the page" aria-label="@($"Open {e.Title}")"><BenIcon Name="edit-2" /></a>
+                                }
+                                else
+                                {
+                                    <button type="button" class="btn btn-secondary btn-sm" title="Edit" aria-label="@($"Edit {e.Title}")" @onclick="@(() => OpenEdit(e))"><BenIcon Name="edit-2" /></button>
+                                }
                             }
                             @if (May(Ben.Data.Common.Enums.OrganizationSecurityAction.Delete))
                             {
-                                <button type="button" class="btn btn-secondary btn-sm" @onclick="@(() => DeleteEntry(e.Id))"><BenIcon Name="trash-2" /></button>
+                                <button type="button" class="btn btn-secondary btn-sm" title="Delete" aria-label="@($"Delete {e.Title}")" @onclick="@(() => AskDelete(e))"><BenIcon Name="trash-2" /></button>
                             }
                         </div>
                     </div>
@@ -88,6 +120,32 @@ else
         }
     </div>
 }
+
+@* A research page can hold hours of work and its files, so deleting one asks first. *@
+<BenConfirmDialog @bind-Visible="@_showDeleteConfirm" Title="Delete research" Width="420px"
+                  Busy="@_deleting" BusyText="Deleting…" OnConfirm="DeleteConfirmedAsync">
+    <p class="mb-0" data-testid="research-delete-message">
+        Delete <strong>@_deleteTarget?.Title</strong>@(_deleteTarget?.ResearchType == CaseResearchType.Note ? ", with its files and links" : "")? This cannot be undone.
+    </p>
+</BenConfirmDialog>
+
+@* ── A new research page: just its title ─────────────────────────────────────── *@
+<BenModal @bind-Visible="@_showNewPage" Title="New research page" Size="sm">
+    <ChildContent>
+        <label class="form-label fw-semibold" for="research-new-page-title">Title</label>
+        <input id="research-new-page-title" class="form-control" maxlength="300" placeholder="e.g. County deed records"
+               @bind="_newPageTitle" @bind:event="oninput" @onkeydown="OnNewPageKeyAsync" />
+        <div class="form-text">The page opens next. It stays a draft only you can see until you publish it.</div>
+        @if (_newPageError is not null) { <div class="alert alert-danger py-2 mt-2 mb-0">@_newPageError</div> }
+        <div class="dialog-footer-actions">
+            <span class="dialog-footer-spacer"></span>
+            <button type="button" class="btn btn-secondary" @onclick="@(() => _showNewPage = false)">Cancel</button>
+            <button type="button" class="btn btn-primary" id="research-new-page-create" disabled="@(_saving || string.IsNullOrWhiteSpace(_newPageTitle))" @onclick="CreatePageAsync">
+                @(_saving ? "Creating…" : "Create page")
+            </button>
+        </div>
+    </ChildContent>
+</BenModal>
 
 @* ── Add / Edit dialog ───────────────────────────────────────────────────────── *@
 <BenModal @bind-Visible="@_showDialog" Title="@(_editId == Guid.Empty ? $"Add {_dialogType}" : $"Edit {_dialogType}")">
@@ -212,11 +270,34 @@ else
         finally { _saving = false; StateHasChanged(); }
     }
 
-    private async Task DeleteEntry(Guid entryId)
+    private CaseResearchEntryDto? _deleteTarget;
+    private bool _showDeleteConfirm;
+    private bool _deleting;
+
+    private void AskDelete(CaseResearchEntryDto entry)
     {
-        await AdminClient.DeleteCaseResearchAsync(OrgId, CaseId, entryId);
-        _entries.RemoveAll(e => e.Id == entryId);
-        StateHasChanged();
+        _deleteTarget = entry;
+        _showDeleteConfirm = true;
+    }
+
+    private async Task DeleteConfirmedAsync()
+    {
+        if (_deleteTarget is not { } target) return;
+        _deleting = true;
+        _error = null;
+        try
+        {
+            if (await AdminClient.DeleteCaseResearchAsync(OrgId, CaseId, target.Id))
+                _entries.RemoveAll(e => e.Id == target.Id);
+            else
+                _error = $"\"{target.Title}\" could not be deleted.";
+        }
+        finally
+        {
+            _deleting = false;
+            _showDeleteConfirm = false;
+            _deleteTarget = null;
+        }
     }
 
     private async Task OnFileSelected(InputFileChangeEventArgs e)
@@ -237,6 +318,39 @@ else
         }
         catch { _error = "Failed to upload research file."; }
         finally { _uploading = false; StateHasChanged(); }
+    }
+
+    // ── Research pages ────────────────────────────────────────────────────────
+    private bool _showNewPage;
+    private string _newPageTitle = "";
+    private string? _newPageError;
+
+    private string PageHref(CaseResearchEntryDto e) => $"/organizations/{OrgId}/cases/{CaseId}/research/{e.Id}";
+
+    private void OpenNewPage()
+    {
+        _newPageTitle = "";
+        _newPageError = null;
+        _showNewPage = true;
+    }
+
+    private async Task OnNewPageKeyAsync(KeyboardEventArgs e)
+    {
+        if (e.Key == "Enter" && !string.IsNullOrWhiteSpace(_newPageTitle)) await CreatePageAsync();
+    }
+
+    private async Task CreatePageAsync()
+    {
+        _saving = true;
+        _newPageError = null;
+        try
+        {
+            var (created, error) = await AdminClient.CreateCaseResearchPageAsync(OrgId, CaseId, _newPageTitle.Trim());
+            if (created is null) { _newPageError = error ?? "The page could not be created."; return; }
+            _showNewPage = false;
+            NavManager.NavigateTo(PageHref(created));
+        }
+        finally { _saving = false; }
     }
 
     private static string TypeBadge(CaseResearchType t) => t switch

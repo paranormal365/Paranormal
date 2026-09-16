@@ -16,7 +16,7 @@
 
     <div class="row mb-3 align-items-center">
         <div class="col">
-            <button type="button" class="btn @(ThemeConstants.Button.FillMode.Flat == ThemeConstants.Button.FillMode.Solid ? "btn-secondary" : "btn-outline-secondary")" @onclick="@(() => NavManager.NavigateTo(ReturnUrl ?? "/organizations"))"><BenIcon Name="arrow-left" Class="me-1" />
+            <button type="button" class="btn @(ThemeConstants.Button.FillMode.Flat == ThemeConstants.Button.FillMode.Solid ? "btn-secondary" : "btn-outline-secondary")" @onclick="@(() => NavManager.NavigateTo(BackUrl))"><BenIcon Name="arrow-left" Class="me-1" />
                 Back
             </button>
             @* W-A2: this said "Organization" — the name of the TABLE — on the page for a
@@ -420,6 +420,14 @@
     [Parameter, SupplyParameterFromQuery(Name = "returnUrl")]
     public string? ReturnUrl { get; set; }
 
+    /// <summary>Where Back goes: the page named in returnUrl when it is one of ours, else the groups list.</summary>
+    /// <remarks>
+    /// A path on this site only (UI test pass 6.9, 2026-09-14): Back followed any returnUrl, so a link to a group page
+    /// could send the person who pressed Back to another website.
+    /// </remarks>
+    private string BackUrl =>
+        ReturnUrl is { Length: > 0 } r && r.StartsWith('/') && !r.StartsWith("//") ? r : "/organizations";
+
     /// <summary>Tab to open on arrival, by <see cref="BenTab.Id"/> ("investigations", "cases", …).
     /// Unknown or inaccessible ids fall back to the first tab — same contract as CaseDetail's.</summary>
     [Parameter, SupplyParameterFromQuery(Name = "tab")]
@@ -468,7 +476,7 @@
 
         if (!await UserState.WaitUntilAuthReadyAsync(RendererInfo.IsInteractive)) return;
         if (!UserState.IsAuthenticated)
-            NavManager.NavigateTo("/login");
+            NavManager.NavigateTo(Ben.Web.Website.Library.Kit.SignInLink.For(NavManager));
     }
 
     // ── The owner's first-steps tour (item 166 W1) ────────────────────────────

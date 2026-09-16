@@ -108,6 +108,12 @@ public interface IBenCaseClient
     /// </summary>
     Task<LinkPreview?> GetLinkPreviewAsync(string url, CancellationToken token = default);
 
+    /// <summary>
+    /// Asks the server to make (or refresh) the card for another site's link, as a signed-in person about to post it
+    /// (2026-09-14). Null when the page could not be read or the address is not a web address.
+    /// </summary>
+    Task<LinkPreview?> CreateLinkPreviewAsync(string url, bool refresh = false, CancellationToken token = default);
+
     // ── Cases ─────────────────────────────────────────────────────────────────
 
     Task<LoadResult<CaseRecord>> GetOrgCasesAsync(Guid orgId, CancellationToken token = default);
@@ -137,7 +143,11 @@ public interface IBenCaseClient
     Task<(CaseRecord? Result, string? Error)> CreateOrgCaseAsync(Guid orgId, CreateCaseRequest request, CancellationToken token = default);
     Task<LoadResult<OrgPendingRequestRecord>> GetOrgPendingRequestsAsync(Guid orgId, CancellationToken token = default);
     Task<(CaseRecord? Result, string? Error)> AcceptClientRequestAsCaseAsync(Guid orgId, Guid clientRequestId, AcceptClientRequestAsCaseRequest request, CancellationToken token = default);
-    Task<bool> DeclineClientRequestAsync(Guid orgId, Guid clientRequestId, CancellationToken token = default);
+    /// <remarks>
+    /// Declined only when the server says so: the list used to take a request off the screen whatever the answer, so a member
+    /// without the grant "declined" a request that came back on the next visit (UI test pass 6.15, 2026-09-14).
+    /// </remarks>
+    Task<(bool Declined, string? Error)> DeclineClientRequestAsync(Guid orgId, Guid clientRequestId, CancellationToken token = default);
     /// <summary>Marks a pending request as Viewed or UnderReview without accepting or declining.</summary>
     Task<bool> UpdatePendingRequestStatusAsync(Guid orgId, Guid clientRequestId, Ben.Data.Common.Enums.ClientOrgRequestStatus status, CancellationToken token = default);
 
@@ -202,6 +212,16 @@ public interface IBenCaseClient
     Task<CaseResearchEntryDto?> UploadCaseResearchFileAsync(Guid orgId, Guid caseId, string title, string? description, Stream content, string fileName, string contentType, CancellationToken token = default);
     Task<CaseResearchEntryDto?> UpdateCaseResearchAsync(Guid orgId, Guid caseId, Guid entryId, UpsertResearchRequest request, CancellationToken token = default);
     Task<bool> DeleteCaseResearchAsync(Guid orgId, Guid caseId, Guid entryId, CancellationToken token = default);
+
+    // ── Research pages (2026-09-14) ──────────────────────────────────────────
+    /// <summary>A new research page, with the server's refusal sentence when there is one.</summary>
+    Task<(CaseResearchEntryDto? Result, string? Error)> CreateCaseResearchPageAsync(Guid orgId, Guid caseId, string title, CancellationToken token = default);
+    Task<ItemResult<CaseResearchPageDto>> GetCaseResearchPageAsync(Guid orgId, Guid caseId, Guid entryId, CancellationToken token = default);
+    Task<ResearchDraftSaveOutcome> SaveCaseResearchDraftAsync(Guid orgId, Guid caseId, Guid entryId, SaveResearchDraftRequest request, CancellationToken token = default);
+    Task<(CaseResearchPageDto? Result, string? Error)> PublishCaseResearchPageAsync(Guid orgId, Guid caseId, Guid entryId, CancellationToken token = default);
+    Task<(CaseResearchAttachmentDto? Result, string? Error)> UploadCaseResearchAttachmentAsync(Guid orgId, Guid caseId, Guid entryId, Stream content, string fileName, string contentType, CancellationToken token = default);
+    Task<(CaseResearchAttachmentDto? Result, string? Error)> AddCaseResearchLinkAsync(Guid orgId, Guid caseId, Guid entryId, AddResearchLinkRequest request, CancellationToken token = default);
+    Task<(bool Ok, string? Error)> DeleteCaseResearchAttachmentAsync(Guid orgId, Guid caseId, Guid entryId, Guid attachmentId, CancellationToken token = default);
 
     // ── Case Files (Files/Evidence tab) ──────────────────────────────────────
 
@@ -331,7 +351,8 @@ public interface IBenCaseClient
     Task<LoadResult<CaseMessageRecord>> GetCaseMessagesAsync(Guid orgId, Guid caseId, CancellationToken token = default);
 
     /// <summary>Posts a message from the org to the client on this case.</summary>
-    Task<(CaseMessageRecord? Result, string? Error)> PostCaseMessageAsync(Guid orgId, Guid caseId, string body, CancellationToken token = default);
+    /// <summary>Posts the group's message, written in the formatting editor, as HTML; the API derives the plain Body.</summary>
+    Task<(CaseMessageRecord? Result, string? Error)> PostCaseMessageAsync(Guid orgId, Guid caseId, string bodyHtml, CancellationToken token = default);
 
     /// <summary>Returns the count of unread client messages the org hasn't seen yet.</summary>
     Task<int> GetCaseMessageUnreadCountAsync(Guid orgId, Guid caseId, CancellationToken token = default);

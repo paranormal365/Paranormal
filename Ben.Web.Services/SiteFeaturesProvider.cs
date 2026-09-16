@@ -61,6 +61,7 @@ public sealed class SiteFeaturesProvider
     private volatile string? _announcement;
     private volatile bool _allowOrgSelfRegistration = true;
     private volatile bool _allowTourBusinessSignUps = true;
+    private volatile bool _planPurchasesEnabled = true;
     private long _nextRefreshTicks;
     private int _refreshing;
 
@@ -106,6 +107,18 @@ public sealed class SiteFeaturesProvider
     }
 
     /// <summary>
+    /// Whether plans and member seats are on sale (2026-09-14).
+    /// </summary>
+    /// <remarks>
+    /// True until told otherwise: an unreachable API must not hide the buy buttons from a site that sells, and the
+    /// server refuses a checkout itself when the switch is off.
+    /// </remarks>
+    public bool PlanPurchasesEnabled
+    {
+        get { EnsureFresh(); return _planPurchasesEnabled; }
+    }
+
+    /// <summary>
     /// Forces the next read to refetch. Called after a SuperAdmin saves a setting so they see
     /// their own change immediately rather than up to <see cref="RefreshInterval"/> later.
     /// </summary>
@@ -147,6 +160,7 @@ public sealed class SiteFeaturesProvider
                 _announcement = string.IsNullOrWhiteSpace(info.Announcement) ? null : info.Announcement;
                 _allowOrgSelfRegistration = info.AllowOrganizationSelfRegistration;
                 _allowTourBusinessSignUps = info.AllowTourBusinessSignUps;
+                _planPurchasesEnabled = info.PlanPurchasesEnabled;
             }
         }
         catch (Exception ex)

@@ -31,6 +31,12 @@ public sealed class MyCaseController : BenControllerBase
     private readonly IConfiguration _configuration;
     private readonly ILogger<MyCaseController> _logger;
 
+    /// <summary>For the formatted copy of a client's message (2026-09-14) — see CaseMessageBodies.</summary>
+    private readonly Services.ICmsMarkupSanitizer _sanitizer;
+
+    /// <summary>Makes the cards for links in a client's message once it is saved (2026-09-14).</summary>
+    private readonly Ben.Data.WebApi.Services.LinkPreviews.ILinkPreviewWarmer _previews;
+
     // Fixed Guid for the 'Case Evidence' upload file type seeded by UploadFileTypeSeeder
     private static readonly Guid EvidenceFileTypeId = new("20000000-0000-0000-0000-000000000001");
 
@@ -39,8 +45,12 @@ public sealed class MyCaseController : BenControllerBase
         IEmailService emailService, IConfiguration configuration, ILogger<MyCaseController> logger,
         Microsoft.Extensions.Options.IOptions<Ben.Data.Common.SiteIdentity> site,
         Services.PlatformMessageService messages,
-        Services.IMediaIngestService mediaIngest)
+        Services.IMediaIngestService mediaIngest,
+        Services.ICmsMarkupSanitizer sanitizer,
+        Ben.Data.WebApi.Services.LinkPreviews.ILinkPreviewWarmer previews)
     {
+        _sanitizer = sanitizer;
+        _previews = previews;
         _db = db; _mapper = mapper; _fileStorage = fileStorage; _metadataExtractor = metadataExtractor; _auditLog = auditLog;
         _emailService = emailService; _configuration = configuration; _logger = logger;
         _site = site.Value;
@@ -107,7 +117,8 @@ public sealed class MyCaseController : BenControllerBase
             Status:                  c.Status,
             CaseManagerDisplayName:  c.CaseManagerAppUser?.DisplayName,
             DateCaseOpened:          c.DateCaseOpened,
-            NextInvestigationDate:   nextInvMap.GetValueOrDefault(c.Id))));
+            NextInvestigationDate:   nextInvMap.GetValueOrDefault(c.Id),
+            ClientRequestId:         c.ClientRequestId)));
     }
 
     /// <summary>
@@ -432,7 +443,7 @@ public sealed class MyCaseController : BenControllerBase
         // Reuse the static PDF generator from CaseReportController via shared helper
         var readouts = await CaseReportReadouts.ForAsync(report.Sections.SelectMany(x => x.FieldSessions), _fileStorage, ct);
         var pdfBytes = CaseReportPdfGenerator.Generate(report, readouts);
-        return File(pdfBytes, "application/pdf", $"report-{report.Title.Replace(' ', '-')}.pdf");
+        return File(pdfBytes, "application/pdf", CaseReportPdfGenerator.FileName(report.Title));
     }
 
     // ── Investigation scheduling (client responds to proposed dates) ───────────
@@ -707,7 +718,9 @@ public sealed class MyCaseController : BenControllerBase
     {
         var userId = GetCurrentUserId();
         if (userId == Guid.Empty) return Unauthorized();
-        if (string.IsNullOrWhiteSpace(request.Body)) return BadRequest("Message body is required.");
+        // Body, BodyHtml, or both — see CaseMessageBodies for why Body stays plain text.
+        if (Services.CaseMessageBodies.Normalise(request.Body, request.BodyHtml, _sanitizer) is not { } bodies)
+            return BadRequest("Type a message first.");
 
         await using var db = await _db.CreateDbContextAsync(ct);
         if (!await IsCaseClient(db, caseId, userId, ct)) return NotFound();
@@ -717,7 +730,8 @@ public sealed class MyCaseController : BenControllerBase
             Id                = Guid.NewGuid(),
             CaseId            = caseId,
             AuthorAppUserId   = userId,
-            Body              = request.Body.Trim(),
+            Body              = bodies.Body,
+            BodyHtml          = bodies.BodyHtml,
             SenderSide        = CaseMessageSide.Client,
             IsReadByClient    = true,
             IsReadByOrg       = false,
@@ -726,6 +740,7 @@ public sealed class MyCaseController : BenControllerBase
         };
         db.CaseMessages.Add(msg);
         await db.SaveChangesAsync(ct);
+        _previews.WarmFrom(msg.Body, msg.BodyHtml, userId);
 
         await db.Entry(msg).Reference(m => m.AuthorAppUser).LoadAsync(ct);
         return Ok(ToRecord(msg));
@@ -1379,7 +1394,7 @@ public sealed class MyCaseController : BenControllerBase
     private static CaseMessageRecord ToRecord(Ben.Data.Source.Entities.CaseMessage m) => new(
         m.Id, m.CaseId, m.AuthorAppUserId,
         m.AuthorAppUser?.DisplayName ?? "Unknown",
-        m.Body, m.SenderSide, m.IsReadByClient, m.IsReadByOrg, m.DateCreated);
+        m.Body, m.SenderSide, m.IsReadByClient, m.IsReadByOrg, m.DateCreated, m.BodyHtml);
 }
 
 // ── Response records ──────────────────────────────────────────────────────────
@@ -1393,7 +1408,10 @@ public sealed record ClientCaseListItem(
     Ben.Data.Common.Enums.CaseStatus Status,
     string?   CaseManagerDisplayName,
     DateTime  DateCaseOpened,
-    DateTime? NextInvestigationDate = null);
+    DateTime? NextInvestigationDate = null,
+    // The request this case was accepted from, so a request's page can open ITS case rather than the client's first one
+    // (client test pass, 2026-09-14). Additive: older apps ignore it.
+    Guid?     ClientRequestId = null);
 
 public sealed record ClientCaseDetail(
     Guid      CaseId,
@@ -1458,7 +1476,8 @@ public sealed record LogOccurrenceRequest(
     string?   Body,
     IReadOnlyList<Guid>? ExperienceTypeIds = null);
 
-public sealed record PostCaseMessageRequest(string Body);
+/// <summary>A message to post: plain <c>Body</c> (the app), formatted <c>BodyHtml</c> (the website), or both.</summary>
+public sealed record PostCaseMessageRequest(string? Body = null, string? BodyHtml = null);
 
 public sealed record CaseMessageRecord(
     Guid   Id,
@@ -1469,7 +1488,9 @@ public sealed record CaseMessageRecord(
     Ben.Data.Common.Enums.CaseMessageSide SenderSide,
     bool   IsReadByClient,
     bool   IsReadByOrg,
-    DateTime DateCreated);
+    DateTime DateCreated,
+    // Added 2026-09-14, last and optional so the shipped app's decoder is untouched — see CaseMessageBodies.
+    string? BodyHtml = null);
 
 public sealed record CaseReportSummary(
     Guid                                   Id,

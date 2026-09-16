@@ -16,6 +16,21 @@ namespace Ben.Data.Common.Enums;
 /// </remarks>
 public static class CaseTimelineEntryTypes
 {
+    /// <summary>
+    /// The kinds a person may choose when adding a timeline entry: every kind except
+    /// <see cref="CaseTimelineEntryType.ResearchNote"/>.
+    /// </summary>
+    /// <remarks>
+    /// Beta feedback, 2026-09-14: research has its own tab, and a research page carries its own date and
+    /// time, so offering "Research" as a timeline entry made two places to write the same thing. The value
+    /// stays in the enum — entries written as research before this still exist and still show, under their
+    /// own filter chip — it is only no longer offered for new ones.
+    /// </remarks>
+    public static IReadOnlyList<CaseTimelineEntryType> Pickable { get; } = Enum
+        .GetValues<CaseTimelineEntryType>()
+        .Where(t => t != CaseTimelineEntryType.ResearchNote)
+        .ToArray();
+
     /// <summary>The full name, for a picker or a heading.</summary>
     public static string DisplayName(CaseTimelineEntryType type) => type switch
     {

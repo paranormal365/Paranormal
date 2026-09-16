@@ -641,7 +641,8 @@ public sealed record MyOrgPermissionsItem(
     bool CanReadCases,
     bool CanReadInvestigations,
     IReadOnlyDictionary<Ben.Data.Common.Enums.OrganizationPermissionArea, OrgAreaActions>? Areas = null,
-    IReadOnlyDictionary<Ben.Data.Common.Enums.TierCapability, bool>? Capabilities = null)
+    IReadOnlyDictionary<Ben.Data.Common.Enums.TierCapability, bool>? Capabilities = null,
+    bool IsViewer = false)
 {
     /// <summary>Whether the group's PLAN includes a capability — a different question from
     /// whether this person may act.</summary>
@@ -995,7 +996,10 @@ public sealed record PublicCaseDiscoveryItem(
     int      Score,
     decimal? ApproxLatitude,
     decimal? ApproxLongitude,
-    string?  ClientName);
+    string?  ClientName,
+    // False for a case shown only because this caller may already open it (their group's, or their own as a client), so
+    // the card can say it is not public — the section is headed "Public Investigations". Trailing and defaulted: additive.
+    bool     IsPublic = true);
 
 // ── Phase 5: Investigation + Evidence Voting request records ──────────────────
 public sealed record UpsertInvestigationRequest(
@@ -1155,7 +1159,8 @@ public sealed record ClientCaseListItem(
     Ben.Data.Common.Enums.CaseStatus Status,
     string?   CaseManagerDisplayName,
     DateTime  DateCaseOpened,
-    DateTime? NextInvestigationDate = null);
+    DateTime? NextInvestigationDate = null,
+    Guid?     ClientRequestId = null);
 
 public sealed record ClientCaseDetail(
     Guid      CaseId,
@@ -1372,7 +1377,10 @@ public sealed record CaseMessageRecord(
     Ben.Data.Common.Enums.CaseMessageSide SenderSide,
     bool                             IsReadByClient,
     bool                             IsReadByOrg,
-    DateTime                         DateCreated);
+    DateTime                         DateCreated,
+    // 2026-09-14: the formatted copy, when the message was written in the website's editor. Body always holds the
+    // same words as plain text — the iPhone app reads Body.
+    string?                          BodyHtml = null);
 
 // ── My Investigations response records ───────────────────────────────────────
 public sealed record MyInvestigationItem(
@@ -1401,7 +1409,8 @@ public sealed record UpsertResearchRequest(
     Ben.Data.Common.Enums.CaseResearchType ResearchType,
     string  Title,
     string? Body,
-    string? Url);
+    string? Url,
+    DateTime? EventDateTime = null);
 
 public sealed record CaseResearchEntryDto(
     Guid                                   Id,
@@ -1412,7 +1421,58 @@ public sealed record CaseResearchEntryDto(
     string?                                Url,
     ResearchFileInfo?                      File,
     int                                    SortOrder,
-    DateTime                               DateCreated);
+    DateTime                               DateCreated,
+    // Research pages (2026-09-14)
+    DateTime?                              EventDateTime = null,
+    DateTime?                              PublishedUtc = null,
+    DateTime?                              DraftSavedUtc = null,
+    bool                                   HasUnpublishedDraft = false,
+    bool                                   DraftIsMine = false,
+    string?                                Excerpt = null);
+
+/// <summary>A research page as one reader sees it (2026-09-14) — mirrors the API's record.</summary>
+public sealed record CaseResearchPageDto(
+    Guid Id,
+    Guid CaseId,
+    string Title,
+    DateTime? EventDateTime,
+    Ben.Data.Common.Blocks.BlockDocument Document,
+    bool IsDraft,
+    int Revision,
+    DateTime? PublishedUtc,
+    string? PublishedByName,
+    DateTime? DraftSavedUtc,
+    bool HasUnpublishedDraft,
+    string? DraftHeldByName,
+    bool DraftHeldByMe,
+    IReadOnlyList<CaseResearchAttachmentDto> Attachments);
+
+public sealed record CaseResearchAttachmentDto(
+    Guid Id,
+    Ben.Data.Common.Enums.CaseResearchAttachmentKind Kind,
+    string Title,
+    Guid? FileId,
+    string? FileName,
+    string? ContentType,
+    long? FileSize,
+    string? Url,
+    int SortOrder,
+    DateTime DateCreated,
+    Ben.Service.Models.Entities.LinkPreview? Preview = null);
+
+public sealed record SaveResearchDraftRequest(
+    Ben.Data.Common.Blocks.BlockDocument Document,
+    int BaseRevision,
+    Guid ClientSaveId,
+    string Title,
+    DateTime? EventDateTime);
+
+public sealed record ResearchDraftSavedDto(int Revision, DateTime SavedUtc);
+
+/// <summary>What a draft save came to: saved, refused with a sentence, or refused because newer work would be lost.</summary>
+public sealed record ResearchDraftSaveOutcome(ResearchDraftSavedDto? Saved, string? Refusal, bool IsConflict);
+
+public sealed record AddResearchLinkRequest(string Url, string? Title = null, bool RefreshPreview = false);
 
 public sealed record ResearchFileInfo(Guid FileId, string FileName, string ContentType, long FileSize);
 

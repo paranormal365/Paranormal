@@ -1,0 +1,110 @@
+@implements IAsyncDisposable
+@inject NavigationManager NavManager
+@inject IJSRuntime JS
+
+@*
+    Stops unsaved work being lost by leaving the page.
+
+    Two ways out, two halves: a link or the back button inside the site goes through Blazor's
+    navigation, and is stopped here with a question; closing the tab, reloading or typing a URL never
+    reaches Blazor, and gets the browser's own "Leave site?" through beforeunload — only while there is
+    something to lose.
+
+    When the page can save by itself (TrySaveAsync), leaving saves first and only asks if that failed:
+    a person who wrote something and clicked away meant to keep it. Without one, it asks.
+
+    First used by the Edit Case page (beta feedback, 2026-09-14) and meant for the research page's
+    autosave; the event layout's older guard is the pattern it was lifted from.
+*@
+
+<BenModal @bind-Visible="@_asking" Title="@Title" Size="sm">
+    <ChildContent>
+        <p class="mb-0">@Message</p>
+        <div class="dialog-footer-actions">
+            <span class="dialog-footer-spacer"></span>
+            <button type="button" class="btn btn-secondary" id="leave-guard-stay" @onclick="Stay">Stay on this page</button>
+            <button type="button" class="btn btn-danger" id="leave-guard-leave" @onclick="Leave">Leave without saving</button>
+        </div>
+    </ChildContent>
+</BenModal>
+
+@code {
+    /// <summary>True while there is work that leaving would lose.</summary>
+    [Parameter] public bool Dirty { get; set; }
+
+    /// <summary>
+    /// Saves before leaving; returns true when it saved. When it returns false, the person is asked.
+    /// </summary>
+    [Parameter] public Func<Task<bool>>? TrySaveAsync { get; set; }
+
+    [Parameter] public string Title { get; set; } = "Leave without saving?";
+
+    [Parameter] public string Message { get; set; } = "Your changes on this page have not been saved.";
+
+    private readonly string _id = Guid.NewGuid().ToString("N");
+    private IDisposable? _registration;
+    private IJSObjectReference? _module;
+    private bool _asking;
+    private bool _leaving;
+    private string? _target;
+    private bool? _browserGuardOn;
+
+    protected override async Task OnAfterRenderAsync(bool firstRender)
+    {
+        // Registered once the circuit is interactive: during prerender a handler never fires.
+        if (firstRender)
+            _registration = NavManager.RegisterLocationChangingHandler(OnLocationChangingAsync);
+
+        if (_browserGuardOn == Dirty) return;
+        try
+        {
+            _module ??= await JS.InvokeAsync<IJSObjectReference>(
+                "import", "/_content/Ben.Web.Website.Library/Kit/BenLeaveGuard.razor.js");
+            await _module.InvokeVoidAsync("setGuard", _id, Dirty);
+            _browserGuardOn = Dirty;
+        }
+        catch (JSDisconnectedException) { }
+        catch (ObjectDisposedException) { }
+    }
+
+    private async ValueTask OnLocationChangingAsync(LocationChangingContext context)
+    {
+        if (_leaving || !Dirty) return;
+
+        if (TrySaveAsync is not null && await TrySaveAsync()) return;
+
+        context.PreventNavigation();
+        _target = context.TargetLocation;
+        _asking = true;
+        await InvokeAsync(StateHasChanged);
+    }
+
+    /// <summary>Lets the next navigation through without asking — for the page's own Save and Cancel.</summary>
+    public void Release() => _leaving = true;
+
+    private void Stay()
+    {
+        _asking = false;
+        _target = null;
+    }
+
+    private void Leave()
+    {
+        _asking = false;
+        _leaving = true;
+        if (_target is { Length: > 0 } target) NavManager.NavigateTo(target);
+    }
+
+    public async ValueTask DisposeAsync()
+    {
+        _registration?.Dispose();
+        if (_module is null) return;
+        try
+        {
+            await _module.InvokeVoidAsync("setGuard", _id, false);
+            await _module.DisposeAsync();
+        }
+        catch (JSDisconnectedException) { }
+        catch (ObjectDisposedException) { }
+    }
+}

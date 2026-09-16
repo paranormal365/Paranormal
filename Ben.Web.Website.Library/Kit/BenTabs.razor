@@ -3,6 +3,8 @@
     own tree — no data-bs-toggle="tab", so Bootstrap's Tab plugin never takes ownership of this
     subtree and inputs inside a tab keep binding.
 *@
+@implements IAsyncDisposable
+@inject IJSRuntime JS
 
 <CascadingValue Value="this" IsFixed="true">
     @* Children register themselves during this first pass; the markup below renders from that list. *@
@@ -16,8 +18,13 @@
    One row that scrolls sideways instead. flex-nowrap stops the wrap; overflow-x:auto gives the
    overflow somewhere to go; the scrollbar is hidden on the platforms that draw a permanent one,
    because a horizontal bar under a tab strip reads as a divider. Keyboard users are unaffected —
-   focus moves through the buttons in order and the browser scrolls each one into view. *@
-<ul class="nav @NavClass flex-nowrap ben-tabs-scroll" role="tablist">
+   focus moves through the buttons in order and the browser scrolls each one into view.
+
+   UI test pass, 2026-09-14: with the bar hidden, nothing said the row went on, and a plain mouse wheel — the ordinary
+   Windows mouse — scrolls vertically, so Roles, Addresses and Settings could not be reached at all. BenTabs.razor.js
+   fades whichever edge has more tabs past it, turns the wheel into a sideways scroll while the pointer is over the row,
+   and brings the chosen tab into view (a ?tab=settings link opened on a tab off the edge). *@
+<ul @ref="_list" class="nav @NavClass flex-nowrap ben-tabs-scroll" role="tablist">
     @foreach (var tab in _tabs)
     {
         var index = _tabs.IndexOf(tab);
@@ -71,6 +78,38 @@
     [Parameter] public string NavClass { get; set; } = "nav-tabs";
 
     private readonly List<BenTab> _tabs = new();
+    private ElementReference _list;
+    private IJSObjectReference? _module;
+    private int _shownIndex = -1;
+
+    protected override async Task OnAfterRenderAsync(bool firstRender)
+    {
+        try
+        {
+            if (firstRender)
+            {
+                _module = await JS.InvokeAsync<IJSObjectReference>("import", "/_content/Ben.Web.Website.Library/Kit/BenTabs.razor.js");
+                await _module.InvokeVoidAsync("attach", _list);
+            }
+            if (_module is not null && _shownIndex != ActiveIndex && _tabs.Count > 0)
+            {
+                _shownIndex = ActiveIndex;
+                await _module.InvokeVoidAsync("reveal", _list);
+            }
+        }
+        catch (JSDisconnectedException) { }
+    }
+
+    public async ValueTask DisposeAsync()
+    {
+        if (_module is null) return;
+        try
+        {
+            await _module.InvokeVoidAsync("detach", _list);
+            await _module.DisposeAsync();
+        }
+        catch (JSDisconnectedException) { }
+    }
 
     internal void Register(BenTab tab)
     {

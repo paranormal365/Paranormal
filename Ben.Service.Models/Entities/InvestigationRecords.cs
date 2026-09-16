@@ -187,4 +187,9 @@ public sealed record ReportContentRequest(string? Reason);
 /// <param name="Title">What the thing is called.</param>
 /// <param name="Subtitle">Who it belongs to and roughly where, on one line.</param>
 /// <param name="Path">Where to go, root-relative, as this server resolved it.</param>
-public sealed record LinkPreview(string Kind, string Title, string? Subtitle, string Path);
+/// <param name="Description">Another site's own description of the page (2026-09-14). Null for our own addresses.</param>
+/// <param name="ImageUrl">The page's picture as this site keeps a copy of it — always a <c>/media/link-preview/</c> address.</param>
+/// <param name="SiteName">What the other site calls itself.</param>
+/// <param name="Domain">The host the link goes to, for another site's page.</param>
+public sealed record LinkPreview(string Kind, string Title, string? Subtitle, string Path,
+    string? Description = null, string? ImageUrl = null, string? SiteName = null, string? Domain = null);

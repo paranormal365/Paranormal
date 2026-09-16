@@ -182,7 +182,20 @@ public static class FileAudienceAccess
                || await db.CaseTimelineEntryFiles.AsNoTracking()
                    .AnyAsync(ef => ef.UploadFileId == uploadFileId && caseIds.Contains(ef.CaseTimelineEntry.CaseId), ct)
                || await db.VideoProjects.AsNoTracking()
-                   .AnyAsync(p => p.PublishedUploadFileId == uploadFileId && p.CaseId.HasValue && caseIds.Contains(p.CaseId.Value), ct);
+                   .AnyAsync(p => p.PublishedUploadFileId == uploadFileId && p.CaseId.HasValue && caseIds.Contains(p.CaseId.Value), ct)
+               // Research pages (UI test pass 5.12, 2026-09-14): a picture or file on a research page — and the older
+               // "File" research entry — was refused to every member but its uploader, so a published page showed the rest
+               // of the group broken pictures. The same rule as the Research tab's list: a page nobody has published is
+               // its author's alone; anything else on the case is the group's.
+               || await db.CaseResearchAttachments.AsNoTracking()
+                   .AnyAsync(a => a.UploadFileId == uploadFileId && caseIds.Contains(a.ResearchEntry.CaseId)
+                                  && (a.ResearchEntry.ResearchType != CaseResearchType.Note
+                                      || a.ResearchEntry.PublishedUtc != null
+                                      || (a.ResearchEntry.DraftBlocksJson == null && a.ResearchEntry.PublishedBlocksJson == null)
+                                      || a.ResearchEntry.DraftAuthorAppUserId == userId
+                                      || (a.ResearchEntry.DraftAuthorAppUserId == null && a.ResearchEntry.CreatedByAppUserId == userId)), ct)
+               || await db.CaseResearchEntries.AsNoTracking()
+                   .AnyAsync(r => r.UploadFileId == uploadFileId && caseIds.Contains(r.CaseId), ct);
     }
 
     /// <summary>
@@ -217,6 +230,22 @@ public static class FileAudienceAccess
         return await db.OrganizationUserMemberships.AsNoTracking()
             .AnyAsync(m => m.OrganizationId == organizationId && m.AppUserId == userId && m.IsActive, ct);
     }
+
+    /// <summary>
+    /// True if <paramref name="userId"/>'s active membership of <paramref name="organizationId"/> is a
+    /// <see cref="OrganizationMemberRole.Viewer"/> one.
+    /// </summary>
+    /// <remarks>
+    /// A Viewer reads a group's work and changes none of it (Ben, 2026-09-14: "make viewers read-only"). Writes open to
+    /// every member — calendar events, investigations and their attendance and findings, group messages, timeline entries,
+    /// request statuses and votes, place contacts — ask this after their own gate. Grant-checked writes are covered in
+    /// <c>OrganizationSecurityService.HasAccessAsync</c>. Callers do their own SuperAdmin bypass first.
+    /// </remarks>
+    public static Task<bool> IsOrgViewerAsync(
+        BenDataContext db, Guid organizationId, Guid userId, CancellationToken ct)
+        => db.OrganizationUserMemberships.AsNoTracking()
+            .AnyAsync(m => m.OrganizationId == organizationId && m.AppUserId == userId && m.IsActive
+                        && m.Role == OrganizationMemberRole.Viewer, ct);
 }
 
 /// <summary>Snapshot of which audiences a user currently belongs to for one file.</summary>

@@ -22,6 +22,14 @@ namespace Ben.Data.WebApi.Controllers.Entities;
 [Authorize]
 public sealed class CaseController : BenControllerBase
 {
+    /// <summary>A Viewer here reads and changes nothing — see <see cref="Ben.Data.WebApi.Services.Access.FileAudienceAccess.IsOrgViewerAsync"/>.</summary>
+    private async Task<bool> IsViewerAsync(Guid orgId, CancellationToken ct)
+    {
+        if (User.IsInRole(Ben.Data.Common.Constants.RoleNames.SuperAdmin)) return false;
+        await using var viewerDb = await _db.CreateDbContextAsync(ct);
+        return await Ben.Data.WebApi.Services.Access.FileAudienceAccess.IsOrgViewerAsync(viewerDb, orgId, GetCurrentUserId(), ct);
+    }
+
     private readonly IDbContextFactory<BenDataContext> _db;
     private readonly IMapper _mapper;
 
@@ -34,8 +42,10 @@ public sealed class CaseController : BenControllerBase
         Services.Billing.SubscriptionLimitGuard limits,
         Ben.Service.RepositoryService.GenericInterfaces.IOrganizationSecurityService security,
         Services.RequestReviewNotifier reviewNotifier,
-        Services.ClientStatusMailer clientMail)
+        Services.ClientStatusMailer clientMail,
+        Services.ICmsMarkupSanitizer sanitizer)
     {
+        _sanitizer = sanitizer;
         _clientMail = clientMail;
         _db = db;
         _mapper = mapper;
@@ -45,6 +55,24 @@ public sealed class CaseController : BenControllerBase
     }
 
     private readonly Services.RequestReviewNotifier _reviewNotifier;
+
+    private readonly Services.ICmsMarkupSanitizer _sanitizer;
+
+    /// <summary>
+    /// A case description as it is stored: sanitized HTML, or null when the editor held nothing.
+    /// </summary>
+    /// <remarks>
+    /// The description has always been rendered as markup — on the case, and on the public case page once
+    /// published — but it was stored exactly as sent. Beta feedback (2026-09-14) gave it a formatting editor on
+    /// Edit Case and New Case, which made the gap plain: nothing between a request body and a MarkupString on a
+    /// public page. An emptied editor still sends <c>&lt;p&gt;&lt;/p&gt;</c>, which is no description at all.
+    /// </remarks>
+    public static string? CleanDescription(string? html, Services.ICmsMarkupSanitizer sanitizer)
+    {
+        if (!Ben.Data.Common.Text.PlainTextHtml.HasText(html)) return null;
+        var clean = sanitizer.SanitizeHtml(html).Trim();
+        return Ben.Data.Common.Text.PlainTextHtml.HasText(clean) ? clean : null;
+    }
 
     private readonly Ben.Service.RepositoryService.GenericInterfaces.IOrganizationSecurityService _security;
 
@@ -118,6 +146,7 @@ public sealed class CaseController : BenControllerBase
         if (!await CanReadAsync(orgId, ct)) return Forbid();
         await using var db = await _db.CreateDbContextAsync(ct);
         var cases = await db.Cases.AsNoTracking()
+            .Include(c => c.CaseManagerAppUser)   // the record's manager name maps from this navigation (as GetById)
             .Where(c => c.OrganizationId == orgId)
             .OrderByDescending(c => c.DateCaseOpened)
             .ToListAsync(ct);
@@ -286,7 +315,7 @@ public sealed class CaseController : BenControllerBase
             OrganizationId     = orgId,
             Status             = CaseStatus.Proposed,
             Title              = request.Title.Trim(),
-            Description        = request.Description?.Trim(),
+            Description        = CleanDescription(request.Description, _sanitizer),
             StreetAddress1     = request.StreetAddress1.Trim(),
             StreetAddress2     = request.StreetAddress2?.Trim(),
             City               = request.City.Trim(),
@@ -351,6 +380,7 @@ public sealed class CaseController : BenControllerBase
         Guid orgId, Guid clientRequestId, [FromBody] UpdateRequestStatusRequest request, CancellationToken ct)
     {
         if (!await CanReadAsync(orgId, ct)) return Forbid();
+        if (await IsViewerAsync(orgId, ct)) return ViewerReadOnly();
         if (request.Status is not ClientOrgRequestStatus.Viewed and not ClientOrgRequestStatus.UnderReview)
             return BadRequest("Only Viewed and UnderReview statuses may be set via this endpoint.");
 
@@ -590,7 +620,7 @@ public sealed class CaseController : BenControllerBase
         }
 
         entity.Title                = request.Title?.Trim() ?? entity.Title;
-        entity.Description          = request.Description?.Trim();
+        entity.Description          = CleanDescription(request.Description, _sanitizer);
         var previousStatus = entity.Status;
         entity.Status               = request.Status;
         entity.PublicPseudonym      = request.PublicPseudonym?.Trim();
@@ -714,7 +744,66 @@ public sealed class CaseController : BenControllerBase
             .ThenBy(e => e.DateCreated)
             .ThenBy(e => e.Id)
             .ToListAsync(ct);
-        return Ok(_mapper.Map<IEnumerable<CaseTimelineEntryRecord>>(entries));
+        var rows = _mapper.Map<IEnumerable<CaseTimelineEntryRecord>>(entries).ToList();
+
+        // Research pages that are published and dated take their place on the case's timeline (2026-09-14): the page says
+        // when what it is about happened, and the timeline is where a case's moments are read in order. Not in an
+        // investigation's binder — a research page belongs to the case, not to a visit. Group-only, like the page, and
+        // read-only here: a page changes on its page.
+        if (investigationId is null)
+        {
+            var pages = await db.CaseResearchEntries.AsNoTracking()
+                .Where(r => r.CaseId == caseId && r.ResearchType == CaseResearchType.Note
+                         && r.EventDateTime != null && r.PublishedUtc != null)
+                .OrderBy(r => r.EventDateTime)
+                .ThenBy(r => r.PublishedUtc)
+                .ThenBy(r => r.Id)
+                .Select(r => new
+                {
+                    r.Id, r.Title, r.Excerpt, r.EventDateTime, r.PublishedUtc, r.PublishedByAppUserId, r.CreatedByAppUserId,
+                    PublishedBy = db.Users.Where(u => u.Id == r.PublishedByAppUserId).Select(u => u.DisplayName).FirstOrDefault(),
+                })
+                .ToListAsync(ct);
+
+            if (pages.Count > 0)
+            {
+                rows = MergeByMoment(rows, pages.Select(p => new CaseTimelineEntryRecord
+                {
+                    Id = p.Id, CaseId = caseId,
+                    AuthorAppUserId = p.PublishedByAppUserId ?? p.CreatedByAppUserId,
+                    AuthorDisplayName = p.PublishedBy,
+                    EntryType = CaseTimelineEntryType.ResearchNote,
+                    EventDateTime = p.EventDateTime,
+                    Title = p.Title,
+                    Body = string.IsNullOrWhiteSpace(p.Excerpt) ? null : Ben.Data.Common.Text.PlainTextHtml.FromPlainText(p.Excerpt),
+                    Visibility = CaseTimelineVisibility.OrgOnly,
+                    DateCreated = p.PublishedUtc!.Value,
+                    CreatedByAppUserId = p.CreatedByAppUserId,
+                    ResearchEntryId = p.Id,
+                    IsReadOnly = true,
+                }).ToList());
+            }
+        }
+
+        return Ok(rows);
+    }
+
+    /// <summary>
+    /// Puts research pages among timeline entries by the moment each is about, without reordering either list: both arrive
+    /// already sorted (entries by the database's event time, logged time and id), and re-sorting the entries in memory
+    /// would break their ties differently from the database. On the same moment an entry comes before a page.
+    /// </summary>
+    internal static List<CaseTimelineEntryRecord> MergeByMoment(List<CaseTimelineEntryRecord> entries, List<CaseTimelineEntryRecord> pages)
+    {
+        var merged = new List<CaseTimelineEntryRecord>(entries.Count + pages.Count);
+        int e = 0, p = 0;
+        while (e < entries.Count || p < pages.Count)
+        {
+            var takePage = e == entries.Count
+                        || (p < pages.Count && (pages[p].EventDateTime ?? pages[p].DateCreated) < (entries[e].EventDateTime ?? entries[e].DateCreated));
+            merged.Add(takePage ? pages[p++] : entries[e++]);
+        }
+        return merged;
     }
 
     [HttpPost("{caseId:guid}/timeline")]
@@ -722,6 +811,7 @@ public sealed class CaseController : BenControllerBase
         Guid orgId, Guid caseId, [FromBody] UpsertTimelineEntryRequest request, CancellationToken ct)
     {
         if (!await CanReadAsync(orgId, ct)) return Forbid();
+        if (await IsViewerAsync(orgId, ct)) return ViewerReadOnly();
         var userId = GetCurrentUserId();
         await using var db = await _db.CreateDbContextAsync(ct);
         if (!await db.Cases.AnyAsync(c => c.Id == caseId && c.OrganizationId == orgId, ct))

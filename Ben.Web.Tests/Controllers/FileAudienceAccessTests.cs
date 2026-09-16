@@ -289,4 +289,95 @@ public class FileAudienceAccessTests
         await using var readDb = await factory.CreateDbContextAsync();
         Assert.True(await FileAudienceAccess.CanViewFileAsync(readDb, file.Id, targetUserId, default));
     }
+    // ── Research pages (UI test pass 5.12) ─────────────────────────────────────
+
+    /// <summary>
+    /// A group with one case, an uploader and a second member; a research entry on the case built by
+    /// <paramref name="entry"/>, and — when <paramref name="asAttachment"/> — the file attached to it.
+    /// </summary>
+    private static async Task<(IDbContextFactory<BenDataContext> Factory, UploadFile File, Guid UploaderId, Guid MemberId)> ResearchFileAsync(
+        Action<CaseResearchEntry, Guid> entry, bool asAttachment)
+    {
+        var factory = CreateFactory();
+        var uploaderId = Guid.NewGuid();
+        var memberId = Guid.NewGuid();
+        var orgId = Guid.NewGuid();
+        var caseId = Guid.NewGuid();
+        var file = MakeFile(uploaderId);
+
+        await using var db = await factory.CreateDbContextAsync();
+        db.UploadFiles.Add(file);
+        db.Organizations.Add(new Organization { Id = orgId, Name = "Org", UrlName = "org", DateCreated = DateTime.UtcNow, CreatedByAppUserId = uploaderId });
+        foreach (var id in new[] { uploaderId, memberId })
+        {
+            db.OrganizationUserMemberships.Add(new OrganizationUserMembership
+            {
+                Id = Guid.NewGuid(), OrganizationId = orgId, AppUserId = id, Role = OrganizationMemberRole.Member,
+                IsActive = true, DateCreated = DateTime.UtcNow, CreatedByAppUserId = uploaderId,
+            });
+        }
+        db.Cases.Add(new Case
+        {
+            Id = caseId, OrganizationId = orgId, Title = "Case", CaseYear = 2026, OrgCaseNumber = 1,
+            StreetAddress1 = "1 Main", City = "N", State = "TN", ZipCode = "37201", Country = "US",
+            DateCreated = DateTime.UtcNow, CreatedByAppUserId = uploaderId,
+        });
+        var research = new CaseResearchEntry
+        {
+            Id = Guid.NewGuid(), CaseId = caseId, Title = "Research", DateCreated = DateTime.UtcNow, CreatedByAppUserId = uploaderId,
+        };
+        entry(research, file.Id);
+        db.CaseResearchEntries.Add(research);
+        if (asAttachment)
+        {
+            db.CaseResearchAttachments.Add(new CaseResearchAttachment
+            {
+                Id = Guid.NewGuid(), ResearchEntryId = research.Id, Kind = CaseResearchAttachmentKind.File,
+                UploadFileId = file.Id, Title = "f.jpg", DateCreated = DateTime.UtcNow, CreatedByAppUserId = uploaderId,
+            });
+        }
+        await db.SaveChangesAsync();
+        return (factory, file, uploaderId, memberId);
+    }
+
+    [Fact]
+    public async Task CanViewFileAsync_APictureOnAPublishedResearchPage_IsTheWholeGroups()
+    {
+        var (factory, file, _, memberId) = await ResearchFileAsync((e, _) =>
+        {
+            e.DraftBlocksJson = e.PublishedBlocksJson = "{}";
+            e.DraftAuthorAppUserId = e.CreatedByAppUserId;
+            e.PublishedUtc = DateTime.UtcNow;
+        }, asAttachment: true);
+
+        await using var readDb = await factory.CreateDbContextAsync();
+        Assert.True(await FileAudienceAccess.CanViewFileAsync(readDb, file.Id, memberId, default));
+        Assert.False(await FileAudienceAccess.CanViewFileAsync(readDb, file.Id, Guid.NewGuid(), default));
+    }
+
+    [Fact]
+    public async Task CanViewFileAsync_APictureOnAPageNobodyHasPublished_IsItsAuthorsAlone()
+    {
+        var (factory, file, _, memberId) = await ResearchFileAsync((e, _) =>
+        {
+            e.DraftBlocksJson = "{}";
+            e.DraftAuthorAppUserId = e.CreatedByAppUserId;
+        }, asAttachment: true);
+
+        await using var readDb = await factory.CreateDbContextAsync();
+        Assert.False(await FileAudienceAccess.CanViewFileAsync(readDb, file.Id, memberId, default));
+    }
+
+    [Fact]
+    public async Task CanViewFileAsync_AnOlderFileResearchEntry_IsTheWholeGroups()
+    {
+        var (factory, file, _, memberId) = await ResearchFileAsync((e, fileId) =>
+        {
+            e.ResearchType = CaseResearchType.File;
+            e.UploadFileId = fileId;
+        }, asAttachment: false);
+
+        await using var readDb = await factory.CreateDbContextAsync();
+        Assert.True(await FileAudienceAccess.CanViewFileAsync(readDb, file.Id, memberId, default));
+    }
 }

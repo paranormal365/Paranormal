@@ -11200,7 +11200,7 @@ the fold hands back a y the mouse cannot reach and the drags land on whatever is
 The test then reports "the map never reloaded" about a map nobody touched. Scroll it into view
 first.
 
-## 224. A date field silently takes an impossible day as its second digit (OPEN)
+## 224. A date field silently takes an impossible day as its second digit (FIXED 2026-09-15 — `fix/date-picker-impossible-day-224`)
 
 Found 2026-09-09 alongside item 221, deferred by Ben the same day. **Not started.**
 
@@ -11232,6 +11232,31 @@ typing behaviour were wrong on the day this was found:
 
 **Related, and already fixed:** item 221, where an *empty* picker rebuilt the whole date on the
 first arrow press. That one was fixed by seeding every date field; this one survives a seeded field.
+
+### Measured 2026-09-15 (branch `fix/date-picker-impossible-day-224`) — every option on the tree above fails
+
+Real keystrokes in Chromium against temporary pickers on `/styleguide`, value seeded 09/15/2026, typing from the month:
+
+| Field | Typed | Shows | Bound value |
+|---|---|---|---|
+| `TelerikDatePicker` (today's call sites) | 0 9 3 1 | 09/01/2026 | 09/01/2026 — silent |
+| `TelerikDatePicker AutoCorrectParts="false"` | 0 9 3 1 | 09/31/2026, red `k-invalid` | 09/15/2026 — Save keeps the old date |
+| …then 3 0 to fix the day | | 09/31/**0030** — focus had moved to the year | 09/15/2026 |
+| `TelerikDateTimePicker` (MM/dd/yyyy hh:mm tt) | 0 9 3 1 | 09/01/2026 | 09/01/2026 — silent |
+| `TelerikTimePicker` (hh:mm tt) | 1 3 | 03:00 PM | 15:00 — silent |
+| native `<input type="date" @bind>` | 0 9 3 1 | 01/01/0001 | 09/03/2026 |
+| **Telerik 15.0.1** (probe build only, reverted) | same | identical to 14.1 | identical |
+
+Telerik's own XML docs say `AutoCorrectParts=true` turns "32" into the month's last day; it actually restarts the
+part with the second digit. Selection set from script (`setSelectionRange`) does not move Telerik's active part —
+only a real click does, which matters for any automated test.
+
+**Done, as (1)** — and wider than this entry knew. `Kit/BenDateField` (`DateEntry` parses; a sentence and the kept value on refusal; TelerikCalendar inline) replaced all 34 Telerik pickers **and** the fourteen `type="date"` and three `type="datetime-local"` boxes added since, which failed too: `@bind` saved 01/01/0001 into a `DateTime`, erased a `DateTime?`, and an impossible `datetime-local` read as "none" posted a scheduled post at once. `BenDateFieldGuardTests` bans all of them; `type="time"` stays (it took 08:30 PM correctly).
+
+**What is left:** (1) a Kit date field Blazor owns — free text parsed by our code with a sentence for an impossible
+date, and a calendar button (TelerikCalendar in a popup) — for date, date-and-time and time, migrating the 34 sites
+with a guard; (2) intercepting Telerik's keystrokes in JS (fragile across Telerik versions; not recommended); (3) a
+support ticket to Telerik with the table above, and wait.
 
 ---
 
@@ -12490,3 +12515,98 @@ three components were rendering without styling somebody had written for them.
 — all 118 of them moved to `ProjectNotes/FeatureHistory/` on 2026-09-12. `git mv` both as part of
 the merge, or the root fills up again.
 
+
+## 241. The research document, next: a canvas you edit in the browser (PRODUCT — being built as a separate WASM project)
+
+**Ben, 2026-09-15:** research is being built as a new, separate WASM project. When it is finished and tested it is imported
+into `Ben.slnx`; then it is shaped to fit, and the API is shaped to match it. Nothing here is built ahead of that import.
+
+`feature/beta-feedback-1` ships research pages as a Notion-style stack of blocks (text, picture, file, link card, map), with
+private drafts, Publish, and a Files & links rail, built in `Ben.Web.Website.Library/Kit/Blocks`. Ben, 2026-09-14, during
+the UI test pass: that stack is the foundation, not what the research document is meant to be.
+
+### What it is meant to be — Ben: *"Keep it like a combination of Notion, Canva, OneNote and Obsidian's Canvas. This is what the Research tool document is supposed to be."*
+
+- **Notion** — what ships now: blocks you type into, move and turn into other kinds.
+- **Canva** — the page is designed: layout, sizes, colour, pictures placed with care rather than stacked.
+- **OneNote** — put anything anywhere: click an empty spot and start writing there.
+- **Obsidian Canvas** — cards on a board you pan and zoom, joined by arrows and gathered into groups: the owners, the deed,
+  the cemetery and the newspaper story, with lines saying how they connect.
+- The **table block** is still owed (Ben asked to be reminded; memory `project_block_editor_followups`).
+
+### Where it runs — Ben: *"WASM sounds like is where it should be. The end user only needs to get data from the server when needed. It doesn't need anything but when it is saved... that is when the server is really needed. The rest can be stored in local storage until saved."*
+
+Today the editor is Blazor Server: every toolbar press, menu, drag and keystroke-driven change is a round trip over the
+circuit. It measured 3–5 ms on localhost, but on a real connection the lag shows — the test pass found that clicking B and
+typing at once loses the bold (4.5), because the tool waits for the server. So the next editor is **Blazor WebAssembly**
+(the video editor already has a WASM host, `Ben.Wasm.Video`, so C# and Telerik stay):
+
+- **Load once**: the page, its draft and its attachments come from the existing research API.
+- **Edit in the browser**: typing, formatting, moving, arranging cards, drawing arrows — no server involved.
+- **Keep the working copy in browser storage** until it is saved, so a refresh, a closed laptop or a dropped connection
+  loses nothing.
+- **The server when it matters**: save a draft, publish, upload a file, fetch a link's preview. The API's
+  `BaseRevision`/409 already tells a tab that somebody else saved first.
+
+### To settle before building
+
+1. **A local copy older than the server's** — the other tab or person saved since. Show both and let the person choose, or
+   merge block by block?
+2. **Shared computers** — browser storage outlives sign-out. Key it by person, clear it on sign-out, and cap how long an
+   unsaved copy is kept.
+3. **Files cannot wait in browser storage** — pictures and files upload the moment they are added (as now); only the
+   document waits.
+4. **Phones** — a free canvas on a 375px screen: pan/zoom with a finger, or the stack as the phone's view of the same
+   document?
+5. **Storage shape** — card positions, sizes, groups and arrows beside today's block list (`BlockDocument` version 2), with
+   the stack kept as the reading and print view, and old version-1 pages opening unchanged.
+6. **The reader** — does a published canvas read as a canvas (pan/zoom) for members, or flatten to the stack?
+
+---
+
+## 242. EVP analysis that can tell a voice from noise, and says how sure it is (FUTURE — business-critical; parked 2026-09-15 for Claude usage)
+
+Ben, 2026-09-15: a small AI service that processes audio when someone analyses it for EVPs, then (separately, later) one
+for long video feeds. His outline: spectrogram analysis (voices leave formants even when buried), anomaly detection over
+the quiet parts of a room, and an open-source speech model (Whisper) to decide whether a flagged burst is a spoken word.
+Ben: *"I don't want to steal claude, I just want claude to teach my AI to be better."* Parked because the work would
+likely exceed his Claude usage allowance — **"invaluable for my business"**, so it comes back.
+
+### Already built
+- `Ben.Data.WebApi/Services/Audio/EvpDetector.cs` — voice-band energy above an adaptive local noise floor; candidates land
+  Pending for a person to accept or dismiss; manual Scan only. `EvpDetectorTests` is its accuracy gate (synthetic fixture).
+- Spectrograms in the audio player (WaveSurfer workers).
+- Local model hosting: `OnnxNsfwScreener` (ONNX Runtime 1.29, model fetched by script, never committed, degrades loudly).
+
+### The design that came out of the conversation
+1. **A speech detector decides "is it speech", not Whisper** — pretrained Silero VAD (ONNX) on each candidate.
+2. **Whisper only suggests words, and only on the flagged 1–3 s clips** — run locally (whisper.cpp / Whisper.net, MIT) so
+   private-residence audio never leaves the server; show its no-speech probability and word confidence; hide weak ones.
+   **Whisper invents fluent phrases from pure noise** — the single biggest risk to credibility.
+3. **Controls** — the same pipeline over plain room tone and reversed audio; its false-word rate is shown, not hidden.
+4. **Blind review** — the investigator writes what they hear before the suggestion is revealed (priming makes people hear it).
+5. **Cleaned listen** (RNNoise / DeepFilterNet) offered beside the original, labelled processed — denoisers can create
+   speech-like artefacts.
+6. Runs in its own process (≈1 GB model memory stays out of the IIS app pool), started by a person like Scan.
+
+### How "Claude teaches the AI" — honestly
+- Claude cannot hear audio, and its guesses at spectrogram images must never become labels.
+- **Known-truth training material:** real room tone, tape hiss and static from Ben's recorders, with public speech
+  (e.g. LibriSpeech) mixed in at known times and loudness down to barely audible, plus non-speech impostors (knocks, steps,
+  pipes, dogs, handling). Every example carries its true answer.
+- Claude writes the generator, the fine-tuning pipeline for a small pretrained detector (not a CNN from scratch — no dataset
+  of confirmed EVPs can exist), the scoring harness (catch rate, false-speech rate on noise, quietest voice caught), and the
+  server integration.
+- **Investigators keep teaching it:** every Accept/Dismiss is a real-tape label that later re-tunes scoring (as FeedLearning
+  re-fits the feed).
+- Anthropic's terms restrict training models that compete with Claude on its outputs; a narrow audio detector built with
+  code Claude wrote is ordinary software work, but Ben should read the terms himself for a commercial product.
+
+### First step when it resumes (cheap, decides the rest)
+A throwaway console measurement, outside the product: Silero VAD and Whisper tiny/base/small over current detector candidates
+on real recordings, and over plain room tone as a control — how often each "hears words" in the control, and CPU time per
+clip on a Windows-class server. **Needs from Ben:** real recordings, including plain room tone and hiss from his recorders.
+
+### Video (separate item when it comes)
+MCP is a protocol for connecting tools to an assistant, not a model. Long-feed analysis is motion detection / background
+subtraction plus a small vision model; MCP could let an assistant use its results.

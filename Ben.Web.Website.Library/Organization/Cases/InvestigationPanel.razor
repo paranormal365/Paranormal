@@ -12,7 +12,9 @@
 <div>
     @* ── Date negotiation with client ─────────────────────────────────────────── *@
     <details class="mb-3">
-        <summary class="fw-semibold small text-secondary" style="cursor:pointer;">
+        @* Drawn as a button: the template removes the disclosure triangle and the icon broke onto its own line, so the
+           summary read as a loose icon over a caption, not something to open (UI test pass, 2026-09-14). *@
+        <summary class="btn btn-sm btn-outline-secondary d-inline-flex align-items-center gap-1">
             <BenIcon Name="calendar" /> Date Proposals to Client
         </summary>
         <div class="mt-2">
@@ -251,7 +253,7 @@
                                             </div>
                                             <div>
                                                 <label class="form-label mb-1" style="font-size:.8rem;" for="investigationpanel-role-optional-3abb">Role (optional)</label>
-                                                <input id="investigationpanel-role-optional-3abb" type="text" class="form-control" placeholder="Lead Investigator" style="max-width:160px;" @bind="@_newAttendeeRole" @bind:event="oninput" />
+                                                <input id="investigationpanel-role-optional-3abb" type="text" class="form-control" placeholder="e.g. Lead Investigator" style="max-width:160px;" @bind="@_newAttendeeRole" @bind:event="oninput" />
                                             </div>
                                             <button type="button" class="btn btn-primary btn-sm" @onclick="@(() => AddAttendee(i))" disabled="@(!(_newAttendeeUserId != Guid.Empty && !_attendeeBusy))"><BenIcon Name="plus" Class="me-1" />
                                                 Add
@@ -281,7 +283,7 @@
         <div class="row g-3">
             <div class="col-12">
                 <label class="form-label fw-semibold" for="investigationpanel-title-092d">Title <span class="text-danger">*</span></label>
-                <input id="investigationpanel-title-092d" type="text" class="form-control" placeholder="Night Investigation #1" @bind="@_form.Title" @bind:event="oninput" />
+                <input id="investigationpanel-title-092d" type="text" class="form-control" placeholder="e.g. Night Investigation #1" @bind="@_form.Title" @bind:event="oninput" />
             </div>            <div class="col-12">
                 <label class="form-label fw-semibold" for="investigationpanel-investigation-plan-description-32cb">Investigation Plan / Description</label>
                 <textarea id="investigationpanel-investigation-plan-description-32cb" class="form-control" rows="3" placeholder="What areas will be investigated? What equipment will be used?" @bind="@_form.Description"></textarea>
@@ -294,8 +296,8 @@
             <div class="col-md-6">
                 <label class="form-label fw-semibold" for="investigationpanel-start-date">Starts</label>
                 <div class="d-flex gap-2">
-                    <TelerikDatePicker Id="investigationpanel-start-date" Format="MM/dd/yyyy" @bind-Value="@_form.StartDate" Width="160px" />
-                    <TelerikTimePicker Format="hh:mm tt" @bind-Value="@_form.StartTime" Width="130px" />
+                    <BenDateField Mode="DateEntryMode.Date" Id="investigationpanel-start-date" @bind-Value="@_form.StartDate" Width="160px" />
+                    <BenDateField Mode="DateEntryMode.Time" @bind-Value="@_form.StartTime" Width="130px" />
                 </div>
             </div>
             @* One arrival and one departure is the ordinary shape, and it is allowed to cross
@@ -307,11 +309,11 @@
                 <label class="form-label fw-semibold">Ends (optional)</label>
                 @if (_form.MultiDay)
                 {
-                    <TelerikDateTimePicker Format="@DateTimeViewerExtensions.DateTimeNoSecondsPattern" @bind-Value="@_form.EndDateTime" Width="100%" />
+                    <BenDateField Mode="DateEntryMode.DateTime" @bind-Value="@_form.EndDateTime" Width="100%" />
                 }
                 else
                 {
-                    <TelerikTimePicker Format="hh:mm tt" @bind-Value="@_form.EndTime" Width="100%" />
+                    <BenDateField Mode="DateEntryMode.Time" @bind-Value="@_form.EndTime" Width="100%" />
                     <div class="form-text">A time at or before the start is the next morning.</div>
                 }
                 <div class="form-check mt-2">
@@ -338,7 +340,7 @@
                 </div>
                 <div class="col-md-6">
                     <label class="form-label fw-semibold">Evidence Due Date (optional)</label>
-                    <TelerikDateTimePicker Format="@DateTimeViewerExtensions.DateTimeNoSecondsPattern" @bind-Value="@_form.EvidenceDueDate" Width="100%" />
+                    <BenDateField Mode="DateEntryMode.DateTime" @bind-Value="@_form.EvidenceDueDate" Width="100%" />
                     <div class="form-text">After this date, no new evidence may be submitted for this investigation.</div>
                 </div>
             }
@@ -435,13 +437,14 @@
     private sealed record BinderTypeOption(string Label, CaseTimelineEntryType Value);
 
     // Named from the shared helper (W-A11) rather than typed here, so a fifth kind added to the
-    // enum cannot be listed under one name in this panel and another on the timeline.
+    // enum cannot be listed under one name in this panel and another on the timeline. No Research:
+    // research is written on the case's Research tab, as a page with its own date (beta feedback,
+    // 2026-09-14) — see CaseTimelineEntryTypes.Pickable.
     private static readonly List<BinderTypeOption> _binderEntryTypes =
     [
         new(CaseTimelineEntryTypes.ShortName(CaseTimelineEntryType.InvestigatorNote),  CaseTimelineEntryType.InvestigatorNote),
         new(CaseTimelineEntryTypes.DisplayName(CaseTimelineEntryType.InstrumentReading), CaseTimelineEntryType.InstrumentReading),
         new(CaseTimelineEntryTypes.ShortName(CaseTimelineEntryType.Evidence),          CaseTimelineEntryType.Evidence),
-        new(CaseTimelineEntryTypes.ShortName(CaseTimelineEntryType.ResearchNote),      CaseTimelineEntryType.ResearchNote),
     ];
 
     private async Task ToggleBinderAsync(InvestigationRecord inv)

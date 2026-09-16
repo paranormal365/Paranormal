@@ -100,6 +100,25 @@ happens: the website's settings go into `appsettings.json` rather than `appsetti
 (same reason as the API, below), Serilog's own copy of the connection string is patched in *both*
 applications, and the sidecar zips are staged under `/files` instead of inside the editor.
 
+## What a release needs besides the deploy
+
+Newest first. Each entry is what the database or the site settings need for that release, in the order to do it. Remove
+nothing: a server that skipped a release needs the older entries too.
+
+### 2026-09-14 — beta feedback (research pages, formatted notes and messages, plans off sale)
+
+1. Apply the two migrations, in order, before deploying — `dotnet ef database update` applies both:
+   - `CaseMessageBodyHtml` — one nullable column on case messages for the formatted copy.
+   - `ResearchPages` — research-page columns on research entries, and the research attachments and link previews
+     tables. Additive only; no existing row changes.
+2. Nothing to run for case notes: the API converts plain-text notes to HTML once, in the background, on its first
+   start. The log says how many it converted.
+3. **Sell plans and seats** (`billing.purchases-enabled`, under Site Settings → Selling plans) is on when unset, so the
+   site keeps selling after the deploy. Turn it off there to take plans off sale.
+4. Link previews read other sites from the API server: it needs outbound HTTPS (443) and HTTP (80) to the internet, and
+   writes small pictures under the file store's `link-previews` folder. Verified on macOS only; after deploying, paste a
+   public web address into a research page and check the card shows its picture.
+
 ## Why each one is an Application
 
 The root `web.config` registers the ASP.NET Core handler at `path="*"`. **Every** request under the

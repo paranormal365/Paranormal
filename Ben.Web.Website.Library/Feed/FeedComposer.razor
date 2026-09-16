@@ -27,7 +27,9 @@
                   maxlength="@MaxLength"
                   placeholder="@Placeholder"
                   value="@_body"
-                  @oninput="OnBodyInput"></textarea>
+                  @oninput="OnBodyInput"
+                  @onfocusin="@(() => _bodyLeft = false)" @onfocusout="@(() => _bodyLeft = true)"></textarea>
+        <BenComposerLinkCard Text="@_body" LeftTheBox="@_bodyLeft" />
 
         @if (_error is not null)
         {
@@ -199,9 +201,7 @@
                         @* The picker speaks the reader's own clock and the value is turned into
                            UTC on the way out — a scheduled time typed as 8pm means 8pm where the
                            person typing it is standing. *@
-                        <input id="composer-when" type="datetime-local" class="form-control form-control-sm"
-                               value="@(_scheduledFor?.ToString("yyyy-MM-ddTHH:mm"))"
-                               @onchange="OnScheduleChosen" />
+                        <BenDateField Mode="DateEntryMode.DateTime" Id="composer-when" Value="_scheduledFor" ValueChanged="@((DateTime? when) => OnScheduleChosen(when))" />
                         @if (_scheduledFor is not null)
                         {
                             <button type="button" class="btn btn-link btn-sm p-0 mt-1"
@@ -279,9 +279,13 @@
     /// A datetime-local box has no zone in it, and the person typing 8pm means 8pm where they are
     /// standing. It is turned into an instant on the way out, once, in PostAsync.
     /// </remarks>
-    private void OnScheduleChosen(ChangeEventArgs e)
+    /// <summary>
+    /// Only a time the field accepted reaches here. An impossible one used to arrive as nothing, which cleared the
+    /// schedule and posted straight away; now the field refuses it with a sentence and the panel stays open (item 224).
+    /// </summary>
+    private void OnScheduleChosen(DateTime? when)
     {
-        _scheduledFor = DateTime.TryParse(e.Value?.ToString(), out var when) ? when : null;
+        _scheduledFor = when;
         _scheduleOpen = false;
     }
 
@@ -415,6 +419,7 @@
     [Parameter] public EventCallback<FeedPostRecord> OnPosted { get; set; }
 
     private string _body = string.Empty;
+    private bool _bodyLeft;
     private string? _error;
     private bool _busy;
 

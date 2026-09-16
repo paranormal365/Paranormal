@@ -258,7 +258,7 @@
         if (!firstRender) return;
 
         await UserState.WaitUntilAuthReadyAsync(RendererInfo.IsInteractive);
-        if (!UserState.IsSuperAdmin || UserState.IsImpersonating) { NavManager.NavigateTo("/"); return; }
+        if (!UserState.IsSuperAdmin || UserState.IsImpersonating) { NavManager.NavigateTo(Ben.Web.Website.Library.Kit.SignInLink.ForRefusal(NavManager, UserState)); return; }
 
         var result = await AdminClient.GetAllUsersAsync();
         _people = result.Items.OrderBy(u => u.DisplayName ?? u.Email).ToList();

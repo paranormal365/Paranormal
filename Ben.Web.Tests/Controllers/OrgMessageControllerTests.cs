@@ -52,7 +52,7 @@ public class OrgMessageControllerTests
         var ctrl = new OrgMessageController(
             factory, CreateMapper(),
             new Ben.Service.RepositoryService.Services.OrganizationSecurityService(factory),
-            new Ben.Data.WebApi.Services.CmsMarkupSanitizer());
+            new Ben.Data.WebApi.Services.CmsMarkupSanitizer(), Ben.Data.WebApi.Services.LinkPreviews.LinkPreviewWarmer.None);
         ctrl.ControllerContext = new ControllerContext
         {
             HttpContext = new DefaultHttpContext

@@ -153,7 +153,8 @@
                                      ValueChanged="@((DateTime d) => _selectedDate = d)"
                                      Min="@_case.DateCaseOpened.ToViewerLocalTime(UserState).Date"
                                      Max="@(_case.DateCaseClosed?.ToViewerLocalTime(UserState).Date ?? UserState.NowInViewerTimeZone().Date)"
-                                     ShowOtherMonthDays="false">
+                                     ShowOtherMonthDays="false"
+                                     OnCellRender="@MarkDaysWithOccurrences">
                     </TelerikCalendar>
                 </div>
             </div>
@@ -358,7 +359,7 @@
                             }
                         </div>
                         <div class="d-flex gap-2 flex-wrap">
-                            <button type="button" class="btn btn-outline-secondary btn-sm" @onclick="@(() => { _counterProposalId = p.Id; _showCounterDialog = true; })" disabled="@(!(!_respondingProposal))">Suggest Different Date</button>
+                            <button type="button" class="btn btn-outline-secondary btn-sm" @onclick="@(() => OpenCounter(p.Id))" disabled="@(!(!_respondingProposal))">Suggest Different Date</button>
                             <button type="button" class="btn btn-danger btn-sm" @onclick="@(async () => await DeclineProposal(p.Id))" disabled="@(!(!_respondingProposal))">Decline All</button>
                         </div>
                     </div>
@@ -373,7 +374,7 @@
         <div class="card mt-4">
             <div class="card-header fw-semibold d-flex align-items-center justify-content-between">
                 <span><BenIcon Name="users" /> Shared Access</span>
-                <button type="button" class="btn btn-secondary btn-sm" @onclick="@(() => _showAddCoClient = true)"><BenIcon Name="plus" Class="me-1" />Add Person</button>
+                <button type="button" class="btn btn-outline-primary btn-sm" @onclick="@(() => _showAddCoClient = true)"><BenIcon Name="plus" Class="me-1" />Add Person</button>
             </div>
             <div class="card-body">
                 @* These lists are mutated in place by Add/Remove below, so the failure state is
@@ -491,7 +492,7 @@
             <span><BenIcon Name="users" /> People at the Property</span>
             @if (_isPrimaryClient)
             {
-                <button type="button" class="btn btn-secondary btn-sm" @onclick="OpenAddPerson"><BenIcon Name="plus" Class="me-1" />Add Person</button>
+                <button type="button" class="btn btn-outline-primary btn-sm" @onclick="OpenAddPerson"><BenIcon Name="plus" Class="me-1" />Add Person</button>
             }
         </div>
         <div class="card-body">
@@ -577,6 +578,10 @@
                     <BenListState TItem="CaseReportSummary" Result="@_reportsResult" OnRetry="@LoadAsync" />
                 </div>
             }
+            @if (_reportDownloadError is not null)
+            {
+                <div class="alert alert-warning small m-2 mb-0" id="report-download-error">@_reportDownloadError</div>
+            }
             <div class="list-group list-group-flush">
                 @foreach (var r in _reports)
                 {
@@ -588,7 +593,19 @@
                                 <div class="text-secondary small">Published @r.PublishedAt.Value.ToViewerLocalTime(UserState).ToDisplayDate()</div>
                             }
                         </div>
-                        <button type="button" class="btn btn-outline-secondary btn-sm" @onclick="@(async () => await DownloadReport(r.Id))"><BenIcon Name="file-text" Class="me-1" />PDF</button>
+                        @* Making a PDF takes a moment, and the button used to sit unchanged through it — and through a failure
+                           (client test pass P.9, 2026-09-14). *@
+                        <button type="button" class="btn btn-outline-secondary btn-sm text-nowrap" disabled="@(_downloadingReportId is not null)"
+                                @onclick="@(async () => await DownloadReport(r.Id))">
+                            @if (_downloadingReportId == r.Id)
+                            {
+                                <span class="spinner-border spinner-border-sm me-1" aria-hidden="true"></span>@("Preparing…")
+                            }
+                            else
+                            {
+                                <BenIcon Name="file-text" Class="me-1" />@("PDF")
+                            }
+                        </button>
                     </div>
                 }
             </div>
@@ -603,7 +620,7 @@
         <div class="row g-3">
             <div class="col-12">
                 <label class="form-label fw-semibold">Date & Time</label>
-                <TelerikDateTimePicker Format="@DateTimeViewerExtensions.DateTimeNoSecondsPattern" @bind-Value="@_form.EventDateTime" Width="100%" />
+                <BenDateField Mode="DateEntryMode.DateTime" @bind-Value="@_form.EventDateTime" Width="100%" />
             </div>
             <div class="col-12">
                 <label class="form-label fw-semibold" for="mycasedetail-brief-title-optional-e44e">Brief Title (optional)</label>
@@ -805,7 +822,7 @@
         <div class="row g-3">
             <div class="col-12">
                 <label class="form-label fw-semibold">Your Preferred Date & Time</label>
-                <TelerikDateTimePicker Format="@DateTimeViewerExtensions.DateTimeNoSecondsPattern" @bind-Value="@_counterDateTime" Width="100%" />
+                <BenDateField Mode="DateEntryMode.DateTime" @bind-Value="@_counterDateTime" Width="100%" />
             </div>
             <div class="col-12">
                 <label class="form-label fw-semibold" for="mycasedetail-notes-optional-70d8">Notes (optional)</label>
@@ -1012,6 +1029,17 @@
             StateHasChanged();
         }
         catch { _relatedPeopleResult = LoadResult<CaseRelatedPersonRecord>.Failure(); }
+    }
+
+    /// <summary>
+    /// A dot under each day something was logged: the calendar said "9 occurrences" and showed one day's, and finding the
+    /// rest meant pressing every date (client test pass P.6, 2026-09-14).
+    /// </summary>
+    private void MarkDaysWithOccurrences(CalendarCellRenderEventArgs args)
+    {
+        if (args.View != CalendarView.Month || _case is null) return;
+        if (_case.Occurrences.Any(o => (o.EventDateTime ?? o.DateCreated).ToViewerLocalTime(UserState).Date == args.Date.Date))
+            args.Class = "ben-cal-has-entries";
     }
 
     private List<ClientCaseOccurrence> OccurrencesForDate(DateTime date) =>
@@ -1365,12 +1393,29 @@
     private async Task<CaseMessageRecord?> PostClientMessage(string body)
         => await AdminClient.PostMyCaseMessageAsync(CaseId, body);
 
+    private Guid? _downloadingReportId;
+    private string? _reportDownloadError;
+
     private async Task DownloadReport(Guid reportId)
     {
-        var result = await AdminClient.DownloadMyCaseReportPdfAsync(CaseId, reportId);
-        if (result is null) return;
-        var base64 = Convert.ToBase64String(result.Value.Data);
-        await JS.InvokeVoidAsync("downloadFileFromBase64", base64, "application/pdf", result.Value.FileName);
+        _downloadingReportId = reportId;
+        _reportDownloadError = null;
+        StateHasChanged();
+        try
+        {
+            var result = await AdminClient.DownloadMyCaseReportPdfAsync(CaseId, reportId);
+            if (result is null)
+            {
+                _reportDownloadError = "The report couldn't be downloaded just now. Try again in a moment.";
+                return;
+            }
+            var base64 = Convert.ToBase64String(result.Value.Data);
+            await JS.InvokeVoidAsync("downloadFileFromBase64", base64, "application/pdf", result.Value.FileName);
+        }
+        finally
+        {
+            _downloadingReportId = null;
+        }
     }
 
     private async Task AcceptProposal(Guid proposalId, Guid slotId)
@@ -1415,13 +1460,28 @@
         finally { _cancelling = false; StateHasChanged(); }
     }
 
+    /// <summary>
+    /// Opens "Suggest a different date" on a real date: tomorrow at seven in the evening, the viewer's own time.
+    /// </summary>
+    /// <remarks>
+    /// An empty Telerik date box rebuilds the whole date the first time a segment is stepped (2026-09-09), and this one
+    /// opened empty. It also sent what was picked as if it were UTC while the group's panel reads it as UTC and shows it in
+    /// local time — so "Friday 7 PM" arrived as Friday 2 PM (UI test pass, 2026-09-14). Picked in local, sent in UTC.
+    /// </remarks>
+    private void OpenCounter(Guid proposalId)
+    {
+        _counterProposalId = proposalId;
+        _counterDateTime ??= UserState.NowInViewerTimeZone().Date.AddDays(1).AddHours(19);
+        _showCounterDialog = true;
+    }
+
     private async Task SendCounter()
     {
         if (!_counterDateTime.HasValue) return;
         _respondingProposal = true;
         try
         {
-            await AdminClient.CounterScheduleProposalAsync(CaseId, _counterProposalId, _counterDateTime.Value, _counterNotes);
+            await AdminClient.CounterScheduleProposalAsync(CaseId, _counterProposalId, _counterDateTime.Value.ToUtcFromViewerLocal(UserState), _counterNotes);
             _pendingProposals.RemoveAll(p => p.Id == _counterProposalId);
             _showCounterDialog = false;
         }

@@ -72,6 +72,8 @@ export function attach(containerId, dotnet) {
             painting: e.pointerType === 'mouse' || e.pointerType === 'pen',
             seen: new Set(),
             order: [],
+            x: e.clientX,
+            y: e.clientY,
         };
         paint(key);
 
@@ -82,13 +84,26 @@ export function attach(containerId, dotnet) {
         }
     };
 
+    // How far apart the points along a sweep are looked at. Well under the smallest square, so no
+    // square the pointer crossed can fall between two of them.
+    const StepPx = 6;
+
     const onOver = (e) => {
         if (!gesture || !gesture.painting) return;
         // With capture on the grid, the events arrive here rather than at the square, so the
-        // square under the pointer is asked for by position.
-        const under = document.elementFromPoint(e.clientX, e.clientY);
-        const key = keyOf(under);
-        if (key) paint(key);
+        // square under the pointer is asked for by position — at every point along the line from
+        // where the last move left off, not only where this one landed. A quick sweep reports a
+        // move every few squares, and asking only at its end left the squares in between unchosen:
+        // a mouse dragged across four rooms chose three (UI test pass 6.12, 2026-09-14).
+        const dx = e.clientX - gesture.x;
+        const dy = e.clientY - gesture.y;
+        const steps = Math.max(1, Math.ceil(Math.hypot(dx, dy) / StepPx));
+        for (let i = 1; i <= steps; i++) {
+            const key = keyOf(document.elementFromPoint(gesture.x + dx * i / steps, gesture.y + dy * i / steps));
+            if (key) paint(key);
+        }
+        gesture.x = e.clientX;
+        gesture.y = e.clientY;
     };
 
     const onUp = () => {

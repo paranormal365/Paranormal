@@ -48,18 +48,25 @@
                             @applied.DateCreated.ToViewerLocalTime(UserState).ToDisplayDate()
                         </Template>
                     </GridColumn>
-                    <GridCommandColumn Width="260px">
+                    <GridCommandColumn Width="136px">
                         <GridCommandButton OnClick="@(e => AcceptAsync((OrganizationMembershipRequestRecord)e.Items.First()))"
                                           ThemeColor="@ThemeConstants.Button.ThemeColor.Success"
-                                          Size="@ThemeConstants.Button.Size.Small">Accept</GridCommandButton>
+                                          Size="@ThemeConstants.Button.Size.Small"
+                                          Title="Accept"
+                                          Class="ben-grid-action"
+                                          FillMode="@ThemeConstants.Button.FillMode.Outline"><BenIcon Name="check" /></GridCommandButton>
                         <GridCommandButton OnClick="@(e => DenyAsync((OrganizationMembershipRequestRecord)e.Items.First()))"
                                           ThemeColor="@ThemeConstants.Button.ThemeColor.Error"
                                           Size="@ThemeConstants.Button.Size.Small"
-                                          Class="ms-1">Deny</GridCommandButton>
+                                          Title="Deny"
+                                          Class="ben-grid-action"
+                                          FillMode="@ThemeConstants.Button.FillMode.Outline"><BenIcon Name="x" /></GridCommandButton>
                         <GridCommandButton OnClick="@(e => OpenVoteDialog((OrganizationMembershipRequestRecord)e.Items.First()))"
                                           ThemeColor="@ThemeConstants.Button.ThemeColor.Warning"
                                           Size="@ThemeConstants.Button.Size.Small"
-                                          Class="ms-1">Vote</GridCommandButton>
+                                          Title="Vote"
+                                          Class="ben-grid-action"
+                                          FillMode="@ThemeConstants.Button.FillMode.Outline"><BenIcon Name="thumbs-up" /></GridCommandButton>
                     </GridCommandColumn>
                 </GridColumns>
             </TelerikGrid>
@@ -141,7 +148,7 @@
             When the deadline passes, votes are tallied: majority Approve → Accepted, otherwise → Denied.
         </p>
         <label class="form-label fw-semibold">Vote Deadline <span class="text-danger">*</span></label>
-        <TelerikDateTimePicker Format="@DateTimeViewerExtensions.DateTimeNoSecondsPattern" @bind-Value="@_voteDeadline" Width="100%" Min="@UserState.NowInViewerTimeZone().AddHours(1)" />
+        <BenDateField Mode="DateEntryMode.DateTime" @bind-Value="@_voteDeadline" Width="100%" Min="@UserState.NowInViewerTimeZone().AddHours(1)" />
         @if (_voteDialogError is not null)
         {
             <div class="text-danger small mt-2">@_voteDialogError</div>

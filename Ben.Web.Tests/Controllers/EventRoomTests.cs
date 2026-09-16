@@ -224,7 +224,7 @@ public sealed class EventRoomTests
 
         var feed = new FeedController(sqlite.Factory, TestMedia.StorageOnDisk(MediaRoot), TestMedia.IngestToDisk(MediaRoot),
             new ManualReviewScreener(), new FeedLearningService(TestMedia.StorageOnDisk(MediaRoot), NullLogger<FeedLearningService>.Instance),
-            NullLogger<FeedController>.Instance)
+            NullLogger<FeedController>.Instance, Ben.Data.WebApi.Services.LinkPreviews.LinkPreviewWarmer.None)
         {
             ControllerContext = new ControllerContext { HttpContext = new DefaultHttpContext { User = Who(Guest) } },
         };

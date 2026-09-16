@@ -123,6 +123,14 @@ public sealed class OrgCalendarEventTypeController : BenControllerBase
 [Ben.Data.WebApi.Services.FeatureGated(Ben.Data.WebApi.Services.SiteSettingKeys.FeatureEvents)]
 public sealed class OrgCalendarEventController : BenControllerBase
 {
+    /// <summary>A Viewer here reads and changes nothing — see <see cref="Ben.Data.WebApi.Services.Access.FileAudienceAccess.IsOrgViewerAsync"/>.</summary>
+    private async Task<bool> IsViewerAsync(Guid orgId, CancellationToken ct)
+    {
+        if (User.IsInRole(Ben.Data.Common.Constants.RoleNames.SuperAdmin)) return false;
+        await using var viewerDb = await _db.CreateDbContextAsync(ct);
+        return await Ben.Data.WebApi.Services.Access.FileAudienceAccess.IsOrgViewerAsync(viewerDb, orgId, GetCurrentUserId(), ct);
+    }
+
     private readonly IDbContextFactory<BenDataContext> _db;
     private readonly IMapper _mapper;
 
@@ -206,6 +214,7 @@ public sealed class OrgCalendarEventController : BenControllerBase
         Guid orgId, [FromBody] UpsertCalendarEventRequest request, CancellationToken ct)
     {
         if (!await IsOrgMemberAsync(orgId, ct)) return Forbid();
+        if (await IsViewerAsync(orgId, ct)) return ViewerReadOnly();
         var userId = GetCurrentUserId();
         await using var db = await _db.CreateDbContextAsync(ct);
         var entity = new OrgCalendarEvent
@@ -513,6 +522,7 @@ public sealed class OrgCalendarEventController : BenControllerBase
         Guid orgId, Guid eventId, [FromBody] UpsertCalendarEventRequest request, CancellationToken ct)
     {
         if (!await IsOrgMemberAsync(orgId, ct)) return Forbid();
+        if (await IsViewerAsync(orgId, ct)) return ViewerReadOnly();
         var userId = GetCurrentUserId();
         await using var db = await _db.CreateDbContextAsync(ct);
         var entity = await db.OrgCalendarEvents
@@ -567,6 +577,7 @@ public sealed class OrgCalendarEventController : BenControllerBase
     public async Task<IActionResult> Delete(Guid orgId, Guid eventId, CancellationToken ct)
     {
         if (!await IsOrgMemberAsync(orgId, ct)) return Forbid();
+        if (await IsViewerAsync(orgId, ct)) return ViewerReadOnly();
         await using var db = await _db.CreateDbContextAsync(ct);
         var entity = await db.OrgCalendarEvents
             .FirstOrDefaultAsync(e => e.Id == eventId && e.OrganizationId == orgId, ct);

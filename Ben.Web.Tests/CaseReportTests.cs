@@ -100,4 +100,12 @@ public class CaseReportTests
         var bytes = Ben.Data.WebApi.Services.CaseReportPdfGenerator.Generate(report);
         Assert.NotNull(bytes);
     }
+
+    [Theory]
+    [InlineData("Initial Assessment — Belmont Blvd residence", "report-Initial-Assessment-Belmont-Blvd-residence.pdf")]
+    [InlineData("Séance at the Thomas House", "report-Seance-at-the-Thomas-House.pdf")]
+    [InlineData("  —  ", "report.pdf")]
+    [InlineData(null, "report.pdf")]
+    public void The_downloaded_name_is_plain_letters_digits_and_hyphens(string? title, string expected)
+        => Assert.Equal(expected, Ben.Data.WebApi.Services.CaseReportPdfGenerator.FileName(title));
 }

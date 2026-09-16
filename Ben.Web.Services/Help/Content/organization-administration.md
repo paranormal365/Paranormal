@@ -60,6 +60,11 @@ has decided its people stay unidentified to clients.
 | Member | Works cases and attends investigations. |
 | Viewer | Reads without changing anything. |
 
+A **Viewer** reads and never changes anything, whatever roles or permissions they are given: roles can widen what they
+may *see*, never what they may do. They can read the calendar and the group's messages, but cannot add, move or delete an
+event, send a message, schedule or change an investigation, add to a timeline, or vote on a request. To let somebody
+contribute, make them a Member.
+
 ## The roles every group starts with
 
 Every group begins with seven ready-made roles — **Case Manager Role, Equipment Manager Role,
@@ -280,6 +285,10 @@ Declining tells the client, and lets them send it elsewhere without rewriting it
 
 The group's **Calendar** holds meetings, training, anything with a time attached. Investigations
 are scheduled from the case they belong to, not here.
+
+**Moving an event.** Drag an event to another day or time, or drag its end to make it longer or shorter. A line above the
+calendar says where it went, with **Undo**. A repeating event is moved from its editor instead, because dragging one date
+would move every date in the series. Deleting an event — with the ✕ on it or **Delete** in its editor — asks first.
 
 **Where it happens.** Type a free-text location, or pick one of the group's saved addresses. Prefer
 the saved address: it is stored as a reference rather than copied text, so correcting the address
@@ -1996,6 +2005,14 @@ recording's place, since a clip has no coordinates of its own.
 Plans are priced by **active members, per group** — the price list is on the **Pricing** page,
 visible to everyone. Yearly billing usually costs less than paying month by month; the card says
 how much less.
+
+Each band on the Pricing page has its own button. If you don't run a group yet, **Start a group on
+this plan** opens the new-group steps with that plan named at the top; once the group exists you go
+straight to its billing page to confirm the plan and pay. If you already run a group, **Choose this
+plan** takes you to that group's billing page with the same billing period selected (with several
+groups, it asks which one). The price always follows the group's size: if the band you picked isn't
+the one your group falls in, the billing page says which band it is priced as. The band marked
+**Most groups start here** is simply the middle of the member bands.
 
 Two things worth knowing about how plans behave:
 

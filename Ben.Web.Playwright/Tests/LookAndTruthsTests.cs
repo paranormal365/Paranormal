@@ -15,7 +15,7 @@ namespace Ben.Web.Playwright.Tests;
 ///
 /// <para>The signed-out checks come first: most of these are what a stranger meets.</para>
 /// </remarks>
-// Fixtures that drive the Edit Case dialog on the one seeded case, or upload to it, cannot run
+// Fixtures that drive the Edit Case page on the one seeded case, or upload to it, cannot run
 // beside each other: each one changes the case, asserts, and restores, and in parallel one
 // fixture's restore lands in the middle of another's assertion. The 2026-09-07 full run failed
 // The_leak_warning_fires_before_save_not_after_it exactly that way, having passed twice in
@@ -277,7 +277,10 @@ public class LookAndTruthsTests : BenTestBase
         if (!await OpenOrgCaseAsync("Paranormal365", "Belmont"))
             Assert.Ignore("the seeded case this walks is not on this database");
 
-        // Read the address BEFORE opening the dialog, which covers the panel it lives in.
+        // Read the address BEFORE opening the edit page. The original-request card draws after the case header, so
+        // wait for its address row first — reading at once found nothing under full-suite load (2026-09-15).
+        await Expect(Main.Locator("dt", new() { HasTextString = "Address given" }).First)
+            .ToBeVisibleAsync(new() { Timeout = 15_000 });
         var street = await Page.EvaluateAsync<string?>(
             """
             (() => {
@@ -298,9 +301,9 @@ public class LookAndTruthsTests : BenTestBase
             "Could not read this case's address from its Details panel, so there is nothing to "
             + "put in the label that the check should object to. The panel has changed shape.");
 
-        var edit = Page.GetByRole(AriaRole.Button, new() { Name = "Edit Case" }).First;
+        var edit = Page.Locator("#case-edit");
         Assert.That(await edit.CountAsync(), Is.GreaterThan(0),
-            "No Edit Case control — this seat cannot reach the dialog the warning lives in.");
+            "No Edit Case control — this seat cannot reach the page the warning lives on.");
         await ClickUntilAsync(edit, Page.Locator("#case-public"));
 
         var makePublic = Page.Locator("#case-public");
@@ -310,28 +313,25 @@ public class LookAndTruthsTests : BenTestBase
         var label = Page.Locator("#casedetail-case-label-surname-city-0146");
         await label.FillAsync($"{street} survey");
 
-        // A beat before blurring. The field binds on `oninput`, so the typed value reaches the
-        // server one circuit round trip behind the keyboard, and `onblur` fires the leak check
-        // with whatever the server has. Alone that round trip is ~3 ms and blur lands after it;
-        // under a full-suite load it does not, the check runs on the OLD title, and the warning
-        // never appears — which is how this test passed on its own and failed in every full run.
-        // A person never blurs zero milliseconds after their last keystroke either.
-        await Page.WaitForTimeoutAsync(500);
+        // Leaving the field is what runs the check. No pause first: the label used to bind on input with a
+        // separate blur handler, which could check the old title under load, and this test slept to dodge
+        // that. The field now binds on change and checks after the value is applied (2026-09-14), so the
+        // race is gone from the page rather than waited out here.
         await label.BlurAsync();
 
         // No Save has been pressed anywhere above this line. That is the whole assertion.
         await Expect(Page.Locator("#case-title-leak-warning"))
             .ToBeVisibleAsync(new() { Timeout = 20_000 });
 
-        // And it sits with the decision, not at the bottom of a dialog somebody has to scroll.
+        // And it sits with the decision, not somewhere below it that somebody has to scroll to.
         var checkboxTop = (await makePublic.BoundingBoxAsync())!.Y;
         var warningTop  = (await Page.Locator("#case-title-leak-warning").BoundingBoxAsync())!.Y;
         Assert.That(warningTop - checkboxTop, Is.LessThan(200),
             "The warning is far below the Make Public control it is about.");
 
-        // Nothing is saved: the dialog is cancelled.
-        var cancel = Page.GetByRole(AriaRole.Button, new() { Name = "Cancel" }).First;
-        if (await cancel.CountAsync() > 0) await cancel.ClickAsync();
+        // Nothing is saved: Cancel leaves without asking and goes back to the case.
+        await Page.Locator("#case-edit-cancel").ClickAsync();
+        await Expect(Page).ToHaveURLAsync(new System.Text.RegularExpressions.Regex(@"/cases/[0-9a-f\-]+$"), new() { Timeout = 15_000 });
     }
 
     /// <summary>

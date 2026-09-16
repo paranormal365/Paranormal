@@ -20,8 +20,29 @@ belongs there; this is for the part underneath.
 
 ## 2026-09-14
 
+- A client's list of cases now says which request each case was accepted from, as a new field that older apps ignore.
+- A group's Viewers are refused every change, with a sentence saying why, whatever roles or permissions they hold. The permissions a person has in a group now say whether they are a Viewer.
 - Files are now saved whole or not at all. A save interrupted part way, such as a thumbnail being made when the
   person leaves the page, no longer leaves an empty file that is then served in place of the picture.
+- Case descriptions are cleaned of anything that could run as code before they are stored, and a description
+  that holds no words once its formatting is removed is stored as no description.
+- Case notes are stored and returned as cleaned HTML. A note sent as plain text is kept as paragraphs and line
+  breaks, and notes written before this change are converted once, the same way.
+- Case messages accept a formatted copy as well as plain text. A message sent formatted is stored with its plain
+  text written from it, so every message still has a plain-text body; messages now return the formatted copy
+  when there is one.
+- Research notes can be pages made of blocks, with a private draft, publishing, and files and links kept beside
+  them. Every block is cleaned before it is stored, a draft saved twice by the same request is stored once, and
+  a save from an out-of-date copy, or over somebody else's unpublished changes, is refused with a sentence
+  instead of overwriting.
+- The case timeline includes published, dated research pages, marked as read-only with a way to open the page.
+  Older apps see them as research entries.
+- Link cards are made by reading the linked page once, only when a signed-in person posts or adds the link, never
+  when somebody reads it. The page's picture is copied small onto our own storage so readers never load it from
+  the other site, and a card no research page keeps is removed after seven days. Each person may ask for a limited
+  number of new cards a minute, and addresses that cannot be read safely get a plain card with the address.
+- A new site setting takes plans and member seats off sale. While it is off, starting a checkout for either is
+  refused with a short sentence, and the public features answer says so.
 
 ## 2026-09-13
 

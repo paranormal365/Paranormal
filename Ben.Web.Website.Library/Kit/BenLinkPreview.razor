@@ -4,24 +4,51 @@
 @inject IBenAdminClient AdminClient
 
 @*
-    The card under a message that contains a link (Ben, 2026-09-11: "as currently is done in
-    iMessage on the iPhone").
+    The card under a link (Ben, 2026-09-11: "as currently is done in iMessage on the iPhone"; 2026-09-14: "like when
+    you paste a link in Twitter/X").
 
-    Two kinds of card, and the difference is not cosmetic:
+    Three kinds of card:
 
-      - One of OURS resolves out of our own records — a case's title, its group, where it is.
-        Correct at the moment of asking, and still correct after somebody renames it, which is more
-        than a snapshot of anybody's OpenGraph tags would manage.
+      - One of OURS resolves out of our own records — a case's title, its group, where it is. Correct at the moment of
+        asking, and still correct after somebody renames it.
 
-      - Anybody else's shows the host and the path and nothing more. Reading a stranger's page to
-        describe it would mean this server making a request to an address a stranger chose, which
-        is the shape of every server-side request forgery there has ever been. A card that says
-        less is the price, and it is a small one.
+      - Another site's page that somebody signed in has posted or pasted gets its own card — picture, title,
+        description, site — from the preview the server kept when it read that page behind its guards. The picture is
+        our own small copy, never loaded from the other site. Drawing this card never makes the server read anything.
+
+      - Anything else shows the host and the path, as every card did before kept previews.
+
+    A caller that already holds the card's words — a research page stores a copy in its link block — passes them in,
+    and nothing is asked for. A composer passes EnsureFetched, which asks the server to read the page while the person
+    is still writing, so the card is ready by the time they send.
 *@
 
-@if (_preview is { } preview)
+@if (_card is { Domain: { Length: > 0 } domain } rich)
 {
-    <a class="link-card" href="@preview.Path">
+    <a class="link-card link-card--rich" href="@rich.Path" target="_blank" rel="noopener noreferrer nofollow" data-testid="link-card">
+        @if (rich.ImageUrl is { Length: > 0 } image && !_imageFailed)
+        {
+            <span class="link-card__image">
+                <img src="@image" alt="" loading="lazy" @onerror="@(() => _imageFailed = true)" />
+            </span>
+        }
+        <span class="link-card__text">
+            <span class="link-card__kind"><BenIcon Name="link" Class="me-1" />@(rich.SiteName ?? domain)</span>
+            <span class="link-card__title link-card__title--wrap">@rich.Title</span>
+            @if (rich.Description is { Length: > 0 } description)
+            {
+                <span class="link-card__desc">@description</span>
+            }
+            @if (rich.SiteName is not null)
+            {
+                <span class="link-card__domain">@domain</span>
+            }
+        </span>
+    </a>
+}
+else if (_card is { } preview)
+{
+    <a class="link-card" href="@preview.Path" data-testid="link-card">
         <span class="link-card__kind">@preview.Kind</span>
         <span class="link-card__title">@preview.Title</span>
         @if (preview.Subtitle is { Length: > 0 } subtitle)
@@ -32,18 +59,38 @@
 }
 else if (_host is { } host)
 {
-    <a class="link-card link-card--away" href="@Url" target="_blank" rel="noopener noreferrer nofollow">
+    <a class="link-card link-card--away" href="@Url" target="_blank" rel="noopener noreferrer nofollow" data-testid="link-card">
         <span class="link-card__kind">@host</span>
         <span class="link-card__title">@Trimmed</span>
     </a>
 }
 
 @code {
-    /// <summary>The address, exactly as it appeared in the message.</summary>
+    /// <summary>The address, exactly as it appeared.</summary>
     [Parameter, EditorRequired] public string Url { get; set; } = string.Empty;
 
-    private LinkPreview? _preview;
+    /// <summary>The card's title, when the caller already holds the card (a research page's link block). Nothing is asked for then.</summary>
+    [Parameter] public string? Title { get; set; }
+
+    [Parameter] public string? Description { get; set; }
+
+    /// <summary>Our own copy of the page's picture — a <c>/media/link-preview/</c> address.</summary>
+    [Parameter] public string? ImageUrl { get; set; }
+
+    [Parameter] public string? SiteName { get; set; }
+
+    [Parameter] public string? Domain { get; set; }
+
+    /// <summary>
+    /// Asks the server to read another site's page when no card is kept yet. Only where a signed-in person is writing the
+    /// link: the server allows it only to them, and budgets it.
+    /// </summary>
+    [Parameter] public bool EnsureFetched { get; set; }
+
+    private LinkPreview? _card;
     private string? _host;
+    private bool _imageFailed;
+    private string? _loadedFor;
 
     /// <summary>The address without its scheme, which is noise in a card that names the host.</summary>
     private string Trimmed => Url.Replace("https://", "", StringComparison.OrdinalIgnoreCase)
@@ -51,21 +98,33 @@ else if (_host is { } host)
 
     protected override async Task OnParametersSetAsync()
     {
-        _preview = null;
+        var key = $"{Url}\n{Title}\n{ImageUrl}\n{EnsureFetched}";
+        if (key == _loadedFor) return;
+        _loadedFor = key;
+
+        _card = null;
         _host = null;
+        _imageFailed = false;
 
         if (string.IsNullOrWhiteSpace(Url)) return;
 
-        // Ours first. A 404 here is the ordinary answer for somebody else's address, not a fault,
-        // and it costs one cheap lookup against records we already hold.
-        _preview = await AdminClient.GetLinkPreviewAsync(Url);
-        if (_preview is not null) return;
+        var parsed = Uri.TryCreate(Url, UriKind.Absolute, out var uri)
+                     && (uri.Scheme == Uri.UriSchemeHttp || uri.Scheme == Uri.UriSchemeHttps);
 
-        // Not ours. All we say is whose it is — and only when the address parses, because a card
-        // headed by a malformed string is worse than no card.
-        _host = Uri.TryCreate(Url, UriKind.Absolute, out var uri)
-             && (uri.Scheme == Uri.UriSchemeHttp || uri.Scheme == Uri.UriSchemeHttps)
-            ? uri.Host
-            : null;
+        if (Title is { Length: > 0 } title && parsed)
+        {
+            _card = new LinkPreview(SiteName ?? uri!.Host, title, null, Url, Description, ImageUrl, SiteName, Domain ?? uri!.Host);
+            return;
+        }
+
+        // Ours, or a kept card for somebody else's. A 404 is the ordinary answer when neither exists.
+        _card = await AdminClient.GetLinkPreviewAsync(Url);
+        if (_card is null && EnsureFetched && parsed)
+            _card = await AdminClient.CreateLinkPreviewAsync(Url);
+        if (_card is not null) return;
+
+        // All we can say is whose it is — and only when the address parses, because a card headed by a malformed string
+        // is worse than no card.
+        _host = parsed ? uri!.Host : null;
     }
 }

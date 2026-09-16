@@ -86,7 +86,7 @@
                 <div class="card-footer d-flex gap-2">
                     @if (_request.Status == ClientRequestStatus.Draft)
                     {
-                        <button type="button" class="btn btn-secondary" @onclick="@(() => NavManager.NavigateTo($"/my-requests/{Id}/edit"))"><BenIcon Name="edit-2" Class="me-1" />
+                        <button type="button" class="btn btn-primary" @onclick="@(() => NavManager.NavigateTo($"/my-requests/{Id}/edit"))"><BenIcon Name="edit-2" Class="me-1" />
                             Edit &amp; Submit
                         </button>
                         <button type="button" class="btn btn-outline-danger" @onclick="@(() => _showDeleteConfirm = true)" disabled="@(!(!_isBusy))"><BenIcon Name="trash-2" Class="me-1" />
@@ -270,8 +270,9 @@
                 {
                     // Only used to find the one case this request became; a failed lookup
                     // simply leaves the link off, which is what an empty list already did.
+                    // The case made from THIS request — "the first case" sent a client with two of them to the wrong one.
                     var cases = await AdminClient.GetMyCasesAsync();
-                    _myCase = cases.Items.FirstOrDefault();
+                    _myCase = cases.Items.FirstOrDefault(c => c.ClientRequestId == Id);
                 }
             }
         }

@@ -66,7 +66,9 @@
        offered to the people it will work for; everybody else is told who can. *@
     @if (!MayManage)
     {
-        @if (!_loading)
+        @* Not to somebody who is only signed out: the list below says that, and a sentence about permissions above it
+           said something untrue about them (UI test pass 6.10). *@
+        @if (!_loading && UserState.IsAuthenticated)
         {
             <div class="alert alert-secondary" id="events-read-only">
                 Adding and changing events is for people who can manage the group's settings.
@@ -82,7 +84,7 @@
                 <div class="col-12 col-md-5">
                     <label class="form-label" for="new-event-name">Name <span class="text-danger">*</span></label>
                     <input id="new-event-name" class="form-control" @bind="_form.Name" @bind:event="oninput"
-                           placeholder="Thomas House Weekend" />
+                           placeholder="e.g. Thomas House Weekend" />
                     <div class="form-text">What you call it. For a run of performances, the production's name.</div>
                 </div>
                 <div class="col-12 col-md-4">
@@ -167,7 +169,7 @@
                     <div class="col-12 col-md-5">
                         <label class="form-label" for="venue-name">Name</label>
                         <input id="venue-name" class="form-control" @bind="_venue.Name" @bind:event="oninput"
-                               placeholder="The Thomas House Hotel" />
+                               placeholder="e.g. The Thomas House Hotel" />
                     </div>
                     <div class="col-12 col-md-7">
                         <label class="form-label" for="venue-street">Street</label>
@@ -197,11 +199,11 @@
             <div class="row g-3 align-items-start mt-0">
                 <div class="col-6 col-md-3">
                     <label class="form-label" for="new-event-from">First date</label>
-                    <input id="new-event-from" type="date" class="form-control" @bind="_form.StartsOn" />
+                    <BenDateField Mode="DateEntryMode.Date" Id="new-event-from" @bind-Value="_form.StartsOn" />
                 </div>
                 <div class="col-6 col-md-3">
                     <label class="form-label" for="new-event-to">Last date</label>
-                    <input id="new-event-to" type="date" class="form-control" @bind="_form.EndsOn" />
+                    <BenDateField Mode="DateEntryMode.Date" Id="new-event-to" @bind-Value="_form.EndsOn" />
                 </div>
                 <div class="col-12 col-md-6 pt-md-4">
                     @* The flag Ben asked for. A stay is nights in a row; a run is a production put

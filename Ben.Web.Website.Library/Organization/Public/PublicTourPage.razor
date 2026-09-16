@@ -293,7 +293,7 @@ else
                     @whyNot
                     @if (whyNot.StartsWith("Sign in", StringComparison.OrdinalIgnoreCase))
                     {
-                        <a class="ms-1" href="@($"/login?returnUrl={Uri.EscapeDataString(NavManager.Uri)}")">Sign in</a>
+                        <a class="ms-1" href="@Ben.Web.Website.Library.Kit.SignInLink.For(NavManager)">Sign in</a>
                     }
                 </p>
             }

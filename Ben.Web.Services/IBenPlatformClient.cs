@@ -274,7 +274,8 @@ public interface IBenPlatformClient
     Task<LoadResult<CaseMessageRecord>> GetMyCaseMessagesAsync(Guid caseId, CancellationToken token = default);
 
     /// <summary>Posts a message from the client to the org on this case.</summary>
-    Task<CaseMessageRecord?> PostMyCaseMessageAsync(Guid caseId, string body, CancellationToken token = default);
+    /// <summary>Posts the client's message, written in the formatting editor, as HTML; the API derives the plain Body.</summary>
+    Task<CaseMessageRecord?> PostMyCaseMessageAsync(Guid caseId, string bodyHtml, CancellationToken token = default);
 
     /// <summary>Client cancels a scheduled investigation (422 if outside cancellation window).</summary>
     Task<bool> CancelMyInvestigationAsync(Guid caseId, Guid investigationId, CancellationToken token = default);

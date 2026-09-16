@@ -38,7 +38,7 @@ public class CaseResearchControllerTests
         storage.Setup(s => s.DeleteAsync(It.IsAny<string>(), It.IsAny<CancellationToken>()))
                .Returns(Task.CompletedTask);
 
-        var ctrl = new CaseResearchController(factory, storage.Object, Ben.Web.Tests.TestMedia.Ingest(), Ben.Web.Tests.TestMedia.Stripper(), new Ben.Service.RepositoryService.Services.OrganizationSecurityService(factory));
+        var ctrl = new CaseResearchController(factory, storage.Object, Ben.Web.Tests.TestMedia.Ingest(), Ben.Web.Tests.TestMedia.Stripper(), new Ben.Service.RepositoryService.Services.OrganizationSecurityService(factory), new Ben.Data.WebApi.Services.CmsMarkupSanitizer(), new Ben.Web.Tests.FakeLinkPreviews());
         ctrl.ControllerContext = new ControllerContext
         {
             HttpContext = new DefaultHttpContext
@@ -184,12 +184,13 @@ public class CaseResearchControllerTests
     {
         var (factory, orgId, caseId, userId) = await SeedAsync();
         var ctrl = BuildController(factory, userId);
+        // A link: a note's words live in its page now (2026-09-14), so Body is a link's or file's description.
         var create = await ctrl.Create(orgId, caseId,
-            new UpsertResearchRequest(CaseResearchType.Note, "Original", "Body", null), default);
+            new UpsertResearchRequest(CaseResearchType.Link, "Original", "Body", "https://example.com/"), default);
         var entryId = ((CaseResearchEntryDto)((OkObjectResult)create.Result!).Value!).Id;
 
         var result = await ctrl.Update(orgId, caseId, entryId,
-            new UpsertResearchRequest(CaseResearchType.Note, "Updated", "New body", null), default);
+            new UpsertResearchRequest(CaseResearchType.Link, "Updated", "New body", "https://example.com/"), default);
 
         var ok  = Assert.IsType<OkObjectResult>(result.Result);
         var dto = Assert.IsType<CaseResearchEntryDto>(ok.Value);

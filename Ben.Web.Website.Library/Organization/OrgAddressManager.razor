@@ -147,8 +147,8 @@ else
                     <Template>
                         @{ var a2 = (OrganizationAddressRecord)context; }
                         <div class="d-flex gap-1">
-                            <button type="button" class="btn @(ThemeConstants.Button.FillMode.Flat == ThemeConstants.Button.FillMode.Solid ? "btn-secondary" : "btn-outline-secondary") btn-sm" @onclick="@(async () => await BeginEdit(a2))"><BenIcon Name="edit-2" /></button>
-                            <button type="button" class="btn @(ThemeConstants.Button.FillMode.Flat == ThemeConstants.Button.FillMode.Solid ? "btn-danger" : "btn-outline-danger") btn-sm" @onclick="@(() => ConfirmDeleteAsync(a2.Id))"><BenIcon Name="trash-2" /></button>
+                            <BenGridAction Icon="edit-2" Label="Edit" OnClick="@(async () => await BeginEdit(a2))" />
+                            <BenGridAction Icon="trash-2" Label="Delete" Tone="GridActionTone.Danger" OnClick="@(() => ConfirmDeleteAsync(a2.Id))" />
                         </div>
                     </Template>
                 </GridColumn>

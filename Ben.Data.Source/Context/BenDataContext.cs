@@ -172,6 +172,8 @@ namespace Ben.Data.Source.Context
         public virtual DbSet<CaseReportSectionFile> CaseReportSectionFiles { get; set; }
         public virtual DbSet<CaseReportSectionFieldSession> CaseReportSectionFieldSessions { get; set; }
         public virtual DbSet<CaseResearchEntry> CaseResearchEntries { get; set; }
+        public virtual DbSet<CaseResearchAttachment> CaseResearchAttachments { get; set; }
+        public virtual DbSet<StoredLinkPreview> LinkPreviews { get; set; }
         public virtual DbSet<CaseFile> CaseFiles { get; set; }
         public virtual DbSet<CaseRelatedPerson> CaseRelatedPeople { get; set; }
         public virtual DbSet<CaseNote> CaseNotes { get; set; }
@@ -3668,6 +3670,51 @@ namespace Ben.Data.Source.Context
                 .Property(e => e.Url).HasMaxLength(2000);
             modelBuilder.Entity<CaseResearchEntry>()
                 .HasIndex(e => new { e.CaseId, e.SortOrder });
+            modelBuilder.Entity<CaseResearchEntry>()
+                .Property(e => e.Excerpt).HasMaxLength(300);
+            modelBuilder.Entity<CaseResearchEntry>()
+                .HasIndex(e => new { e.CaseId, e.PublishedUtc });
+
+            // ── CaseResearchAttachment (research pages, 2026-09-14) ────────────
+            // Cascade from the page: the rail belongs to it. NoAction from the upload and the preview, because
+            // UploadFiles already reach CaseResearchEntries by SET NULL, and a second path from UploadFiles to this table
+            // is the multiple-cascade-path SQL Server refuses. Code removes rail rows before their uploads.
+            modelBuilder.Entity<CaseResearchAttachment>()
+                .HasOne(a => a.ResearchEntry).WithMany(e => e.Attachments)
+                .HasForeignKey(a => a.ResearchEntryId).OnDelete(DeleteBehavior.Cascade);
+            modelBuilder.Entity<CaseResearchAttachment>()
+                .HasOne(a => a.UploadFile).WithMany()
+                .HasForeignKey(a => a.UploadFileId).IsRequired(false).OnDelete(DeleteBehavior.NoAction);
+            modelBuilder.Entity<CaseResearchAttachment>()
+                .HasOne(a => a.LinkPreview).WithMany()
+                .HasForeignKey(a => a.LinkPreviewId).IsRequired(false).OnDelete(DeleteBehavior.NoAction);
+            modelBuilder.Entity<CaseResearchAttachment>()
+                .HasOne(a => a.CreatedByAppUser).WithMany()
+                .HasForeignKey(a => a.CreatedByAppUserId).OnDelete(DeleteBehavior.NoAction);
+            modelBuilder.Entity<CaseResearchAttachment>()
+                .HasOne(a => a.UpdatedByAppUser).WithMany()
+                .HasForeignKey(a => a.UpdatedByAppUserId).IsRequired(false).OnDelete(DeleteBehavior.NoAction);
+            modelBuilder.Entity<CaseResearchAttachment>()
+                .Property(a => a.Title).HasMaxLength(300);
+            modelBuilder.Entity<CaseResearchAttachment>()
+                .Property(a => a.Url).HasMaxLength(2000);
+            modelBuilder.Entity<CaseResearchAttachment>()
+                .HasIndex(a => new { a.ResearchEntryId, a.SortOrder });
+
+            // ── StoredLinkPreview (2026-09-14), table LinkPreviews ───────────────────────────────────────
+            modelBuilder.Entity<StoredLinkPreview>()
+                .HasIndex(l => l.UrlHash).IsUnique();
+            modelBuilder.Entity<StoredLinkPreview>()
+                .HasIndex(l => l.ExpiresUtc);
+            modelBuilder.Entity<StoredLinkPreview>().Property(l => l.Url).HasMaxLength(2000);
+            modelBuilder.Entity<StoredLinkPreview>().Property(l => l.UrlHash).HasMaxLength(64);
+            modelBuilder.Entity<StoredLinkPreview>().Property(l => l.Domain).HasMaxLength(255);
+            modelBuilder.Entity<StoredLinkPreview>().Property(l => l.Title).HasMaxLength(200);
+            modelBuilder.Entity<StoredLinkPreview>().Property(l => l.Description).HasMaxLength(500);
+            modelBuilder.Entity<StoredLinkPreview>().Property(l => l.SiteName).HasMaxLength(100);
+            modelBuilder.Entity<StoredLinkPreview>().Property(l => l.ThumbnailStoragePath).HasMaxLength(500);
+            modelBuilder.Entity<StoredLinkPreview>().Property(l => l.ThumbnailContentType).HasMaxLength(100);
+            modelBuilder.Entity<StoredLinkPreview>().Property(l => l.FailureReason).HasMaxLength(300);
 
             // ── CaseFile ──────────────────────────────────────────────────────
             modelBuilder.Entity<CaseFile>()

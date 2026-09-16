@@ -1,0 +1,413 @@
+@page "/organizations/{OrgId:guid}/cases/{CaseId:guid}/research/{EntryId:guid}"
+@using Ben.Data.Common.Blocks
+@using Ben.Data.Common.Enums
+@using Ben.Web.Services
+@using Ben.Web.Services.WebApi
+@using Ben.Web.Website.Library.Kit.Blocks
+@implements IAsyncDisposable
+@inject IBenAdminClient AdminClient
+@inject IBenUserState UserState
+@inject IMediaUrlBuilder MediaUrls
+
+@*
+    A research page (Ben, 2026-09-14): one note on a case, written as a page of blocks — words, pictures, files, link
+    cards and maps — with its files and links kept in a rail beside it.
+
+    It saves itself a minute after the last change, and on the way out. What is saved is a draft only its author sees;
+    Publish is what shows it to the rest of the group. Somebody else holding unpublished changes makes the page read-only
+    here until they publish, rather than letting two people overwrite each other.
+
+    The block editor is the Kit's (Kit/Blocks) and knows nothing about cases; this page is what connects it to one — where
+    uploads go, how links get their cards, how places are found. No map on it is filled in from the case: a research map
+    shows places the author chose.
+*@
+
+<PageTitle>@(_title.Length > 0 ? _title : "Research page")</PageTitle>
+
+<div class="container-fluid py-3 research-page" style="max-width:1320px;" data-testid="research-page">
+    <nav class="mb-3" aria-label="breadcrumb">
+        <a class="btn btn-sm btn-outline-secondary" href="@($"/organizations/{OrgId}/cases/{CaseId}?tab=research")"><BenIcon Name="chevron-left" Class="me-1" />Research on this case</a>
+    </nav>
+
+    @if (!_loaded)
+    {
+        <BenLoaderOverlay Visible="true" Text="Loading the page…" />
+    }
+    else if (_page.Failed)
+    {
+        <BenItemState TItem="CaseResearchPageDto" Result="@_page" OnRetry="@LoadAsync" />
+    }
+    else if (_page.Item is null)
+    {
+        <div class="alert alert-secondary" data-testid="research-page-missing">This page isn't there, or it hasn't been published yet.</div>
+    }
+    else
+    {
+        var current = _page.Item;
+
+        <div class="d-flex flex-wrap align-items-start gap-2 mb-3">
+            <div class="flex-grow-1" style="min-width:16rem;">
+                @if (CanEdit)
+                {
+                    <label class="visually-hidden" for="research-page-title">Title</label>
+                    <input id="research-page-title" class="form-control form-control-lg research-page__title" maxlength="300"
+                           value="@_title" @onchange="OnTitleChangedAsync" placeholder="Title" />
+                }
+                else
+                {
+                    <h1 class="h3 mb-0">@current.Title</h1>
+                }
+                <div class="small text-secondary mt-1 d-flex flex-wrap gap-2 align-items-center">
+                    @if (current.PublishedUtc is { } published)
+                    {
+                        <span data-testid="research-page-published">Published @published.ToViewerLocalTime(UserState).ToDisplayDateTime()@(current.PublishedByName is { } by ? $" by {by}" : "")</span>
+                    }
+                    else
+                    {
+                        <span class="badge bg-secondary" data-testid="research-page-draft-badge">Draft — only you can see it</span>
+                    }
+                    @if (CanEdit && _hasUnpublished && current.PublishedUtc is not null)
+                    {
+                        <span class="badge text-bg-warning" data-testid="research-page-differs">Draft differs from published</span>
+                    }
+                    <HelpLink Slug="working-a-case" Anchor="research-pages" />
+                </div>
+            </div>
+
+            @if (CanEdit)
+            {
+                <div class="d-flex flex-wrap align-items-center gap-2">
+                    <BenSaveStatus Autosave="@(_autosave!)" FormatTime="@(at => at.UtcDateTime.ToViewerLocalTime(UserState).ToString("h:mm tt"))" />
+                    <button type="button" class="btn btn-outline-secondary" id="research-page-save" disabled="@_busy" @onclick="SaveNowAsync">
+                        <BenIcon Name="save" Class="me-1" />Save now
+                    </button>
+                    <button type="button" class="btn btn-primary" id="research-page-publish" disabled="@(_busy || !_hasUnpublished && !_autosave!.HasUnsavedChanges)"
+                            @onclick="PublishAsync">
+                        <BenIcon Name="send" Class="me-1" />@(_busy ? "Publishing…" : "Publish")
+                    </button>
+                </div>
+            }
+        </div>
+
+        @if (_notice is not null)
+        {
+            <div class="alert @(_noticeIsError ? "alert-danger" : "alert-success") py-2" role="status" data-testid="research-page-notice">@_notice</div>
+        }
+
+        @if (current.DraftHeldByName is { } holder)
+        {
+            <div class="alert alert-secondary py-2" data-testid="research-page-held">
+                You're reading the published page. @holder has unpublished changes to it; it can be edited again once they publish.
+            </div>
+        }
+
+        @* When the page is about. Never an empty date box: an empty Telerik date field rebuilds the whole date the first
+           time a segment is stepped (Ben, 2026-09-09, on Propose Dates). An undated page — the ordinary case, and the one
+           that stays off the timeline — shows "Add a date", which opens a date box and a time box already holding one;
+           "Remove date" undates it again. Separate boxes, as InvestigationPanel's, for the same two reasons. *@
+        <div class="mb-3" data-testid="research-page-when-row">
+            @if (CanEdit && _eventLocal is { } eventLocal)
+            {
+                <label class="form-label small mb-1" for="research-page-when">When this happened <span class="text-secondary">(puts the page on the timeline)</span></label>
+                <div class="d-flex flex-wrap gap-2 align-items-center">
+                    <BenDateField Mode="DateEntryMode.Date" Id="research-page-when" Value="@eventLocal" ValueChanged="@((DateTime v) => OnWhenDateChanged(v))" Width="160px" />
+                    <label class="visually-hidden" for="research-page-when-time">Time</label>
+                    <BenDateField Mode="DateEntryMode.Time" Id="research-page-when-time" Value="@eventLocal" ValueChanged="@((DateTime v) => OnWhenTimeChanged(v))" Width="130px" />
+                    <button type="button" class="btn btn-sm btn-outline-secondary" id="research-page-when-remove" @onclick="RemoveWhen">
+                        <BenIcon Name="x" Class="me-1" />Remove date
+                    </button>
+                </div>
+            }
+            else if (CanEdit)
+            {
+                <div class="small text-secondary mb-1">Not dated, so it isn't on the timeline.</div>
+                <button type="button" class="btn btn-sm btn-outline-secondary" id="research-page-when-add" @onclick="AddWhen">
+                    <BenIcon Name="calendar" Class="me-1" />Add a date
+                </button>
+            }
+            else
+            {
+                <div class="small text-secondary">When this happened</div>
+                <div data-testid="research-page-when-read">@(current.EventDateTime is { } when ? when.ToViewerLocalTime(UserState).ToDisplayDateTime() : "Not dated")</div>
+            }
+        </div>
+
+        @if (CanEdit)
+        {
+            <BenBlockDocument @ref="_editor" Document="@_document" DocumentChanged="@OnDocumentChanged"
+                              UploadAsync="@UploadAsync" LinkAsync="@LinkAsync" FileUrl="@FileUrl" MapHost="@_mapHost"
+                              SideRailTitle="Files and links" SideRailCount="@_attachments.Count">
+                <SideRail>
+                    <CaseResearchRail Attachments="@_attachments" FileUrl="@FileUrl" UploadAsync="@UploadFromRailAsync"
+                                      AddLinkAsync="@AddLinkFromRailAsync" DeleteAsync="@DeleteAttachmentAsync" InsertAsync="@InsertFromRailAsync" />
+                </SideRail>
+            </BenBlockDocument>
+        }
+        else
+        {
+            <div class="row g-3">
+                <div class="col-12 col-lg-8">
+                    <BenBlockReader Document="@current.Document" FileUrl="@FileUrl" MapHost="@_mapHost" EmptyText="This page is empty." />
+                </div>
+                @if (current.Attachments.Count > 0)
+                {
+                    <aside class="col-12 col-lg-4">
+                        <CaseResearchRail Attachments="@_attachments" FileUrl="@FileUrl" ReadOnly="true" />
+                    </aside>
+                }
+            </div>
+        }
+    }
+</div>
+
+@if (CanEdit)
+{
+    <BenLeaveGuard @ref="_leaveGuard" Dirty="@(_autosave?.HasUnsavedChanges == true)" TrySaveAsync="@TrySaveBeforeLeavingAsync"
+                   Title="Leave without saving?" Message="The latest changes to this page could not be saved." />
+}
+
+@code {
+    [Parameter] public Guid OrgId { get; set; }
+    [Parameter] public Guid CaseId { get; set; }
+    [Parameter] public Guid EntryId { get; set; }
+
+    private bool _loaded;
+    private ItemResult<CaseResearchPageDto> _page;
+    private bool _mayUpdate;
+    private BlockDocument _document = new();
+    private List<CaseResearchAttachmentDto> _attachments = [];
+    private string _title = "";
+    private DateTime? _eventLocal;
+    private int _revision;
+    private bool _hasUnpublished;
+    private bool _busy;
+    private string? _notice;
+    private bool _noticeIsError;
+    private BlockAutosave? _autosave;
+    private BenBlockDocument? _editor;
+    private BenLeaveGuard? _leaveGuard;
+    private BlockMapHost? _mapHost;
+
+    /// <summary>May change the page: holds the Cases.Update grant, and nobody else holds unpublished changes to it.</summary>
+    private bool CanEdit => _mayUpdate && _page.Item is { DraftHeldByName: null };
+
+    protected override async Task OnAfterRenderAsync(bool firstRender)
+    {
+        if (!firstRender) return;
+        if (!await UserState.WaitUntilAuthReadyAsync(RendererInfo.IsInteractive)) return;
+
+        _mapHost = new BlockMapHost(SearchPlaceAsync, ReversePlaceAsync, placeId => $"/places/{placeId}");
+        _autosave = new BlockAutosave(SaveDraftAsync, TimeSpan.FromSeconds(60), InvokeAsync, () => InvokeAsync(StateHasChanged),
+            collect: () => _editor?.CommitAsync() ?? Task.CompletedTask);
+        await LoadAsync();
+        StateHasChanged();
+    }
+
+    private async Task LoadAsync()
+    {
+        try
+        {
+            var perms = await AdminClient.GetMyOrgPermissionsAsync(OrgId);
+            _mayUpdate = perms?.May(OrganizationPermissionArea.Cases, OrganizationSecurityAction.Update) == true;
+        }
+        catch { _mayUpdate = false; }
+
+        _page = await AdminClient.GetCaseResearchPageAsync(OrgId, CaseId, EntryId);
+        if (_page.Item is { } loaded)
+        {
+            _document = loaded.Document;
+            _attachments = loaded.Attachments.ToList();
+            _title = loaded.Title;
+            _eventLocal = loaded.EventDateTime?.ToViewerLocalTime(UserState);
+            _revision = loaded.Revision;
+            _hasUnpublished = loaded.DraftHeldByMe;
+        }
+        _loaded = true;
+    }
+
+    // ── Saving and publishing ──────────────────────────────────────────────────────────────────────────────
+
+    private void OnDocumentChanged() => _autosave?.Touch();
+
+    private void OnTitleChangedAsync(ChangeEventArgs e)
+    {
+        _title = e.Value?.ToString()?.Trim() ?? "";
+        _autosave?.Touch();
+    }
+
+    /// <summary>Starts the date at the top of the current hour, the viewer's own clock: a real date to change, never an empty box.</summary>
+    private void AddWhen()
+    {
+        var now = DateTime.UtcNow.ToViewerLocalTime(UserState);
+        _eventLocal = new DateTime(now.Year, now.Month, now.Day, now.Hour, 0, 0);
+        _autosave?.Touch();
+    }
+
+    private void RemoveWhen()
+    {
+        _eventLocal = null;
+        _autosave?.Touch();
+    }
+
+    private void OnWhenDateChanged(DateTime date)
+    {
+        if (_eventLocal is not { } current) return;
+        _eventLocal = date.Date + current.TimeOfDay;
+        _autosave?.Touch();
+    }
+
+    private void OnWhenTimeChanged(DateTime time)
+    {
+        if (_eventLocal is not { } current) return;
+        _eventLocal = current.Date + time.TimeOfDay;
+        _autosave?.Touch();
+    }
+
+    private async Task<AutosaveOutcome> SaveDraftAsync(CancellationToken ct)
+    {
+        if (_title.Length == 0) return new AutosaveOutcome(AutosaveResult.Failed, "Give the page a title to save it.");
+
+        var outcome = await AdminClient.SaveCaseResearchDraftAsync(OrgId, CaseId, EntryId, new SaveResearchDraftRequest(
+            _document, _revision, Guid.NewGuid(), _title, _eventLocal?.ToUtcFromViewerLocal(UserState)), ct);
+
+        if (outcome.Saved is { } saved)
+        {
+            _revision = saved.Revision;
+            _hasUnpublished = true;
+            return AutosaveOutcome.Saved;
+        }
+        return new AutosaveOutcome(outcome.IsConflict ? AutosaveResult.Conflict : AutosaveResult.Failed,
+            outcome.Refusal ?? "The page could not be saved.");
+    }
+
+    private async Task SaveNowAsync()
+    {
+        if (_autosave is null) return;
+        await _autosave.FlushAsync();   // the text block being typed in reports its last keystrokes as the save begins
+    }
+
+    private async Task PublishAsync()
+    {
+        if (_autosave is null) return;
+        _busy = true;
+        _notice = null;
+        try
+        {
+            if (!await _autosave.FlushAsync())
+            {
+                _notice = _autosave.Message ?? "The page could not be saved, so it was not published.";
+                _noticeIsError = true;
+                return;
+            }
+
+            var (published, error) = await AdminClient.PublishCaseResearchPageAsync(OrgId, CaseId, EntryId);
+            if (published is null)
+            {
+                _notice = error ?? "The page could not be published.";
+                _noticeIsError = true;
+                return;
+            }
+            _page = ItemResult<CaseResearchPageDto>.Ok(published with { Document = _document });
+            _hasUnpublished = false;
+            _notice = "Published. Everyone who can read this case can now read this page.";
+            _noticeIsError = false;
+        }
+        finally { _busy = false; }
+    }
+
+    private async Task<bool> TrySaveBeforeLeavingAsync() => _autosave is not null && await _autosave.FlushAsync();
+
+    // ── What the block editor asks of this page ───────────────────────────────────────────────────────────
+
+    private string FileUrl(Guid fileId, BlockFileUrlKind kind) =>
+        kind == BlockFileUrlKind.Picture ? MediaUrls.Thumbnail(fileId) : MediaUrls.Download(fileId);
+
+    private async Task<BlockUploadResult> UploadAsync(BlockUploadRequest request)
+    {
+        var (attachment, error) = await AdminClient.UploadCaseResearchAttachmentAsync(
+            OrgId, CaseId, EntryId, request.Content, request.FileName, request.ContentType);
+        if (attachment is null) return BlockUploadResult.Refused(request.FileName, error ?? $"\"{request.FileName}\" could not be added.");
+        _attachments.Add(attachment);
+        return new BlockUploadResult(attachment.FileId, attachment.FileName ?? request.FileName,
+            attachment.ContentType ?? request.ContentType, attachment.FileSize ?? request.Size, null);
+    }
+
+    private async Task<BlockLinkResult> LinkAsync(string url, bool refresh)
+    {
+        var (attachment, error) = await AdminClient.AddCaseResearchLinkAsync(OrgId, CaseId, EntryId, new AddResearchLinkRequest(url, RefreshPreview: refresh));
+        if (attachment is null) return new BlockLinkResult(url, null, null, null, null, null, error ?? "That link could not be added.");
+
+        var at = _attachments.FindIndex(a => a.Id == attachment.Id);
+        if (at >= 0) _attachments[at] = attachment; else _attachments.Add(attachment);
+
+        var card = attachment.Preview;
+        return new BlockLinkResult(attachment.Url ?? url, card?.Title, card?.Description, card?.ImageUrl, card?.SiteName,
+            card?.Domain ?? (Uri.TryCreate(url, UriKind.Absolute, out var u) ? u.Host : null));
+    }
+
+    private async Task<BlockPlaceResult?> SearchPlaceAsync(string query)
+    {
+        var found = await AdminClient.SearchGeocodingAsync(query);
+        if (found?.Latitude is not { } lat || found.Longitude is not { } lon) return null;
+        return new BlockPlaceResult((double)lat, (double)lon, query, null);
+    }
+
+    private async Task<string?> ReversePlaceAsync(double latitude, double longitude)
+    {
+        var address = await AdminClient.ReverseGeocodeAsync(latitude, longitude);
+        if (address is null) return null;
+        var parts = new[] { address.StreetAddress1, address.City, address.State }.Where(p => !string.IsNullOrWhiteSpace(p));
+        var text = string.Join(", ", parts);
+        return text.Length == 0 ? null : text;
+    }
+
+    // ── The rail ───────────────────────────────────────────────────────────────────────────────────────────
+
+    private async Task<string?> UploadFromRailAsync(BlockUploadRequest request) =>
+        (await UploadAsync(request)).Refusal;
+
+    private async Task<string?> AddLinkFromRailAsync(string url) =>
+        (await LinkAsync(url, false)).Refusal;
+
+    private async Task<string?> DeleteAttachmentAsync(CaseResearchAttachmentDto attachment)
+    {
+        var (ok, error) = await AdminClient.DeleteCaseResearchAttachmentAsync(OrgId, CaseId, EntryId, attachment.Id);
+        if (!ok) return error ?? "That could not be removed.";
+        _attachments.RemoveAll(a => a.Id == attachment.Id);
+        return null;
+    }
+
+    /// <summary>
+    /// "Insert" from the rail: a link goes where the cursor is when a text block is being written; a picture or a file —
+    /// and a link with no text block open — becomes a block of its own below the one being worked on.
+    /// </summary>
+    private async Task InsertFromRailAsync(CaseResearchAttachmentDto attachment)
+    {
+        if (_editor is null) return;
+
+        if (attachment.Kind == CaseResearchAttachmentKind.Link && attachment.Url is { } url)
+        {
+            var text = System.Net.WebUtility.HtmlEncode(attachment.Title);
+            var inserted = await _editor.InsertIntoActiveTextAsync($"<a href=\"{System.Net.WebUtility.HtmlEncode(url)}\">{text}</a>");
+            if (!inserted)
+            {
+                var card = attachment.Preview;
+                await _editor.InsertAsync(NewBlock.Link(new BlockLinkResult(url, card?.Title, card?.Description, card?.ImageUrl, card?.SiteName, card?.Domain)));
+            }
+            _autosave?.Touch();
+            return;
+        }
+
+        if (attachment.FileId is { } fileId)
+        {
+            await _editor.InsertAsync(NewBlock.FromUpload(new BlockUploadResult(fileId, attachment.FileName ?? attachment.Title,
+                attachment.ContentType ?? "application/octet-stream", attachment.FileSize ?? 0, null)));
+            _autosave?.Touch();
+        }
+    }
+
+    public async ValueTask DisposeAsync()
+    {
+        if (_autosave is not null) await _autosave.DisposeAsync();
+    }
+}

@@ -210,23 +210,14 @@
                             <Template>
                                 @{ var row = (AdminHostedEventRow)cell; }
                                 <div class="text-nowrap">
-                                    <a class="btn btn-sm btn-outline-primary me-1" title="View this event"
-                                       id="@($"view-{row.Id}")" href="@($"/organizations/{row.OrganizationId}/events/{row.Id}")">
-                                        <BenIcon Name="eye" />
-                                    </a>
+                                    <BenGridAction Icon="eye" Label="View this event" Tone="GridActionTone.Primary" Href="@($"/organizations/{row.OrganizationId}/events/{row.Id}")" id="@($"view-{row.Id}")" />
                                     @if (row.State is HostedEventLifecycleState.Removed)
                                     {
-                                        <button type="button" class="btn btn-sm btn-outline-danger" disabled
-                                                title="Already removed">
-                                            <BenIcon Name="trash-2" />
-                                        </button>
+                                        <BenGridAction Icon="trash-2" Label="Already removed" Tone="GridActionTone.Danger" Disabled="true" />
                                     }
                                     else
                                     {
-                                        <a class="btn btn-sm btn-outline-danger" title="Remove this event"
-                                           id="@($"remove-{row.Id}")" href="@($"/admin/events/{row.Id}/remove")">
-                                            <BenIcon Name="trash-2" />
-                                        </a>
+                                        <BenGridAction Icon="trash-2" Label="Remove this event" Tone="GridActionTone.Danger" Href="@($"/admin/events/{row.Id}/remove")" id="@($"remove-{row.Id}")" />
                                     }
                                 </div>
                             </Template>
@@ -252,7 +243,7 @@
     {
         if (!firstRender) return;
         if (!await UserState.WaitUntilAuthReadyAsync(RendererInfo.IsInteractive)) return;
-        if (!UserState.IsSuperAdmin || UserState.IsImpersonating) { NavManager.NavigateTo("/"); return; }
+        if (!UserState.IsSuperAdmin || UserState.IsImpersonating) { NavManager.NavigateTo(Ben.Web.Website.Library.Kit.SignInLink.ForRefusal(NavManager, UserState)); return; }
 
         await LoadAsync();
         StateHasChanged();

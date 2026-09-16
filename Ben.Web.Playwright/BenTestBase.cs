@@ -483,7 +483,7 @@ public abstract class BenTestBase : PageTest
     /// from a component lifecycle method, so it cannot show up before the circuit is live. Outside
     /// Development there is nothing to wait for, hence best-effort with a short bound.</para>
     /// </remarks>
-    private async Task FillCredentialsAsync(string email, string password)
+    protected async Task FillCredentialsAsync(string email, string password)
     {
         var emailBox    = Page.Locator(EmailSelector).First;
         var passwordBox = Page.Locator("input[type='password']").First;
@@ -778,18 +778,19 @@ public abstract class BenTestBase : PageTest
     }
 
     /// <summary>
-    /// A Telerik grid's row command button, by the text on it.
+    /// A Telerik grid's row command button, by the words of its tooltip (its <c>title</c>).
     /// </summary>
     /// <remarks>
-    /// <b>Not <c>GetByRole(Button, name)</c>.</b> Telerik's filter row renders one icon button per
-    /// column carrying <c>aria-label="Open"</c> — fifteen of them on the SuperAdmin cases grid —
-    /// so an accessible-name match finds a filter toggle long before it finds the row's command,
-    /// clicks it happily, and reports that the row would not navigate. That cost this suite one
-    /// standing failure for weeks. Command buttons live in <c>td.k-command-cell</c> and carry real
-    /// text; both facts are what make this selector safe.
+    /// <para><b>Not a page-wide <c>GetByRole(Button, name)</c>.</b> Telerik's filter row renders one icon
+    /// button per column carrying <c>aria-label="Open"</c> — fifteen of them on the SuperAdmin cases grid —
+    /// so an accessible-name match finds a filter toggle long before it finds the row's command, clicks it
+    /// happily, and reports that the row would not navigate. That cost this suite one standing failure for
+    /// weeks. Command buttons live in <c>td.k-command-cell</c>, which is what keeps this to the rows.</para>
+    /// <para>By title, not by text: since 2026-09-14 a grid's row actions are icons and their words are the
+    /// tooltip (Ben: no text in grid buttons). The match is a substring, so "Open" finds "Open the case".</para>
     /// </remarks>
     protected ILocator GridCommand(string text, ILocator? within = null)
-        => (within ?? Main).Locator("td.k-command-cell button", new() { HasTextString = text });
+        => (within ?? Main).Locator($"td.k-command-cell button[title*='{text}']");
 
     /// <summary>
     /// Skips a guided tour if one has opened over the page, and says whether it did.
