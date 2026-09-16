@@ -96,6 +96,15 @@ public sealed class OnnxNsfwScreener : IFeedMediaScreener, IDisposable
         if (contentType?.StartsWith("video/", StringComparison.OrdinalIgnoreCase) == true)
             return await ScreenVideoAsync(storagePath, ct);
 
+        // Sound. A picture classifier has no opinion on it, and sending it down the image path
+        // held every session with an audio recording as "image would not decode" — a wrong
+        // reason, and an archive that could never show a night's sound (found 2026-09-16). The
+        // archive's rule is publish first and pull on the first flag; the screener is the safety
+        // net for pictures, so sound passes with the truth about what was and was not looked at.
+        if (contentType?.StartsWith("audio/", StringComparison.OrdinalIgnoreCase) == true)
+            return new FeedMediaVerdict(FeedMediaReviewState.Approved,
+                "screener: sound — nothing for the picture screener to look at; a flag brings a moderator");
+
         // Everything else arrived through the feed's upload validation, which only admits
         // image/* and video/* — so this is the image path, plus a safety net for anything odd.
         return await ScreenImageAsync(storagePath, ct);

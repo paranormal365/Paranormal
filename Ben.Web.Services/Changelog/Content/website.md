@@ -18,6 +18,8 @@ day-by-day account of building it would say nothing to anyone using it now.
 
 ## 2026-09-16
 
+- A session's sound recordings no longer sit held out of a place's archive: the picture screener used to hold every audio file as an image that would not decode, so an archived night could show its readings but never its sound.
+- A field session that was sent from the app as one session file can now be added to a public place's archive, and its recordings play there like any other.
 - Research on a case is now a board you lay out yourself: cards, notes, pictures, maps, links and files, placed where they belong. It opens in its own editor, keeps what you are writing on your own machine, and stays yours until you publish it. Once published the group sees it, and anybody who can edit the case can add to it — changing what somebody else put there is for whoever put it there, a group administrator, or an administrator of the site.
 - The older research pages have been replaced by boards. Research is also a kind of timeline entry again, for a note about what you read that belongs on the day it happened.
 - Select a card on a board and four small + handles appear on its sides. Click one and the next card arrives there, already joined by an arrow and ready to type in; drag one onto empty board to put it where you let go, or onto another card to join those two. Ctrl+Shift and an arrow key does the same from the keyboard, and one Undo takes back the card and its arrow together.

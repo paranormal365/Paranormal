@@ -40,15 +40,18 @@ public sealed class PublicArchiveMediaController : ControllerBase
     private readonly IDbContextFactory<BenDataContext> _db;
     private readonly IFileStorageService _fileStorage;
     private readonly IMediaIngestService _mediaIngest;
+    private readonly Services.FieldSessions.IBenBundleStore _bundles;
 
     public PublicArchiveMediaController(
         IDbContextFactory<BenDataContext> db,
         IFileStorageService fileStorage,
-        IMediaIngestService mediaIngest)
+        IMediaIngestService mediaIngest,
+        Services.FieldSessions.IBenBundleStore bundles)
     {
         _db = db;
         _fileStorage = fileStorage;
         _mediaIngest = mediaIngest;
+        _bundles = bundles;
     }
 
     /// <summary>What a visitor may currently see for this session — empty while media is held.</summary>
@@ -76,7 +79,13 @@ public sealed class PublicArchiveMediaController : ControllerBase
 
         var file = await db.UploadFiles.AsNoTracking()
             .FirstOrDefaultAsync(f => f.Id == uploadFileId, ct);
-        if (file is null) return NotFound();
+        if (file is null)
+        {
+            // Not a file of its own: a recording inside the session's .ben, asked for by its row's
+            // id. The phone stripped its photographs before sealing (DeviceDataExporter), so the
+            // member is served as it is, the way the share link serves it.
+            return await ServeBundleMemberAsync(db, fieldSessionId, uploadFileId, ct);
+        }
 
         // Same disk-then-blob fallback as UploadFileController.Download: rows predating the
         // storage migration still keep their bytes in the column.
@@ -93,5 +102,28 @@ public sealed class PublicArchiveMediaController : ControllerBase
             return File(file.FileData, file.ContentType, file.FileName);
 
         return NotFound();
+    }
+
+    private async Task<IActionResult> ServeBundleMemberAsync(
+        BenDataContext db, Guid fieldSessionId, Guid rowId, CancellationToken ct)
+    {
+        var member = await db.FieldSessionUploadFiles.AsNoTracking()
+            .Where(f => f.Id == rowId && f.FieldSessionUploadId == fieldSessionId && f.BundleEntryPath != null)
+            .Select(f => new { f.BundleEntryPath, f.ContentType, f.RelativePath })
+            .FirstOrDefaultAsync(ct);
+        if (member is null) return NotFound();
+
+        var bundlePath = await db.FieldSessionUploads.AsNoTracking()
+            .Where(s => s.Id == fieldSessionId)
+            .Select(s => s.DocumentUploadFile.StoragePath)
+            .FirstOrDefaultAsync(ct);
+        if (bundlePath is not { Length: > 0 } || !_fileStorage.Exists(bundlePath)) return NotFound();
+
+        var stream = await _bundles.OpenEntryAsync(bundlePath, member.BundleEntryPath!, ct);
+        if (stream is null) return NotFound();
+
+        return File(stream,
+                    member.ContentType ?? Services.FieldSessionFileGuard.ContentTypeFor(member.RelativePath),
+                    Path.GetFileName(member.RelativePath), enableRangeProcessing: true);
     }
 }

@@ -34,7 +34,8 @@ public sealed class FieldSessionArchiveTests
         // The shipping screener: approves nothing, routes everything to a person. These suites
         // are about publication, not media, and this is what production actually does.
         => new(db, new Ben.Data.WebApi.Services.Feed.ManualReviewScreener(),
-               NullLogger<FieldSessionPublishController>.Instance)
+               NullLogger<FieldSessionPublishController>.Instance,
+               TestBundles.Store(ArchiveTestStorage.Empty()), ArchiveTestStorage.Empty())
         {
             ControllerContext = new ControllerContext
             {
@@ -438,7 +439,8 @@ public sealed class ArchiveCandidateTests
     private static FieldSessionPublishController Controller(
         IDbContextFactory<BenDataContext> db, Guid userId)
         => new(db, new Ben.Data.WebApi.Services.Feed.ManualReviewScreener(),
-               NullLogger<FieldSessionPublishController>.Instance)
+               NullLogger<FieldSessionPublishController>.Instance,
+               TestBundles.Store(ArchiveTestStorage.Empty()), ArchiveTestStorage.Empty())
         {
             ControllerContext = new ControllerContext
             {
@@ -578,7 +580,8 @@ public sealed class ArchiveMediaTests
     private static FieldSessionPublishController Controller(
         IDbContextFactory<BenDataContext> db, Guid userId,
         Ben.Data.WebApi.Services.Feed.IFeedMediaScreener screener)
-        => new(db, screener, NullLogger<FieldSessionPublishController>.Instance)
+        => new(db, screener, NullLogger<FieldSessionPublishController>.Instance,
+               TestBundles.Store(ArchiveTestStorage.Empty()), ArchiveTestStorage.Empty())
         {
             ControllerContext = new ControllerContext
             {
@@ -1111,4 +1114,14 @@ public sealed class PlaceMergeTests
 
         Assert.Empty(await FindAsync(factory));
     }
+}
+
+/// <summary>
+/// Storage that holds nothing. Nothing in these fixtures publishes a session sent as one .ben, so the
+/// bundle store built over it is never asked for a member.
+/// </summary>
+file static class ArchiveTestStorage
+{
+    public static Ben.Data.Common.Interfaces.IFileStorageService Empty()
+        => new Moq.Mock<Ben.Data.Common.Interfaces.IFileStorageService>().Object;
 }

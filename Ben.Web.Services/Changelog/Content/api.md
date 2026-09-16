@@ -20,6 +20,7 @@ belongs there; this is for the part underneath.
 
 ## 2026-09-16
 
+- The public archive lists and serves recordings that live inside a session's single file, by the file row's id; publishing such a session is no longer refused, and its recordings are screened like any other before they show.
 - Research boards on a case have their own addresses: a group's boards, one board, and publishing one. A board nobody has published is not in the list for anybody but the person writing it.
 - The older research pages and their attachments have been removed, along with their addresses. Files those pages referred to are untouched: they are the case's files and stay on the case's Files tab.
 - The canvas is no longer behind a site switch. It answers signed-in callers wherever the service is running.

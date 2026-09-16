@@ -6,6 +6,7 @@ using Ben.Service.RepositoryService.Services;
 using Ben.Data.WebApi.Services.Feed;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
+using Ben.Data.Common.Interfaces;
 using Microsoft.EntityFrameworkCore;
 
 namespace Ben.Data.WebApi.Controllers;
@@ -45,14 +46,19 @@ public sealed class FieldSessionPublishController : BenControllerBase
     private readonly IDbContextFactory<BenDataContext> _db;
     private readonly IFeedMediaScreener _screener;
     private readonly ILogger<FieldSessionPublishController> _log;
+    private readonly Services.FieldSessions.IBenBundleStore _bundles;
+    private readonly IFileStorageService _fileStorage;
 
     public FieldSessionPublishController(
         IDbContextFactory<BenDataContext> db, IFeedMediaScreener screener,
-        ILogger<FieldSessionPublishController> log)
+        ILogger<FieldSessionPublishController> log,
+        Services.FieldSessions.IBenBundleStore bundles, IFileStorageService fileStorage)
     {
         _db = db;
         _screener = screener;
         _log = log;
+        _bundles = bundles;
+        _fileStorage = fileStorage;
     }
 
     /// <param name="PlaceId">An existing public location, when the person picked one.</param>
@@ -262,16 +268,6 @@ public sealed class FieldSessionPublishController : BenControllerBase
                 "Only public locations have an open archive. A session recorded at somebody's "
               + "home stays with you and your group — that is what the private lane is for.");
 
-        // A session that arrived as one .ben carries its recordings inside that file, and the
-        // open archive can only serve files of their own so far. Published anyway, it would
-        // appear with its readings and no sound — which is worse than being told it cannot go
-        // yet. Refused at the door until the archive can serve a range of a bundle.
-        if (session.IsBundle)
-            return BadRequest(
-                "This session can't go in the open archive yet. It was sent as a single session "
-              + "file, and the archive can't play what's inside one of those — it will be able "
-              + "to shortly.");
-
         session.PlaceId = place.Id;
         // Re-publishing an already-public session keeps its original date: the answer to "when
         // did this become public" must not move because somebody pressed the button twice.
@@ -327,11 +323,28 @@ public sealed class FieldSessionPublishController : BenControllerBase
             return;
         }
 
-        var files = await db.FieldSessionUploadFiles.AsNoTracking()
-            .Where(f => f.FieldSessionUploadId == session.Id)
+        // A recording sent on its own is screened where it lies. One inside the session's .ben has
+        // no path of its own, so it is copied out to a scratch path in the same storage for as long
+        // as the screener needs it — the screener reads storage-relative paths and nothing else.
+        var own = await db.FieldSessionUploadFiles.AsNoTracking()
+            .Where(f => f.FieldSessionUploadId == session.Id && f.UploadFileId != null)
             .Join(db.UploadFiles.AsNoTracking(), f => f.UploadFileId, u => u.Id,
                   (f, u) => new { u.StoragePath, u.ContentType })
             .ToListAsync(ct);
+        var inBundle = await db.FieldSessionUploadFiles.AsNoTracking()
+            .Where(f => f.FieldSessionUploadId == session.Id && f.BundleEntryPath != null)
+            .Select(f => new { f.BundleEntryPath, f.ContentType, f.RelativePath })
+            .ToListAsync(ct);
+        var files = own.Select(f => (f.StoragePath, f.ContentType, Entry: (string?)null)).ToList();
+        string? bundlePath = null;
+        if (inBundle.Count > 0)
+        {
+            bundlePath = await db.UploadFiles.AsNoTracking()
+                .Where(u => u.Id == session.DocumentUploadFileId)
+                .Select(u => u.StoragePath)
+                .FirstOrDefaultAsync(ct);
+            files.AddRange(inBundle.Select(f => ((string?)null, f.ContentType, Entry: f.BundleEntryPath)));
+        }
 
         if (files.Count == 0)
         {
@@ -343,11 +356,20 @@ public sealed class FieldSessionPublishController : BenControllerBase
 
         foreach (var file in files)
         {
-            // A file whose bytes are still in the database has no path on disk for the screener to
-            // read. It cannot be looked at, so it is HELD rather than waved through: the whole
-            // point of the screen is that unreviewed media does not go public. Same answer the
-            // catch below gives, for the same reason.
-            if (string.IsNullOrWhiteSpace(file.StoragePath))
+            var path = file.StoragePath;
+            string? scratch = null;
+            if (file.Entry is { } entry)
+            {
+                // The member, copied out beside the archive's own scratch for the length of one screen.
+                scratch = await CopyMemberToScratchAsync(bundlePath, entry, session.Id, ct);
+                path = scratch;
+            }
+
+            // A file whose bytes are still in the database — or a member that could not be copied
+            // out — has no path on disk for the screener to read. It cannot be looked at, so it is
+            // HELD rather than waved through: the whole point of the screen is that unreviewed
+            // media does not go public. Same answer the catch below gives, for the same reason.
+            if (string.IsNullOrWhiteSpace(path))
             {
                 _log.LogWarning(
                     "Session {SessionId} has media with no stored path; it stays private until reviewed.",
@@ -359,7 +381,7 @@ public sealed class FieldSessionPublishController : BenControllerBase
             FeedMediaVerdict verdict;
             try
             {
-                verdict = await _screener.ScreenAsync(file.StoragePath, file.ContentType, ct);
+                verdict = await _screener.ScreenAsync(path, file.ContentType, ct);
             }
             catch (Exception ex)
             {
@@ -367,6 +389,14 @@ public sealed class FieldSessionPublishController : BenControllerBase
                     session.Id);
                 session.MediaReviewState = FeedMediaReviewState.Pending;
                 return;
+            }
+            finally
+            {
+                if (scratch is not null)
+                {
+                    try { await _fileStorage.DeleteAsync(scratch, CancellationToken.None); }
+                    catch (Exception ex) { _log.LogWarning(ex, "Could not remove the screening copy {Path}.", scratch); }
+                }
             }
 
             if (verdict.State != FeedMediaReviewState.Approved)
@@ -378,6 +408,22 @@ public sealed class FieldSessionPublishController : BenControllerBase
         }
 
         session.MediaReviewState = FeedMediaReviewState.Approved;
+    }
+
+    /// <summary>
+    /// Copies one member of the session's .ben to a scratch path in storage, for the screener, which
+    /// reads storage-relative paths only. Null when the bundle or the member is not there.
+    /// </summary>
+    private async Task<string?> CopyMemberToScratchAsync(
+        string? bundlePath, string entry, Guid sessionId, CancellationToken ct)
+    {
+        if (bundlePath is not { Length: > 0 } || !_fileStorage.Exists(bundlePath)) return null;
+        await using var member = await _bundles.OpenEntryAsync(bundlePath, entry, ct);
+        if (member is null) return null;
+
+        var scratch = $"scratch/archive-screen/{sessionId}/{Guid.NewGuid():N}{Path.GetExtension(entry)}";
+        await _fileStorage.WriteAsync(scratch, member, ct);
+        return scratch;
     }
 
     /// <summary>
