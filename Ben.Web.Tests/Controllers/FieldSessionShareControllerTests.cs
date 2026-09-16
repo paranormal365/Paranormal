@@ -155,7 +155,7 @@ public sealed class FieldSessionShareControllerTests
                    bytes.TryGetValue(path, out var b) ? new MemoryStream(b) : Stream.Null));
 
         var controller = new FieldSessionShareController(
-            factory, storage.Object, NullLogger<FieldSessionShareController>.Instance);
+            factory, storage.Object, TestBundles.Store(storage.Object), NullLogger<FieldSessionShareController>.Instance);
 
         // No identity at all for the anonymous side: a share endpoint that only works because a
         // signed-in principal happened to be lying around would pass every test here and fail for

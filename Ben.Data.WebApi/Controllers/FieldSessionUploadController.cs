@@ -34,7 +34,7 @@ namespace Ben.Data.WebApi.Controllers;
 [ApiController]
 [Route("api/field-sessions")]
 [Authorize]
-public sealed class FieldSessionUploadController : BenControllerBase
+public sealed partial class FieldSessionUploadController : BenControllerBase
 {
     /// The "Case Evidence" type, shared with the other evidence doors.
     private static readonly Guid EvidenceFileTypeId = new("20000000-0000-0000-0000-000000000001");
@@ -43,18 +43,21 @@ public sealed class FieldSessionUploadController : BenControllerBase
     private readonly IFileStorageService _fileStorage;
     private readonly IMediaIngestService _mediaIngest;
     private readonly ILogger<FieldSessionUploadController> _log;
+    private readonly Services.FieldSessions.IBenBundleStore _bundles;
 
     public FieldSessionUploadController(
         IDbContextFactory<BenDataContext> db,
         IFileStorageService fileStorage,
         IMediaIngestService mediaIngest,
         Services.Media.MediaRetentionPolicy retention,
+        Services.FieldSessions.IBenBundleStore bundles,
         ILogger<FieldSessionUploadController> log)
     {
         _db = db;
         _fileStorage = fileStorage;
         _mediaIngest = mediaIngest;
         _retention = retention;
+        _bundles = bundles;
         _log = log;
     }
 
@@ -443,8 +446,12 @@ public sealed class FieldSessionUploadController : BenControllerBase
             return NotFound("This session's readings are no longer on the server.");
 
         string document;
-        await using (var stream = await _fileStorage.OpenReadAsync(
-                         session.DocumentUploadFile.StoragePath, ct))
+        // For a bundle the document is a member of the session's one file rather than a file of
+        // its own, so it is read out of it the same way a recording is.
+        await using (var stream = session.IsBundle
+                         ? await _bundles.OpenEntryAsync(
+                               documentPath, Services.FieldSessions.BenBundle.DocumentEntryPath, ct)
+                         : await _fileStorage.OpenReadAsync(documentPath, ct))
         {
             if (stream is null)
                 return NotFound("This session's readings are no longer on the server.");
@@ -480,9 +487,30 @@ public sealed class FieldSessionUploadController : BenControllerBase
             .FirstOrDefaultAsync(f => f.Id == fileId && f.FieldSessionUploadId == sessionId, ct);
         if (file is null) return NotFound();
 
+        // A recording inside the session's .ben: served as a byte range of that one file, which
+        // is what lets a session BE a single file without storing everything twice. The window is
+        // seekable, so a player dragging its scrubber into the middle of an hour costs one seek.
+        if (file.BundleEntryPath is { Length: > 0 } entryPath)
+        {
+            var bundlePath = await db.UploadFiles.AsNoTracking()
+                .Where(f => f.Id == session.DocumentUploadFileId)
+                .Select(f => f.StoragePath)
+                .FirstOrDefaultAsync(ct);
+            if (bundlePath is not { Length: > 0 } || !_fileStorage.Exists(bundlePath))
+                return NotFound("That recording is no longer on the server.");
+
+            var member = await _bundles.OpenEntryAsync(bundlePath, entryPath, ct);
+            if (member is null)
+                return NotFound("That recording isn't in this session's file.");
+
+            return File(member,
+                        file.ContentType ?? FieldSessionFileGuard.ContentTypeFor(file.RelativePath),
+                        Path.GetFileName(file.RelativePath), enableRangeProcessing: true);
+        }
+
         // Same nullable StoragePath as the document above: no path means no file on disk, which
         // is the 404 this line already intends rather than the NullReferenceException it threw.
-        if (file.UploadFile.StoragePath is not { } recordingPath
+        if (file.UploadFile?.StoragePath is not { } recordingPath
             || !_fileStorage.Exists(recordingPath))
             return NotFound("That recording is no longer on the server.");
 
@@ -608,9 +636,49 @@ public sealed class FieldSessionUploadController : BenControllerBase
             session.UpdatedByAppUserId = userId;
         }
 
-        // Who RECORDED it, which is not always who is sending it — a device can be handed over,
-        // and a session recorded while signed out has nobody's name on it at all. It is never
-        // silently attributed to the uploader.
+        await ApplyRecordedByAsync(db, session, userId, recordedByAppUserId, recordedByName, ct);
+
+        // Set on every submission, so choosing an investigation later is simply re-sending.
+        session.InvestigationId = investigationId;
+        session.DocumentUploadFileId = uploadFile.Id;
+        session.DeviceModel = summary.DeviceModel;
+        session.LocationLabel = summary.LocationLabel;
+        session.StartedAt = summary.StartedAt;
+        session.EndedAt = summary.EndedAt;
+        session.ReadingCount = summary.ReadingCount;
+        // The first fix, copied onto the row so a map never has to open this document again.
+        // PositionResolved is set either way: "looked and found nothing" must be remembered, or
+        // every indoor session would be re-read on every map request for ever.
+        var fix = FirstFix(documentText);
+        session.Latitude  = fix?.Latitude;
+        session.Longitude = fix?.Longitude;
+        session.PositionResolved = true;
+        session.MarkerCount = summary.MarkerCount;
+
+        await db.SaveChangesAsync(ct);
+        await db.Entry(session).Collection(s => s.Files).LoadAsync(ct);
+
+        _log.LogInformation(
+            "Field session {DeviceSessionId} uploaded to investigation {InvestigationId} "
+            + "({Readings} readings, {Markers} marked).",
+            deviceSessionId, investigationId, summary.ReadingCount, summary.MarkerCount);
+
+        return Ok(ToRecord(session));
+    }
+
+    /// <summary>
+    /// Records who RECORDED a session, which is not always who is sending it.
+    /// </summary>
+    /// <remarks>
+    /// A device can be handed over, and a session recorded while signed out has nobody's name on
+    /// it at all. It is never silently attributed to the uploader. Shared by both upload doors so
+    /// a bundle and a document cannot drift apart on the one question anybody will later argue
+    /// about.
+    /// </remarks>
+    private static async Task ApplyRecordedByAsync(
+        BenDataContext db, FieldSessionUpload session, Guid userId,
+        Guid? recordedByAppUserId, string? recordedByName, CancellationToken ct)
+    {
         if (recordedByAppUserId is Guid recorded && recorded != Guid.Empty)
         {
             var account = await db.Users.AsNoTracking()
@@ -644,33 +712,6 @@ public sealed class FieldSessionUploadController : BenControllerBase
             session.RecordedByAppUserId = null;
             session.RecordedByName = null;
         }
-
-        // Set on every submission, so choosing an investigation later is simply re-sending.
-        session.InvestigationId = investigationId;
-        session.DocumentUploadFileId = uploadFile.Id;
-        session.DeviceModel = summary.DeviceModel;
-        session.LocationLabel = summary.LocationLabel;
-        session.StartedAt = summary.StartedAt;
-        session.EndedAt = summary.EndedAt;
-        session.ReadingCount = summary.ReadingCount;
-        // The first fix, copied onto the row so a map never has to open this document again.
-        // PositionResolved is set either way: "looked and found nothing" must be remembered, or
-        // every indoor session would be re-read on every map request for ever.
-        var fix = FirstFix(documentText);
-        session.Latitude  = fix?.Latitude;
-        session.Longitude = fix?.Longitude;
-        session.PositionResolved = true;
-        session.MarkerCount = summary.MarkerCount;
-
-        await db.SaveChangesAsync(ct);
-        await db.Entry(session).Collection(s => s.Files).LoadAsync(ct);
-
-        _log.LogInformation(
-            "Field session {DeviceSessionId} uploaded to investigation {InvestigationId} "
-            + "({Readings} readings, {Markers} marked).",
-            deviceSessionId, investigationId, summary.ReadingCount, summary.MarkerCount);
-
-        return Ok(ToRecord(session));
     }
 
     // ── The recordings ────────────────────────────────────────────────────────

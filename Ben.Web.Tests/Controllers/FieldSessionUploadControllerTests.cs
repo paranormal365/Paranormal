@@ -128,6 +128,8 @@ public sealed class FieldSessionUploadControllerTests
             factory, storage.Object, ingest.Object,
             new Ben.Data.WebApi.Services.Media.MediaRetentionPolicy(
                 new Ben.Data.WebApi.Services.Billing.SubscriptionLimitGuard(factory)),
+            TestBundles.Store(storage.Object),
+
             NullLogger<FieldSessionUploadController>.Instance);
         controller.ControllerContext = new ControllerContext
         {

@@ -107,7 +107,8 @@ public class FieldSessionMapPointsTests
         var controller = new FieldSessionUploadController(
             factory, new DictionaryStorage(storage),
             mediaIngest: null!, new Ben.Data.WebApi.Services.Media.MediaRetentionPolicy(
-                new Ben.Data.WebApi.Services.Billing.SubscriptionLimitGuard(factory)), NullLogger<FieldSessionUploadController>.Instance);
+                new Ben.Data.WebApi.Services.Billing.SubscriptionLimitGuard(factory)), TestBundles.Store(new DictionaryStorage(storage)),
+            NullLogger<FieldSessionUploadController>.Instance);
 
         controller.ControllerContext = new ControllerContext
         {

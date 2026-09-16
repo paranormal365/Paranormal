@@ -191,6 +191,11 @@ builder.Services.AddSingleton<Ben.Data.WebApi.Services.FileMetadataExtractorServ
 builder.Services.AddSingleton<Ben.Data.WebApi.Services.IMediaSanitizationService, Ben.Data.WebApi.Services.MediaSanitizationService>();
 // The one place an uploaded media file is taken in — see IMediaIngestService.
 builder.Services.AddSingleton<Ben.Data.WebApi.Services.IMediaIngestService, Ben.Data.WebApi.Services.MediaIngestService>();
+
+// Reads .ben session bundles and serves what is inside them as byte ranges. Singleton because
+// the index it caches describes files that never change once written.
+builder.Services.AddSingleton<Ben.Data.WebApi.Services.FieldSessions.IBenBundleStore,
+                              Ben.Data.WebApi.Services.FieldSessions.BenBundleStore>();
 // Author-written page markup is cleaned at the point it is stored, so what is in the database is
 // what will be rendered — see ICmsMarkupSanitizer for why provenance alone is not enough.
 builder.Services.AddSingleton<Ben.Data.WebApi.Services.ICmsMarkupSanitizer, Ben.Data.WebApi.Services.CmsMarkupSanitizer>();
