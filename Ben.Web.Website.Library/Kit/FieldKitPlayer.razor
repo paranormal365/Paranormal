@@ -1002,6 +1002,16 @@
             // as the playhead.
             if (await PlayMediaFromAsync(key, (_playhead - startsAt).TotalSeconds)) return;
         }
+        else if (NextRecordingAfter(_playhead) is { } next && MediaStartOf(next) is { } nextStart)
+        {
+            // Nothing is playing HERE, but something plays soon: the playhead moves up to the
+            // recording that starts next and that recording is the clock from its beginning. This
+            // is the half of the old "first recording" fallback that was right — a playhead before
+            // every clip has nowhere to go but forward. The half that was wrong, a playhead inside
+            // or past a clip being dragged back to its start, stays gone (Ben, 2026-09-16).
+            _playhead = nextStart;
+            if (await PlayMediaFromAsync(next, 0)) return;
+        }
 
         _clockKey = null;
         _playing = true;
@@ -1066,10 +1076,12 @@
     /// span is what decides.
     /// </para>
     /// <para>
-    /// There is no fallback to "the first recording" any more. That was the other half: with the
-    /// playhead before every recording, it handed back one that plainly did not cover the moment,
-    /// which is a seek to a negative offset — clamped to zero, and the beginning again. Nothing
-    /// covering the moment is an ordinary answer, and the page keeps time itself for it.
+    /// This never hands back a recording that does not cover the moment. The old "first
+    /// recording" fallback did, and a playhead inside a later clip was then seeked to a negative
+    /// offset — clamped to zero, and the beginning again. A playhead BEFORE every recording is a
+    /// different case with a different answer, <see cref="NextRecordingAfter"/>: the page moves it
+    /// forward to the recording that starts next, because that is what pressing Play at 0:00 on
+    /// a session whose sound begins at 0:04 means.
     /// </para>
     /// </remarks>
     private Guid? RecordingCovering(DateTime moment)
@@ -1078,6 +1090,22 @@
             .Select(f => (f.Id, StartsAt: MediaStart(f)))
             .Where(x => x.StartsAt is not null && x.StartsAt <= moment && !HasFinishedBy(x.Id, x.StartsAt!.Value, moment))
             .OrderByDescending(x => x.StartsAt)
+            .Select(x => (Guid?)x.Id)
+            .FirstOrDefault();
+
+    /// <summary>The recording that begins soonest after this moment, when one does.</summary>
+    /// <remarks>
+    /// Only ever consulted when nothing covers the moment. With the playhead at 0:00 and the first
+    /// recording at 0:04, Play jumps to 0:04 and the recording drives from its start — the
+    /// behaviour <c>FieldSessionMediaClockTests</c> pins, and the one the first fix of the
+    /// fallback took away by mistake.
+    /// </remarks>
+    private Guid? NextRecordingAfter(DateTime moment)
+        => _session?.Files
+            .Where(f => (IsAudio(f.RelativePath) || IsVideo(f.RelativePath)) && !_undecodable.Contains(f.Id))
+            .Select(f => (f.Id, StartsAt: MediaStart(f)))
+            .Where(x => x.StartsAt is not null && x.StartsAt > moment)
+            .OrderBy(x => x.StartsAt)
             .Select(x => (Guid?)x.Id)
             .FirstOrDefault();
 
