@@ -348,6 +348,114 @@ public abstract class BenTestBase : PageTest
     protected static string SoloEmail          => Environment.GetEnvironmentVariable("BEN_SOLO_EMAIL")          ?? "wren.ashby@benco.dev";
     protected static string SoloPassword       => RequiredSecret("BEN_SOLO_PASSWORD");
 
+    // ── The public feed's switch, for fixtures that need it on ───────────────
+
+    /// <summary>
+    /// Turns the public feed on and <b>waits until the service agrees</b>, returning what it was
+    /// before so the caller can put it back.
+    /// </summary>
+    /// <remarks>
+    /// <para><b>Why the waiting half exists.</b> Setting a site setting and starting to click is a
+    /// race, and it is a race that loses quietly: the feed reads as off, a composer does not render,
+    /// and three tests time out looking for an element whose absence is correct. That happened on
+    /// 2026-09-17 — the place-post fixtures passed whenever some earlier fixture had left the feed
+    /// on and failed whenever they were first, which is the worst possible failure pattern because
+    /// it looks like flakiness in the product.</para>
+    ///
+    /// <para>Confirmation is <c>GET /api/feed</c>: it 404s wholesale while the feed is off, so a
+    /// 200 is the service saying the switch has landed — and it is the same answer the pages under
+    /// test depend on, rather than a proxy for it.</para>
+    ///
+    /// <para>Returns null when the switch could not be set or never took. That is a <b>missing
+    /// precondition</b> and the caller should <c>Assert.Ignore</c>, never fail: a fixture that
+    /// cannot arrange its own world has not found a bug.</para>
+    /// </remarks>
+    protected static async Task<bool?> TurnTheFeedOnAsync()
+    {
+        var token = await SuperAdminTokenAsync();
+        if (token is null) return null;
+
+        bool wasOn;
+        using (var read = new HttpClient { BaseAddress = new Uri(ApiUrl), Timeout = TimeSpan.FromSeconds(30) })
+        {
+            read.DefaultRequestHeaders.Authorization =
+                new System.Net.Http.Headers.AuthenticationHeaderValue("Bearer", token);
+            try
+            {
+                var settings = await read.GetFromJsonAsync<System.Text.Json.JsonElement>("/api/admin/site-settings");
+                wasOn = settings.EnumerateArray().Any(setting =>
+                    setting.GetProperty("key").GetString() == FeedSwitchKey
+                    && setting.TryGetProperty("value", out var value)
+                    && string.Equals(value.GetString(), "true", StringComparison.OrdinalIgnoreCase));
+            }
+            catch (HttpRequestException) { return null; }
+        }
+
+        if (!await SetFeedSwitchAsync(token, on: true)) return null;
+
+        // Up to twenty seconds, because the answer has to travel through whatever the hosts cache.
+        using var probe = new HttpClient { BaseAddress = new Uri(ApiUrl), Timeout = TimeSpan.FromSeconds(10) };
+        for (var attempt = 0; attempt < 20; attempt++)
+        {
+            try
+            {
+                using var response = await probe.GetAsync("/api/feed");
+                if (response.IsSuccessStatusCode) return wasOn;
+            }
+            catch (HttpRequestException) { }
+            await Task.Delay(1000);
+        }
+
+        return null;
+    }
+
+    /// <summary>Puts the feed switch back where <see cref="TurnTheFeedOnAsync"/> found it.</summary>
+    protected static async Task PutTheFeedBackAsync(bool? wasOn)
+    {
+        if (wasOn is not { } previous) return;
+        if (await SuperAdminTokenAsync() is { } token) await SetFeedSwitchAsync(token, previous);
+    }
+
+    /// <summary>The site setting that switches the public feed on.</summary>
+    protected const string FeedSwitchKey = "features.public-feed";
+
+    private static async Task<bool> SetFeedSwitchAsync(string token, bool on)
+    {
+        using var http = new HttpClient { BaseAddress = new Uri(ApiUrl), Timeout = TimeSpan.FromSeconds(30) };
+        http.DefaultRequestHeaders.Authorization =
+            new System.Net.Http.Headers.AuthenticationHeaderValue("Bearer", token);
+        try
+        {
+            using var response = await http.PutAsJsonAsync(
+                $"/api/admin/site-settings/{FeedSwitchKey}", new { value = on ? "true" : "false" });
+            return response.IsSuccessStatusCode;
+        }
+        catch (HttpRequestException) { return false; }
+    }
+
+    /// <summary>
+    /// A SuperAdmin bearer token, or null when sign-in failed.
+    /// </summary>
+    /// <remarks>
+    /// A plain <c>HttpClient</c> rather than Playwright's request context: the Playwright instance
+    /// is created per test and does not exist during <c>[OneTimeSetUp]</c>, which is where this is
+    /// needed.
+    /// </remarks>
+    protected static async Task<string?> SuperAdminTokenAsync()
+    {
+        using var http = new HttpClient { BaseAddress = new Uri(ApiUrl), Timeout = TimeSpan.FromSeconds(30) };
+        try
+        {
+            using var response = await http.PostAsJsonAsync("/login",
+                new { email = SuperAdminEmail, password = SuperAdminPassword });
+            if (!response.IsSuccessStatusCode) return null;
+
+            var json = await response.Content.ReadFromJsonAsync<System.Text.Json.JsonElement>();
+            return json.GetProperty("accessToken").GetString();
+        }
+        catch (HttpRequestException) { return null; }
+    }
+
     /// <summary>
     /// Logs in as the specified user via the /login page and waits for redirect.
     /// </summary>

@@ -26,73 +26,28 @@ public class PlacePostsTests : BenTestBase
 {
     private const string SeededPlace = "40000001-0000-0000-0000-000000000001";
     private const string SeededPlaceName = "Bell Witch Cave";
-    private const string FeedFlag = "features.public-feed";
-
-    /// <summary>Was the feed already on before this fixture touched it?</summary>
-    private static bool _wasAlreadyOn;
+    private static bool? _feedWasOn;
 
     /// <summary>
-    /// Turns the feed on, because place posts are feed posts and follow its switch.
+    /// Turns the feed on and waits until the service agrees. Place posts are feed posts, so
+    /// nothing here exists without it.
     /// </summary>
     /// <remarks>
-    /// The same pattern as <c>FeedTests</c>, including putting the flag back afterwards. The
-    /// harness turns on only <c>features.publications</c>, so without this every test here ignores
-    /// itself — which is exactly what happened on the first run, and a fixture that reports
-    /// "skipped" is a fixture nobody reads.
+    /// Ignores the whole fixture when the switch cannot be arranged — a missing precondition, not
+    /// a finding. Setting it and starting to click was a race, and a race that loses quietly: the
+    /// composer does not render and the tests time out looking for an element whose absence is
+    /// correct.
     /// </remarks>
     [OneTimeSetUp]
     public async Task TurnTheFeedOn()
     {
-        var token = await AdminTokenAsync();
-        if (token is null) return;
-
-        using (var http = new HttpClient { BaseAddress = new Uri(ApiUrl) })
-        {
-            http.DefaultRequestHeaders.Authorization =
-                new System.Net.Http.Headers.AuthenticationHeaderValue("Bearer", token);
-
-            var settings = await http.GetFromJsonAsync<System.Text.Json.JsonElement>("/api/admin/site-settings");
-            foreach (var setting in settings.EnumerateArray())
-            {
-                if (setting.GetProperty("key").GetString() != FeedFlag) continue;
-                _wasAlreadyOn = setting.TryGetProperty("value", out var value)
-                    && string.Equals(value.GetString(), "true", StringComparison.OrdinalIgnoreCase);
-            }
-        }
-
-        await SetFeedAsync(token, on: true);
+        _feedWasOn = await TurnTheFeedOnAsync();
+        if (_feedWasOn is null)
+            Assert.Ignore("The public feed could not be switched on, so a place takes no posts here.");
     }
 
     [OneTimeTearDown]
-    public async Task PutTheFeedBack()
-    {
-        var token = await AdminTokenAsync();
-        if (token is not null) await SetFeedAsync(token, on: _wasAlreadyOn);
-    }
-
-    private static async Task<string?> AdminTokenAsync()
-    {
-        using var http = new HttpClient { BaseAddress = new Uri(ApiUrl), Timeout = TimeSpan.FromSeconds(30) };
-        try
-        {
-            using var response = await http.PostAsJsonAsync("/login",
-                new { email = SuperAdminEmail, password = SuperAdminPassword });
-            if (!response.IsSuccessStatusCode) return null;
-
-            var json = await response.Content.ReadFromJsonAsync<System.Text.Json.JsonElement>();
-            return json.GetProperty("accessToken").GetString();
-        }
-        catch (HttpRequestException) { return null; }
-    }
-
-    private static async Task SetFeedAsync(string token, bool on)
-    {
-        using var http = new HttpClient { BaseAddress = new Uri(ApiUrl), Timeout = TimeSpan.FromSeconds(30) };
-        http.DefaultRequestHeaders.Authorization =
-            new System.Net.Http.Headers.AuthenticationHeaderValue("Bearer", token);
-        using var _ = await http.PutAsJsonAsync(
-            $"/api/admin/site-settings/{FeedFlag}", new { value = on ? "true" : "false" });
-    }
+    public Task PutTheFeedBack() => PutTheFeedBackAsync(_feedWasOn);
 
     private async Task<bool> OpenSeededPlaceAsync(string email, string password)
     {
@@ -114,9 +69,11 @@ public class PlacePostsTests : BenTestBase
         if (!await OpenSeededPlaceAsync(UserEmail, UserPassword))
             Assert.Ignore("the seeded landmark this walks is not on this database");
 
+        // The fixture's setup has already confirmed the feed is on, so a missing composer is a
+        // fault rather than a precondition — and ignoring here would hide exactly the regression
+        // this test exists to catch.
         var composer = Main.GetByTestId("place-composer");
-        if (await composer.CountAsync() == 0)
-            Assert.Ignore("the feed is switched off on this database, so a place takes no posts");
+        await Expect(composer).ToBeVisibleAsync(new() { Timeout = 30_000 });
 
         // Unique, so the assertions cannot pass on somebody else's post from an earlier run.
         var said = $"Cold spot on the stair {Guid.NewGuid():N}"[..40];
@@ -161,9 +118,11 @@ public class PlacePostsTests : BenTestBase
         if (!await OpenSeededPlaceAsync(UserEmail, UserPassword))
             Assert.Ignore("the seeded landmark this walks is not on this database");
 
+        // The fixture's setup has already confirmed the feed is on, so a missing composer is a
+        // fault rather than a precondition — and ignoring here would hide exactly the regression
+        // this test exists to catch.
         var composer = Main.GetByTestId("place-composer");
-        if (await composer.CountAsync() == 0)
-            Assert.Ignore("the feed is switched off on this database, so a place takes no posts");
+        await Expect(composer).ToBeVisibleAsync(new() { Timeout = 30_000 });
 
         var said = $"Only about this place {Guid.NewGuid():N}"[..40];
         var box = composer.GetByRole(AriaRole.Textbox).First;
@@ -192,12 +151,6 @@ public class PlacePostsTests : BenTestBase
     {
         if (!await OpenSeededPlaceAsync(MemberEmail, MemberPassword))
             Assert.Ignore("the seeded landmark this walks is not on this database");
-
-        if (await Main.GetByTestId("place-composer").CountAsync() == 0
-            && await Main.GetByTestId("place-posts").CountAsync() == 0)
-        {
-            Assert.Ignore("the feed is switched off on this database, so a place takes no posts");
-        }
 
         await Expect(Main.GetByTestId("place-composer")).ToBeVisibleAsync(new() { Timeout = 20_000 });
     }

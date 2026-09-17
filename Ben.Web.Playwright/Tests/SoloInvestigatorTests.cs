@@ -35,64 +35,28 @@ public class SoloInvestigatorTests : BenTestBase
 {
     private const string SeededPlace = "40000001-0000-0000-0000-000000000001";
     private const string SeededPlaceName = "Bell Witch Cave";
-    private const string FeedFlag = "features.public-feed";
+    private static bool? _feedWasOn;
 
-    private static bool _wasAlreadyOn;
-
-    /// <summary>Place posts are feed posts, so the box only exists when the feed is on.</summary>
+    /// <summary>
+    /// Turns the feed on and waits until the service agrees. Place posts are feed posts, so
+    /// nothing here exists without it.
+    /// </summary>
+    /// <remarks>
+    /// Ignores the whole fixture when the switch cannot be arranged — a missing precondition, not
+    /// a finding. Setting it and starting to click was a race, and a race that loses quietly: the
+    /// composer does not render and the tests time out looking for an element whose absence is
+    /// correct.
+    /// </remarks>
     [OneTimeSetUp]
     public async Task TurnTheFeedOn()
     {
-        var token = await AdminTokenAsync();
-        if (token is null) return;
-
-        using (var http = new HttpClient { BaseAddress = new Uri(ApiUrl) })
-        {
-            http.DefaultRequestHeaders.Authorization =
-                new System.Net.Http.Headers.AuthenticationHeaderValue("Bearer", token);
-
-            var settings = await http.GetFromJsonAsync<System.Text.Json.JsonElement>("/api/admin/site-settings");
-            foreach (var setting in settings.EnumerateArray())
-            {
-                if (setting.GetProperty("key").GetString() != FeedFlag) continue;
-                _wasAlreadyOn = setting.TryGetProperty("value", out var value)
-                    && string.Equals(value.GetString(), "true", StringComparison.OrdinalIgnoreCase);
-            }
-        }
-
-        await SetFeedAsync(token, on: true);
+        _feedWasOn = await TurnTheFeedOnAsync();
+        if (_feedWasOn is null)
+            Assert.Ignore("The public feed could not be switched on, so a place takes no posts here.");
     }
 
     [OneTimeTearDown]
-    public async Task PutTheFeedBack()
-    {
-        var token = await AdminTokenAsync();
-        if (token is not null) await SetFeedAsync(token, on: _wasAlreadyOn);
-    }
-
-    private static async Task<string?> AdminTokenAsync()
-    {
-        using var http = new HttpClient { BaseAddress = new Uri(ApiUrl), Timeout = TimeSpan.FromSeconds(30) };
-        try
-        {
-            using var response = await http.PostAsJsonAsync("/login",
-                new { email = SuperAdminEmail, password = SuperAdminPassword });
-            if (!response.IsSuccessStatusCode) return null;
-
-            var json = await response.Content.ReadFromJsonAsync<System.Text.Json.JsonElement>();
-            return json.GetProperty("accessToken").GetString();
-        }
-        catch (HttpRequestException) { return null; }
-    }
-
-    private static async Task SetFeedAsync(string token, bool on)
-    {
-        using var http = new HttpClient { BaseAddress = new Uri(ApiUrl), Timeout = TimeSpan.FromSeconds(30) };
-        http.DefaultRequestHeaders.Authorization =
-            new System.Net.Http.Headers.AuthenticationHeaderValue("Bearer", token);
-        using var _ = await http.PutAsJsonAsync(
-            $"/api/admin/site-settings/{FeedFlag}", new { value = on ? "true" : "false" });
-    }
+    public Task PutTheFeedBack() => PutTheFeedBackAsync(_feedWasOn);
 
     private async Task<bool> OpenTheLandmarkAsync()
     {
@@ -203,9 +167,11 @@ public class SoloInvestigatorTests : BenTestBase
         if (!await OpenTheLandmarkAsync())
             Assert.Ignore("the seeded landmark this walks is not on this database");
 
+        // The fixture's setup has already confirmed the feed is on, so a missing composer is a
+        // fault rather than a precondition — and ignoring here would hide exactly the regression
+        // this test exists to catch.
         var composer = Main.GetByTestId("place-composer");
-        if (await composer.CountAsync() == 0)
-            Assert.Ignore("the feed is switched off on this database, so a place takes no posts");
+        await Expect(composer).ToBeVisibleAsync(new() { Timeout = 30_000 });
 
         var said = $"First visit for me {Guid.NewGuid():N}"[..36];
         await composer.Locator("textarea").First.FillAsync(said);
