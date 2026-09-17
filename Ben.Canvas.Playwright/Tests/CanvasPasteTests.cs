@@ -197,19 +197,19 @@ public sealed class CanvasPasteTests(DeviceKind device) : CanvasTestBase(device)
         var before = await WorldRectAsync(card);
         await Board.FocusAsync();
 
-        await Page.Keyboard.PressAsync("Control+c");
+        await Page.Keyboard.PressAsync("ControlOrMeta+c");
         var clip = await Page.EvaluateAsync<string>("() => navigator.clipboard.readText()");
         Assert.That(clip, Does.StartWith("{\"$ishcanvas\""));
         await Expect(Board).ToBeFocusedAsync();
 
-        await Page.Keyboard.PressAsync("Control+v");
+        await Page.Keyboard.PressAsync("ControlOrMeta+v");
         await Expect(Nodes).ToHaveCountAsync(2);
         var copy = Page.Locator(".bc-node[data-bc-selected]");
         var after = await WorldRectAsync(copy);
         Assert.That(after.X - before.X, Is.EqualTo(24).Within(1));
         Assert.That(after.Y - before.Y, Is.EqualTo(24).Within(1));
 
-        await Page.Keyboard.PressAsync("Control+z");
+        await Page.Keyboard.PressAsync("ControlOrMeta+z");
         await Expect(Nodes).ToHaveCountAsync(1);
     }
 
@@ -221,11 +221,11 @@ public sealed class CanvasPasteTests(DeviceKind device) : CanvasTestBase(device)
         await AddNodeAsync("text");
         await Board.FocusAsync();
 
-        await Page.Keyboard.PressAsync("Control+x");
+        await Page.Keyboard.PressAsync("ControlOrMeta+x");
         await Expect(Nodes).ToHaveCountAsync(0);
 
         await Board.FocusAsync();
-        await Page.Keyboard.PressAsync("Control+v");
+        await Page.Keyboard.PressAsync("ControlOrMeta+v");
         await Expect(Page.Locator(".bc-node--text")).ToHaveCountAsync(1);
     }
 

@@ -52,9 +52,9 @@ public sealed class CanvasBlocksTests(DeviceKind device) : CanvasTestBase(device
         await Expect(card).ToContainTextAsync("Yes");
 
         await Board.FocusAsync();
-        await Page.Keyboard.PressAsync("Control+z");
+        await Page.Keyboard.PressAsync("ControlOrMeta+z");
         await Expect(card).Not.ToContainTextAsync("Cold spot by the stairs");
-        await Page.Keyboard.PressAsync("Control+Shift+Z");
+        await Page.Keyboard.PressAsync("ControlOrMeta+Shift+Z");
         await Expect(card).ToContainTextAsync("Cold spot by the stairs");
     }
 
@@ -79,8 +79,8 @@ public sealed class CanvasBlocksTests(DeviceKind device) : CanvasTestBase(device
         var content = message.Locator(".k-editor [contenteditable='true']").First;
         await content.ClickAsync();
         await Page.Keyboard.TypeAsync("Footsteps");
-        await Page.Keyboard.PressAsync("Control+a");
-        await Page.Keyboard.PressAsync("Control+b");
+        await Page.Keyboard.PressAsync("ControlOrMeta+a");
+        await Page.Keyboard.PressAsync("ControlOrMeta+b");
         await Page.WaitForTimeoutAsync(200);
         await Page.Mouse.ClickAsync(700, 120);
         await Expect(message).Not.ToHaveClassAsync(new Regex("bc-node--editing"));
@@ -166,7 +166,7 @@ public sealed class CanvasBlocksTests(DeviceKind device) : CanvasTestBase(device
         await Board.FocusAsync();
         await Page.Keyboard.PressAsync("Delete");
         await Expect(Page.Locator("g.bc-edge")).ToHaveCountAsync(0);
-        await Page.Keyboard.PressAsync("Control+z");
+        await Page.Keyboard.PressAsync("ControlOrMeta+z");
         await Expect(Page.Locator("g.bc-edge")).ToHaveCountAsync(1);
     }
 
@@ -204,8 +204,8 @@ public sealed class CanvasBlocksTests(DeviceKind device) : CanvasTestBase(device
         await DragAsync(b, 120, 60);
 
         await Board.FocusAsync();
-        await Page.Keyboard.PressAsync("Control+a");
-        await Page.Keyboard.PressAsync("Control+g");
+        await Page.Keyboard.PressAsync("ControlOrMeta+a");
+        await Page.Keyboard.PressAsync("ControlOrMeta+g");
         await Expect(Page.Locator(".bc-group")).ToHaveCountAsync(1);
 
         var ra = await WorldRectAsync(a);
@@ -215,7 +215,7 @@ public sealed class CanvasBlocksTests(DeviceKind device) : CanvasTestBase(device
         Assert.That((await WorldRectAsync(b)).X - rb.X, Is.EqualTo(50).Within(3));
 
         await Board.FocusAsync();
-        await Page.Keyboard.PressAsync("Control+z");
+        await Page.Keyboard.PressAsync("ControlOrMeta+z");
         await EventuallyAsync(async () => (await WorldRectAsync(a)).X, ra.X, 1);
         await EventuallyAsync(async () => (await WorldRectAsync(b)).X, rb.X, 1);
     }
@@ -226,14 +226,26 @@ public sealed class CanvasBlocksTests(DeviceKind device) : CanvasTestBase(device
         await StartCleanAsync();
         var a = await AddNodeAsync("card");
         await Board.FocusAsync();
-        await Page.Keyboard.PressAsync("Control+g");
+        await Page.Keyboard.PressAsync("ControlOrMeta+g");
         await Expect(Page.Locator(".bc-group")).ToHaveCountAsync(1);
 
+        // Out of the group first, and said out loud: a note that was already inside it would make
+        // the membership assertion below prove nothing. Both drags are computed from where the
+        // group and the note actually are — the old pair used a fixed 250 px and a hand-written 46
+        // px for the label's height, which stopped landing inside the group once added blocks
+        // began looking for clear ground rather than cascading (2026-09-17).
         var outsider = await AddNodeAsync("text");
-        await DragAsync(outsider, 0, 250);
         var group = (await Page.Locator(".bc-group").BoundingBoxAsync())!;
+        var outside = (await outsider.BoundingBoxAsync())!;
+        await DragAsync(outsider, 0, group.Y + group.Height + 80 - outside.Y);
+        await Expect(outsider).Not.ToHaveAttributeAsync("aria-label", new Regex("in group"));
+
+        // Then in, with the grab point itself put at the middle of the group.
+        group = (await Page.Locator(".bc-group").BoundingBoxAsync())!;
         var ob = (await outsider.BoundingBoxAsync())!;
-        await DragAsync(outsider, group.X + group.Width / 2 - (ob.X + ob.Width / 2), group.Y + group.Height / 2 - 46 - (ob.Y + 14));
+        await DragAsync(outsider,
+                        group.X + group.Width / 2 - (ob.X + ob.Width / 2),
+                        group.Y + group.Height / 2 - (ob.Y + Math.Min(16, ob.Height / 2)));
         await Expect(outsider).ToHaveAttributeAsync("aria-label", new Regex("in group"));
 
         var before = await WorldRectAsync(outsider);
@@ -247,7 +259,7 @@ public sealed class CanvasBlocksTests(DeviceKind device) : CanvasTestBase(device
         await StartCleanAsync();
         await AddNodeAsync("card");
         await Board.FocusAsync();
-        await Page.Keyboard.PressAsync("Control+g");
+        await Page.Keyboard.PressAsync("ControlOrMeta+g");
         await Page.ClickAsync(".bc-group__label");
         await Board.FocusAsync();
         await Page.Keyboard.PressAsync("F2");

@@ -142,7 +142,7 @@ public sealed class BlocksWalk : PageTest
         await map.ClickAsync();
         await image.ClickAsync(new() { Modifiers = [KeyboardModifier.Shift] });
         await board.FocusAsync();
-        await page.Keyboard.PressAsync("Control+g");
+        await page.Keyboard.PressAsync("ControlOrMeta+g");
         await page.Locator(".bc-group").WaitForAsync();
         await page.Keyboard.PressAsync("F2");
         if (await page.Locator(".bc-group__input").CountAsync() > 0)

@@ -94,9 +94,9 @@ public sealed class CanvasEditingTests(DeviceKind device) : CanvasTestBase(devic
 
         await Expect(Page.Locator(".bc-header [data-bc-action='undo']")).ToHaveAttributeAsync("title", new System.Text.RegularExpressions.Regex("^Undo move"));
         await Board.FocusAsync();
-        await Page.Keyboard.PressAsync("Control+z");
+        await Page.Keyboard.PressAsync("ControlOrMeta+z");
         await EventuallyAsync(async () => (await WorldRectAsync(card)).X, start.X, 1);
-        await Page.Keyboard.PressAsync("Control+Shift+Z");
+        await Page.Keyboard.PressAsync("ControlOrMeta+Shift+Z");
         await EventuallyAsync(async () => (await WorldRectAsync(card)).X, moved.X, 1);
     }
 
@@ -233,7 +233,7 @@ public sealed class CanvasEditingTests(DeviceKind device) : CanvasTestBase(devic
         await StartCleanAsync();
         var card = await AddNodeAsync("card");
         await Board.FocusAsync();
-        await Page.Keyboard.PressAsync("Control+Shift+L");
+        await Page.Keyboard.PressAsync("ControlOrMeta+Shift+L");
         await Expect(card).ToHaveAttributeAsync("data-bc-locked", "true");
         var before = await WorldRectAsync(card);
 
@@ -252,7 +252,7 @@ public sealed class CanvasEditingTests(DeviceKind device) : CanvasTestBase(devic
         await Board.FocusAsync();
         await Page.Keyboard.PressAsync("Delete");
         await Expect(Nodes).ToHaveCountAsync(0);
-        await Page.Keyboard.PressAsync("Control+z");
+        await Page.Keyboard.PressAsync("ControlOrMeta+z");
         await Expect(Nodes).ToHaveCountAsync(1);
     }
 
@@ -285,7 +285,7 @@ public sealed class CanvasEditingTests(DeviceKind device) : CanvasTestBase(devic
         await Board.FocusAsync();
         var downloaded = false;
         Page.Download += (_, _) => downloaded = true;
-        await Page.Keyboard.PressAsync("Control+s");
+        await Page.Keyboard.PressAsync("ControlOrMeta+s");
         await Page.WaitForTimeoutAsync(300);
         Assert.That(downloaded, Is.False);
         await AddNodeAsync("card");
@@ -300,7 +300,7 @@ public sealed class CanvasEditingTests(DeviceKind device) : CanvasTestBase(devic
         var card = await AddNodeAsync("card");
         await DragAsync(card, 60, 40);
         await Board.FocusAsync();
-        await Page.Keyboard.PressAsync("Control+z");
+        await Page.Keyboard.PressAsync("ControlOrMeta+z");
         Assert.That(errors, Is.Empty, string.Join("\n", errors));
     }
 }

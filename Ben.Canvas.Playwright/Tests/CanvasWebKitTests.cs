@@ -36,17 +36,25 @@ public sealed class CanvasWebKitTests(string device) : PlaywrightTest
     [SetUp]
     public async Task OpenWebKitAsync()
     {
-        var installed = Directory.Exists(Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData) + "\\ms-playwright")
-                        && Directory.EnumerateDirectories(Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData) + "\\ms-playwright", "webkit-*").Any();
-        if (!installed) Assert.Ignore("WebKit not installed: run playwright.ps1 install webkit.");
-
         using (var probe = new HttpClient { Timeout = TimeSpan.FromSeconds(5) })
         {
             try { (await probe.GetAsync($"{CanvasUrl}/_framework/dotnet.js")).EnsureSuccessStatusCode(); }
             catch (Exception ex) when (ex is HttpRequestException or TaskCanceledException) { Assert.Ignore($"Canvas host not running at {CanvasUrl}."); }
         }
 
-        _browser = await Playwright.Webkit.LaunchAsync();
+        // Ask Playwright for the browser and believe what it says. This used to look for a folder
+        // under LocalApplicationData with a backslash in the path — true on Windows, where the suite
+        // was written, and never true on a Mac, where the browsers live under ~/Library/Caches. So
+        // every WebKit test skipped itself on this machine, and a run with the iPhone and iPad
+        // engines never exercised at all still reported a pass (2026-09-17).
+        try
+        {
+            _browser = await Playwright.Webkit.LaunchAsync();
+        }
+        catch (PlaywrightException ex)
+        {
+            Assert.Ignore($"WebKit is not installed — install it and run again. {ex.Message}");
+        }
         var options = new BrowserNewContextOptions(Playwright.Devices[Phone ? "iPhone 13" : "iPad (gen 7)"])
         {
             ViewportSize = Phone ? new() { Width = 375, Height = 812 } : new() { Width = 768, Height = 1024 },

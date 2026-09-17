@@ -35,6 +35,26 @@ Start the host first; with it stopped every test reports Ignored with the comman
 dotnet run --project Messenger/Ben.Wasm.Canvas --urls http://localhost:5125
 ```
 
+## Two things that made this suite lie on a Mac
+
+Both were written on Windows and both failed silently — as a skip, or as a test that could never
+pass — which reads as a pass either way (2026-09-17).
+
+- **Keyboard shortcuts use `ControlOrMeta`, never `Control`.** The canvas is Blazor WebAssembly: it
+  runs on the visitor's machine, so copy, cut, paste, select-all and bold are whatever that platform
+  binds them to. `Control+c` on a Mac arms the editor's own handler and never triggers the browser's
+  copy command, so the clipboard stays empty and the test fails on an assertion about the board. The
+  app itself has always accepted either modifier (`e.ctrlKey || e.metaKey`); only the tests were
+  one-sided.
+- **Ask Playwright whether a browser is installed.** The WebKit fixtures used to look for a folder
+  under `LocalApplicationData` with a backslash in the path, which is never there on a Mac, so all
+  eighteen skipped with "WebKit not installed" however many times you installed it. They now try to
+  launch it and skip only if that fails. Install it with the bundled driver rather than `pwsh`:
+
+```bash
+bin/Debug/net10.0/.playwright/node/darwin-arm64/node bin/Debug/net10.0/.playwright/package/cli.js install webkit
+```
+
 ## Categories
 
 Shell, Layout, Editing, Persistence, Touch, Paste, Server, Capture.
