@@ -66,6 +66,12 @@
                                     {
                                         <BenGridAction Icon="check" Label="Approve" Tone="GridActionTone.Success" OnClick="@(() => ApproveBrandAsync(row.Id))" Disabled="@_busy" />
                                     }
+                                    @* Ben's question was "what happens when I try to change
+                                       Samsung to Sansung?" The server could rename and merge from
+                                       the day that was asked, and no button ever called either —
+                                       so a typo was permanently unfixable, because delete is
+                                       refused while anything references the row (2026-09-17). *@
+                                    <BenGridAction Icon="edit-2" Label="Rename" OnClick="@(() => OpenRenameBrand(row))" Disabled="@_busy" />
                                     <BenGridAction Icon="x" Label="Reject" Tone="GridActionTone.Danger" OnClick="@(() => RejectBrandAsync(row.Id))" Disabled="@_busy" />
                                 </div>
                             </Template>
@@ -108,6 +114,7 @@
                                     {
                                         <BenGridAction Icon="check" Label="Approve" Tone="GridActionTone.Success" OnClick="@(() => ApproveModelAsync(row.Id))" Disabled="@_busy" />
                                     }
+                                    <BenGridAction Icon="edit-2" Label="Rename" OnClick="@(() => OpenRenameModel(row))" Disabled="@_busy" />
                                     <BenGridAction Icon="x" Label="Reject" Tone="GridActionTone.Danger" OnClick="@(() => RejectModelAsync(row.Id))" Disabled="@_busy" />
                                 </div>
                             </Template>
@@ -194,6 +201,53 @@
     </ChildContent>
 </BenModal>
 
+@* ── Rename, and the merge a taken name would take (2026-09-17 audit) ──────
+   One dialog for both brands and models: the two answer the same 409 with the same
+   TaxonomyMergeOffer, and a second copy of this wording would be a second copy of the only
+   warning anybody gets before two rows become one. *@
+<BenModal @bind-Visible="@_renameVisible" Title="@($"Rename {_renameKindLabel}")">
+    <ChildContent>
+        <div class="mb-3">
+            <label class="form-label fw-semibold" for="equipment-rename-name">New name</label>
+            <input id="equipment-rename-name" class="form-control" maxlength="100" value="@_renameName"
+                   @oninput="@(e => { _renameName = e.Value?.ToString() ?? string.Empty; _renameOffer = null; })" />
+            <div class="form-text">
+                The address for this @_renameKindLabel follows the corrected name.
+            </div>
+        </div>
+
+        @if (_renameError is not null)
+        {
+            <div class="alert alert-danger" data-testid="equipment-rename-error">@_renameError</div>
+        }
+
+        @if (_renameOffer is { } offer)
+        {
+            <div class="alert alert-warning" data-testid="equipment-merge-offer">
+                <div class="mb-2">@offer.Message</div>
+                <div class="d-flex gap-2 flex-wrap">
+                    <button type="button" class="btn btn-warning btn-sm" disabled="@_busy"
+                            data-testid="equipment-merge-accept"
+                            @onclick="AcceptEquipmentMergeAsync">
+                        @(_busy ? "Merging…" : $"Merge into \"{offer.TargetName}\"")
+                    </button>
+                    <button type="button" class="btn btn-outline-secondary btn-sm" disabled="@_busy"
+                            @onclick="@(() => _renameOffer = null)">
+                        Keep both — I'll pick another name
+                    </button>
+                </div>
+            </div>
+        }
+
+        <div class="dialog-footer-actions">
+            <span class="dialog-footer-spacer"></span>
+            <button type="button" class="btn btn-secondary" @onclick="CloseRename" disabled="@_busy">Cancel</button>
+            <button type="button" class="btn btn-primary" @onclick="SaveRenameAsync"
+                    disabled="@(_busy || string.IsNullOrWhiteSpace(_renameName))">Save</button>
+        </div>
+    </ChildContent>
+</BenModal>
+
 @code {
     private List<EquipmentBrandRecord> _brands = [];
     private List<EquipmentModelRecord> _models = [];
@@ -204,6 +258,109 @@
     private LoadResult<EquipmentBrandRecord> _taxonomyResult;
     private bool _busy;
     private string? _error;
+
+    // ── Renaming a brand or a model (2026-09-17 audit) ───────────────────────
+    //
+    // Four server routes existed with no caller: rename and merge, for brands and for models. So
+    // a make or model name typed wrong stayed wrong — delete is refused while anything references
+    // the row, and nothing could rename. One dialog serves both because both answer a taken name
+    // with the same TaxonomyMergeOffer.
+
+    private bool _renameVisible;
+    private bool _renameIsBrand;
+    private Guid _renameId;
+    private string _renameName = string.Empty;
+    private string? _renameError;
+    private TaxonomyMergeOffer? _renameOffer;
+
+    private string _renameKindLabel => _renameIsBrand ? "brand" : "model";
+
+    private void OpenRenameBrand(EquipmentBrandRecord row)
+    {
+        _renameIsBrand = true;
+        _renameId = row.Id;
+        _renameName = row.Name;
+        _renameError = null;
+        _renameOffer = null;
+        _renameVisible = true;
+    }
+
+    private void OpenRenameModel(EquipmentModelRecord row)
+    {
+        _renameIsBrand = false;
+        _renameId = row.Id;
+        _renameName = row.Name;
+        _renameError = null;
+        _renameOffer = null;
+        _renameVisible = true;
+    }
+
+    private void CloseRename()
+    {
+        _renameVisible = false;
+        // Cleared with the dialog, or the next row opens carrying the last one's offer.
+        _renameOffer = null;
+        _renameError = null;
+    }
+
+    private async Task SaveRenameAsync()
+    {
+        if (string.IsNullOrWhiteSpace(_renameName)) return;
+
+        _busy = true;
+        _renameError = null;
+        _renameOffer = null;
+        try
+        {
+            if (_renameIsBrand)
+            {
+                var (result, error, offer) = await AdminClient.RenameEquipmentBrandAsync(
+                    _renameId, new UpsertEquipmentBrandRequest(_renameName.Trim()));
+
+                if (offer is not null) { _renameOffer = offer; return; }
+                if (result is null) { _renameError = error ?? "The rename could not be saved."; return; }
+            }
+            else
+            {
+                var (result, error, offer) = await AdminClient.RenameEquipmentModelAsync(
+                    _renameId, new RenameEquipmentModelRequest(_renameName.Trim()));
+
+                if (offer is not null) { _renameOffer = offer; return; }
+                if (result is null) { _renameError = error ?? "The rename could not be saved."; return; }
+            }
+
+            CloseRename();
+            await LoadAsync();
+        }
+        finally { _busy = false; }
+    }
+
+    /// <summary>
+    /// Takes the merge the server offered instead of the rename.
+    /// </summary>
+    /// <remarks>
+    /// Merge can still refuse, with a sentence rather than a shape, when the direction would lose
+    /// an approved name for an unapproved one — somebody correcting "Sansung" usually has the two
+    /// the wrong way round. That refusal is shown where the offer was.
+    /// </remarks>
+    private async Task AcceptEquipmentMergeAsync()
+    {
+        if (_renameOffer is not { } offer) return;
+
+        _busy = true;
+        try
+        {
+            var (ok, error) = _renameIsBrand
+                ? await AdminClient.MergeEquipmentBrandAsync(offer.SourceId, offer.TargetId)
+                : await AdminClient.MergeEquipmentModelAsync(offer.SourceId, offer.TargetId);
+
+            if (!ok) { _renameError = error ?? "The merge could not be completed."; return; }
+
+            CloseRename();
+            await LoadAsync();
+        }
+        finally { _busy = false; }
+    }
 
     private bool _categoryEditorVisible;
     private EquipmentCategoryRecord? _editingCategory;

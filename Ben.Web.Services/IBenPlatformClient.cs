@@ -297,7 +297,19 @@ public interface IBenPlatformClient
     Task<ExperienceCategoryRecord?> ApproveExperienceCategoryAsync(Guid id, CancellationToken token = default);
 
     Task<ExperienceTypeRecord?> CreateExperienceTypeAsync(Guid categoryId, UpsertExperienceTypeRequest request, CancellationToken token = default);
-    Task<ExperienceTypeRecord?> UpdateExperienceTypeAsync(Guid categoryId, Guid id, UpsertExperienceTypeRequest request, CancellationToken token = default);
+    /// <summary>
+    /// Renames a type, or comes back with the merge it would take to use that name.
+    /// </summary>
+    /// <remarks>
+    /// The server answers a name clash with a 409 carrying a <see cref="TaxonomyMergeOffer"/> —
+    /// "that name already exists; merging moves everything across and cannot be undone". The
+    /// adapter discarded it and the page said "Save failed", so the offer was written, sent, and
+    /// never seen; the endpoint that ACCEPTS it had no caller at all (2026-09-17 audit).
+    /// </remarks>
+    Task<(ExperienceTypeRecord? Result, string? Error, TaxonomyMergeOffer? Offer)> UpdateExperienceTypeAsync(Guid categoryId, Guid id, UpsertExperienceTypeRequest request, CancellationToken token = default);
+
+    /// <summary>Folds one experience type into another in the same category. Not undoable.</summary>
+    Task<(bool Ok, string? Error)> MergeExperienceTypeAsync(Guid categoryId, Guid id, Guid targetId, CancellationToken token = default);
     Task<bool> DeleteExperienceTypeAsync(Guid categoryId, Guid id, CancellationToken token = default);
     Task<ExperienceTypeRecord?> ApproveExperienceTypeAsync(Guid categoryId, Guid id, CancellationToken token = default);
 

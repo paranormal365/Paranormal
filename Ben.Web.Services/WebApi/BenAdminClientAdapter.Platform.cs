@@ -364,8 +364,21 @@ public sealed partial class BenAdminClientAdapter
     public Task<ExperienceTypeRecord?> CreateExperienceTypeAsync(Guid categoryId, UpsertExperienceTypeRequest request, CancellationToken token = default)
         => _api.PostAsync<UpsertExperienceTypeRequest, ExperienceTypeRecord>($"/api/admin/experience-categories/{categoryId}/types", request, token);
 
-    public Task<ExperienceTypeRecord?> UpdateExperienceTypeAsync(Guid categoryId, Guid id, UpsertExperienceTypeRequest request, CancellationToken token = default)
-        => _api.PutAsync<UpsertExperienceTypeRequest, ExperienceTypeRecord>($"/api/admin/experience-categories/{categoryId}/types/{id}", request, token);
+    public Task<(ExperienceTypeRecord? Result, string? Error, TaxonomyMergeOffer? Offer)> UpdateExperienceTypeAsync(Guid categoryId, Guid id, UpsertExperienceTypeRequest request, CancellationToken token = default)
+        => _api.SendExpectingConflictAsync<UpsertExperienceTypeRequest, ExperienceTypeRecord, TaxonomyMergeOffer>(
+               HttpMethod.Put, $"/api/admin/experience-categories/{categoryId}/types/{id}", request, token);
+
+    public async Task<(bool Ok, string? Error)> MergeExperienceTypeAsync(Guid categoryId, Guid id, Guid targetId, CancellationToken token = default)
+    {
+        // Merge answers 204, and refuses with a 409 carrying a SENTENCE (not a shape) when the
+        // direction would lose a reviewed name. SendExpectingReasonAsync recovers exactly that.
+        var (_, error) = await _api.SendExpectingReasonAsync<object, object>(
+            HttpMethod.Post,
+            $"/api/admin/experience-categories/{categoryId}/types/{id}/merge-into/{targetId}",
+            new { }, token);
+
+        return (error is null, error);
+    }
 
     public Task<bool> DeleteExperienceTypeAsync(Guid categoryId, Guid id, CancellationToken token = default)
         => _api.DeleteAsync($"/api/admin/experience-categories/{categoryId}/types/{id}", token);
