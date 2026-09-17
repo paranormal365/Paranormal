@@ -568,9 +568,21 @@ else
         finally { _saving = false; }
     }
 
+    // ── Removing things, checked ──────────────────────────────────────────────
+    //
+    // All four of these used to discard the result and rebuild local state regardless
+    // (2026-09-17 audit), so a refused removal showed the section, the cited file or the citation
+    // as gone while the report a client is about to read still carried it. The publish and add
+    // paths in this same file always checked; only the removals did not.
+
     private async Task DeleteReport(Guid reportId)
     {
-        await AdminClient.DeleteCaseReportAsync(OrgId, CaseId, reportId);
+        if (!await AdminClient.DeleteCaseReportAsync(OrgId, CaseId, reportId))
+        {
+            _error = "That report could not be deleted, so it is still here.";
+            return;
+        }
+
         _reports.RemoveAll(r => r.Id == reportId);
     }
 
@@ -611,14 +623,24 @@ else
     private async Task RemoveSection(Guid sectionId)
     {
         if (_editingReport is null) return;
-        await AdminClient.DeleteReportSectionAsync(OrgId, CaseId, _editingReport.Id, sectionId);
+        if (!await AdminClient.DeleteReportSectionAsync(OrgId, CaseId, _editingReport.Id, sectionId))
+        {
+            _error = "That section could not be removed, so it is still in the report.";
+            return;
+        }
+
         _editingReport = _editingReport with { Sections = _editingReport.Sections.Where(s => s.Id != sectionId).ToList() };
     }
 
     private async Task RemoveSectionFile(Guid sectionId, Guid fileId)
     {
         if (_editingReport is null) return;
-        await AdminClient.RemoveReportSectionFileAsync(OrgId, CaseId, _editingReport.Id, sectionId, fileId);
+        if (!await AdminClient.RemoveReportSectionFileAsync(OrgId, CaseId, _editingReport.Id, sectionId, fileId))
+        {
+            _error = "That file could not be removed, so the report still cites it.";
+            return;
+        }
+
         var updatedSections = _editingReport.Sections.Select(s => s.Id != sectionId ? s
             : s with { Files = s.Files.Where(f => f.Id != fileId).ToList() }).ToList();
         _editingReport = _editingReport with { Sections = updatedSections };
@@ -672,7 +694,13 @@ else
     {
         if (_editingReport is null) return;
         // Removes the citation. The session itself stays exactly where it was uploaded.
-        await AdminClient.RemoveReportSectionFieldSessionAsync(OrgId, CaseId, _editingReport.Id, sectionId, linkId);
+        if (!await AdminClient.RemoveReportSectionFieldSessionAsync(
+                OrgId, CaseId, _editingReport.Id, sectionId, linkId))
+        {
+            _error = "That citation could not be removed, so the report still points at the session.";
+            return;
+        }
+
         var updated = _editingReport.Sections.Select(s => s.Id != sectionId ? s
             : s with { FieldSessions = s.FieldSessions.Where(f => f.Id != linkId).ToList() }).ToList();
         _editingReport = _editingReport with { Sections = updated };

@@ -200,7 +200,19 @@
         _savedMessage = null;
         try
         {
-            await AdminClient.UpdateClientAcceptanceAsync(OrgId, _isAcceptingClients, _acceptsOutsideRange);
+            // A green "Saved." on a discarded bool (2026-09-17 audit). The transport returns false
+            // on a refusal rather than throwing, so the catch below never fired on the 403 this
+            // endpoint actually returns — and a refusal here is a DESIGNED-FOR event, not a
+            // hypothetical: StartGroupPage documents that a brand-new group is on the free lane
+            // where the paid gate turns away any attempt to open membership applications.
+            if (!await AdminClient.UpdateClientAcceptanceAsync(
+                    OrgId, _isAcceptingClients, _acceptsOutsideRange))
+            {
+                _error = "That setting could not be saved, so nothing has changed. "
+                       + "If your group is on the free plan, taking on clients is part of a paid one.";
+                return;
+            }
+
             _savedMessage = _isAcceptingClients
                 ? "Saved. Clients can find this group once an operating area is set."
                 : "Saved. This group is hidden from client searches.";
@@ -228,7 +240,13 @@
         _isBusy = true;
         try
         {
-            await AdminClient.DeleteOrgAreaOfOperationAsync(OrgId);
+            // Checked for the same reason as the acceptance save above: a discarded false left
+            // the area looking deleted while it was still serving client searches.
+            if (!await AdminClient.DeleteOrgAreaOfOperationAsync(OrgId))
+            {
+                _error = "That operating area could not be removed, so it is still in place.";
+                return;
+            }
             _area = null;
             _showDeleteConfirm = false;
             await OnChanged.InvokeAsync();

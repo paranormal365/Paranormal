@@ -424,11 +424,13 @@ public sealed partial class BenAdminClientAdapter
     public Task<ClientCaseDetail?> GetMyCaseAsync(Guid caseId, CancellationToken token = default)
         => _api.GetAsync<ClientCaseDetail>($"/api/my-cases/{caseId}", token);
 
-    public Task<CaseTimelineEntryRecord?> LogOccurrenceAsync(Guid caseId, LogOccurrenceRequest request, CancellationToken token = default)
-        => _api.PostAsync<LogOccurrenceRequest, CaseTimelineEntryRecord>($"/api/my-cases/{caseId}/occurrences", request, token);
+    public Task<(CaseTimelineEntryRecord? Result, string? Error)> LogOccurrenceAsync(Guid caseId, LogOccurrenceRequest request, CancellationToken token = default)
+        => _api.SendExpectingReasonAsync<LogOccurrenceRequest, CaseTimelineEntryRecord>(
+               HttpMethod.Post, $"/api/my-cases/{caseId}/occurrences", request, token);
 
-    public Task<CaseTimelineEntryRecord?> UpdateOccurrenceAsync(Guid caseId, Guid entryId, LogOccurrenceRequest request, CancellationToken token = default)
-        => _api.PutAsync<LogOccurrenceRequest, CaseTimelineEntryRecord>($"/api/my-cases/{caseId}/occurrences/{entryId}", request, token);
+    public Task<(CaseTimelineEntryRecord? Result, string? Error)> UpdateOccurrenceAsync(Guid caseId, Guid entryId, LogOccurrenceRequest request, CancellationToken token = default)
+        => _api.SendExpectingReasonAsync<LogOccurrenceRequest, CaseTimelineEntryRecord>(
+               HttpMethod.Put, $"/api/my-cases/{caseId}/occurrences/{entryId}", request, token);
 
     public Task<bool> DeleteOccurrenceAsync(Guid caseId, Guid entryId, CancellationToken token = default)
         => _api.DeleteAsync($"/api/my-cases/{caseId}/occurrences/{entryId}", token);

@@ -804,7 +804,16 @@
         _isBusy = true;
         try
         {
-            await AdminClient.CancelInvestigationByOrgAsync(OrgId, CaseId, _editInv.Id);
+            // Checked, like DeleteInvestigation twelve lines below — whose comment records this
+            // exact bug being fixed for the delete and not for the cancel (2026-09-17 audit).
+            // A discarded false closed the dialog and reloaded as though the visit had been
+            // cancelled, while the client and every attendee still had it in their calendar.
+            if (!await AdminClient.CancelInvestigationByOrgAsync(OrgId, CaseId, _editInv.Id))
+            {
+                _dialogError = "This visit could not be cancelled, so it is still scheduled.";
+                return;
+            }
+
             _showDialog = false;
             await LoadAsync();
         }

@@ -347,6 +347,12 @@
                 <label class="form-label">Visibility</label>
                 <BenSelect Data="@_visibilityOptions" @bind-Value="@_shareVisibility" TextField="Label" ValueField="Value" Width="100%" />
             </div>
+            @* Sharing is a consent decision, so a refusal has to be said. This dialog had no
+               error slot at all and closed on a discarded result (2026-09-17 audit). *@
+            @if (_shareError is not null)
+            {
+                <div class="alert alert-danger py-2 mb-0">@_shareError</div>
+            }
         }
             <div class="dialog-footer-actions">
             <span class="dialog-footer-spacer"></span>
@@ -393,6 +399,7 @@
 
     // Share dialog
     private bool _showShareDialog;
+    private string? _shareError;
     private UploadFileRecord? _sharingFile;
     private Guid _shareOrgId;
     private FileShareVisibility _shareVisibility = FileShareVisibility.OrgAdminsOnly;
@@ -820,9 +827,22 @@
     {
         if (_sharingFile is null) return;
 
+        _shareError = null;
+
         // Who's sharing is now derived server-side from the caller's own token, not sent here.
-        await Api.ShareFileWithOrgAsync(_sharingFile.Id, new ShareFileWithOrgRequest(
+        //
+        // The result is READ. Believing a file reached a group's investigators when it did not is
+        // a disclosure-expectation failure rather than a lost click, and this endpoint refuses on
+        // a missing file, a caller who does not own it, and an unset organization — none of which
+        // throws, because the transport maps a refusal to null (2026-09-17 audit).
+        var shared = await Api.ShareFileWithOrgAsync(_sharingFile.Id, new ShareFileWithOrgRequest(
             _shareOrgId, _shareVisibility));
+
+        if (shared is null)
+        {
+            _shareError = "That file was not shared. Choose a group and try again.";
+            return;
+        }
 
         _showShareDialog = false;
     }

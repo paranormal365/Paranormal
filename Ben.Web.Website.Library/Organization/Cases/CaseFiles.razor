@@ -258,9 +258,21 @@ else
         _showCommentSettingsId = null;
     }
 
+    /// <remarks>
+    /// Checked, and the row stays when the server refuses (2026-09-17 audit). The local
+    /// <c>RemoveAll</c> was unconditional with no reload behind it, so a refused delete removed
+    /// the evidence from the list and left it attached to the case — a lie that persisted until
+    /// somebody navigated away.
+    /// </remarks>
     private async Task DeleteFile(Guid caseFileId)
     {
-        await AdminClient.DeleteCaseFileAsync(OrgId, CaseId, caseFileId);
+        if (!await AdminClient.DeleteCaseFileAsync(OrgId, CaseId, caseFileId))
+        {
+            _error = "That file could not be removed, so it is still attached to this case.";
+            StateHasChanged();
+            return;
+        }
+
         _files.RemoveAll(f => f.Id == caseFileId);
         StateHasChanged();
     }

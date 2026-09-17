@@ -174,9 +174,25 @@ else
         finally { _saving = false; StateHasChanged(); }
     }
 
+    /// <summary>
+    /// Takes dates back off the table — and only says so if the server agreed.
+    /// </summary>
+    /// <remarks>
+    /// The status used to be written locally from a discarded bool (2026-09-17 audit), so a
+    /// refused withdrawal read as "Withdrawn" to the group while the dates were still live on the
+    /// client's side. The client could then accept one, and an investigation would be scheduled
+    /// that the group believed it had retracted. Of all the discarded results in this sweep this
+    /// is the one whose consequence lands on somebody else.
+    /// </remarks>
     private async Task Withdraw(Guid proposalId)
     {
-        await AdminClient.WithdrawScheduleProposalAsync(OrgId, CaseId, proposalId);
+        if (!await AdminClient.WithdrawScheduleProposalAsync(OrgId, CaseId, proposalId))
+        {
+            _error = "Those dates could not be withdrawn, so they are still offered to your client.";
+            StateHasChanged();
+            return;
+        }
+
         var idx = _proposals.FindIndex(p => p.Id == proposalId);
         if (idx >= 0) _proposals[idx] = _proposals[idx] with { Status = ScheduleProposalStatus.Withdrawn };
         StateHasChanged();

@@ -163,7 +163,7 @@ public sealed partial class BenAdminClientAdapter
     public Task<bool> ImpersonateUserAsync(Guid targetUserId, string targetUserEmail, CancellationToken token = default)
         => _auth.ImpersonateAsync(targetUserId, targetUserEmail, token);
 
-    public Task StopImpersonatingAsync(CancellationToken token = default)
+    public Task<bool> StopImpersonatingAsync(CancellationToken token = default)
         => _auth.StopImpersonatingAsync(token);
 
     // ── User sub-entity type lists ────────────────────────────────────────────

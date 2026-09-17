@@ -638,10 +638,18 @@
     });
     private void OnLocationChanged(object? sender, LocationChangedEventArgs args) => InvokeAsync(StateHasChanged);
 
+    /// <remarks>
+    /// The identity always comes back — the swap is local state. What can fail is the round trip
+    /// that re-reads the roles, and when it does the SuperAdmin returns without Administration
+    /// access until they sign out and in again. That used to be silent while this navigated
+    /// straight to /admin/users, a page which then refuses them (2026-09-17 audit). Sending them
+    /// home with the reason beats sending them to a refusal with none.
+    /// </remarks>
     private async Task ReturnToSuperAdmin()
     {
-        await AuthService.StopImpersonatingAsync();
-        NavManager.NavigateTo("/admin/users");
+        var restored = await AuthService.StopImpersonatingAsync();
+
+        NavManager.NavigateTo(restored ? "/admin/users" : "/?roles-unconfirmed=1");
         await InvokeAsync(StateHasChanged);
     }
 

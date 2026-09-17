@@ -304,10 +304,21 @@ public interface IBenCaseClient
     Task<ClientCaseDetail?> GetMyCaseAsync(Guid caseId, CancellationToken token = default);
 
     /// <summary>Logs a new occurrence (ClientReport timeline entry) on the client's case.</summary>
-    Task<CaseTimelineEntryRecord?> LogOccurrenceAsync(Guid caseId, LogOccurrenceRequest request, CancellationToken token = default);
+    /// <summary>
+    /// Records what the client says happened, or hands back why it could not be recorded.
+    /// </summary>
+    /// <remarks>
+    /// Returns the reason, not just a null. The transport maps every server refusal to null rather
+    /// than throwing, so the page's <c>catch</c> never saw a 404 or a 400 — and this is the
+    /// client's own account of what is happening in their house, typed once. The 2026-09-17 audit
+    /// found the result discarded entirely: the dialog closed, the list refreshed, and the text
+    /// was gone.
+    /// </remarks>
+    Task<(CaseTimelineEntryRecord? Result, string? Error)> LogOccurrenceAsync(Guid caseId, LogOccurrenceRequest request, CancellationToken token = default);
 
     /// <summary>Updates a previously logged occurrence.</summary>
-    Task<CaseTimelineEntryRecord?> UpdateOccurrenceAsync(Guid caseId, Guid entryId, LogOccurrenceRequest request, CancellationToken token = default);
+    /// <summary>Edits one, or hands back why it could not be edited. See above.</summary>
+    Task<(CaseTimelineEntryRecord? Result, string? Error)> UpdateOccurrenceAsync(Guid caseId, Guid entryId, LogOccurrenceRequest request, CancellationToken token = default);
 
     /// <summary>Deletes a previously logged occurrence.</summary>
     Task<bool> DeleteOccurrenceAsync(Guid caseId, Guid entryId, CancellationToken token = default);

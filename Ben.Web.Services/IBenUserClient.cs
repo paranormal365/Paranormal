@@ -162,7 +162,11 @@ public interface IBenUserClient
     /// Calls <c>/api/me</c> to re-establish IsSuperAdmin on the restored token — the Identity
     /// API's opaque tokens can't have that claim read back out of them locally.
     /// </remarks>
-    Task StopImpersonatingAsync(CancellationToken token = default);
+    /// <summary>
+    /// Returns to the caller's own identity. False means their roles could not be confirmed —
+    /// see <c>WebApiAuthService.StopImpersonatingAsync</c> (2026-09-17 audit).
+    /// </summary>
+    Task<bool> StopImpersonatingAsync(CancellationToken token = default);
 
     // ── User sub-entity type lists (for dropdowns) ────────────────────────────
 
