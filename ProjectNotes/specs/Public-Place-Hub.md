@@ -568,7 +568,33 @@ The deterministic proof of the door remains the unit test, which needs no seat a
 6. **Help.** `getting-started.md` new section "Investigating on your own" (free = public, plan = yours);
    `the-mobile-apps.md` cross-reference. Changelog.
 
-## Phase 5 — Finishing
+## Phase 5 — Finishing — **DONE 2026-09-17**
+
+1. **Changelog catch-up.** Checked all three streams against `git log` since their last dated
+   heading. Nothing user-visible from today was missing; the internal commits — deploy notes, the
+   plan document itself — are correctly absent. One entry had to be reworded because
+   `ChangelogServiceTests` requires an entry to start as a sentence rather than with bold.
+2. **Pictures and documents.** Four new screens captured through a new
+   `HelpMediaCapture.Capture_Places`: the place page signed in (the load-bearing one — the only page
+   that gathers several groups' work at one location), New Case with the offer showing and the kind
+   choice, the composer on a place's page with a post already saying "at Bell Witch Cave", and the
+   sentence somebody with no group reads first. `HelpMediaReferenceTests` refused the help text until
+   the files existed, which is what made this a step rather than an intention. Product PDF and all
+   six persona PDFs rebuilt.
+   - Two shots went wrong first. Anchoring the New Case shot on the radio input gave a forty-pixel
+     sliver, because `around` grows from the element's own box; it proves itself on the question
+     instead. The dialog shot proved itself on the word "public", which appears several times on the
+     page behind it, so the first match won and nothing was captured; it proves itself on the button.
+3. **The walk.** `ProductWalk` gained a public place as a stranger, the same page as a member, a new
+   case naming a place, and a whole persona — `Somebody_in_no_group` — which nothing covered, because
+   every existing seat is a member, a client, a viewer or an admin and each passes doors Wren does
+   not. Every persona walks clean. Three failed on the first pass and neither failure was the arc:
+   the capture's `finally` had restored the feed switch to off so `/feed` correctly 404s, and a
+   freshly seeded database has no field session to play back.
+4. **Full run and merge.** Solution build clean, `Ben.Web.Tests` 6254/0, `Ben.Canvas.Tests` 927/0,
+   and the whole Playwright suite on a fresh `BEN_E2E_DB` before merging to develop and master.
+
+### As originally planned
 
 1. **Changelog catch-up** against `git log` since each file's last heading.
 2. **Help + pictures + PDFs**: re-shoot the place page (visitor and signed-in), New Case with the
