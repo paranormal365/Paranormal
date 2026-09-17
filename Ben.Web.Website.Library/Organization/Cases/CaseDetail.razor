@@ -314,6 +314,50 @@
             <BenTab Title="Transfers" Id="transfers">
                 <div class="mt-2">
                     <CaseTransferPanel OrgId="@OrgId" CaseId="@CaseId" IsPrivateEngagement="@(_case?.IsPrivateEngagement == true)" />
+
+                    @* Who agreed to publish this case's footage to the feed (2026-09-17 audit).
+
+                       FeedPostConsent is append-only and its entity doc says what it is for:
+                       "When a client asks 'who put this footage up', this row is the answer." The
+                       table was entirely write-only, so the question had no answer anywhere. Shown
+                       here rather than on a page of its own — it is the same kind of fact as a
+                       transfer: something that happened to this case's privacy, recorded, with a
+                       person's name on it.
+
+                       Shown only when there IS one, because a case nobody published to the feed
+                       has nothing to account for. *@
+                    @if (_feedConsents.Count > 0)
+                    {
+                        <div class="mt-4" data-testid="case-feed-consents">
+                            <BenSectionHeading Text="Published to the feed" />
+                            <ul class="list-unstyled mb-0">
+                                @foreach (var consent in _feedConsents)
+                                {
+                                    <li class="border-top pt-2 mt-2">
+                                        <div>
+                                            <strong>@consent.AgreedByDisplayName</strong>
+                                            agreed on
+                                            @consent.AgreedUtc.ToViewerLocalTime(UserState).ToDisplayDateTime()
+                                        </div>
+                                        <div class="text-secondary small">
+                                            @* "Agreed and then took it down" and "nobody ever
+                                               agreed" are different facts; the consent outlives
+                                               the post on purpose, so this says which. *@
+                                            @if (consent.PostExists)
+                                            {
+                                                <text>The post is still up.</text>
+                                            }
+                                            else
+                                            {
+                                                <text>That post is gone; the agreement stands on the record.</text>
+                                            }
+                                            <text> · wording version @consent.WordingVersion</text>
+                                        </div>
+                                    </li>
+                                }
+                            </ul>
+                        </div>
+                    }
                 </div>
             </BenTab>
 
@@ -415,6 +459,16 @@
     private CaseRecord? _case;
 
     /// <summary>
+    /// Recorded agreements to publish this case's footage to the feed (2026-09-17 audit).
+    /// </summary>
+    /// <remarks>
+    /// Empty for almost every case, and the section does not render then. Fetched quietly: an
+    /// accountability record that cannot be reached is not a reason to fail the case page, it is a
+    /// reason for the section to be absent.
+    /// </remarks>
+    private IReadOnlyList<CaseFeedConsentRecord> _feedConsents = [];
+
+    /// <summary>
     /// The client request this case came from, when there is one and the caller may read it.
     /// Null is the normal state for an internally-raised case, so it is not treated as an error.
     /// </summary>
@@ -497,6 +551,11 @@
             catch { /* the banner just carries no count */ }
             StateHasChanged();
         }
+
+        // Quiet for the same reason: no consents is the ordinary answer, and an unreachable one
+        // costs a section rather than the page.
+        try { _feedConsents = (await AdminClient.GetCaseFeedConsentsAsync(OrgId, CaseId)).Items; }
+        catch { _feedConsents = []; }
 
         // Fetched separately and allowed to fail quietly: most cases have one, some don't, and a
         // missing original request should never stop the case page rendering.

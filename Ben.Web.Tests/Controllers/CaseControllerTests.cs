@@ -1123,4 +1123,138 @@ public class CaseControllerTests
         Assert.DoesNotContain("casey", saved.UrlName, StringComparison.OrdinalIgnoreCase);
     }
 
+    // ── Who published this case's footage (2026-09-17 audit) ────────────────────────────────
+    //
+    // FeedPostConsent is append-only and its entity doc states its purpose: "When a client asks
+    // 'who put this footage up', this row is the answer." The whole table was write-only — the
+    // only other references in the tree were two purges — so the question had no answer anywhere.
+
+    private static async Task<Guid> SeedCaseWithConsentAsync(
+        IDbContextFactory<BenDataContext> factory, Guid orgId, Guid userId, bool postStillExists)
+    {
+        await using var db = await factory.CreateDbContextAsync();
+
+        var caseId = Guid.NewGuid();
+        db.Cases.Add(new Case
+        {
+            Id = caseId, OrganizationId = orgId, Title = "A private engagement",
+            CaseYear = 2026, OrgCaseNumber = 7,
+            StreetAddress1 = "1 Elm", City = "Nashville", State = "TN", ZipCode = "37201", Country = "US",
+            IsPrivateEngagement = true,
+            DateCreated = DateTime.UtcNow, CreatedByAppUserId = userId,
+        });
+
+        Guid? postId = null;
+        if (postStillExists)
+        {
+            postId = Guid.NewGuid();
+            db.OrgMessages.Add(new OrgMessage
+            {
+                Id = postId.Value, OrganizationId = orgId, AuthorAppUserId = userId,
+                ChannelType = OrgMessageChannel.PublicFeed, Body = "A render",
+                DateCreated = DateTime.UtcNow, CreatedByAppUserId = userId,
+            });
+        }
+
+        db.FeedPostConsents.Add(new FeedPostConsent
+        {
+            Id = Guid.NewGuid(),
+            OrgMessageId = postId,
+            CaseId = caseId,
+            AgreedByAppUserId = userId,
+            AgreedUtc = DateTime.UtcNow.AddDays(-3),
+            WordingVersion = 1,
+        });
+
+        await db.SaveChangesAsync();
+        return caseId;
+    }
+
+    private static async Task<IReadOnlyList<CaseFeedConsentRecord>> ConsentsAsync(
+        IDbContextFactory<BenDataContext> factory, Guid orgId, Guid caseId, Guid userId)
+    {
+        var result = await Build(factory, userId, isAdmin: true).GetFeedConsents(orgId, caseId, default);
+        return (IReadOnlyList<CaseFeedConsentRecord>)Assert.IsType<OkObjectResult>(result.Result).Value!;
+    }
+
+    [Fact]
+    public async Task GetFeedConsents_NamesWhoAgreedAndWhen()
+    {
+        var (factory, orgId, userId) = await SeedAsync();
+        var caseId = await SeedCaseWithConsentAsync(factory, orgId, userId, postStillExists: true);
+
+        var consent = Assert.Single(await ConsentsAsync(factory, orgId, caseId, userId));
+
+        Assert.Equal(userId, consent.AgreedByAppUserId);
+        Assert.Equal(1, consent.WordingVersion);
+        Assert.True(consent.PostExists);
+    }
+
+    /// <summary>
+    /// The consent outlives the post on purpose. "Somebody agreed and then took it down" and
+    /// "nobody ever agreed" are different facts, so the row is reported either way rather than
+    /// filtered out with its post.
+    /// </summary>
+    [Fact]
+    public async Task GetFeedConsents_KeepsTheRecordAfterThePostIsGone()
+    {
+        var (factory, orgId, userId) = await SeedAsync();
+        var caseId = await SeedCaseWithConsentAsync(factory, orgId, userId, postStillExists: false);
+
+        var consent = Assert.Single(await ConsentsAsync(factory, orgId, caseId, userId));
+
+        Assert.False(consent.PostExists);
+        Assert.Null(consent.OrgMessageId);
+    }
+
+    [Fact]
+    public async Task GetFeedConsents_ACaseNobodyPublished_AnswersEmpty()
+    {
+        var (factory, orgId, userId) = await SeedAsync();
+
+        await using (var db = await factory.CreateDbContextAsync())
+        {
+            db.Cases.Add(new Case
+            {
+                Id = Guid.NewGuid(), OrganizationId = orgId, Title = "Never published",
+                CaseYear = 2026, OrgCaseNumber = 8,
+                StreetAddress1 = "2 Elm", City = "Nashville", State = "TN", ZipCode = "37201", Country = "US",
+                DateCreated = DateTime.UtcNow, CreatedByAppUserId = userId,
+            });
+            await db.SaveChangesAsync();
+        }
+
+        await using var read = await factory.CreateDbContextAsync();
+        var plainCaseId = (await read.Cases.FirstAsync(c => c.Title == "Never published")).Id;
+
+        Assert.Empty(await ConsentsAsync(factory, orgId, plainCaseId, userId));
+    }
+
+    [Fact]
+    public async Task GetFeedConsents_NonMember_ReturnsForbid()
+    {
+        var (factory, orgId, userId) = await SeedAsync();
+        var caseId = await SeedCaseWithConsentAsync(factory, orgId, userId, postStillExists: true);
+
+        var result = await Build(factory, Guid.NewGuid()).GetFeedConsents(orgId, caseId, default);
+
+        Assert.IsType<ForbidResult>(result.Result);
+    }
+
+    /// <summary>
+    /// Matched on both ids: a caseId from another org must not resolve just because the caller
+    /// belongs to the org they named in the route.
+    /// </summary>
+    [Fact]
+    public async Task GetFeedConsents_ACaseFromAnotherOrg_IsNotFound()
+    {
+        var (factory, orgId, userId) = await SeedAsync();
+        var caseId = await SeedCaseWithConsentAsync(factory, orgId, userId, postStillExists: true);
+
+        var result = await Build(factory, userId, isAdmin: true)
+            .GetFeedConsents(Guid.NewGuid(), caseId, default);
+
+        // Another org this caller does not belong to is refused before the case is looked at.
+        Assert.IsType<ForbidResult>(result.Result);
+    }
 }

@@ -127,6 +127,16 @@ public interface IBenCaseClient
     Task<CaseClientRequestRecord?> GetOrgCaseClientRequestAsync(Guid orgId, Guid caseId, CancellationToken token = default);
 
     /// <summary>
+    /// Who agreed to publish this case's footage to the feed, and when.
+    /// </summary>
+    /// <remarks>
+    /// The table behind this is append-only and was entirely write-only until the 2026-09-17
+    /// audit, so the question its own entity doc names — "who put this footage up" — had no
+    /// answer anywhere. Answered to the GROUP: a client asks their group and the group answers.
+    /// </remarks>
+    Task<WebApi.LoadResult<CaseFeedConsentRecord>> GetCaseFeedConsentsAsync(Guid orgId, Guid caseId, CancellationToken token = default);
+
+    /// <summary>
     /// Advisory warnings when this title or pseudonym would carry the client's name or the street
     /// address onto the public case page (item 176). The caller decides what a failed check means —
     /// for an advisory, failure must never block publishing.

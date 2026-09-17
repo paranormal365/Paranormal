@@ -181,6 +181,51 @@ public sealed class CaseController : BenControllerBase
     /// <para>404 when the case has no originating request, which is normal: cases can be raised
     /// internally rather than from a client submission.</para>
     /// </remarks>
+    /// <summary>
+    /// Who agreed to publish this case's footage to the feed, and when.
+    /// </summary>
+    /// <remarks>
+    /// <para><b>The answer to a question nobody could answer.</b> <c>FeedPostConsent</c> is
+    /// append-only and its entity doc states its purpose plainly: "When a client asks 'who put
+    /// this footage up', this row is the answer." The 2026-09-17 audit found the whole table
+    /// write-only — the only other references in the tree are two purges. So the record existed,
+    /// was correct, outlived the post on purpose, and could not be read by anybody.</para>
+    ///
+    /// <para><b>Answered to the group, not to the client.</b> A client asks the group and the group
+    /// answers; naming which member published it directly to a client is a disclosure decision
+    /// nobody has taken, and this endpoint deliberately does not take it either. Case.Read is the
+    /// gate, the same as the client request beside it.</para>
+    ///
+    /// <para>The consent survives the post being hidden or deleted, so <c>PostExists</c> is part
+    /// of the answer rather than a filter: "somebody agreed and then took it down" and "nobody
+    /// ever agreed" are different facts.</para>
+    /// </remarks>
+    [HttpGet("{caseId:guid}/feed-consents")]
+    public async Task<ActionResult<IReadOnlyList<CaseFeedConsentRecord>>> GetFeedConsents(
+        Guid orgId, Guid caseId, CancellationToken ct)
+    {
+        if (!await CanReadAsync(orgId, ct)) return Forbid();
+
+        await using var db = await _db.CreateDbContextAsync(ct);
+
+        // Both ids, for the same reason the client request above matches both.
+        if (!await db.Cases.AsNoTracking().AnyAsync(x => x.Id == caseId && x.OrganizationId == orgId, ct))
+            return NotFound("Case not found.");
+
+        return Ok(await db.FeedPostConsents.AsNoTracking()
+            .Where(c => c.CaseId == caseId)
+            .OrderByDescending(c => c.AgreedUtc)
+            .Select(c => new CaseFeedConsentRecord(
+                c.Id,
+                c.AgreedByAppUserId,
+                c.AgreedByAppUser.DisplayName ?? "Somebody",
+                c.AgreedUtc,
+                c.WordingVersion,
+                c.OrgMessageId,
+                c.OrgMessageId != null))
+            .ToListAsync(ct));
+    }
+
     [HttpGet("{caseId:guid}/client-request")]
     public async Task<ActionResult<CaseClientRequestRecord>> GetClientRequest(
         Guid orgId, Guid caseId, CancellationToken ct)
