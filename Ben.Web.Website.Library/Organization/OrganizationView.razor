@@ -341,7 +341,13 @@
                 </BenTab>
             }
 
-            @if (_isMember)
+            @* Same rule as the Calendar tab above and the Publications tab below: a gated tab must
+               not EXIST, because FeatureGate renders a not-found body, and inside a tab strip that
+               is a tab which opens onto an error. OrgMessages wraps its whole self in a
+               FeatureGate — embedded mode included — so with messaging switched off this tab used
+               to open onto "There is nothing at this address" (2026-09-17 audit). The two tabs
+               either side were written to avoid exactly that; this one was missed. *@
+            @if (_isMember && Features.IsOn(SiteFeatures.OrgMessaging))
             {
                 <BenTab Title="Messages" Id="messages">
                     <OrgMessages OrgId="@OrgId" EmbeddedMode="true" />
@@ -393,10 +399,17 @@
 
             @* Equipment shared with the group is readable by any member — sharing is the owner's
                consent, so it needs no permission gate. The group's own equipment arrives here in
-               phase 3, behind the new Equipment permission. *@
-            <BenTab Title="Equipment" Id="equipment">
-                <Ben.Web.Website.Library.Organization.Equipment.OrganizationEquipment OrgId="@OrgId" EmbeddedMode="true" />
-            </BenTab>
+               phase 3, behind the new Equipment permission.
+
+               Behind the site switch, though: with Equipment off, /my-equipment and the rest 404
+               and the nav entries go, and this tab kept working (2026-09-17 audit) — so "off hides
+               the whole section", as the setting's own description puts it, was not true. *@
+            @if (Features.IsOn(SiteFeatures.Equipment))
+            {
+                <BenTab Title="Equipment" Id="equipment">
+                    <Ben.Web.Website.Library.Organization.Equipment.OrganizationEquipment OrgId="@OrgId" EmbeddedMode="true" />
+                </BenTab>
+            }
 
             @if (_canManageRoles)
             {

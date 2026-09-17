@@ -61,8 +61,31 @@ public sealed class SoloPlanController : BenControllerBase
 
         await using var db = await _db.CreateDbContextAsync(ct);
 
+        // Returning the one they already have is not creating anything, so it is answered before
+        // the switch is consulted — closing sign-ups must not strand somebody who already minted
+        // a personal space.
         if (await FindAsync(db, userId, ct) is { } already)
             return Ok(new SoloPlanRecord(already.Id, already.Name));
+
+        // The same switch the registration door asks, and for the same reason (2026-09-17 audit).
+        //
+        // This mints a full Organization — roles, member levels, duties, event types — so it is a
+        // second front door, and it was not consulting the switch. With self-registration off,
+        // "Start a group" was refused with a sentence and its button hidden, while "Start
+        // investigating on your own" on any place page still handed out organizations. The
+        // registration door's own doc comment is about precisely this failure mode: "a policy
+        // control whose failure mode is believing you closed a door is worse than no control".
+        //
+        // SuperAdmins exempt, matching that door.
+        if (!User.IsInRole(Ben.Data.Common.Constants.RoleNames.SuperAdmin)
+            && !await Services.SiteSettingsService.GetBoolAsync(
+                    db, Services.SiteSettingKeys.AllowOrganizationSelfRegistration,
+                    whenUnset: true, ct))
+        {
+            return StatusCode(StatusCodes.Status403Forbidden,
+                "New groups are not being accepted at the moment. Please contact us if you would "
+                + "like to start one.");
+        }
 
         var user = await db.AppUsers.AsNoTracking().FirstOrDefaultAsync(u => u.Id == userId, ct);
         if (user is null) return Unauthorized();

@@ -523,6 +523,11 @@ public sealed class InvestigationController : BenControllerBase
 /// </summary>
 [ApiController]
 [Route("api/evidence-votes")]
+// Behind the voting switch, like PublicCaseVoteController and UploadFileVoteController. This one
+// was missed (2026-09-17 audit): the widget dutifully hid itself while both halves of the
+// endpoint — the [AllowAnonymous] summary AND the signed-in read and cast — kept answering, so a
+// site whose admin page said Voting was Off still took votes from anything holding a URL.
+[Ben.Data.WebApi.Services.FeatureGated(Ben.Data.WebApi.Services.SiteSettingKeys.FeatureVoting)]
 public sealed class EvidenceVoteController : BenControllerBase
 {
     private readonly IDbContextFactory<BenDataContext> _db;
