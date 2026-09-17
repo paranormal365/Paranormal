@@ -132,7 +132,8 @@ public sealed class OrganizationFileController : ControllerBase
         else if (file.FileData is { Length: > 0 })
             stream = new MemoryStream(file.FileData);
         if (stream is null) return NotFound("File data not found in storage.");
-        return File(stream, file.ContentType, file.FileName);
+        // enableRangeProcessing: a player asks for the piece it needs; without it Safari will not start at all and nothing can seek (2026-09-17).
+        return File(stream, file.ContentType, file.FileName, enableRangeProcessing: true);
     }
 
     // POST /api/organizations/{orgId}/files  (direct upload)

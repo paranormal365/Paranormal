@@ -95,11 +95,12 @@ public sealed class PublicArchiveMediaController : ControllerBase
             var stream = await _fileStorage.OpenReadAsync(servingPath, ct);
             // The row's ContentType already describes the SERVED copy — ingest records the
             // derivative's type, not the original's.
-            return File(stream, file.ContentType, file.FileName);
+            // enableRangeProcessing: a player asks for the piece it needs; without it Safari will not start at all and nothing can seek (2026-09-17).
+            return File(stream, file.ContentType, file.FileName, enableRangeProcessing: true);
         }
 
         if (file.FileData is not null)
-            return File(file.FileData, file.ContentType, file.FileName);
+            return File(file.FileData, file.ContentType, file.FileName, enableRangeProcessing: true);
 
         return NotFound();
     }

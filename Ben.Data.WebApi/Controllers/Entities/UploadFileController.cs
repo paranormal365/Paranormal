@@ -141,11 +141,11 @@ public sealed class UploadFileController : BenControllerBase
             // The row's ContentType already describes the SERVED copy — ingest records the
             // derivative's type, not the original's — so it is right for a cleaned JPEG, a
             // remuxed MP4 (item 181) and an unsanitized original alike.
-            return File(stream, entity.ContentType, entity.FileName);
+            return Served(stream, entity);
         }
 
         if (entity.FileData is not null)
-            return File(entity.FileData, entity.ContentType, entity.FileName);
+            return Served(entity.FileData, entity);
 
         return NotFound("File data is unavailable.");
     }
@@ -173,6 +173,39 @@ public sealed class UploadFileController : BenControllerBase
     /// the pipeline existed need no backfill.</para>
     /// </remarks>
     [Microsoft.AspNetCore.RateLimiting.DisableRateLimiting]
+    /// <summary>
+    /// Hands a file back in the way its kind is meant to arrive: a recording or a picture plays or
+    /// shows where it sits, everything else is saved under its own name. Either way the response
+    /// answers byte-range requests.
+    /// </summary>
+    /// <remarks>
+    /// <para><b>Ranges are what makes a video play at all.</b> Safari will not start a &lt;video&gt;
+    /// whose source cannot serve a range — it asks for the first bytes, is handed the whole file with
+    /// a 200, and shows a black rectangle with dead controls. Ben uploaded an 8.4 MB mp4 to a case on
+    /// 2026-09-17 and got exactly that, and reasonably read it as an upload that had failed. Chrome
+    /// is more forgiving but cannot seek. The field session's own file route has always passed
+    /// <c>enableRangeProcessing</c>; this one, which serves every other upload on the site, did not.</para>
+    /// <para><b>And a name makes it a download.</b> Naming the file sets <c>Content-Disposition:
+    /// attachment</c>, which is right for a document somebody means to keep and wrong for the picture
+    /// or recording beside it. Media is served inline; the rest keeps its name.</para>
+    /// </remarks>
+    private IActionResult Served(Stream stream, UploadFile entity) =>
+        PlaysInThePage(entity.ContentType)
+            ? File(stream, entity.ContentType, enableRangeProcessing: true)
+            : File(stream, entity.ContentType, entity.FileName, enableRangeProcessing: true);
+
+    private IActionResult Served(byte[] bytes, UploadFile entity) =>
+        PlaysInThePage(entity.ContentType)
+            ? File(bytes, entity.ContentType)
+            : File(bytes, entity.ContentType, entity.FileName);
+
+    /// <summary>Whether a browser shows this where it sits rather than saving it.</summary>
+    private static bool PlaysInThePage(string? contentType) =>
+        contentType is not null
+        && (contentType.StartsWith("video/", StringComparison.OrdinalIgnoreCase)
+            || contentType.StartsWith("audio/", StringComparison.OrdinalIgnoreCase)
+            || contentType.StartsWith("image/", StringComparison.OrdinalIgnoreCase));
+
     [HttpGet("{id:guid}/thumbnail")]
     [AllowAnonymous]
     public async Task<IActionResult> Thumbnail(
