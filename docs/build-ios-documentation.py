@@ -252,7 +252,8 @@ moment.</p>
 <p>The sentry watches while nobody is looking at the phone and marks the timeline by itself. Four
 triggers, each switched on separately: magnetic field and sound, measured as a departure from the
 base level; the device being moved, which is what matters when a tripod is disturbed; and movement
-in the camera's view. It can also start a clip when something fires.</p>
+in the camera's view. What it does when one fires is mark the timeline — it takes no clip, and the
+camera is there to be watched through rather than recorded from (2026-09-17).</p>
 
 <p>Arming is refused, in words, when it would be pointless — a magnetic threshold with no base
 level to measure against is not a threshold, and scene motion needs the camera switched on.</p>

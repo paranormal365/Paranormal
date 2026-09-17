@@ -4,8 +4,8 @@ Everything needed to finish submitting **1.0.3**, and every answer App Review ha
 This supersedes `APP-STORE-1.0.2.md` for the submission itself; that file stays as the record of
 1.0.2 and its two rejections, and `APP-STORE.md` as the record of 1.0.0 and the listing copy.
 
-**2026-09-17: build 6 has a bug worth pulling. Build 7 is the fix — see §1b before doing
-anything in App Store Connect.**
+**2026-09-17: build 7 SUBMITTED.** Ben removed build 6 from review, selected **1.0.3 (7)** and
+submitted it the same morning. §1b says what 7 fixes; §7 says what to do with either verdict.
 
 **State on 2026-09-16, evening: SUBMITTED.** Ben created version 1.0.3 in App Store Connect,
 filled the page, selected build 1.0.3 (6) and submitted it for review. It is now *Waiting for
@@ -351,7 +351,7 @@ Check App Store Connect → 1.0.3 → App Review → Resolution Center for the l
 - [x] Version 1.0.3 created in App Store Connect (§6 step 4)
 - [x] Page filled, media uploaded, build 1.0.3 (6) selected (§6 steps 5–7)
 - [x] Review notes pasted
-- [x] Submitted 2026-09-16 — Waiting for Review
+- [x] Submitted 2026-09-16 as build 6; **resubmitted 2026-09-17 as build 7** — Waiting for Review
 - [ ] Approved and released; then retire the per-file upload endpoints — §10
 
 ---
@@ -408,7 +408,7 @@ file, with the same two commands below and `(7)` in place of `(6)`. Version 1.0.
 extension at 1.0.3 (7), no warnings from the field kit or BenKit. Proven before archiving: BenKit
 499 tests, the simulator build, the four UI tests that cover the capture bar (`FieldKitChannelsUITests`
 ×3 and `FieldKitUITests/testTheVideoSwitchAddsAndRemovesTheCameraButton`), the web suite (6195) and
-the Playwright playback test for the website player's away stretch. Uploaded the same evening.
+the Playwright playback test for the website player's away stretch. Uploaded 2026-09-17 at 7:24 AM — *"Uploading IsHaunted.ipa is complete… Uploaded package is processing."*
 
 ### Build 6, 2026-09-16
 

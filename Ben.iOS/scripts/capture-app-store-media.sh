@@ -52,6 +52,12 @@ echo "── $SIM_NAME ($UDID) ────────────────�
 xcrun simctl boot "$UDID" 2>/dev/null || true
 xcrun simctl bootstatus "$UDID" -b
 xcrun simctl ui "$UDID" appearance dark
+# Answer the camera question before it is asked. A simulator that has just been reset has no
+# answer on file, so the first tap on the camera put iOS's own permission sheet over a black
+# screen — and that is what frame 15 photographed on 2026-09-17. Granting it up front means the
+# app reaches its own "No camera is available on this device." sentence, which the test knows to
+# skip. simctl on older Xcodes has no `privacy camera`, so a failure here is not fatal.
+xcrun simctl privacy "$UDID" grant camera com.ishaunted.ios 2>/dev/null || true
 
 mkdir -p "$SHOT_DIR" "$OUT/app-preview"
 
@@ -65,15 +71,54 @@ xcodebuild test-without-building -project IsHaunted.xcodeproj -scheme IsHaunted 
   -destination "platform=iOS Simulator,id=$UDID" \
   -only-testing:IsHauntedUITests/FieldKitScreenshotTests \
   -resultBundlePath /tmp/shots-$DEVICE_KIND.xcresult -quiet
-xcrun xcresulttool export attachments --path /tmp/shots-$DEVICE_KIND.xcresult --output-path "$SHOT_DIR"
+# Exported into a directory of its own, NOT straight into the set. The export writes UUID names
+# plus a manifest mapping each to the attachment's own name, and both of those used to land beside
+# the set's finished frames — where the resize below then globbed the FINISHED ones and re-encoded
+# them in place while this run's real captures sat unrenamed next to them. The set looked
+# refreshed and was the old pictures, re-compressed (2026-09-17). Now: export apart, rename from
+# the manifest, resize only what this run took, and copy over the set last.
+RAW_SHOTS=/tmp/shots-$DEVICE_KIND-export
+rm -rf "$RAW_SHOTS"
+xcrun xcresulttool export attachments --path /tmp/shots-$DEVICE_KIND.xcresult --output-path "$RAW_SHOTS"
+
+python3 - "$RAW_SHOTS" <<'PLACE'
+import json, pathlib, re, sys
+export = pathlib.Path(sys.argv[1])
+manifest = json.loads((export / "manifest.json").read_text())
+renamed = 0
+for run in manifest if isinstance(manifest, list) else [manifest]:
+    for shot in run.get("attachments") or []:
+        # "04-field-kit_0_<uuid>.png" is the name the test gave it plus what Xcode adds.
+        name = re.sub(r"_\d+_[0-9A-Fa-f-]{36}(?=\.png$)", "", shot.get("suggestedHumanReadableName") or "")
+        exported = export / (shot.get("exportedFileName") or "")
+        if not re.match(r"^\d\d-[a-z0-9-]+\.png$", name) or not exported.exists():
+            continue
+        exported.rename(export / name)
+        renamed += 1
+print(f"   {renamed} frames named")
+PLACE
+
+# `find`, not a glob: with every attachment renamed there is nothing left for the pattern to match,
+# and zsh treats an unmatched glob as an error — which killed the run before it resized or copied
+# anything, leaving the set untouched and the script reporting success (2026-09-17).
+rm -f "$RAW_SHOTS/manifest.json"
+find "$RAW_SHOTS" -maxdepth 1 -name '????????-????-????-????-????????????.png' -delete
 
 # The iPhone's native 1320×2868 is not a size the store takes; 1242×2688 is.
 if [[ "$DEVICE_KIND" == "iphone" ]]; then
-  for png in "$SHOT_DIR"/*.png; do
+  for png in "$RAW_SHOTS"/*.png; do
     sips -Z 2698 --resampleWidth 1242 "$png" >/dev/null
     sips --cropToHeightWidth 2688 1242 "$png" >/dev/null
   done
 fi
+
+# The camera frame is never real on a simulator: there is no camera, so the best it can show is
+# the app saying so. It belongs in the set only from a capture run on a real phone, which this
+# script cannot be (README). Dropped here rather than trusted not to appear.
+rm -f "$RAW_SHOTS/15-fieldkit-camera.png"
+
+# A frame the run did not take keeps whatever the set already holds, rather than being blanked.
+cp "$RAW_SHOTS"/*.png "$SHOT_DIR"/
 
 echo "── The preview ──────────────────────────────────────"
 RAW=/tmp/demo-$DEVICE_KIND.mp4

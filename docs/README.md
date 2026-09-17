@@ -120,7 +120,16 @@ python3 docs/build-ios-documentation.py iphone
 
 The export writes files named by UUID plus a `manifest.json` that maps each one to its
 `suggestedHumanReadableName`; rename them to the leading `NN-slug.png` before they land in
-`docs/ios-media/<device>/`, because the builder matches sections by that numeric prefix.
+`docs/ios-media/<device>/`, because the builder matches sections by that numeric prefix. A run
+covers 21 of the guide's frames — the hosted-event and door ones come from `HelpMediaCaptureTests`
+and are left alone, so copy the renamed frames over rather than emptying the folder first.
+
+**The store-set script does this renaming itself** (`Ben.iOS/scripts/capture-app-store-media.sh`),
+into a directory of its own before copying the finished frames across. It used to export straight
+into the set, where the iPhone's resize loop then globbed the FINISHED frames and re-encoded them
+in place while that run's real captures sat beside them unrenamed: the set looked refreshed and was
+the old pictures, re-compressed (2026-09-17). If you write a capture step of your own, export
+somewhere else and copy in at the end.
 
 **The iPhone guide is also on the website**, as the App Store listing's Marketing URL:
 `Ben.Web.Website/wwwroot/guides/IsHaunted-iOS-iPhone.pdf`, served at
