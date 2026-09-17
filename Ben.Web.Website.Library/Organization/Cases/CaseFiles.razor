@@ -51,7 +51,16 @@ else
                 <div class="card-body">
                     <div class="d-flex align-items-start justify-content-between gap-2">
                         <div class="flex-grow-1">
-                            <div class="fw-semibold small mb-1">@f.FileName</div>
+                            <div class="fw-semibold small mb-1">
+                                @f.FileName
+                                @* Which files a research board is built from, so the ones a camera named
+                                   can be found and renamed (Ben, 2026-09-17). Ordinary case evidence is
+                                   the common case and wears no badge — a label on everything labels nothing. *@
+                                @if (ShowsType(f.TypeName))
+                                {
+                                    <span class="badge text-bg-secondary ms-1 fw-normal" data-testid="case-file-type">@f.TypeName</span>
+                                }
+                            </div>
                             <UserMediaPreview FileId="@f.UploadFileId" FileName="@f.FileName" ContentType="@f.ContentType" FileSize="@f.FileSize" />
                             @if (!string.IsNullOrWhiteSpace(f.Description))
                             {
@@ -106,6 +115,15 @@ else
 </BenModal>
 
 @code {
+    /// <summary>
+    /// Whether a file's kind is worth saying. Everything uploaded here is case evidence unless it came
+    /// from somewhere else — a research board, a published board's picture — and saying "Case Evidence"
+    /// on every row would bury the two that are not.
+    /// </summary>
+    private static bool ShowsType(string? typeName) =>
+        !string.IsNullOrWhiteSpace(typeName)
+        && !string.Equals(typeName, "Case Evidence", StringComparison.OrdinalIgnoreCase);
+
     [Parameter, EditorRequired] public Guid OrgId  { get; set; }
     [Parameter, EditorRequired] public Guid CaseId { get; set; }
     /// <summary>

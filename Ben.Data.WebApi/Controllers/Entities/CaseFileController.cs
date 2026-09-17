@@ -21,7 +21,7 @@ namespace Ben.Data.WebApi.Controllers.Entities;
 public sealed class CaseFileController : BenControllerBase
 {
     // Fixed "Case Evidence" UploadFileType — same one used by MyCaseController/CaseResearchController.
-    private static readonly Guid CaseEvidenceFileTypeId = new("20000000-0000-0000-0000-000000000001");
+    internal static readonly Guid CaseEvidenceFileTypeId = new("20000000-0000-0000-0000-000000000001");
 
     private readonly IDbContextFactory<BenDataContext> _db;
     private readonly IFileStorageService _fileStorage;
@@ -67,14 +67,23 @@ public sealed class CaseFileController : BenControllerBase
             .Where(m => fileIds.Contains(m.UploadFileId) && m.DurationSeconds != null)
             .ToDictionaryAsync(m => m.UploadFileId, m => m.DurationSeconds, ct);
 
-        return Ok(files.Select(f => ToRecord(f, durations.GetValueOrDefault(f.UploadFileId))));
+        // What kind of upload each one is, in the site's own words, so the Files tab can mark the ones
+        // a research board is built from. One lookup for the page, like the durations above.
+        var typeIds = files.Select(f => f.UploadFile.UploadFileTypeId).Distinct().ToList();
+        var typeNames = await db.UploadFileTypes.AsNoTracking()
+            .Where(t => typeIds.Contains(t.Id))
+            .ToDictionaryAsync(t => t.Id, t => t.Name, ct);
+
+        return Ok(files.Select(f => ToRecord(f, durations.GetValueOrDefault(f.UploadFileId),
+                                             typeNames.GetValueOrDefault(f.UploadFile.UploadFileTypeId))));
     }
 
     [HttpPost]
     [Consumes("multipart/form-data")]
     [DisableRequestSizeLimit]
     public async Task<ActionResult<CaseFileRecord>> Upload(
-        Guid orgId, Guid caseId, [FromForm] string? description, IFormFile file, CancellationToken ct)
+        Guid orgId, Guid caseId, [FromForm] string? description, IFormFile file, CancellationToken ct,
+        [FromForm] string? origin = null)
     {
         if (file.Length == 0) return BadRequest("File is empty.");
 
@@ -106,7 +115,7 @@ public sealed class CaseFileController : BenControllerBase
 
         var uploadFile = new UploadFile
         {
-            Id = uploadFileId, UploadFileTypeId = CaseEvidenceFileTypeId, AppUserId = userId,
+            Id = uploadFileId, UploadFileTypeId = FileTypeFor(origin), AppUserId = userId,
             FileName = file.FileName, StoredFileName = storedName,
             // The served copy's type and size belong on the row; the original's are recorded in
             // the metadata table beside its EXIF.
@@ -261,7 +270,20 @@ public sealed class CaseFileController : BenControllerBase
                Ben.Data.Common.Enums.OrganizationSecurityTable.Case,
                Ben.Data.Common.Enums.OrganizationSecurityAction.Read, ct);
 
-    private static CaseFileRecord ToRecord(CaseFile f, double? durationSeconds = null) => new()
+    /// <summary>
+    /// Which kind of upload a posted file is. Only the research board names itself; everything else
+    /// is case evidence, which is what every caller before this one meant and still means.
+    /// </summary>
+    /// <remarks>
+    /// A word rather than a file-type id on purpose: the ids are ours, and an endpoint that took one
+    /// from the form would let a caller file anything as anything (Ben, 2026-09-17).
+    /// </remarks>
+    internal static Guid FileTypeFor(string? origin) =>
+        string.Equals(origin, "research", StringComparison.OrdinalIgnoreCase)
+            ? SeedData.UploadFileTypeSeeder.ResearchFileTypeId
+            : CaseEvidenceFileTypeId;
+
+    private static CaseFileRecord ToRecord(CaseFile f, double? durationSeconds = null, string? typeName = null) => new()
     {
         DurationSeconds = durationSeconds,
         Id = f.Id,
@@ -273,5 +295,6 @@ public sealed class CaseFileController : BenControllerBase
         Description = f.Description,
         DateCreated = f.DateCreated,
         CreatedByAppUserId = f.CreatedByAppUserId,
+        TypeName = typeName,
     };
 }

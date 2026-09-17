@@ -122,6 +122,17 @@ applications, and the sidecar zips are staged under `/files` instead of inside t
 Newest first. Each entry is what the database or the site settings need for that release, in the order to do it. Remove
 nothing: a server that skipped a release needs the older entries too.
 
+### 2026-09-17 — research cards, address lookup, and a Research file type
+
+1. **No migration.** The one new database row is a file type, and `UploadFileTypeSeeder` adds it on
+   startup as it does the others; running it again changes nothing. After deploying, Site
+   Administration → File Types should list **Research** beside Case Evidence and Board Snapshot.
+2. **The API server needs to reach Apple's Maps API**, which it already does for every map on the
+   site: the map box's new Find button and a pasted address both go through `api/geocode/search`.
+   That endpoint answers anonymously and is rate limited, because its calls spend the same daily
+   allowance the maps do.
+3. Nothing to turn on. Everything here is part of the research board, which is already on.
+
 ### 2026-09-16 — the case canvas becomes the Research tab
 
 1. Apply the migrations, in order, before deploying — `dotnet ef database update` applies all of them:

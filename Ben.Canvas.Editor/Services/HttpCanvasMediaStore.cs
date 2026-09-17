@@ -22,15 +22,23 @@ public sealed class HttpCanvasMediaStore(IJSRuntime js, IOptions<CanvasEditorOpt
 
     public bool IsAvailable => Base is not null && tokens is not null && (signIn?.IsSignedIn ?? true);
 
+    /// <summary>
+    /// What the case's Files should call a file this board sent it. Every file the canvas uploads is
+    /// one somebody put on a board, so it is a constant rather than a parameter (Ben, 2026-09-17:
+    /// researchers need to tell which files a board is built from, to go back and rename the ones a
+    /// camera named).
+    /// </summary>
+    private const string ResearchOrigin = "research";
+
     public async Task<(CanvasMediaUpload? Upload, string? Problem)> UploadAsync(Guid organizationId, Guid caseId, string sourceUrl, string fileName, string? description, CancellationToken ct = default)
     {
         if (!IsAvailable) return (null, CanvasCopy.Sentences.SignedOutSave);
 
         var url = $"{Base}/api/orgs/{organizationId}/cases/{caseId}/files";
         var module = await ModuleAsync();
-        var result = await module.InvokeAsync<UploadResult>("uploadFromUrl", ct, url, await tokens!.GetAccessTokenAsync(false, ct), sourceUrl, fileName, description ?? "");
+        var result = await module.InvokeAsync<UploadResult>("uploadFromUrl", ct, url, await tokens!.GetAccessTokenAsync(false, ct), sourceUrl, fileName, description ?? "", ResearchOrigin);
         if (result.Status == 401)
-            result = await module.InvokeAsync<UploadResult>("uploadFromUrl", ct, url, await tokens.GetAccessTokenAsync(true, ct), sourceUrl, fileName, description ?? "");
+            result = await module.InvokeAsync<UploadResult>("uploadFromUrl", ct, url, await tokens.GetAccessTokenAsync(true, ct), sourceUrl, fileName, description ?? "", ResearchOrigin);
 
         switch (result.Status)
         {

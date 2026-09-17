@@ -40,7 +40,7 @@ export async function fetchAsObjectUrl(url, token) {
 }
 
 /** Uploads the file behind a blob: address as form field "file"; answers { status, body }. */
-export async function uploadFromUrl(url, token, sourceUrl, fileName, description) {
+export async function uploadFromUrl(url, token, sourceUrl, fileName, description, origin) {
   await slot();
   try {
     const source = await fetch(sourceUrl);
@@ -48,6 +48,8 @@ export async function uploadFromUrl(url, token, sourceUrl, fileName, description
     const form = new FormData();
     form.append('file', await source.blob(), fileName);
     form.append('description', description || '');
+    // Where the file came from, so the case's Files can mark the ones a research board is built from.
+    if (origin) form.append('origin', origin);
     const response = await fetch(url, { method: 'POST', body: form, headers: authHeaders(token), credentials: 'omit' });
     return { status: response.status, body: await response.text() };
   } catch {

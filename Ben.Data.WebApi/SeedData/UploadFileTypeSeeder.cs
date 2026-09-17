@@ -53,6 +53,24 @@ internal static class UploadFileTypeSeeder
     internal const string BoardSnapshotFileTypeName = "Board Snapshot";
 
     /// <summary>
+    /// The upload type of a file put on a case's research board — dropped, pasted, or added from the
+    /// board's own toolbar.
+    /// </summary>
+    /// <remarks>
+    /// <para>Ben, 2026-09-17: "if the researchers add files which have strange names, they will know
+    /// which ones are used in the research board… That might help a researcher know which files they
+    /// are using and to go back and rename them to something more obvious." A file dropped on a board
+    /// lands in the case's Files as well, where it sat among everything else under a camera's name for
+    /// it, and nothing said where it came from or that anything was pointing at it.</para>
+    /// <para>It is a label, not a fence: the file is an ordinary case file, reached and served the same
+    /// way, and anybody who may see the case's files may see it. What the type adds is the sentence
+    /// "this one is on a board".</para>
+    /// </remarks>
+    internal static readonly Guid ResearchFileTypeId = new("90000000-0000-0000-0000-000000000001");
+
+    internal const string ResearchFileTypeName = "Research";
+
+    /// <summary>
     /// What a feed post may carry: browser-displayable photos, and video the &lt;video&gt; element
     /// plays without a plugin. No SVG — an SVG is a document that can carry script, and the feed
     /// is the one surface where anybody who belongs may upload.
@@ -108,6 +126,8 @@ internal static class UploadFileTypeSeeder
         await SeedPublishedVideoFileTypeAsync(db, owner.Id);
 
         await SeedBoardSnapshotFileTypeAsync(db, owner.Id);
+
+        await SeedResearchFileTypeAsync(db, owner.Id);
 
         await SeedAudioMixFileTypeAsync(db, owner.Id);
 
@@ -183,6 +203,30 @@ internal static class UploadFileTypeSeeder
             IsActive           = true,
             IsPublic           = false,
             SortOrder          = 3,
+            AllowAllExtensions = true,
+            DateCreated        = DateTime.UtcNow,
+            CreatedByAppUserId = ownerId,
+        });
+        await db.SaveChangesAsync();
+    }
+
+    /// <summary>Ensures the Research file type exists (fixed GUID so the case-files endpoint can use it directly).</summary>
+    /// <remarks>
+    /// <c>AllowAllExtensions</c>, like case evidence: a board carries whatever the research is —
+    /// a scanned deed, a photograph of a gravestone, a recording of an interview, somebody's PDF.
+    /// </remarks>
+    private static async Task SeedResearchFileTypeAsync(BenDataContext db, Guid ownerId)
+    {
+        if (await db.UploadFileTypes.AnyAsync(t => t.Id == ResearchFileTypeId)) return;
+
+        db.UploadFileTypes.Add(new UploadFileType
+        {
+            Id                 = ResearchFileTypeId,
+            Name               = ResearchFileTypeName,
+            Description        = "Files put on a case's research board — what the research is made of, rather than evidence from the night",
+            IsActive           = true,
+            IsPublic           = false,
+            SortOrder          = 10,
             AllowAllExtensions = true,
             DateCreated        = DateTime.UtcNow,
             CreatedByAppUserId = ownerId,

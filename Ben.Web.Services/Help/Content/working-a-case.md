@@ -115,7 +115,9 @@ place, and anything else becomes a note. Whatever you paste lands on clear groun
 of what is already there.
 
 **Drop files on the board** and the same happens — and they are added to the case's **Files** at the
-same time, so a photograph only ever exists once.
+same time, so a photograph only ever exists once. A file that arrived this way is marked **Research**
+in the Files tab, so you can tell which of the case's files the boards are built from — useful when a
+camera or a scanner named them and you want to go back and give them names that say what they are.
 
 **The case files button** (the folder, on the left) reaches the other way: it lists what the case
 already holds so you can put a photograph from last week's visit straight onto the board without
