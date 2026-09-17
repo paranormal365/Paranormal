@@ -260,6 +260,12 @@ public sealed class ProductWalk : BenTestBase
         await StepAsync("an event's page", () => FollowAsync("/o/"));
         await StepAsync("the feed", () => GoAsync("/feed"));
         await StepAsync("a post", () => FollowAsync("/feed/"));
+        // The arc's front door for a stranger: one location, everybody's work at it. A visitor must
+        // see the published half and be offered no box (2026-09-17).
+        await StepAsync("a public place, as a stranger",
+            () => GoAsync("/places/40000001-0000-0000-0000-000000000001"),
+            Main.GetByText("Published investigations", new() { Exact = false })
+                .Or(Main.GetByText("Nothing has been published", new() { Exact = false })));
         await StepAsync("equipment catalog", () => GoAsync("/equipment-catalog"));
         await StepAsync("gear people own", () => OrgTabAsync("Gear people own"));
         await StepAsync("an item somebody owns", () => FollowIfAnyAsync("/equipment/"));
@@ -359,8 +365,58 @@ public sealed class ProductWalk : BenTestBase
         await StepAsync("what's on", () => GoAsync("/events"));
         await StepAsync("my events", () => GoAsync("/my-events"));
         await StepAsync("group messages", () => GoAsync($"/organizations/{org}/messages"));
+        // The place hub as a member sees it (2026-09-17): their own groups' visits and cases, what
+        // others shared, the published cases, the posts, and the buttons that start work here.
+        await StepAsync("a public place, signed in",
+            () => GoAsync("/places/40000001-0000-0000-0000-000000000001"),
+            Main.GetByText("Shared by other groups", new() { Exact = false }));
+        await StepAsync("a new case names its place", async () =>
+        {
+            await GoAsync($"/organizations/{org}/cases/new?place=40000001-0000-0000-0000-000000000001");
+            await WaitUntilLoadedAsync();
+        }, Main.GetByTestId("case-place-chosen")
+               .Or(Main.GetByText("What kind of place is this?", new() { Exact = false })));
         await StepAsync("notifications", () => GoAsync("/notifications"));
         await StepAsync("upload files", () => GoAsync("/upload-files"));
+        await StepAsync("the admin area refuses", () => GoAsync("/admin/dashboard"));
+
+        Finish();
+    }
+
+    // ── 3b. Somebody in no group at all — the free lane's own seat ────────────
+
+    /// <summary>
+    /// Wren: an account, and nothing else. The persona the free lane is for.
+    /// </summary>
+    /// <remarks>
+    /// <para>Added 2026-09-17, because until then no walk covered somebody who belongs to nothing —
+    /// every seat here is a member, a client, a viewer or an admin, and each of them passes doors
+    /// she does not. Most of what she opens should REFUSE her in words rather than show an empty
+    /// page, which is the thing this walk exists to catch.</para>
+    ///
+    /// <para>She may already have a space of her own, from a browser test that minted her one. The
+    /// walk does not care: it reads what the page offers rather than asserting which offer it is.</para>
+    /// </remarks>
+    [Test]
+    public async Task Somebody_in_no_group()
+    {
+        _persona = "3b-no-group";
+        await LoginAsync(SoloEmail, SoloPassword);
+
+        await StepAsync("home, signed in", () => GoAsync("/"));
+        await StepAsync("a public place, where the free lane starts",
+            () => GoAsync("/places/40000001-0000-0000-0000-000000000001"),
+            Main.Locator(".place-investigate-solo").Or(Main.Locator(".place-investigate")));
+        await StepAsync("the feed, which she may read", () => GoAsync("/feed"));
+        await StepAsync("my investigations", () => GoAsync("/my-investigations"));
+        await StepAsync("my evidence", () => GoAsync("/my-evidence"));
+        await StepAsync("my files", () => GoAsync("/upload-files"));
+        await StepAsync("my profile", () => GoAsync("/profile"));
+        await StepAsync("organizations — hers, if she has made one", () => GoAsync("/organizations"));
+        await StepAsync("find a group", () => GoAsync("/find"));
+        await StepAsync("pricing", () => GoAsync("/pricing"), expect: "Pricing");
+        await StepAsync("ask a group for help", () => GoAsync("/my-requests/new"));
+        await StepAsync("notifications", () => GoAsync("/notifications"));
         await StepAsync("the admin area refuses", () => GoAsync("/admin/dashboard"));
 
         Finish();

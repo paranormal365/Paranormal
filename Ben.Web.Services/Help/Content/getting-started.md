@@ -433,6 +433,10 @@ your first visit to the place you were already looking at. The space is free, it
 else joins it, and it never appears in any list of groups — it exists so the rest of the site has
 somewhere to hang your work, because investigations, evidence and reports all belong to something.
 
+![Starting on your own](/help/media/getting-started/investigate-alone.png)
+*What the button explains before it does anything: a space of your own, free, and what you record at
+a public place is public.*
+
 **What you record at a public location is public.** That is the bargain and it is worth
 understanding before you start: your visit joins that place's own page, where anybody can read it.
 One person's night somewhere is an anecdote; the same place recorded by eleven people is a record

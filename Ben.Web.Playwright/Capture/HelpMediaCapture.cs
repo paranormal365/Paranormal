@@ -388,6 +388,105 @@ public sealed class HelpMediaCapture : BenTestBase
     }
 
     /// <summary>
+    /// The place hub: a public location's page, the case that names one, and investigating alone.
+    /// </summary>
+    /// <remarks>
+    /// <para>Four screens the 2026-09-17 arc added, and every one of them is a screen the help now
+    /// describes in words. The place page is the load-bearing shot: it is the only page on the site
+    /// that gathers several groups' work at one location, and a paragraph explaining that is no
+    /// substitute for seeing the sections stacked up.</para>
+    ///
+    /// <para>The feed flag is turned on for the duration and put back afterwards, because place
+    /// posts are feed posts and the composer does not exist without it.</para>
+    /// </remarks>
+    [Test]
+    [Description("working-a-case, the-feed and getting-started: places, and investigating alone.")]
+    public async Task Capture_Places()
+    {
+        var wasOn = await FeedFlagAsync();
+        await SetFeedFlagAsync(true);
+
+        try
+        {
+            await LoginAsync(UserEmail, UserPassword);
+
+            // ── New Case, at the place already on file ───────────────────────
+            if (await OpenOrganizationAsync("Paranormal365"))
+            {
+                await OpenTabAsync("Cases", Main.GetByTestId("new-case"));
+                await ClickUntilUrlAsync(Main.GetByTestId("new-case").First, @"/cases/new");
+                await WaitUntilLoadedAsync();
+
+                await Main.Locator("#casecreatepage-case-title-b1b1").FillAsync("Another look at the cave");
+                await Main.Locator("#casecreatepage-street-address-5b76").FillAsync("430 Keysburg Rd");
+                await Main.Locator("#casecreatepage-city-4662").FillAsync("Adams");
+                await Main.Locator("#casecreatepage-state-7b45").FillAsync("TN");
+                await Main.Locator("#casecreatepage-zip-code-ba79").FillAsync("37010");
+                await Main.Locator("#case-place-name").FillAsync("Bell Witch Cave");
+
+                // The offer is debounced and then a round trip, so it is waited for rather than
+                // hoped for — a picture of the moment before it arrives teaches the wrong thing.
+                var offer = Main.GetByTestId("place-candidates");
+                try { await Expect(offer).ToBeVisibleAsync(new() { Timeout = 20_000 }); }
+                catch (AssertionException) { /* shot below still shows the kind choice */ }
+
+                // The whole form, not a crop around the radio: anchoring on the input itself gave
+                // a 40-pixel sliver of sidebar, because "around" grows from the element's own box
+                // and a radio button's box is a radio button.
+                await ShootAsync("working-a-case", "new-case-place.png",
+                                 proves: "What kind of place is this?");
+            }
+
+            // ── A place's own page, signed in ────────────────────────────────
+            await GoAsync("/places/40000001-0000-0000-0000-000000000001");
+            await WaitUntilLoadedAsync();
+            await Expect(Main.GetByText("Shared by other groups", new() { Exact = false }))
+                .ToBeVisibleAsync(new() { Timeout = 30_000 });
+            await ShootAsync("working-a-case", "place-page.png", proves: "Shared by other groups");
+
+            // ── Posting about a place ────────────────────────────────────────
+            var composer = Main.GetByTestId("place-composer");
+            if (await composer.CountAsync() > 0)
+            {
+                await composer.Locator("textarea").First.FillAsync(
+                    "Two of us felt the cold spot on the lower stair, about 20 minutes apart. "
+                    + "Readings going up with the session.");
+                await composer.GetByTestId("feed-composer-post").ClickAsync();
+                await Expect(Main.GetByTestId("place-posts")).ToBeVisibleAsync(new() { Timeout = 20_000 });
+                await ShootAsync("the-feed", "place-posts.png",
+                                 selector: "[data-testid='place-composer']",
+                                 around: new Around(Top: 60, Bottom: 320));
+            }
+
+            // ── The door for somebody in no group ────────────────────────────
+            // Wren belongs to nothing, which is what makes the offer appear at all. If an earlier
+            // run gave her a space the offer is gone and there is nothing to photograph; the shot
+            // is skipped rather than faked with a different button.
+            await LogoutAsync();
+            await LoginAsync(SoloEmail, SoloPassword);
+            await GoAsync("/places/40000001-0000-0000-0000-000000000001");
+            await WaitUntilLoadedAsync();
+
+            var solo = Main.Locator(".place-investigate-solo");
+            if (await solo.CountAsync() > 0)
+            {
+                await solo.First.ClickAsync();
+                var dialog = Page.Locator(".modal, [role='dialog']").Filter(
+                    new() { HasTextString = "Investigating on your own" }).First;
+                await Expect(dialog).ToBeVisibleAsync(new() { Timeout = 15_000 });
+                // Proved on the button rather than on the word "public": that word appears in
+                // several places on the page behind the dialog, and the first match wins.
+                await ShootAsync("getting-started", "investigate-alone.png",
+                                 proves: "Create it and carry on");
+            }
+        }
+        finally
+        {
+            await SetFeedFlagAsync(wasOn);
+        }
+    }
+
+    /// <summary>
     /// Signing up, two-step sign-in, and the notifications page.
     /// </summary>
     /// <remarks>

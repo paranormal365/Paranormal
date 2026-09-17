@@ -85,6 +85,10 @@ Then say **what kind of place** it is, which has no default because both answers
 **Open Case** stays greyed out until you have answered. Once the case exists, a line at the top of
 it names the place, says how many other groups have investigated there, and links to its page.
 
+![Naming the place on a new case](/help/media/working-a-case/new-case-place.png)
+*The place already on file is offered as you type; **Use this place** joins it. The kind of place has
+no default.*
+
 Coming the other way works too: a public place's own page offers **Open a case here**, which brings
 you to this form with the place already settled.
 
@@ -708,6 +712,10 @@ rows show their sharing setting: how another group chose to share something is t
 
 Place pages work for visitors too. Somebody who is not signed in sees only investigations that have
 been published, and nothing else.
+
+![A place's page](/help/media/working-a-case/place-page.png)
+*One location, and every group's work at it: your visits, what others shared, the cases published
+here, the posts, and the field archive.*
 
 ### Your groups' cases here
 

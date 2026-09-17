@@ -87,6 +87,10 @@ Two things are different about that box, both on purpose:
 - **Private residences have no box at all.** Publishing what happens inside somebody's home is
   theirs to agree to, and there is no way to ask them yet. So a home's page takes no posts.
 
+![Posting about a place](/help/media/the-feed/place-posts.png)
+*The same box, on a public location's own page. What you write there says **at** the place wherever
+it is read.*
+
 Everything else is the same as any other post: photos and videos go through the same check, reports
 and hiding work the same way, and replies belong to the thread rather than to the place. **See all
 posts about this place** opens the whole list at its own address, which is shareable.
