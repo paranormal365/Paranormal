@@ -1,5 +1,6 @@
 using Ben.Data.Common.Enums;
 using Ben.Data.Source.Context;
+using Ben.Data.WebApi.Services.Access;
 using Ben.Service.Models.Entities;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
@@ -103,10 +104,107 @@ public sealed class SearchController : ControllerBase
         }
 
         var events = await NearbyEventsAsync(db, lat, lon, clampedRadius, query, ct);
+        var places = await NearbyPlacesAsync(
+            db, lat, lon, clampedRadius, latMin, latMax, lonMin, lonMax, query, ct);
 
         return Ok(new NearbyResults(
             [.. results.OrderBy(r => r.DistanceMiles)],
-            events));
+            events,
+            places));
+    }
+
+    /// <summary>
+    /// Public locations near a point that have something published at them.
+    /// </summary>
+    /// <remarks>
+    /// <para>Item #88's third toggle, built 2026-09-17. The place hub is described as the public
+    /// front door for a location and nothing let a stranger find one: no /places index, /find
+    /// searches groups only, and the nav has no Places entry.</para>
+    ///
+    /// <para><b>Exact position, like an organization's and unlike an event's.</b> A public
+    /// location is a landmark; there is nobody's home to protect, and snapping a cave to a
+    /// six-mile grid would break browsing rather than protect anybody. A private residence cannot
+    /// appear here at all.</para>
+    ///
+    /// <para><b>A place has to have earned its listing.</b> A row is created by the first group to
+    /// work somewhere, so listing all of them would hand back a directory of addresses somebody
+    /// once typed into a form. Counted the same way the place page counts: investigations the
+    /// shared visibility predicate lets a stranger see, and published field sessions.</para>
+    /// </remarks>
+    private static async Task<List<NearbyPlaceResult>> NearbyPlacesAsync(
+        BenDataContext db, double lat, double lon, double clampedRadius,
+        decimal latMin, decimal latMax, decimal lonMin, decimal lonMax,
+        string? query, CancellationToken ct)
+    {
+        var candidates = await db.Places.AsNoTracking()
+            .Where(p => p.Kind == PlaceKind.PublicLocation
+                     && p.Latitude >= latMin && p.Latitude <= latMax
+                     && p.Longitude >= lonMin && p.Longitude <= lonMax)
+            .Select(p => new { p.Id, p.Name, p.City, p.State, p.Latitude, p.Longitude })
+            .ToListAsync(ct);
+
+        if (candidates.Count == 0) return [];
+
+        var placeIds = candidates.Select(p => p.Id).ToList();
+
+        // Counted through the shared predicate, passed no organizations — the same "public only"
+        // resolution the anonymous place page gets, rather than a second copy of the rules. As two
+        // grouped queries rather than correlated subqueries, because the predicate is an
+        // expression tree and inlining it per row would fall back to client evaluation.
+        var investigationCounts = (await db.Investigations.AsNoTracking()
+                .Where(InvestigationVisibilityFilter.VisibleTo([], []))
+                .Where(i => i.PlaceId != null && placeIds.Contains(i.PlaceId.Value))
+                .GroupBy(i => i.PlaceId!.Value)
+                .Select(g => new { PlaceId = g.Key, Count = g.Count() })
+                .ToListAsync(ct))
+            .ToDictionary(x => x.PlaceId, x => x.Count);
+
+        var sessionCounts = (await db.FieldSessionUploads.AsNoTracking()
+                .Where(fs => fs.PlaceId != null
+                          && fs.PublishedAtUtc != null
+                          && placeIds.Contains(fs.PlaceId.Value))
+                .GroupBy(fs => fs.PlaceId!.Value)
+                .Select(g => new { PlaceId = g.Key, Count = g.Count() })
+                .ToListAsync(ct))
+            .ToDictionary(x => x.PlaceId, x => x.Count);
+
+        var places = new List<NearbyPlaceResult>();
+        foreach (var candidate in candidates)
+        {
+            var investigationCount = investigationCounts.GetValueOrDefault(candidate.Id);
+            var sessionCount = sessionCounts.GetValueOrDefault(candidate.Id);
+
+            var p = new
+            {
+                candidate.Id, candidate.Name, candidate.City, candidate.State,
+                candidate.Latitude, candidate.Longitude,
+                InvestigationCount = investigationCount,
+                SessionCount = sessionCount,
+            };
+
+            if (p.Latitude is null || p.Longitude is null) continue;
+            if (p.InvestigationCount == 0 && p.SessionCount == 0) continue;
+
+            var dist = HaversineDistance(lat, lon, (double)p.Latitude, (double)p.Longitude);
+            if (dist > clampedRadius) continue;
+
+            if (!string.IsNullOrWhiteSpace(query)
+                && !(p.Name?.Contains(query, StringComparison.OrdinalIgnoreCase) ?? false)
+                && !(p.City?.Contains(query, StringComparison.OrdinalIgnoreCase) ?? false)) continue;
+
+            places.Add(new NearbyPlaceResult(
+                PlaceId:            p.Id,
+                Name:               p.Name,
+                City:               p.City,
+                State:              p.State,
+                Latitude:           p.Latitude,
+                Longitude:          p.Longitude,
+                DistanceMiles:      Math.Round(dist, 2),
+                InvestigationCount: p.InvestigationCount,
+                SessionCount:       p.SessionCount));
+        }
+
+        return [.. places.OrderBy(p => p.DistanceMiles)];
     }
 
     /// <summary>

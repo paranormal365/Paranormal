@@ -86,7 +86,8 @@
                 <BenLoaderOverlay Visible="true" Text="Looking nearby…" />
             </div>
         }
-        else if (_hasSearched && _events.Count == 0 && _groups.Count == 0 && _tours.Count == 0)
+        else if (_hasSearched && _events.Count == 0 && _groups.Count == 0 && _tours.Count == 0
+                 && _places.Count == 0)
         {
             <div class="alert alert-light text-muted text-center py-4">
                 Nothing found within @_radiusMiles miles.
@@ -113,6 +114,63 @@
                             {
                                 <div class="col-12 col-md-6 col-lg-4">
                                     <BenTourCard Tour="@tour" ShowDistance="true" />
+                                </div>
+                            }
+                        </div>
+                    </BenTab>
+                }
+
+                @* Item #88's third toggle, built 2026-09-17. The place hub is the public front
+                   door for a location and until now nothing let a stranger find one: no /places
+                   index, /find searches groups only, and the nav has no Places entry — so the
+                   only ways in were a feed card, a public investigation or a venue page. The
+                   component's own note above explains dropping the MAP and says nothing about
+                   dropping places, which is what made this an oversight rather than a decision.
+
+                   Exact positions here, unlike events: a public location is a landmark, and only
+                   places with published work at them are listed, so this is never a directory of
+                   addresses somebody once typed into a form. *@
+                @if (_places.Count > 0)
+                {
+                    <BenTab Title="Places" Id="places" Badge="@_places.Count">
+                        <p class="text-secondary small mb-3">
+                            Locations where groups have published their work. Anyone can add to a
+                            public place's record.
+                        </p>
+                        <div class="row g-3">
+                            @foreach (var place in _places)
+                            {
+                                <div class="col-12 col-md-6 col-lg-4">
+                                    <a class="card h-100 text-decoration-none"
+                                       href="@($"/places/{place.PlaceId}")"
+                                       data-testid="nearby-place">
+                                        <div class="card-body">
+                                            <div class="fw-semibold mb-1">
+                                                @(place.Name ?? "A place with no name on file")
+                                            </div>
+                                            <div class="text-secondary small">
+                                                @if (!string.IsNullOrWhiteSpace(place.City))
+                                                {
+                                                    <text>@place.City@(string.IsNullOrWhiteSpace(place.State) ? "" : ", " + place.State) · </text>
+                                                }
+                                                @($"{place.DistanceMiles:0.0} miles away")
+                                            </div>
+                                            <div class="text-secondary small mt-2">
+                                                @if (place.InvestigationCount > 0)
+                                                {
+                                                    <text>@place.InvestigationCount investigation@(place.InvestigationCount == 1 ? "" : "s")</text>
+                                                }
+                                                @if (place.InvestigationCount > 0 && place.SessionCount > 0)
+                                                {
+                                                    <text> · </text>
+                                                }
+                                                @if (place.SessionCount > 0)
+                                                {
+                                                    <text>@place.SessionCount recorded session@(place.SessionCount == 1 ? "" : "s")</text>
+                                                }
+                                            </div>
+                                        </div>
+                                    </a>
                                 </div>
                             }
                         </div>
@@ -210,6 +268,9 @@
     private IReadOnlyList<Ben.Service.Models.Entities.PublicTourListItem> _tours = [];
     private IReadOnlyList<Ben.Service.Models.Entities.NearbyOrgResult>   _groups = [];
 
+    /// <summary>Public locations with published work at them (item #88's third toggle).</summary>
+    private IReadOnlyList<Ben.Service.Models.Entities.NearbyPlaceResult> _places = [];
+
     /// <summary>Which tab opens. Set from what was actually found, never to an empty one.</summary>
     private string? _resultTab;
 
@@ -291,6 +352,7 @@
 
         _events = results?.Events ?? [];
         _groups = results?.Organizations ?? [];
+        _places = results?.Places ?? [];
         _resultTab = null;   // chosen below, once the counts are known
         _tours  = (await AdminClient.SearchToursAsync(
             latitude: _lat.Value, longitude: _lon.Value, radiusMiles: _radiusMiles)).Items;

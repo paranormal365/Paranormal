@@ -11,7 +11,46 @@ namespace Ben.Service.Models.Entities;
 /// <summary>What is near a point.</summary>
 public sealed record NearbyResults(
     IReadOnlyList<NearbyOrgResult> Organizations,
-    IReadOnlyList<NearbyEventResult> Events);
+    IReadOnlyList<NearbyEventResult> Events,
+    /// <summary>
+    /// Public locations near the caller that have something published at them.
+    /// </summary>
+    /// <remarks>
+    /// Item #88's stated shape asked for "toggles for groups / events / places" and the places
+    /// tier was never built; the 2026-09-17 audit found the consequence — the place hub is the
+    /// public front door for a location and a stranger had no way to reach one. There is no
+    /// /places index, /find searches groups only, and the nav has no Places entry, so the only
+    /// routes in were a feed card, a public investigation page and a venue page.
+    ///
+    /// Defaults to empty so an older server simply shows no places rather than failing.
+    /// </remarks>
+    IReadOnlyList<NearbyPlaceResult>? Places = null);
+
+/// <summary>
+/// One public location near the caller, with a count of what has been published there.
+/// </summary>
+/// <remarks>
+/// <para><b>Exact coordinates, deliberately.</b> A public location is a landmark, a business or
+/// somewhere that runs tours — the same position as an organization that opted into search, and
+/// the opposite of a case or a residence. Grid-snapping a cave would break the feature rather
+/// than protect anybody.</para>
+///
+/// <para><b>Only places with something to read.</b> A place row is created by the first group to
+/// work there, so listing every one of them would hand a stranger a directory of addresses
+/// somebody once typed. A place earns its way into this list by having published work at it.</para>
+///
+/// <para>Private residences can never appear here, whatever they have at them.</para>
+/// </remarks>
+public sealed record NearbyPlaceResult(
+    Guid     PlaceId,
+    string?  Name,
+    string?  City,
+    string?  State,
+    decimal? Latitude,
+    decimal? Longitude,
+    double   DistanceMiles,
+    int      InvestigationCount,
+    int      SessionCount);
 
 /// <summary>
 /// One public event near the caller.
