@@ -18,6 +18,10 @@ day-by-day account of building it would say nothing to anyone using it now.
 
 ## 2026-09-17
 
+- Adding a file to a case shows it going. The file is named as soon as you choose it, with a bar
+  that fills as it uploads, so a long recording is something you can watch rather than a still page
+  you have to guess about. Several files at once each get their own line, and a refusal now says
+  what the trouble was.
 - On a research board, something you paste or drop no longer lands on top of a card that was already
   there. It goes to the nearest clear ground instead, the same way a card added from the toolbar does.
 - A map box can be given an address instead of coordinates: write it and press Find. Pasting an address

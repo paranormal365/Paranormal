@@ -81,6 +81,13 @@ from its author.
 italics, lists and links — and pinned to the top. Notes written before formatting arrived keep their
 line breaks.
 
+**Files** is the case's evidence. **Upload File** takes photographs, audio, video and documents, and
+you can choose several at once. Each file is named as soon as you pick it, with a bar that fills as
+it goes up, so a long recording is something you can watch rather than a page that sits still —
+which is the point, because a night's video takes a while on a home connection. If one is refused,
+the reason appears beside it. **Attach from Library** adds a file the group already holds without a
+second copy. Video and audio play where they sit, and you can drag through them.
+
 ## Binders
 
 A binder is the case timeline filtered to one investigation. Entries recorded during a visit stay

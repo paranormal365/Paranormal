@@ -94,6 +94,11 @@ builder.Services.AddSingleton<Ben.Web.Website.Services.UploadTicketService>();
 builder.Services.AddScoped<Ben.Web.Services.IVideoUploadRelay,
                            Ben.Web.Website.Services.BrowserVideoUploadRelay>();
 
+// The same idea for a file onto a case: the browser posts it to this site's own relay, so the
+// upload component can show progress. Reading it through the circuit showed none at all.
+builder.Services.AddScoped<Ben.Web.Services.ICaseFileUploads,
+                           Ben.Web.Website.Services.SiteCaseFileUploads>();
+
 // Save to Server, through the client this host already authenticates. The editor's default store
 // posts over a named HttpClient, and the bearer token here lives in the circuit where a
 // root-registered message handler cannot reach it — so that button answered 401, always
@@ -947,6 +952,39 @@ app.MapPost("/uploads/video-project/{projectId:guid}", async (
 
     using var request = new HttpRequestMessage(
         HttpMethod.Post, $"{config["WebApi:BaseUrl"]}/api/video-projects/{projectId}/publish");
+    request.Headers.Authorization = new System.Net.Http.Headers.AuthenticationHeaderValue("Bearer", accessToken);
+    request.Content = new StreamContent(ctx.Request.Body);
+    if (ctx.Request.ContentType is { } contentType)
+        request.Content.Headers.TryAddWithoutValidation("Content-Type", contentType);
+
+    return await Ben.Web.Website.Services.UploadRelay.ForwardAsync(http, request, ct);
+});
+
+// One file onto a case, posted by the browser's own upload component rather than carried through
+// the circuit (Ben, 2026-09-17). The circuit route gave no progress and no way to cancel, so a big
+// recording was a long silence that read as a failure — and the file it could not report on was
+// arriving in SignalR messages the whole time.
+//
+// The ticket is bound to the case id, so a ticket minted for one case cannot be replayed against
+// another: the endpoint it unlocks names that case in its path. The body is streamed to the API and
+// never enters this process's memory, as the video publish relay does.
+app.MapPost("/uploads/case-file/{orgId:guid}/{caseId:guid}", async (
+    Guid orgId, Guid caseId, string? t,
+    Ben.Web.Website.Services.UploadTicketService tickets,
+    IHttpClientFactory httpFactory, IConfiguration config,
+    HttpContext ctx, CancellationToken ct) =>
+{
+    var accessToken = string.IsNullOrWhiteSpace(t) ? null : tickets.Unprotect(caseId, t);
+    if (accessToken is null) return Results.Unauthorized();
+
+    ctx.Features.Get<Microsoft.AspNetCore.Http.Features.IHttpMaxRequestBodySizeFeature>()!
+        .MaxRequestBodySize = null;
+
+    using var http = httpFactory.CreateClient();
+    http.Timeout = TimeSpan.FromMinutes(30);   // a long recording on a slow home upstream
+
+    using var request = new HttpRequestMessage(
+        HttpMethod.Post, $"{config["WebApi:BaseUrl"]}/api/orgs/{orgId}/cases/{caseId}/files");
     request.Headers.Authorization = new System.Net.Http.Headers.AuthenticationHeaderValue("Bearer", accessToken);
     request.Content = new StreamContent(ctx.Request.Body);
     if (ctx.Request.ContentType is { } contentType)
