@@ -142,6 +142,15 @@ nothing: a server that skipped a release needs the older entries too.
    cards need too. Without them a card falls back to the site and address, which is what it did
    before — nothing breaks, the pictures are just missing.
 5. Nothing to turn on. Everything here is part of the research board, which is already on.
+6. **The API and the website both matter for a case's evidence, and for different reasons.** The API
+   now answers a byte range for video, audio and images, which is what lets a recording play in the
+   page at all — Safari refuses a `<video>` that cannot be seeked, and Ben's upload showed a black
+   rectangle with dead controls until this. The website carries the new upload path: the browser
+   posts a case file to `/uploads/case-file/{org}/{case}` on the site's own origin, which redeems a
+   short-lived ticket and streams the body to the API. Deploying one without the other leaves either
+   a file that will not play or an upload button that posts to a URL nothing answers. No migration,
+   no setting. Check it afterwards: a case's **Files** tab names a chosen file with a bar that fills,
+   and a video already on the case plays where it sits.
 
 ### 2026-09-16 — the case canvas becomes the Research tab
 
