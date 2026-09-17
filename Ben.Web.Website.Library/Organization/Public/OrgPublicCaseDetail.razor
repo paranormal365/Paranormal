@@ -42,6 +42,20 @@ else
         @* The facts of the case, in the rail every other public page states a figure in. *@
         <BenFactRail Facts="@Summary" Class="mb-4" />
 
+        @* The traversal a stranger would naturally make — read this case, then see every group's
+           work at the same location — was missing in exactly the direction that serves them
+           (2026-09-17 audit). The server sends a place only for a PUBLIC location, so this can
+           never point at somebody's home. *@
+        @if (_case.PlaceId is { } placeId)
+        {
+            <p class="mb-4" data-testid="public-case-place">
+                <a href="@($"/places/{placeId}")">
+                    <BenIcon Name="map-pin" Class="me-1" />
+                    Everything recorded at @(_case.PlaceName ?? "this place")
+                </a>
+            </p>
+        }
+
         @* ── Description ──────────────────────────────────────────────────── *@
         @if (!string.IsNullOrWhiteSpace(_case.Description))
         {

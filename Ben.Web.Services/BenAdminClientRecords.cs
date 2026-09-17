@@ -983,7 +983,13 @@ public sealed record PublicCaseDetail(
     IReadOnlyList<PublicTimelineEntry> Timeline,
     string OrgName,
     string OrgUrlName,
-    PublicCaseReport? Report = null);
+    PublicCaseReport? Report = null,
+    /// <summary>
+    /// The place this case is about, when it is a public location. Null for a residence, so no
+    /// public page ever points at somebody's home (2026-09-17 audit).
+    /// </summary>
+    Guid? PlaceId = null,
+    string? PlaceName = null);
 
 /// <summary>
 /// What a case's investigation report says to the public — the group's own finding, as opposed to
