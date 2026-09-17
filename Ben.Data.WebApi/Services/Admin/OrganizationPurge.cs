@@ -497,7 +497,23 @@ public sealed class OrganizationPurge
                 .ExecuteUpdateAsync(u => u.SetProperty(x => x.OrganizationId, (Guid?)null), ct);
             await db.Cases.Where(x => x.OrganizationId == organizationId).ExecuteDeleteAsync(ct);
 
-            await db.BillingLedgerEntries.Where(x => x.OrganizationId == organizationId).ExecuteDeleteAsync(ct);
+            // The ledger is UNLINKED, not deleted — the same treatment as the outbox above, and
+            // for a stronger reason (2026-09-17 audit).
+            //
+            // BillingLedgerEntry is append-only by its own doc: "there is no update or delete path
+            // anywhere; a mistake is corrected by an Adjustment row that names it, the way a paper
+            // ledger works." ReceiptNumber is "stable forever", and the tax rate and amount are
+            // frozen on the row so "a receipt reprinted next year must say what it said". This
+            // purge also contradicted itself about it: the event-credits paragraph above says the
+            // money "survives in the ledger rows below, which is where a purged group's history is
+            // supposed to live" — and then the rows went.
+            //
+            // OrganizationId is nullable, so nulling it was always available. It is also what the
+            // tax record, the platform's own revenue history and any referrer's payout row depend
+            // on surviving.
+            await db.BillingLedgerEntries
+                .Where(x => x.OrganizationId == organizationId)
+                .ExecuteUpdateAsync(u => u.SetProperty(x => x.OrganizationId, (Guid?)null), ct);
             await db.ClientRequestOrganizations.Where(x => x.OrganizationId == organizationId).ExecuteDeleteAsync(ct);
             await db.CouponRedemptions.Where(x => x.OrganizationId == organizationId).ExecuteDeleteAsync(ct);
             await db.EquipmentItemShares.Where(x => x.OrganizationId == organizationId).ExecuteDeleteAsync(ct);
@@ -536,7 +552,22 @@ public sealed class OrganizationPurge
             await db.OrganizationBillingContacts.Where(x => x.OrganizationId == organizationId).ExecuteDeleteAsync(ct);
             await db.OrganizationCmsTemplates.Where(x => x.OrganizationId == organizationId).ExecuteDeleteAsync(ct);
             await db.OrganizationEmails.Where(x => x.OrganizationId == organizationId).ExecuteDeleteAsync(ct);
-            await db.OrganizationFileDeleteLogs.Where(x => x.OrganizationId == organizationId).ExecuteDeleteAsync(ct);
+            // OrganizationFileDeleteLogs are KEPT, not deleted (2026-09-17 audit).
+            //
+            // The entity says why in its own summary: "Immutable audit record … Intentionally
+            // denormalized (no FKs to any other tables) so the log survives even if the
+            // organization, file type, or deleting user is later removed — same pattern as
+            // AuditLog." Nothing in the database required this delete — there is no HasOne
+            // anywhere for this table — and the OrganizationId is a snapshot, held alongside
+            // OrganizationName, DeletedByDisplayName and StoragePath precisely so the row still
+            // means something after the group is gone.
+            //
+            // It was being deleted because the coverage guard below asks that every entity with
+            // an OrganizationId property be NAMED in this file, and a delete is the quickest way
+            // to satisfy that. So the count is taken instead: it satisfies the guard with real
+            // code, and it tells whoever ran the purge what survived it.
+            var deleteLogsKept = await db.OrganizationFileDeleteLogs
+                .CountAsync(x => x.OrganizationId == organizationId, ct);
             await db.OrganizationFiles.Where(x => x.OrganizationId == organizationId).ExecuteDeleteAsync(ct);
             await db.OrganizationLinks.Where(x => x.OrganizationId == organizationId).ExecuteDeleteAsync(ct);
             await db.OrganizationLogos.Where(x => x.OrganizationId == organizationId).ExecuteDeleteAsync(ct);
@@ -583,6 +614,12 @@ public sealed class OrganizationPurge
             await db.Organizations.Where(x => x.Id == organizationId).ExecuteDeleteAsync(ct);
 
             await tx.CommitAsync(ct);
+
+            // Said out loud, because it is the part of a purge that is easiest to assume went.
+            _log.LogInformation(
+                "Purged organization {OrganizationId}. Kept: {DeleteLogs} file-deletion audit "
+                + "records, and its billing ledger rows unlinked rather than removed.",
+                organizationId, deleteLogsKept);
         }
         catch (Exception ex)
         {

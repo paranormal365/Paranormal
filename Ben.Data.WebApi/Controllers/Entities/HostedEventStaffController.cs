@@ -117,6 +117,42 @@ public sealed class HostedEventStaffController : OrgCmsControllerBase
         // field and a different act.
         var appUserId = request.AppUserId;
 
+        // AND PICKING SOMEBODY MEANS PICKING A MEMBER (2026-09-17 audit).
+        //
+        // The comment above states the rule and nothing enforced it: request.AppUserId came
+        // straight from the body, and the row was written with DateConfirmed = now — live
+        // immediately, no acceptance. So a host could name ANY account GUID on the site and hand
+        // it the booking board with guests' names, emails and dietary notes, the door, the files,
+        // and the event room as a moderator. OrAsStaffAsync matches on the event and the user and
+        // nothing else, so the row itself is the grant. EventBookingAlertSettings would then start
+        // mailing that stranger the guest list.
+        //
+        // Non-members are still perfectly welcome as staff — a hotel's weekend helper is the case
+        // the feature exists for — but they arrive through the ADDRESS, which is an invitation
+        // they have to accept. That is the consent gate, and this path went round it.
+        //
+        // TourController.SetGuides asks the same question of the same shape of request; its
+        // refusal is worded for guides, so this one says it in its own words.
+        if (appUserId is { } picked)
+        {
+            var isMember = await db.OrganizationUserMemberships.AsNoTracking()
+                .AnyAsync(m => m.OrganizationId == orgId && m.AppUserId == picked && m.IsActive, ct);
+
+            if (!isMember)
+            {
+                var pickedName = await db.AppUsers.AsNoTracking()
+                    .Where(u => u.Id == picked)
+                    .Select(u => u.DisplayName)
+                    .FirstOrDefaultAsync(ct);
+
+                return BadRequest(
+                    $"{pickedName ?? "That person"} isn't a member of this group, so they can't be picked "
+                    + "as staff. Invite them by email address instead — an invitation is theirs to "
+                    + "accept, and being handed other people's names and allergies is a thing to "
+                    + "say yes to.");
+            }
+        }
+
         var staff = appUserId is { } who
             ? await db.HostedEventStaff.FirstOrDefaultAsync(
                   s => s.HostedEventId == eventId && s.AppUserId == who, ct)
