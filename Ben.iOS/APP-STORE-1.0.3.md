@@ -313,7 +313,52 @@ Check App Store Connect → 1.0.3 → App Review → Resolution Center for the l
 - [x] Page filled, media uploaded, build 1.0.3 (6) selected (§6 steps 5–7)
 - [x] Review notes pasted
 - [x] Submitted 2026-09-16 — Waiting for Review
-- [ ] Approved and released; then retire the per-file upload endpoints the approved 1.0.2 still used
+- [ ] Approved and released; then retire the per-file upload endpoints — §10
+
+---
+
+## 10. After 1.0.3 is live: retire the per-file uploads
+
+Ben asked to be reminded of this (2026-09-17). **Do not do it until 1.0.3 is live on the store and
+people have had time to update** — the approved 1.0.2 on their phones sends a session file by file,
+and retiring the endpoints under it turns every upload from an un-updated phone into a refusal.
+
+**The two endpoints, both in `FieldSessionUploadController.cs`:**
+
+| Endpoint | Line | What it does |
+|---|---|---|
+| `POST api/field-sessions/document` | 529 | Opens a session from its `data.json` and returns the new id |
+| `POST api/field-sessions/{sessionId}/files` | 722 | Attaches one recording to that session, one call per file |
+
+1.0.3 replaces both with the single `POST api/field-sessions/bundle`
+(`FieldSessionUploadController.Bundle.cs:37`), which takes the whole sealed `.ben`.
+
+**Who calls them, checked across the whole repo on 2026-09-17:**
+
+- **The phone, and only the phone.** `BenKit/Field/FieldUploadClient.swift` — `submitDocument`
+  (line 56) and `submitFile` (line 128). Neither is called by 1.0.3 any more: the one send path,
+  `UploadSessionView.swift:642`, calls `submitBundle`. The two functions sit there unused, and the
+  comment at line 89 says they are kept deliberately. They come out with the endpoints.
+- **The Playwright suite, as a fixture.** Six files seed a session by posting a document and then
+  its files: `FieldSessionHardeningTests` (3 calls), `FieldSessionMediaClockTests`,
+  `FieldSessionPlaybackTests`, `FieldSessionShareLinkTests`, `CaseReportFieldSessionTests`,
+  `ParameterisedRouteCrawlTests`. **This is the real work of the retirement** — each one has to seed
+  through `bundle` instead, which means building a stored ZIP with a `seal.json` in the test
+  helpers. `FieldSessionHardeningTests` also *asserts the refusals* of the per-file path (line 159),
+  so those assertions move to the bundle endpoint or go.
+- **Nothing on the website.** Verified, not assumed — see below.
+
+**What must NOT be removed with them:**
+
+- `GET api/field-sessions/{sessionId}/files/{fileId}` (line 473) — the website's player reads every
+  recording through it, proxied as `/media/field-sessions/{id}/files/{fileId}`
+  (`Ben.Web.Website/Program.cs:660`, `Services/MediaUrlBuilder.cs:51`). It is a GET on a
+  similar-looking path; deleting it by name-match would blank the player and the place archive.
+- Storage layout and `FieldSessionUploadFile` rows. A bundle's members are rows too, with
+  `BundleEntryPath` set; the archive and the player read both kinds by row id.
+
+**Do it as its own branch** with the e2e suite green before merging, and leave the old sessions
+alone — this retires a door, not the rooms behind it.
 
 ---
 
