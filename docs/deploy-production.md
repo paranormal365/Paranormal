@@ -162,6 +162,35 @@ nothing: a server that skipped a release needs the older entries too.
    no setting. Check it afterwards: a case's **Files** tab names a chosen file with a bar that fills,
    and a video already on the case plays where it sits.
 
+8. **The audit fixes are code-only, and one of them is why this release should not wait.** No
+   migration and no setting: `.\scripts\deploy-ishaunted.ps1 -Apps webapi,website`.
+
+   The reason to deploy promptly is that a place's page currently serves a **private residence's
+   street address, postcode and exact map pin to anybody holding the URL**, and the same projection
+   with no scoping to any signed-in account. That is live on production now. Deploying the API
+   alone fixes it — the withholding is entirely server-side — so if the website deploy has to wait
+   for any reason, deploy the API anyway.
+
+   Deploy both together for everything else, because several fixes are a new page or a new button
+   against an endpoint that already exists:
+
+   - `/moderation/archive` (Moderation → Place Archive) is new and is the only way to release a
+     field session or a photograph somebody flagged. **Worth working through once after
+     deploying**: anything flagged before today has been held with no way back, so there may be a
+     backlog nobody could see. It opens showing what is held.
+   - `/admin/mail` grows the outbox list and its retry buttons.
+   - The bookings board grows **Invite by email** and **Book somebody in**.
+   - Equipment and experience taxonomy grow **Rename**, and the merge offer that goes with it.
+   - `/my-field-sessions` shows storage used.
+
+   An older website against the new API is safe everywhere: each of these is an addition, and the
+   pages that read them are the new ones. An older API against the new website is the pairing to
+   avoid — the new pages would call endpoints that answer 404.
+
+   Check it afterwards: open a private residence's place page **signed out** and confirm it shows
+   the city and state with no street address and no exact pin; then Moderation → Place Archive
+   answers 200 and lists whatever is held.
+
 ### 2026-09-16 — the case canvas becomes the Research tab
 
 1. Apply the migrations, in order, before deploying — `dotnet ef database update` applies all of them:
