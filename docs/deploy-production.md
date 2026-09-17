@@ -128,17 +128,22 @@ nothing: a server that skipped a release needs the older entries too.
    - `AddCanvasEditor` — the boards table and the link-unfurl cache.
    - `CanvasPublishedDocument` — the published copy of a board and the revision it came from.
    - `CanvasPieceOwners` — who put each piece on a board.
-   Additive only; no existing row changes.
+   - `RetireResearchPages` — **destroys rows**; read the section above before running it.
+   Everything but the last is additive.
 2. **Deploy the canvas application too**: `.\scripts\deploy-ishaunted.ps1 -Apps webapi,canvas,website`. It publishes
    `Ben.Wasm.Canvas` to `/editors/canvas/`, which `setup-iis-ishaunted.ps1` creates as its own IIS application on the
-   static pool. A site that skips it has a Research tab whose boards open a 404.
-3. **The canvas is off until you turn it on**: Site Settings → Features → *Canvas editor*. While it is off the Research
-   tab keeps showing the block-editor research pages and the boards API answers 404, so deploying changes nothing.
-   Turning it on replaces the Research tab with boards for everybody at once.
-4. **What changes for people when it is on**: research is written in the canvas on their own machine; a board is theirs
-   alone until they publish it; publishing shows it to the group and files a picture on the case. A member who may edit
-   the case can add to somebody else's board but not rework it — that is for the author, a group administrator, or a
-   site administrator.
+   static pool. A site that skips it has a Research tab whose boards open a 404. Check it after deploying:
+   `/editors/canvas/` must answer 200.
+3. **There is no switch, and looking for one wastes an evening.** This entry said until 2026-09-17 that the canvas
+   waited behind Site Settings → Features → *Canvas editor*. That flag was **removed** on the day it shipped, while
+   this entry still described the plan it had been written against. Research is boards now — the block-editor research
+   pages it would have fallen back to are the rows `RetireResearchPages` drops — so a site with the switch off would
+   have had no research at all, and a flag whose off position breaks the product is a trap rather than a choice.
+   `CanvasDeployScriptGuardTests.No_canvas_feature_flag_is_declared_anywhere` keeps it from coming back.
+4. **What changes for people**, from the moment the deploy lands: research is written in the canvas on their own
+   machine; a board is theirs alone until they publish it; publishing shows it to the group and files a picture on the
+   case. A member who may edit the case can add to somebody else's board but not rework it — that is for the author, a
+   group administrator, or a site administrator.
 
 ### 2026-09-14 — beta feedback (research pages, formatted notes and messages, plans off sale)
 
