@@ -92,6 +92,7 @@ public sealed class LinkPreviewResolver(CanvasStore store, ILinkPreviewProvider 
             link.Description = card.Description;
             link.SiteName = card.SiteName;
             link.ImageSourceUrl = card.ImageSourceUrl;
+            link.ImageUrl = card.ImageUrl;
             link.Tier = card.Tier;
             link.FetchedAtUtc = now;
         });

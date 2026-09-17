@@ -220,6 +220,12 @@ somebody signed in adds the link, and never for somebody who is only reading. So
 fetched — a private network, a page that is not a web page, a site too slow to answer — and those
 cards show the address instead.
 
+The picture on a link card is **our own copy**, kept when the card was first made, so a board keeps
+its pictures after it is published and shows them to whoever reads it, and a card does not go blank
+because the other site moved its image. A board you are working on without signing in shows the
+address alone unless somebody has used that link before: reading a stranger's page is something the
+server only does for somebody signed in.
+
 The same cards appear under links in group messages, case messages and feed posts.
 
 ### Map boxes

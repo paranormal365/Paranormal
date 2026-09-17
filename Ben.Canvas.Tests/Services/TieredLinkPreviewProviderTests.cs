@@ -52,17 +52,75 @@ public sealed class TieredLinkPreviewProviderTests
         Assert.Empty(unfurl.Requests);
     }
 
+    /// <summary>What the server answers when it has kept a preview: our own copy of the picture.</summary>
+    private const string Kept =
+        """{"kind":"example.com","title":"Example Domain","subtitle":null,"path":"https://example.com/a","description":"For examples.","imageUrl":"/media/link-preview/3fa85f64-5717-4562-b3fc-2c963f66afa6","siteName":"Example","domain":"example.com"}""";
+
+    /// <summary>
+    /// The picture comes back as an address any browser can load, which is the whole point: the proxy
+    /// needs a bearer token and a published board is read by people who have none (Ben, 2026-09-17).
+    /// </summary>
+    /// <summary>
+    /// A board with no account behind it asks the anonymous endpoint, which answers with a preview
+    /// somebody signed-in had kept earlier — so the card has its picture without this board being
+    /// able to make the server read anybody's page (Ben, 2026-09-17).
+    /// </summary>
+    [Fact]
+    public async Task Signed_out_a_kept_card_still_arrives_whole()
+    {
+        var ours = new StubHandler(HttpStatusCode.OK, Kept);
+        var api = new StubHandler(HttpStatusCode.OK, Unfurled);
+
+        var card = await Provider(ours, api, signedIn: false).GetAsync("https://example.com/a");
+
+        Assert.Equal(LinkPreviewTier.Unfurled, card.Tier);
+        Assert.Equal("Example Domain", card.Title);
+        Assert.Equal("For examples.", card.Description);
+        Assert.Equal("/api/public/link-previews/3fa85f64-5717-4562-b3fc-2c963f66afa6/thumbnail", card.ImageUrl);
+        Assert.Empty(api.Requests);
+    }
+
+    [Fact]
+    public async Task A_kept_preview_brings_our_own_copy_of_the_picture()
+    {
+        var ours = new StubHandler(HttpStatusCode.NotFound, "");
+        var api = new StubHandler(HttpStatusCode.OK, Kept);
+
+        var card = await Provider(ours, api).GetAsync("https://example.com/a");
+
+        Assert.Equal(LinkPreviewTier.Unfurled, card.Tier);
+        Assert.Equal("Example Domain", card.Title);
+        Assert.Equal("Example", card.SiteName);
+        Assert.Equal("/api/public/link-previews/3fa85f64-5717-4562-b3fc-2c963f66afa6/thumbnail", card.ImageUrl);
+        Assert.Null(card.ImageSourceUrl);
+        Assert.Equal($"{Api}/api/link-previews", api.LastUrl);
+        Assert.Equal(HttpMethod.Post, api.LastMethod);
+    }
+
+    /// <summary>A picture address of any other shape is refused rather than passed to an img src.</summary>
+    [Theory]
+    [InlineData("https://example.com/og.png")]
+    [InlineData("/media/link-preview/not-a-guid")]
+    [InlineData("/media/other/3fa85f64-5717-4562-b3fc-2c963f66afa6")]
+    [InlineData("")]
+    [InlineData(null)]
+    public void Only_a_kept_previews_own_path_becomes_a_picture(string? imageUrl) =>
+        Assert.Null(TieredLinkPreviewProvider.ThumbnailPath(imageUrl));
+
     [Fact]
     public async Task A_strangers_page_is_unfurled_with_its_picture_address_unchanged()
     {
         var ours = new StubHandler(HttpStatusCode.NotFound, "");
-        var unfurl = new StubHandler(HttpStatusCode.OK, Unfurled);
+        // Nothing kept, so the older unfurl answers: the keeping service is asked first and this is
+        // the fallback, which needs no storage.
+        var unfurl = new StubHandler(HttpStatusCode.NotFound, "").Then(HttpStatusCode.OK, Unfurled);
 
         var card = await Provider(ours, unfurl).GetAsync("https://example.com/a");
 
         Assert.Equal(LinkPreviewTier.Unfurled, card.Tier);
         Assert.Equal("Example Domain", card.Title);
         Assert.Equal("https://example.com/og.png", card.ImageSourceUrl);
+        Assert.Null(card.ImageUrl);
         Assert.Equal($"{Api}/api/link-unfurl?url=https%3A%2F%2Fexample.com%2Fa", unfurl.LastUrl);
     }
 

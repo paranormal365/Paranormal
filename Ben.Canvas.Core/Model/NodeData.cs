@@ -124,6 +124,21 @@ public sealed class LinkData : NodeData
     /// </summary>
     public string? ImageSourceUrl { get; set; }
 
+    /// <summary>
+    /// A picture address anybody's browser can load as it stands — our own copy of the page's picture,
+    /// kept by the server when a signed-in person asked for the preview.
+    /// </summary>
+    /// <remarks>
+    /// <para>Ben, 2026-09-17: "when you paste a link, I want it to build a preview or thumbnail like
+    /// when you post a link in a twitter/x post or facebook post."</para>
+    /// <para>The difference from <see cref="ImageSourceUrl"/> is who can see it. That one is the other
+    /// site's own address and is only ever loaded through the API's proxy, which needs a bearer token —
+    /// so a published board's link cards lost their pictures for exactly the readers a board is
+    /// published for. This one is served by the API to anybody, and is stable, so it is kept with the
+    /// board rather than rebuilt.</para>
+    /// </remarks>
+    public string? ImageUrl { get; set; }
+
     public Guid? ImageAssetId { get; set; }
     public DateTime? FetchedAtUtc { get; set; }
     public LinkPreviewTier Tier { get; set; } = LinkPreviewTier.None;

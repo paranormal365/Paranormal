@@ -116,11 +116,28 @@ public sealed class NodeDataTests
         Assert.Equal(["audio", "card", "file", "image", "link", "map", "message", "text", "video"], names);
     }
 
+    /// <summary>
+    /// A link card keeps two picture addresses and no third: the page's own (loaded only through the
+    /// API's proxy, never stored as a proxy address) and our own kept copy, which any browser can load.
+    /// </summary>
+    /// <remarks>
+    /// This test used to say <c>ImageUrl</c> must not exist at all, which was the right rule while the
+    /// only alternative to the page's own address was a proxy address with a token in it — that would
+    /// have been stored and then died. The kept copy is not that: the API serves it to anybody at a
+    /// stable path, which is what lets a published board keep its pictures for the people it was
+    /// published for (Ben, 2026-09-17). The rule the old assertion protected is now held by
+    /// <c>TieredLinkPreviewProviderTests.Only_a_kept_previews_own_path_becomes_a_picture</c>, which
+    /// refuses every address shape but that one.
+    /// </remarks>
     [Fact]
-    public void A_link_stores_the_image_source_not_a_proxy_address()
+    public void A_link_stores_the_pages_own_picture_and_our_kept_copy_of_it()
     {
         Assert.NotNull(typeof(LinkData).GetProperty("ImageSourceUrl"));
-        Assert.Null(typeof(LinkData).GetProperty("ImageUrl"));
+        Assert.NotNull(typeof(LinkData).GetProperty("ImageUrl"));
+
+        // Nothing ticketed or proxied: those are built when a card renders and never written down.
+        Assert.Null(typeof(LinkData).GetProperty("ImageProxyUrl"));
+        Assert.Null(typeof(LinkData).GetProperty("ImageTicket"));
     }
 }
 

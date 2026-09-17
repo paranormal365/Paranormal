@@ -44,10 +44,32 @@
     private string? _fetchedFor;
 
     /// <summary>The picture: the host's own address when given, otherwise the proxy fetched with the token.</summary>
-    private string? Picture => ImageSrc ?? _fetched;
+    /// <summary>
+    /// What the card draws: a test's own picture, then our kept copy (no token needed), then the
+    /// proxied original fetched as a blob.
+    /// </summary>
+    private string? Picture => ImageSrc ?? Servable ?? _fetched;
+
+    /// <summary>Our kept copy of the page's picture, made absolute against the API when it is a path.</summary>
+    private string? Servable
+    {
+        get
+        {
+            var kept = Link.ImageUrl;
+            if (string.IsNullOrWhiteSpace(kept)) return null;
+            if (Uri.TryCreate(kept, UriKind.Absolute, out _)) return kept;
+
+            var apiBase = Options.Value.ApiBaseUrl?.Trim().TrimEnd('/');
+            return string.IsNullOrWhiteSpace(apiBase) ? null : $"{apiBase}{kept}";
+        }
+    }
 
     protected override async Task OnParametersSetAsync()
     {
+        // Our own copy needs no token, so it is drawn straight and nothing is fetched here at all —
+        // which is what lets a published board keep its pictures for a reader who is signed out.
+        if (!string.IsNullOrWhiteSpace(Link.ImageUrl)) return;
+
         var proxy = ImageProxyUrl(Options.Value.ApiBaseUrl, Link.ImageSourceUrl);
         if (ImageSrc is not null || proxy == _fetchedFor) return;
         _fetchedFor = proxy;
@@ -61,7 +83,7 @@
         var url = (value ?? "").Trim();
         if (url == Link.Url) return;
         Link.Url = url;
-        Link.Title = Link.Description = Link.SiteName = Link.ImageSourceUrl = null;
+        Link.Title = Link.Description = Link.SiteName = Link.ImageSourceUrl = Link.ImageUrl = null;
         Link.FetchedAtUtc = null;
         Link.Tier = LinkPreviewTier.None;
     }
