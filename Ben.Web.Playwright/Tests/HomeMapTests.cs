@@ -213,7 +213,20 @@ public class HomeMapTests : BenTestBase
         // of your own vote afterwards, and pressing it offers the three choices. This asserted on
         // "Confirms the findings", which is one of those choices and is no longer on the page
         // until somebody asks for it — so it presses the button and then looks.
-        var vote = Page.Locator(".vote-actions__vote > .vote-btn").First;
+        //
+        // A card this reader has NOT already voted on, and that is the whole of it. The one button
+        // does two different jobs: unvoted it opens the chooser, and once you have voted its own
+        // label reads "Your vote: … Press to take it back", which is exactly what it then does —
+        // CaseVoteWidget.VoteButtonPressedAsync returns before ever setting _picking. Taking the
+        // first .vote-btn on the page picked whichever card the feed happened to sort first, and on
+        // a FRESH database the default "Most Votes" order puts the seeded cases this account has
+        // already voted on at the top. The click withdrew a vote, no chooser opened, and the test
+        // failed on a product behaviour that was working. It only passed on the long-lived test
+        // databases, where enough drift had pushed an unvoted case to the front.
+        //
+        // "Vote" is the unvoted label and nothing else on the page carries it, so asking for it by
+        // name is asking for the state this test is actually about.
+        var vote = Page.GetByRole(AriaRole.Button, new() { Name = "Vote", Exact = true }).First;
         await Expect(vote).ToBeVisibleAsync(new() { Timeout = 12_000 });
         await vote.ClickAsync();
 
