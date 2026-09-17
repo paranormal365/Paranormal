@@ -18,6 +18,10 @@ day-by-day account of building it would say nothing to anyone using it now.
 
 ## 2026-09-17
 
+- A case you open yourself is accepted as you open it, instead of waiting as **Proposed** for a
+  decision nobody was asked to make. If you would rather the group decided, tick the box on the new
+  case form and it waits as it used to. Anyone who may open a case but not change one still proposes
+  it, as before.
 - Adding a file to a case shows it going. The file is named as soon as you choose it, with a bar
   that fills as it uploads, so a long recording is something you can watch rather than a still page
   you have to guess about. Several files at once each get their own line, and a refusal now says

@@ -144,8 +144,13 @@ public class CaseControllerTests
 
     // ── Create ────────────────────────────────────────────────────────────────
 
+    /// <summary>
+    /// Ben, 2026-09-17: "I proposed a case, but I should be able to accept it as it was created by
+    /// me... unless I say it is up to a group decision, it should be accepted." A case opened by
+    /// somebody who may change a case's status was proposed to nobody.
+    /// </summary>
     [Fact]
-    public async Task Create_Admin_ReturnsCreated()
+    public async Task Create_Admin_ReturnsCreated_AndAcceptsIt()
     {
         var (factory, orgId, userId) = await SeedAsync();
         var ctrl   = Build(factory, userId);
@@ -153,6 +158,18 @@ public class CaseControllerTests
         var created = Assert.IsType<CreatedAtActionResult>(result.Result);
         var dto = Assert.IsType<CaseRecord>(created.Value);
         Assert.Equal("Haunted House", dto.Title);
+        Assert.Equal(CaseStatus.Accepted, dto.Status);
+    }
+
+    /// <summary>Asking for the group's decision leaves the case waiting, as every case used to.</summary>
+    [Fact]
+    public async Task Create_PutToTheGroup_LeavesItProposed()
+    {
+        var (factory, orgId, userId) = await SeedAsync();
+        var ctrl = Build(factory, userId);
+        var request = MakeCreateRequest("Up to everyone") with { PutToTheGroup = true };
+
+        var dto = (CaseRecord)((CreatedAtActionResult)(await ctrl.Create(orgId, request, default)).Result!).Value!;
         Assert.Equal(CaseStatus.Proposed, dto.Status);
     }
 

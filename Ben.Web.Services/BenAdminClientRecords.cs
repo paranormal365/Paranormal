@@ -1086,7 +1086,11 @@ public sealed record CreateCaseRequest(
     string ZipCode,
     string? Country,
     decimal? Latitude,
-    decimal? Longitude);
+    decimal? Longitude,
+    // True when the person opening the case wants the group to decide whether to take it on.
+    // False — the default, and what every older caller sends — accepts it there and then, for
+    // anybody who may change a case's status (Ben, 2026-09-17).
+    bool PutToTheGroup = false);
 
 public sealed record AcceptClientRequestAsCaseRequest(
     string? Title,

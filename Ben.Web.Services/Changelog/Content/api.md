@@ -18,6 +18,11 @@ read.
 This stream deliberately does not repeat the website's list. A change people meet as a page
 belongs there; this is for the part underneath.
 
+## 2026-09-17
+
+- A video, a recording or an image on a case can be asked for a byte range, so it plays and can be seeked in the page instead of only being downloadable. The same applies to a case's public page, a place's archive, an event's evidence and a group's files.
+- Opening a case now accepts it, for anybody who may change a case's status. A new optional field on the request asks for the group's decision instead, which leaves the case proposed as before. Older apps that do not send it get the accepted behaviour.
+
 ## 2026-09-16
 
 - The public archive lists and serves recordings that live inside a session's single file, by the file row's id; publishing such a session is no longer refused, and its recordings are screened like any other before they show.

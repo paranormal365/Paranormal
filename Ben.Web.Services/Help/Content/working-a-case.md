@@ -67,6 +67,13 @@ the case manager sit beside it. On a phone they follow it, below. If you have ma
 to leave another way, the page asks first; **Cancel** leaves without saving. **New Case** uses the
 same editor for its description.
 
+A case you open yourself is **accepted** as you open it. That is usually what you want for a place
+your group picked itself: it was proposed to nobody, and you are the person who would have accepted
+it. If the decision really is the group's, tick **Let the group decide whether to take this on** and
+the case waits as **Proposed** until somebody accepts it. The box only appears if you may change a
+case's status; anyone else opens a case as a proposal, as before. A case a client asked for is
+untouched by this — it arrives as a request and is accepted or declined the usual way.
+
 ![The Edit Case page](/help/media/working-a-case/edit-case.png)
 *Edit Case: the description in the wide column, status and publishing beside it.*
 

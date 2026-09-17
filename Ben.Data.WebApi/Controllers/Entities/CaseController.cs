@@ -309,11 +309,25 @@ public sealed class CaseController : BenControllerBase
 
         if (await WhyNotAnotherOpenCaseAsync(db, orgId, ct) is { } capped) return BadRequest(capped);
 
+        // Ben, 2026-09-17: "I proposed a case, but I should be able to accept it as it was created
+        // by me... so, unless I say it is up to a group decision, it should be accepted. In this
+        // case, it is a new public location."
+        //
+        // Every case anyone opened here started Proposed and stayed there until somebody edited it,
+        // which is the right shape for work a client asked for and the wrong one for a place the
+        // group picked itself: it was proposed to nobody, and the person who wrote it down was the
+        // person entitled to accept it. So it is accepted on the way in, unless the writer says the
+        // group should decide, or cannot accept a case at all — accepting is a status change, and
+        // a status change is Update.
+        var mayAccept = await IsAdminOrHasAsync(
+            orgId, OrganizationSecurityTable.Case, OrganizationSecurityAction.Update, ct);
+        var status = request.PutToTheGroup || !mayAccept ? CaseStatus.Proposed : CaseStatus.Accepted;
+
         var entity = new Case
         {
             Id                 = Guid.NewGuid(),
             OrganizationId     = orgId,
-            Status             = CaseStatus.Proposed,
+            Status             = status,
             Title              = request.Title.Trim(),
             Description        = CleanDescription(request.Description, _sanitizer),
             StreetAddress1     = request.StreetAddress1.Trim(),
@@ -954,7 +968,11 @@ public sealed record CreateCaseRequest(
     string ZipCode,
     string? Country,
     decimal? Latitude,
-    decimal? Longitude);
+    decimal? Longitude,
+    // Ben, 2026-09-17: "unless I say it is up to a group decision, it should be accepted."
+    // Trailing and defaulted, so the shipped iPhone app and every existing caller keep their
+    // meaning — false is what they have always effectively asked for.
+    bool PutToTheGroup = false);
 
 public sealed record AcceptClientRequestAsCaseRequest(
     string? Title,
