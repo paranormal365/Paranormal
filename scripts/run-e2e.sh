@@ -154,7 +154,6 @@ cleanup() {
   pkill -f "Ben.Wasm.Video"  2>/dev/null || true
   pkill -f "Ben.Wasm.Canvas" 2>/dev/null || true
 }
-trap cleanup EXIT
 
 port_busy() { curl -fsS -o /dev/null --max-time 2 "$1" 2>/dev/null; }
 
@@ -168,6 +167,23 @@ for url in "$API_URL/api/public/build" "$WEB_URL/" "$WASM_URL/" "$CANVAS_URL/"; 
     exit 1
   fi
 done
+
+# ARMED ONLY NOW, AND THAT ORDER IS LOAD-BEARING.
+#
+# cleanup() ends in `pkill -f "Ben.Data.WebApi"` and friends, because `dotnet run` spawns the real
+# Kestrel process as a child and killing the parent leaves the port held. With the trap armed
+# before the check above, a run that REFUSED because somebody else's hosts were up would then kill
+# those very hosts on its way out — so the polite refusal became the thing that disturbed the run
+# it was refusing to disturb.
+#
+# That happened twice on 2026-09-17, in both directions between two sessions on one machine, and
+# the second time it killed an API 1m51s into the suite: 124 of 158 tests failed on
+# "connect ECONNREFUSED ::1:5252" with nothing wrong in the code. A fabricated failure that large
+# costs more than the leaked temp directory a refusing run now leaves behind.
+#
+# From here on every exit path has started hosts worth stopping, which is the only case cleanup is
+# for.
+trap cleanup EXIT
 
 echo "── Migrating $DB_NAME ──────────────────────────────────────────────────"
 # --connection, NOT an environment override. `dotnet run` honours
