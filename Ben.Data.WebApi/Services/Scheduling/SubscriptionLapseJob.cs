@@ -55,9 +55,26 @@ public sealed class SubscriptionLapseJob : IScheduledJob
     {
         var now = DateTime.UtcNow;
 
-        await SendApproachWarningsAsync(now, ct);
-        await LapseExpiredAsync(now, ct);
-        await OfferReassignmentToStrandedClientsAsync(now, ct);
+        // Each section in its own try (2026-09-17 audit). They are three unrelated duties that
+        // happened to share a job, and before this a single throw in the warnings — one
+        // over-length subject, one transient deadlock — stopped every lapse on the platform:
+        // no case paused, no client offered another group, for as long as it kept throwing.
+        // HoldExpiryJob already does it this way.
+        await SectionAsync("approach warnings", () => SendApproachWarningsAsync(now, ct), ct);
+        await SectionAsync("lapsing expired subscriptions", () => LapseExpiredAsync(now, ct), ct);
+        await SectionAsync("offers to stranded clients",
+                           () => OfferReassignmentToStrandedClientsAsync(now, ct), ct);
+    }
+
+    /// <summary>Runs one duty, and lets the other two happen if it fails.</summary>
+    private async Task SectionAsync(string what, Func<Task> section, CancellationToken ct)
+    {
+        try { await section(); }
+        catch (Exception ex) when (ex is not OperationCanceledException)
+        {
+            // Logged at Error, not Warning: a section that stopped is work nobody did.
+            _logger.LogError(ex, "The subscription-lapse job could not finish {What}.", what);
+        }
     }
 
 
@@ -170,7 +187,13 @@ public sealed class SubscriptionLapseJob : IScheduledJob
                 await _messages.SendAsync(subject, body + unpublishWarning,
                     recipients, sub.CreatedByAppUserId, ct);
 
+                // Saved immediately, not after the loop (2026-09-17 audit). The mail commits in
+                // its own context, so a later organization throwing used to discard this marker
+                // while the letter had already gone — and the same group was written to again
+                // every five minutes, indefinitely. TierChangeNoticeJob saves per item for
+                // exactly this reason.
                 sub.TwoWeekNoticeSentForPeriodEnd = end;
+                await db.SaveChangesAsync(ct);
             }
 
             if (end <= now.AddDays(7) && sub.OneWeekNoticeSentForPeriodEnd != end)
@@ -200,10 +223,9 @@ public sealed class SubscriptionLapseJob : IScheduledJob
                     recipients, sub.CreatedByAppUserId, ct);
 
                 sub.OneWeekNoticeSentForPeriodEnd = end;
+                await db.SaveChangesAsync(ct);
             }
         }
-
-        await db.SaveChangesAsync(ct);
     }
 
     /// <summary>
@@ -364,9 +386,10 @@ public sealed class SubscriptionLapseJob : IScheduledJob
                     clients, sub.CreatedByAppUserId, ct);
             }
 
+            // Per subscription, for the same reason as the two notices above — and it matters
+            // more here, because these letters go to CLIENTS rather than to staff.
             sub.StrandedClientNoticeSentAtUtc = now;
+            await db.SaveChangesAsync(ct);
         }
-
-        await db.SaveChangesAsync(ct);
     }
 }

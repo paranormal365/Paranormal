@@ -10,9 +10,14 @@ namespace Ben.Data.WebApi.Services.LinkPreviews;
 /// </summary>
 /// <remarks>
 /// A preview is a week-old snapshot of somebody else's page. Kept for ever it would grow without limit and go on
-/// describing pages that have changed. Past its expiry it is removed — unless a research page's rail still points at it,
-/// because a research page is a record someone chose to keep. A message whose card is removed falls back to the link's
-/// host until somebody posts that link again.
+/// describing pages that have changed. Past its expiry it is removed. A message whose card is removed falls back to the
+/// link's host until somebody posts that link again.
+///
+/// <para>This used to promise an exception — "unless a research page's rail still points at it" — that the code never
+/// contained and now could not: research pages were retired (see the <c>RetireResearchPages</c> migration), and
+/// <c>StoredLinkPreview</c> has no relationship to anything. The sentence outlived the feature, and a reader of this
+/// job believed a protection was in place that was not (2026-09-17 audit). If a kept-forever preview is wanted again,
+/// it needs a reference to hold it, not a comment.</para>
 /// </remarks>
 public sealed class LinkPreviewRetentionJob(
     IDbContextFactory<BenDataContext> dbFactory, IFileStorageService storage, ILogger<LinkPreviewRetentionJob> log) : IScheduledJob

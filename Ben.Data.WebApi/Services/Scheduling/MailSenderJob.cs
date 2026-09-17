@@ -216,16 +216,28 @@ public sealed class MailSenderJob : IScheduledJob
 
         // Attachments first: their rows hang off the letter, and clearing the letter's own body is
         // what marks the pair as done.
+        // A letter that was GIVEN UP ON is scrubbed too (2026-09-17 audit).
+        //
+        // Both of these used to require AcceptedBySmtpUtc, so a letter that failed kept its body
+        // and its attachment bytes for ever — and that is the cohort most likely to be carrying a
+        // hosted-event pass QR, which this job's own doc calls "a working door credential", to an
+        // address that turned out to be bad or hostile. The thirty-day promise held only for mail
+        // that succeeded, which is precisely backwards.
+        //
+        // Dated from whichever of the two actually happened. A failed letter has no accepted
+        // date, so the clock runs from when it was given up on.
         var scrubbed = await db.OutboxEmailAttachments
             .Where(a => a.Content != null
-                     && a.OutboxEmail.AcceptedBySmtpUtc != null
-                     && a.OutboxEmail.AcceptedBySmtpUtc < before)
+                     && ((a.OutboxEmail.AcceptedBySmtpUtc != null
+                          && a.OutboxEmail.AcceptedBySmtpUtc < before)
+                      || (a.OutboxEmail.FailedUtc != null
+                          && a.OutboxEmail.FailedUtc < before)))
             .ExecuteUpdateAsync(u => u.SetProperty(a => a.Content, (byte[]?)null), ct);
 
         var cleared = await db.OutboxEmails
             .Where(e => e.BodyScrubbedUtc == null
-                     && e.AcceptedBySmtpUtc != null
-                     && e.AcceptedBySmtpUtc < before)
+                     && ((e.AcceptedBySmtpUtc != null && e.AcceptedBySmtpUtc < before)
+                      || (e.FailedUtc != null && e.FailedUtc < before)))
             .ExecuteUpdateAsync(u => u
                 .SetProperty(e => e.HtmlBody, (string?)null)
                 .SetProperty(e => e.BodyScrubbedUtc, now), ct);

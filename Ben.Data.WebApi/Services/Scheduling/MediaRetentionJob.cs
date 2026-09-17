@@ -72,6 +72,24 @@ public sealed class MediaRetentionJob : IScheduledJob
 
         await using var db = await _dbFactory.CreateDbContextAsync(ct);
 
+        // With no relay configured nothing can be warned, and since the sweep now refuses to
+        // delete anything unwarned, retention stops entirely. That is the safe direction for
+        // somebody's only copy of a recording, but it is not a quiet one: files accumulate, and
+        // an operator who is not told will find out from a disk.
+        if (!_email.IsConfigured)
+        {
+            var pausedAt = DateTime.UtcNow;
+            var waiting = await db.UploadFiles.CountAsync(
+                f => f.ExpiresAtUtc != null && f.KeptAtUtc == null && f.ExpiresAtUtc <= pausedAt, ct);
+
+            if (waiting > 0)
+                _log.LogWarning(
+                    "Media retention is paused: no mail relay is configured, so the {Count} files "
+                    + "past their expiry cannot be warned, and nothing is deleted unwarned. "
+                    + "Configure mail, or they will keep accumulating.",
+                    waiting);
+        }
+
         await WarnAsync(db, ct);
         await SweepAsync(db, ct);
     }
@@ -99,8 +117,27 @@ public sealed class MediaRetentionJob : IScheduledJob
             .Take(Batch)
             .ToListAsync(ct);
 
+        // Expired without ever being warned — the cohort the query above cannot see, because it
+        // only looks AHEAD of expiry. Before the sweep required a notice these were simply
+        // deleted; now they would wait forever instead, so they are warned late rather than
+        // either. A late notice plus the sweep's grace window still leaves a day to act.
+        var overdue = await db.UploadFiles
+            .Where(f => f.ExpiresAtUtc != null
+                     && f.KeptAtUtc == null
+                     && f.ExpiresAtUtc <= now
+                     && f.ExpiryNoticeSentAtUtc == null)
+            .OrderBy(f => f.ExpiresAtUtc)
+            .Take(Batch)
+            .ToListAsync(ct);
+
+        if (overdue.Count > 0)
+            _log.LogWarning(
+                "{Count} files were already past their expiry with no notice sent. Warning them "
+                + "now; they become deletable once the usual notice window has passed.",
+                overdue.Count);
+
         var warned = 0;
-        foreach (var file in due)
+        foreach (var file in due.Concat(overdue))
         {
             if (ct.IsCancellationRequested) break;
 
@@ -157,8 +194,27 @@ public sealed class MediaRetentionJob : IScheduledJob
     {
         var now = DateTime.UtcNow;
 
+        // Warned, and warned long enough ago to have been acted on.
+        //
+        // The class doc has always said this sweep "never deletes anything it has not already
+        // warned about", and until the 2026-09-17 audit the predicate said nothing of the kind:
+        // it took every expired file regardless. WarnAsync returns immediately when no relay is
+        // configured, so on such a deployment nothing was ever warned and everything was still
+        // deleted on schedule — somebody's only copy of a recording, gone unannounced.
+        //
+        // The second clause is the difference between a warning and a formality. WarnAsync runs
+        // immediately before this in the same pass, so without it a file warned late would be
+        // warned and deleted in the same second. LastNotice is the window the normal path already
+        // gives — a file warned a day out satisfies this exactly at its expiry, so nothing on the
+        // ordinary path is delayed.
+        var deletableFrom = now - LastNotice;
+
         var expired = await db.UploadFiles
-            .Where(f => f.ExpiresAtUtc != null && f.KeptAtUtc == null && f.ExpiresAtUtc <= now)
+            .Where(f => f.ExpiresAtUtc != null
+                     && f.KeptAtUtc == null
+                     && f.ExpiresAtUtc <= now
+                     && f.ExpiryNoticeSentAtUtc != null
+                     && f.ExpiryNoticeSentAtUtc <= deletableFrom)
             .OrderBy(f => f.ExpiresAtUtc)
             .Take(Batch)
             .ToListAsync(ct);

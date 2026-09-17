@@ -311,6 +311,11 @@ builder.Services.AddScoped<Ben.Data.WebApi.Services.Scheduling.IScheduledJob,
 // Link previews (2026-09-14) are week-long snapshots of other sites; this forgets the stale ones.
 builder.Services.AddScoped<Ben.Data.WebApi.Services.Scheduling.IScheduledJob,
                            Ben.Data.WebApi.Services.LinkPreviews.LinkPreviewRetentionJob>();
+// A request for help that nobody ever claimed is deleted rather than kept for ever. Its entity doc
+// said rows were "ignored after DateExpires" and nothing ever swept them, so an anonymous
+// visitor's account of somebody else's home stayed indefinitely (2026-09-17 audit).
+builder.Services.AddScoped<Ben.Data.WebApi.Services.Scheduling.IScheduledJob,
+                           Ben.Data.WebApi.Services.Scheduling.PendingClientRequestExpiryJob>();
 // Item 239: posts what the outbox holds, retries what did not go, and clears the words out of
 // letters that went a month ago. Nothing else sends mail any more.
 builder.Services.AddScoped<Ben.Data.WebApi.Services.Scheduling.IScheduledJob,

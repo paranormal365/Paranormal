@@ -25,11 +25,25 @@ namespace Ben.Data.WebApi.Services.Billing.StripeIntegration;
 /// idempotency key, and if nothing lands before the period ends, <c>SubscriptionLapseJob</c>
 /// winds the group down exactly as if no card existed. One consequence engine, not two.</para>
 ///
-/// <para><b>Double-charge safety is layered:</b> the Stripe idempotency key caps each
-/// subscription at one charge attempt per period per day; the synchronous fulfillment after a
-/// success advances <c>CurrentPeriodEnd</c>, which removes the subscription from tomorrow's
-/// eligibility; and fulfillment itself is idempotent by payment reference, so the webhook's
-/// later delivery of the same success is a no-op.</para>
+/// <para><b>Double-charge safety is layered:</b> the Stripe idempotency key is stable for the
+/// period being renewed, so any retry inside Stripe's 24-hour idempotency window replays the
+/// original charge rather than making a second one; the synchronous fulfillment after a success
+/// advances <c>CurrentPeriodEnd</c>, which removes the subscription from tomorrow's eligibility;
+/// and fulfillment itself is idempotent by payment reference, so the webhook's later delivery of
+/// the same success is a no-op.</para>
+///
+/// <para><b>The key used to carry today's date, and that was the hole</b> (2026-09-17 audit). It
+/// was written to allow "one charge attempt per period per day", but the only thing it actually
+/// changed was what happened when a charge SUCCEEDED and fulfillment then failed: the row stays
+/// eligible because <c>CurrentPeriodEnd</c> never advanced, and at midnight UTC the key changed,
+/// so the next pass made a second, genuinely distinct charge for the same period. Fulfillment
+/// being idempotent by payment reference does not help — it is a different reference.</para>
+///
+/// <para>Dropping the date costs nothing, because <b>Stripe expires idempotency keys after 24
+/// hours</b>. A decline can still be retried the following day: by then the key has aged out of
+/// Stripe's cache and the request is treated as new. The date was duplicating an expiry Stripe
+/// already performs, while defeating the deduplication exactly at the boundary where it was the
+/// only thing standing between a failed fulfillment and a double charge.</para>
 /// </remarks>
 public sealed class StripeRenewalJob : IScheduledJob
 {
@@ -266,7 +280,9 @@ public sealed class StripeRenewalJob : IScheduledJob
             payable + tax,
             $"IsHaunted renewal — {tier.Name}, {BillableUnits.Describe(priced)}",
             facts.ToMetadata(),
-            IdempotencyKey: $"renew-{sub.Id:N}-{periodStart:yyyyMMdd}-{now:yyyyMMdd}"), ct);
+            // Stable for this subscription and this period — see the class remarks. Adding the
+            // current date here is what allowed a second charge across a midnight boundary.
+            IdempotencyKey: $"renew-{sub.Id:N}-{periodStart:yyyyMMdd}"), ct);
 
         if (!outcome.Succeeded)
         {
