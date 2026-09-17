@@ -39,9 +39,12 @@ public sealed class CaseMessageController : BenControllerBase
 
         await using var db = await _db.CreateDbContextAsync(ct);
         if (!await MayUseThreadAsync(db, orgId, caseId, OrganizationSecurityAction.Read, ct)) return NotFound();
-        // Item 84: the ORG stops writing when lapsed. The client's half of this conversation is
-        // MyCaseController and stays open — their records, their voice.
-        if (await _limits.WhyReadOnlyAsync(orgId, ct) is { } readOnly) return BadRequest(readOnly);
+
+        // Item 84 gates WRITING, and this is a read. Refusing it here (until the 2026-09-17
+        // audit) broke the guard's own promise — "everything already here stays readable" — for
+        // the one screen where a lapsed group most needs to look something up, and put the word
+        // "Renewing" on an iPhone screen, which PaidPlan documents as an App Review 3.1.1 risk.
+        var readOnly = await _limits.WhyReadOnlyAsync(orgId, ct);
 
         var messages = await db.CaseMessages.AsNoTracking()
             .Include(m => m.AuthorAppUser)
@@ -49,14 +52,22 @@ public sealed class CaseMessageController : BenControllerBase
             .OrderBy(m => m.DateCreated)
             .ToListAsync(ct);
 
-        // Mark unread client messages as read now that org is viewing
-        var unread = await db.CaseMessages
-            .Where(m => m.CaseId == caseId && m.SenderSide == CaseMessageSide.Client && !m.IsReadByOrg)
-            .ToListAsync(ct);
-        if (unread.Count > 0)
+        // Mark unread client messages as read now that org is viewing.
+        //
+        // Skipped while lapsed, because this is the one write on a read path and marking a
+        // client's message read is a claim that somebody in the group dealt with it. Pausing the
+        // receipt rather than the whole thread keeps the reading open and leaves the unread count
+        // honest, so nothing is quietly consumed during a lapse.
+        if (readOnly is null)
         {
-            unread.ForEach(m => m.IsReadByOrg = true);
-            await db.SaveChangesAsync(ct);
+            var unread = await db.CaseMessages
+                .Where(m => m.CaseId == caseId && m.SenderSide == CaseMessageSide.Client && !m.IsReadByOrg)
+                .ToListAsync(ct);
+            if (unread.Count > 0)
+            {
+                unread.ForEach(m => m.IsReadByOrg = true);
+                await db.SaveChangesAsync(ct);
+            }
         }
 
         return Ok(messages.Select(ToRecord));
@@ -153,10 +164,9 @@ public sealed class CaseMessageController : BenControllerBase
 
         await using var db = await _db.CreateDbContextAsync(ct);
         if (!await MayUseThreadAsync(db, orgId, caseId, OrganizationSecurityAction.Read, ct)) return NotFound();
-        // Item 84: the ORG stops writing when lapsed. The client's half of this conversation is
-        // MyCaseController and stays open — their records, their voice.
-        if (await _limits.WhyReadOnlyAsync(orgId, ct) is { } readOnly) return BadRequest(readOnly);
 
+        // A count is a read. See the thread endpoint above: item 84 gates writing, and gating
+        // this made a lapsed group's unread badge fail instead of reading zero-or-more.
         var count = await db.CaseMessages
             .CountAsync(m => m.CaseId == caseId && m.SenderSide == CaseMessageSide.Client && !m.IsReadByOrg, ct);
         return Ok(count);

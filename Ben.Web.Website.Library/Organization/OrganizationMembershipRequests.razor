@@ -17,6 +17,20 @@
 <div class="mt-4">
     <h5 class="mb-3 fw-semibold">Membership Applications</h5>
 
+    @* The server's reason for refusing an acceptance, kept on the page rather than only in a
+       toast that fades. The likeliest one is the 402 explaining what a second member costs, and
+       that is something somebody has to act on — so it stays put, with the way to act on it. *@
+    @if (_acceptRefusal is not null)
+    {
+        <div class="alert alert-warning" data-testid="accept-refused">
+            @_acceptRefusal
+            <div class="mt-1">
+                <a href="@($"/organizations/{OrgId}/billing")">Your group's plan</a> ·
+                <a href="/pricing">See what each plan includes</a>
+            </div>
+        </div>
+    }
+
     @if (_loading)
     {
         <span class="spinner-border spinner-border-sm text-secondary" role="status"></span>
@@ -168,6 +182,9 @@
     [Parameter, EditorRequired] public Guid OrgId { get; set; }
 
     private bool _loading = true;
+
+    /// <summary>Why the last acceptance was refused, in the server's words, or null.</summary>
+    private string? _acceptRefusal;
     /// <summary>One row per applicant per outcome — see the IH-09 note in the markup.</summary>
     private sealed record ResolvedGroup(
         string ApplicantDisplayName,
@@ -217,7 +234,9 @@
 
     private async Task AcceptAsync(OrganizationMembershipRequestRecord r)
     {
-        var updated = await AdminClient.RespondToMembershipRequestAsync(
+        _acceptRefusal = null;
+
+        var (updated, error) = await AdminClient.RespondToMembershipRequestAsync(
             OrgId, r.Id, OrganizationMembershipRequestStatus.Accepted, null);
         if (updated is not null)
         {
@@ -226,7 +245,11 @@
         }
         else
         {
-            Toasts.Error($"Failed to accept {r.ApplicantDisplayName}. Please try again.");
+            // The server's own words when it has any. The likeliest refusal here is the 402 that
+            // explains what a second member costs, and "Please try again" is advice that can
+            // never work for it.
+            _acceptRefusal = error;
+            Toasts.Error(error ?? $"Failed to accept {r.ApplicantDisplayName}. Please try again.");
         }
     }
 
@@ -241,7 +264,7 @@
     private async Task ConfirmDenyAsync()
     {
         if (_pendingDeny is null) return;
-        var updated = await AdminClient.RespondToMembershipRequestAsync(
+        var (updated, error) = await AdminClient.RespondToMembershipRequestAsync(
             OrgId, _pendingDeny.Id, OrganizationMembershipRequestStatus.Denied,
             _denyNote, canReapply: _canReapply,
             denialReason: string.IsNullOrWhiteSpace(_denyNote) ? null : _denyNote);
@@ -254,7 +277,7 @@
         }
         else
         {
-            Toasts.Error("Failed to deny the request. Please try again.");
+            Toasts.Error(error ?? "Failed to deny the request. Please try again.");
         }
     }
 

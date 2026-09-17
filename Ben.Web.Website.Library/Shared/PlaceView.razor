@@ -91,7 +91,8 @@
                        the form arrives with it settled rather than asking for an address somebody
                        is already looking at. Offered at a public location only: a case at
                        somebody's home starts from the client, not from a page anyone can read. *@
-                    @if (_place.Kind == Ben.Data.Common.Enums.PlaceKind.PublicLocation)
+                    @if (_place.Kind == Ben.Data.Common.Enums.PlaceKind.PublicLocation
+                         && _mayOpenCaseIn.Contains(org.OrganizationId))
                     {
                         <a class="btn btn-sm btn-outline-secondary me-1 mb-1 place-open-case"
                            href="@($"/organizations/{org.OrganizationId}/cases/new?place={PlaceId}")">
@@ -101,6 +102,11 @@
                                 <span class="text-secondary">· @org.Name</span>
                             }
                         </a>
+                    }
+
+                    @if (_place.Kind == Ben.Data.Common.Enums.PlaceKind.PublicLocation
+                         && _mayInvestigateIn.Contains(org.OrganizationId))
+                    {
                         <button type="button" class="btn btn-sm btn-outline-secondary me-1 mb-1 place-investigate"
                                 @onclick="@(() => InvestigateWith(org.OrganizationId))">
                             <BenIcon Name="calendar" Class="me-1" />Investigate here
@@ -644,7 +650,11 @@
 
             // The reader now belongs somewhere, so the per-group buttons and the signed-in
             // sections have something to draw. Re-read rather than guessed at.
-            try { _myOrgs = (await AdminClient.GetMyMembershipOrganizationsAsync()).Items; }
+            try
+            {
+                _myOrgs = (await AdminClient.GetMyMembershipOrganizationsAsync()).Items;
+                await LoadWhatMyGroupsMayDoAsync();
+            }
             catch { /* the window is open either way, which is what they asked for */ }
         }
         catch (Exception ex)
@@ -697,6 +707,47 @@
     /// </remarks>
     private IReadOnlyList<MyMembershipOrgItem> _myOrgs = [];
 
+    /// <summary>
+    /// The groups of mine that may open a case, and the ones that may schedule a visit.
+    /// </summary>
+    /// <remarks>
+    /// <para>Membership is not permission. Both buttons were drawn once per membership and the
+    /// servers behind them require grants — <c>Cases.Create</c> and <c>Investigations.Create</c> —
+    /// so an ordinary member with no role clicked, filled the whole form, pressed the button and
+    /// was refused (2026-09-17 audit). The plan for this page said "members holding Cases.Create"
+    /// and the check was dropped in the build.</para>
+    ///
+    /// <para>One request per group of mine, which is one or two for almost everybody. A failure
+    /// leaves that group out of the sets and the button undrawn: refusing to offer something is
+    /// the safe direction, and the page still shows everything it is about.</para>
+    /// </remarks>
+    private readonly HashSet<Guid> _mayOpenCaseIn = [];
+    private readonly HashSet<Guid> _mayInvestigateIn = [];
+
+    private async Task LoadWhatMyGroupsMayDoAsync()
+    {
+        _mayOpenCaseIn.Clear();
+        _mayInvestigateIn.Clear();
+
+        foreach (var org in _myOrgs)
+        {
+            try
+            {
+                var perms = await AdminClient.GetMyOrgPermissionsAsync(org.OrganizationId);
+                if (perms is null) continue;
+
+                if (perms.May(Ben.Data.Common.Enums.OrganizationPermissionArea.Cases,
+                              Ben.Data.Common.Enums.OrganizationSecurityAction.Create))
+                    _mayOpenCaseIn.Add(org.OrganizationId);
+
+                if (perms.May(Ben.Data.Common.Enums.OrganizationPermissionArea.Investigations,
+                              Ben.Data.Common.Enums.OrganizationSecurityAction.Create))
+                    _mayInvestigateIn.Add(org.OrganizationId);
+            }
+            catch { /* left out of both sets, so neither button is offered for this group */ }
+        }
+    }
+
     /// <summary>The session whose Report button is mid-flight, so it can disable just that one.</summary>
     private Guid? _flagging;
 
@@ -746,6 +797,7 @@
         // For the rooms link. A failure here costs a link, not the page, so it is not reported —
         // the rest of this view is about the place itself and stands without it.
         _myOrgs = (await AdminClient.GetMyMembershipOrganizationsAsync()).Items;
+        await LoadWhatMyGroupsMayDoAsync();
 
         // Quiet on failure: the section simply does not appear, which is the same as having no
         // case here — and is a great deal better than losing the rest of the page over it.

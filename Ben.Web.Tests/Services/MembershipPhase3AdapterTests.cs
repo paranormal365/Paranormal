@@ -219,24 +219,31 @@ public class MembershipPhase3AdapterTests
         var requestId = Guid.NewGuid();
         var api       = ApiMock();
         string? capturedJson = null;
-        api.Setup(x => x.PutAsync<object, OrganizationMembershipRequestRecord>(
+        // SendExpectingReasonAsync rather than PutAsync: the adapter hands back the server's own
+        // sentence now, so a 402 explaining the price of a second member reaches the page.
+        api.Setup(x => x.SendExpectingReasonAsync<object, OrganizationMembershipRequestRecord>(
+                HttpMethod.Put,
                 $"/api/organizations/{orgId}/membership-requests/{requestId}/respond",
                 It.IsAny<object>(),
                 It.IsAny<CancellationToken>()))
-           .Callback<string, object, CancellationToken>((_, body, _) =>
+           .Callback<HttpMethod, string, object, CancellationToken>((_, _, body, _) =>
                capturedJson = System.Text.Json.JsonSerializer.Serialize(body))
-           .ReturnsAsync(new OrganizationMembershipRequestRecord
+           .ReturnsAsync((new OrganizationMembershipRequestRecord
            {
                OrganizationName = "Org", ApplicantDisplayName = "Alice",
                ApplicantEmail = "a@b.com",
                Status = OrganizationMembershipRequestStatus.Denied,
                CanReapply = true, DenialReason = "Try again later.",
-           });
+           }, (string?)null));
 
-        var result = await Build(api).RespondToMembershipRequestAsync(
+        // Returns the server's reason alongside the record now (2026-09-17 audit): the 402 that
+        // explains what a second member costs was being discarded, so the page said "Please try
+        // again" about the one refusal trying again can never clear.
+        var (result, error) = await Build(api).RespondToMembershipRequestAsync(
             orgId, requestId, OrganizationMembershipRequestStatus.Denied,
             "Try again later.", canReapply: true, denialReason: "Try again later.");
 
+        Assert.Null(error);
         Assert.Equal(OrganizationMembershipRequestStatus.Denied, result!.Status);
         Assert.True(result.CanReapply);
         Assert.Contains("Try again", result.DenialReason);

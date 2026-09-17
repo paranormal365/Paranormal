@@ -32,10 +32,11 @@ public sealed partial class BenAdminClientAdapter
         => _api.SendExpectingReasonAsync<object, OrganizationMembershipRequestRecord>(
                HttpMethod.Post, $"/api/organizations/{orgId}/membership-requests", new { Message = message }, token);
 
-    public Task<OrganizationMembershipRequestRecord?> RespondToMembershipRequestAsync(
+    public Task<(OrganizationMembershipRequestRecord? Result, string? Error)> RespondToMembershipRequestAsync(
         Guid orgId, Guid requestId, OrganizationMembershipRequestStatus status, string? responseNote,
         bool? canReapply = null, string? denialReason = null, CancellationToken token = default)
-        => _api.PutAsync<object, OrganizationMembershipRequestRecord>(
+        => _api.SendExpectingReasonAsync<object, OrganizationMembershipRequestRecord>(
+               HttpMethod.Put,
                $"/api/organizations/{orgId}/membership-requests/{requestId}/respond",
                new { Status = status, ResponseNote = responseNote, CanReapply = canReapply, DenialReason = denialReason }, token);
 

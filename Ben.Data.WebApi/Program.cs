@@ -350,7 +350,12 @@ builder.Services.AddScoped<Ben.Data.WebApi.Services.Events.HostedEventCalendarSy
 builder.Services.AddScoped<Ben.Data.WebApi.Services.Events.HostedEventEntitlement>();
 // Item 235 phase 4: four jobs, four keys. Arranging an event is not deciding who comes, deciding
 // is not standing at the door, and none of the three is spending the group's money.
-builder.Services.AddScoped<Ben.Data.WebApi.Services.Access.HostedEventAccess>();
+// The db factory is passed so "any member may read an event" can actually mean it — see
+// HostedEventAccess.CanReadEventAsync (2026-09-17 audit).
+builder.Services.AddScoped<Ben.Data.WebApi.Services.Access.HostedEventAccess>(sp =>
+    new Ben.Data.WebApi.Services.Access.HostedEventAccess(
+        sp.GetRequiredService<Ben.Service.RepositoryService.GenericInterfaces.IOrganizationSecurityService>(),
+        sp.GetRequiredService<Microsoft.EntityFrameworkCore.IDbContextFactory<Ben.Data.Source.Context.BenDataContext>>()));
 // Item 235 phase 1B: warns a credit's holder thirty days before it lapses. It only speaks — an
 // unspent credit past its date is gone by the clock, so there is no state for a job to get wrong.
 builder.Services.AddScoped<Ben.Data.WebApi.Services.Scheduling.IScheduledJob,

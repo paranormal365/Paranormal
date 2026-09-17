@@ -163,13 +163,22 @@ public class OrganizationMembershipController : BenControllerBase
                 planDb, organizationId, cancellationToken);
         }
 
+        string? readOnlyReason;
+        using (var lapseScope = HttpContext.RequestServices.CreateScope())
+        {
+            var limits = lapseScope.ServiceProvider
+                .GetRequiredService<Ben.Data.WebApi.Services.Billing.SubscriptionLimitGuard>();
+            readOnlyReason = await limits.WhyReadOnlyAsync(organizationId, cancellationToken);
+        }
+
         return Ok(new MyOrgPermissionsResponse(
             CanReadCases: areas[Ben.Data.Common.Enums.OrganizationPermissionArea.Cases].Read,
             CanReadInvestigations: areas[Ben.Data.Common.Enums.OrganizationPermissionArea.Investigations].Read,
             Areas: areas,
             Capabilities: capabilities,
             IsViewer: isViewer,
-            PublicByDefault: publicByDefault));
+            PublicByDefault: publicByDefault,
+            ReadOnlyReason: readOnlyReason));
 
         async Task<bool> MayAsync(
             Ben.Data.Common.Enums.OrganizationSecurityTable table,
@@ -343,7 +352,16 @@ public class OrganizationMembershipController : BenControllerBase
         //
         // Defaulted FALSE, which is the answer that leaves controls working. An older server that
         // says nothing must not lock a paying group's boxes.
-        bool PublicByDefault = false);
+        bool PublicByDefault = false,
+        // Why this group cannot write anything right now, in the server's own words, or null.
+        //
+        // 2026-09-17 audit: nothing reached the browser to say a group was read-only, so every
+        // control a lapsed group cannot use was offered live and failed on the click. The
+        // guard's sentence existed and only the client's own page ever rendered it — the group's
+        // own members were told nothing at all.
+        //
+        // Defaulted null, the answer that leaves controls working.
+        string? ReadOnlyReason = null);
 
     /// <summary>What one person may do in one area. Absent action means refused.</summary>
     public sealed record AreaActions(bool Create, bool Read, bool Update, bool Delete);

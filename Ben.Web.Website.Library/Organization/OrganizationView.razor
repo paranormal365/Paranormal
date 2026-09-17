@@ -193,6 +193,24 @@
             </div>
         }
 
+        @* A lapse said out loud, once, at the top of the group (2026-09-17 audit).
+
+           Until this, nothing on the website told a group's own members they were read-only: the
+           sentence existed on the server and was rendered only on the CLIENT's case page, so
+           every control the group could no longer use was offered live and failed on the click.
+           One banner rather than a per-control lock, because a lapse stops all writing — saying
+           it thirty times is worse than saying it once, and the click that follows now has a
+           sentence behind it either way. *@
+        @if (_isMember && _myPerms?.ReadOnlyReason is { } readOnly)
+        {
+            <div class="alert alert-warning" data-testid="org-read-only">
+                <strong>This group is read-only.</strong> @readOnly
+                <div class="mt-1">
+                    <a href="@($"/organizations/{OrgId}/billing")">Your group's plan</a>
+                </div>
+            </div>
+        }
+
         <BenTabs @bind-ActiveId="_activeTabId">
 
             <BenTab Title="Details" Id="details">

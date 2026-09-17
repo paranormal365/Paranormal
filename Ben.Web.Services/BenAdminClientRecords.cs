@@ -693,8 +693,21 @@ public sealed record MyOrgPermissionsItem(
     /// sentence, rather than live and then refused. False when an older server says nothing, which
     /// leaves every control exactly as it was.
     /// </remarks>
-    bool PublicByDefault = false)
+    bool PublicByDefault = false,
+    /// <summary>
+    /// Why this group can write nothing at the moment, in the server's own words, or null.
+    /// </summary>
+    /// <remarks>
+    /// A lapsed subscription makes a group read-only, and until the 2026-09-17 audit no page on
+    /// the website said so: the sentence was rendered only on the CLIENT's own case page, so a
+    /// group's own members were offered every control and found out by clicking. Null when an
+    /// older server says nothing, which leaves every control exactly as it was.
+    /// </remarks>
+    string? ReadOnlyReason = null)
 {
+    /// <summary>True when the group is read-only, whatever the reason says.</summary>
+    public bool IsReadOnly => ReadOnlyReason is not null;
+
     /// <summary>Whether the group's PLAN includes a capability — a different question from
     /// whether this person may act.</summary>
     /// <remarks>

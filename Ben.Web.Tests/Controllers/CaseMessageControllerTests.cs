@@ -322,4 +322,105 @@ public class CaseMessageControllerTests
         var ok = Assert.IsType<OkObjectResult>(result.Result);
         Assert.Equal(0, ok.Value);
     }
+
+    // ── A lapse stops writing, not reading (2026-09-17 audit) ────────────────────────────────
+    //
+    // The guard's own sentence promises "everything already here stays readable. Renewing brings
+    // everything back exactly as it was." Both GETs on this controller asked WhyReadOnlyAsync and
+    // returned BadRequest, while all nine other call sites in the tree are writes. So a lapsed
+    // group could not read its own client thread — and the phone routes these GETs, maps the
+    // prose to messagesProblem and renders it, which put the word "Renewing" on an iPhone screen.
+    // PaidPlan documents that as an App Review 3.1.1 risk.
+
+    private static async Task<Guid> SeedClientAccountAsync(IDbContextFactory<BenDataContext> factory)
+    {
+        await using var db = await factory.CreateDbContextAsync();
+        var id = Guid.NewGuid();
+        db.Users.Add(new AppUser
+        {
+            Id = id, UserName = $"client{id:N}@t", Email = "client@t",
+            DisplayName = "A Client", DateCreated = DateTime.UtcNow,
+        });
+        await db.SaveChangesAsync();
+        return id;
+    }
+
+    private static async Task LapseAsync(IDbContextFactory<BenDataContext> factory, Guid orgId, Guid actor)
+    {
+        await using var db = await factory.CreateDbContextAsync();
+        db.OrganizationSubscriptions.Add(new OrganizationSubscription
+        {
+            Id = Guid.NewGuid(), OrganizationId = orgId, Status = SubscriptionStatus.Lapsed,
+            Interval = BillingInterval.Monthly,
+            DateCreated = DateTime.UtcNow, CreatedByAppUserId = actor,
+        });
+        await db.SaveChangesAsync();
+    }
+
+    [Fact]
+    public async Task GetMessages_WhenLapsed_StillReadsTheThread()
+    {
+        var (factory, orgId, caseId, userId) = await SeedAsync();
+        await SeedClientMessage(factory, caseId, await SeedClientAccountAsync(factory));
+        await LapseAsync(factory, orgId, userId);
+
+        var result = await BuildController(factory, userId).GetMessages(orgId, caseId, default);
+
+        var ok = Assert.IsType<OkObjectResult>(result.Result);
+        Assert.Single(Assert.IsAssignableFrom<IEnumerable<CaseMessageRecord>>(ok.Value));
+    }
+
+    [Fact]
+    public async Task GetUnreadCount_WhenLapsed_StillCounts()
+    {
+        var (factory, orgId, caseId, userId) = await SeedAsync();
+        await SeedClientMessage(factory, caseId, Guid.NewGuid());
+        await LapseAsync(factory, orgId, userId);
+
+        var result = await BuildController(factory, userId).GetUnreadCount(orgId, caseId, default);
+
+        Assert.Equal(1, Assert.IsType<OkObjectResult>(result.Result).Value);
+    }
+
+    /// <summary>
+    /// The one write on a read path pauses instead. Marking a client's message read is a claim
+    /// that somebody dealt with it, so a lapsed group reading the thread must not consume it.
+    /// </summary>
+    [Fact]
+    public async Task GetMessages_WhenLapsed_DoesNotMarkTheClientsMessageRead()
+    {
+        var (factory, orgId, caseId, userId) = await SeedAsync();
+        await SeedClientMessage(factory, caseId, Guid.NewGuid());
+        await LapseAsync(factory, orgId, userId);
+
+        await BuildController(factory, userId).GetMessages(orgId, caseId, default);
+
+        await using var db = await factory.CreateDbContextAsync();
+        Assert.True(await db.CaseMessages.AnyAsync(m => m.CaseId == caseId && !m.IsReadByOrg));
+    }
+
+    [Fact]
+    public async Task GetMessages_WhenPaying_MarksTheClientsMessageRead()
+    {
+        var (factory, orgId, caseId, userId) = await SeedAsync();
+        await SeedClientMessage(factory, caseId, Guid.NewGuid());
+
+        await BuildController(factory, userId).GetMessages(orgId, caseId, default);
+
+        await using var db = await factory.CreateDbContextAsync();
+        Assert.False(await db.CaseMessages.AnyAsync(m => m.CaseId == caseId && !m.IsReadByOrg));
+    }
+
+    /// <summary>And the write is still refused, which is the rule item 84 actually states.</summary>
+    [Fact]
+    public async Task PostMessage_WhenLapsed_IsStillRefused()
+    {
+        var (factory, orgId, caseId, userId) = await SeedAsync();
+        await LapseAsync(factory, orgId, userId);
+
+        var result = await BuildController(factory, userId)
+            .PostMessage(orgId, caseId, new PostCaseMessageRequest(Body: "Trying to answer"), default);
+
+        Assert.IsType<BadRequestObjectResult>(result.Result);
+    }
 }

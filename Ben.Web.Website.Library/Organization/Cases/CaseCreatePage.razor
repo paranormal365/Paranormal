@@ -139,9 +139,13 @@
                                 </div>
                             </label>
                         </div>
+                        @* The plan is knowable before the click, so it is said beside the control
+                           rather than after the attempt — item 193's rule, and the one the Edit
+                           page has always followed here. *@
                         <div class="form-check mt-2">
                             <input class="form-check-input" type="radio" name="case-place-kind"
                                    id="case-place-kind-residence"
+                                   disabled="@(!_planIncludesPrivate)"
                                    checked="@(_form.PlaceKind == Ben.Data.Common.Enums.PlaceKind.PrivateResidence)"
                                    @onchange="@(() => ChooseKind(Ben.Data.Common.Enums.PlaceKind.PrivateResidence))" />
                             <label class="form-check-label" for="case-place-kind-residence">
@@ -151,6 +155,13 @@
                                     private-engagement work, which needs a plan that covers it.
                                 </div>
                             </label>
+                            @if (!_planIncludesPrivate)
+                            {
+                                <div class="form-text text-warning" data-testid="new-case-private-needs-plan">
+                                    Your group's plan covers public investigations only.
+                                    <a href="/pricing">See what each plan includes.</a>
+                                </div>
+                            }
                         </div>
                     </div>
                 }
@@ -205,6 +216,17 @@
     private bool _mayAccept;
     private bool _publicByDefault;
 
+    /// <summary>
+    /// Whether the group's plan covers private-residence work (item 193).
+    /// </summary>
+    /// <remarks>
+    /// Fails open, as the server does and as the Edit page does. This page offered the residence
+    /// radio with no plan check at all until the 2026-09-17 audit, while Edit Case gated the same
+    /// commitment three times over — so a free-tier group could open a case it could not publish
+    /// and only find out afterwards.
+    /// </remarks>
+    private bool _planIncludesPrivate = true;
+
     protected override async Task OnInitializedAsync()
     {
         if (!await UserState.WaitUntilAuthReadyAsync(RendererInfo.IsInteractive)) return;
@@ -223,6 +245,8 @@
             _mayAccept = perms?.May(Ben.Data.Common.Enums.OrganizationPermissionArea.Cases,
                                     Ben.Data.Common.Enums.OrganizationSecurityAction.Update) == true;
             _publicByDefault = perms?.PublicByDefault ?? false;
+            _planIncludesPrivate = perms?.PlanIncludes(
+                Ben.Data.Common.Enums.TierCapability.PrivateResidenceCases) ?? true;
         }
         catch { _mayAccept = false; }
 
