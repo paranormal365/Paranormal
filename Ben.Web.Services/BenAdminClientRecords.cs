@@ -1703,6 +1703,16 @@ public sealed record DuplicatePlaceGroup(IReadOnlyList<DuplicatePlaceRow> Places
 /// that holds its document belongs to whichever machine ran the suite. Nothing in the product can
 /// open one, which is what makes them safe to delete.
 /// </remarks>
+/// <summary>
+/// How much of this account's personal storage allowance is used, and the cap if there is one.
+/// </summary>
+/// <remarks>
+/// <c>CapBytes</c> is null when a group's paid plan covers this person, and the page says
+/// "uncapped" rather than inventing a number. The endpoint behind this existed with no caller at
+/// all until the 2026-09-17 audit, so nobody was warned before an upload was refused.
+/// </remarks>
+public sealed record AccountStorageItem(long UsedBytes, long? CapBytes);
+
 public sealed record OrphanedFieldSessionRecord(
     Guid Id, string? LocationLabel, string DeviceModel, DateTime StartedAt, DateTime DateCreated,
     int ReadingCount, int MarkerCount, string? RecordedByName,

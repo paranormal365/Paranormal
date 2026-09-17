@@ -385,12 +385,6 @@ public sealed partial class FieldSessionUploadController : BenControllerBase
             CapBytes: covered ? null : await AccountStorageGuard.CapBytesAsync(db, ct)));
     }
 
-    /// <param name="CapBytes">
-    /// Null when nothing caps this account — a member of a group on a paid plan, whose personal
-    /// sessions ride along with what the group already pays for.
-    /// </param>
-    public sealed record AccountStorageRecord(long UsedBytes, long? CapBytes);
-
     /// <summary>Everything anyone has sent up for one investigation.</summary>
     [HttpGet("for-investigation/{investigationId:guid}")]
     public async Task<ActionResult<IEnumerable<FieldSessionRecord>>> GetForInvestigation(
@@ -1009,6 +1003,21 @@ public sealed record DeviceDataSummary(
             MarkerCount: markerCount);
     }
 }
+
+/// <summary>
+/// How much of a personal account's storage allowance is used.
+/// </summary>
+/// <remarks>
+/// <para><b>CapBytes is null when nothing caps this account</b> — a member of a group on a paid
+/// plan, whose personal sessions ride along with what the group already pays for. A figure they
+/// are not measured against would be a lie however carefully it were labelled.</para>
+///
+/// <para>File-scoped rather than nested in the controller so the website can name it. It was
+/// nested, which is one of the reasons nothing read it: the 2026-09-17 audit found this endpoint
+/// had no caller anywhere, while the phone hardcoded "2 GB" from a comment in
+/// <c>SessionTrim.swift</c> — so a covered member was told a cap that does not apply to them.</para>
+/// </remarks>
+public sealed record AccountStorageRecord(long UsedBytes, long? CapBytes);
 
 public sealed record FieldSessionRecord(
     Guid Id, Guid? InvestigationId, Guid DeviceSessionId, string DeviceModel, string? LocationLabel,

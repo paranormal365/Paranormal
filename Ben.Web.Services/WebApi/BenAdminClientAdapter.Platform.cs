@@ -114,6 +114,9 @@ public sealed partial class BenAdminClientAdapter
         return (error is null, error);
     }
 
+    public Task<AccountStorageItem?> GetMyStorageAsync(CancellationToken token = default)
+        => _api.GetAsync<AccountStorageItem>("/api/field-sessions/my-storage", token);
+
     public string GetArchiveMediaUrl(Guid fieldSessionId, Guid uploadFileId)
         => $"{_webApiBaseUrl}/api/public/field-sessions/{fieldSessionId}/media/{uploadFileId}";
 
