@@ -321,6 +321,9 @@
                     new NavItem("Moderation", "shield", children:
                     [
                         new NavItem("Media Review",   "image", "/moderation/media"),
+                        // The place archive's own queue. Its endpoints existed with no entrance,
+                        // so a flagged session or photograph stayed held forever (2026-09-17).
+                        new NavItem("Place Archive",  "archive", "/moderation/archive"),
                         new NavItem("Reported Posts", "flag",  "/admin/feed-reports"),
                     ]),
                 }));
@@ -379,6 +382,7 @@
             // hiding the only way to see them would strand them.
             new NavItem("Reported Posts",       "flag",   "/admin/feed-reports"),
             new NavItem("Media Review",         "image",  "/moderation/media"),
+            new NavItem("Place Archive",        "archive", "/moderation/archive"),
             new NavItem("Group Ads",            "star",   "/admin/org-ads"),
             new NavItem("Merge Groups",         "git-merge", "/admin/merge-groups"),
             new NavItem("Duplicate Places",     "map-pin", "/admin/place-duplicates"),

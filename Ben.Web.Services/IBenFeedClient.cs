@@ -49,6 +49,29 @@ public interface IBenFeedClient
     /// <summary>How much is waiting, and whether screening is automatic.</summary>
     Task<FeedModerationSummary?> GetModerationSummaryAsync(CancellationToken token = default);
 
+    // ── The place archive's queue (2026-09-17 audit) ─────────────────────────
+    //
+    // These four endpoints existed and nothing called them, so a field session or a guest's
+    // photograph flagged by any reader went to Held and stayed there: only Approved is served,
+    // and the release route had no client. The flag's own design note says "the flag acts, then a
+    // person decides" — this is the half that lets a person decide.
+
+    /// <summary>Published sessions whose media is waiting on a decision, oldest first.</summary>
+    Task<LoadResult<ArchiveMediaReviewRow>> GetArchiveMediaReviewAsync(
+        bool includeHeld = false, CancellationToken token = default);
+
+    /// <summary>Approves or holds one published session's media.</summary>
+    Task<bool> ReviewArchiveMediaAsync(
+        Guid sessionId, bool approve, string? note = null, CancellationToken token = default);
+
+    /// <summary>Event evidence published to a place and waiting on a decision, oldest first.</summary>
+    Task<LoadResult<ArchiveEvidenceReviewRow>> GetArchiveEvidenceReviewAsync(
+        bool includeHeld = false, CancellationToken token = default);
+
+    /// <summary>Approves or holds one published piece of event evidence.</summary>
+    Task<bool> ReviewArchiveEvidenceAsync(
+        Guid submissionId, bool approve, string? note = null, CancellationToken token = default);
+
     /// <summary>Where a moderator's browser fetches a file under review, whatever its state.</summary>
     string GetModerationMediaUrl(Guid postId);
 

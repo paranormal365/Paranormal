@@ -57,6 +57,26 @@ public sealed partial class BenAdminClientAdapter
     public Task<FeedModerationSummary?> GetModerationSummaryAsync(CancellationToken token = default)
         => _api.GetAsync<FeedModerationSummary>("/api/moderation/summary", token);
 
+    public Task<LoadResult<ArchiveMediaReviewRow>> GetArchiveMediaReviewAsync(
+        bool includeHeld = false, CancellationToken token = default)
+        => _api.GetListAsync<ArchiveMediaReviewRow>(
+            $"/api/moderation/archive-media?includeHeld={(includeHeld ? "true" : "false")}", token);
+
+    public Task<bool> ReviewArchiveMediaAsync(
+        Guid sessionId, bool approve, string? note = null, CancellationToken token = default)
+        => _api.PostVoidAsync($"/api/moderation/archive-media/{sessionId}",
+                              new ReviewFeedMediaRequest(approve, note), token);
+
+    public Task<LoadResult<ArchiveEvidenceReviewRow>> GetArchiveEvidenceReviewAsync(
+        bool includeHeld = false, CancellationToken token = default)
+        => _api.GetListAsync<ArchiveEvidenceReviewRow>(
+            $"/api/moderation/archive-evidence?includeHeld={(includeHeld ? "true" : "false")}", token);
+
+    public Task<bool> ReviewArchiveEvidenceAsync(
+        Guid submissionId, bool approve, string? note = null, CancellationToken token = default)
+        => _api.PostVoidAsync($"/api/moderation/archive-evidence/{submissionId}",
+                              new ReviewFeedMediaRequest(approve, note), token);
+
     public string GetModerationMediaUrl(Guid postId)
         => $"{_webApiBaseUrl}/api/moderation/feed-media/{postId}/file";
 

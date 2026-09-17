@@ -297,6 +297,50 @@ public sealed record FeedModerationSummary(
     int FeedPostCount = 0);
 
 
+/// <summary>One published field session waiting on a reviewer's decision about its media.</summary>
+/// <remarks>
+/// <para>Carries the place and the contributor because that is what the decision turns on: a night
+/// at a public landmark and a night somewhere a reviewer does not recognise are different
+/// questions, and the readings are already public either way.</para>
+///
+/// <para>Moved here from the controller file on 2026-09-17. It had lived in the API project, which
+/// the website cannot reference — so the queue could not be rendered even in principle, and the
+/// two endpoints behind it sat uncalled while flagged sessions stayed held forever.</para>
+/// </remarks>
+public sealed record ArchiveMediaReviewRow(
+    Guid SessionId,
+    string ContributorName,
+    string? PlaceName,
+    Guid PlaceId,
+    string? LocationLabel,
+    DateTime StartedAt,
+    DateTime PublishedAtUtc,
+    int FileCount,
+    FeedMediaReviewState State,
+    string? Note);
+
+/// <summary>
+/// One piece of event evidence, published to a place's archive and waiting on a decision.
+/// </summary>
+/// <remarks>
+/// The same question as <see cref="ArchiveMediaReviewRow"/> — should a stranger see this at this
+/// place — about the other thing that reaches a place archive. Its flag path set Held and wrote a
+/// reason for "the moderator queue" that did not exist (2026-09-17 audit), so one flag from one
+/// reader removed a guest's photograph permanently.
+/// </remarks>
+public sealed record ArchiveEvidenceReviewRow(
+    Guid SubmissionId,
+    Guid EventId,
+    string EventTitle,
+    string ContributorName,
+    string? PlaceName,
+    Guid? PlaceId,
+    string? Caption,
+    DateTime PublishedAtUtc,
+    FeedMediaReviewState State,
+    string? Note);
+
+
 /// <summary>
 /// One GIF from Giphy, trimmed to what a picker shows and what a post carries (item 233).
 /// </summary>

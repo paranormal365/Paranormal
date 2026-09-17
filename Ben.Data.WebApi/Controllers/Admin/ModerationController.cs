@@ -3,6 +3,7 @@ using Ben.Data.Common.Enums;
 using Ben.Data.Common.Interfaces;
 using Ben.Data.Source.Context;
 using Ben.Data.WebApi.Services;
+using Ben.Data.WebApi.Controllers.Public;
 using Ben.Data.WebApi.Services.Feed;
 using Ben.Service.Models.Feed;
 using Microsoft.AspNetCore.Authorization;
@@ -248,6 +249,73 @@ public sealed class ModerationController : BenControllerBase
             .ToListAsync(ct));
     }
 
+    /// <summary>
+    /// Event evidence published to a place's archive and waiting on a person, oldest first.
+    /// </summary>
+    /// <remarks>
+    /// <para>The other thing that reaches a place archive, and the same question about it. Its
+    /// flag path wrote a reason for "the moderator queue" and there was no queue (2026-09-17
+    /// audit): <c>ArchiveReviewState</c> went to Held, nothing could ever set it back, and
+    /// <see cref="ArchiveEvidencePublication"/> serves only Approved. So one flag from one reader
+    /// permanently removed a guest's photograph with no appeal.</para>
+    ///
+    /// <para>Kept beside the session queue rather than merged with it: a reviewer looking at a
+    /// guest's single photograph from an event is answering about one image, and a night's
+    /// recording is answering about a building. The page shows both under one heading.</para>
+    /// </remarks>
+    [HttpGet("archive-evidence")]
+    public async Task<ActionResult<IReadOnlyList<ArchiveEvidenceReviewRow>>> GetArchiveEvidence(
+        [FromQuery] bool includeHeld, CancellationToken ct)
+    {
+        await using var db = await _db.CreateDbContextAsync(ct);
+
+        return Ok(await db.EventEvidenceSubmissions.AsNoTracking()
+            .Where(e => e.PublishedToPlaceAtUtc != null
+                     && (e.ArchiveReviewState == FeedMediaReviewState.Pending
+                         || (includeHeld && e.ArchiveReviewState == FeedMediaReviewState.Held)))
+            .OrderBy(e => e.PublishedToPlaceAtUtc)
+            .Select(e => new ArchiveEvidenceReviewRow(
+                e.Id,
+                e.OrgCalendarEventId,
+                e.OrgCalendarEvent.Title,
+                e.SubmittedByAppUser.DisplayName ?? e.SubmittedByAppUser.Email ?? "Unknown",
+                e.OrgCalendarEvent.Place!.Name,
+                e.OrgCalendarEvent.PlaceId,
+                e.Note,
+                e.PublishedToPlaceAtUtc!.Value,
+                e.ArchiveReviewState,
+                e.ArchiveReviewNote))
+            .ToListAsync(ct));
+    }
+
+    /// <summary>Approves or holds one published piece of event evidence.</summary>
+    /// <remarks>
+    /// Approving is what releases a flagged photograph. Until this existed, Held was terminal.
+    /// </remarks>
+    [HttpPost("archive-evidence/{submissionId:guid}")]
+    public async Task<IActionResult> ReviewArchiveEvidence(
+        Guid submissionId, [FromBody] ReviewFeedMediaRequest request, CancellationToken ct)
+    {
+        var userId = GetCurrentUserIdOrThrow();
+        await using var db = await _db.CreateDbContextAsync(ct);
+
+        var submission = await db.EventEvidenceSubmissions
+            .FirstOrDefaultAsync(e => e.Id == submissionId, ct);
+        if (submission is null) return NotFound();
+
+        submission.ArchiveReviewState = request.Approve
+            ? FeedMediaReviewState.Approved
+            : FeedMediaReviewState.Held;
+        submission.ArchiveReviewNote = string.IsNullOrWhiteSpace(request.Note)
+            ? submission.ArchiveReviewNote
+            : request.Note.Trim();
+        submission.UpdatedByAppUserId = userId;
+        submission.DateUpdated = DateTime.UtcNow;
+
+        await db.SaveChangesAsync(ct);
+        return NoContent();
+    }
+
     /// <summary>Approves or holds one published session's media.</summary>
     /// <remarks>
     /// Idempotent in the way that matters, like the feed's: deciding the same way twice moves
@@ -300,20 +368,3 @@ public sealed class ModerationController : BenControllerBase
     }
 }
 
-/// <summary>One published session waiting on a reviewer's decision about its media.</summary>
-/// <remarks>
-/// Carries the place and the contributor because that is what the decision turns on: a night at a
-/// public landmark and a night somewhere a reviewer does not recognise are different questions,
-/// and the readings are already public either way.
-/// </remarks>
-public sealed record ArchiveMediaReviewRow(
-    Guid SessionId,
-    string ContributorName,
-    string? PlaceName,
-    Guid PlaceId,
-    string? LocationLabel,
-    DateTime StartedAt,
-    DateTime PublishedAtUtc,
-    int FileCount,
-    Ben.Data.Common.Enums.FeedMediaReviewState State,
-    string? Note);
