@@ -90,9 +90,18 @@ public sealed class OrgPublicController : ControllerBase
             .Where(a => a.OrganizationId == org.Id)
             .Select(a => new { a.DisplayLabel, a.RadiusMiles })
             .FirstOrDefaultAsync(ct);
+        // Honours the two switches the owner actually set (2026-09-17 audit).
+        //
+        // This took the first address by Id with no filter at all, so an owner could mark an
+        // address Private — and see a grey "Private" badge confirming it — while this line put
+        // that address's city and state on the group's public page. PublicDisplayMode.Hidden means
+        // "show nothing to this audience" and was equally ignored. RegionOnly still discloses a
+        // region, which a city and state are, so it passes.
         var city = await db.OrganizationAddresses.AsNoTracking()
-            .Where(a => a.OrganizationId == org.Id)
-            .OrderBy(a => a.Id)
+            .Where(a => a.OrganizationId == org.Id
+                     && a.Visibility == Ben.Data.Common.Enums.OrganizationAddressVisibility.Public
+                     && a.PublicDisplayMode != Ben.Data.Common.Enums.OrganizationAddressDisplayMode.Hidden)
+            .OrderBy(a => a.SortOrder).ThenBy(a => a.Id)
             .Select(a => new { a.City, a.State })
             .FirstOrDefaultAsync(ct);
         var place = city is not null && !string.IsNullOrWhiteSpace(city.City)

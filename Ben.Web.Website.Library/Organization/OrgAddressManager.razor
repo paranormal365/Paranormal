@@ -79,14 +79,20 @@ else
                             </div>
                         </div>
                     }
-                    <div class="col-sm-6">
+                    <div class="col-12">
                         <label class="form-label">Public display</label>
                         <BenSelect Data="@_displayModeOptions" @bind-Value="@_formPublicDisplayMode" TextField="Label" ValueField="Value" Width="100%" />
                     </div>
-                    <div class="col-sm-6">
-                        <label class="form-label">Member display</label>
-                        <BenSelect Data="@_displayModeOptions" @bind-Value="@_formMemberDisplayMode" TextField="Label" ValueField="Value" Width="100%" />
-                    </div>
+                    @* "Member display" was here, offering Full address + map / Map pin only /
+                       Region only / Hidden. The 2026-09-17 audit found MemberDisplayMode has zero
+                       readers, so members always saw everything and the choice was a decision with
+                       no effect — while its sibling PublicDisplayMode IS enforced, which is what
+                       made the asymmetry unambiguous.
+
+                       Withdrawn rather than enforced because there is no member-facing address
+                       surface to enforce it on: this list is the manager's own screen, gated on
+                       OrganizationAddress.Read, and it has to show the full address to edit it.
+                       The column and the API field stay for the day that surface exists. *@
                     <div class="col-12 d-flex align-items-center gap-2">
                         <input type="checkbox" class="form-check-input" id="addr-search" @bind="@_formIsSearchable" />
                         <label for="addr-search">Include in proximity search</label>
