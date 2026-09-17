@@ -126,6 +126,15 @@ else if (_desk is { GroupCount: > 0 })
                     <div class="card-header py-2 d-flex justify-content-between">
                         <span>Gear checked out to you</span>
                         <a href="/my-equipment" class="small">@_desk.GearCheckedOutCount item@(_desk.GearCheckedOutCount == 1 ? "" : "s")</a>
+                        @* The total the server has always computed and no page read (2026-09-17
+                           audit). The per-item badge below says which one is late; this says how
+                           many, which is the at-a-glance fact a desk is for. *@
+                        @if (_desk.OverdueGearCount > 0)
+                        {
+                            <span class="badge text-bg-danger ms-1" data-testid="desk-overdue-total">
+                                @_desk.OverdueGearCount overdue
+                            </span>
+                        }
                     </div>
                     <div class="card-body p-0">
                         @if (_desk.GearCheckedOut.Count == 0)
