@@ -160,6 +160,10 @@ public sealed class CaseController : BenControllerBase
         await using var db = await _db.CreateDbContextAsync(ct);
         var c = await db.Cases.AsNoTracking()
             .Include(x => x.CaseManagerAppUser)
+            // The place's name, for the banner that sends somebody to its page. Same reasoning as
+            // the manager navigation above: the record maps a name off it, so a query without it
+            // answers null and the page draws a blank where a name belongs (W-A9).
+            .Include(x => x.Place)
             .FirstOrDefaultAsync(x => x.Id == caseId && x.OrganizationId == orgId, ct);
         return c is null ? NotFound() : Ok(_mapper.Map<CaseRecord>(c));
     }
@@ -332,10 +336,6 @@ public sealed class CaseController : BenControllerBase
         // than left for the default to walk into: the contribute door on field sessions (which
         // would have let anyone upload to a brand-new case's visits) and the count on a group's
         // public page (which would have overstated it).
-        // A case at somebody's home is never swept up by this. It cannot be one yet — the
-        // designation is set when a residence place is bound, and an unpaid account is refused that
-        // by PrivateCaseGate — and Phase 2's mandatory "what kind of place is this" is what makes
-        // the intention safe before a place exists to read.
         var publicByDefault = await Services.Billing.PaidPlan.PublicByDefaultAsync(db, orgId, ct);
 
         var entity = new Case
@@ -343,7 +343,9 @@ public sealed class CaseController : BenControllerBase
             Id                 = Guid.NewGuid(),
             OrganizationId     = orgId,
             Status             = status,
-            IsPublic           = publicByDefault,
+            // Decided below, once the place is known: a case at somebody's home is never swept up
+            // by the free lane's rule, and the place is what says whether it is one.
+            IsPublic           = false,
             Title              = request.Title.Trim(),
             Description        = CleanDescription(request.Description, _sanitizer),
             StreetAddress1     = request.StreetAddress1.Trim(),
@@ -362,6 +364,23 @@ public sealed class CaseController : BenControllerBase
         entity.CaseYear     = yr;
         entity.OrgCaseNumber = num;
         db.Cases.Add(entity);
+
+        // ── The shared place this case is about (2026-09-17) ──────────────────
+        // Before the publication decision, because the decision depends on it. Binding a residence
+        // here is also what designates the case private-lane work, so this may refuse the whole
+        // create — which is right: the alternative is a case that exists at a home the group's plan
+        // does not cover.
+        var placement = await Services.Places.CasePlacement.ApplyAsync(
+            db, entity, request.PlaceId, request.NewPlace, userId, ct);
+        if (placement.Error is not null) return BadRequest(placement.Error);
+
+        // Public from the start on an account that pays nothing, and only at a public location.
+        // A residence is the paid lane whatever the plan says, and a case with no place named has
+        // nothing to say it is public — so it is not.
+        entity.IsPublic = publicByDefault
+                       && !entity.IsPrivateEngagement
+                       && placement.Place?.Kind == PlaceKind.PublicLocation;
+
         await db.SaveChangesAsync(ct);
         return CreatedAtAction(nameof(GetById), new { orgId, caseId = entity.Id },
             _mapper.Map<CaseRecord>(entity));
@@ -1000,7 +1019,17 @@ public sealed record CreateCaseRequest(
     // Ben, 2026-09-17: "unless I say it is up to a group decision, it should be accepted."
     // Trailing and defaulted, so the shipped iPhone app and every existing caller keep their
     // meaning — false is what they have always effectively asked for.
-    bool PutToTheGroup = false);
+    bool PutToTheGroup = false,
+    // ── The shared place this case is about (2026-09-17) ────────────────────────────────────
+    // Name one that already exists, or describe a new one; both optional, and in practice
+    // exclusive. A case that names neither is unplaced, exactly as every case was before today —
+    // see CasePlacement for why nothing is derived from the case's own address.
+    //
+    // NewPlace.Kind is the "what kind of location is this" answer, and it matters twice: a
+    // residence designates the case private-lane work permanently, and a public location is what
+    // makes an unpaid account's case public. The New Case page requires it.
+    Guid? PlaceId = null,
+    Services.Places.NewPlaceRequest? NewPlace = null);
 
 public sealed record AcceptClientRequestAsCaseRequest(
     string? Title,

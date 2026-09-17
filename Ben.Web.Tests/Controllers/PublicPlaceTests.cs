@@ -225,4 +225,117 @@ public class PublicPlaceTests
         Assert.Null(response.Place.Latitude);
         Assert.Single(response.Investigations);
     }
+
+    // ── Cases written up here (2026-09-17) ───────────────────────────────────
+
+    /// <summary>Adds a case at the seeded place.</summary>
+    private static async Task AddCaseAsync(
+        IDbContextFactory<BenDataContext> f, string title, bool isPublic, CaseStatus status,
+        bool atThePlace = true, bool privateEngagement = false, string? urlName = "the-old-depot")
+    {
+        await using var db = await f.CreateDbContextAsync();
+        db.Cases.Add(new Case
+        {
+            Id = Guid.NewGuid(), OrganizationId = OrgId,
+            PlaceId = atThePlace ? PlaceId : null,
+            Title = title, UrlName = urlName,
+            CaseYear = 2026, OrgCaseNumber = await db.Cases.CountAsync() + 1,
+            StreetAddress1 = "1 Keysburg Rd", City = "Adams", State = "TN",
+            ZipCode = "37010", Country = "US",
+            IsPublic = isPublic, Status = status, IsPrivateEngagement = privateEngagement,
+            DateCaseOpened = new DateTime(2024, 6, 1, 0, 0, 0, DateTimeKind.Utc),
+            DateCreated = DateTime.UtcNow, CreatedByAppUserId = Guid.NewGuid(),
+        });
+        await db.SaveChangesAsync();
+    }
+
+    [Fact]
+    public async Task A_published_case_at_this_place_is_listed()
+    {
+        var f = await SeedAsync();
+        await AddCaseAsync(f, "The old depot", isPublic: true, status: CaseStatus.Public);
+
+        var row = Assert.Single((await GetAsync(f)).Cases!);
+
+        Assert.Equal("The old depot", row.Title);
+        Assert.Equal("#2026-001", row.CaseReference);
+        Assert.Equal(2024, row.OpenedYear);
+        // So the row can link to the case and to its group without a second lookup.
+        Assert.Equal("the-old-depot", row.UrlName);
+        Assert.Equal("paranormal365", row.OrganizationUrlName);
+    }
+
+    /// <summary>
+    /// The same two conditions the case's own public page uses, and both are load-bearing. A case
+    /// merely flagged public is not published, and from 2026-09-17 an unpaid account's cases carry
+    /// that flag from birth — so the flag alone would put every one of them on a public page.
+    /// </summary>
+    [Theory]
+    [InlineData(true,  CaseStatus.Proposed,   false)]
+    [InlineData(true,  CaseStatus.Accepted,   false)]
+    [InlineData(true,  CaseStatus.Active,     false)]
+    [InlineData(true,  CaseStatus.Closed,     false)]
+    [InlineData(false, CaseStatus.Public,     false)]
+    [InlineData(true,  CaseStatus.Public,     true)]
+    [InlineData(true,  CaseStatus.Haunted,    true)]
+    public async Task Only_a_published_case_reaches_the_place_page(
+        bool isPublic, CaseStatus status, bool listed)
+    {
+        var f = await SeedAsync();
+        await AddCaseAsync(f, "The old depot", isPublic, status);
+
+        var cases = (await GetAsync(f)).Cases!;
+        Assert.Equal(listed ? 1 : 0, cases.Count);
+    }
+
+    [Fact]
+    public async Task A_published_case_somewhere_else_is_not_listed()
+    {
+        var f = await SeedAsync();
+        await AddCaseAsync(f, "Elsewhere", isPublic: true, status: CaseStatus.Public, atThePlace: false);
+
+        Assert.Empty((await GetAsync(f)).Cases!);
+    }
+
+    /// <summary>
+    /// A private-engagement case reaches this list only by being published, which item 184 gates on
+    /// the plan — and its prose is redacted on the way out, exactly as on the case's own page. The
+    /// title here carries no client name because a roster with nothing in it redacts nothing; the
+    /// point of the test is that the redactor is asked at all.
+    /// </summary>
+    [Fact]
+    public async Task A_published_private_engagement_case_goes_through_the_redactor()
+    {
+        var f = await SeedAsync();
+        await AddCaseAsync(f, "A family home", isPublic: true, status: CaseStatus.Public,
+                           privateEngagement: true);
+
+        var row = Assert.Single((await GetAsync(f)).Cases!);
+        Assert.Equal("A family home", row.Title);
+    }
+
+    /// <summary>
+    /// A case published before slugs existed still has somewhere to point, rather than a link to
+    /// nothing — the same fallback the group's own public case list uses.
+    /// </summary>
+    [Fact]
+    public async Task A_case_with_no_slug_falls_back_to_its_reference()
+    {
+        var f = await SeedAsync();
+        await AddCaseAsync(f, "Before slugs", isPublic: true, status: CaseStatus.Public, urlName: null);
+
+        Assert.Equal("2026-001", Assert.Single((await GetAsync(f)).Cases!).UrlName);
+    }
+
+    [Fact]
+    public async Task A_place_with_no_cases_answers_an_empty_list_rather_than_null()
+    {
+        var f = await SeedAsync();
+        await AddAsync(f, "Published", InvestigationVisibility.Public);
+
+        // Empty, not null: the page branches on Count, and a null would read as "an older server
+        // that does not know about cases" rather than "no cases here".
+        Assert.NotNull((await GetAsync(f)).Cases);
+        Assert.Empty((await GetAsync(f)).Cases!);
+    }
 }

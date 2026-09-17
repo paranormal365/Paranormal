@@ -1,5 +1,6 @@
 @page "/organizations/{OrgId:guid}/cases/new"
 @using Ben.Web.Services
+@using Ben.Web.Website.Library.Kit.Places
 @inject IBenAdminClient AdminClient
 @inject IBenUserState UserState
 @inject NavigationManager NavManager
@@ -63,6 +64,97 @@
                     <input id="casecreatepage-zip-code-ba79" type="text" class="form-control" @bind="@_form.ZipCode" @bind:event="oninput" />
                 </div>
 
+                @* ── Which place is this? (2026-09-17) ───────────────────────────────────
+                   A case now names the shared place it is about, so the place's page can gather
+                   every group's work at one location. Offered, never applied: the candidate list
+                   suggests, and only the person typing knows whether it is really the same
+                   building. *@
+                <div class="col-12">
+                    <hr class="my-1" />
+                    <div class="fw-semibold small text-secondary mb-2">The place</div>
+                </div>
+
+                @if (_chosenPlace is { } chosen)
+                {
+                    <div class="col-12">
+                        <div class="alert alert-success py-2 d-flex justify-content-between align-items-center mb-0"
+                             data-testid="case-place-chosen">
+                            <div>
+                                <div class="fw-semibold">@DescribePlace(chosen)</div>
+                                <div class="small">
+                                    @(chosen.Kind == Ben.Data.Common.Enums.PlaceKind.PublicLocation
+                                        ? "A public location."
+                                        : "A private residence.")
+                                    @if (chosen.InvestigationCount > 0)
+                                    {
+                                        @($" {chosen.InvestigationCount} investigation{(chosen.InvestigationCount == 1 ? "" : "s")} already recorded here.")
+                                    }
+                                </div>
+                            </div>
+                            <button type="button" class="btn btn-outline-secondary btn-sm"
+                                    @onclick="ClearChosenPlace">Change</button>
+                        </div>
+                    </div>
+                }
+                else
+                {
+                    <div class="col-12">
+                        <label class="form-label" for="case-place-name">
+                            Name of the place <span class="text-secondary small">(a landmark or building, if it has one)</span>
+                        </label>
+                        <input id="case-place-name" type="text" class="form-control" placeholder="e.g. Cragfont"
+                               @bind="@_form.PlaceName" @bind:event="oninput" />
+                        <div class="form-text">
+                            Leave this blank for an ordinary address. The address above is what the
+                            place is matched on.
+                        </div>
+                    </div>
+
+                    <div class="col-12">
+                        <BenPlaceCandidates Street="@_form.StreetAddress1" City="@_form.City"
+                                            State="@_form.State" Zip="@_form.ZipCode"
+                                            Name="@_form.PlaceName"
+                                            OnChosen="ChoosePlace" />
+                    </div>
+
+                    @* No default on purpose. Every consequence of this answer is heavy — a
+                       residence designates the case private-lane work permanently, a public
+                       location is what makes a free account's case public — and a default would be
+                       one of them chosen by nobody. *@
+                    <div class="col-12">
+                        <div class="form-label fw-semibold">
+                            What kind of place is this? <span class="text-danger">*</span>
+                        </div>
+                        <div class="form-check">
+                            <input class="form-check-input" type="radio" name="case-place-kind"
+                                   id="case-place-kind-public"
+                                   checked="@(_form.PlaceKind == Ben.Data.Common.Enums.PlaceKind.PublicLocation)"
+                                   @onchange="@(() => ChooseKind(Ben.Data.Common.Enums.PlaceKind.PublicLocation))" />
+                            <label class="form-check-label" for="case-place-kind-public">
+                                <span class="fw-semibold">Public location</span>
+                                <div class="form-text mb-0">
+                                    A landmark, a business, anywhere that is not somebody's home.
+                                    Its page gathers every group's work there, and anyone may add to
+                                    it.@(_publicByDefault ? " On this account your case here is public." : "")
+                                </div>
+                            </label>
+                        </div>
+                        <div class="form-check mt-2">
+                            <input class="form-check-input" type="radio" name="case-place-kind"
+                                   id="case-place-kind-residence"
+                                   checked="@(_form.PlaceKind == Ben.Data.Common.Enums.PlaceKind.PrivateResidence)"
+                                   @onchange="@(() => ChooseKind(Ben.Data.Common.Enums.PlaceKind.PrivateResidence))" />
+                            <label class="form-check-label" for="case-place-kind-residence">
+                                <span class="fw-semibold">Private residence</span>
+                                <div class="form-text mb-0">
+                                    Somebody's home. Findings stay with your group, and this is
+                                    private-engagement work, which needs a plan that covers it.
+                                </div>
+                            </label>
+                        </div>
+                    </div>
+                }
+
                 @* Shown only to somebody who could accept the case anyway: for everybody else it
                    goes to the group whatever the box says, and a box that changes nothing is worse
                    than no box (Ben, 2026-09-17). *@
@@ -100,11 +192,18 @@
 @code {
     [Parameter] public Guid OrgId { get; set; }
 
+    /// <summary>
+    /// A place chosen before arriving — the place page's "Open a case here" button.
+    /// </summary>
+    [SupplyParameterFromQuery(Name = "place")] public Guid? PrechosenPlaceId { get; set; }
+
     private readonly CaseForm _form = new();
+    private PlaceCandidate? _chosenPlace;
     private BenEditor? _descriptionEditor;
     private bool _saving;
     private string? _error;
     private bool _mayAccept;
+    private bool _publicByDefault;
 
     protected override async Task OnInitializedAsync()
     {
@@ -116,14 +215,76 @@
         }
 
         // Whether this person could accept the case once it exists — the same permission the
-        // server asks before accepting it on the way in.
+        // server asks before accepting it on the way in — and whether the plan makes work at a
+        // public place public, which the kind choice explains.
         try
         {
             var perms = await AdminClient.GetMyOrgPermissionsAsync(OrgId);
             _mayAccept = perms?.May(Ben.Data.Common.Enums.OrganizationPermissionArea.Cases,
                                     Ben.Data.Common.Enums.OrganizationSecurityAction.Update) == true;
+            _publicByDefault = perms?.PublicByDefault ?? false;
         }
         catch { _mayAccept = false; }
+
+        // Arrived from a place's own page ("Open a case here"), so the place is already settled and
+        // its address fills the form rather than being retyped into a second copy of it.
+        if (PrechosenPlaceId is { } prechosen) await AdoptPlaceAsync(prechosen);
+    }
+
+    /// <summary>
+    /// Takes a place the caller already named and fills the form from it.
+    /// </summary>
+    /// <remarks>
+    /// Read through the public place endpoint, which needs no membership: somebody may open a case
+    /// at a place their group has never touched, which is the whole point of arriving this way. A
+    /// place that cannot be read is simply not adopted — the form is then the ordinary one, and
+    /// nothing is lost but a shortcut.
+    /// </remarks>
+    private async Task AdoptPlaceAsync(Guid placeId)
+    {
+        try
+        {
+            var place = await AdminClient.GetPlaceAsync(placeId);
+            if (place is null) return;
+
+            _chosenPlace = new PlaceCandidate(
+                place.Id, place.Name, place.StreetAddress1, place.City, place.State,
+                place.Kind, DistanceMiles: null, InvestigationCount: 0);
+
+            _form.PlaceName = place.Name;
+            if (!string.IsNullOrWhiteSpace(place.StreetAddress1)) _form.StreetAddress1 = place.StreetAddress1!;
+            if (!string.IsNullOrWhiteSpace(place.City))  _form.City  = place.City!;
+            if (!string.IsNullOrWhiteSpace(place.State)) _form.State = place.State!;
+            if (!string.IsNullOrWhiteSpace(place.ZipCode)) _form.ZipCode = place.ZipCode!;
+        }
+        catch { /* the shortcut is a convenience, never a precondition */ }
+    }
+
+    private void ChoosePlace(PlaceCandidate candidate)
+    {
+        _chosenPlace = candidate;
+
+        // The place decides what kind of location this is, so the answer follows it rather than
+        // whatever was ticked before the place was known.
+        _form.PlaceKind = candidate.Kind;
+        _form.PlaceName = candidate.Name ?? _form.PlaceName;
+        if (!string.IsNullOrWhiteSpace(candidate.StreetAddress1)) _form.StreetAddress1 = candidate.StreetAddress1!;
+        if (!string.IsNullOrWhiteSpace(candidate.City))  _form.City  = candidate.City!;
+        if (!string.IsNullOrWhiteSpace(candidate.State)) _form.State = candidate.State!;
+    }
+
+    private void ClearChosenPlace() => _chosenPlace = null;
+
+    private void ChooseKind(Ben.Data.Common.Enums.PlaceKind kind) => _form.PlaceKind = kind;
+
+    private static string DescribePlace(PlaceCandidate candidate)
+    {
+        if (!string.IsNullOrWhiteSpace(candidate.Name)) return candidate.Name!;
+
+        var parts = new[] { candidate.StreetAddress1, candidate.City, candidate.State }
+            .Where(p => !string.IsNullOrWhiteSpace(p));
+        var described = string.Join(", ", parts);
+        return string.IsNullOrWhiteSpace(described) ? "A place with no address on file" : described;
     }
 
     private bool IsValid =>
@@ -131,7 +292,10 @@
         !string.IsNullOrWhiteSpace(_form.StreetAddress1) &&
         !string.IsNullOrWhiteSpace(_form.City)    &&
         !string.IsNullOrWhiteSpace(_form.State)   &&
-        !string.IsNullOrWhiteSpace(_form.ZipCode);
+        !string.IsNullOrWhiteSpace(_form.ZipCode) &&
+        // The kind has no default, so an unanswered question blocks Open Case rather than being
+        // decided by whichever value happened to be first.
+        (_chosenPlace is not null || _form.PlaceKind is not null);
 
     private async Task Submit()
     {
@@ -151,7 +315,18 @@
                 _form.ZipCode.Trim(),
                 "US",
                 null, null,
-                _form.PutToTheGroup);
+                _form.PutToTheGroup,
+                // One or the other: a place already on file, or the one being described here.
+                PlaceId: _chosenPlace?.Id,
+                NewPlace: _chosenPlace is not null ? null : new NewPlaceRequest(
+                    Name: string.IsNullOrWhiteSpace(_form.PlaceName) ? null : _form.PlaceName!.Trim(),
+                    StreetAddress1: _form.StreetAddress1.Trim(),
+                    StreetAddress2: string.IsNullOrWhiteSpace(_form.StreetAddress2) ? null : _form.StreetAddress2!.Trim(),
+                    City: _form.City.Trim(),
+                    State: _form.State.Trim().ToUpperInvariant(),
+                    ZipCode: _form.ZipCode.Trim(),
+                    Country: "US",
+                    Kind: _form.PlaceKind));
 
             var (result, error) = await AdminClient.CreateOrgCaseAsync(OrgId, request);
             if (result is not null)
@@ -178,5 +353,11 @@
         public string  State          { get; set; } = "";
         public string  ZipCode        { get; set; } = "";
         public bool    PutToTheGroup  { get; set; }
+
+        /// <summary>A landmark's name, when it has one. Blank for an ordinary address.</summary>
+        public string? PlaceName      { get; set; }
+
+        /// <summary>Null until answered — see IsValid.</summary>
+        public Ben.Data.Common.Enums.PlaceKind? PlaceKind { get; set; }
     }
 }

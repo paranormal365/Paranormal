@@ -62,6 +62,34 @@
             }
         }
 
+        @* ── Where this case is, and who else has been there ──────────────── *@
+        @* Ben, 2026-09-17: linking a case to a place is what lets somebody "create their own
+           investigation" at somewhere other groups already work. A case that names a place says so
+           here, with the one fact that makes the place page worth opening: how many other groups
+           have been. Shown always rather than once — it is orientation, not a notice, and a banner
+           that vanishes on the second visit is a banner nobody can find again. *@
+        @if (_case.PlaceId is { } placeId)
+        {
+            <div class="alert alert-info d-flex align-items-center gap-3 flex-wrap py-2"
+                 data-testid="case-place-banner">
+                <div class="flex-grow-1 small">
+                    This case is at <strong>@(_case.PlaceName ?? "a place on file")</strong>.
+                    @if (_placeSummary is { } summary && summary.OrganizationCount > 1)
+                    {
+                        <text>
+                            @(summary.OrganizationCount - 1)
+                            @(summary.OrganizationCount - 1 == 1 ? "other group has" : "other groups have")
+                            investigated there.
+                        </text>
+                    }
+                </div>
+                <a class="btn btn-outline-secondary btn-sm text-nowrap" id="case-place-link"
+                   href="@($"/places/{placeId}")">
+                    <BenIcon Name="map-pin" Class="me-1" />See the place
+                </a>
+            </div>
+        }
+
         @* ── Header ────────────────────────────────────────────────────────── *@
         <div class="d-flex align-items-start justify-content-between mb-3 flex-wrap gap-2">
             <div>
@@ -392,6 +420,7 @@
     /// </summary>
     private CaseClientRequestRecord? _clientRequest;
     private bool _loaded;
+    private Ben.Web.Services.PlaceSummary? _placeSummary;
     private string? _error;
     private bool _isBusy;
     private int _unreadCount;
@@ -458,6 +487,16 @@
         catch { _error = "Failed to load case."; }
         _loaded = true;
         StateHasChanged();
+
+        // How many groups have worked this place — the one fact that makes the place worth
+        // opening. Separate and quiet for the same reason as the request below: the banner keeps
+        // its link either way, and it simply says less.
+        if (_case?.PlaceId is { } bannerPlaceId)
+        {
+            try { _placeSummary = await AdminClient.GetPlaceSummaryAsync(bannerPlaceId); }
+            catch { /* the banner just carries no count */ }
+            StateHasChanged();
+        }
 
         // Fetched separately and allowed to fail quietly: most cases have one, some don't, and a
         // missing original request should never stop the case page rendering.

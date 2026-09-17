@@ -379,7 +379,19 @@ public sealed record PublicPlaceResponse(
     IReadOnlyList<PublicPlaceInvestigationRow> Investigations,
     PlaceSummary Summary,
     IReadOnlyList<PublicPlaceSessionRow>? Sessions = null,
-    IReadOnlyList<PlaceEvidenceRow>? EventEvidence = null);
+    IReadOnlyList<PlaceEvidenceRow>? EventEvidence = null,
+    /// <summary>Cases any group has published at this place (2026-09-17).</summary>
+    IReadOnlyList<PublicPlaceCaseRow>? Cases = null);
+
+/// <summary>One published case at a place. The title is already redacted by the server.</summary>
+public sealed record PublicPlaceCaseRow(
+    string CaseReference,
+    string UrlName,
+    string Title,
+    Ben.Data.Common.Enums.CaseStatus Status,
+    int OpenedYear,
+    string OrganizationName,
+    string OrganizationUrlName);
 
 /// <summary>
 /// One piece of guest evidence photographed at a public event here and contributed by its owner.
@@ -1100,7 +1112,15 @@ public sealed record CreateCaseRequest(
     // True when the person opening the case wants the group to decide whether to take it on.
     // False — the default, and what every older caller sends — accepts it there and then, for
     // anybody who may change a case's status (Ben, 2026-09-17).
-    bool PutToTheGroup = false);
+    bool PutToTheGroup = false,
+    /// <summary>A shared place already on file that this case is about.</summary>
+    Guid? PlaceId = null,
+    /// <summary>
+    /// A place to create with the case, when none on file is the right one. Its <c>Kind</c> is the
+    /// "public location or private residence" answer, which decides whether the case is private-lane
+    /// work and, on an unpaid account, whether it is public.
+    /// </summary>
+    NewPlaceRequest? NewPlace = null);
 
 public sealed record AcceptClientRequestAsCaseRequest(
     string? Title,

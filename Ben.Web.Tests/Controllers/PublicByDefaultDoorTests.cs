@@ -306,19 +306,65 @@ public sealed class PublicByDefaultDoorTests
 
     // ── Cases ────────────────────────────────────────────────────────────────
 
-    private static CreateCaseRequest NewCase() => new(
+    /// <summary>A case at a named place, or at none when <paramref name="placeId"/> is null.</summary>
+    private static CreateCaseRequest NewCase(Guid? placeId = null) => new(
         "A case at " + Landmark, null, "200 Cragfont Rd", null,
-        "Castalian Springs", "TN", "37031", "US", null, null);
+        "Castalian Springs", "TN", "37031", "US", null, null,
+        PutToTheGroup: false, PlaceId: placeId);
+
+    private static async Task<Case> OnlyNewCaseAsync(World w)
+    {
+        await using var db = await w.Factory.CreateDbContextAsync();
+        return await db.Cases.AsNoTracking().OrderByDescending(c => c.DateCreated).FirstAsync();
+    }
 
     [Fact]
-    public async Task An_unpaid_accounts_new_case_arrives_public()
+    public async Task An_unpaid_accounts_new_case_at_a_landmark_arrives_public()
+    {
+        var w = await SeedAsync(paying: false);
+
+        var created = Assert.IsType<CreatedAtActionResult>(
+            (await Cases(w.Factory, w.UserId).Create(w.OrgId, NewCase(w.LandmarkId), default)).Result);
+
+        Assert.True(Assert.IsType<CaseRecord>(created.Value).IsPublic);
+        Assert.Equal(w.LandmarkId, (await OnlyNewCaseAsync(w)).PlaceId);
+    }
+
+    /// <summary>
+    /// A case that names no place is not public, whatever the plan says. Nothing has said it is at
+    /// a public location, and the free lane's rule is about public locations — not about everything
+    /// an unpaid account touches.
+    /// </summary>
+    [Fact]
+    public async Task An_unpaid_accounts_new_case_with_no_place_is_not_public()
     {
         var w = await SeedAsync(paying: false);
 
         var created = Assert.IsType<CreatedAtActionResult>(
             (await Cases(w.Factory, w.UserId).Create(w.OrgId, NewCase(), default)).Result);
 
-        Assert.True(Assert.IsType<CaseRecord>(created.Value).IsPublic);
+        Assert.False(Assert.IsType<CaseRecord>(created.Value).IsPublic);
+        Assert.Null((await OnlyNewCaseAsync(w)).PlaceId);
+    }
+
+    /// <summary>
+    /// Naming a home at birth designates the case private-lane work there and then, rather than
+    /// waiting for somebody to schedule a visit — and a private-lane case is never made public by
+    /// the free lane's rule.
+    /// </summary>
+    [Fact]
+    public async Task A_new_case_at_a_home_is_private_lane_from_birth_and_not_public()
+    {
+        var w = await SeedAsync(paying: false);
+
+        var created = Assert.IsType<CreatedAtActionResult>(
+            (await Cases(w.Factory, w.UserId).Create(w.OrgId, NewCase(w.HomeId), default)).Result);
+
+        Assert.False(Assert.IsType<CaseRecord>(created.Value).IsPublic);
+
+        var saved = await OnlyNewCaseAsync(w);
+        Assert.Equal(w.HomeId, saved.PlaceId);
+        Assert.True(saved.IsPrivateEngagement);
     }
 
     [Fact]
@@ -327,9 +373,75 @@ public sealed class PublicByDefaultDoorTests
         var w = await SeedAsync(paying: true);
 
         var created = Assert.IsType<CreatedAtActionResult>(
-            (await Cases(w.Factory, w.UserId).Create(w.OrgId, NewCase(), default)).Result);
+            (await Cases(w.Factory, w.UserId).Create(w.OrgId, NewCase(w.LandmarkId), default)).Result);
 
         Assert.False(Assert.IsType<CaseRecord>(created.Value).IsPublic);
+    }
+
+    /// <summary>
+    /// A place described inline rather than picked, which is how a landmark nobody has listed gets
+    /// on file. The kind is the caller's answer and decides everything downstream.
+    /// </summary>
+    [Fact]
+    public async Task A_case_may_describe_a_place_nobody_has_listed()
+    {
+        var w = await SeedAsync(paying: false);
+
+        var request = NewCase() with
+        {
+            NewPlace = new Ben.Data.WebApi.Services.Places.NewPlaceRequest(
+                Name: "Wynnewood", StreetAddress1: "210 Old Highway 25",
+                StreetAddress2: null, City: "Castalian Springs", State: "TN",
+                ZipCode: "37031", Country: "US",
+                Latitude: 36.3831m, Longitude: -86.3294m,
+                Kind: PlaceKind.PublicLocation),
+        };
+
+        var created = Assert.IsType<CreatedAtActionResult>(
+            (await Cases(w.Factory, w.UserId).Create(w.OrgId, request, default)).Result);
+        Assert.True(Assert.IsType<CaseRecord>(created.Value).IsPublic);
+
+        await using var db = await w.Factory.CreateDbContextAsync();
+        var made = await db.Places.AsNoTracking().SingleAsync(x => x.Name == "Wynnewood");
+        Assert.Equal(PlaceKind.PublicLocation, made.Kind);
+        Assert.Equal((await OnlyNewCaseAsync(w)).PlaceId, made.Id);
+
+        // Supplied coordinates are trusted rather than looked up again.
+        Assert.Equal(36.3831m, made.Latitude);
+    }
+
+    /// <summary>An inline place with no kind stated is treated as a home, the safe direction.</summary>
+    [Fact]
+    public async Task An_inline_place_with_no_kind_stated_is_treated_as_a_home()
+    {
+        var w = await SeedAsync(paying: false);
+
+        var request = NewCase() with
+        {
+            NewPlace = new Ben.Data.WebApi.Services.Places.NewPlaceRequest(
+                Name: null, StreetAddress1: "4 Unsaid Street", StreetAddress2: null,
+                City: "Nashville", State: "TN", ZipCode: "37201", Country: "US",
+                Latitude: 36.16m, Longitude: -86.78m),
+        };
+
+        Assert.IsType<CreatedAtActionResult>(
+            (await Cases(w.Factory, w.UserId).Create(w.OrgId, request, default)).Result);
+
+        var saved = await OnlyNewCaseAsync(w);
+        Assert.True(saved.IsPrivateEngagement);
+        Assert.False(saved.IsPublic);
+    }
+
+    [Fact]
+    public async Task A_case_naming_a_place_that_does_not_exist_is_refused()
+    {
+        var w = await SeedAsync(paying: false);
+
+        var refused = await Cases(w.Factory, w.UserId)
+            .Create(w.OrgId, NewCase(Guid.NewGuid()), default);
+
+        var bad = Assert.IsType<BadRequestObjectResult>(refused.Result);
+        Assert.Contains("could not be found", Assert.IsType<string>(bad.Value));
     }
 
     [Fact]
@@ -339,7 +451,7 @@ public sealed class PublicByDefaultDoorTests
         var ctrl = Cases(w.Factory, w.UserId);
         var caseId = Assert.IsType<CaseRecord>(
             Assert.IsType<CreatedAtActionResult>(
-                (await ctrl.Create(w.OrgId, NewCase(), default)).Result).Value).Id;
+                (await ctrl.Create(w.OrgId, NewCase(w.LandmarkId), default)).Result).Value).Id;
 
         var refused = await ctrl.Update(w.OrgId, caseId,
             new UpdateCaseRequest("A case at " + Landmark, null, CaseStatus.Accepted, null,

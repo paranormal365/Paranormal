@@ -77,7 +77,58 @@ public sealed class PublicPlaceController : ControllerBase
 
         return Ok(new PublicPlaceResponse(place, rows, PlaceSummary.From(rows),
             await PublishedSessionsAsync(db, id, ct),
-            await ArchiveEvidencePublication.ForPlaceAsync(db, id, ct)));
+            await ArchiveEvidencePublication.ForPlaceAsync(db, id, ct),
+            await PublishedCasesAsync(db, id, ct)));
+    }
+
+    /// <summary>
+    /// The cases published at this place, by any group.
+    /// </summary>
+    /// <remarks>
+    /// <para>Cases learned to name a place on 2026-09-17, which is what makes this possible: until
+    /// then a case's address and a place's address were two strings nothing joined. This is the
+    /// reading half of that — "who has worked here" now includes the written-up cases, not only the
+    /// visits.</para>
+    ///
+    /// <para><b>Published means the same thing it means everywhere else</b> — the flag AND a status
+    /// of Public or Haunted. Two other readers had that wrong until the same day; this one is
+    /// written the long way rather than borrowing either of them.</para>
+    ///
+    /// <para>Real client names never appear: a private-engagement case's prose is redacted through
+    /// the same roster the case's own public page uses. A private-lane case can only be here if its
+    /// group holds the plan to publish one, which item 184 gates at the publish.</para>
+    /// </remarks>
+    private static async Task<IReadOnlyList<PublicPlaceCaseRow>> PublishedCasesAsync(
+        BenDataContext db, Guid placeId, CancellationToken ct)
+    {
+        var cases = await db.Cases.AsNoTracking()
+            .Where(c => c.PlaceId == placeId
+                     && c.IsPublic
+                     && (c.Status == CaseStatus.Public || c.Status == CaseStatus.Haunted))
+            .OrderByDescending(c => c.DateCaseOpened)
+            .Select(c => new
+            {
+                c.Id, c.Title, c.UrlName, c.CaseYear, c.OrgCaseNumber, c.Status,
+                c.DateCaseOpened,
+                OrganizationName = c.Organization.Name,
+                OrganizationUrlName = c.Organization.UrlName,
+            })
+            .ToListAsync(ct);
+
+        var rosters = await CaseRedactionRoster.ForCasesAsync(
+            db, cases.Select(c => c.Id).ToList(), ct);
+
+        return cases.Select(c => new PublicPlaceCaseRow(
+                CaseReference: $"#{c.CaseYear}-{c.OrgCaseNumber:D3}",
+                // Falls back to the reference for a case published before slugs existed, so a row
+                // always has somewhere to point rather than linking nowhere.
+                UrlName: c.UrlName ?? $"{c.CaseYear}-{c.OrgCaseNumber:D3}",
+                Title: CaseProseRedactor.RedactFor(rosters, c.Id, c.Title)!,
+                Status: c.Status,
+                OpenedYear: c.DateCaseOpened.Year,
+                OrganizationName: c.OrganizationName,
+                OrganizationUrlName: c.OrganizationUrlName))
+            .ToList();
     }
 
     /// <summary>
@@ -165,7 +216,25 @@ public sealed record PublicPlaceResponse(
     IReadOnlyList<PublicPlaceInvestigationRow> Investigations,
     PlaceSummary Summary,
     IReadOnlyList<PublicPlaceSessionRow>? Sessions = null,
-    IReadOnlyList<PlaceEvidenceRow>? EventEvidence = null);
+    IReadOnlyList<PlaceEvidenceRow>? EventEvidence = null,
+    /// <summary>Cases any group has published at this place (2026-09-17). Trailing and optional,
+    /// so an older client simply does not draw the section.</summary>
+    IReadOnlyList<PublicPlaceCaseRow>? Cases = null);
+
+/// <summary>
+/// One published case at a place, as a visitor sees it listed.
+/// </summary>
+/// <param name="Title">Already redacted — a real client name never reaches here.</param>
+/// <param name="OpenedYear">A year rather than a date: when a haunting was reported is the
+/// client's business, and the year is what makes a list of them read as a history.</param>
+public sealed record PublicPlaceCaseRow(
+    string CaseReference,
+    string UrlName,
+    string Title,
+    CaseStatus Status,
+    int OpenedYear,
+    string OrganizationName,
+    string OrganizationUrlName);
 
 /// <summary>
 /// One published field session in a place's archive.

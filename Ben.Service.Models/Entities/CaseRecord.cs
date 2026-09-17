@@ -34,6 +34,19 @@ public record CaseRecord
     /// <summary>Item 184: private-lane work — public prose substitutes names, publication is plan-gated.</summary>
     public bool IsPrivateEngagement { get; init; }
 
+    /// <summary>
+    /// The shared place this case is about, once one is bound (2026-09-17).
+    /// </summary>
+    /// <remarks>
+    /// Null for every case opened before cases learned to name a place, and for any opened without
+    /// one since. The case keeps its own address columns either way — those are the record of what
+    /// was reported, and this is the shared identity used for "who else has been here".
+    /// </remarks>
+    public Guid? PlaceId { get; init; }
+
+    /// <summary>What that place is called, when it has a name. Mapped from the navigation.</summary>
+    public string? PlaceName { get; init; }
+
     /// <summary>Item 184 Phase D: true when a lapse unpublished this case; the republish banner's switch.</summary>
     public bool? WasPublicBeforeLapse { get; init; }
     public DateTime DateCaseOpened { get; init; }

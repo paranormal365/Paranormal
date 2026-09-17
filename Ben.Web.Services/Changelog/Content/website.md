@@ -18,6 +18,13 @@ day-by-day account of building it would say nothing to anyone using it now.
 
 ## 2026-09-17
 
+- A case now names the place it is about. As you type the address, a place already on file that
+  looks like it is offered, so your case joins the one everybody else has been working at instead of
+  making a second copy of it. You say whether it is a public location or somebody's home, and the
+  answer decides who may see the case.
+- A place's page lists the cases groups have published there, beside the investigations and the field
+  archive. A public place also offers **Open a case here**, and a case that names a place says at the
+  top how many other groups have investigated the same location.
 - A group with no plan now collects what it finds at public places in public. A case you open is
   public from the start, and a visit to a public location is shared with everyone; both say so where
   you would otherwise have been refused. A plan is what makes your work yours. Somebody's home is

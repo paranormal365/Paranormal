@@ -287,7 +287,64 @@ fixtures were run to prove the markup changes broke nothing.
 7. **Help.** `organization-administration.md` "Your group's plan": the sentence. `working-a-case.md`
    publishing paragraph. Changelog website + api.
 
-## Phase 2 — A case knows its place, and is offered the one already on file
+## Phase 2 — A case knows its place, and is offered the one already on file — **BUILT 2026-09-17**
+
+### One thing the plan called for, dropped on contact
+
+**No fallback place derived from the case's own address.** The plan said a request naming neither an
+existing place nor a new one should have one built from the case's address, "so no new case is
+placeless". That cannot answer the question everything downstream depends on: *what kind of location
+is it?* Guessing a residence would designate the case private-lane work permanently and ask the
+paid-plan gate, over a question nobody was asked. Guessing a public location could put somebody's
+home on a page anyone can read. So the kind is a **required** answer on the New Case page instead —
+no default, Open Case disabled until it is given — and a caller that sends nothing leaves the case
+unplaced, exactly where every case stood before today. The reasoning is written into
+`CasePlacement`'s own remarks so the next person to reach for a fallback finds it.
+
+### What shipped
+
+- `PlaceFactory.CreateAsync` — the trimming, country default, cautious kind default and geocoding
+  call, extracted from `InvestigationPlacement` so the three doors that build a place from a
+  description build it identically. `InvestigationPlacement` now calls it.
+- `CasePlacement.ApplyAsync` — the case-shaped sibling. Binds an existing place or creates a
+  described one; runs `PrivateCaseGate` and designates the case private-lane when a residence is
+  bound, which now happens **at birth** rather than whenever somebody first schedules a visit;
+  never rewrites the case's own address, and fills its coordinates only when it has none.
+- `CreateCaseRequest` gains trailing `PlaceId` and `NewPlace` (server + client mirror). The iPhone
+  app never creates org cases — it only touches `api/my-cases` — so the website is the one caller.
+- `CaseController.Create` restructured: place first, publication decided after it, so an unpaid
+  account's case is public only at a `PublicLocation` and never when a residence made it
+  private-lane.
+- `Kit/Places/BenPlaceCandidates.razor` — the "this place may already be on file / Use this place"
+  offer, lifted out of `NewInvestigationWindow` with its debounce, its refusal sentence and its
+  "offered, never applied" rule. It watches the parent's address fields rather than taking its own
+  input events, keyed so an unrelated re-render does not restart the clock.
+- New Case page: the offer, a name field for landmarks, the required kind choice with both
+  consequences spelled out, `?place={id}` pre-choosing from a place's own page, and a chosen-place
+  banner with **Change**.
+- `CaseRecord` gains `PlaceId` and `PlaceName` (the latter mapped off the navigation, which
+  `GetById` now includes — the W-A9 lesson); the case page shows a line naming the place, how many
+  other groups have investigated there, and a link to it.
+- Place page: **Cases written up here**, from a new trailing `Cases` member on
+  `PublicPlaceResponse`. Published means the flag AND a Public/Haunted status, written the long way
+  rather than borrowing either of the two readers that had it wrong. Titles go through
+  `CaseProseRedactor`. A public place also offers **Open a case here** per group the viewer belongs
+  to.
+- Tests: `PublicByDefaultDoorTests` grew to 16 (landmark, no place, home-at-birth, inline place,
+  inline place with no kind, unknown place refused); `PublicPlaceTests` grew to 21 (listed, the
+  seven-case published/not theory, elsewhere, redactor, slug fallback, empty-not-null); Playwright
+  `CasePlaceTests` (the kind gate, the offer taken, `?place=` pre-choosing). Suite 6226/0.
+- Help: "Which place the case is about" on working-a-case, "Cases written up here" under Place
+  pages. Changelog both streams.
+
+### Not done in Phase 2
+
+**`GET api/places/{id}/my-cases` and the signed-in "Your groups' cases here" section.** The plan
+listed it; it is a convenience next to the rest, and a member already reaches the place from their
+own case's banner. Deferred rather than dropped — it belongs with Phase 3, where the place page
+grows its signed-in half anyway.
+
+### As planned
 
 1. **Request.** `CreateCaseRequest` gains trailing `Guid? PlaceId = null`, `NewPlaceRequest? NewPlace = null`
    (server + client mirror). `NewPlaceRequest.Kind` is the kind choice; null → `PrivateResidence` (the

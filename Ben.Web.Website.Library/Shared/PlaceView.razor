@@ -76,6 +76,23 @@
                             <span class="text-secondary">· @org.Name</span>
                         }
                     </a>
+                    @* Ben, 2026-09-17: "if someone wants to create a case at a public case, they
+                       are given the option to link to the existing case and create their own
+                       investigation." This is the case half — the place is carried in the query, so
+                       the form arrives with it settled rather than asking for an address somebody
+                       is already looking at. Offered at a public location only: a case at
+                       somebody's home starts from the client, not from a page anyone can read. *@
+                    @if (_place.Kind == Ben.Data.Common.Enums.PlaceKind.PublicLocation)
+                    {
+                        <a class="btn btn-sm btn-outline-secondary me-1 mb-1 place-open-case"
+                           href="@($"/organizations/{org.OrganizationId}/cases/new?place={PlaceId}")">
+                            <BenIcon Name="folder-plus" Class="me-1" />Open a case here
+                            @if (_myOrgs.Count > 1)
+                            {
+                                <span class="text-secondary">· @org.Name</span>
+                            }
+                        </a>
+                    }
                 }
             </p>
         }
@@ -164,6 +181,36 @@
             {
                 @SignedInTable(shared, showVisibility: false)
             }
+        }
+
+        @* ── Cases written up here ────────────────────────────────────────── *@
+        @* Rendered for visitor and member alike from the anonymous endpoint, because published is
+           published. A case reaches this list only when its group published it AND its status says
+           so; a client's real name is replaced by the server before it ever arrives here. *@
+        @if (_cases is { Count: > 0 })
+        {
+            <h6 class="fw-semibold mt-4">Cases written up here</h6>
+            <div class="table-responsive">
+                <table class="table table-sm align-middle mb-0" data-testid="place-cases">
+                    <thead><tr><th>Opened</th><th>Case</th><th>Group</th></tr></thead>
+                    <tbody>
+                        @foreach (var row in _cases)
+                        {
+                            <tr>
+                                <td class="text-nowrap">@row.OpenedYear</td>
+                                <td>
+                                    <a href="@($"/o/{row.OrganizationUrlName}/cases/{row.UrlName}")">@row.Title</a>
+                                    @if (row.Status == Ben.Data.Common.Enums.CaseStatus.Haunted)
+                                    {
+                                        <span class="badge text-bg-danger ms-1 fw-normal">Haunted</span>
+                                    }
+                                </td>
+                                <td><a href="@($"/o/{row.OrganizationUrlName}")">@row.OrganizationName</a></td>
+                            </tr>
+                        }
+                    </tbody>
+                </table>
+            </div>
         }
 
         @* ── The field archive ────────────────────────────────────────────── *@
@@ -399,6 +446,7 @@
     private List<PlaceInvestigationRow>? _rows;
     private LoadResult<PlaceInvestigationRow> _rowsResult;
     private List<PublicPlaceInvestigationRow>? _publicRows;
+    private List<Ben.Web.Services.PublicPlaceCaseRow>? _cases;
     private List<InvestigationMapPin> _pins = [];
     private bool _loading = true;
 
@@ -474,6 +522,7 @@
         _summary = response.Summary;
         _sessions = response.Sessions?.ToList();
         _evidence = response.EventEvidence?.ToList();
+        _cases = response.Cases?.ToList();
         BuildPins(_publicRows.Select(r => (r.Id, r.Title)));
     }
 
@@ -490,6 +539,7 @@
         var response = await AdminClient.GetPublicPlaceAsync(PlaceId);
         _sessions = response?.Sessions?.ToList();
         _evidence = response?.EventEvidence?.ToList();
+        _cases = response?.Cases?.ToList();
     }
 
     /// <summary>

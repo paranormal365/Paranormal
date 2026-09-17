@@ -20,6 +20,9 @@ belongs there; this is for the part underneath.
 
 ## 2026-09-17
 
+- A case can be created naming the shared place it concerns, either one already on file or one
+  described with it, and a place's public page now also lists the cases published there. Both fields
+  are optional additions, so an app that sends neither behaves exactly as before.
 - What an account may keep private is now decided by its plan, not by whether it works alone. An
   account with no plan has its cases and its visits at public locations shared by default and cannot
   narrow them; an account with a plan chooses. Work at a private residence, and anything already

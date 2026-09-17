@@ -67,6 +67,27 @@ the case manager sit beside it. On a phone they follow it, below. If you have ma
 to leave another way, the page asks first; **Cancel** leaves without saving. **New Case** uses the
 same editor for its description.
 
+### Which place the case is about
+
+A case names the **place** it concerns, and that is what connects it to everybody else's work at
+the same location. As you type the address, any place already on file that looks like a match is
+suggested. Pick **Use this place** and the case joins it; carry on typing and a new place is created
+instead. The suggestion is only ever a suggestion — two flats at one address are two places, and
+only you know which this is.
+
+Then say **what kind of place** it is, which has no default because both answers matter:
+
+- **Public location** — a landmark, a business, anywhere that is not somebody's home. Its page
+  gathers every group's work there and anyone may add to it.
+- **Private residence** — somebody's home. Findings stay with your group, and this is
+  private-engagement work, which needs a plan that covers it.
+
+**Open Case** stays greyed out until you have answered. Once the case exists, a line at the top of
+it names the place, says how many other groups have investigated there, and links to its page.
+
+Coming the other way works too: a public place's own page offers **Open a case here**, which brings
+you to this form with the place already settled.
+
 If your group has no plan, a case you open is **public from the start** and the **Make Public** box
 cannot be unticked: work at a public location is public on a free account, and the Edit Case page
 says so beside the box. A case at somebody's home is not affected, and neither is any case that was
@@ -687,6 +708,16 @@ rows show their sharing setting: how another group chose to share something is t
 
 Place pages work for visitors too. Somebody who is not signed in sees only investigations that have
 been published, and nothing else.
+
+### Cases written up here
+
+A place also lists the **cases** groups have published about it, with the year each was opened and
+whose case it was. Only published cases appear — a case has to be both marked public and have a
+status saying it is published — and a client's real name is never shown, exactly as on the case's
+own public page. Visitors see this list too.
+
+This is the other half of naming a place on a case: your case appears on the place's page when you
+publish it, and everybody else's is already there to read before you start.
 
 ### The field archive
 
