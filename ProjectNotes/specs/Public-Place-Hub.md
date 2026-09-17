@@ -1,0 +1,351 @@
+# The Public Place Hub: one public record per location, many groups' work around it
+
+**Status:** plan, agreed in conversation 2026-09-17, not yet built.
+**Branch:** `feature/public-place-hub` (this document is its README; each phase adds to it).
+**Supersedes nothing.** Extends `Places-and-Investigation-Sharing.md` (2026-08-15) and the free-lane
+rule in `PaidPlan` (2026-08-31). Both are quoted below because this plan is mostly them, finished.
+
+---
+
+## What Ben asked for (2026-09-17, four messages)
+
+1. "Maybe we make a new completely public case which should actually be public for adding files,
+   messages etc. There can be many investigations by many groups linked to the public case, and if
+   someone wants to create a case at a public case, they are given the option to link to the existing
+   case and create their own investigation."
+2. "This is also what is created when individuals who are not in a paid tier create a case."
+3. "Everything a solo person submits is going to be public by default."
+4. "If paid, they can make their work private. By default we should be able to collect information as
+   public for unpaid plan."
+
+So: a shared public record per location that anyone may add to; many groups' investigations hang off
+it; a group opening a case at a known location is offered the link; and the free lane is public by
+default, with privacy the thing a plan buys.
+
+## What already exists (verified in code, 2026-09-17)
+
+Most of this is built. The plan is narrower than the idea sounds.
+
+- **The place is already the shared thing.** `Place` has no `OrganizationId` at all ("nothing here
+  assumes one owner", `BenDataModel.Place.cs:19-21`). `Case.PlaceId` (`BenDataModel.Case.cs:40`) and
+  `Investigation.PlaceId` (`BenDataModel.Investigation.cs:116`) are both nullable; an investigation
+  may hang off a place with no case (`CaseId is not null || PlaceId is not null`, enforced at
+  `OrgInvestigationsController.cs:228`).
+- **The 2026-08-15 spec already chose this shape**, in these words: *"Introduce a `Place`. Do not model
+  case-less investigations as cases with the client fields left empty… Case = a client's problem at a
+  place; Public investigation = a visit to a place."* This plan does not reopen that decision.
+- **The place page is already cross-group.** `PublicPlaceController` (`api/public/places/{id}`) lists
+  every group's published investigations through the one visibility predicate
+  (`InvestigationVisibilityFilter.VisibleTo`), the published field-session archive, and event evidence,
+  and computes "N investigations by M groups since Y" (`PlaceSummary`). Blazor: `Shared/PlaceView.razor`
+  at `/places/{PlaceId:guid}`, with a signed-in view ("Your groups' visits" / "Shared by other groups").
+- **The sharing ladder exists.** `InvestigationVisibility` is `GroupOnly` → `PlaceInvestigators`
+  ("anyone whose organization has also investigated this place", deliberately not reciprocal) →
+  `Public`; `Public` is refused at a private residence. Defaults follow `PlaceKind`
+  (`InvestigationVisibilityFilter.DefaultFor`).
+- **"Did you mean this place" exists on two of three doors.** `PlaceMatcher.IsProbableMatch` (same
+  address AND within 0.1 mile; landmarks by name) behind `GET api/places/candidates`, offered but never
+  applied, in `NewInvestigationWindow.razor:145-185` ("Use this place") and `OrgScheduler.razor:383`.
+  **`CaseController` contains zero references to `Place`.** A new case gets no place at all until an
+  investigation binds one; `Case.PlaceId` is written only by the 2026-08-15 backfill and the admin merge.
+- **The free-lane rule is written and shipped**, in Ben's words (`PaidPlan.cs:40-51`): *"free means
+  your findings join the public archive, paid means your work is yours."* It gates **retraction, not
+  publication** — publishing a session stays a deliberate act, because auto-publishing would put
+  unreviewed media live as a side effect. `PaidPlan.CoversAsync(userId)` / `CoversOrganizationAsync(orgId)`
+  is the single definition of "paid" (active subscription, not merely present).
+- **But two gates are keyed on the wrong question.** `PersonalOrganizations.WhyNotInAPersonalOrganization`
+  refuses `CreateCase` and `CreatePrivateInvestigation` for `IsPersonal` organizations — a fact about the
+  record, not about the plan. Under Ben's rule a paid solo subscriber may keep work private and may take
+  client work; an unpaid group of one must publish. Today the opposite holds on both counts. And the
+  flat door (`OrgInvestigationsController.Create`) never asks the solo question at all; only the
+  case-nested door does (`InvestigationController.cs:160-171`). The two doors do not answer alike.
+- **Nothing mints a personal organization.** `SoloPlanController.Start` (free, idempotent, creates the
+  personal org with the full skeleton) has **no caller** on the website or in the app. A person with no
+  group cannot open a case or an investigation from anywhere today; they can only record field sessions
+  and publish them to a place's archive (the app's `ArchiveActions`, `FieldSessionPublishController`).
+- **The feed already has placed, screened, public posts with media — minus the place.** A feed post is
+  an `OrgMessage` with `ChannelType = PublicFeed`, nullable `OrganizationId`, `AuthorAppUserId`,
+  `MediaUploadFileId` + `MediaReviewState` (NSFW screener, Held pile, three confident refusals pause
+  uploads for a day — `FeedMediaAbuse`), reports, hide, likes, replies, scheduling, and `PostedLatitude/
+  Longitude/PostedPlaceName` (the author's whereabouts, opted in). **There is no `PlaceId`.** Writing is
+  gated by `FeedParticipation.RefusalAsync` ("anyone scrolls, people who belong here post": any active
+  membership, or a client). The iPhone app reads and writes the feed (`FeedStore`, `FeedActions`).
+- **Case files, messages and notes are structurally private.** `CaseFile`, `CaseMessage`, `CaseNote`
+  carry no visibility column and appear in no public controller. `CaseMediaPublication` (the rule from
+  item 80) says in so many words that files on the Files tab are never publishable because nothing ever
+  recorded consent. Only timeline-entry files with `Visibility == Public` on a published case are served,
+  through `PublicCaseMediaController`, sanitized, 404-never-403.
+- **"Public case" already means something else.** `PublicCaseController` / `PublicCaseDiscoveryController`
+  serve a group's own case once `IsPublic && Status in (Public, Haunted)` — the group's published report,
+  with the client's name replaced. This plan does not reuse the phrase for the shared record.
+
+## Decisions
+
+Made with Ben on 2026-09-17 unless marked *(recommended, confirm)*.
+
+- **D1. The Place is the hub. No second object.** The shared public record of a location is the place
+  and its page. A group's case stays that group's private working record, pointing at the place. Two
+  objects meaning "a location many groups investigate" would drift, exactly as the two copies of the
+  media rule did (memory: `feedback_server_guard_needs_a_ui_path`, the place page's second copy).
+  *In the UI the word is "place", as everywhere on the site today; "public case" keeps its existing
+  meaning (a published report).*
+- **D2. Unpaid means public by default; paid buys privacy.** Ben: "if paid, they can make their work
+  private. By default we should be able to collect information as public for unpaid plan." Keyed on
+  `PaidPlan.CoversOrganizationAsync`, never on `IsPersonal`. Applies alike to a personal organization
+  and to a free-band group of one.
+- **D3. "By default" means pre-set and not undoable without a plan — not published as a side effect.**
+  The recorded reason stands (`PaidPlan.cs:45-51`): publication as a side effect would put unscreened
+  media live. So on an unpaid plan: a case at a public place is created `IsPublic = true` and the box
+  cannot be unticked (with the sentence); investigations there default to `Public` and cannot be
+  narrowed; timeline entries default to `Public` visibility in the composer; sessions publish and cannot
+  be retracted (already). A published case still becomes visible when its status reaches `Public`, and
+  media still passes review first. Live, conversational public contribution happens at the place (D4).
+- **D4. Posts about a place are feed posts with a `PlaceId`.** Not a new comment table. That inherits
+  screening, the spam pause, reporting, hiding, likes, replies, the moderator screens, the app's reader,
+  and the block list, at the cost of one nullable column. The place page shows them and hosts a composer.
+- **D5. Private residences never take place posts.** Publishing what happens inside somebody's home is
+  theirs to agree to, and there is still no mechanism for asking (spec open question 4). Refused with a
+  sentence; the composer does not render there.
+- **D6. Who may post about a place** *(recommended, confirm)*: **any signed-in account**, because the
+  free lane *is* public contribution and a person with no group is precisely who it exists for. The
+  feed's front page keeps its "people who belong here" rule. Both rules live in `FeedParticipation`,
+  named, so the difference is stated once. *Alternative rejected:* minting the personal organization to
+  make the person "belong" — it works, but it makes a billing object the key to a moderation rule.
+- **D7. A personal organization is an organization** *(recommended, confirm)*. The `IsPersonal` refusals
+  (`CreateCase`, `CreatePrivateInvestigation`) are retired. A paid solo investigator may open a case and
+  keep it private, subject to the same `PrivateResidenceCases` capability as any group; an unpaid one
+  gets D2. This reverses the 2026-08-31 sentence "a solo plan does not take client work" in one respect
+  only — Ben's 2026-09-17 rule is the newer one — and the `Discoverable` filter (never a directory row,
+  never a nearby pin) is untouched.
+- **D8. A new case names its place, and says what kind of place it is.** New Case gains the same "this
+  place may already be on file → Use this place" offer as New Investigation, and an explicit Public
+  location / Private residence choice with no default (the model's own default, `PrivateResidence`,
+  stands for callers that send nothing). Offered, never applied — the dedup design's rule.
+- **D9. Additive API only.** 1.0.3 is in App Review. Every request field is trailing and defaulted;
+  every record field is trailing; no path changes. The app ignores `PlaceId` on posts until a later build
+  tags them.
+
+## Facts that shape the work
+
+- The Blazor place page is `Shared/PlaceView.razor`; the client is `IBenPlacesClient`
+  (`GetPublicPlaceAsync`, `FindPlaceCandidatesAsync`, `GetPlaceInvestigationsAsync`, `GetPlaceSummaryAsync`).
+- `PublicPlaceResponse(Place, Investigations, Summary, Sessions?, EventEvidence?)` — trailing optional
+  members; new sections go on the end.
+- Case creation: `CaseController.Create` + `CreateCaseRequest` (server `CaseController.cs:947`, client
+  `BenAdminClientRecords.cs:1079`; both must change together); page `Organization/Cases/CaseCreatePage.razor`;
+  the accepted-on-create rule and its `PutToTheGroup` field landed 2026-09-17 (commit bb2bee61).
+- Placement helper: `Services/Places/InvestigationPlacement.ApplyAsync(db, investigation, placeId,
+  newPlace, userId, ct)` — creates or finds the place, geocodes, inherits the case's place, flips
+  `IsPrivateEngagement` through `PrivateCaseGate` when a residence is bound. `NewPlaceRequest` is at
+  `InvestigationPlacement.cs:138` and mirrored at `BenAdminClientRecords.cs:489`.
+- Investigation create doors: `InvestigationController.Create` (under a case) and
+  `OrgInvestigationsController.Create` (`CreateOrgInvestigationRequest`, `OrgInvestigationsController.cs:980`).
+  Visibility default + `Reject` at `:152-153` and `:254-255`.
+- Feed: `FeedController` (`GetFeed` filters: mode/hashtag/author/type; `VisiblePosts`, `VisibleOrMineAwaiting`,
+  `ExceptBlockedBy`, `ToRecordsAsync`); records in `Ben.Service.Models/Feed/FeedRecords.cs`
+  (`CreateFeedPostRequest` already has ten trailing defaulted fields — add after `PostedPlaceName`);
+  media path `FeedController.cs:405-430` (ingest → `MediaReviewState.Pending` → screener); switch
+  `SiteSettingKeys.FeaturePublicFeed`, unset = off.
+- Admin merge repoints nine tables (`AdminPlaceMergeController.cs:185-250`); `OrgMessages` must join
+  the list the moment `PlaceId` exists, or a merge orphans the posts.
+- Seeds: the only `PublicLocation` seeded is Bell Witch Cave (`DevelopmentDataSeeder.cs:928-940`); no
+  seeded person is without a group (emma is in the second org), so a no-group seat has to be added.
+- Playwright seats: sarah (admin), james (member), victor (viewer), daniel (client). Guards that bite
+  new markup: `LabelAssociationTests`, `IconNameGuardTests`, `OrphanedHandlerTests`, `NoTelerikDialogTests`,
+  `HelpLinkTargetTests`, `CanvasCopyTests` is canvas-only. Source-scan guard for the solo rule:
+  `PersonalOrganizationsAreHiddenTests` (Discoverable) — untouched by this plan.
+- Windows is production. Nothing here touches the filesystem beyond the feed's existing ingest.
+
+---
+
+## Phase 1 — The rule: unpaid is public by default, paid may keep private
+
+The smallest change with the largest effect, and everything after it assumes it.
+
+1. **`PaidPlan`** gains `PublicByDefaultAsync(db, orgId, ct)` (= `!CoversOrganizationAsync`) and three
+   sentence-or-null rules, each written once:
+   - `WhyCannotKeepCasePrivateAsync(db, orgId, ct)` — "On this plan a case at a public location is public.
+     What you record there joins the place's page; a plan is what makes your work yours."
+   - `WhyCannotNarrowInvestigationAsync(db, orgId, ct)` — same idea for visibility.
+   - The existing `WhyCannotKeepPrivateAsync` (sessions) is unchanged.
+   The wording never names a price or where to buy (the sessions sentence reaches the app verbatim;
+   these will too, one day — Guideline 3.1.1).
+2. **`PersonalOrganizations`**: retire `PersonalAction.CreateCase` and `CreatePrivateInvestigation` and
+   the two call sites (`CaseController.cs:301-308`, `InvestigationController.cs:160-171`). Keep
+   `Discoverable`/`DiscoverableVia` and the enum type (with the remaining doc) so the hidden-from-
+   directories guard is untouched. Rewrite the class remarks: privacy is the plan's, not personal-ness's.
+3. **Cases.** In `CaseController.Create`: when the org is public-by-default and the bound place is not a
+   private residence (Phase 2 binds it; until then, when no residence is bound), `IsPublic = true`. In
+   `Update`: turning `IsPublic` off on such a case returns 400 with the sentence. Timeline entry
+   composer (`CaseTimeline.razor`) defaults `Visibility` to `Public` when the case's org is public-by-
+   default — the record already carries what the page needs? No: add `PublicByDefault` (bool, trailing)
+   to `CaseRecord` so the page and the Edit Case page can say why the box is locked.
+4. **Investigations.** Both create doors and the update path: when public-by-default and the place is a
+   `PublicLocation`, default `Visibility = Public` (instead of `PlaceInvestigators`) and refuse anything
+   narrower with the sentence. At a residence the existing rules stand (paid lane). This also closes the
+   door-parity gap: the rule lives in `InvestigationVisibilityFilter` next to `DefaultFor`/`Reject` as
+   `DefaultFor(place, publicByDefault)` / `Reject(visibility, place, publicByDefault)`, so neither door
+   can forget it.
+5. **UI.** Edit Case page: `Make Public` disabled + sentence under it when locked
+   (`#case-public-locked`). New Investigation window and the investigation edit form: narrower scopes
+   rendered disabled with the sentence (`#investigation-scope-locked`). The sentence renders — a server
+   guard needs a UI path.
+6. **Tests.** `PaidPlanTests`: unpaid org public-by-default; active plan not; lapsed plan is.
+   `CaseControllerTests`: unpaid create → `IsPublic`; update off → 400 with sentence; paid → free choice.
+   `InvestigationVisibilityTests`: unpaid at landmark defaults Public; narrowing refused; residence
+   unchanged; **both doors** (a parity test that calls each controller). `PersonalOrganizationTests`:
+   `A_personal_organization_may_not_open_a_case` and `…investigations_are_public_ones` rewritten to the
+   new truth (a paid personal org opens a private case; an unpaid one opens a public one). Every rule
+   test seen failing first with the rule broken.
+7. **Help.** `organization-administration.md` "Your group's plan": the sentence. `working-a-case.md`
+   publishing paragraph. Changelog website + api.
+
+## Phase 2 — A case knows its place, and is offered the one already on file
+
+1. **Request.** `CreateCaseRequest` gains trailing `Guid? PlaceId = null`, `NewPlaceRequest? NewPlace = null`
+   (server + client mirror). `NewPlaceRequest.Kind` is the kind choice; null → `PrivateResidence` (the
+   model's default, safe direction).
+2. **Server.** `Services/Places/CasePlacement.ApplyAsync(db, case, placeId, newPlace, userId, ct)` —
+   the case-shaped sibling of `InvestigationPlacement`, sharing its place-creation and geocoding code
+   (extract `PlaceFactory.CreateAsync(newPlace, userId, ct)` so there is one way to make a place). When
+   the request names neither, the case's own address becomes a `NewPlace` (as the backfill did) so no
+   new case is placeless. Binding a residence runs `PrivateCaseGate` and sets `IsPrivateEngagement`,
+   exactly as `InvestigationPlacement.cs:97-109`. Then Phase 1's `IsPublic` decision runs, now with the
+   real place.
+3. **New Case page.** After the address block: the "Did you mean" offer, lifted from
+   `NewInvestigationWindow.razor:145-185` into a Kit component `Kit/Places/BenPlaceCandidates.razor`
+   (`Street/City/State/Zip/Name` parameters, debounced `FindPlaceCandidatesAsync`, `OnChosen`), used by
+   both windows so the wording and the "offered, never applied" comment live once. A chosen place fills
+   and locks the address fields with a "Change" link. Then **What kind of place is this?** — two
+   radios, no default, `id="case-place-kind-public"` / `id="case-place-kind-residence"`, each with one
+   sentence: public location → "Anyone may add to this place's page; on a free plan your case here is
+   public."; private residence → "Somebody's home. Findings stay with your group; this is paid-lane
+   work." Open Case is disabled until a kind is chosen (or a place with a kind was picked).
+   `?place={id}` in the query pre-chooses a place (the place page's "Open a case here" button).
+4. **Landing.** After create, the case page shows a one-time banner (`data-testid="case-place-banner"`):
+   "This case is at {place} — {n} other groups have investigated there. See the place page ·
+   Schedule your first visit" (the second link opens the Investigations tab's scheduler). Dismissed by
+   navigating; nothing stored.
+5. **Place page.** New section **Published cases here**: cases with `PlaceId == id && IsPublic &&
+   Status in (Public, Haunted)`, as `PublicPlaceCaseRow(CaseId, OrgUrlName, CaseRef, Title, Status,
+   PublishedYear)` through `PublicClientName` redaction; trailing member on `PublicPlaceResponse`.
+   Signed-in members additionally see **Your groups' cases here** (own org's cases at the place, any
+   status) from a new `GET api/places/{id}/my-cases` (membership-scoped).
+6. **Tests.** `CaseControllerTests`: existing place bound; new place created and geocoded; residence →
+   private-engagement flip and gate; placeless request gets a place from its address; unpaid + public
+   place → `IsPublic`. `CasePlacementTests` on SqliteTestDb. `PublicPlaceTests`: published cases listed,
+   unpublished not, client name never emitted. Playwright `CasePlaceTests`: typing the seeded cave's
+   address on New Case offers it; Use this place locks the fields; Open Case lands with the banner; the
+   place page's Published cases section shows a seeded published case; `?place=` pre-chooses.
+7. **Help.** `working-a-case.md` New Case paragraph (the kind choice, the offer). Changelog.
+
+## Phase 3 — Posts about a place
+
+1. **Migration `PlacePosts`**: `OrgMessages.PlaceId uniqueidentifier NULL`, FK → `Places` (SetNull),
+   index `(PlaceId, DateCreated)` filtered `PlaceId IS NOT NULL`. One `AddColumn` + one index. Apply to
+   `IsHauntedDb_player` only; production with the runbook.
+2. **Entity/records.** `OrgMessage.PlaceId` + nav. `CreateFeedPostRequest` gains trailing
+   `Guid? PlaceId = null`. `FeedPostRecord` gains trailing `Guid? PlaceId = null, string? PlaceName = null`.
+3. **Write.** `FeedController.CreatePost`: when `PlaceId` is given — place must exist and be
+   `PublicLocation` (D5; "Posts about somebody's home aren't shared here."), participation is
+   `FeedParticipation.PlaceRefusalAsync` (D6: signed-in is enough) instead of `RefusalAsync`; a reply
+   inherits its parent's place. Media, screening, spam pause, poll, scheduling: unchanged.
+4. **Read.** `GetFeed` gains `[FromQuery] Guid? place` (combines like `type`); `ToRecordsAsync` fills
+   `PlaceName`. `PublicPlaceResponse` gains trailing `IReadOnlyList<FeedPostRecord>? Posts` (latest 20,
+   through `VisiblePosts` and the reader's block list) and `bool CanPost`. The place page section
+   **Posts about this place** with the existing feed card (`Feed/FeedPostCard.razor` or whatever the feed
+   page renders — reuse, do not fork) and, when `CanPost`, the existing composer with the place fixed
+   and a "Posting publicly about {place}" line. "See all" → `/feed/places/{id}` (new route on
+   `FeedPage.razor`, the `place` filter). Feed cards everywhere show "at {place}" linking to
+   `/places/{id}` when `PlaceId` is set.
+5. **Moderation.** Nothing new: hidden posts vanish from the place page through `VisiblePosts`; reports
+   land in `api/admin/feed` as today. `AdminPlaceMergeController` repoints `OrgMessages.PlaceId`.
+   `moderating-the-feed.md` gains one paragraph.
+6. **Switch.** Place posts are part of the feed and follow `FeaturePublicFeed`; the place page renders
+   the section only when the feed is on. No second switch.
+7. **Tests.** `FeedControllerTests`: post with place stored and returned; residence refused; unknown
+   place 404; `?place=` filters; reply inherits; signed-in stranger may post *with* a place and still
+   may not without one (D6, both directions); hidden post absent from the place page.
+   `AdminPlaceMergeTests` (or the existing merge fixture): posts repointed. `PublicPlaceTests`: posts
+   section, `CanPost` for a no-group account. Playwright `PlacePostsTests`: sarah posts on the cave's
+   page → card appears with "at Bell Witch Cave"; the no-group seat can post there but not on `/feed`;
+   `/feed/places/{id}` lists it; feed card links back.
+8. **Help.** `the-feed.md` "Posting about a place". Changelog website + api + apps ("older app builds
+   show place posts as ordinary posts").
+
+## Phase 4 — The door for a person with no group
+
+1. **Website client** gains `StartSoloPlanAsync()` → `POST api/solo-plan` (exists, free, idempotent).
+2. **`/my-investigations`** (`Client/MyInvestigations.razor`) and the place page's signed-in header gain
+   **Investigate here / Start investigating on your own**: for somebody with no organization it mints
+   the personal organization (one sentence first: "This creates a private space for your own
+   investigating. On the free plan, what you record at public places is public; a plan lets you keep
+   it to yourself."), then opens the New Investigation window with the place pre-chosen and
+   `Visibility` fixed to Public per Phase 1. For somebody with groups it asks which group, as the
+   scheduler does.
+3. **Place page CTAs** (signed-in, `PublicLocation` only): Investigate here · Open a case here
+   (members holding Cases.Create; `?place=`) · Post about this place. Three buttons, one row, wrapping
+   on phones.
+4. **Seed + seat.** `DevelopmentDataSeeder` adds a person with no group ("olivia.chen@benco.dev",
+   password from the same gitignored source as the others) and a second `PublicLocation` with
+   investigations from both seeded groups, so the place page has more than one group on it.
+   `BenTestBase.SoloEmail`/`SoloPassword` (`BEN_SOLO_EMAIL`, `BEN_SOLO_PASSWORD`); `run-e2e.sh` and
+   `seeded-passwords.sh` hand it through like the others. Never printed.
+5. **Tests.** `PersonalOrganizationTests` already cover minting; add: minting from the web client
+   shape; a no-group person's first investigation at a landmark is Public and cannot be narrowed.
+   Playwright `SoloInvestigatorTests`: olivia signs in, opens the cave, Investigate here → sentence →
+   window with the place fixed and only Public offered → the visit appears under "Your groups' visits"
+   and, once published, for a visitor.
+6. **Help.** `getting-started.md` new section "Investigating on your own" (free = public, plan = yours);
+   `the-mobile-apps.md` cross-reference. Changelog.
+
+## Phase 5 — Finishing
+
+1. **Changelog catch-up** against `git log` since each file's last heading.
+2. **Help + pictures + PDFs**: re-shoot the place page (visitor and signed-in), New Case with the
+   offer and the kind choice, the locked Make Public box, the place composer; rebuild the product and
+   persona PDFs.
+3. **ProductWalk** gains: the place page as visitor / member / solo; New Case at a known place;
+   posting about a place. Run as every persona on the player copy; read every report.
+4. **Full e2e**, then merge to develop and master and push. Runbook entry: the `PlacePosts` migration,
+   no switch, "deploy API and website together", and what to check (a post appears on the cave's page).
+
+---
+
+## What this deliberately does not do
+
+- **No shared case object, no case owned by several groups.** `Case.OrganizationId` stays non-null;
+  every `CaseOrgAccess` check stays true. Sharing is the place.
+- **No public case files/messages/notes.** Those tables stay private. The public "files at a place"
+  are feed posts' media (screened) and the field archive (reviewed), which already have consent and
+  review built in.
+- **No curation of places** (spec open question 3). `Place.IsApproved` stays inert; the dedup offer and
+  the admin merge are the tools. Revisit if junk places appear.
+- **No reciprocity change** on `PlaceInvestigators` (open question 1).
+- **No client-consent mechanism for residences** (open question 4) — which is why D5 refuses them.
+- **No app work in this branch.** The app keeps working unchanged (D9); tagging a post to a place from
+  the phone is the next app build, noted in `APP-STORE-1.0.4` when it starts.
+
+## Verification
+
+1. `dotnet build Ben.slnx` warning-free for touched projects; `dotnet test Ben.Web.Tests` green; every
+   new rule test seen failing first with its rule broken (memory: `feedback_verify_test_discriminates`).
+2. `scripts/run-e2e.sh --filter <fixture>` per phase; full run on the finished branch (last full run:
+   716 tests, 33 min). Playwright runs with `dotnet vstest`, never `dotnet test`.
+3. Migration applied to `IsHauntedDb_player` only; hosts on 5252/5078/5180/5125 restarted after each
+   rebuild; never during a run.
+4. Walk on the player copy as visitor, sarah, james, victor, daniel and olivia (memory:
+   `feedback_test_as_ordinary_member`; the place page's public half must be traced as a visitor —
+   `feedback_author_sees_what_visitor_cannot`).
+5. iOS: decode a feed page and a public place response captured from the real API with the new fields
+   present (fixture from the real API, never invented) in BenKit's tests; nothing renumbered.
+
+## Open for Ben
+
+- D6 (who may post about a place) and D7 (paid solo may open cases) are recommendations. Both are one
+  predicate each; say the word and they flip.
+- The sentences in Phase 1 are drafts. They will reach the phone one day, so they say the rule and stop.
+- Whether an unpaid group's **existing** cases at public places become public. This plan says **no**:
+  the rule applies to cases created after it ships, exactly as the member cap never evicted anybody
+  (`PaidPlan.cs:73-76`). Flipping history public without asking would be the side-effect publication
+  D3 rules out.
