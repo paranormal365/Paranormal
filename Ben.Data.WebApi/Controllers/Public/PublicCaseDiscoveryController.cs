@@ -241,8 +241,20 @@ public sealed class PublicCaseDiscoveryController : ControllerBase
 
         await using var db = await _db.CreateDbContextAsync(ct);
 
+        // Only published cases answer. Votes can only be CAST on a published case, so without this
+        // the reachable disclosure was the tally of a case that has since been unpublished — a
+        // surface that should have gone dark with the case and did not (2026-09-17 audit). An id
+        // that is not published now returns a zero row, exactly like an id with no votes, so this
+        // is not an existence oracle either.
+        var published = await db.Cases.AsNoTracking()
+            .Where(c => caseIds.Contains(c.Id)
+                     && c.IsPublic
+                     && (c.Status == CaseStatus.Public || c.Status == CaseStatus.Haunted))
+            .Select(c => c.Id)
+            .ToListAsync(ct);
+
         var votes = await db.CaseVotes.AsNoTracking()
-            .Where(v => caseIds.Contains(v.CaseId))
+            .Where(v => published.Contains(v.CaseId))
             .ToListAsync(ct);
 
         // Resolve the authenticated user's ID (null when anonymous)

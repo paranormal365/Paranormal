@@ -33,14 +33,33 @@ public sealed class PlaceController : BenControllerBase
     {
         await using var db = await _db.CreateDbContextAsync(ct);
 
-        var place = await db.Places.AsNoTracking()
+        var stored = await db.Places.AsNoTracking()
             .Where(p => p.Id == id)
-            .Select(p => new PlaceRecord(
+            .Select(p => new
+            {
                 p.Id, p.Name, p.StreetAddress1, p.City, p.State, p.ZipCode, p.Country,
-                p.Latitude, p.Longitude, p.GeocodeNote, p.Kind))
+                p.Latitude, p.Longitude, p.GeocodeNote, p.Kind,
+            })
             .FirstOrDefaultAsync(ct);
 
-        return place is null ? NotFound() : Ok(place);
+        if (stored is null) return NotFound();
+
+        // Being signed in is not a reason to know where somebody lives — accounts are free and
+        // self-service, so this endpoint asks for standing and otherwise serves the same shape the
+        // anonymous one would (2026-09-17 audit).
+        var inFull = stored.Kind != PlaceKind.PrivateResidence
+                  || await PlaceDisclosure.MaySeeInFullAsync(
+                         db, id, GetCurrentUserId(), await CallerIsSuperAdminAsync(), ct);
+
+        return Ok(inFull
+            ? new PlaceRecord(
+                stored.Id, stored.Name, stored.StreetAddress1, stored.City, stored.State,
+                stored.ZipCode, stored.Country, stored.Latitude, stored.Longitude,
+                stored.GeocodeNote, stored.Kind)
+            : PlaceDisclosure.Public(
+                stored.Id, stored.Name, stored.StreetAddress1, stored.City, stored.State,
+                stored.ZipCode, stored.Country, stored.Latitude, stored.Longitude,
+                stored.GeocodeNote, stored.Kind));
     }
 
     /// <summary>

@@ -5,6 +5,7 @@ using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.EntityFrameworkCore;
 using Ben.Data.WebApi.Services.Access;
+using Ben.Data.WebApi.Services.Places;
 using Ben.Data.WebApi.Services.Redaction;
 using Ben.Service.Models.Feed;
 
@@ -38,14 +39,24 @@ public sealed class PublicPlaceController : ControllerBase
     {
         await using var db = await _db.CreateDbContextAsync(ct);
 
-        var place = await db.Places.AsNoTracking()
+        // Read the columns, then let PlaceDisclosure decide which of them a stranger may have.
+        // Projecting straight into PlaceRecord here is what leaked a client's home address, ZIP
+        // and exact map pin to anybody with the URL until the 2026-09-17 audit.
+        var stored = await db.Places.AsNoTracking()
             .Where(p => p.Id == id)
-            .Select(p => new PlaceRecord(
+            .Select(p => new
+            {
                 p.Id, p.Name, p.StreetAddress1, p.City, p.State, p.ZipCode, p.Country,
-                p.Latitude, p.Longitude, p.GeocodeNote, p.Kind))
+                p.Latitude, p.Longitude, p.GeocodeNote, p.Kind,
+            })
             .FirstOrDefaultAsync(ct);
 
-        if (place is null) return NotFound();
+        if (stored is null) return NotFound();
+
+        var place = PlaceDisclosure.Public(
+            stored.Id, stored.Name, stored.StreetAddress1, stored.City, stored.State,
+            stored.ZipCode, stored.Country, stored.Latitude, stored.Longitude,
+            stored.GeocodeNote, stored.Kind);
 
         // An anonymous caller belongs to no organizations and has investigated nowhere, so the
         // shared predicate resolves to "public only" on its own. No second rule to keep in step.

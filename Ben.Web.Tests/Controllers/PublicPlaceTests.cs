@@ -42,6 +42,7 @@ public class PublicPlaceTests
         db.Places.Add(new Place
         {
             Id = PlaceId, Name = "Bell Witch Cave", City = "Adams", State = "TN",
+            StreetAddress1 = "430 Keysburg Rd", ZipCode = "37010", GeocodeNote = "matched 430 Keysburg Rd",
             Latitude = lat, Longitude = lon, Kind = kind,
             DateCreated = DateTime.UtcNow, CreatedByAppUserId = Guid.NewGuid(),
         });
@@ -337,5 +338,75 @@ public class PublicPlaceTests
         // that does not know about cases" rather than "no cases here".
         Assert.NotNull((await GetAsync(f)).Cases);
         Assert.Empty((await GetAsync(f)).Cases!);
+    }
+
+    // ── What a residence may tell a stranger (2026-09-17 audit) ──────────────────────────────
+    //
+    // The leak these hold shut: this endpoint projected straight into PlaceRecord, so the street
+    // address, the ZIP and the EXACT coordinates of a client's home went to anybody with the URL.
+    // It was the only anonymous surface that never called PublicCoordinates, and the place page
+    // became a signed-out destination while the projection stayed as written on 2026-08-15.
+
+    [Fact]
+    public async Task A_private_residence_does_not_publish_its_street_address_or_zip()
+    {
+        var f = await SeedAsync(PlaceKind.PrivateResidence);
+
+        var place = (await GetAsync(f)).Place;
+
+        Assert.Null(place.StreetAddress1);
+        Assert.Null(place.ZipCode);
+        // The geocoder's note quotes back what it matched, which is the address again.
+        Assert.Null(place.GeocodeNote);
+    }
+
+    /// <summary>
+    /// A residence is routinely named after the family living in it, so the name is withheld
+    /// outright rather than redacted — the place page has no single case whose roster would apply.
+    /// </summary>
+    [Fact]
+    public async Task A_private_residence_does_not_publish_its_name()
+        => Assert.Null((await GetAsync(await SeedAsync(PlaceKind.PrivateResidence))).Place.Name);
+
+    [Fact]
+    public async Task A_private_residence_publishes_an_approximated_position_not_the_real_one()
+    {
+        var f = await SeedAsync(PlaceKind.PrivateResidence, lat: 36.5893m, lon: -87.0625m);
+
+        var place = (await GetAsync(f)).Place;
+
+        // Present, so the page can still say roughly where this is...
+        Assert.NotNull(place.Latitude);
+        Assert.NotNull(place.Longitude);
+        // ...but never the stored point, which is what a map pin at an address is.
+        Assert.NotEqual(36.5893m, place.Latitude);
+        Assert.NotEqual(-87.0625m, place.Longitude);
+    }
+
+    /// <summary>
+    /// City and state stay. They are what a published case already says about its own location, so
+    /// withholding them here would take away a fact the rest of the site discloses on purpose and
+    /// leave the page unable to say anything at all.
+    /// </summary>
+    [Fact]
+    public async Task A_private_residence_still_publishes_its_city_and_state()
+    {
+        var place = (await GetAsync(await SeedAsync(PlaceKind.PrivateResidence))).Place;
+
+        Assert.Equal("Adams", place.City);
+        Assert.Equal("TN", place.State);
+    }
+
+    [Fact]
+    public async Task A_public_location_publishes_everything_it_always_did()
+    {
+        var place = (await GetAsync(await SeedAsync(PlaceKind.PublicLocation))).Place;
+
+        Assert.Equal("Bell Witch Cave", place.Name);
+        Assert.Equal("430 Keysburg Rd", place.StreetAddress1);
+        Assert.Equal("37010", place.ZipCode);
+        // A landmark's own coordinates are the point of the page.
+        Assert.Equal(36.5893m, place.Latitude);
+        Assert.Equal(-87.0625m, place.Longitude);
     }
 }
