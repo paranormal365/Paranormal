@@ -122,16 +122,26 @@ applications, and the sidecar zips are staged under `/files` instead of inside t
 Newest first. Each entry is what the database or the site settings need for that release, in the order to do it. Remove
 nothing: a server that skipped a release needs the older entries too.
 
-### 2026-09-17 — research cards, address lookup, and a Research file type
+### 2026-09-17 — research cards, address lookup, the client's words, and a Research file type
 
-1. **No migration.** The one new database row is a file type, and `UploadFileTypeSeeder` adds it on
+1. **Deploy the canvas application, or none of this appears**:
+   `.\scripts\deploy-ishaunted.ps1 -Apps webapi,canvas,website`. Almost everything in this release
+   lives in `Ben.Wasm.Canvas`, which is its own IIS application at `/editors/canvas/` — the website
+   and the API alone would deploy cleanly and change nothing anybody can see. Check it afterwards:
+   `/editors/canvas/` answers 200, and a board's card menu offers **Make a map** on a card with an
+   address in it.
+2. **No migration.** The one new database row is a file type, and `UploadFileTypeSeeder` adds it on
    startup as it does the others; running it again changes nothing. After deploying, Site
    Administration → File Types should list **Research** beside Case Evidence and Board Snapshot.
-2. **The API server needs to reach Apple's Maps API**, which it already does for every map on the
-   site: the map box's new Find button and a pasted address both go through `api/geocode/search`.
-   That endpoint answers anonymously and is rate limited, because its calls spend the same daily
-   allowance the maps do.
-3. Nothing to turn on. Everything here is part of the research board, which is already on.
+3. **The API server needs to reach Apple's Maps API**, which it already does for every map on the
+   site: the map box's new Find button, a pasted address and **Make a map** all go through
+   `api/geocode/search`. That endpoint answers anonymously and is rate limited, because its calls
+   spend the same daily allowance the maps do.
+4. **Boards now ask for link previews to be kept** (`POST api/link-previews`), so the outbound HTTPS
+   and the file store's `link-previews` folder from the 2026-09-14 entry are what a board's link
+   cards need too. Without them a card falls back to the site and address, which is what it did
+   before — nothing breaks, the pictures are just missing.
+5. Nothing to turn on. Everything here is part of the research board, which is already on.
 
 ### 2026-09-16 — the case canvas becomes the Research tab
 

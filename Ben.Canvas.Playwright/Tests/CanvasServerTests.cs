@@ -34,7 +34,11 @@ public sealed class CanvasServerTests : CanvasTestBase
         }
 
         _api = await ApiSession.SignInAsync(ApiUrl, UserEmail, UserPassword);
-        if (!await _api.CanvasIsOnAsync()) Assert.Ignore("Turn on features.canvas-editor in IsHauntedDb_e2e (docs/dev-loop-canvas.md).");
+        // The probe is a live one — the boards endpoint either answers or it does not. It used to
+        // name a site switch to turn on; that switch was removed on 2026-09-16 when research became
+        // boards, so saying so would send somebody looking for something that is not there.
+        if (!await _api.CanvasIsOnAsync())
+            Assert.Ignore($"The API at {ApiUrl} refused api/canvas-documents for this account — check it is running and the account may read a case.");
         (_org, _case) = await _api.CaseAsync();
         foreach (var board in await _api.BoardsAsync(_case)) _api.CreatedBoards.Add(board.GetProperty("id").GetGuid());
         _baseline = _api.CreatedBoards.ToHashSet();

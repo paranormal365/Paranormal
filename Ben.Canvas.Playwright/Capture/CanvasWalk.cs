@@ -419,7 +419,7 @@ public sealed class CanvasWalk(string device, int width, int height, string them
             api = await ApiSession.SignInAsync(ApiUrl, Environment.GetEnvironmentVariable("BEN_USER_EMAIL") ?? "sarah.mitchell@benco.dev", password);
             if (!await api.CanvasIsOnAsync())
             {
-                SkipAllServerRows("features.canvas-editor is off on that database.");
+                SkipAllServerRows("the API refused api/canvas-documents for this account.");
                 return;
             }
 
