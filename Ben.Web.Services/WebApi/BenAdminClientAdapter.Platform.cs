@@ -427,6 +427,28 @@ public sealed partial class BenAdminClientAdapter
 
     // ── Mail diagnostics ──────────────────────────────────────────────────────
 
+    public Task<LoadResult<OutboxLetterItem>> GetOutboxAsync(
+        string? state = null, string? kind = null, int take = 100, CancellationToken token = default)
+    {
+        var query = new List<string>();
+        if (!string.IsNullOrWhiteSpace(state)) query.Add($"state={Uri.EscapeDataString(state)}");
+        if (!string.IsNullOrWhiteSpace(kind)) query.Add($"kind={Uri.EscapeDataString(kind)}");
+        query.Add($"take={take}");
+
+        return _api.GetListAsync<OutboxLetterItem>(
+            $"/api/admin/mail/outbox?{string.Join("&", query)}", token);
+    }
+
+    public Task<(OutboxRetryOutcome? Result, string? Error)> RetryOutboxLetterAsync(
+        Guid id, CancellationToken token = default)
+        => _api.SendExpectingReasonAsync<object, OutboxRetryOutcome>(
+               HttpMethod.Post, $"/api/admin/mail/outbox/{id}/retry", new { }, token);
+
+    public Task<(OutboxRetryOutcome? Result, string? Error)> RetryFailedOutboxAsync(
+        CancellationToken token = default)
+        => _api.SendExpectingReasonAsync<object, OutboxRetryOutcome>(
+               HttpMethod.Post, "/api/admin/mail/outbox/retry-failed", new { }, token);
+
     public Task<MailSettingsRecord?> GetMailSettingsAsync(CancellationToken token = default)
         => _api.GetAsync<MailSettingsRecord>("/api/admin/mail/settings", token);
 

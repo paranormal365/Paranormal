@@ -87,6 +87,47 @@ public sealed class ModerationQueuesHaveAnEntranceTests
         Assert.Contains("/moderation/archive", nav);
     }
 
+    // ── The outbox (item 239; wired 2026-09-17) ──────────────────────────────
+    //
+    // Same defect, same shape: three routes with no caller, behind a controller whose own doc says
+    // this is "the screen that would have answered the 2026-08-31 question — I signed up and got
+    // nothing — in five seconds instead of not at all". It answered it in zero.
+
+    [Theory]
+    [InlineData("/api/admin/mail/outbox")]
+    [InlineData("/api/admin/mail/outbox/{id}/retry")]
+    [InlineData("/api/admin/mail/outbox/retry-failed")]
+    public void An_outbox_route_has_a_client_that_calls_it(string route)
+        => Assert.Contains(route, Read("Ben.Web.Services", "WebApi", "BenAdminClientAdapter.Platform.cs"));
+
+    [Theory]
+    [InlineData("GetOutboxAsync")]
+    [InlineData("RetryOutboxLetterAsync")]
+    [InlineData("RetryFailedOutboxAsync")]
+    public void An_outbox_client_method_is_called_by_a_page(string method)
+        => Assert.Contains(method, Read("Ben.Web.Website.Library", "SuperAdmin", "AdminMailDiagnostics.razor"));
+
+    /// <summary>
+    /// And the page offers the retry, which is the whole point: the record of a failure that
+    /// cannot be acted on is a log, not a screen.
+    /// </summary>
+    [Fact]
+    public void The_outbox_offers_a_retry_and_never_shows_a_body()
+    {
+        var page = Read("Ben.Web.Website.Library", "SuperAdmin", "AdminMailDiagnostics.razor");
+
+        Assert.Contains("outbox-retry", page);
+        Assert.Contains("outbox-retry-all", page);
+        // A body carries somebody's name, what they booked and, for a hosted event, a working
+        // door code — so the endpoint never returns one and the page must never render one. The
+        // record has no field that could carry it; this asserts none is invented. BodyScrubbedUtc
+        // is a DATE and is deliberately shown, so the check names the body fields precisely
+        // rather than matching any ".Body".
+        Assert.DoesNotContain("HtmlBody", page);
+        Assert.DoesNotContain("letter.Body\"", page);
+        Assert.DoesNotContain("TextBody", page);
+    }
+
     /// <summary>
     /// Approving has to be offered on a held row, because releasing is the whole reason the queue
     /// exists. A page that only ever offered Hold would satisfy every assertion above.

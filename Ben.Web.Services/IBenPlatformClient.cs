@@ -48,6 +48,24 @@ public interface IBenPlatformClient
     /// <summary>How this machine is configured to send mail. No secrets.</summary>
     Task<MailSettingsRecord?> GetMailSettingsAsync(CancellationToken token = default);
 
+    // ── The outbox (item 239; wired 2026-09-17) ──────────────────────────────
+    //
+    // Three routes existed with no caller, so the screen that "would have answered the 2026-08-31
+    // question — I signed up and got nothing — in five seconds instead of not at all" answered it
+    // in zero, because no page read it.
+
+    /// <summary>Every letter the site has meant to send lately, and what became of it.</summary>
+    /// <param name="state">"failed", "waiting", "accepted", or null for all.</param>
+    Task<LoadResult<OutboxLetterItem>> GetOutboxAsync(
+        string? state = null, string? kind = null, int take = 100, CancellationToken token = default);
+
+    /// <summary>Puts one given-up letter back in the queue.</summary>
+    Task<(OutboxRetryOutcome? Result, string? Error)> RetryOutboxLetterAsync(
+        Guid id, CancellationToken token = default);
+
+    /// <summary>Puts every given-up letter back in the queue — the button after fixing the relay.</summary>
+    Task<(OutboxRetryOutcome? Result, string? Error)> RetryFailedOutboxAsync(CancellationToken token = default);
+
     /// <summary>Sends one real test message and reports what the server said.</summary>
     Task<MailTestResultRecord?> SendTestEmailAsync(string to, CancellationToken token = default);
 

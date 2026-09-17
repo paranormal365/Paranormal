@@ -1713,6 +1713,35 @@ public sealed record DuplicatePlaceGroup(IReadOnlyList<DuplicatePlaceRow> Places
 /// </remarks>
 public sealed record AccountStorageItem(long UsedBytes, long? CapBytes);
 
+// ── The outbox (item 239; wired 2026-09-17) ─────────────────────────────────
+// Three routes existed with no caller, so the screen that "would have answered the 2026-08-31
+// question — I signed up and got nothing — in five seconds instead of not at all" still answered
+// it in zero, because no page read it.
+
+/// <summary>One letter in the outbox, without its words.</summary>
+/// <remarks>
+/// Bodies are never returned: a body carries somebody's name, what they booked and, for a hosted
+/// event, a working door code. <c>AcceptedBySmtpUtc</c> is when the mail server TOOK it, not when
+/// anybody received it — that is only knowable from bounce reports this site does not collect.
+/// </remarks>
+public sealed record OutboxLetterItem(
+    Guid Id,
+    string To,
+    string Subject,
+    string Kind,
+    DateTime CreatedUtc,
+    int Attempts,
+    DateTime NextAttemptUtc,
+    DateTime? AcceptedBySmtpUtc,
+    DateTime? FailedUtc,
+    string? LastError,
+    bool HasBody,
+    DateTime? BodyScrubbedUtc,
+    int AttachmentCount);
+
+/// <summary>What came of putting letters back in the queue.</summary>
+public sealed record OutboxRetryOutcome(int Requeued, int Skipped, string Message);
+
 public sealed record OrphanedFieldSessionRecord(
     Guid Id, string? LocationLabel, string DeviceModel, DateTime StartedAt, DateTime DateCreated,
     int ReadingCount, int MarkerCount, string? RecordedByName,
