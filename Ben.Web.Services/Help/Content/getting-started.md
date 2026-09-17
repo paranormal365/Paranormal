@@ -112,6 +112,17 @@ with the distance dropdown.
 *Each tab carries its count, so you can see the shape of what was found before opening anything.
 A tab only appears when there is something behind it.*
 
+**Places** is the fourth tab, and it is a different kind of answer from the other three. A place is a
+location rather than an organisation or a date — a cave, a mill, a hotel — and the tab lists the
+ones near you that groups have actually published work at. Opening one shows everything anybody has
+shared about that location: which groups have investigated there, what they concluded, recorded
+sessions, photographs from events held there, and what visitors have posted.
+
+A place only appears once there is something to read at it. A location gets a record the moment the
+first group types its address, so listing every one of them would be a directory of addresses
+rather than somewhere worth going. **Private residences never appear**, whatever has happened at
+them.
+
 Tours open first, because a walk with a date on it is the most useful thing the page can hand you.
 Every tour card leads with a picture; a walk that has not put one up yet gets a plate drawn from its
 own name, so it is the same colour here, on the group's page, and on the tour's own page.

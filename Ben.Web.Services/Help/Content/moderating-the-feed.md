@@ -101,6 +101,37 @@ the feed's front page. That is the free lane working as intended — a shared re
 anyone can visit is filled by visitors — but it does mean a place's page is the likeliest first stop
 for somebody with no group and no history. Private residences take no posts at all.
 
+## The place archive
+
+**Moderation → Place Archive** is a second queue, and it is not about posts. Two other things reach
+a public location's page: a **field session** somebody published from the app, and a piece of
+**event evidence** a guest published from an event held there.
+
+Both work the other way round from the feed. They go public the moment their owner publishes them,
+and a queue entry appears only when something has been questioned — either a screener could not
+clear the media, or **any signed-in reader flagged it**.
+
+**A flag hides it straight away, and then you decide.** That order is deliberate: waiting for a
+moderator before hiding leaves the thing somebody objected to up for however long that takes, which
+is the failure a report exists to prevent. Hiding first costs a contributor some visibility for a
+while; not hiding costs somebody whatever the picture was.
+
+Which means **one flag from one person is enough to hide somebody's work**, and it stays hidden
+until you look. That is the whole reason this screen exists, and it is why it opens showing what is
+already held rather than only what is new. A held session is invisible to the public and invisible
+to its owner's audience, and nothing releases it except somebody here.
+
+- **Approve** puts it back on the place's page.
+- **Hold** takes it down again — that is how an approval is undone.
+- The reason the flag was given is shown on the row, which is usually the whole story.
+
+**The readings stay either way.** A flag is about what a photograph shows; magnetic-field numbers
+cannot be objectionable, and pulling a whole session would let one flag erase a contribution to the
+archive rather than hide a picture.
+
+If a place is later corrected to a **private residence**, its media comes down with it
+automatically. You do not need to work through it here.
+
 ## Hidden, not deleted
 
 A hidden post is still there. Nothing is destroyed: its replies, its reports and the record of who

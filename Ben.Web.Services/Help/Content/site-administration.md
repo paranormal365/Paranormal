@@ -348,6 +348,34 @@ different fixes, and a polite summary tells you neither.
 If it succeeds and the message still does not arrive, the mail left this server and the problem is
 delivery — spam filtering, or the recipient's provider rejecting it after accepting it.
 
+### Every letter the site meant to send
+
+Under the settings, **Recent letters** lists what the site has actually tried to send lately. It
+opens on the pile you came for: the ones it has **given up on**.
+
+Each row says who it was for, what it was, when it was written, and where it got to — accepted by
+the mail server, still waiting with its next attempt time, or given up with the server's own last
+error against it.
+
+**Accepted is not received.** It means the mail server took the message. Whether anybody got it is
+only knowable from bounce reports, which this site does not collect. If a letter is accepted and
+the person still has nothing, the problem is delivery rather than sending, and the section above is
+the wrong place to look.
+
+**Send again** puts one given-up letter back in the queue; the sender picks it up on its next pass,
+within five minutes. There is a bulk version for after you have fixed a relay — it says how many it
+will requeue.
+
+Two letters cannot be sent again, and say so rather than offering a button that fails:
+
+- One the mail server already accepted. Sending it again would send a duplicate.
+- One whose **words were cleared**. A letter's body is deleted a month after it is accepted,
+  because a body carries somebody's name, what they booked and — for a hosted event — a working
+  door code. That is the trade: the record of the letter is kept for as long as you need it, the
+  contents are not. Whatever wrote it has to write it again.
+
+Bodies are never shown here at all, for the same reason.
+
 ## Knowing whether a member was ever emailed
 
 **Administration → Users** has a **Verified** column, and it distinguishes three things that used

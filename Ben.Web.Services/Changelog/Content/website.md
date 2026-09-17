@@ -18,6 +18,34 @@ day-by-day account of building it would say nothing to anyone using it now.
 
 ## 2026-09-17
 
+- Places are searchable now. "What's near you" has a fourth tab: public locations near you that
+  groups have published work at. A location only appears once there is something to read at it, and
+  somebody's home never appears.
+- A published case now links to its place, so you can go from one group's write-up to everything
+  anybody has shared about that location. Only for public locations.
+- Your field sessions page shows how much storage you have used, and warns you before the cap rather
+  than when an upload is refused. If a group's paid plan covers you, it says so instead of showing
+  a cap that is not yours.
+- A group that has gone read-only now says so at the top of the group, instead of letting you find
+  out by pressing something.
+- Accepting somebody into your group now tells you why when it cannot, with a link to your plan —
+  it used to say "please try again" about the one thing trying again never fixes.
+- Notification badges use the icon and colour set for that kind of message.
+- An event that cannot be booked now says **why** — called off, or bookings closed — rather than
+  showing a form or a greyed-out grid.
+- Your event pass says who scanned you in. A case transfer says which person asked for it. Your
+  desk shows how many borrowed items are overdue, not just which ones.
+- A group's public page no longer names the city of an address you marked private. Two settings
+  that never did anything — the address map and directions switches — have been withdrawn rather
+  than left looking like they work.
+- Withdrawing your own request for access to a file works properly, and a request somebody has
+  already answered can no longer be withdrawn out from under them.
+- Groups can rename a make, a model or an experience type, and are offered a merge when the name is
+  already taken. Correcting a typo used to be impossible.
+- Hosts can invite a guest by email, and book somebody in, from the bookings board — both of which
+  the help has described for a while.
+- A field session or a photograph that somebody flagged can now be looked at and put back. One
+  report used to hide it permanently.
 - You no longer need a group to investigate. A public location's page offers **Start investigating on
   your own** to anybody signed in with no group: it explains what it does, then sets up a private
   space of your own and opens the form to schedule your first visit there, in one step. It is free

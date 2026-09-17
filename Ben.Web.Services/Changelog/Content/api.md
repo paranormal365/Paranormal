@@ -20,6 +20,26 @@ belongs there; this is for the part underneath.
 
 ## 2026-09-17
 
+- A place tells a stranger less about a private residence. Its street address, postcode and exact
+  position are no longer returned to an anonymous caller, and its name is withheld as well, because
+  a home is often named after the family in it; the city, the state and an approximate position
+  still come back so a page can say roughly where it is. Asking as a signed-in caller now requires
+  a reason to know — one of your groups has worked there, you added the place, or you administer
+  the site — and otherwise answers the same as it would to anybody. A public location is
+  unaffected.
+- A link preview for a case, and a case's vote tally, follow the same rules as every other public
+  case surface: substituted names on a private engagement, and nothing at all once a case stops
+  being published.
+- Nearby search answers with public locations as well as groups and events, for those that have
+  published work at them. Optional addition; a caller that ignores the new list behaves as before.
+- A published case says which public location it is about, when it has one.
+- Reading a client message thread no longer depends on the group's plan being current. Writing
+  still does. A lapse leaves everything already recorded readable, which is what it always said.
+- What a caller may do in a group now includes whether the group is read-only, so a client can say
+  so before offering a control that will be refused.
+- An account can ask how much of its storage allowance is used, and is told there is no cap when a
+  group's plan covers it.
+- A case answers who agreed to publish its footage to the feed, and when.
 - A feed post can name a public location it is about, and the feed can be narrowed to one. A place's
   page returns its latest posts and says whether the reader may add one. Both the field and the
   filter are optional additions, so an app that sends neither behaves as before; an older app shows a

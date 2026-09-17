@@ -437,6 +437,19 @@ space of your own in one step — free, and yours. What you record there is publ
 exactly as a published session is. See
 [Investigating on your own](getting-started#investigating-on-your-own).
 
+## How much you can keep
+
+An account with no paid plan behind it holds a limited amount of recorded material. **My field
+sessions** on the website shows what you have used, with a bar that turns amber and then red as it
+fills, so the cap is something you see coming rather than something you meet when an upload is
+refused.
+
+If a group you belong to is on a paid plan, that covers your storage and the page says so — there
+is no personal cap to show you, and it does not invent one.
+
+When you are close to full there are two ways on: remove sessions you no longer need, or join a
+group on a paid plan. Removing a session frees its space immediately.
+
 ## Deleting a session
 
 **My Field Sessions** on the website lists everything the app has sent up, and a session that is
