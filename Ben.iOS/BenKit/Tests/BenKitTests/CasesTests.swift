@@ -90,7 +90,53 @@ struct CasesTests {
     @Test func anUnknownStatusDecodesRatherThanThrowing() throws {
         struct Box: Decodable { let status: CaseStatus }
         #expect(try BenJSON.decoder.decode(Box.self, from: Data(#"{"status":99}"#.utf8)).status == .unknown)
-        #expect(try BenJSON.decoder.decode(Box.self, from: Data(#"{"status":1}"#.utf8)).status == .active)
+        #expect(try BenJSON.decoder.decode(Box.self, from: Data(#"{"status":1}"#.utf8)).status == .accepted)
+    }
+
+    /// Every number the server can send means what the server means by it.
+    ///
+    /// This assertion is the 2026-09-17 audit written down. `CaseStatus` used to declare four
+    /// values on the belief — recorded in `GroupCaseRecords.swift` — that a client saw a different
+    /// four-value enum. There is no such enum: `MyCaseController`'s records declare
+    /// `Ben.Data.Common.Enums.CaseStatus` outright, the same nine values the group sees. The old
+    /// mapping told a client their Active case was "Closed" and one being written up was
+    /// "Declined", and the previous assertion in the test above — `1 == .active` — was the wrong
+    /// mapping written down as a guarantee.
+    @Test func everyServerStatusMeansWhatTheServerMeans() throws {
+        struct Box: Decodable { let status: CaseStatus }
+
+        let expected: [(Int, CaseStatus)] = [
+            (0, .proposed), (1, .accepted), (2, .active), (3, .summarized),
+            (4, .closed), (5, .publicCase), (6, .haunted), (7, .transferred), (8, .paused),
+        ]
+
+        for (raw, status) in expected {
+            let decoded = try BenJSON.decoder
+                .decode(Box.self, from: Data(#"{"status":\#(raw)}"#.utf8)).status
+            #expect(decoded == status, "server \(raw) should decode as \(status)")
+        }
+    }
+
+    /// The control gate, which is what made the wrong numbers more than a wrong word.
+    ///
+    /// "Log what happened" is hidden on a finished case. Before the fix it was hidden while
+    /// `status != .closed` was false — and `.closed` was raw 2, which the server means as ACTIVE —
+    /// so the button disappeared on exactly the cases a client most needs it on.
+    @Test func loggingIsOfferedWhileACaseIsStillBeingWorked() {
+        #expect(CaseStatus.proposed.isFinished == false)
+        #expect(CaseStatus.accepted.isFinished == false)
+        #expect(CaseStatus.active.isFinished == false)
+        #expect(CaseStatus.summarized.isFinished == false)
+
+        // A pause is the GROUP's billing problem. A client's own account of what is happening in
+        // their house does not stop being recordable because somebody else did not renew, and the
+        // server agrees — it gates logging on being the case's client and on nothing else.
+        #expect(CaseStatus.paused.isFinished == false)
+
+        #expect(CaseStatus.closed.isFinished)
+        #expect(CaseStatus.publicCase.isFinished)
+        #expect(CaseStatus.haunted.isFinished)
+        #expect(CaseStatus.transferred.isFinished)
     }
 
     @Test func signedOutIsAFactNotAnError() async {

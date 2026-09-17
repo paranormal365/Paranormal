@@ -45,9 +45,15 @@ struct FixtureNullDriftTests {
 
         // The collections and counts on a case detail. C# writes an empty collection as [],
         // and `int`/`bool` cannot be null.
+        //
+        // "contacts" is deliberately NOT here any more (2026-09-17 audit). The C# parameter is
+        // `IReadOnlyList<CaseContactRecord>? Contacts = null`, so the contract permits a null
+        // even though today's server always fills it — and this list asserting otherwise was the
+        // recorded claim that let the Swift side declare it non-optional. A null would have failed
+        // the whole case-detail screen rather than one section.
         "my-case-detail": ["caseId", "caseReference", "title", "status", "dateCaseOpened",
                            "id", "entryType", "dateCreated",
-                           "occurrences", "investigations", "contacts", "files",
+                           "occurrences", "investigations", "files",
                            "experienceTypeIds", "fromInvestigators",
                            "unreadMessageCount", "isPrimaryClient"],
 

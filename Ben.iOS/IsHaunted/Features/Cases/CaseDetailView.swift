@@ -45,8 +45,13 @@ struct CaseDetailView: View {
         .navigationTitle(store?.detail?.caseReference ?? "Case")
         .navigationBarTitleDisplayMode(.inline)
         .toolbar {
-            // Only on a case still open: logging onto a closed case would go unread.
-            if let detail = store?.detail, detail.status != .closed, detail.status != .declined {
+            // Only on a case still open: logging onto a finished case would go unread.
+            //
+            // Asked through isFinished rather than by naming cases. The old form compared against
+            // .closed and .declined, whose raw values were 2 and 3 — which the server means as
+            // ACTIVE and SUMMARIZED — so this hid the button on precisely the cases still being
+            // worked and offered it on closed ones (2026-09-17 audit).
+            if let detail = store?.detail, !detail.status.isFinished {
                 ToolbarItem(placement: .primaryAction) {
                     Button { logging = true } label: {
                         Image(systemName: "square.and.pencil")
@@ -127,23 +132,20 @@ struct CaseDetailView: View {
                 }
             }
 
-            if !detail.contacts.isEmpty {
+            // What the server actually sends: a name, and whether this is the case manager
+            // standing in. The mailto:/tel: links that used to be here read `email` and `phone`,
+            // two fields the server has never sent, so they could never appear — see
+            // MyCaseContact (2026-09-17 audit). The group's contact details are not on this
+            // endpoint; the message thread is how a client reaches them.
+            if let contacts = detail.contacts, !contacts.isEmpty {
                 Section("Who to contact") {
-                    ForEach(detail.contacts, id: \.identity) { contact in
+                    ForEach(contacts) { contact in
                         VStack(alignment: .leading, spacing: 2) {
-                            Text(contact.displayName ?? "Someone at the group")
+                            Text(contact.displayName)
                                 .font(.subheadline.weight(.medium))
-                            if let role = contact.roleName {
-                                Text(role).font(.caption).foregroundStyle(Theme.fog)
-                            }
-                            // Tappable where the phone can genuinely act on it.
-                            if let email = contact.email, !email.isEmpty,
-                               let url = URL(string: "mailto:\(email)") {
-                                Link(email, destination: url).font(.caption)
-                            }
-                            if let phone = contact.phone, !phone.isEmpty,
-                               let url = URL(string: "tel:\(phone.filter { $0.isNumber || $0 == "+" })") {
-                                Link(phone, destination: url).font(.caption)
+                            if contact.isFallback {
+                                Text("Looking after your case")
+                                    .font(.caption).foregroundStyle(Theme.fog)
                             }
                         }
                         .padding(.vertical, 2)
