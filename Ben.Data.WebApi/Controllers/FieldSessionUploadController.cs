@@ -895,6 +895,14 @@ public sealed partial class FieldSessionUploadController : BenControllerBase
     ///
     /// <para>A public case does NOT make a private residence's investigation public: the case's
     /// own flag is what is read, and case privacy is decided elsewhere and deliberately.</para>
+    ///
+    /// <para><b>"Public case" here means PUBLISHED</b> — the flag <i>and</i> a status of Public or
+    /// Haunted, which is what the phrase means in every other query on the site (see
+    /// <c>PublicCaseController</c>'s own summary). This asked for the flag alone until 2026-09-17,
+    /// and the flag alone is set long before anybody publishes anything: it is a stated intention,
+    /// not a publication. That made the widest of the three doors open on a case somebody had
+    /// merely ticked a box on, which was never the bargain. Found while making an unpaid account's
+    /// cases public by default, where it would have thrown this door open on every new case.</para>
     /// </remarks>
     private static async Task<bool> MayContributeAsync(
         BenDataContext db, Guid investigationId, Guid userId, CancellationToken ct)
@@ -910,7 +918,10 @@ public sealed partial class FieldSessionUploadController : BenControllerBase
                 i.OrganizationId,
                 i.Visibility,
                 CaseIsPublic = i.CaseId != null
-                    && db.Cases.Any(c => c.Id == i.CaseId && c.IsPublic),
+                    && db.Cases.Any(c => c.Id == i.CaseId
+                                      && c.IsPublic
+                                      && (c.Status == Ben.Data.Common.Enums.CaseStatus.Public
+                                       || c.Status == Ben.Data.Common.Enums.CaseStatus.Haunted)),
             })
             .FirstOrDefaultAsync(ct);
         if (investigation is null) return false;

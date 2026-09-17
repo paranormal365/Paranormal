@@ -352,21 +352,39 @@
                 @* Plain select: a Telerik dropdown that drops its selection would silently leave
                    the previous sharing scope in place, and this is the one field where quietly
                    keeping the old value could publish something. *@
+                @* An account that pays nothing shares a public place's findings with everyone and
+                   may not narrow them (Ben, 2026-09-17). The narrower options are not offered at
+                   all rather than offered and refused — the same treatment Public already gets at a
+                   private home. A home is untouched by the plan rule, so this only bites where the
+                   place is a public one, and this panel cannot always know the place from here:
+                   the server has the final say either way and its sentence is rendered below. *@
                 <select id="investigationpanel-who-can-see-the-e9a5" class="form-select" style="max-width:420px;" value="@_form.Visibility"
                         @onchange="@(e => _form.Visibility = Enum.TryParse<InvestigationVisibility>(e.Value?.ToString(), out var v) ? v : _form.Visibility)">
-                    <option value="@InvestigationVisibility.GroupOnly"
-                            selected="@(_form.Visibility == InvestigationVisibility.GroupOnly)">
-                        Just this group
-                    </option>
-                    <option value="@InvestigationVisibility.PlaceInvestigators"
-                            selected="@(_form.Visibility == InvestigationVisibility.PlaceInvestigators)">
-                        Groups who have also investigated this place
-                    </option>
+                    @if (!_publicByDefault)
+                    {
+                        <option value="@InvestigationVisibility.GroupOnly"
+                                selected="@(_form.Visibility == InvestigationVisibility.GroupOnly)">
+                            Just this group
+                        </option>
+                        <option value="@InvestigationVisibility.PlaceInvestigators"
+                                selected="@(_form.Visibility == InvestigationVisibility.PlaceInvestigators)">
+                            Groups who have also investigated this place
+                        </option>
+                    }
                     <option value="@InvestigationVisibility.Public"
                             selected="@(_form.Visibility == InvestigationVisibility.Public)">
                         Anyone
                     </option>
                 </select>
+
+                @if (_publicByDefault)
+                {
+                    <div class="form-text" data-testid="investigation-scope-locked">
+                        On this account a visit to a public location is shared with everyone. What
+                        you find there joins the place's own page.
+                        <a href="/pricing">See what each plan includes.</a>
+                    </div>
+                }
 
                 @* The membership is dynamic, and that is not obvious from the wording alone. A
                    group that investigates this place next year gains access to what was shared
@@ -559,10 +577,11 @@
 
     /// <summary>What this viewer may do with investigations here — see CaseList for the pattern.</summary>
     private MyOrgPermissionsItem? _perms;
+    private bool _publicByDefault;
 
     private async Task LoadAsync()
     {
-        try { _perms = await AdminClient.GetMyOrgPermissionsAsync(OrgId); }
+        try { _perms = await AdminClient.GetMyOrgPermissionsAsync(OrgId); _publicByDefault = _perms?.PublicByDefault ?? false; }
         catch { _perms = null; }   // unknown means the button stays hidden, not hopeful
 
         try { _investigations = (await AdminClient.GetInvestigationsAsync(OrgId, CaseId)).Items.ToList(); }

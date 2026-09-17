@@ -642,7 +642,17 @@ public sealed record MyOrgPermissionsItem(
     bool CanReadInvestigations,
     IReadOnlyDictionary<Ben.Data.Common.Enums.OrganizationPermissionArea, OrgAreaActions>? Areas = null,
     IReadOnlyDictionary<Ben.Data.Common.Enums.TierCapability, bool>? Capabilities = null,
-    bool IsViewer = false)
+    bool IsViewer = false,
+    /// <summary>
+    /// True when this group pays nothing, so what it records at a public place is public and
+    /// cannot be narrowed (Ben, 2026-09-17).
+    /// </summary>
+    /// <remarks>
+    /// Read by the publish box and the sharing dropdown to render themselves locked WITH the
+    /// sentence, rather than live and then refused. False when an older server says nothing, which
+    /// leaves every control exactly as it was.
+    /// </remarks>
+    bool PublicByDefault = false)
 {
     /// <summary>Whether the group's PLAN includes a capability — a different question from
     /// whether this person may act.</summary>

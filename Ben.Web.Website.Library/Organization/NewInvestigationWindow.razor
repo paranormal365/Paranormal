@@ -192,16 +192,23 @@
         </label>
         @* Plain select for the same reason as the case-bound form: a dropdown that dropped its
            selection here would silently leave a wider scope in place. *@
+        @* Two rules narrow this list, and neither is offered-then-refused. The place decides
+           whether Public may be chosen; the plan decides whether anything narrower may be. This
+           window knows the kind of place because the person picks it, so it can be exact. *@
+        @{ var mustBePublic = _publicByDefault && _kind == PlaceKind.PublicLocation; }
         <select id="newinvestigationwindow-who-can-see-the-fea9" class="form-select" style="max-width:420px;" value="@_visibility"
                 @onchange="@(e => _visibility = Enum.TryParse<InvestigationVisibility>(e.Value?.ToString(), out var v) ? v : _visibility)">
-            <option value="@InvestigationVisibility.GroupOnly"
-                    selected="@(_visibility == InvestigationVisibility.GroupOnly)">
-                Just this group
-            </option>
-            <option value="@InvestigationVisibility.PlaceInvestigators"
-                    selected="@(_visibility == InvestigationVisibility.PlaceInvestigators)">
-                Groups who have also investigated this place
-            </option>
+            @if (!mustBePublic)
+            {
+                <option value="@InvestigationVisibility.GroupOnly"
+                        selected="@(_visibility == InvestigationVisibility.GroupOnly)">
+                    Just this group
+                </option>
+                <option value="@InvestigationVisibility.PlaceInvestigators"
+                        selected="@(_visibility == InvestigationVisibility.PlaceInvestigators)">
+                    Groups who have also investigated this place
+                </option>
+            }
             @* Public is not offered at a private home at all. The server refuses it either way;
                leaving it selectable would mean offering a choice that comes back as an error. *@
             @if (_kind != PlaceKind.PrivateResidence)
@@ -212,6 +219,15 @@
                 </option>
             }
         </select>
+
+        @if (mustBePublic)
+        {
+            <div class="form-text" data-testid="investigation-scope-locked">
+                On this account a visit to a public location is shared with everyone. What you find
+                there joins the place's own page.
+                <a href="/pricing">See what each plan includes.</a>
+            </div>
+        }
 
         @if (_visibility == InvestigationVisibility.PlaceInvestigators)
         {
@@ -253,6 +269,7 @@
     private bool   _multiDay;
     private PlaceKind _kind = PlaceKind.PublicLocation;
     private InvestigationVisibility _visibility = InvestigationVisibility.PlaceInvestigators;
+    private bool _publicByDefault;
 
     private string _name = "";
     private string _street = "";
@@ -383,6 +400,26 @@
         StateHasChanged();
     }
 
+    /// <summary>
+    /// Reads the group's plan, because the sharing list depends on it.
+    /// </summary>
+    /// <remarks>
+    /// The window is rendered when it opens, so this runs then. A failure leaves the flag false,
+    /// which offers every scope — the server still refuses what it must, and its sentence reaches
+    /// the error line, so the worst case is a refusal rather than a hidden option.
+    /// </remarks>
+    protected override async Task OnInitializedAsync()
+    {
+        try
+        {
+            var perms = await AdminClient.GetMyOrgPermissionsAsync(OrgId);
+            _publicByDefault = perms?.PublicByDefault ?? false;
+        }
+        catch { _publicByDefault = false; }
+
+        KeepScopeLegal();
+    }
+
     private void ChoosePlace(PlaceCandidate candidate)
     {
         _chosenPlace = candidate;
@@ -392,8 +429,7 @@
         // The place decides what kind of location this is, so the sharing options follow it rather
         // than whatever was picked before the place was known.
         _kind = candidate.Kind;
-        if (_kind == PlaceKind.PrivateResidence && _visibility == InvestigationVisibility.Public)
-            _visibility = InvestigationVisibility.GroupOnly;
+        KeepScopeLegal();
     }
 
     private void ClearChosenPlace() => _chosenPlace = null;
@@ -402,11 +438,29 @@
     {
         if (!Enum.TryParse<PlaceKind>(value, out var kind)) return;
         _kind = kind;
+        KeepScopeLegal();
+    }
 
-        // Public is not offered at a private home; silently leaving it selected would send a
-        // request the server refuses.
-        if (_kind == PlaceKind.PrivateResidence && _visibility == InvestigationVisibility.Public)
-            _visibility = InvestigationVisibility.GroupOnly;
+    /// <summary>
+    /// Moves the chosen scope to one the server will accept for this kind of place and this plan.
+    /// </summary>
+    /// <remarks>
+    /// Called whenever the kind changes, from either chooser. A scope left behind by a change of
+    /// place is the one field where quietly keeping the old value could publish something, or be
+    /// refused for a value nobody typed — so it is corrected in one place rather than in two
+    /// half-copies. Both directions matter now: moving to a home takes Public off an unpaid
+    /// account's visit, and moving to a landmark puts it back.
+    /// </remarks>
+    private void KeepScopeLegal()
+    {
+        if (_kind == PlaceKind.PrivateResidence)
+        {
+            if (_visibility == InvestigationVisibility.Public)
+                _visibility = InvestigationVisibility.GroupOnly;
+            return;
+        }
+
+        if (_publicByDefault) _visibility = InvestigationVisibility.Public;
     }
 
     private static string DescribeCandidate(PlaceCandidate candidate)

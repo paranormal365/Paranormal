@@ -208,6 +208,12 @@ public class CaseControllerTests
     }
 
     // ── Update ────────────────────────────────────────────────────────────────
+    //
+    // These pass isPublic: TRUE, and it is not what any of them is about. The seeded org pays
+    // nothing, so from 2026-09-17 a case it opens is created public, and an update that asked for
+    // false would be refused with "a case at a public location is public on this account" — the
+    // rule these tests would then be accidentally testing instead of titles, managers and dates.
+    // Sending the case's own state leaves each one about the thing it is named for.
 
     [Fact]
     public async Task Update_Admin_UpdatesTitleAndStatus()
@@ -216,7 +222,7 @@ public class CaseControllerTests
         var ctrl    = Build(factory, userId);
         var caseId  = ((CaseRecord)((CreatedAtActionResult)(await ctrl.Create(orgId, MakeCreateRequest(), default)).Result!).Value!).Id;
 
-        var result = await ctrl.Update(orgId, caseId, new UpdateCaseRequest("Updated", null, CaseStatus.Accepted, null, false, null), default);
+        var result = await ctrl.Update(orgId, caseId, new UpdateCaseRequest("Updated", null, CaseStatus.Accepted, null, true, null), default);
         var ok  = Assert.IsType<OkObjectResult>(result.Result);
         var dto = Assert.IsType<CaseRecord>(ok.Value);
         Assert.Equal("Updated", dto.Title);
@@ -249,7 +255,7 @@ public class CaseControllerTests
         var caseId = ((CaseRecord)((CreatedAtActionResult)(await ctrl.Create(orgId, MakeCreateRequest(), default)).Result!).Value!).Id;
 
         var result = await ctrl.Update(orgId, caseId,
-            new UpdateCaseRequest("Assigned", null, CaseStatus.Accepted, null, false, managerId), default);
+            new UpdateCaseRequest("Assigned", null, CaseStatus.Accepted, null, true, managerId), default);
 
         var dto = Assert.IsType<CaseRecord>(Assert.IsType<OkObjectResult>(result.Result).Value);
         Assert.Equal(managerId, dto.CaseManagerAppUserId);
@@ -276,7 +282,7 @@ public class CaseControllerTests
         }
         var ctrl   = Build(factory, userId);
         var caseId = ((CaseRecord)((CreatedAtActionResult)(await ctrl.Create(orgId, MakeCreateRequest(), default)).Result!).Value!).Id;
-        await ctrl.Update(orgId, caseId, new UpdateCaseRequest("Assigned", null, CaseStatus.Accepted, null, false, managerId), default);
+        await ctrl.Update(orgId, caseId, new UpdateCaseRequest("Assigned", null, CaseStatus.Accepted, null, true, managerId), default);
 
         var ok = Assert.IsType<OkObjectResult>((await Build(factory, userId).GetAll(orgId, default)).Result);
 
@@ -290,7 +296,7 @@ public class CaseControllerTests
         var ctrl   = Build(factory, userId);
         var caseId = ((CaseRecord)((CreatedAtActionResult)(await ctrl.Create(orgId, MakeCreateRequest(), default)).Result!).Value!).Id;
 
-        await ctrl.Update(orgId, caseId, new UpdateCaseRequest(null, null, CaseStatus.Closed, null, false, null), default);
+        await ctrl.Update(orgId, caseId, new UpdateCaseRequest(null, null, CaseStatus.Closed, null, true, null), default);
 
         await using var db = await factory.CreateDbContextAsync();
         var c = await db.Cases.FindAsync(caseId);
@@ -310,10 +316,10 @@ public class CaseControllerTests
         var admin = Build(factory, adminId);
         var caseId = ((CaseRecord)((CreatedAtActionResult)(await admin.Create(orgId, MakeCreateRequest(), default)).Result!).Value!).Id;
         // Assign case manager
-        await admin.Update(orgId, caseId, new UpdateCaseRequest(null, null, CaseStatus.Accepted, null, false, managerId), default);
+        await admin.Update(orgId, caseId, new UpdateCaseRequest(null, null, CaseStatus.Accepted, null, true, managerId), default);
 
         var mgr = Build(factory, managerId);
-        var result = await mgr.Update(orgId, caseId, new UpdateCaseRequest("Mgr Updated", null, CaseStatus.Accepted, null, false, managerId), default);
+        var result = await mgr.Update(orgId, caseId, new UpdateCaseRequest("Mgr Updated", null, CaseStatus.Accepted, null, true, managerId), default);
         Assert.IsType<OkObjectResult>(result.Result);
     }
 

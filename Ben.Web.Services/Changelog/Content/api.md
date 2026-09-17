@@ -20,6 +20,13 @@ belongs there; this is for the part underneath.
 
 ## 2026-09-17
 
+- What an account may keep private is now decided by its plan, not by whether it works alone. An
+  account with no plan has its cases and its visits at public locations shared by default and cannot
+  narrow them; an account with a plan chooses. Work at a private residence, and anything already
+  private, is unaffected.
+- A case counted as public, or opened for anyone to add recordings to, now means a case that has
+  actually been published. Two older checks read the publish setting without asking whether the case
+  had been published, which is what every other answer on the service has always meant by it.
 - A video, a recording or an image on a case can be asked for a byte range, so it plays and can be seeked in the page instead of only being downloadable. The same applies to a case's public page, a place's archive, an event's evidence and a group's files.
 - Opening a case now accepts it, for anybody who may change a case's status. A new optional field on the request asks for the group's decision instead, which leaves the case proposed as before. Older apps that do not send it get the accepted behaviour.
 

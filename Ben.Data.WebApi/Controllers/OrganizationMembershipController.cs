@@ -153,12 +153,23 @@ public class OrganizationMembershipController : BenControllerBase
                 viewerDb, organizationId, appUserId, cancellationToken);
         }
 
+        bool publicByDefault;
+        using (var planScope = HttpContext.RequestServices.CreateScope())
+        {
+            var planFactory = planScope.ServiceProvider
+                .GetRequiredService<Microsoft.EntityFrameworkCore.IDbContextFactory<Ben.Data.Source.Context.BenDataContext>>();
+            await using var planDb = await planFactory.CreateDbContextAsync(cancellationToken);
+            publicByDefault = await Ben.Data.WebApi.Services.Billing.PaidPlan.PublicByDefaultAsync(
+                planDb, organizationId, cancellationToken);
+        }
+
         return Ok(new MyOrgPermissionsResponse(
             CanReadCases: areas[Ben.Data.Common.Enums.OrganizationPermissionArea.Cases].Read,
             CanReadInvestigations: areas[Ben.Data.Common.Enums.OrganizationPermissionArea.Investigations].Read,
             Areas: areas,
             Capabilities: capabilities,
-            IsViewer: isViewer));
+            IsViewer: isViewer,
+            PublicByDefault: publicByDefault));
 
         async Task<bool> MayAsync(
             Ben.Data.Common.Enums.OrganizationSecurityTable table,
@@ -324,7 +335,15 @@ public class OrganizationMembershipController : BenControllerBase
         IReadOnlyDictionary<Ben.Data.Common.Enums.TierCapability, bool> Capabilities,
         // A Viewer reads and changes nothing, including the member-open writes the areas above do not describe — the
         // calendar, group messages (Ben, 2026-09-14). Additive.
-        bool IsViewer = false);
+        bool IsViewer = false,
+        // Ben, 2026-09-17: an account that pays nothing is public by default at a public place. The
+        // browser needs this BEFORE it draws the publish box and the sharing dropdown — the same
+        // reasoning as Capabilities above, and the same failure if it is missing: a control that
+        // looks live, is clicked, and comes back a 400.
+        //
+        // Defaulted FALSE, which is the answer that leaves controls working. An older server that
+        // says nothing must not lock a paying group's boxes.
+        bool PublicByDefault = false);
 
     /// <summary>What one person may do in one area. Absent action means refused.</summary>
     public sealed record AreaActions(bool Create, bool Read, bool Update, bool Delete);

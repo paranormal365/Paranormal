@@ -67,6 +67,11 @@ the case manager sit beside it. On a phone they follow it, below. If you have ma
 to leave another way, the page asks first; **Cancel** leaves without saving. **New Case** uses the
 same editor for its description.
 
+If your group has no plan, a case you open is **public from the start** and the **Make Public** box
+cannot be unticked: work at a public location is public on a free account, and the Edit Case page
+says so beside the box. A case at somebody's home is not affected, and neither is any case that was
+already private. See [Having a plan, and not having one](organization-administration#having-a-plan-and-not-having-one).
+
 A case you open yourself is **accepted** as you open it. That is usually what you want for a place
 your group picked itself: it was proposed to nobody, and you are the person who would have accepted
 it. If the decision really is the group's, tick **Let the group decide whether to take this on** and

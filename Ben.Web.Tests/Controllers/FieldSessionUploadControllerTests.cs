@@ -669,8 +669,28 @@ public sealed class FieldSessionUploadControllerTests
         Assert.IsType<OkObjectResult>(result.Result);
     }
 
-    [Fact]
-    public async Task A_public_case_opens_its_investigations_to_recordings_too()
+    /// <summary>
+    /// A PUBLISHED case opens its investigations to recordings from anyone — the widest of the
+    /// three doors, and Ben's rule of 2026-08-25: an open investigation is an invitation.
+    /// </summary>
+    /// <remarks>
+    /// <b>Published, not merely flagged.</b> This asked for <c>IsPublic</c> alone until 2026-09-17,
+    /// and a case carrying that flag with a status of Proposed — which is what the old version of
+    /// this test set up — is readable by nobody: not anonymously, not in discovery, not on the
+    /// group's own public list. So the flag alone threw the widest door open on a case nobody had
+    /// published, and from 2026-09-17 an unpaid account's cases carry that flag from the moment
+    /// they are opened, which would have meant every new case. The deliberate width is still there
+    /// and is reached the deliberate way: the investigation's own Public scope, which the test above
+    /// this one covers and which an unpaid account's landmark visits now default to.
+    /// </remarks>
+    [Theory]
+    [InlineData(CaseStatus.Proposed,  false)]
+    [InlineData(CaseStatus.Accepted,  false)]
+    [InlineData(CaseStatus.Active,    false)]
+    [InlineData(CaseStatus.Public,    true)]
+    [InlineData(CaseStatus.Haunted,   true)]
+    public async Task Only_a_published_case_opens_its_investigations_to_recordings(
+        CaseStatus status, bool strangerMayContribute)
     {
         var factory = await SeedAsync();
         var caseId = Guid.NewGuid();
@@ -679,7 +699,7 @@ public sealed class FieldSessionUploadControllerTests
             db.Cases.Add(new Case
             {
                 Id = caseId, OrganizationId = OrgId, Title = "An open case",
-                City = "Nashville", State = "TN", IsPublic = true,
+                City = "Nashville", State = "TN", IsPublic = true, Status = status,
                 DateCaseOpened = DateTime.UtcNow, DateCreated = DateTime.UtcNow,
             });
             var investigation = await db.Investigations.SingleAsync(i => i.Id == InvestigationId);
@@ -690,7 +710,9 @@ public sealed class FieldSessionUploadControllerTests
         var result = await Build(factory, StrangerId).SubmitDocument(
             Document(ValidDocument()), Guid.NewGuid(), InvestigationId,
             StrangerId, "A Stranger", default);
-        Assert.IsType<OkObjectResult>(result.Result);
+
+        if (strangerMayContribute) Assert.IsType<OkObjectResult>(result.Result);
+        else Assert.IsType<NotFoundResult>(result.Result);
     }
 
     [Fact]

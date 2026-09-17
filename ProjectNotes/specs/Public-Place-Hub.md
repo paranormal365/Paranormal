@@ -106,17 +106,17 @@ Made with Ben on 2026-09-17 unless marked *(recommended, confirm)*.
 - **D5. Private residences never take place posts.** Publishing what happens inside somebody's home is
   theirs to agree to, and there is still no mechanism for asking (spec open question 4). Refused with a
   sentence; the composer does not render there.
-- **D6. Who may post about a place** *(recommended, confirm)*: **any signed-in account**, because the
-  free lane *is* public contribution and a person with no group is precisely who it exists for. The
+- **D6. Who may post about a place — CONFIRMED by Ben, 2026-09-17**: **any signed-in account**, because
+  the free lane *is* public contribution and a person with no group is precisely who it exists for. The
   feed's front page keeps its "people who belong here" rule. Both rules live in `FeedParticipation`,
   named, so the difference is stated once. *Alternative rejected:* minting the personal organization to
   make the person "belong" — it works, but it makes a billing object the key to a moderation rule.
-- **D7. A personal organization is an organization** *(recommended, confirm)*. The `IsPersonal` refusals
-  (`CreateCase`, `CreatePrivateInvestigation`) are retired. A paid solo investigator may open a case and
-  keep it private, subject to the same `PrivateResidenceCases` capability as any group; an unpaid one
-  gets D2. This reverses the 2026-08-31 sentence "a solo plan does not take client work" in one respect
-  only — Ben's 2026-09-17 rule is the newer one — and the `Discoverable` filter (never a directory row,
-  never a nearby pin) is untouched.
+- **D7. A personal organization is an organization — CONFIRMED by Ben, 2026-09-17.** The `IsPersonal`
+  refusals (`CreateCase`, `CreatePrivateInvestigation`) are retired. A paid solo investigator may open a
+  case and keep it private, subject to the same `PrivateResidenceCases` capability as any group; an
+  unpaid one gets D2. This reverses the 2026-08-31 sentence "a solo plan does not take client work" in
+  one respect only — Ben's 2026-09-17 rule is the newer one — and the `Discoverable` filter (never a
+  directory row, never a nearby pin) is untouched.
 - **D8. A new case names its place, and says what kind of place it is.** New Case gains the same "this
   place may already be on file → Use this place" offer as New Investigation, and an explicit Public
   location / Private residence choice with no default (the model's own default, `PrivateResidence`,
@@ -124,6 +124,30 @@ Made with Ben on 2026-09-17 unless marked *(recommended, confirm)*.
 - **D9. Additive API only.** 1.0.3 is in App Review. Every request field is trailing and defaulted;
   every record field is trailing; no path changes. The app ignores `PlaceId` on posts until a later build
   tags them.
+
+## The worked example: Cragfont
+
+Ben, 2026-09-17: "Use my Cragfont record in production as an example of a public site where people can
+post their own evidence and have their own investigations."
+
+Cragfont is a historic house at Castalian Springs, Tennessee — a museum with opening hours, which is a
+`PlaceKind.PublicLocation` in every sense the model means by it, and nobody's home. It is the example
+every phase below is written against, and it is also the measure of the gap: **on production today
+there is nothing public about it at all.** `GET /api/public/cases` on ishaunted.com returns an empty
+list (checked 2026-09-17), so Cragfont exists as one group's private case with a video on it, and a
+visitor who has heard it is haunted can find nothing and contribute nothing.
+
+What it should be, phase by phase:
+
+| Phase | Cragfont gains |
+|---|---|
+| 1 | Ben's group pays, so nothing changes for it. A free group opening its own Cragfont case gets one that is public from the start, with visits there shared with everyone. |
+| 2 | The case names a place. Typing "200 Cragfont Rd" on New Case offers the place already on file with **Use this place**, and the case lands with "Cragfont — 3 other groups have investigated there". Its page lists **Published cases here**. |
+| 3 | A visitor who went on the evening tour posts a photograph about the place. It is screened like any feed media, it appears on Cragfont's page, and reporting and hiding work as they do everywhere. |
+| 4 | Somebody with no group at all presses **Investigate here** on Cragfont's page, gets a private space of their own in one step, and records a visit that is public because they pay nothing. |
+
+The dev seed gets a Cragfont-shaped place with visits from both seeded groups so the page has more
+than one group on it (Phase 4), and the help screenshots are taken there.
 
 ## Facts that shape the work
 
@@ -158,9 +182,72 @@ Made with Ben on 2026-09-17 unless marked *(recommended, confirm)*.
 
 ---
 
-## Phase 1 — The rule: unpaid is public by default, paid may keep private
+## Phase 1 — The rule: unpaid is public by default, paid may keep private — **BUILT 2026-09-17**
 
 The smallest change with the largest effect, and everything after it assumes it.
+
+### What it turned out to need, that the plan did not foresee
+
+**Two readers treated the publish flag as publication.** Everywhere on the site "a public case"
+means `IsPublic` **and** a status of `Public` or `Haunted`; `PublicCaseController`'s own summary says
+so. Two places asked for the flag alone, and the flag is set long before anybody publishes anything —
+so with the new default they would have fired on every case an unpaid account opened, on the day it
+opened it. Both were fixed before the default could reach them:
+
+- `FieldSessionUploadController.MayContributeAsync` — the widest of its three doors, "anybody at all
+  when the investigation or its case is public". On the flag alone, a stranger could upload
+  recordings to, and read the sessions on, the investigations of any case somebody had merely ticked
+  a box on. Its own test set the case up with status `Proposed` and asserted the stranger got in, so
+  this was asserted behaviour, not an oversight nobody had looked at — which is why the test is now a
+  five-case `[Theory]` naming both halves. The deliberate width is unharmed and better reached: an
+  unpaid account's landmark visits now default to `Visibility.Public`, which is the primary door.
+- `OrgPublicController` — the "public cases" count on a group's public page, which would have
+  overstated itself against the list underneath it.
+
+Recorded as its own lesson: the memory note says to grep for a documented rule's predicate anyway.
+Sixteen places ask this question and fourteen had it right, which is exactly the ratio that makes a
+sweep worth doing rather than trusting the comment. **A named predicate for it is not in this phase**
+(`CmsEmbed.cs:337` already asks for one, and half-adopting a helper leaves three shapes rather than
+two) — spun off as its own task.
+
+**The two doors really did disagree.** The retired solo rule was asked by `InvestigationController`
+and not by `OrgInvestigationsController`, so the same visit was judged differently by which screen
+booked it. `PublicByDefaultDoorTests` now asserts every rule through both doors in one test each, so
+neither can be made to pass by fixing one controller.
+
+### What shipped
+
+- `PaidPlan.PublicByDefaultAsync`, `WhyCannotKeepCasePrivateAsync`, `WhyCannotNarrowInvestigationAsync` —
+  one definition of the rule, worded so it can reach the phone (no plan, no price; 3.1.1).
+- `PersonalOrganizations` keeps `Discoverable` and nothing else. `PersonalAction` and
+  `WhyNotInAPersonalOrganization` are gone, with a note in their place saying why.
+- `InvestigationVisibilityFilter.DefaultFor(place, publicByDefault)` and
+  `Reject(visibility, place, publicByDefault, whyNotNarrower)`. The place's refusals still come first
+  and still win, so a home is never published because a subscription lapsed. All three call sites use
+  the new overloads.
+- `CaseController`: `IsPublic` set from the plan on create; un-publishing refused, only at the moment
+  it would go off, and never on a private-engagement case.
+- `MyOrgPermissionsResponse`/`Item` carry `PublicByDefault` (trailing, default false, so an older
+  server leaves every control as it was).
+- Locked with their reasons: `#case-public` + `[data-testid=case-public-locked]` on the Edit Case
+  page; the narrower options withheld and `[data-testid=investigation-scope-locked]` shown on both
+  `InvestigationPanel` and `NewInvestigationWindow`. The window's scope correction is now one
+  `KeepScopeLegal()` rather than two half-copies, and it moves in both directions.
+- Tests: `PaidPlanTests` (+2), `InvestigationVisibilityTests` (+5), `PersonalOrganizationTests`
+  (rewritten to the new truth), `FieldSessionUploadControllerTests` (the theory), and the new
+  `PublicByDefaultDoorTests` (11). Suite 6221/0.
+- Help: a new "With no plan, work at a public place is public" section under
+  organization-administration's plan heading, cross-referenced from working-a-case. Changelog both
+  streams.
+
+### Not done in Phase 1, on purpose
+
+No Playwright test for the locked controls: **both seeded groups are on active plans**, so there is
+no unpaid group in the e2e database to drive them with. That seat arrives with Phase 4's no-group
+person, and the browser tests for the locks go in beside it. The existing case and investigation
+fixtures were run to prove the markup changes broke nothing.
+
+### As planned
 
 1. **`PaidPlan`** gains `PublicByDefaultAsync(db, orgId, ct)` (= `!CoversOrganizationAsync`) and three
    sentence-or-null rules, each written once:

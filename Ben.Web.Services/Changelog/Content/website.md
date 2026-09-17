@@ -18,6 +18,12 @@ day-by-day account of building it would say nothing to anyone using it now.
 
 ## 2026-09-17
 
+- A group with no plan now collects what it finds at public places in public. A case you open is
+  public from the start, and a visit to a public location is shared with everyone; both say so where
+  you would otherwise have been refused. A plan is what makes your work yours. Somebody's home is
+  never affected, and nothing already private is changed.
+- Investigating on your own no longer means doing without cases. What you may keep private is decided
+  by your plan rather than by whether you work alone.
 - A case you open yourself is accepted as you open it, instead of waiting as **Proposed** for a
   decision nobody was asked to make. If you would rather the group decided, tick the box on the new
   case form and it waits as it used to. Anyone who may open a case but not change one still proposes

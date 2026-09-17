@@ -131,6 +131,31 @@ The price is set by how many members the group has, and the **Billing** screen u
 the band you are in and what it costs. If the price list has no charge for a group your size, that
 screen says there is nothing to buy rather than offering you a plan for nothing.
 
+### With no plan, work at a public place is public
+
+This is the bargain, and it is the same one the field archive has always made: what a free account
+records at a public location joins that location's own page, where anybody can read it. One group's
+night at a landmark is an anecdote. The same landmark recorded by eleven groups is a record worth
+having, and free accounts are what fill it.
+
+So on a group with no plan:
+
+- A case you open is **public from the start**, and the **Make Public** box on the Edit Case page
+  is ticked and cannot be unticked. The page says why, beside the box.
+- A visit to a public location is shared with **everyone**, and the narrower sharing choices are
+  not offered.
+- A session you publish to a place's archive cannot be taken back out.
+
+**A private residence is never touched by any of this.** Somebody's home is client work, it belongs
+to the paid lane, and publishing what happens inside it is theirs to agree to. A missing
+subscription is not their consent.
+
+A plan is what makes your work yours: you choose what to publish, you can narrow a visit's audience
+afterwards, and you can take a published session back out of the archive. **Nothing already private
+is changed by this.** A case that was private before your plan lapsed stays private, and you can go
+on saving it — the rule applies to new work, the same way the member limit never removes anybody
+already in your group.
+
 ## Custom-role permissions and your plan
 
 Each subscription plan includes custom-role permissions for a set of areas — cases, calendar,

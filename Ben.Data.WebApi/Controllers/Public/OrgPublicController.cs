@@ -103,8 +103,14 @@ public sealed class OrgPublicController : ControllerBase
 
         var members = await db.OrganizationUserMemberships.AsNoTracking()
             .CountAsync(m => m.OrganizationId == org.Id && m.IsActive, ct);
+        // PUBLISHED, not merely flagged: the same two conditions the group's public case list uses.
+        // Counting the flag alone made this number disagree with the list under it — the flag is an
+        // intention recorded well before a case is published, and from 2026-09-17 an unpaid
+        // account's cases carry it from the moment they are opened.
         var publicCases = await db.Cases.AsNoTracking()
-            .CountAsync(c => c.OrganizationId == org.Id && c.IsPublic, ct);
+            .CountAsync(c => c.OrganizationId == org.Id
+                          && c.IsPublic
+                          && (c.Status == CaseStatus.Public || c.Status == CaseStatus.Haunted), ct);
 
         var now = DateTime.UtcNow;
         var next = await db.OrgCalendarEvents.AsNoTracking()

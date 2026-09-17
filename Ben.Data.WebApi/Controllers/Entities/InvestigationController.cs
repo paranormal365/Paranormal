@@ -147,28 +147,26 @@ public sealed class InvestigationController : BenControllerBase
             db, entity, request.PlaceId, request.NewPlace, userId, ct);
         if (placement.Error is not null) return BadRequest(placement.Error);
 
-        // The sharing scope follows the place unless the caller states one. A case-bound visit is
-        // at somebody's home more often than not, so the cautious default is also the common one.
-        entity.Visibility = request.Visibility ?? InvestigationVisibilityFilter.DefaultFor(placement.Place);
-        if (InvestigationVisibilityFilter.Reject(entity.Visibility, placement.Place) is { } scopeError)
-            return BadRequest(scopeError);
+        // The sharing scope follows the place unless the caller states one, and the plan decides
+        // where "follows the place" starts: an account that pays nothing shares what it finds at a
+        // public location with everyone (Ben, 2026-09-17). A case-bound visit is at somebody's home
+        // more often than not, and a home is untouched by the plan rule — the cautious default is
+        // still the common one.
+        //
+        // This replaces a solo-plan check that asked whether the ORGANIZATION was personal. It was
+        // the wrong question (see PersonalOrganizations), and it was asked here and not by the flat
+        // door in OrgInvestigationsController — so the same visit was refused or allowed depending
+        // on which screen scheduled it. Both doors now call the same overload.
+        var publicByDefault = await Services.Billing.PaidPlan.PublicByDefaultAsync(
+            db, entity.OrganizationId, ct);
+        var whyNotNarrower = await Services.Billing.PaidPlan.WhyCannotNarrowInvestigationAsync(
+            db, entity.OrganizationId, ct);
 
-        // A solo plan's investigations are public ones. Checked AFTER the default is resolved, so
-        // somebody who states nothing is judged on what they would actually have got — the place's
-        // cautious default is private, and refusing them for a value they never typed would be
-        // both baffling and correct-looking.
-        if (entity.Visibility != InvestigationVisibility.Public)
-        {
-            var org = await db.Organizations.AsNoTracking()
-                .FirstOrDefaultAsync(o => o.Id == entity.OrganizationId, ct);
-            if (org is not null
-                && Services.PersonalOrganizations.WhyNotInAPersonalOrganization(
-                       org, Services.PersonalOrganizations.PersonalAction.CreatePrivateInvestigation)
-                   is { } notForSolo)
-            {
-                return BadRequest(notForSolo);
-            }
-        }
+        entity.Visibility = request.Visibility
+            ?? InvestigationVisibilityFilter.DefaultFor(placement.Place, publicByDefault);
+        if (InvestigationVisibilityFilter.Reject(
+                entity.Visibility, placement.Place, publicByDefault, whyNotNarrower) is { } scopeError)
+            return BadRequest(scopeError);
 
         if (await EnsurePublicSlugAsync(db, entity, ct) is string newSlugRefusal)
             return BadRequest(newSlugRefusal);
@@ -244,7 +242,16 @@ public sealed class InvestigationController : BenControllerBase
         // Only changed when the caller says so: an edit that says nothing about sharing should not
         // silently re-derive a scope somebody may have deliberately narrowed.
         if (request.Visibility is { } requested) entity.Visibility = requested;
-        if (InvestigationVisibilityFilter.Reject(entity.Visibility, placement.Place) is { } scopeError)
+
+        // Judged on the value the row will actually carry, whether this edit typed it or not:
+        // moving a visit from a home to a landmark is how an unpaid account's group-only scope
+        // becomes a scope the plan does not allow, without anybody touching the dropdown.
+        var publicByDefault = await Services.Billing.PaidPlan.PublicByDefaultAsync(
+            db, entity.OrganizationId, ct);
+        var whyNotNarrower = await Services.Billing.PaidPlan.WhyCannotNarrowInvestigationAsync(
+            db, entity.OrganizationId, ct);
+        if (InvestigationVisibilityFilter.Reject(
+                entity.Visibility, placement.Place, publicByDefault, whyNotNarrower) is { } scopeError)
             return BadRequest(scopeError);
 
         if (await EnsurePublicSlugAsync(db, entity, ct) is string slugRefusal)

@@ -295,17 +295,11 @@ public sealed class CaseController : BenControllerBase
         var userId = GetCurrentUserId();
         await using var db = await _db.CreateDbContextAsync(ct);
 
-        // A solo plan covers the person's own investigating and keeps their data private; it
-        // does not take client work, and a case is client work by definition. Asked before the
-        // subscription caps because "your plan does not do cases" is the more useful answer than
-        // "you have used this period's case".
-        var org = await db.Organizations.AsNoTracking().FirstOrDefaultAsync(o => o.Id == orgId, ct);
-        if (org is not null
-            && Services.PersonalOrganizations.WhyNotInAPersonalOrganization(
-                   org, Services.PersonalOrganizations.PersonalAction.CreateCase) is { } notForSolo)
-        {
-            return BadRequest(notForSolo);
-        }
+        // A personal organization used to be refused a case here outright ("a solo plan does not
+        // take client work"). That gate was keyed on IsPersonal — a fact about the record — when
+        // what it meant to ask was what the account pays. Ben settled it on 2026-09-17: paid work
+        // may be private, unpaid work at a public place is public. So a solo investigator opens
+        // cases like anybody else, and the plan decides how public they are, below.
 
         if (await WhyNotAnotherOpenCaseAsync(db, orgId, ct) is { } capped) return BadRequest(capped);
 
@@ -323,11 +317,33 @@ public sealed class CaseController : BenControllerBase
             orgId, OrganizationSecurityTable.Case, OrganizationSecurityAction.Update, ct);
         var status = request.PutToTheGroup || !mayAccept ? CaseStatus.Proposed : CaseStatus.Accepted;
 
+        // Ben, 2026-09-17: "Everything a solo person submits is going to be public by default…
+        // if paid, they can make their work private."
+        //
+        // WHAT THIS FLAG DOES AND DOES NOT DO. Setting it here records the intention, and nothing
+        // else: every reader of a public case pairs it with a status of Public or Haunted, so a
+        // case opened today is no more readable by a stranger than it was before. Publication stays
+        // the deliberate act it has always been — the status change — which is the same line the
+        // field archive draws, and for the same reason: publishing as a side effect would put work
+        // nobody has looked at in front of everybody. What the flag buys is that the box arrives
+        // ticked and, per Update below, cannot be unticked on an account that pays nothing.
+        //
+        // Two readers did NOT pair it with the status, and both were fixed alongside this rather
+        // than left for the default to walk into: the contribute door on field sessions (which
+        // would have let anyone upload to a brand-new case's visits) and the count on a group's
+        // public page (which would have overstated it).
+        // A case at somebody's home is never swept up by this. It cannot be one yet — the
+        // designation is set when a residence place is bound, and an unpaid account is refused that
+        // by PrivateCaseGate — and Phase 2's mandatory "what kind of place is this" is what makes
+        // the intention safe before a place exists to read.
+        var publicByDefault = await Services.Billing.PaidPlan.PublicByDefaultAsync(db, orgId, ct);
+
         var entity = new Case
         {
             Id                 = Guid.NewGuid(),
             OrganizationId     = orgId,
             Status             = status,
+            IsPublic           = publicByDefault,
             Title              = request.Title.Trim(),
             Description        = CleanDescription(request.Description, _sanitizer),
             StreetAddress1     = request.StreetAddress1.Trim(),
@@ -622,6 +638,18 @@ public sealed class CaseController : BenControllerBase
         {
             if (await Services.PrivateCaseGate.RefusalAsync(db, orgId, ct) is { } noPublish)
                 return BadRequest(noPublish);
+        }
+
+        // ── 2026-09-17: an account that pays nothing cannot take a public case private ──
+        // The other half of Ben's rule. Asked only at the moment the flag would go OFF, so a case
+        // that is already private stays private and nothing in hand is disturbed — the same
+        // grandfathering the member cap uses. A private-engagement case is exempt: that is the paid
+        // lane, its designation is what says so, and nobody's home is published for want of a
+        // subscription.
+        if (!request.IsPublic && entity.IsPublic && !entity.IsPrivateEngagement)
+        {
+            if (await Services.Billing.PaidPlan.WhyCannotKeepCasePrivateAsync(db, orgId, ct) is { } mustStay)
+                return BadRequest(mustStay);
         }
 
         // Manual designation (setter c). Setting it needs the plan; CLEARING it is free to the
