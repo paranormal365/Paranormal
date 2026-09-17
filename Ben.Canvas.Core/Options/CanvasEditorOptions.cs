@@ -69,6 +69,19 @@ public sealed class CanvasEditorOptions
     public HashSet<CanvasNodeType> EnabledBlocks { get; set; } = [.. Enum.GetValues<CanvasNodeType>()];
 
     /// <summary>The card templates; the first is used when a card is added without choosing one.</summary>
+    /// <remarks>
+    /// <para>Ben, 2026-09-17: "there should be other kinds of cards besides evidence. Like historical
+    /// notes, articles like news or books, quotes and from people witnesses or clients." Research is
+    /// mostly not evidence: it is what somebody read, what somebody said, and what happened here before
+    /// anybody was recording it, and all of that was going on evidence cards with the wrong four fields.</para>
+    /// <para><b>When is written, not dated</b>, everywhere but evidence. A date control cannot hold
+    /// "the 1920s", "before the fire" or "1887" without inventing a day, and a research note that has to
+    /// invent one is worse than a sentence.</para>
+    /// <para><b>No card asks for a way to contact anybody.</b> A board can be published to the case and
+    /// its picture filed there, so a telephone number typed into a person card is a telephone number
+    /// published. Who somebody is and what they described is the research; how to reach them lives on
+    /// the case, where the rules about that already are.</para>
+    /// </remarks>
     public List<CardTemplate> CardTemplates { get; set; } =
     [
         new("evidence", "Evidence",
@@ -77,6 +90,36 @@ public sealed class CanvasEditorOptions
             new("date", "Date", CardFieldKind.Date),
             new("category", "Category", CardFieldKind.Select, ["Photo", "Audio", "Video", "Witness", "Other"]),
             new("verified", "Verified", CardFieldKind.Checkbox),
+        ]),
+        new("historical", "Historical note",
+        [
+            new("what", "What happened", CardFieldKind.Text),
+            new("when", "When", CardFieldKind.Text),
+            new("where", "Where", CardFieldKind.Text),
+            new("source", "Where this comes from", CardFieldKind.Text),
+        ]),
+        new("article", "Article",
+        [
+            new("kind", "Kind", CardFieldKind.Select, ["News", "Book", "Journal", "Website", "Broadcast", "Other"]),
+            new("author", "Author", CardFieldKind.Text),
+            new("publication", "Publication", CardFieldKind.Text),
+            new("published", "Published", CardFieldKind.Text),
+            new("says", "What it says", CardFieldKind.Text),
+        ]),
+        new("quote", "Quote",
+        [
+            new("words", "The words", CardFieldKind.Text),
+            new("who", "Who said it", CardFieldKind.Text),
+            new("when", "When", CardFieldKind.Text),
+            new("source", "Where it comes from", CardFieldKind.Text),
+        ]),
+        new("person", "Person",
+        [
+            new("role", "Role", CardFieldKind.Select,
+                ["Witness", "Client", "Resident", "Owner", "Neighbour", "Investigator", "Historian", "Other"]),
+            new("connection", "Connection to the place", CardFieldKind.Text),
+            new("account", "What they describe", CardFieldKind.Text),
+            new("when", "When they were there", CardFieldKind.Text),
         ]),
     ];
 

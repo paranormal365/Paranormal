@@ -215,9 +215,40 @@ public sealed class CanvasEditorOptionsTests
     [Fact]
     public void The_default_template_is_evidence()
     {
-        var template = Assert.Single(new CanvasEditorOptions().CardTemplates);
+        var template = new CanvasEditorOptions().CardTemplates[0];
         Assert.Equal("evidence", template.Id);
         Assert.Equal(["description", "date", "category", "verified"], template.Fields.Select(f => f.Key));
+    }
+
+    [Fact]
+    public void Research_is_more_than_evidence_so_there_are_cards_for_the_rest_of_it()
+    {
+        var templates = new CanvasEditorOptions().CardTemplates;
+
+        Assert.Equal(["evidence", "historical", "article", "quote", "person"], templates.Select(t => t.Id));
+        Assert.Equal(["Evidence", "Historical note", "Article", "Quote", "Person"], templates.Select(t => t.Name));
+        new CanvasEditorOptions().Validate();
+    }
+
+    [Fact]
+    public void No_card_asks_how_to_reach_anybody_because_a_board_can_be_published()
+    {
+        var fields = new CanvasEditorOptions().CardTemplates.SelectMany(t => t.Fields).ToList();
+
+        foreach (var word in new[] { "phone", "telephone", "email", "e-mail", "address", "contact", "mobile" })
+        {
+            Assert.DoesNotContain(fields, f => f.Key.Contains(word, StringComparison.OrdinalIgnoreCase)
+                                            || f.Label.Contains(word, StringComparison.OrdinalIgnoreCase));
+        }
+    }
+
+    [Fact]
+    public void Only_evidence_asks_for_a_date_control_because_history_is_written_not_dated()
+    {
+        var templates = new CanvasEditorOptions().CardTemplates;
+
+        Assert.All(templates.Where(t => t.Id != "evidence"),
+            t => Assert.DoesNotContain(t.Fields, f => f.Kind == CardFieldKind.Date));
     }
 
     [Fact]

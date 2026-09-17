@@ -18,6 +18,20 @@
 else if (Editing)
 {
     <div class="bc-card__edit">
+        @* What kind of card this is, changeable after the fact: research rarely arrives knowing whether
+           it is a quote or an article, and anything already typed is kept — a field this kind does not
+           ask for waits in the card rather than being thrown away, and comes back if the kind does. *@
+        @if (Options.Value.CardTemplates.Count > 1)
+        {
+            <label class="bc-field" for="@FieldId("kind")"><span class="bc-field__label">Kind</span>
+                <select id="@FieldId("kind")" class="form-select form-select-sm" value="@Card.TemplateId" @onchange="OnKind">
+                    @foreach (var kind in Options.Value.CardTemplates)
+                    {
+                        <option value="@kind.Id" selected="@(kind.Id == Card.TemplateId)">@kind.Name</option>
+                    }
+                </select>
+            </label>
+        }
         <label class="bc-field" for="@FieldId("title")"><span class="bc-field__label">Title</span>
             <input @ref="FirstField" id="@FieldId("title")" class="form-control form-control-sm" @bind="Card.Title" @bind:event="oninput" placeholder="@Template.Name" />
         </label>
@@ -81,6 +95,14 @@ else
 
     private CardTemplate? Template =>
         Options.Value.CardTemplates.FirstOrDefault(t => t.Id == Card.TemplateId);
+
+    private void OnKind(ChangeEventArgs e)
+    {
+        var id = e.Value?.ToString();
+        if (string.IsNullOrWhiteSpace(id) || id == Card.TemplateId) return;
+        if (!Options.Value.CardTemplates.Any(t => string.Equals(t.Id, id, StringComparison.Ordinal))) return;
+        Card.TemplateId = id;
+    }
 
     private string FieldId(string key) => $"bc-card-{Node.Id:N}-{key}";
 }

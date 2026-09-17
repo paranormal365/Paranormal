@@ -110,7 +110,9 @@ empty part of the board to drop a note where you clicked.
 
 **Paste anywhere.** The board reads what you pasted and makes the right thing from it: a web address
 becomes a link card with the page's title and picture, a photo becomes a picture, a recording becomes
-something that plays where it sits, a document becomes a file, and text becomes a note.
+something that plays where it sits, a document becomes a file, a street address becomes a map of that
+place, and anything else becomes a note. Whatever you paste lands on clear ground rather than on top
+of what is already there.
 
 **Drop files on the board** and the same happens — and they are added to the case's **Files** at the
 same time, so a photograph only ever exists once.
@@ -118,6 +120,30 @@ same time, so a photograph only ever exists once.
 **The case files button** (the folder, on the left) reaches the other way: it lists what the case
 already holds so you can put a photograph from last week's visit straight onto the board without
 finding it on your computer and sending it a second time.
+
+### Kinds of card
+
+Research is mostly not evidence, so a card can be any of five kinds, each asking for what that kind of
+thing needs:
+
+| Kind | What it is for |
+|---|---|
+| **Evidence** | something recorded — a description, the date, what kind it is, and whether it is verified. |
+| **Historical note** | what happened here before anybody was recording: what, when, where, and where you read it. |
+| **Article** | a piece of writing — news, a book, a journal, a website or a broadcast — with its author and what it says. |
+| **Quote** | somebody's words, who said them, when, and where the quote comes from. |
+| **Person** | a witness, a client, a neighbour or an owner: their connection to the place and what they describe. |
+
+Pick the kind while editing a card, at the top of its form. Changing your mind keeps what you have
+already typed: a field the new kind does not ask for waits in the card, and comes back if you change
+back. **No card asks for a telephone number or an address for a person**, because a board can be
+published to the case — how to reach somebody belongs on the case itself.
+
+**When** is written rather than picked from a calendar on every kind but Evidence, so "the 1920s",
+"before the fire" and "1887" can all be said plainly.
+
+A card's heading shows its title. Until you give it one, the heading is the kind of card it is —
+*Quote*, *Person* — rather than the word "Card", which every card would share.
 
 ### One card after another
 

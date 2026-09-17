@@ -533,11 +533,16 @@ public static class Words
 /// <summary>Short names for blocks, for labels and announcements.</summary>
 public static class NodeWords
 {
-    public static string Title(CanvasNode node)
+    /// <param name="templates">
+    /// The card kinds this editor knows, so an untitled card is headed by what kind of card it is —
+    /// "Evidence", "Quote", "Person" — rather than by the word "Card", which every card shares and so
+    /// tells a reader nothing (Ben, 2026-09-17). Without them an untitled card falls back to "Card".
+    /// </param>
+    public static string Title(CanvasNode node, IReadOnlyList<CardTemplate>? templates = null)
     {
         var text = node.Data switch
         {
-            CardData c => string.IsNullOrWhiteSpace(c.Title) ? null : c.Title,
+            CardData c => string.IsNullOrWhiteSpace(c.Title) ? KindOf(c, templates) : c.Title,
             MessageData m => string.IsNullOrWhiteSpace(m.Author) ? Core.Paste.PasteHtmlAllowList.VisibleText(m.Html) : m.Author,
             MapData m => m.Address ?? (m.Latitude != 0 || m.Longitude != 0
                 ? string.Create(CultureInfo.InvariantCulture, $"{m.Latitude:F5}, {m.Longitude:F5}")
@@ -554,10 +559,15 @@ public static class NodeWords
         return clean.Length <= 40 ? clean : clean[..39] + "…";
     }
 
-    public static string Aria(CanvasNode node, bool selected, string? groupLabel)
+    /// <summary>The name of the kind of card this is, when the editor has its template.</summary>
+    private static string? KindOf(CardData card, IReadOnlyList<CardTemplate>? templates) =>
+        templates?.FirstOrDefault(t => string.Equals(t.Id, card.TemplateId, StringComparison.Ordinal))?.Name;
+
+    public static string Aria(CanvasNode node, bool selected, string? groupLabel,
+                              IReadOnlyList<CardTemplate>? templates = null)
     {
         var d = BlockRegistry.Get(node.Type);
-        var label = $"{d.DisplayName}: {Title(node)}";
+        var label = $"{d.DisplayName}: {Title(node, templates)}";
         if (selected) label += ", selected";
         if (node.Locked) label += ", locked";
         if (!string.IsNullOrWhiteSpace(groupLabel)) label += $", in group {groupLabel}";

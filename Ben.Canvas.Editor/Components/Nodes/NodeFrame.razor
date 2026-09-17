@@ -8,19 +8,20 @@
 @inject CanvasStore Store
 @inject SelectionState Selection
 @inject BoardAccess Access
+@inject Microsoft.Extensions.Options.IOptions<Ben.Canvas.Core.Options.CanvasEditorOptions> Options
 
 @* data-bc-locked also carries "somebody else's piece, and this person may only add to the board" (Ben,
    2026-09-16): the pointer script already refuses to drag a locked block, and the document is untouched — this is
    what the screen allows, not what the board records. *@
 <div class="@CssClass" role="group" tabindex="@(Focused ? "0" : "-1")"
-     aria-label="@NodeWords.Aria(Node, Selected, GroupLabel)"
+     aria-label="@NodeWords.Aria(Node, Selected, GroupLabel, Options.Value.CardTemplates)"
      data-bc-node="@Node.Id"
      data-bc-locked="@((Node.Locked || !Access.MayChange(Node.Id)) ? "true" : null)"
      data-bc-selected="@(Selected ? "true" : null)"
      style="@Style" @ref="_element">
     <div class="bc-node__head">
         <BcIcon Name="@Descriptor.IconName" Class="bc-node__icon" />
-        <span class="bc-node__title">@NodeWords.Title(Node)</span>
+        <span class="bc-node__title">@NodeWords.Title(Node, Options.Value.CardTemplates)</span>
         @if (Node.Locked)
         {
             <BcIcon Name="lock" Class="bc-node__lock" />

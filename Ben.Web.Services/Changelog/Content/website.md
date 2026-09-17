@@ -22,6 +22,9 @@ day-by-day account of building it would say nothing to anyone using it now.
   there. It goes to the nearest clear ground instead, the same way a card added from the toolbar does.
 - A map box can be given an address instead of coordinates: write it and press Find. Pasting an address
   onto a board now makes a map of that place, and text nobody can place is still the note it was.
+- A research card can be a historical note, an article, a quote or a person as well as evidence, each
+  asking for what that kind of thing needs. Pick the kind while editing a card; changing it keeps what
+  you typed. Until a card has a title, its heading says which kind it is rather than "Card".
 
 ## 2026-09-16
 

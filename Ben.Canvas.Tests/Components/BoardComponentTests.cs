@@ -75,7 +75,9 @@ public sealed class CanvasBoardRenderTests
         node.Locked = true;
         document.Nodes.Add(node);
         var html = await RenderHelper.RenderWithBoardAsync<CanvasBoard>(document);
-        Assert.True(html.Contains("aria-label=\"Card: Card, locked\""), html);
+        // "Card: Evidence", not "Card: Card": an untitled card is announced by what kind of card it is,
+        // now that there is more than one kind (Ben, 2026-09-17).
+        Assert.True(html.Contains("aria-label=\"Card: Evidence, locked\""), html);
         Assert.Contains("data-bc-locked=\"true\"", html);
     }
 

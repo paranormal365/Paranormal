@@ -1,5 +1,7 @@
 using Ben.Canvas.Core.Commands;
 using Ben.Canvas.Core.Model;
+using Ben.Canvas.Core.Options;
+using Microsoft.Extensions.Options;
 using Ben.Canvas.Core.Presentation;
 
 namespace Ben.Canvas.Editor.Services;
@@ -26,8 +28,15 @@ namespace Ben.Canvas.Editor.Services;
 /// stopping when it is gone.
 /// </para>
 /// </remarks>
-public sealed class PresentationState(CanvasStore store)
+public sealed class PresentationState(CanvasStore store, IOptions<CanvasEditorOptions>? options = null)
 {
+    /// <summary>
+    /// The card kinds, so a stop on the walk is headed "Evidence" or "Quote" rather than "Card" — the
+    /// same words the board itself shows (Ben, 2026-09-17). Optional so a host that builds this by hand
+    /// still works; without it the heading falls back to the block's own name.
+    /// </summary>
+    private string TitleOf(CanvasNode node) => NodeWords.Title(node, options?.Value.CardTemplates);
+
     private IReadOnlyList<Slide> _slides = [];
 
     /// <summary>Raised when the walk starts, moves or stops.</summary>
@@ -51,7 +60,7 @@ public sealed class PresentationState(CanvasStore store)
     public bool HasPrevious => Active && Index > 0;
 
     /// <summary>What a board would be walked through as, without starting.</summary>
-    public IReadOnlyList<Slide> Preview() => SlideOrder.For(store.Document, NodeWords.Title);
+    public IReadOnlyList<Slide> Preview() => SlideOrder.For(store.Document, TitleOf);
 
     /// <summary>
     /// Starts a walk, at the stop showing <paramref name="from"/> when it is one of them.
@@ -64,7 +73,7 @@ public sealed class PresentationState(CanvasStore store)
     /// </remarks>
     public bool Start(Guid? from = null)
     {
-        _slides = SlideOrder.For(store.Document, NodeWords.Title);
+        _slides = SlideOrder.For(store.Document, TitleOf);
         if (_slides.Count == 0) return false;
 
         Active = true;
