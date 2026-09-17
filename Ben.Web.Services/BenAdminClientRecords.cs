@@ -387,6 +387,15 @@ public sealed record PublicPlaceResponse(
     /// <summary>Whether this reader may add one. False for a visitor and at a private residence.</summary>
     bool CanPost = false);
 
+/// <summary>
+/// The personal organization behind one account's own investigating (2026-09-17).
+/// </summary>
+/// <remarks>
+/// Named for the person, because the only screens that ever show this name are their own. It is
+/// not a brand and nobody else reads it.
+/// </remarks>
+public sealed record SoloPlanItem(Guid OrganizationId, string Name);
+
 /// <summary>A place's posts for a signed-in reader, and whether they may add one (2026-09-17).</summary>
 public sealed record PlacePostsRecord(
     IReadOnlyList<Ben.Service.Models.Feed.FeedPostRecord> Posts,

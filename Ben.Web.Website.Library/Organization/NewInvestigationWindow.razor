@@ -255,6 +255,15 @@
 @code {
     [Parameter] public Guid OrgId { get; set; }
 
+    /// <summary>
+    /// A place chosen before the window opened — arriving from that place's own page.
+    /// </summary>
+    /// <remarks>
+    /// Fills the chosen-place banner and settles the kind, so somebody who pressed "Investigate
+    /// here" is not asked for an address they are already looking at.
+    /// </remarks>
+    [Parameter] public Guid? PrechosenPlaceId { get; set; }
+
     /// <summary>Raised after a successful create, so the caller can refresh its list.</summary>
     [Parameter] public EventCallback OnCreated { get; set; }
 
@@ -416,6 +425,24 @@
             _publicByDefault = perms?.PublicByDefault ?? false;
         }
         catch { _publicByDefault = false; }
+
+        // Arrived from a place's own page, so the place is settled and its kind decides the rest.
+        // Read through the anonymous place endpoint: somebody may investigate a place their group
+        // has never touched, which is the whole reason the button is on that page.
+        if (PrechosenPlaceId is { } prechosen)
+        {
+            try
+            {
+                if (await AdminClient.GetPlaceAsync(prechosen) is { } place)
+                {
+                    _chosenPlace = new PlaceCandidate(
+                        place.Id, place.Name, place.StreetAddress1, place.City, place.State,
+                        place.Kind, DistanceMiles: null, InvestigationCount: 0);
+                    _kind = place.Kind;
+                }
+            }
+            catch { /* the shortcut is a convenience; the form still works by hand */ }
+        }
 
         KeepScopeLegal();
     }

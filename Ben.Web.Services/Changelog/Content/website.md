@@ -18,6 +18,13 @@ day-by-day account of building it would say nothing to anyone using it now.
 
 ## 2026-09-17
 
+- You no longer need a group to investigate. A public location's page offers **Start investigating on
+  your own** to anybody signed in with no group: it explains what it does, then sets up a private
+  space of your own and opens the form to schedule your first visit there, in one step. It is free
+  and nobody else joins it. What you record at a public location is public on a free account, which
+  the page says before you agree to it.
+- A public location also offers **Investigate here** for each of your groups, with the place already
+  filled in.
 - A public location's page now takes **posts**. Anybody signed in can add a note or a photograph
   about somewhere anyone can visit, and it appears on the place's page and on the feed alike, with a
   link back. Photos are checked, reported and hidden exactly as anywhere else on the feed. Somebody's

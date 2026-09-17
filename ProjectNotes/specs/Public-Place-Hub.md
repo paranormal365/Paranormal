@@ -488,7 +488,61 @@ new code's own tests — every one of them supplies a context — and only the o
 8. **Help.** `the-feed.md` "Posting about a place". Changelog website + api + apps ("older app builds
    show place posts as ordinary posts").
 
-## Phase 4 — The door for a person with no group
+## Phase 4 — The door for a person with no group — **BUILT 2026-09-17**
+
+### What shipped
+
+- `IBenOrganizationClient.GetSoloPlanAsync` / `StartSoloPlanAsync` — the first callers the
+  solo-plan endpoint has ever had. It shipped with the solo tier and sat unreachable: a person with
+  no group could record field sessions from the phone and nothing else, because every other feature
+  is org-scoped and they had no org.
+- Place page, public locations only: **Investigate here** per group the reader belongs to, and
+  **Start investigating on your own** for somebody who belongs to nothing. The second explains the
+  bargain in a `BenModal` first — a private space of your own, free, nobody else joins it; and what
+  you record here is public because you pay nothing — then mints the organization and goes straight
+  on to the scheduling window with the place already settled. Straight on, because the button said
+  "start investigating" and stopping at "you now have a space" leaves somebody to work out where
+  investigations live.
+- `NewInvestigationWindow` gains `PrechosenPlaceId`, so arriving from a place's page does not ask
+  for an address the person is already looking at.
+- **A seat that belongs to nothing**: `wren.ashby@benco.dev` in `DevelopmentRosterSeeder`, with no
+  `MemberAsync` call anywhere — that absence is the fixture. `BenTestBase.SoloEmail`/`SoloPassword`,
+  `BEN_SOLO_PASSWORD` derived in `seeded-passwords.sh` from the DevData password like Victor's.
+  Daniel was the closest existing seat and is no use here: he is group-less but a *client*, and a
+  client passes the feed's belonging rule, so he cannot show the wider door at all.
+- Help: "Investigating on your own" in getting-started, cross-referenced from the-mobile-apps and
+  from the plan section in organization-administration. Changelog.
+- Tests: `PersonalOrganizationTests.Somebody_in_no_group_gets_one_of_their_own_and_it_is_public_by_default`
+  (deterministic, and the real proof of the door); Playwright `SoloInvestigatorTests` — the door, the
+  scope that can only be public, and the post-about-a-place-but-not-the-feed seam.
+
+### The same Razor trap, twice in one afternoon
+
+`<NewInvestigationWindow>` rendered as an empty `<newinvestigationwindow>` element because
+`PlaceView.razor` had no `@using Ben.Web.Website.Library.Organization` — the button opened nothing,
+with no error anywhere. Exactly the failure `<FeedComposer>` had an hour earlier in phase 3. Both
+usings are now on the page with a comment saying why. Recorded as its own memory note
+(`feedback_razor_unknown_component_renders_as_html`) because it will happen again.
+
+### Wren's group-less state is a consumable, and the fixture had to learn that twice
+
+`SoloInvestigatorTests` **writes**: the door test mints her a personal organization, after which
+"belongs to nothing" is impossible on that database. Two mistakes came out of it, and an existing
+guard caught the first.
+
+1. The branches for "she already has a space" were `Assert.Pass`, and
+   `PlaywrightTestsCanFailTests` refused the file outright: a browser test that ends itself as
+   passed makes a regression in what it covers report green. It is right, and the guard's own
+   instruction is the fix — `Assert.Ignore` for a missing precondition. So a database that cannot
+   provide the seat now reports honestly as not-run, naming `BEN_E2E_DB` as the way to get it back.
+2. Even on a brand-new database two tests ignored themselves, because NUnit runs alphabetically and
+   the **scheduling** test spent the seat before the **door** test could use it. The fixture is now
+   `[Order]`ed: the two tests that need her group-less run first, then the two that work either way.
+   Four passed, none skipped, on a fresh `BEN_E2E_DB`.
+
+The deterministic proof of the door remains the unit test, which needs no seat at all.
+
+### As planned
 
 1. **Website client** gains `StartSoloPlanAsync()` → `POST api/solo-plan` (exists, free, idempotent).
 2. **`/my-investigations`** (`Client/MyInvestigations.razor`) and the place page's signed-in header gain

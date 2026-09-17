@@ -422,6 +422,30 @@ an "Investigator Role" for exactly this). Titles like *Probationary* or *Senior 
 are seniority labels and open nothing by themselves; if a tab you expect is missing, it's a
 role you're missing, not a bug — ask whoever runs your group.
 
+## Investigating on your own
+
+You do not need a group. Open any **public location's** page — a landmark, a cemetery, a museum —
+and, signed in with no group of your own, it offers **Start investigating on your own**.
+
+Pressing it explains the bargain before anything happens, and then does two things at once: it
+creates a private space of your own to keep investigations in, and it opens the form to schedule
+your first visit to the place you were already looking at. The space is free, it is yours, nobody
+else joins it, and it never appears in any list of groups — it exists so the rest of the site has
+somewhere to hang your work, because investigations, evidence and reports all belong to something.
+
+**What you record at a public location is public.** That is the bargain and it is worth
+understanding before you start: your visit joins that place's own page, where anybody can read it.
+One person's night somewhere is an anecdote; the same place recorded by eleven people is a record
+worth having, and free accounts are what fill it. A plan is what makes your work yours instead —
+see [Having a plan, and not having one](organization-administration#having-a-plan-and-not-having-one).
+
+Somebody's home is never part of this. Private-residence work is client work, it belongs to the
+paid lane, and a home's page offers none of these buttons.
+
+You can also simply **post** about a public place, with no space and no visit: see
+[Posting about a place](the-feed#posting-about-a-place). And what you record on the phone can be
+published to a place's archive the same way — see [the mobile apps](the-mobile-apps).
+
 ## A group's own pages
 
 Every group has a page of its own at `/o/their-name`, and everything they publish hangs off it: a

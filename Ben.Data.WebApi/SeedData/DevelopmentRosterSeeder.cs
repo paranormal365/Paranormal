@@ -75,6 +75,16 @@ internal static class DevelopmentRosterSeeder
         // remember to put them back. The seat nobody can sit in is the seat nobody tests.
         var victor = await UserAsync(userManager, "victor.reyes@benco.dev",    "Victor Reyes", seedPassword);
 
+        // Wren exists for the same reason as Victor, one tier further out: somebody in NO GROUP AT
+        // ALL, which every other seeded person fails to be. She is who the free lane is for — a
+        // person who visits public places, records, and publishes — and until she existed nothing
+        // could drive the door she comes through. Note what is NOT below: no MemberAsync call for
+        // her, anywhere, ever. That absence is the fixture.
+        //
+        // She is deliberately not given a personal organization either. Minting one is the thing
+        // being tested, and a seat that arrives already through the door cannot test the door.
+        _ = await UserAsync(userManager, "wren.ashby@benco.dev", "Wren Ashby", seedPassword);
+
         // IH-08, Ben's 2026-08-26 sweep: Site Roles reported Admin 0 users and Moderator 0, so
         // neither role's behaviour had ever run — including whatever gates the 26 /admin/* routes
         // and the /moderation/media screen. Same reasoning as Victor's Viewer seat above: the

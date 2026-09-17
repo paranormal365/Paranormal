@@ -431,6 +431,12 @@ normally stay on the phone that made them.
   the first place. So it is worth a moment's thought before the first publish: what people have
   already read cannot be unread either way.
 
+**On the website, the same place page goes further.** A public location offers to schedule a visit
+there and to post about it, and if you have no group at all it offers to set you up with a private
+space of your own in one step — free, and yours. What you record there is public on a free account,
+exactly as a published session is. See
+[Investigating on your own](getting-started#investigating-on-your-own).
+
 ## Deleting a session
 
 **My Field Sessions** on the website lists everything the app has sent up, and a session that is

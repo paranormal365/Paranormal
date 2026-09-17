@@ -205,6 +205,27 @@ public interface IBenOrganizationClient
     Task<(OrganizationAdRecord? Result, string? Error)> WithdrawOrgAdAsync(Guid orgId, Guid adId, CancellationToken token = default);
     Task<bool> DeleteOrgAdAsync(Guid orgId, Guid adId, CancellationToken token = default);
     Task<MyOrgPermissionsItem?> GetMyOrgPermissionsAsync(Guid orgId, CancellationToken token = default);
+
+    // ── Investigating on your own (2026-09-17) ───────────────────────────────
+
+    /// <summary>
+    /// This account's personal organization, or null when it has none.
+    /// </summary>
+    Task<SoloPlanItem?> GetSoloPlanAsync(CancellationToken token = default);
+
+    /// <summary>
+    /// Creates this account's personal organization, or returns the one it already has.
+    /// </summary>
+    /// <remarks>
+    /// <para>Free, and idempotent — tapping twice gets the same organization rather than a second
+    /// one. It takes no payment: it produces the organization the rest of the site hangs work on,
+    /// and the ordinary billing flow does the rest if somebody later wants a plan.</para>
+    ///
+    /// <para>The endpoint has existed since the solo tier shipped and <b>had no caller anywhere</b>
+    /// until this: a person with no group could record field sessions from the phone and nothing
+    /// else, because every other feature is org-scoped and they had no org. This is the door.</para>
+    /// </remarks>
+    Task<(SoloPlanItem? Plan, string? Error)> StartSoloPlanAsync(CancellationToken token = default);
     Task<OrgIncludedAreasItem?> GetOrgIncludedAreasAsync(Guid orgId, CancellationToken token = default);
 
     // ── Member-title ladder (item 157) — seniority, never permission ─────────

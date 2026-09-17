@@ -210,6 +210,42 @@ public sealed class PersonalOrganizationTests
     }
 
     /// <summary>
+    /// A person with no group at all can get one in a single call, and what they then record at a
+    /// public place is public — the whole free lane, end to end.
+    /// </summary>
+    /// <remarks>
+    /// The endpoint had existed since the solo tier shipped and had <b>no caller anywhere</b> until
+    /// 2026-09-17: a person with no group could record field sessions from the phone and nothing
+    /// else, because every other feature is org-scoped and they had no org. This asserts the door
+    /// rather than the plumbing behind it — that somebody who belongs to nothing ends up belonging
+    /// to exactly one thing, owning it, and inside the free lane's rule.
+    /// </remarks>
+    [Fact]
+    public async Task Somebody_in_no_group_gets_one_of_their_own_and_it_is_public_by_default()
+    {
+        var f = CreateFactory();
+        var userId = await AddUserAsync(f);
+
+        await using (var before = await f.CreateDbContextAsync())
+        {
+            Assert.Empty(before.OrganizationUserMemberships);
+        }
+
+        var plan = await StartAsync(f, userId);
+
+        await using var db = await f.CreateDbContextAsync();
+
+        var membership = Assert.Single(db.OrganizationUserMemberships);
+        Assert.Equal(plan.OrganizationId, membership.OrganizationId);
+        Assert.Equal(userId, membership.AppUserId);
+        Assert.Equal(OrganizationMemberRole.Owner, membership.Role);
+
+        // And straight into the free lane: nothing was paid, so a landmark's findings are shared.
+        Assert.True(await PaidPlan.PublicByDefaultAsync(db, plan.OrganizationId, default));
+        Assert.NotNull(await PaidPlan.WhyCannotNarrowInvestigationAsync(db, plan.OrganizationId, default));
+    }
+
+    /// <summary>
     /// A personal organization that pays nothing is public by default; one that pays is not. The
     /// question is the subscription, and the answer is the same one storage and the archive use.
     /// </summary>

@@ -333,6 +333,22 @@ public abstract class BenTestBase : PageTest
     protected static string ClientPassword     => RequiredSecret("BEN_CLIENT_PASSWORD");
 
     /// <summary>
+    /// Wren — an account in no group at all, and no group's client either.
+    /// </summary>
+    /// <remarks>
+    /// <para>The free lane's own seat (2026-09-17). <see cref="ClientEmail"/> is also group-less,
+    /// but a client has a case being worked and so passes the feed's "people who belong here"
+    /// rule — which makes him useless for testing the wider door a public place opens. Wren passes
+    /// nothing: no membership, no case, no client access. She is who the free lane exists for, and
+    /// what she may and may not do is the whole point of her.</para>
+    ///
+    /// <para>She has no personal organization either, because minting one is the behaviour under
+    /// test and a seat already through the door cannot test the door.</para>
+    /// </remarks>
+    protected static string SoloEmail          => Environment.GetEnvironmentVariable("BEN_SOLO_EMAIL")          ?? "wren.ashby@benco.dev";
+    protected static string SoloPassword       => RequiredSecret("BEN_SOLO_PASSWORD");
+
+    /// <summary>
     /// Logs in as the specified user via the /login page and waits for redirect.
     /// </summary>
     /// <param name="email">Email address to enter into the login form.</param>

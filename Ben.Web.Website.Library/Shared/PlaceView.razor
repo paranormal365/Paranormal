@@ -10,6 +10,10 @@
    no error, no warning, just an empty <feedcomposer> tag in the page. Which is exactly what
    happened, and what cost an hour of looking at the server. *@
 @using Ben.Web.Website.Library.Feed
+@* And the scheduling window, for the same reason and after making the same mistake twice in one
+   afternoon: without this, <NewInvestigationWindow> emitted an empty <newinvestigationwindow>
+   element and the button that opens it did nothing at all. *@
+@using Ben.Web.Website.Library.Organization
 
 @*
    A place, and the history of what has happened there.
@@ -97,9 +101,73 @@
                                 <span class="text-secondary">· @org.Name</span>
                             }
                         </a>
+                        <button type="button" class="btn btn-sm btn-outline-secondary me-1 mb-1 place-investigate"
+                                @onclick="@(() => InvestigateWith(org.OrganizationId))">
+                            <BenIcon Name="calendar" Class="me-1" />Investigate here
+                            @if (_myOrgs.Count > 1)
+                            {
+                                <span class="text-secondary">· @org.Name</span>
+                            }
+                        </button>
                     }
                 }
             </p>
+        }
+
+        @* ── The door for somebody in no group at all (2026-09-17) ────────────
+           Ben: everything a solo person submits is public by default. Until now a person with no
+           group could record from the phone and nothing else — every other feature is org-scoped
+           and they had no org, and the endpoint that mints one had no caller anywhere on the site.
+           This is it. Offered only at a public location: a visit to somebody's home starts with
+           the client, not from a page anyone can read. *@
+        @if (UserState.IsAuthenticated && _myOrgs.Count == 0
+             && _place.Kind == Ben.Data.Common.Enums.PlaceKind.PublicLocation)
+        {
+            <p class="mb-2">
+                <button type="button" class="btn btn-sm btn-primary place-investigate-solo"
+                        disabled="@_startingSolo" @onclick="@(() => _offeringSolo = true)">
+                    <BenIcon Name="calendar" Class="me-1" />Start investigating on your own
+                </button>
+            </p>
+        }
+
+        @* The sentence before the act, not after it: minting a space and publishing by default are
+           both things somebody should agree to knowingly. BenModal, never TelerikDialog. *@
+        <BenModal @bind-Visible="@_offeringSolo" Title="Investigating on your own" Size="sm">
+            <ChildContent>
+                <p>
+                    This creates a private space of your own to keep investigations in. It is free,
+                    and it is yours — nobody else joins it and it never appears in any list of groups.
+                </p>
+                <p class="mb-0">
+                    On a free account, what you record at a public location like
+                    <strong>@Title</strong> is <strong>public</strong>: it joins this place's page
+                    where anybody can read it. That is the bargain, and it is what makes a place's
+                    record worth reading. A plan is what makes your work yours instead.
+                </p>
+                @if (_soloError is not null)
+                {
+                    <div class="alert alert-danger py-2 small mt-3 mb-0" data-testid="solo-error">@_soloError</div>
+                }
+            </ChildContent>
+            <FooterContent>
+                <button type="button" class="btn btn-outline-secondary"
+                        disabled="@_startingSolo" @onclick="@(() => _offeringSolo = false)">Cancel</button>
+                <button type="button" class="btn btn-primary" data-testid="solo-confirm"
+                        disabled="@_startingSolo" @onclick="StartInvestigatingAloneAsync">
+                    @(_startingSolo ? "Setting it up…" : "Create it and carry on")
+                </button>
+            </FooterContent>
+        </BenModal>
+
+        @* The scheduling window, for whichever organization was chosen above — one of the reader's
+           groups, or the personal one just minted. *@
+        @if (_investigatingWith is { } investigatingOrgId)
+        {
+            <NewInvestigationWindow OrgId="@investigatingOrgId"
+                                    PrechosenPlaceId="@PlaceId"
+                                    OnCreated="@OnInvestigationScheduledAsync"
+                                    OnClosed="@(() => _investigatingWith = null)" />
         }
 
         @* Who runs this place as its venue, when somebody has been confirmed as it (item 235 phase 9).
@@ -535,6 +603,68 @@
     private List<PublicPlaceInvestigationRow>? _publicRows;
     private List<Ben.Web.Services.PublicPlaceCaseRow>? _cases;
     private List<Ben.Web.Services.PlaceCaseRow>? _myCases;
+
+    // ── Investigating here (2026-09-17) ──────────────────────────────────────
+    private Guid? _investigatingWith;
+    private bool _offeringSolo;
+    private bool _startingSolo;
+    private string? _soloError;
+
+    /// <summary>Opens the scheduling window for one of the reader's groups.</summary>
+    private void InvestigateWith(Guid organizationId) => _investigatingWith = organizationId;
+
+    /// <summary>
+    /// Mints the personal organization and goes straight on to scheduling.
+    /// </summary>
+    /// <remarks>
+    /// <para>Idempotent at the server, so somebody who tapped twice, or who did this on another
+    /// place last week, gets the space they already have rather than a second one.</para>
+    ///
+    /// <para>Straight on to the window rather than back to the page: the person pressed a button
+    /// that said "start investigating", and stopping at "you now have a space" would leave them to
+    /// work out where investigations live. The visibility is fixed to public by the plan rule
+    /// either way, which the sentence they just agreed to said.</para>
+    /// </remarks>
+    private async Task StartInvestigatingAloneAsync()
+    {
+        _startingSolo = true;
+        _soloError = null;
+        try
+        {
+            var (plan, error) = await AdminClient.StartSoloPlanAsync();
+            if (plan is null)
+            {
+                // The server's own sentence where it gave one; it knows why better than this does.
+                _soloError = error ?? "That could not be set up just now. Try again in a moment.";
+                return;
+            }
+
+            _offeringSolo = false;
+            _investigatingWith = plan.OrganizationId;
+
+            // The reader now belongs somewhere, so the per-group buttons and the signed-in
+            // sections have something to draw. Re-read rather than guessed at.
+            try { _myOrgs = (await AdminClient.GetMyMembershipOrganizationsAsync()).Items; }
+            catch { /* the window is open either way, which is what they asked for */ }
+        }
+        catch (Exception ex)
+        {
+            _soloError = ex.Message;
+        }
+        finally
+        {
+            _startingSolo = false;
+        }
+    }
+
+    /// <summary>Closes the window and re-reads what the page shows about this place.</summary>
+    private async Task OnInvestigationScheduledAsync()
+    {
+        _investigatingWith = null;
+        if (UserState.IsAuthenticated) await LoadSignedInAsync();
+        else await LoadVisitorAsync();
+        StateHasChanged();
+    }
     private List<Ben.Service.Models.Feed.FeedPostRecord>? _posts;
     private bool _canPost;
 
