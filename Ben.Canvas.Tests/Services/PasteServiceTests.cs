@@ -27,14 +27,15 @@ public sealed class PasteServiceTests
         public PasteService Paste { get; }
         public List<string> Problems { get; } = [];
 
-        public Rig()
+        public Rig(ICanvasGeocoder? geocoder = null)
         {
             Files = new FakeAssets(Js.Module("js/opfsInterop.js"));
             var assets = new CanvasAssetStore(Js, NullLogger<CanvasAssetStore>.Instance);
             assets.StartAsync().GetAwaiter().GetResult();
             Viewport.SetBoardSize(1000, 800);
             Paste = new PasteService(Store, Selection, Viewport, assets, Announcer,
-                Microsoft.Extensions.Options.Options.Create(Options), Js, NullLogger<PasteService>.Instance);
+                Microsoft.Extensions.Options.Options.Create(Options), Js, NullLogger<PasteService>.Instance,
+                access: null, geocoder: geocoder);
             Paste.Problems += p => Problems.AddRange(p);
         }
 
@@ -42,6 +43,61 @@ public sealed class PasteServiceTests
     }
 
     private static PasteItem Text(string text, string mime = "text/plain") => new("string", mime, Text: text);
+
+    /// <summary>A geocoder that knows one answer, and remembers what it was asked.</summary>
+    private sealed class FakeGeocoder(CanvasGeocoderResult? answer) : ICanvasGeocoder
+    {
+        public List<string> Asked { get; } = [];
+
+        public Task<CanvasGeocoderResult?> FindAsync(string? address, CancellationToken ct = default)
+        {
+            Asked.Add(address ?? "");
+            return Task.FromResult(answer);
+        }
+    }
+
+    [Fact]
+    public async Task A_pasted_address_becomes_a_map_of_the_place_it_names()
+    {
+        var geocoder = new FakeGeocoder(new CanvasGeocoderResult(36.5310, -85.8397, "rooftop"));
+        var rig = new Rig(geocoder);
+
+        await rig.PasteAsync(Text("1425 Old Highway 31W, Red Boiling Springs, TN 37150"));
+
+        var node = Assert.Single(rig.Store.Document.Nodes);
+        Assert.Equal(CanvasNodeType.Map, node.Type);
+        var map = Assert.IsType<MapData>(node.Data);
+        Assert.Equal(36.5310, map.Latitude, 4);
+        Assert.Equal(-85.8397, map.Longitude, 4);
+        Assert.Equal("1425 Old Highway 31W, Red Boiling Springs, TN 37150", map.Address);
+        Assert.Equal(17, map.Zoom);
+        Assert.Equal("1425 Old Highway 31W, Red Boiling Springs, TN 37150", Assert.Single(geocoder.Asked));
+    }
+
+    [Fact]
+    public async Task An_address_the_geocoder_cannot_place_stays_the_note_it_would_have_been()
+    {
+        var rig = new Rig(new FakeGeocoder(null));
+
+        await rig.PasteAsync(Text("1425 Old Highway 31W, Red Boiling Springs, TN 37150"));
+
+        var node = Assert.Single(rig.Store.Document.Nodes);
+        Assert.Equal(CanvasNodeType.Text, node.Type);
+        Assert.Equal("1425 Old Highway 31W, Red Boiling Springs, TN 37150", Assert.IsType<TextData>(node.Data).Text);
+        Assert.Empty(rig.Problems);
+    }
+
+    [Fact]
+    public async Task Ordinary_prose_is_never_sent_to_the_geocoder()
+    {
+        var geocoder = new FakeGeocoder(new CanvasGeocoderResult(0, 0, "rooftop"));
+        var rig = new Rig(geocoder);
+
+        await rig.PasteAsync(Text("She heard three knocks on the cellar door at 2am, twice that week."));
+
+        Assert.Empty(geocoder.Asked);
+        Assert.Equal(CanvasNodeType.Text, Assert.Single(rig.Store.Document.Nodes).Type);
+    }
 
     [Fact]
     public async Task A_photo_becomes_a_picture_block_the_shape_of_the_photo()

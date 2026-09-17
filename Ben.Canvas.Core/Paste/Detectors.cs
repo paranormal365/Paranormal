@@ -114,7 +114,8 @@ public static class UrlDetector
 /// </summary>
 /// <remarks>
 /// A decimal point is required in at least one number, so a numbered list ("12, 34") is not a place.
-/// Street addresses are not recognised: that needs a geocoder, which is server work.
+/// Street addresses are handled by <see cref="AddressDetector"/>, which needs a geocoder to finish
+/// the job and so is answered outside this pure code.
 /// </remarks>
 public static partial class CoordinateDetector
 {
@@ -203,4 +204,59 @@ public static class ImageSignature
 
     private static bool Starts(ReadOnlySpan<byte> head, ReadOnlySpan<byte> prefix)
         => head.Length >= prefix.Length && head[..prefix.Length].SequenceEqual(prefix);
+}
+
+/// <summary>
+/// Recognises a written street address, so that pasting one can become a map of it.
+/// </summary>
+/// <remarks>
+/// <para>Ben, 2026-09-17: "Be able to look up address to make the map." Coordinates were the only
+/// way to put a map box somewhere, and nobody writes down coordinates — they write down an address.</para>
+/// <para>This says "worth looking up", not "is an address": the geocoder decides. Being wrong is
+/// cheap in one direction and dear in the other, so the rules are tight. A line that turns out not
+/// to be a place becomes the note it would have been anyway, and the person sees no difference.</para>
+/// <para>Two shapes pass. A house number followed somewhere by a street word ("1425 Old Highway 31W");
+/// or a two-letter state and a ZIP after a comma ("Red Boiling Springs, TN 37150"). A page reference
+/// ("Chapter 3, page 41"), a score, a date and a phone number all fail both.</para>
+/// </remarks>
+public static partial class AddressDetector
+{
+    /// <summary>How many lines an address may run to before it is prose instead.</summary>
+    private const int MaxLines = 3;
+
+    /// <summary>The longest text still worth asking a geocoder about.</summary>
+    private const int MaxLength = 200;
+
+    public static bool LooksLikeAddress(string? text)
+    {
+        if (string.IsNullOrWhiteSpace(text)) return false;
+
+        var trimmed = text.Trim();
+        if (trimmed.Length > MaxLength) return false;
+        if (trimmed.Split('\n').Length > MaxLines) return false;
+
+        // Anything the earlier rules already claim is not ours: a link is a link, and a coordinate
+        // pair is already a place that needs no looking up.
+        if (UrlDetector.IsSingleUrl(trimmed) is not null) return false;
+        if (CoordinateDetector.TryParse(trimmed, out _, out _)) return false;
+
+        var line = trimmed.Replace('\n', ' ').Replace('\r', ' ');
+        if (StateAndZip().IsMatch(line)) return true;
+
+        var number = HouseNumber().Match(line);
+        return number.Success && StreetWord().IsMatch(line[number.Length..]);
+    }
+
+    /// <summary>", TN 37150" — a state's two letters and a ZIP, which together name almost nothing else.</summary>
+    [GeneratedRegex(@",\s*[A-Za-z]{2}\.?\s+\d{5}(?:-\d{4})?\b", RegexOptions.CultureInvariant)]
+    private static partial Regex StateAndZip();
+
+    /// <summary>A house number at the front: "1425", "12A", never "2026" alone (a street word must follow).</summary>
+    [GeneratedRegex(@"^\d{1,6}[A-Za-z]?\s+", RegexOptions.CultureInvariant)]
+    private static partial Regex HouseNumber();
+
+    /// <summary>The word that makes a number and some words into a street.</summary>
+    [GeneratedRegex(@"\b(?:st|street|rd|road|ave|avenue|blvd|boulevard|ln|lane|dr|drive|ct|court|way|hwy|highway|pike|circle|cir|trail|trl|place|pl|terrace|ter|parkway|pkwy|square|sq|route|rt)\b\.?",
+        RegexOptions.IgnoreCase | RegexOptions.CultureInvariant)]
+    private static partial Regex StreetWord();
 }

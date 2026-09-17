@@ -446,3 +446,39 @@ public sealed class PastePlacerTests
         Assert.IsType<MapData>(Assert.Single(read!.Nodes).Data);
     }
 }
+
+/// <summary>
+/// What is worth asking a geocoder about. Wrong in one direction costs one lookup and the note the
+/// person would have got anyway; wrong in the other costs them the map they wanted.
+/// </summary>
+public sealed class AddressDetectorTests
+{
+    [Theory]
+    [InlineData("1425 Old Highway 31W, Red Boiling Springs, TN 37150")]
+    [InlineData("520 Lake Cook Road")]
+    [InlineData("12A Church Street, Franklin")]
+    [InlineData("Red Boiling Springs, TN 37150")]
+    [InlineData("1600 Pennsylvania Avenue NW\nWashington, DC 20500")]
+    public void An_address_is_worth_looking_up(string text) => Assert.True(AddressDetector.LooksLikeAddress(text));
+
+    [Theory]
+    [InlineData("Chapter 3, page 41")]
+    [InlineData("3 knocks, then nothing for an hour")]
+    [InlineData("36.1627, -86.7816")]
+    [InlineData("https://maps.apple.com/?ll=36.16,-86.78")]
+    [InlineData("")]
+    [InlineData("   ")]
+    public void Everything_else_is_not(string text) => Assert.False(AddressDetector.LooksLikeAddress(text));
+
+    [Fact]
+    public void Prose_that_happens_to_name_a_street_is_not_an_address() =>
+        Assert.False(AddressDetector.LooksLikeAddress(
+            "She walked the length of Church Street twice that night and saw nobody at all, which is "
+            + "what made the third knock so strange, and why the owner rang us the following morning "
+            + "rather than waiting for the weekend as she had said she would."));
+
+    [Fact]
+    public void A_whole_paragraph_of_lines_is_prose_not_a_place() =>
+        Assert.False(AddressDetector.LooksLikeAddress("1425 Old Highway 31W\nRed Boiling Springs\nTN 37150\nthe cellar door"));
+}
+

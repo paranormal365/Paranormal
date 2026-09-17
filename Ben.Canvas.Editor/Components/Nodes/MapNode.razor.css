@@ -41,3 +41,7 @@
 @media (pointer: coarse) {
     .bc-map__toggle, .bc-map__apple { min-height: 44px; }
 }
+/* The address box and its Find button sit on one line; the button never shrinks below its word. */
+.bc-map__find { display: flex; gap: .375rem; align-items: center; }
+.bc-map__find > .form-control { flex: 1 1 auto; min-width: 0; }
+.bc-map__find-go { flex: 0 0 auto; white-space: nowrap; }

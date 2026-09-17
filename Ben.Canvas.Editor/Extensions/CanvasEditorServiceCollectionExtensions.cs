@@ -57,6 +57,9 @@ public static class CanvasEditorServiceCollectionExtensions
 
         services.AddScoped<BcToastService>();
 
+        // Looking an address up is one anonymous call to the API, so a board with no account can do it.
+        services.TryAddScoped<ICanvasGeocoder, CanvasGeocoder>();
+
         // M2: the board.
         services.TryAddScoped(sp =>
         {

@@ -8,6 +8,7 @@
 @inherits BlockRendererBase
 @implements IAsyncDisposable
 @inject IJSRuntime JS
+@inject ICanvasGeocoder Geocoder
 
 <div class="@(_live ? "bc-map bc-map--live-on" : "bc-map")">
     @if (ShowsPicture && !_live)
@@ -54,8 +55,21 @@
     @if (Editing)
     {
         <label class="bc-field" for="@($"bc-map-addr-{Node.Id:N}")"><span class="bc-field__label">Address</span>
-            <input @ref="FirstField" id="@($"bc-map-addr-{Node.Id:N}")" class="form-control form-control-sm" @bind="Map.Address" @bind:event="oninput" />
+            <span class="bc-map__find">
+                <input @ref="FirstField" id="@($"bc-map-addr-{Node.Id:N}")" class="form-control form-control-sm" @bind="Map.Address" @bind:event="oninput"
+                       @onkeydown="AddressKeyAsync" aria-describedby="@(_notFound ? $"bc-map-find-{Node.Id:N}" : null)" />
+                @* Enter in the box does the same thing, because typing an address and pressing Enter is what
+                   everybody tries first. *@
+                <button type="button" class="btn btn-sm btn-outline-secondary bc-map__find-go" id="@($"bc-map-go-{Node.Id:N}")"
+                        @onclick="FindAddressAsync" disabled="@(_finding || string.IsNullOrWhiteSpace(Map.Address))">
+                    @(_finding ? "Finding…" : "Find")
+                </button>
+            </span>
         </label>
+        @if (_notFound)
+        {
+            <p id="@($"bc-map-find-{Node.Id:N}")" class="bc-map__error">That address was not found. Add the town or the state, or type the coordinates below.</p>
+        }
         <label class="bc-field" for="@($"bc-map-ll-{Node.Id:N}")"><span class="bc-field__label">Coordinates</span>
             <input id="@($"bc-map-ll-{Node.Id:N}")" class="form-control form-control-sm" value="@(HasCoordinates ? Coordinates(Map.Latitude, Map.Longitude) : "")"
                    aria-describedby="@(_coordinatesError ? $"bc-map-err-{Node.Id:N}" : null)" @onchange="OnCoordinates" />
@@ -83,6 +97,8 @@
 
 @code {
     private bool _coordinatesError;
+    private bool _finding;
+    private bool _notFound;
     private bool _live;
     private bool _mounted;
     private bool _liveFailed;
@@ -160,6 +176,40 @@
         _mounted = false;
         try { await _module.InvokeVoidAsync("unmount", _liveElement); }
         catch (Exception ex) when (ex is JSException or JSDisconnectedException or ObjectDisposedException) { }
+    }
+
+    private async Task AddressKeyAsync(KeyboardEventArgs e)
+    {
+        if (e.Key is "Enter" or "NumpadEnter") await FindAddressAsync();
+    }
+
+    /// <summary>
+    /// Puts the box where the written address is. What was typed is kept either way: an address the
+    /// geocoder does not know is still the best label this box has, and rubbing it out to say "not
+    /// found" would lose the only thing the person wrote.
+    /// </summary>
+    private async Task FindAddressAsync()
+    {
+        if (_finding || string.IsNullOrWhiteSpace(Map.Address)) return;
+
+        _finding = true;
+        _notFound = false;
+        try
+        {
+            var found = await Geocoder.FindAsync(Map.Address);
+            if (found is null) { _notFound = true; return; }
+
+            Map.Latitude = found.Latitude;
+            Map.Longitude = found.Longitude;
+            Map.Zoom = found.Zoom;
+            _coordinatesError = false;
+            await UnmountAsync();   // the live map, if it is up, is showing the old place
+            _mounted = false;
+        }
+        finally
+        {
+            _finding = false;
+        }
     }
 
     private void OnCoordinates(ChangeEventArgs e)

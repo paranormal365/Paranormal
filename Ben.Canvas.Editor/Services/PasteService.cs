@@ -51,7 +51,8 @@ public sealed class PasteService(
     IOptions<CanvasEditorOptions> options,
     IJSRuntime js,
     ILogger<PasteService> log,
-    BoardAccess? access = null) : IAsyncDisposable
+    BoardAccess? access = null,
+    ICanvasGeocoder? geocoder = null) : IAsyncDisposable
 {
     private static readonly TimeSpan CascadeWindow = TimeSpan.FromSeconds(10);
 
@@ -149,6 +150,7 @@ public sealed class PasteService(
 
         var anchor = drop ?? menu ?? Offset(viewport.WorldCentre(), _cascade);
         var plan = PasteClassifier.Classify(new PasteEnvelope(inbound.Items ?? [], anchor.X, anchor.Y, inbound.Source ?? "paste"), o);
+        plan = await LocatedAsync(plan);
         plan = WithoutDisabledMaps(plan, o);
 
         var (nodes, edges) = PastePlacer.Place(plan, 0, 0, now, PasteHtmlAllowList.Normalize);
@@ -183,6 +185,35 @@ public sealed class PasteService(
         var distinct = problems.Distinct(StringComparer.Ordinal).ToList();
         if (distinct.Count > 0) Problems?.Invoke(distinct);
         return placed;
+    }
+
+    /// <summary>
+    /// Finishes the one intent Core cannot: a written address becomes the place it names, or the note
+    /// it would have been. Nothing is asked of the geocoder when maps are switched off, and a place it
+    /// does not know is not an error worth a sentence — the person gets their words on the board either
+    /// way, and can type coordinates or press Find on a map box if they want the map.
+    /// </summary>
+    private async Task<PastePlan> LocatedAsync(PastePlan plan)
+    {
+        var places = plan.Intents.OfType<PasteIntent.Place>().ToList();
+        if (places.Count == 0) return plan;
+
+        var found = new Dictionary<string, CanvasGeocoderResult?>(StringComparer.Ordinal);
+        foreach (var place in places)
+        {
+            if (found.ContainsKey(place.Address)) continue;
+            found[place.Address] = geocoder is null ? null : await geocoder.FindAsync(place.Address);
+        }
+
+        var intents = plan.Intents
+            .Select(i => i is PasteIntent.Place p
+                ? found.GetValueOrDefault(p.Address) is { } at
+                    ? new PasteIntent.Map(at.Latitude, at.Longitude, p.Address, at.Zoom)
+                    : new PasteIntent.Text(p.Address)
+                : i)
+            .ToList();
+
+        return new PastePlan(intents, plan.Refusals) { UnusedAssets = plan.UnusedAssets };
     }
 
     private static CanvasPoint Offset(CanvasPoint p, int steps) =>

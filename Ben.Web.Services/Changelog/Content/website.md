@@ -20,6 +20,8 @@ day-by-day account of building it would say nothing to anyone using it now.
 
 - On a research board, something you paste or drop no longer lands on top of a card that was already
   there. It goes to the nearest clear ground instead, the same way a card added from the toolbar does.
+- A map box can be given an address instead of coordinates: write it and press Find. Pasting an address
+  onto a board now makes a map of that place, and text nobody can place is still the note it was.
 
 ## 2026-09-16
 

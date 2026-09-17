@@ -190,8 +190,12 @@ The same cards appear under links in group messages, case messages and feed post
 ### Map boxes
 
 A map box starts empty, and never takes the case's address: the place on it is the one you choose.
-Search for a town, an address or a cemetery, or tap the map. A published board draws a map box as its
-address rather than as map tiles, because map imagery may not be kept.
+Write the address in the box and press **Find** (or just press Enter) and the map goes there — a town,
+a street address, or a cemetery by name. What you wrote stays as the box's label whether or not the
+address is found, and you can always type coordinates instead. Pasting an address straight onto the
+board makes a map of it the same way; when nobody can find the place, you get your words as a note.
+A published board draws a map box as its address rather than as map tiles, because map imagery may not
+be kept.
 
 ### On a phone
 

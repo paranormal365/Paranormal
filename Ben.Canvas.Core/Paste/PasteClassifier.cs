@@ -19,7 +19,8 @@ namespace Ben.Canvas.Core.Paste;
 /// <item>Files next. A pasted screenshot arrives with placeholder HTML beside it, so once any file is present
 /// the text flavours are ignored.</item>
 /// <item>Plain text that is exactly one address becomes a link card, not a note.</item>
-/// <item>Plain text that is a place becomes a map box.</item>
+/// <item>Plain text that is a place becomes a map box: coordinates outright, a written address once the
+/// geocoder has found it (the editor asks; a place nobody can find stays a note).</item>
 /// <item>HTML with real content becomes a message; HTML that is only a link or a lone picture becomes a link.</item>
 /// <item>Anything else that is text becomes a note, cut to the text limit.</item>
 /// </list>
@@ -81,6 +82,14 @@ public static partial class PasteClassifier
         if (CoordinateDetector.TryParse(plain, out var lat, out var lng))
         {
             intents.Add(new PasteIntent.Map(lat, lng));
+            return new PastePlan(intents, refusals);
+        }
+
+        // 4b. A written place. The geocoder has the last word, so this is a question rather than an
+        // answer: the editor asks it and falls back to the note this would otherwise have been.
+        if (AddressDetector.LooksLikeAddress(plain))
+        {
+            intents.Add(new PasteIntent.Place(plain!.Trim()));
             return new PastePlan(intents, refusals);
         }
 
@@ -306,7 +315,9 @@ public static class PastePlacer
                 {
                     Latitude = map.Latitude,
                     Longitude = map.Longitude,
-                    Pins = [new MapPin { Latitude = map.Latitude, Longitude = map.Longitude }],
+                    Address = map.Address,
+                    Zoom = map.Zoom ?? new MapData().Zoom,
+                    Pins = [new MapPin { Latitude = map.Latitude, Longitude = map.Longitude, Title = map.Address }],
                 }),
                 PasteIntent.Html markup => Node(CanvasNodeType.Message, x, y, new MessageData { Html = htmlToAllowed(markup.Markup), TimestampUtc = nowUtc }),
                 PasteIntent.Text text => Node(CanvasNodeType.Text, x, y, new TextData { Text = text.Value }),

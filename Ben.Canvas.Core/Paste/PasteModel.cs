@@ -99,7 +99,16 @@ public abstract record PasteIntent
     /// <inheritdoc cref="Audio" />
     public sealed record Video(Guid AssetId, string? Ext, string FileName, long Size, string ContentType) : PasteIntent;
     public sealed record Link(string Url) : PasteIntent;
-    public sealed record Map(double Latitude, double Longitude) : PasteIntent;
+    /// <param name="Zoom">How close to look, when whoever found the place knows how exactly they found
+    /// it. Null keeps the map box's own default, which is what a bare coordinate pair gets.</param>
+    public sealed record Map(double Latitude, double Longitude, string? Address = null, double? Zoom = null) : PasteIntent;
+
+    /// <summary>
+    /// A written address, not yet a place. Only the editor can finish this one: it asks the API's
+    /// geocoder and turns it into a <see cref="Map"/>, or into <see cref="Text"/> when the address
+    /// is not found. It never reaches the placer.
+    /// </summary>
+    public sealed record Place(string Address) : PasteIntent;
     public sealed record Html(string Markup, string PlainText) : PasteIntent;
     public sealed record Text(string Value) : PasteIntent;
 }
