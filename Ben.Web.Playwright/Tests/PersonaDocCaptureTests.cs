@@ -23,6 +23,14 @@ namespace Ben.Web.Playwright.Tests;
 [Category("PersonaDocs")]
 public class PersonaDocCaptureTests : BenTestBase
 {
+    /// <summary>The seeded public location every seat is photographed at.</summary>
+    /// <remarks>
+    /// One place across the documents on purpose: the point of a per-seat set is that the reader
+    /// can compare the same screen between seats, which a different place per persona would
+    /// destroy.
+    /// </remarks>
+    private const string PlaceId = "40000001-0000-0000-0000-000000000001";
+
     private static string Persona =>
         Environment.GetEnvironmentVariable("BEN_PERSONA")?.Trim().ToLowerInvariant() ?? "";
 
@@ -99,9 +107,14 @@ public class PersonaDocCaptureTests : BenTestBase
         await VisitAsync("14-sign-in", "/login");
         await VisitAsync("15-sign-up", "/signup");
         await VisitAsync("16-help", "/help");
+        // A public location, as somebody with no account: published investigations, the field
+        // archive and the posts, and no box to add anything (2026-09-17). Worth a picture in this
+        // document because the same page looks different from every seat below, which is the
+        // whole reason these documents are per-seat.
+        await VisitAsync("17-a-public-place", $"/places/{PlaceId}");
         // A seat with no account meeting a page that needs one: the refusal itself is worth
         // showing, because "a refusal must never render as nothing here" is a rule of this site.
-        await VisitAsync("17-refused-my-cases", "/my-cases");
+        await VisitAsync("18-refused-my-cases", "/my-cases");
     }
 
     // ── Client ───────────────────────────────────────────────────────────────
@@ -130,8 +143,11 @@ public class PersonaDocCaptureTests : BenTestBase
         await VisitAsync("34-my-equipment", "/my-equipment");
         await VisitAsync("35-events", "/events");
         await VisitAsync("36-feed", "/feed");
-        await VisitAsync("37-profile", "/profile");
-        await VisitAsync("38-refused-admin", "/admin/users");
+        // The same place, signed in as a member: their groups' visits and cases beside what
+        // other groups shared, and the buttons that start work here.
+        await VisitAsync("37-a-public-place", $"/places/{PlaceId}");
+        await VisitAsync("38-profile", "/profile");
+        await VisitAsync("39-refused-admin", "/admin/users");
     }
 
     // ── Viewer ───────────────────────────────────────────────────────────────
@@ -165,6 +181,11 @@ public class PersonaDocCaptureTests : BenTestBase
         // photographs the door rather than pretending otherwise — an owner of a walking-tour
         // business sees the list here, and one who does not run tours sees the page say so.
         await VisitAsync("58-tours", $"/organizations/{await OrgIdBySlugAsync("benco")}/tours");
+        // A new case naming the place it is about (2026-09-17) — the offer, and the kind choice
+        // that has no default. Arrived at with the place already settled, which is the route from
+        // a place's own page.
+        await VisitAsync("59-new-case-at-a-place",
+            $"/organizations/{await OrgIdBySlugAsync("benco")}/cases/new?place={PlaceId}");
     }
 
     // ── SuperAdmin ───────────────────────────────────────────────────────────
