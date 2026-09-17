@@ -274,17 +274,18 @@ final class FieldKitUITests: XCTestCase {
         XCTAssertTrue(videoSwitch.waitForExistence(timeout: 20),
                       "video should be one of the session's channels")
 
-        // Off by default: it is the one that would fill a phone. The camera button is always
-        // there — what changes is whether it offers clips, which its label says.
+        // Off by default: it is the one that would fill a phone. The photo button is always
+        // there and always says Photo — video keeps the camera on for the viewfinder, it does
+        // not turn the button into something else (Ben, 2026-09-17: "it should just be a photo
+        // button… for now"). The label used to change to "Camera" and offer clips from here.
         let camera = fresh.buttons["capture-camera"]
         XCTAssertTrue(camera.waitForExistence(timeout: 10))
-        XCTAssertEqual(camera.label, "Photo",
-                       "a session not set up for video shouldn't offer clips")
+        XCTAssertEqual(camera.label, "Photo", "a running session offers a photograph and nothing else")
 
         videoSwitch.tap()
         XCTAssertTrue(fresh.buttons["capture-camera"].waitForExistence(timeout: 10))
-        XCTAssertEqual(fresh.buttons["capture-camera"].label, "Camera",
-                       "switching video on should make the camera button offer clips")
+        XCTAssertEqual(fresh.buttons["capture-camera"].label, "Photo",
+                       "switching video on keeps the camera running; it must not turn the photo button into a clip button")
     }
 
     /// A device left in a room: what it watches for, and the fact that it refuses to pretend.

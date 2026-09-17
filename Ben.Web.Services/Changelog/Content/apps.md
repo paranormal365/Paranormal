@@ -16,6 +16,21 @@ known it is worth naming, because that is what somebody can check on their own p
 **Shape:** `## yyyy-MM-dd` headings, newest first, each followed by `- ` lines. Nothing else is
 read.
 
+## 2026-09-17
+
+- The button in a running session is a **Photo** button. It takes a photograph of what the camera
+  sees — there and then when the camera is already on, or from a viewfinder that opens and closes
+  itself — and never leaves the app. It used to open a camera screen with a video switch, and that
+  screen could stop answering while sound was recording; clips are not offered from a running
+  session for now.
+- A session with sound on carries on when the app is put away: sound and readings keep recording in
+  your pocket. With sound off the phone pauses the app a few seconds after you leave it, and the
+  readings stop until you are back. The camera pauses either way, and says so in those words rather
+  than "something else is using the camera". The stretch you were away is marked on the review —
+  *App put away* to *Back in the app* — with a line saying which of those happened.
+- A photograph that the camera never delivers is given up on after a few seconds with a sentence,
+  instead of leaving the button stuck on "Taking…".
+
 ## 2026-09-16
 
 - A session somebody sends you as a `.ben` file — by AirDrop, in a message, from Files — opens in the

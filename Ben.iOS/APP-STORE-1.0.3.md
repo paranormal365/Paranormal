@@ -4,6 +4,9 @@ Everything needed to finish submitting **1.0.3**, and every answer App Review ha
 This supersedes `APP-STORE-1.0.2.md` for the submission itself; that file stays as the record of
 1.0.2 and its two rejections, and `APP-STORE.md` as the record of 1.0.0 and the listing copy.
 
+**2026-09-17: build 6 has a bug worth pulling. Build 7 is the fix — see §1b before doing
+anything in App Store Connect.**
+
 **State on 2026-09-16, evening: SUBMITTED.** Ben created version 1.0.3 in App Store Connect,
 filled the page, selected build 1.0.3 (6) and submitted it for review. It is now *Waiting for
 Review*. While it waits: production stays at `12e55322` or later, the feed flag stays on,
@@ -51,6 +54,42 @@ to an anonymous call, which means their tables migrated. Do not roll production 
 
 The old per-file upload endpoints stay until 1.0.3 is live (Ben, 2026-09-16: *"keep end points for
 now until we upload the next version of the app"*), because approved 1.0.2 still uses them.
+
+### 1b. Build 7 — the in-session camera button froze the app
+
+Ben, 2026-09-17, testing the build in review: *"There is a 'camera' button while recording. It
+causes everything to freeze… it should just be a photo button and just take photo of whatever is
+in our camera view for now. It should never leave the app."* The Field Kit is the first thing the
+review notes send a reviewer to, so a freeze there is a 2.1(a) rejection waiting to happen.
+
+The button opened our own camera screen (nothing launches Apple's app — that guess was wrong), but
+its video half lent the microphone to the clip, reconfigured the audio session and the capture
+session on the main actor while the recorder was letting go, and kept **Close disabled** for as long
+as the clip ran. A clip that would not finish was therefore a screen that could not be left. Build 7:
+
+- The button is **Photo**, whatever the channels say. Camera already running → the photo is taken
+  there and then; not running → a photo-only viewfinder opens and closes itself. No clip path is
+  reachable from a running session.
+- Close on the camera screen is never disabled; leaving with a clip open ends the clip properly.
+- A shutter that is never answered gives up after 8 s with a sentence, so nothing waits for ever.
+- Putting the app away mid-session is now said honestly: sound and readings carry on (the
+  background-audio mode is declared for this), the camera pauses and says *why* in those words, and
+  two automatic marks bracket the stretch on the review, with a sentence.
+
+Numbers: `MARKETING_VERSION` **1.0.3**, `CURRENT_PROJECT_VERSION` **7**. Never 6 again.
+
+**What to do in App Store Connect, in order:**
+
+1. If 1.0.3 is still *Waiting for Review*: open the version page → **Remove this version from
+   review** (top of the page). The submission is cancelled; nothing else is lost.
+2. Wait for build 7 to finish processing (TestFlight → iOS Builds shows **1.0.3 (7)**).
+3. On the 1.0.3 page, in *Build*, remove build 6 (the − on its row) and select **1.0.3 (7)**.
+4. **Add for Review → Submit**. Everything else on the page — media, notes, What's New — stays.
+
+If the reviewer already had build 6 and rejected it, the letter is a 2.1(a): reply in Resolution
+Center that build 7 fixes the in-session camera, select build 7, resubmit. If they approved build 6
+before you got there, release nothing: submit 7 as 1.0.3's replacement build the same way, and it
+goes out instead.
 
 ---
 
@@ -296,7 +335,7 @@ Check App Store Connect → 1.0.3 → App Review → Resolution Center for the l
 
 ## 8. Checklist
 
-- [x] `MARKETING_VERSION` 1.0.3, `CURRENT_PROJECT_VERSION` 6 — app and Share extension alike, proven in the archive
+- [x] `MARKETING_VERSION` 1.0.3, `CURRENT_PROJECT_VERSION` **7** (6 froze on the camera button, §1b) — app and Share extension alike
 - [x] No third-party frameworks or packages — every import re-read 2026-09-16; zero remote package references
 - [x] `PrivacyInfo.xcprivacy` unchanged since build 5; seven types, all linked, no tracking
 - [x] `ITSAppUsesNonExemptEncryption = false`
@@ -362,7 +401,16 @@ alone — this retires a door, not the rooms behind it.
 
 ---
 
-## 9. The archive and the upload, as they were done
+## 9. The archives and the uploads, as they were done
+
+**Build 7, 2026-09-17:** archived from the tree that became the commit named in the git log for this
+file, with the same two commands below and `(7)` in place of `(6)`. Version 1.0.3, build 7, the Share
+extension at 1.0.3 (7), no warnings from the field kit or BenKit. Proven before archiving: BenKit
+499 tests, the simulator build, the four UI tests that cover the capture bar (`FieldKitChannelsUITests`
+×3 and `FieldKitUITests/testTheVideoSwitchAddsAndRemovesTheCameraButton`), the web suite (6195) and
+the Playwright playback test for the website player's away stretch. Uploaded the same evening.
+
+### Build 6, 2026-09-16
 
 Archived from `master` at `12e55322` with automatic signing:
 

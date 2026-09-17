@@ -60,7 +60,7 @@ struct FieldCameraCaptureView: View {
     private var topRow: some View {
         HStack(alignment: .top) {
             Button {
-                dismiss()
+                close()
             } label: {
                 Image(systemName: "xmark")
                     .font(.title3.bold())
@@ -68,7 +68,10 @@ struct FieldCameraCaptureView: View {
                     .frame(width: 44, height: 44)
                     .background(.black.opacity(0.45), in: Circle())
             }
-            .disabled(camera.isRecordingClip)
+            // Never disabled. It used to be, for as long as a clip ran — so a clip that would not
+            // finish was a screen that could not be left, which is what a freeze looks like from
+            // the outside (Ben, 2026-09-17). Leaving with a clip running ends the clip properly
+            // instead; see `close()`.
             .accessibilityLabel("Close the camera")
             .accessibilityIdentifier("camera-close")
 
@@ -150,6 +153,24 @@ struct FieldCameraCaptureView: View {
             .opacity(camera.problem != nil && !camera.isRunning ? 0.4 : 1)
             .accessibilityLabel(shutterLabel)
             .accessibilityIdentifier("camera-shutter")
+        }
+    }
+
+    /// Leaves, ending a running clip on the way out rather than refusing to go.
+    ///
+    /// What was filmed is kept and listed, and the microphone goes back to the session whatever
+    /// the clip did — the same order the shutter's own stop uses, for the same reason.
+    private func close() {
+        Task {
+            if camera.isRecordingClip {
+                let started = camera.clipStartedAt
+                let finished = try? await camera.finishClip()
+                await session.takeMicrophoneBackFromTheClip()
+                if let url = finished {
+                    await onCaptured(url, .video, started.map { Date().timeIntervalSince($0) })
+                }
+            }
+            dismiss()
         }
     }
 

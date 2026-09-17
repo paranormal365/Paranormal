@@ -17,11 +17,11 @@ struct FieldCaptureBar: View {
     let camera: FieldCameraSession
 
     @State private var showingCamera = false
-    @State private var cameraKind: CaptureKind = .photo
     /// Whether the camera was already running when the capture screen was opened, read once at
     /// the tap — so closing the screen puts the camera back exactly as it was found.
     @State private var cameraWasRunning = false
     @State private var errorMessage: String?
+    @State private var takingPhoto = false
 
     private var files: SessionFileStore { dependencies.fieldKit.files }
 
@@ -43,14 +43,7 @@ struct FieldCaptureBar: View {
             }
 
             HStack(spacing: 10) {
-                // One way in, not two. Photo and Video were separate buttons because each one
-                // launched a different Apple app; now that the camera is ours, both are the same
-                // screen with a switch on it — and two buttons plus the audio one left "Stop
-                // audio" wrapping onto a second line in the dark. Ben, 2026-09-16: "there may not
-                // be a need to have a Photo or Video button on the Field Kit because it was when
-                // I clicked those buttons when it pulled up the Apple Photo and Video app."
-                captureButton(session.channels.contains(.video) ? "Camera" : "Photo",
-                              icon: "camera", kind: .photo)
+                photoButton
 
                 Button {
                     Task {
@@ -90,6 +83,16 @@ struct FieldCaptureBar: View {
                     .accessibilityIdentifier("audio-note")
             }
 
+            // Said once the app is back, not while it is away: nobody is looking then. A note,
+            // not a warning — nothing went wrong, and the review carries the same sentence.
+            if let absence = session.lastAbsence {
+                Label("The app was put away for \(ActiveFieldSession.spell(absence.seconds)). "
+                      + ActiveFieldSession.whatHappened(for: session.channels),
+                      systemImage: "moon.zzz")
+                    .font(.caption).foregroundStyle(Theme.fog)
+                    .accessibilityIdentifier("absence-note")
+            }
+
             if session.captures.isEmpty {
                 Text("Nothing captured yet. Anything you take is stamped with where you were.")
                     .font(.caption).foregroundStyle(Theme.fog)
@@ -116,16 +119,20 @@ struct FieldCaptureBar: View {
         .padding(12)
         .background(Theme.mist, in: RoundedRectangle(cornerRadius: 12))
         .fullScreenCover(isPresented: $showingCamera) {
+            // Photo only, whatever the channels say. The clip half of this screen lent the
+            // microphone out and reconfigured the audio and capture sessions on the main actor
+            // while the recorder let go — the freeze Ben reported on 2026-09-17 — and it is not
+            // reachable from a running session any more. See `photoButton`.
             FieldCameraCaptureView(session: session,
                                    camera: camera,
                                    wasRunning: cameraWasRunning,
-                                   allowsVideo: session.channels.contains(.video),
-                                   initialKind: cameraKind,
+                                   allowsVideo: false,
+                                   initialKind: .photo,
                                    onCaptured: { url, kind, duration in
                                        await adopt(url, kind: kind, duration: duration)
                                    })
         }
-        .alert("Couldn't save that capture",
+        .alert("Couldn't take that",
                isPresented: Binding(get: { errorMessage != nil },
                                     set: { if !$0 { errorMessage = nil } })) {
             Button("OK", role: .cancel) { errorMessage = nil }
@@ -137,21 +144,50 @@ struct FieldCaptureBar: View {
         return session.recording == nil ? "Record" : "Stop audio"
     }
 
-    @ViewBuilder
-    private func captureButton(_ title: String, icon: String, kind: CaptureKind) -> some View {
+    /// One button, one thing: a photograph of what the camera sees, without leaving the app.
+    ///
+    /// Ben, 2026-09-17, on the build in review: "There is a 'camera' button while recording. It
+    /// causes everything to freeze… it should just be a photo button and just take photo of
+    /// whatever is in our camera view for now. It should never leave the app." The button opened
+    /// a screen with a Photo/Video switch. Its video half lent the microphone to the clip,
+    /// reconfigured the audio session and the capture session on the main actor while the
+    /// recorder was letting go of the microphone, and kept Close disabled for as long as the clip
+    /// ran — so a clip that would not finish was a screen that would not close, which is what
+    /// "everything freezes" looks like from the outside. None of that is reachable from here now.
+    ///
+    /// When the camera is already running — the video channel keeps it on for the viewfinder
+    /// above — the photo is taken there and then, of exactly what that viewfinder shows. When it
+    /// is not, a photo-only viewfinder opens so the shot can be framed, and closes itself after.
+    private var photoButton: some View {
         Button {
-            cameraKind = kind
-            cameraWasRunning = camera.isRunning
-            showingCamera = true
+            if camera.isRunning {
+                Task { await snap() }
+            } else {
+                cameraWasRunning = camera.isRunning
+                showingCamera = true
+            }
         } label: {
-            Label(title, systemImage: icon)
+            Label(takingPhoto ? "Taking…" : "Photo", systemImage: "camera")
                 .frame(maxWidth: .infinity)
                 .padding(.vertical, 6)
         }
         .buttonStyle(.bordered)
-        // Never disabled: a device with no camera says so on the capture screen, in a sentence.
-        // A dead button explains nothing.
+        .disabled(takingPhoto)
+        // Never disabled for want of a camera: a device with none says so on the capture
+        // screen, in a sentence. A dead button explains nothing.
         .accessibilityIdentifier("capture-camera")
+    }
+
+    /// A photograph from the camera that is already running, with no screen in between.
+    private func snap() async {
+        takingPhoto = true
+        defer { takingPhoto = false }
+        do {
+            let url = try await camera.capturePhoto()
+            await adopt(url, kind: .photo, duration: nil)
+        } catch {
+            errorMessage = error.localizedDescription
+        }
     }
 
     /// Moves the captured file into the session and records what it is.

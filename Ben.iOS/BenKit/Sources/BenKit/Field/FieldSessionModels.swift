@@ -13,18 +13,24 @@ public enum MarkerKind: String, Codable, Sendable, CaseIterable {
     case deviceMoved = "device_moved"
     /// Something in the camera's view moved.
     case sceneMotion = "scene_motion"
+    /// The app was put away — the home screen, another app, the phone locked — while the session
+    /// ran. Sound and readings carry on (the app declares the background-audio mode for exactly
+    /// this); the camera cannot, because iOS takes it from any app that is not on screen.
+    case appBackgrounded = "app_backgrounded"
+    /// The app came back after being put away.
+    case appReturned = "app_returned"
 
     /// Which of the spec's three legal `triggered_by` values this kind reports as.
     public var trigger: FieldReading.Trigger {
         switch self {
-        case .sentryEmf, .sentrySound, .deviceMoved, .sceneMotion: .event
+        case .sentryEmf, .sentrySound, .deviceMoved, .sceneMotion, .appBackgrounded, .appReturned: .event
         case .manual, .evpQuestion, .evpWaitEnd: .manual
         }
     }
 
     public var isAutomatic: Bool {
         switch self {
-        case .sentryEmf, .sentrySound, .deviceMoved, .sceneMotion: true
+        case .sentryEmf, .sentrySound, .deviceMoved, .sceneMotion, .appBackgrounded, .appReturned: true
         case .manual, .evpQuestion, .evpWaitEnd: false
         }
     }
@@ -38,6 +44,8 @@ public enum MarkerKind: String, Codable, Sendable, CaseIterable {
         case .evpWaitEnd: "Stopped waiting"
         case .deviceMoved: "Device moved"
         case .sceneMotion: "Movement seen"
+        case .appBackgrounded: "App put away"
+        case .appReturned: "Back in the app"
         }
     }
 }

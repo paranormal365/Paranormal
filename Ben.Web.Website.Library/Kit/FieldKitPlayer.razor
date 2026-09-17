@@ -307,6 +307,15 @@
                                                    A handful, evenly spaced, is what a time axis is
                                                    for; the readings themselves are all still drawn. *@
                                                 <ChartCategoryAxisLabels Step="@LabelStep(_chartPoints.Count)" />
+                                                @if (AwayBands(_chartPoints) is { Count: > 0 } bands)
+                                                {
+                                                    <ChartCategoryAxisPlotBands>
+                                                        @foreach (var band in bands)
+                                                        {
+                                                            <ChartCategoryAxisPlotBand From="@band.From" To="@band.To" Color="#6c757d" Opacity="0.18" />
+                                                        }
+                                                    </ChartCategoryAxisPlotBands>
+                                                }
                                             </ChartCategoryAxis>
                                         </ChartCategoryAxes>
                                         <ChartValueAxes>
@@ -343,6 +352,15 @@
                                                    A handful, evenly spaced, is what a time axis is
                                                    for; the readings themselves are all still drawn. *@
                                                 <ChartCategoryAxisLabels Step="@LabelStep(_soundPoints.Count)" />
+                                                @if (AwayBands(_soundPoints) is { Count: > 0 } bands)
+                                                {
+                                                    <ChartCategoryAxisPlotBands>
+                                                        @foreach (var band in bands)
+                                                        {
+                                                            <ChartCategoryAxisPlotBand From="@band.From" To="@band.To" Color="#6c757d" Opacity="0.18" />
+                                                        }
+                                                    </ChartCategoryAxisPlotBands>
+                                                }
                                             </ChartCategoryAxis>
                                         </ChartCategoryAxes>
                                         <ChartValueAxes>
@@ -352,6 +370,12 @@
                                         </ChartValueAxes>
                                         <ChartLegend Visible="false" />
                                     </TelerikChart>
+                                }
+                                @if (_awayStretches.Count > 0)
+                                {
+                                    <div class="text-muted small pt-2" data-testid="away-stretch">
+                                        <strong>Shaded:</strong> @AwaySentence()
+                                    </div>
                                 }
                             </div>
                         </div>
@@ -597,6 +621,18 @@
     private List<GeoPoint> _track = new();
     private List<GeoPoint> _markerPoints = new();
     private List<MarkerRow> _markers = new();
+    /// <summary>
+    /// The stretches the app was in the background, from the phone's own marks (2026-09-17).
+    /// </summary>
+    /// <remarks>
+    /// The phone keeps recording sound and readings while it is put away — the app declares the
+    /// background-audio mode for it — and only the camera stops. The review on the phone brackets
+    /// the stretch with two marks and a sentence; this page shades the same stretch on the trace
+    /// and repeats the sentence, so nobody reading a night later mistakes a dark camera for a
+    /// dead one. A stretch that was never closed — the session ended while the app was away —
+    /// runs to the last reading.
+    /// </remarks>
+    private List<AwayStretch> _awayStretches = new();
     /// The base level the session was measured against, read from the document.
     private double? _baseline;
     /// <summary>
@@ -864,6 +900,8 @@
             .Select(r => new MarkerRow(r.At, Humanise(r.Marker!), r.Note, r.Room, r.Microtesla))
             .ToList();
 
+        _awayStretches = AwayStretches(_readings);
+
         _markerPoints = _readings
             .Where(r => r.Marker is not null && r.Latitude is not null && r.Longitude is not null)
             .Select(r => new GeoPoint(r.Latitude!.Value, r.Longitude!.Value, r.At))
@@ -884,7 +922,8 @@
             .Where(r => r.Microtesla is not null)
             .Select(r => new TracePoint(
                 r.At.ToViewerLocalTime(UserState).ToString("HH:mm:ss"),
-                baseline is double b ? (r.Microtesla!.Value - b) * 10 : r.Microtesla!.Value * 10))
+                baseline is double b ? (r.Microtesla!.Value - b) * 10 : r.Microtesla!.Value * 10,
+                r.At))
             .ToList();
 
         return Thin(points);
@@ -936,7 +975,7 @@
     {
         var points = readings
             .Where(r => r.SoundDbfs is not null)
-            .Select(r => new TracePoint(r.At.ToViewerLocalTime(UserState).ToString("HH:mm:ss"), r.SoundDbfs!.Value))
+            .Select(r => new TracePoint(r.At.ToViewerLocalTime(UserState).ToString("HH:mm:ss"), r.SoundDbfs!.Value, r.At))
             .ToList();
 
         return Thin(points);
@@ -946,12 +985,71 @@
         => element.TryGetProperty(name, out var value) && value.ValueKind == JsonValueKind.Number
             ? value.GetDouble() : null;
 
+    /// <summary>One stretch the app was put away for, and the sentence the phone wrote about it.</summary>
+    public sealed record AwayStretch(DateTime From, DateTime To, string? Note);
+
+    /// <summary>Pairs each "put away" mark with the "back" that follows it; an unclosed one runs to the end.</summary>
+    private static List<AwayStretch> AwayStretches(List<Reading> readings)
+    {
+        var stretches = new List<AwayStretch>();
+        Reading? open = null;
+        foreach (var reading in readings.OrderBy(r => r.At))
+        {
+            switch (reading.Marker)
+            {
+                case "app_backgrounded" when open is null:
+                    open = reading;
+                    break;
+                case "app_returned" when open is not null:
+                    stretches.Add(new AwayStretch(open.At, reading.At, open.Note));
+                    open = null;
+                    break;
+            }
+        }
+        if (open is not null && readings.Count > 0)
+            stretches.Add(new AwayStretch(open.At, readings.Max(r => r.At), open.Note));
+        return stretches;
+    }
+
+    /// <summary>
+    /// Where each stretch falls among a chart's points, as the category indexes a plot band takes.
+    /// Empty when no charted point falls inside it — a band with nothing under it would be drawn
+    /// as nothing anyway.
+    /// </summary>
+    private List<(double From, double To)> AwayBands(List<TracePoint> points)
+    {
+        var bands = new List<(double, double)>();
+        foreach (var stretch in _awayStretches)
+        {
+            var first = points.FindIndex(p => p.At >= stretch.From && p.At <= stretch.To);
+            if (first < 0) continue;
+            var last = points.FindLastIndex(p => p.At <= stretch.To);
+            bands.Add((first, Math.Max(first + 1, last + 1)));
+        }
+        return bands;
+    }
+
+    /// <summary>The phone's own sentence, with how long, for one stretch or several.</summary>
+    private string AwaySentence()
+    {
+        var total = TimeSpan.FromSeconds(_awayStretches.Sum(s => (s.To - s.From).TotalSeconds));
+        var howLong = total.TotalHours >= 1 ? $"{(int)total.TotalHours} hr {total.Minutes} min"
+                    : total.TotalMinutes >= 1 ? $"{(int)total.TotalMinutes} min {total.Seconds} sec"
+                    : $"{total.Seconds} sec";
+        var note = _awayStretches.Select(s => s.Note).FirstOrDefault(n => !string.IsNullOrWhiteSpace(n))
+                   ?? "The app was put away here.";
+        var times = _awayStretches.Count == 1 ? "" : $" ({_awayStretches.Count} times)";
+        return $"{note} Away for {howLong}{times}.";
+    }
+
     private static string Humanise(string marker) => marker switch
     {
         "sentry_emf" => "Magnetic spike",
         "sentry_sound" => "Sound",
         "device_moved" => "Device moved",
         "scene_motion" => "Movement seen",
+        "app_backgrounded" => "App put away",
+        "app_returned" => "Back in the app",
         "evp_question" => "Question asked",
         "evp_wait_end" => "Stopped waiting",
         "manual_marker" => "Marked",
@@ -1616,7 +1714,9 @@
         public string? Room { get; set; }
     }
 
-    public sealed record TracePoint(string Label, double Milligauss);
+    /// <param name="At">When the reading was, kept so a stretch of time — the app being put away —
+    /// can be found among the points after thinning, when their index no longer says.</param>
+    public sealed record TracePoint(string Label, double Milligauss, DateTime At = default);
     public sealed record GeoPoint(double Latitude, double Longitude, DateTime At);
     /// <param name="Microtesla">
     /// The magnetic reading on the record that triggered this, when there was one.

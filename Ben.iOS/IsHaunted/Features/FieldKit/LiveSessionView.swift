@@ -11,6 +11,7 @@ struct LiveSessionView: View {
     @Environment(Router.self) private var router
     @Environment(\.dismiss) private var dismiss
     @Environment(\.horizontalSizeClass) private var sizeClass
+    @Environment(\.scenePhase) private var scenePhase
 
     let sessionId: UUID
 
@@ -80,6 +81,19 @@ struct LiveSessionView: View {
             }
             .onChange(of: store.active?.isArmed) { _, armed in
                 UIApplication.shared.isIdleTimerDisabled = armed == true || blackout
+            }
+            // The session carries on while the app is put away — the background-audio mode is
+            // declared for exactly this — and the stretch is marked so the review says so.
+            // `.inactive` is not away: it is the control centre, a notification, the way out and
+            // the way back in. Only `.background` counts, and only `.active` ends it.
+            .onChange(of: scenePhase) { _, phase in
+                Task {
+                    switch phase {
+                    case .background: await store.active?.appWentToBackground()
+                    case .active: await store.active?.appReturned()
+                    default: break
+                    }
+                }
             }
             .onDisappear {
                 camera.stop()

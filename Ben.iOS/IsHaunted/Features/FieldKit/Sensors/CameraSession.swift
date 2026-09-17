@@ -34,6 +34,7 @@ enum FieldCameraError: LocalizedError {
     case notRunning
     case noClipRunning
     case photoFailed
+    case photoTimedOut
     case clipFailed(String)
 
     var errorDescription: String? {
@@ -44,6 +45,8 @@ enum FieldCameraError: LocalizedError {
             "No clip is recording."
         case .photoFailed:
             "The photo came back empty and wasn't saved."
+        case .photoTimedOut:
+            "The camera didn't answer. Try again, or close the camera and open it again."
         case .clipFailed(let reason):
             reason
         }
@@ -316,11 +319,18 @@ final class FieldCameraSession {
         interruptionObservers.keep(centre.addObserver(
             forName: AVCaptureSession.wasInterruptedNotification,
             object: session, queue: .main
-        ) { [weak self] _ in
+        ) { [weak self] notification in
+            // iOS takes the camera from any app that is not on screen. That is not "something
+            // else using it", and saying so read as a fault to fix (Ben, 2026-09-17). The reason
+            // rides on the notification, so the sentence can be the true one.
+            let reason = (notification.userInfo?[AVCaptureSessionInterruptionReasonKey] as? Int)
+                .flatMap(AVCaptureSession.InterruptionReason.init(rawValue:))
             Task { @MainActor in
                 guard let self else { return }
                 self.isRunning = false
-                self.problem = "Something else is using the camera."
+                self.problem = reason == .videoDeviceNotAvailableInBackground
+                    ? "The camera pauses while the app is put away, and comes back when you do."
+                    : "Something else is using the camera."
             }
         })
 
@@ -372,12 +382,30 @@ private final class PhotoCapture: NSObject, AVCapturePhotoCaptureDelegate, @unch
     private let lock = NSLock()
     private var continuation: CheckedContinuation<URL, Error>?
 
+    /// How long a shutter waits before it gives up. A capture that never called back left the
+    /// shutter disabled and the button reading "Taking…" for the rest of the night — a freeze,
+    /// from the outside (Ben, 2026-09-17).
+    private static let patience: TimeInterval = 8
+
     func run(on output: AVCapturePhotoOutput,
              settings: AVCapturePhotoSettings) async throws -> URL {
         try await withCheckedThrowingContinuation { continuation in
             lock.lock(); self.continuation = continuation; lock.unlock()
             output.capturePhoto(with: settings, delegate: self)
+            DispatchQueue.global().asyncAfter(deadline: .now() + Self.patience) { [weak self] in
+                self?.giveUp()
+            }
         }
+    }
+
+    /// Answers the waiting shutter with a sentence if the camera never did. Whichever of the
+    /// two arrives first takes the continuation; the other finds it gone and does nothing.
+    private func giveUp() {
+        lock.lock()
+        let continuation = self.continuation
+        self.continuation = nil
+        lock.unlock()
+        continuation?.resume(throwing: FieldCameraError.photoTimedOut)
     }
 
     func photoOutput(_ output: AVCapturePhotoOutput,

@@ -124,11 +124,25 @@ You choose them on the **New session** sheet before the session opens, and the s
 the running session's screen under *Recording* — switching one off tears it down rather than
 leaving it running quietly, which is the whole reason to switch video off at two in the morning.
 
-Video starts **off**. With it on, a **Video** button appears in the capture bar next to Photo.
-Photographs are always available whatever the channels say.
+Video starts **off**. With it on, the camera stays on: a viewfinder to aim by on the running
+session's screen, and the sentry's eye for movement seen through it. It is not a recording — five
+hours of video is tens of gigabytes and a flat battery long before the night is over.
 
-Video is captured as **clips**, not a continuous recording. Five hours of video is tens of
-gigabytes and a flat battery long before the night is over.
+The **Photo** button takes a photograph of whatever the camera sees, without leaving the app. With
+video on, the photo is taken there and then of what the viewfinder shows; with it off, a viewfinder
+opens so you can frame the shot and closes itself after. Photographs are always available whatever
+the channels say. Clips are not offered from a running session for now.
+
+### If you put the app away
+
+A session **with sound on** carries on when you switch to another app, go to the home screen or
+lock the phone: the sound and every reading keep being recorded in your pocket, because recording
+sound is what keeps the app awake. With sound off nothing does — iOS pauses the app a few seconds
+after it leaves the screen, and the readings stop until you come back. The camera never carries on;
+iOS takes it from any app that is not on screen, and it comes back the moment you do. Either way the
+stretch you were away is marked on the review, *App put away* to *Back in the app*, with a line
+saying which of those happened, so nobody reading the session later mistakes a dark camera for a
+dead one. The session player on the website shades the same stretch.
 
 ![The capture bar, the channel switches, and what has been marked](/help/media/the-mobile-apps/iphone-controls.png)
 

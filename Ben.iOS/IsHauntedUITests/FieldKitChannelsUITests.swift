@@ -84,9 +84,9 @@ final class FieldKitChannelsUITests: XCTestCase {
         // different Apple apps — the mode is a switch on our own camera screen now.
         let camera = app.buttons["capture-camera"]
         XCTAssertTrue(camera.waitForExistence(timeout: 15),
-                      "every session offers the camera")
-        XCTAssertEqual(camera.label, "Camera",
-                       "a session opened for video should say the camera does clips too")
+                      "every session offers a photograph")
+        XCTAssertEqual(camera.label, "Photo",
+                       "video keeps the camera on for the viewfinder; the button is a photo button either way (Ben, 2026-09-17)")
     }
 
     func testWithoutChoosingVideoTheButtonOffersPhotographsOnly() throws {
@@ -98,6 +98,6 @@ final class FieldKitChannelsUITests: XCTestCase {
         let camera = app.buttons["capture-camera"]
         XCTAssertTrue(camera.waitForExistence(timeout: 15))
         XCTAssertEqual(camera.label, "Photo",
-                       "video is opt-in; an untouched start sheet must not offer clips")
+                       "video is opt-in, and even with it on the button is a photo button")
     }
 }

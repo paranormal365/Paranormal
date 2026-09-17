@@ -240,6 +240,80 @@ public final class ActiveFieldSession {
         }
     }
 
+    // MARK: - The app being put away
+
+    /// A stretch the app spent in the background while this session ran.
+    public struct Absence: Sendable, Equatable {
+        public var from: Date
+        public var to: Date
+        public var seconds: TimeInterval { to.timeIntervalSince(from) }
+    }
+
+    /// The most recent stretch the app was put away for, once it has come back.
+    public private(set) var lastAbsence: Absence?
+    private var awaySince: Date?
+
+    /// The app went to the background with this session running.
+    ///
+    /// Ben, 2026-09-17: "if they are in a session and leave the app, it should either continue
+    /// recording waiting on them to come back or pause the recording until they do — with just a
+    /// blank space for while they were gone and a message saying the recording was paused while
+    /// not on app." It continues. The app declares the background-audio mode for exactly this, so
+    /// the sound and the readings carry on in a pocket; only the camera stops, because iOS takes
+    /// it from any app that is not on screen. What was missing was the saying so: nothing on the
+    /// review showed the stretch, and a dark camera read as a dead one. Two automatic marks now
+    /// bracket it, the first carrying the sentence, so the review is honest about what the
+    /// phone was doing while nobody was looking at it. A pending session — Start not yet
+    /// pressed — records nothing, because nothing is running to carry on.
+    public func appWentToBackground() async {
+        guard isRecording, awaySince == nil else { return }
+        awaySince = now()
+        await mark(kind: .appBackgrounded, note: Self.awayNote(for: channels))
+    }
+
+    /// The app is back on screen.
+    public func appReturned() async {
+        guard let since = awaySince else { return }
+        awaySince = nil
+        let back = now()
+        lastAbsence = Absence(from: since, to: back)
+        await mark(kind: .appReturned, note: "Away for \(Self.spell(back.timeIntervalSince(since))).")
+    }
+
+    /// What kept going and what could not, in the words the review shows.
+    public nonisolated static func awayNote(for channels: CaptureChannels) -> String {
+        "The app was put away here. " + whatHappened(for: channels)
+    }
+
+    /// The second sentence: what kept going while nobody was looking, and what could not.
+    ///
+    /// Only sound keeps the app awake. The background-audio mode the app declares holds the process
+    /// running for as long as the recorder is recording, and the readings ride along. With the
+    /// sound channel off nothing holds it: iOS suspends the app a few seconds after it leaves the
+    /// screen and the readings stop with it, so "readings carried on" would be a lie for exactly
+    /// the sessions most likely to be put in a pocket. The camera never carries on — iOS takes it
+    /// from any app that is not on screen.
+    public nonisolated static func whatHappened(for channels: CaptureChannels) -> String {
+        let camera = channels.contains(.video)
+        if channels.contains(.audio) {
+            return camera
+                ? "Sound and readings carried on; the camera paused until the app came back."
+                : "Sound and readings carried on."
+        }
+        return camera
+            ? "With no sound recording to keep it awake, readings and the camera paused until the app came back."
+            : "With no sound recording to keep it awake, readings paused until the app came back."
+    }
+
+    /// "3 min 20 sec", "45 sec", "1 hr 2 min" — the way a person says it, not a stopwatch.
+    public nonisolated static func spell(_ seconds: TimeInterval) -> String {
+        let whole = max(0, Int(seconds.rounded()))
+        let hours = whole / 3600, minutes = (whole % 3600) / 60, rest = whole % 60
+        if hours > 0 { return minutes > 0 ? "\(hours) hr \(minutes) min" : "\(hours) hr" }
+        if minutes > 0 { return rest > 0 ? "\(minutes) min \(rest) sec" : "\(minutes) min" }
+        return "\(rest) sec"
+    }
+
     // MARK: - Recording
 
     /// Starts recording sound into the session's own directory.
