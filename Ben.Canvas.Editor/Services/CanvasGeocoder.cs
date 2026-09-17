@@ -51,7 +51,11 @@ public sealed class CanvasGeocoder(IHttpClientFactory http, IOptions<CanvasEdito
         var apiBase = options.Value.ApiBaseUrl?.Trim().TrimEnd('/');
         if (string.IsNullOrWhiteSpace(apiBase)) return null;
 
-        var url = $"{apiBase}/geocode/search?q={Uri.EscapeDataString(address.Trim())}";
+        // `/api` belongs to the path, not the configured base: the base is the host's API root
+        // ("https://ishaunted.com/webapi", "http://localhost:5252") and every caller adds the rest.
+        // Without it this asked for /geocode/search and was told 404 by a server that has the
+        // endpoint, so every address came back "not found" (caught by driving it, 2026-09-17).
+        var url = $"{apiBase}/api/geocode/search?q={Uri.EscapeDataString(address.Trim())}";
 
         try
         {

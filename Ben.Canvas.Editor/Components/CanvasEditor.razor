@@ -34,6 +34,10 @@
 @inject LinkPreviewResolver Links
 @inject ICanvasMediaStore Media
 @inject PresentationState Presentation
+@* Optional: a host with no API configured is a local-only editor, and looking an address up is the
+   one thing here that needs one. Without it the menu item still appears and says it found nothing,
+   which is the same answer a geocoder that does not know the address gives. *@
+@inject ICanvasGeocoder Geocoder
 @inject BoardSnapshotService Snapshots
 @inject ILoggerFactory LoggerFactory
 
@@ -437,9 +441,15 @@
     {
         if (menu.NodeId is { } nodeId && Store.FindNode(nodeId) is { } node)
         {
+            // Offered only when the block has an address in it, so it is there when it is wanted
+            // and invisible the rest of the time — rather than asking at the moment somebody
+            // pastes one (Ben, 2026-09-17). The map lands beside the block; nothing is replaced.
+            var address = AddressInBlock.Of(node.Data);
+
             return
             [
                 new("Edit", "edit"),
+                .. address is null ? Array.Empty<MenuItem>() : [new MenuItem(CanvasCopy.Buttons.MakeAMap, "make-map")],
                 new(CanvasCopy.Buttons.Duplicate, "duplicate"),
                 new(node.Locked ? CanvasCopy.Buttons.Unlock : CanvasCopy.Buttons.Lock, "lock"),
                 new(CanvasCopy.Buttons.BringToFront, "front"),

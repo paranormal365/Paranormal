@@ -22,6 +22,8 @@ day-by-day account of building it would say nothing to anyone using it now.
   there. It goes to the nearest clear ground instead, the same way a card added from the toolbar does.
 - A map box can be given an address instead of coordinates: write it and press Find. Pasting an address
   onto a board now makes a map of that place, and text nobody can place is still the note it was.
+- A card, note or message with an address written in it offers **Make a map** on its own menu. The map
+  lands beside it, and what you wrote stays where it is.
 - The session player shades the stretch a phone was put away for, with the phone's own line under
   the trace saying what carried on, and names the two marks that bracket it.
 - A link pasted on a research board builds a proper card — title, description, the site's name and a

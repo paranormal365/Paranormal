@@ -238,6 +238,12 @@ board makes a map of it the same way; when nobody can find the place, you get yo
 A published board draws a map box as its address rather than as map tiles, because map imagery may not
 be kept.
 
+**Any block with an address in it can become a map.** Right-click a card, a note, a message or a
+picture's caption and, when there is an address written in it, the menu offers **Make a map**. The map
+appears next to the block, located and labelled with that address, and the block keeps what it says —
+a Person card is still wanted after the map exists. If nobody can find the address you are told, and
+nothing is added.
+
 ### On a phone
 
 The board works on a phone: **Add** and **Paste** sit along the bottom, pinch to zoom, drag to pan,

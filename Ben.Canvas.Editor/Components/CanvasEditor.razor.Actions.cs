@@ -95,6 +95,9 @@ public partial class CanvasEditor
             case "connect":
                 EnterConnectMode();
                 break;
+            case "make-map":
+                await MakeAMapOfTheAddressAsync();
+                break;
             // ── Presenting ──────────────────────────────────────────────────
             //
             // Ben, 2026-09-16: "presentation mode like miro where you can create the cards like
@@ -218,7 +221,7 @@ public partial class CanvasEditor
         action.StartsWith("add-", StringComparison.Ordinal) && action != "add-menu"
         || action is "undo" or "redo" or "edit" or "duplicate" or "delete" or "lock" or "front" or "back" or "group"
             or "ungroup" or "rename" or "connect" or "paste" or "import" or "save-server" or "save-retry" or "publish"
-            or "publish-confirmed" or "conflict-mine" or "case-files";
+            or "publish-confirmed" or "conflict-mine" or "case-files" or "make-map";
 
     /// <summary>
     /// Presenting is reading, not writing — so a view-only board presents like any other.
@@ -345,6 +348,72 @@ public partial class CanvasEditor
 
         // The device copy saves itself: CanvasDocumentStore listens to the store's changes.
         Announcer.Say(CanvasCopy.Sentences.AddedFromCase(file.FileName));
+    }
+
+    /// <summary>
+    /// Makes a map of the address written in the selected block, beside it.
+    /// </summary>
+    /// <remarks>
+    /// <para>Ben, 2026-09-17, on pasting an address into a card: "should we ask if they want to
+    /// convert it to a map card? Would that be helpful?" Helpful as an offer, not as a question —
+    /// so it is an item on the block's own menu, shown only when there is an address to offer it
+    /// about (<see cref="AddressInBlock"/>).</para>
+    /// <para><b>Beside, not instead.</b> A card with an address in it is still wanted after the map
+    /// exists — the address is one field of a Person or a Historical note — and a block cannot
+    /// change its kind without becoming a different block, which would take its connectors and its
+    /// place in the running order with it. An address pasted onto the bare board does become a map
+    /// outright, which is the case where replacing is what somebody meant.</para>
+    /// <para>The map goes to the right of the block when there is room and walks outward when there
+    /// is not, so it never lands on top of what it was made from.</para>
+    /// </remarks>
+    private async Task MakeAMapOfTheAddressAsync()
+    {
+        if (SingleSelected() is not { } block) return;
+        if (AddressInBlock.Of(block.Data) is not { } address) return;
+        if (!Options.Value.EnabledBlocks.Contains(CanvasNodeType.Map)) return;
+
+        var found = Geocoder is null ? null : await Geocoder.FindAsync(address);
+        if (found is null)
+        {
+            Toasts.Warning(CanvasCopy.Sentences.AddressNotFound);
+            Announcer.Say(CanvasCopy.Sentences.AddressNotFound);
+            return;
+        }
+
+        // Just right of the block is where it wants to go; FreePlacement walks outward in rings from
+        // there when that ground is taken, which keeps it near. BesidePlacement was the first
+        // choice and is wrong for this: it only steps along one axis, so on a board with anything
+        // to the right it put the map 460 px straight up and off the screen (driven, 2026-09-17).
+        var from = CanvasHitTester.RectOf(block);
+        var descriptor = BlockRegistry.Get(CanvasNodeType.Map);
+        var wanted = new CanvasPoint(from.Right + BesidePlacement.Gap + descriptor.DefaultWidth / 2, from.CenterY);
+        var free = FreePlacement.Near(wanted, descriptor.DefaultWidth, descriptor.DefaultHeight,
+                                      Store.Document.Nodes.Select(CanvasHitTester.RectOf));
+
+        AddBlock(CanvasNodeType.Map, new CanvasPoint(free.X + free.Width / 2, free.Y + free.Height / 2),
+                 data => data is MapData map
+                     ? Filled(map, found, address)
+                     : null);
+
+        // A board that had no room nearby can still put it outside the view, and a map nobody can
+        // see reads as nothing having happened. The WHOLE block has to be visible, not its middle:
+        // asking about the centre passed a map that was five per cent on screen and hanging off the
+        // top, which is what driving it produced (2026-09-17).
+        var view = Viewport.VisibleWorldRect();
+        if (!view.Contains(free.X, free.Y) || !view.Contains(free.Right, free.Bottom))
+            Viewport.CentreOn(free.CenterX, free.CenterY);
+
+        Announcer.Say(CanvasCopy.Buttons.MakeAMap);
+    }
+
+    private static MapData Filled(MapData map, CanvasGeocoderResult found, string address)
+    {
+        map.Latitude = found.Latitude;
+        map.Longitude = found.Longitude;
+        map.Zoom = found.Zoom;
+        map.Address = address;
+        map.Pins = [new MapPin { Latitude = found.Latitude, Longitude = found.Longitude, Title = address }];
+        return map;
     }
 
     /// <summary>

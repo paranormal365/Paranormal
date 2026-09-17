@@ -75,6 +75,12 @@ public static class CanvasCopy
         public const string Connect = "Connect";
         public const string Lock = "Lock";
         public const string Unlock = "Unlock";
+/// <summary>
+        /// Offered on a block that has an address written in it (Ben, 2026-09-17). Three words rather
+        /// than "Make a map of this": the menu is already attached to the block it is about.
+        /// </summary>
+        public const string MakeAMap = "Make a map";
+
         public const string Duplicate = "Duplicate";
         public const string Delete = "Delete";
         public const string BringToFront = "Bring to front";
@@ -241,6 +247,9 @@ public static class CanvasCopy
 
         public const string ClientNotesForbidden =
             "Your account is not allowed to read this case's messages.";
+
+        public const string AddressNotFound =
+            "That address was not found, so no map was made. Try adding the town, or make a map box and type the coordinates.";
 
         public const string ClientNotesOnlyTheirs =
             "Only what the client wrote is offered here. What the group wrote back is the group's own thinking.";
