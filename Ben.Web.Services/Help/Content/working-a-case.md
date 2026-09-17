@@ -119,13 +119,19 @@ same time, so a photograph only ever exists once. A file that arrived this way i
 in the Files tab, so you can tell which of the case's files the boards are built from — useful when a
 camera or a scanner named them and you want to go back and give them names that say what they are.
 
-**The case files button** (the folder, on the left) reaches the other way: it lists what the case
-already holds so you can put a photograph from last week's visit straight onto the board without
-finding it on your computer and sending it a second time.
+**The case files button** (the folder, on the left) reaches the other way. It opens **From the case**,
+which has two tabs:
+
+- **Files** — what the case already holds, so a photograph from last week's visit goes straight onto
+  the board without finding it on your computer and sending it a second time.
+- **What the client wrote** — every message the client has sent on this case. Pick one and their words
+  land on the board with their name and the day they wrote them, so the reason you are reading about a
+  house is on the board beside what you found. Only the client's side is offered; what the group wrote
+  back is the group's own thinking, and the board is where that is done.
 
 ### Kinds of card
 
-Research is mostly not evidence, so a card can be any of five kinds, each asking for what that kind of
+Research is mostly not evidence, so a card can be any of six kinds, each asking for what that kind of
 thing needs:
 
 | Kind | What it is for |
@@ -133,6 +139,7 @@ thing needs:
 | **Evidence** | something recorded — a description, the date, what kind it is, and whether it is verified. |
 | **Historical note** | what happened here before anybody was recording: what, when, where, and where you read it. |
 | **Article** | a piece of writing — news, a book, a journal, a website or a broadcast — with its author and what it says. |
+| **Experience** | what somebody felt, heard or saw with nothing recording: what, which sense, who, where in the place, and when. |
 | **Quote** | somebody's words, who said them, when, and where the quote comes from. |
 | **Person** | a witness, a client, a neighbour or an owner: their connection to the place and what they describe. |
 

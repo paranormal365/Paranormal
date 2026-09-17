@@ -45,7 +45,28 @@ public interface ICanvasMediaStore
     /// </remarks>
     Task<(IReadOnlyList<CanvasCaseFile> Files, string? Problem)> ListCaseFilesAsync(
         Guid organizationId, Guid caseId, CancellationToken ct = default);
+
+    /// <summary>
+    /// What the client has written on the case, newest first — the words the research usually starts
+    /// from.
+    /// </summary>
+    /// <remarks>
+    /// <para>Ben, 2026-09-17: "maybe we have the ability to select from and add notes from the
+    /// client… this could be something we are researching and then we can track it back to why we
+    /// are researching something." A board could reach the case's files but not the sentence that
+    /// sent somebody looking, so the reason for a night's reading lived in a different tab.</para>
+    /// <para>The client's side only. What the group wrote back is the group's own thinking, and a
+    /// board is where that is done rather than quoted.</para>
+    /// </remarks>
+    Task<(IReadOnlyList<CanvasClientNote> Notes, string? Problem)> ListClientNotesAsync(
+        Guid organizationId, Guid caseId, CancellationToken ct = default);
 }
+
+/// <summary>Something the client wrote on the case, as the board's picker lists it.</summary>
+/// <param name="Html">Allow-listed HTML — what the client typed, formatted as they formatted it.</param>
+/// <param name="PlainText">The same words with no markup, for searching the list.</param>
+public sealed record CanvasClientNote(
+    Guid Id, string Author, string Html, string PlainText, DateTime WrittenUtc);
 
 /// <summary>One file already on the case, as the board's picker lists it.</summary>
 public sealed record CanvasCaseFile(

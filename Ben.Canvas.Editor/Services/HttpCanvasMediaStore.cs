@@ -56,6 +56,28 @@ public sealed class HttpCanvasMediaStore(IJSRuntime js, IOptions<CanvasEditorOpt
         return (null, text.Length is > 0 and < 400 && !text.StartsWith('{') && !text.StartsWith('<') ? text.Trim('"') : CanvasCopy.Sentences.ServerRefusedBoard);
     }
 
+    /// <inheritdoc />
+    public async Task<(IReadOnlyList<CanvasClientNote> Notes, string? Problem)> ListClientNotesAsync(
+        Guid organizationId, Guid caseId, CancellationToken ct = default)
+    {
+        if (!IsAvailable) return ([], CanvasCopy.Sentences.SignedOutSave);
+
+        var url = $"{Base}/api/orgs/{organizationId}/cases/{caseId}/messages";
+        var module = await ModuleAsync();
+        var result = await module.InvokeAsync<UploadResult>("fetchJson", ct, url, await tokens!.GetAccessTokenAsync(false, ct));
+        if (result.Status == 401)
+            result = await module.InvokeAsync<UploadResult>("fetchJson", ct, url, await tokens.GetAccessTokenAsync(true, ct));
+
+        return result.Status switch
+        {
+            200 => (ClientNotes.Read(result.Body), null),
+            0 => ([], CanvasCopy.Sentences.ServerUnreachable),
+            401 => ([], CanvasCopy.Sentences.SignInExpired),
+            403 => ([], CanvasCopy.Sentences.ClientNotesForbidden),
+            _ => ([], CanvasCopy.Sentences.ServerRefusedBoard),
+        };
+    }
+
     public async Task<(IReadOnlyList<CanvasCaseFile> Files, string? Problem)> ListCaseFilesAsync(
         Guid organizationId, Guid caseId, CancellationToken ct = default)
     {

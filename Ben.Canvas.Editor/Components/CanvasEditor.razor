@@ -111,7 +111,7 @@
             <button type="button" class="btn btn-primary" data-bc-action="conflict-mine" @onclick="@(() => RunActionAsync("conflict-mine"))">@CanvasCopy.Buttons.KeepMine</button>
         </FooterContent>
     </BcModal>
-    <CaseFilePicker @bind-Visible="_caseFilesOpen" OrganizationId="@BoardOrganizationId" CaseId="@BoardCaseId" OnPick="AddCaseFile" />
+    <CaseFilePicker @bind-Visible="_caseFilesOpen" OrganizationId="@BoardOrganizationId" CaseId="@BoardCaseId" OnPick="AddCaseFile" OnPickNote="AddClientNote" />
     <BcModal @bind-Visible="_downloadOpen" Title="@CanvasCopy.Buttons.ExportBoard" OnClose="OnDownloadClosedAsync">
         <ChildContent>
             <p>@CanvasCopy.Sentences.ExportReady</p>

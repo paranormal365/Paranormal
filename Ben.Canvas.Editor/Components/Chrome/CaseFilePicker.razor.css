@@ -83,3 +83,12 @@
     font-size: .8125rem;
     color: var(--bs-secondary-color, #6c757d);
 }
+
+/* The two things a board reaches for. Buttons rather than links: nothing here navigates. */
+.bc-picker__tabs { display: flex; gap: .25rem; margin-bottom: .75rem; }
+.bc-picker__tab {
+    border: 1px solid var(--bc-border); background: transparent; color: var(--bc-text);
+    border-radius: var(--bc-radius-sm); padding: .3rem .7rem; font-size: .8125rem; min-height: 2.25rem;
+}
+.bc-picker__tab[aria-selected="true"] { background: var(--bc-surface-2); font-weight: 600; }
+.bc-picker__tab:focus-visible { outline: 2px solid var(--bc-focus-ring); outline-offset: 1px; }

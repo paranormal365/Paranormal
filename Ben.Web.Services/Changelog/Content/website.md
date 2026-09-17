@@ -22,9 +22,12 @@ day-by-day account of building it would say nothing to anyone using it now.
   there. It goes to the nearest clear ground instead, the same way a card added from the toolbar does.
 - A map box can be given an address instead of coordinates: write it and press Find. Pasting an address
   onto a board now makes a map of that place, and text nobody can place is still the note it was.
+- A research board can reach for what the client wrote. The case files button now opens two tabs, and
+  the second lists the client's messages: pick one and their words land on the board with their name
+  and the date, so what sent you looking sits beside what you found.
 - A file added to a research board is marked **Research** in the case's Files, so you can tell which
   files the research is built from and rename the ones that came off a camera with a number for a name.
-- A research card can be a historical note, an article, a quote or a person as well as evidence, each
+- A research card can be a historical note, an article, an experience, a quote or a person as well as evidence, each
   asking for what that kind of thing needs. Pick the kind while editing a card; changing it keeps what
   you typed. Until a card has a title, its heading says which kind it is rather than "Card".
 

@@ -94,6 +94,9 @@ public sealed class CanvasServerSessionTests
         Guid organizationId, Guid caseId, CancellationToken ct = default)
         => Task.FromResult<(IReadOnlyList<CanvasCaseFile>, string?)>(([], null));
 
+        public Task<(IReadOnlyList<CanvasClientNote> Notes, string? Problem)> ListClientNotesAsync(
+            Guid organizationId, Guid caseId, CancellationToken ct = default) => Task.FromResult<(IReadOnlyList<CanvasClientNote>, string?)>(([], null));
+
     public Task<string?> GetDisplayUrlAsync(string apiUrl, CancellationToken ct = default) => Task.FromResult<string?>(null);
     }
 

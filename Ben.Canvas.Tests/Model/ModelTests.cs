@@ -225,8 +225,9 @@ public sealed class CanvasEditorOptionsTests
     {
         var templates = new CanvasEditorOptions().CardTemplates;
 
-        Assert.Equal(["evidence", "historical", "article", "quote", "person"], templates.Select(t => t.Id));
-        Assert.Equal(["Evidence", "Historical note", "Article", "Quote", "Person"], templates.Select(t => t.Name));
+        Assert.Equal(["evidence", "historical", "article", "experience", "quote", "person"], templates.Select(t => t.Id));
+        Assert.Equal(["Evidence", "Historical note", "Article", "Experience", "Quote", "Person"],
+                     templates.Select(t => t.Name));
         new CanvasEditorOptions().Validate();
     }
 

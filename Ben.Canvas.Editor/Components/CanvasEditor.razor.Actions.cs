@@ -347,6 +347,25 @@ public partial class CanvasEditor
         Announcer.Say(CanvasCopy.Sentences.AddedFromCase(file.FileName));
     }
 
+    /// <summary>
+    /// Puts something the client wrote on the board, as a message block in their words.
+    /// </summary>
+    /// <remarks>
+    /// Ben, 2026-09-17: "we can track it back to why we are researching something." A message block
+    /// rather than a card because that is what it is — somebody's words, with their name and the day
+    /// they wrote them — and because a card would ask the researcher to retype it into fields.
+    /// </remarks>
+    private void AddClientNote(CanvasClientNote note)
+    {
+        var kind = CanvasNodeType.Message;
+        if (!Options.Value.EnabledBlocks.Contains(kind)) kind = CanvasNodeType.Text;
+        if (!Options.Value.EnabledBlocks.Contains(kind)) return;
+
+        AddBlock(kind, null, data => ClientNoteBlocks.Fill(data, note));
+
+        Announcer.Say(CanvasCopy.Sentences.AddedFromCase(note.Author));
+    }
+
 
     private void DeleteSelection()
     {

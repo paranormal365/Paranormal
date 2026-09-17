@@ -11,9 +11,69 @@
 *@
 @inject ICanvasMediaStore Media
 
-<BcModal @bind-Visible="Visible" Title="@CanvasCopy.Titles.CaseFiles" Size="lg" Scrollable="true">
+<BcModal @bind-Visible="Visible" Title="@CanvasCopy.Titles.FromTheCase" Size="lg" Scrollable="true">
     <ChildContent>
-        @if (_loading)
+        @* Two things a board reaches for: the case's files, and what the client wrote. Blazor owns the
+           choice — no data-bs-toggle — so the list under it is rendered rather than hidden. *@
+        <div class="bc-picker__tabs" role="tablist">
+            <button type="button" role="tab" id="bc-picker-tab-files" class="@TabClass(Tab.Files)"
+                    aria-selected="@(_tab == Tab.Files ? "true" : "false")" data-bc-tab="files"
+                    @onclick="@(() => ShowAsync(Tab.Files))">@CanvasCopy.Labels.CaseFiles</button>
+            <button type="button" role="tab" id="bc-picker-tab-notes" class="@TabClass(Tab.ClientNotes)"
+                    aria-selected="@(_tab == Tab.ClientNotes ? "true" : "false")" data-bc-tab="client-notes"
+                    @onclick="@(() => ShowAsync(Tab.ClientNotes))">@CanvasCopy.Labels.ClientNotes</button>
+        </div>
+
+        @if (_tab == Tab.ClientNotes)
+        {
+            @if (_loadingNotes)
+            {
+                <p class="bc-picker__note" data-bc-picker="notes-loading">@CanvasCopy.Sentences.ClientNotesLoading</p>
+            }
+            else if (_notesProblem is not null)
+            {
+                <p class="bc-picker__note bc-picker__note--bad" role="alert" data-bc-picker="notes-problem">@_notesProblem</p>
+                <button type="button" class="btn btn-outline-secondary btn-sm" data-bc-action="client-notes-retry"
+                        @onclick="LoadNotesAsync">@CanvasCopy.Buttons.TryAgain</button>
+            }
+            else if (_notes.Count == 0)
+            {
+                <p class="bc-picker__note" data-bc-picker="notes-empty">@CanvasCopy.Sentences.ClientNotesEmpty</p>
+            }
+            else
+            {
+                <label class="visually-hidden" for="bc-picker-notes-search">@CanvasCopy.Labels.SearchClientNotes</label>
+                <input id="bc-picker-notes-search" type="search" class="form-control bc-picker__search"
+                       placeholder="@CanvasCopy.Labels.SearchClientNotes" autocomplete="off"
+                       value="@_noteSearch" @oninput="OnNoteSearch" />
+
+                @if (ShownNotes.Count == 0)
+                {
+                    <p class="bc-picker__note" data-bc-picker="notes-no-match">@CanvasCopy.Sentences.ClientNotesNoMatch</p>
+                }
+                else
+                {
+                    <ul class="bc-picker__list" data-bc-picker="client-notes">
+                        @foreach (var note in ShownNotes)
+                        {
+                            var n = note;
+                            <li>
+                                <button type="button" class="bc-picker__item" data-bc-note="@n.Id"
+                                        @onclick="@(() => PickNoteAsync(n))">
+                                    <span class="bc-picker__thumb"><BcIcon Name="message-square" /></span>
+                                    <span class="bc-picker__text">
+                                        <span class="bc-picker__name">@Excerpt(n.PlainText)</span>
+                                        <span class="bc-picker__meta">@n.Author · @BcDateFormat.MessageTime(n.WrittenUtc, TimeSpan.Zero)</span>
+                                    </span>
+                                </button>
+                            </li>
+                        }
+                    </ul>
+                    <p class="bc-picker__note" data-bc-picker="notes-whose">@CanvasCopy.Sentences.ClientNotesOnlyTheirs</p>
+                }
+            }
+        }
+        else if (_loading)
         {
             <p class="bc-picker__note" data-bc-picker="loading">@CanvasCopy.Sentences.CaseFilesLoading</p>
         }
@@ -81,6 +141,70 @@
     /// <summary>The file somebody chose. The picker closes itself first, so the block lands on a clear board.</summary>
     [Parameter] public EventCallback<CanvasCaseFile> OnPick { get; set; }
 
+    /// <summary>The client's words somebody chose, to become a message block on the board.</summary>
+    [Parameter] public EventCallback<CanvasClientNote> OnPickNote { get; set; }
+
+    private enum Tab { Files, ClientNotes }
+
+    private Tab _tab = Tab.Files;
+    private IReadOnlyList<CanvasClientNote> _notes = [];
+    private string? _notesProblem;
+    private string _noteSearch = "";
+    private bool _loadingNotes;
+    private bool _askedForNotes;
+
+    private static string TabClass(Tab which) => "bc-picker__tab";
+
+    private List<CanvasClientNote> ShownNotes =>
+        string.IsNullOrWhiteSpace(_noteSearch)
+            ? _notes.ToList()
+            : _notes.Where(n => n.PlainText.Contains(_noteSearch.Trim(), StringComparison.OrdinalIgnoreCase)
+                             || n.Author.Contains(_noteSearch.Trim(), StringComparison.OrdinalIgnoreCase))
+                    .ToList();
+
+    /// <summary>The first line, or enough of it to recognise which message this is.</summary>
+    private static string Excerpt(string text)
+    {
+        var line = text.Split('\n', StringSplitOptions.RemoveEmptyEntries).FirstOrDefault()?.Trim() ?? "";
+        return line.Length <= 90 ? line : line[..89] + "…";
+    }
+
+    private async Task ShowAsync(Tab which)
+    {
+        _tab = which;
+        // Asked for once, when somebody first looks: a board that never opens this tab never reads
+        // the case's messages.
+        if (which == Tab.ClientNotes && !_askedForNotes) await LoadNotesAsync();
+    }
+
+    private void OnNoteSearch(ChangeEventArgs e) => _noteSearch = e.Value?.ToString() ?? "";
+
+    private async Task LoadNotesAsync()
+    {
+        if (OrganizationId is not { } org || CaseId is not { } which)
+        {
+            _notesProblem = CanvasCopy.Sentences.CaseFilesNoCase;
+            return;
+        }
+
+        _askedForNotes = true;
+        _loadingNotes = true;
+        _notesProblem = null;
+        StateHasChanged();
+
+        var (notes, problem) = await Media.ListClientNotesAsync(org, which);
+        _notes = notes;
+        _notesProblem = problem;
+        _loadingNotes = false;
+        StateHasChanged();
+    }
+
+    private async Task PickNoteAsync(CanvasClientNote note)
+    {
+        await CloseAsync();
+        await OnPickNote.InvokeAsync(note);
+    }
+
     private IReadOnlyList<CanvasCaseFile> _files = [];
     private readonly Dictionary<Guid, string?> _thumbs = [];
     private string? _problem;
@@ -100,8 +224,14 @@
 
     protected override async Task OnParametersSetAsync()
     {
-        // Opening reloads: a file added from the phone since the board opened should be there.
-        if (Visible && !_wasVisible) await LoadAsync();
+        // Opening reloads: a file added from the phone since the board opened should be there, and so
+        // should a message the client sent this morning.
+        if (Visible && !_wasVisible)
+        {
+            _askedForNotes = false;
+            await LoadAsync();
+            if (_tab == Tab.ClientNotes) await LoadNotesAsync();
+        }
         _wasVisible = Visible;
     }
 
@@ -169,6 +299,7 @@
         Visible = false;
         _wasVisible = false;
         _search = "";
+        _noteSearch = "";
         await VisibleChanged.InvokeAsync(false);
     }
 

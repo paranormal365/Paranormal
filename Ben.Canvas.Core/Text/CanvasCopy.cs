@@ -27,12 +27,22 @@ public static class CanvasCopy
         public const string PublishConfirm = "Publish this board?";
         public const string NewerCopy = "A newer copy is on the case";
         public const string CaseFiles = "The case's files";
+
+        /// <summary>The picker's title once it offers more than files (Ben, 2026-09-17).</summary>
+        public const string FromTheCase = "From the case";
     }
 
     /// <summary>Field labels and placeholders.</summary>
     public static class Labels
     {
         public const string SearchFiles = "Search these files";
+
+        /// <summary>The picker's two tabs (Ben, 2026-09-17).</summary>
+        public const string CaseFiles = "Files";
+
+        public const string ClientNotes = "What the client wrote";
+
+        public const string SearchClientNotes = "Search what the client wrote";
     }
 
     /// <summary>
@@ -219,6 +229,21 @@ public static class CanvasCopy
 
         public const string CaseFilesNoCase =
             "This board is not on a case yet, so there are no case files to reach for. Save it to a case first.";
+
+        // ── What the client wrote, offered to the board ─────────────────────
+
+        public const string ClientNotesLoading = "Reading what the client has written.";
+
+        public const string ClientNotesEmpty =
+            "The client has not written anything on this case yet. What they write appears here.";
+
+        public const string ClientNotesNoMatch = "The client has not written those words on this case.";
+
+        public const string ClientNotesForbidden =
+            "Your account is not allowed to read this case's messages.";
+
+        public const string ClientNotesOnlyTheirs =
+            "Only what the client wrote is offered here. What the group wrote back is the group's own thinking.";
 
         // ── Presenting ──────────────────────────────────────────────────────
 

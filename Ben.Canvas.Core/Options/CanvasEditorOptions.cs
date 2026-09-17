@@ -106,6 +106,15 @@ public sealed class CanvasEditorOptions
             new("published", "Published", CardFieldKind.Text),
             new("says", "What it says", CardFieldKind.Text),
         ]),
+        new("experience", "Experience",
+        [
+            new("what", "What was experienced", CardFieldKind.Text),
+            new("sense", "Kind", CardFieldKind.Select,
+                ["Sound", "Sight", "Touch", "Smell", "Cold spot", "Feeling", "Something moved", "Other"]),
+            new("who", "Who experienced it", CardFieldKind.Text),
+            new("where", "Where in the place", CardFieldKind.Text),
+            new("when", "When", CardFieldKind.Text),
+        ]),
         new("quote", "Quote",
         [
             new("words", "The words", CardFieldKind.Text),
