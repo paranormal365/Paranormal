@@ -130,9 +130,15 @@ public class PlacePostsTests : BenTestBase
         await Expect(Main.GetByTestId("place-posts").GetByText(said, new() { Exact = false }))
             .ToBeVisibleAsync(new() { Timeout = 20_000 });
 
-        // And on the feed, carrying where it belongs.
+        // And on the feed, carrying where it belongs. On the LATEST tab, not the default For You:
+        // For You ranks by score, so on a database with a full seeded feed a post written a second
+        // ago has no guaranteed position on the first page — which is how this failed on a fresh
+        // database having passed on a well-used one. Latest is ordered by time, so the post just
+        // written is the first card, and what the test is actually about is unchanged.
         await Page.GotoAsync($"{BaseUrl}/feed");
         await WaitUntilLoadedAsync();
+        await Main.GetByRole(AriaRole.Button, new() { Name = "Latest", Exact = true }).ClickAsync();
+
         var card = Main.Locator(".bv-feed-post, article, .card")
                        .Filter(new() { HasTextString = said }).First;
         await Expect(card).ToBeVisibleAsync(new() { Timeout = 30_000 });
