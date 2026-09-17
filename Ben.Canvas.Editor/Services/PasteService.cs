@@ -33,8 +33,11 @@ public sealed record ClipboardPayloadOut(string Json, string Html);
 ///
 /// <para>Where things land: a drop lands where it was dropped; a paste after "Paste" in a menu lands at the
 /// menu's point; any other paste is centred in view, and repeated pastes step 24 px so they never stack
-/// exactly. The board's own copy lands 24 px from the original while the original is in view, which is what
-/// Ctrl+C then Ctrl+V means in every drawing tool.</para>
+/// exactly. Each of those is a wanted spot rather than a final one — when something already occupies it the
+/// block is nudged to the nearest clear ground (<see cref="FreePlacement"/>), so a paste never buries what
+/// it landed on. The board's own copy is the one exception: it lands 24 px from the original while the
+/// original is in view, which is what Ctrl+C then Ctrl+V means in every drawing tool, and an offset copy
+/// sitting over its own original is the point of that gesture.</para>
 ///
 /// <para>Message HTML is normalised by Core's allow-list before it is stored, and again whenever a board is
 /// read.</para>
@@ -221,8 +224,15 @@ public sealed class PasteService(
         }
         else
         {
-            left = anchor.X - bounds.Width / 2;
-            top = anchor.Y - bounds.Height / 2;
+            // Centred on the anchor, and never on top of what is already there: the same rule the Add
+            // sheet follows (Ben, 2026-09-16, "Add a free space nudge when adding a new card"). Walking
+            // the site on 2026-09-17 found a pasted link landing 145x126 px over an existing card, which
+            // hid it and made the newest thing on the board the hardest to read. A clear anchor is used
+            // exactly, so a drop still lands where it was dropped and the first paste is still centred.
+            var free = FreePlacement.Near(anchor, bounds.Width, bounds.Height,
+                store.Document.Nodes.Select(CanvasHitTester.RectOf));
+            left = free.X;
+            top = free.Y;
         }
 
         var dx = left - bounds.X;

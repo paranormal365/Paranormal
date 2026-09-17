@@ -16,6 +16,11 @@ read. Add today's heading at the top when you ship something people can see.
 The history before 2026-08-22 is summarised rather than listed: the site was not yet open, and a
 day-by-day account of building it would say nothing to anyone using it now.
 
+## 2026-09-17
+
+- On a research board, something you paste or drop no longer lands on top of a card that was already
+  there. It goes to the nearest clear ground instead, the same way a card added from the toolbar does.
+
 ## 2026-09-16
 
 - A session's sound recordings no longer sit held out of a place's archive: the picture screener used to hold every audio file as an image that would not decode, so an archived night could show its readings but never its sound.

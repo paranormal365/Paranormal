@@ -100,7 +100,7 @@ public sealed class PasteServiceTests
     }
 
     [Fact]
-    public async Task A_paste_is_centred_in_view_and_a_second_one_steps_away()
+    public async Task A_paste_is_centred_in_view_and_a_second_one_lands_clear_of_the_first()
     {
         var rig = new Rig();
         await rig.PasteAsync(Text("one"));
@@ -110,7 +110,25 @@ public sealed class PasteServiceTests
 
         Assert.Equal(centre.X, first.X + first.Width / 2, 1);
         Assert.Equal(centre.Y, first.Y + first.Height / 2, 1);
-        Assert.Equal(CanvasStore.CascadeOffset, second.X - first.X, 1);
+
+        // It used to step exactly 24 px, which on a note-sized block is almost entirely on top of the
+        // first one. The step is still where it tries to go; free ground is where it ends up.
+        Assert.False(CanvasHitTester.RectOf(first).Intersects(CanvasHitTester.RectOf(second)));
+        Assert.True(second.Y >= first.Y, "the nudge lays blocks down in reading order");
+    }
+
+    [Fact]
+    public async Task A_paste_does_not_land_on_a_block_that_was_already_there()
+    {
+        var rig = new Rig();
+        var centre = rig.Viewport.WorldCentre();
+        var sitting = TestBoards.Node(CanvasNodeType.Card, centre.X - 128, centre.Y - 100);
+        rig.Store.Load(new CanvasDocument { Nodes = [sitting] });
+
+        await rig.PasteAsync(Text("pasted over the middle of the board"));
+
+        var pasted = Assert.Single(rig.Store.Document.Nodes, n => n.Id != sitting.Id);
+        Assert.False(CanvasHitTester.RectOf(sitting).Intersects(CanvasHitTester.RectOf(pasted)));
     }
 
     [Fact]
