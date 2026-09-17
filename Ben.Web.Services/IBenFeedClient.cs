@@ -30,9 +30,11 @@ public interface IBenFeedClient
     /// <param name="token">Cancellation.</param>
     /// <param name="author">One person's posts. Overrides <paramref name="mode"/>.</param>
     /// <param name="experienceType">One experience type's posts (item 186 F6). Combines like a tag.</param>
+    /// <param name="place">One place's posts (2026-09-17). Combines like a tag.</param>
     Task<FeedPageRecord?> GetFeedAsync(
         string? mode = null, string? hashtag = null, string? cursor = null,
-        CancellationToken token = default, Guid? author = null, Guid? experienceType = null);
+        CancellationToken token = default, Guid? author = null, Guid? experienceType = null,
+        Guid? place = null);
 
     // ── Moderation (item 186 F5) ─────────────────────────────────────────────
 
@@ -90,7 +92,9 @@ public interface IBenFeedClient
         DateTime? scheduledForUtc = null,
         decimal? postedLatitude = null,
         decimal? postedLongitude = null,
-        string? postedPlaceName = null);
+        string? postedPlaceName = null,
+        /// <summary>The public location this post is about (2026-09-17).</summary>
+        Guid? aboutPlaceId = null);
 
     // ── Org attribution (item 186 F7) ────────────────────────────────────────
 

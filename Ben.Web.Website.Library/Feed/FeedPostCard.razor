@@ -199,6 +199,20 @@
             </div>
         }
 
+        @* What the post is ABOUT, when it was written on a place's page (2026-09-17). Distinct
+           from "said at" above, which is where the author was standing — somebody writes up
+           Cragfont at home, and a card that conflated the two would claim they were there. Shown
+           wherever the card appears, so a post read on the front page still says which place it
+           belongs to and links back to it. *@
+        @if (Post.PlaceId is { } aboutPlaceId && Post.AboutPlaceName is { } aboutPlaceName)
+        {
+            <div class="mt-2 small text-secondary d-flex align-items-center gap-1"
+                 data-testid="feed-post-about-place">
+                <BenIcon Name="map-pin" />
+                <span>at <a href="@($"/places/{aboutPlaceId}")">@aboutPlaceName</a></span>
+            </div>
+        }
+
         @* AUTHOR-ONLY, like the media-pending note: a post waiting for its hour is on the page
            only for the person who scheduled it, and they should be told when it goes up. *@
         @if (Post.ScheduledForUtc is { } goesUp && Post.IsOwnPost)

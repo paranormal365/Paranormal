@@ -709,6 +709,14 @@ rows show their sharing setting: how another group chose to share something is t
 Place pages work for visitors too. Somebody who is not signed in sees only investigations that have
 been published, and nothing else.
 
+### Your groups' cases here
+
+Signed in, a place also shows **your groups' cases here** — every case one of your groups has at
+this location, whatever its status, published or not. That is the question worth asking on arrival:
+do we already have a case here? The published list below cannot answer it, because the answer is
+usually a case nobody published. Other groups' unpublished cases are not shown: having one is
+itself something they have not shared.
+
 ### Cases written up here
 
 A place also lists the **cases** groups have published about it, with the year each was opened and
@@ -718,6 +726,14 @@ own public page. Visitors see this list too.
 
 This is the other half of naming a place on a case: your case appears on the place's page when you
 publish it, and everybody else's is already there to read before you start.
+
+### Posts about this place
+
+A public location also carries **posts** — short notes and photographs from anybody signed in, not
+only from groups. They are feed posts that name the place, so they are screened, reportable and
+hideable exactly like anything else on the feed, and they appear on the feed as well with a link
+back here. See [Posting about a place](the-feed#posting-about-a-place). A private residence has no
+posts and offers no box.
 
 ### The field archive
 

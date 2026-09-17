@@ -6,6 +6,7 @@ using Microsoft.AspNetCore.Mvc;
 using Microsoft.EntityFrameworkCore;
 using Ben.Data.WebApi.Services.Access;
 using Ben.Data.WebApi.Services.Redaction;
+using Ben.Service.Models.Feed;
 
 namespace Ben.Data.WebApi.Controllers.Public;
 
@@ -78,8 +79,66 @@ public sealed class PublicPlaceController : ControllerBase
         return Ok(new PublicPlaceResponse(place, rows, PlaceSummary.From(rows),
             await PublishedSessionsAsync(db, id, ct),
             await ArchiveEvidencePublication.ForPlaceAsync(db, id, ct),
-            await PublishedCasesAsync(db, id, ct)));
+            await PublishedCasesAsync(db, id, ct),
+            await PostsAsync(db, id, GetCurrentUserIdOrEmpty(), ct),
+            // Always false here, and not because of who is asking. The website calls this endpoint
+            // anonymously on purpose, so it cannot know the reader; a signed-in one asks
+            // PlaceController.GetPosts instead. Saying so plainly beats a value that looks like an
+            // answer and never is.
+            CanPost: false));
     }
+
+    /// <summary>
+    /// The signed-in caller's id, or empty for a visitor.
+    /// </summary>
+    /// <remarks>
+    /// This endpoint is anonymous and stays anonymous; the id is read only to answer "may you
+    /// post" and to hide what this reader has blocked. Everything else it returns is the same for
+    /// everybody, which is what makes it safe to use for the signed-in page as well.
+    /// </remarks>
+    private Guid GetCurrentUserIdOrEmpty()
+        // Null-safe all the way down on purpose. This endpoint is reached with no HttpContext at
+        // all in tests, and with no ClaimsPrincipal by a visitor; both are "no reader", and a
+        // dereference here would turn an anonymous read into a 500 on the site's most public page.
+        => Guid.TryParse(
+            HttpContext?.User?.FindFirst(System.Security.Claims.ClaimTypes.NameIdentifier)?.Value,
+            out var id) ? id : Guid.Empty;
+
+    /// <summary>
+    /// The latest posts about this place.
+    /// </summary>
+    /// <remarks>
+    /// <para>Ben, 2026-09-17: a public location should be "actually public for adding files,
+    /// messages etc". These are ordinary feed posts carrying a place, which is what gives them the
+    /// media screener, the upload pause, reporting, hiding and the moderator queues for the cost of
+    /// one column.</para>
+    ///
+    /// <para><b>Read through the feed's own visibility rule</b>, not a copy of it: hidden posts and
+    /// scheduled-but-unreleased ones must disappear from here exactly as they do from the feed, and
+    /// a second predicate is how that stops being true. Blocked authors are dropped for a signed-in
+    /// reader the same way.</para>
+    ///
+    /// <para>Newest first, and only the most recent few — the place page is a summary, and "See all"
+    /// goes to the feed filtered to this place.</para>
+    /// </remarks>
+    private static async Task<IReadOnlyList<FeedPostRecord>> PostsAsync(
+        BenDataContext db, Guid placeId, Guid readerId, CancellationToken ct)
+    {
+        // Place posts are feed posts and follow the feed's switch, here as in the signed-in copy.
+        if (!await Services.SiteSettingsService.GetBoolAsync(
+                db, Services.SiteSettingKeys.FeaturePublicFeed, whenUnset: false, ct))
+        {
+            return [];
+        }
+
+        // Straight into the feed's own reader rather than a query of its own. It owns the
+        // visibility predicate, the block list and the record mapper, and a place page with its
+        // own copy of any of the three is a page that stops agreeing with the feed.
+        return await FeedController.LatestForPlaceAsync(db, placeId, readerId, PlacePostsShown, ct);
+    }
+
+    /// <summary>How many of a place's posts the page shows before "See all".</summary>
+    private const int PlacePostsShown = 20;
 
     /// <summary>
     /// The cases published at this place, by any group.
@@ -219,7 +278,11 @@ public sealed record PublicPlaceResponse(
     IReadOnlyList<PlaceEvidenceRow>? EventEvidence = null,
     /// <summary>Cases any group has published at this place (2026-09-17). Trailing and optional,
     /// so an older client simply does not draw the section.</summary>
-    IReadOnlyList<PublicPlaceCaseRow>? Cases = null);
+    IReadOnlyList<PublicPlaceCaseRow>? Cases = null,
+    /// <summary>The latest posts about this place (2026-09-17), newest first.</summary>
+    IReadOnlyList<FeedPostRecord>? Posts = null,
+    /// <summary>Whether this reader may add one. False for a visitor and at a private residence.</summary>
+    bool CanPost = false);
 
 /// <summary>
 /// One published case at a place, as a visitor sees it listed.

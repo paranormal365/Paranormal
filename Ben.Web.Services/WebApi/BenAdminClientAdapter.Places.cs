@@ -50,6 +50,13 @@ public sealed partial class BenAdminClientAdapter
     public Task<PlaceSummary?> GetPlaceSummaryAsync(Guid placeId, CancellationToken token = default)
         => _api.GetAsync<PlaceSummary>($"/api/places/{placeId}/summary", token);
 
+    public Task<LoadResult<PlaceCaseRow>> GetMyPlaceCasesAsync(
+        Guid placeId, CancellationToken token = default)
+        => _api.GetListAsync<PlaceCaseRow>($"/api/places/{placeId}/my-cases", token);
+
+    public Task<PlacePostsRecord?> GetPlacePostsAsync(Guid placeId, CancellationToken token = default)
+        => _api.GetAsync<PlacePostsRecord>($"/api/places/{placeId}/posts", token);
+
     public Task<LoadResult<PlaceCandidate>> FindPlaceCandidatesAsync(
         string? street, string? city, string? state, string? zip, string? name,
         decimal? latitude, decimal? longitude, CancellationToken token = default)

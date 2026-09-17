@@ -5,6 +5,11 @@
 @inject IBenUserState UserState
 @using Ben.Web.Services.WebApi
 @using Ben.Web.Website.Library.Kit
+@* The feed's own composer and card, reused rather than forked (2026-09-17). Without this using,
+   Razor does not recognise <FeedComposer> as a component and emits it as a literal HTML element —
+   no error, no warning, just an empty <feedcomposer> tag in the page. Which is exactly what
+   happened, and what cost an hour of looking at the server. *@
+@using Ben.Web.Website.Library.Feed
 
 @*
    A place, and the history of what has happened there.
@@ -180,6 +185,88 @@
             else
             {
                 @SignedInTable(shared, showVisibility: false)
+            }
+        }
+
+        @* ── Your own groups' cases here ──────────────────────────────────── *@
+        @* The question a member actually arrives with: do we already have a case here? The public
+           list below cannot answer it, because the answer is usually a case nobody published and
+           never will. Scoped to the reader's own groups — another group's unpublished case is
+           their business, and having one is itself something they have not shared. *@
+        @if (_myCases is { Count: > 0 })
+        {
+            <h6 class="fw-semibold mt-4">Your groups' cases here</h6>
+            <div class="table-responsive">
+                <table class="table table-sm align-middle mb-0" data-testid="place-my-cases">
+                    <thead><tr><th>Opened</th><th>Case</th><th>Group</th><th>Status</th></tr></thead>
+                    <tbody>
+                        @foreach (var row in _myCases)
+                        {
+                            <tr>
+                                <td class="text-nowrap">@row.DateCaseOpened.ToDisplayDate()</td>
+                                <td>
+                                    <a href="@($"/organizations/{row.OrganizationId}/cases/{row.Id}")">
+                                        @row.CaseReference — @row.Title
+                                    </a>
+                                </td>
+                                <td>@row.OrganizationName</td>
+                                <td class="text-nowrap">
+                                    <span class="badge @row.Status.BadgeClass()">@row.Status.Label()</span>
+                                    @if (row.IsPublished)
+                                    {
+                                        <span class="badge text-bg-info ms-1 fw-normal">Published</span>
+                                    }
+                                </td>
+                            </tr>
+                        }
+                    </tbody>
+                </table>
+            </div>
+        }
+
+        @* ── Posts about this place ───────────────────────────────────────── *@
+        @* Ben, 2026-09-17: a public location should be "actually public for adding files,
+           messages etc". These are ordinary feed posts carrying this place, which is what gives
+           them the screener, the upload pause after repeated refusals, reporting, hiding and the
+           moderator queues — and the phone app reads them already. The composer is offered to
+           anybody signed in, wider than the feed's front page on purpose: this record is the free
+           lane's whole point and somebody with no group is exactly who fills it. *@
+        @if (_canPost || _posts is { Count: > 0 })
+        {
+            <h6 class="fw-semibold mt-4">Posts about this place</h6>
+
+            @if (_canPost)
+            {
+                <div class="mb-3" data-testid="place-composer">
+                    <FeedComposer AboutPlaceId="@PlaceId"
+                                  Placeholder="@($"What did you find at {Title}?")"
+                                  OnPosted="OnPlacePosted" />
+                </div>
+            }
+
+            @if (_posts is { Count: > 0 })
+            {
+                <div class="d-flex flex-column gap-3" data-testid="place-posts">
+                    @foreach (var post in _posts)
+                    {
+                        <FeedPostCard Post="@post" />
+                    }
+                </div>
+
+                @* Only when there may be more than the page shows, so the link never promises a
+                   page identical to the one already being read. *@
+                @if (_posts.Count >= PlacePostsShown)
+                {
+                    <p class="mt-2 mb-0">
+                        <a href="@($"/feed/places/{PlaceId}")">See all posts about this place</a>
+                    </p>
+                }
+            }
+            else if (_canPost)
+            {
+                <p class="text-secondary small fst-italic" data-testid="place-posts-empty">
+                    Nothing posted about this place yet. Yours would be the first.
+                </p>
             }
         }
 
@@ -447,6 +534,27 @@
     private LoadResult<PlaceInvestigationRow> _rowsResult;
     private List<PublicPlaceInvestigationRow>? _publicRows;
     private List<Ben.Web.Services.PublicPlaceCaseRow>? _cases;
+    private List<Ben.Web.Services.PlaceCaseRow>? _myCases;
+    private List<Ben.Service.Models.Feed.FeedPostRecord>? _posts;
+    private bool _canPost;
+
+    /// <summary>Matches the server's own page size, so "See all" appears only when it might add.</summary>
+    private const int PlacePostsShown = 20;
+
+    /// <summary>
+    /// A new post goes straight to the top of the list rather than through a reload.
+    /// </summary>
+    /// <remarks>
+    /// The server would answer with it anyway, but a reload throws away everything else on the
+    /// page — the archive, the tables — to redraw one card, and on a slow connection the post
+    /// somebody just wrote appears to have vanished while that happens.
+    /// </remarks>
+    private void OnPlacePosted(Ben.Service.Models.Feed.FeedPostRecord post)
+    {
+        _posts ??= [];
+        _posts.Insert(0, post);
+        StateHasChanged();
+    }
     private List<InvestigationMapPin> _pins = [];
     private bool _loading = true;
 
@@ -508,6 +616,26 @@
         // For the rooms link. A failure here costs a link, not the page, so it is not reported —
         // the rest of this view is about the place itself and stands without it.
         _myOrgs = (await AdminClient.GetMyMembershipOrganizationsAsync()).Items;
+
+        // Quiet on failure: the section simply does not appear, which is the same as having no
+        // case here — and is a great deal better than losing the rest of the page over it.
+        try { _myCases = (await AdminClient.GetMyPlaceCasesAsync(PlaceId)).Items.ToList(); }
+        catch { _myCases = null; }
+
+        // Asked AS SOMEBODY, unlike the archive below. The anonymous place endpoint carries the
+        // posts as well, and the website calls it without a token on purpose — so it can only ever
+        // answer "no" to whether this reader may post. Both endpoints read the posts through the
+        // feed's own method, so the two lists cannot disagree about what is visible.
+        try
+        {
+            if (await AdminClient.GetPlacePostsAsync(PlaceId) is { } mine)
+            {
+                _posts = mine.Posts.ToList();
+                _canPost = mine.CanPost;
+            }
+        }
+        catch { /* the section falls back to what the anonymous read gave it */ }
+
         await LoadArchiveAsync();
         BuildPins(_rows.Select(r => (r.Id, r.Title)));
     }
@@ -523,6 +651,8 @@
         _sessions = response.Sessions?.ToList();
         _evidence = response.EventEvidence?.ToList();
         _cases = response.Cases?.ToList();
+        _posts = response.Posts?.ToList();
+        _canPost = response.CanPost;
         BuildPins(_publicRows.Select(r => (r.Id, r.Title)));
     }
 
@@ -540,6 +670,12 @@
         _sessions = response?.Sessions?.ToList();
         _evidence = response?.EventEvidence?.ToList();
         _cases = response?.Cases?.ToList();
+
+        // NOT the posts, and not CanPost. This call is anonymous on purpose, so its answer to
+        // "may you post" is always no — and a signed-in reader has already asked that properly
+        // through GetPlacePostsAsync. Taking them from here as well would overwrite the real
+        // answer with the anonymous one, which is precisely what it did on the first run: the
+        // composer never appeared for anybody.
     }
 
     /// <summary>

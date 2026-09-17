@@ -71,6 +71,26 @@ to their page, and a **Group verified** badge — the group vouching that the fo
 says. **Moderator reviewed** appears when a site moderator personally cleared the video. Both
 badges lift a post's standing in **For You**.
 
+## Posting about a place
+
+A public location's own page has the same box on it, under **Posts about this place**. What you
+write there is an ordinary post that also belongs to that place: it appears on the place's page, on
+the feed, and anywhere else the post is read, with **at {the place}** under it linking back.
+
+Two things are different about that box, both on purpose:
+
+- **Anybody signed in may use it.** Posting on the feed's front page is for people who belong here —
+  members of a group, and clients whose case is being worked — because a voice in the site's
+  conversation is what belonging buys. A public location's record is the opposite errand. It is a
+  shared account of somewhere anyone can visit, and the visitor who went on the evening tour and
+  photographed something is exactly who it is for.
+- **Private residences have no box at all.** Publishing what happens inside somebody's home is
+  theirs to agree to, and there is no way to ask them yet. So a home's page takes no posts.
+
+Everything else is the same as any other post: photos and videos go through the same check, reports
+and hiding work the same way, and replies belong to the thread rather than to the place. **See all
+posts about this place** opens the whole list at its own address, which is shareable.
+
 ## The tools under the box
 
 ![The composer's row of tools, with the poll open](/help/media/the-feed/composer-tools.png)

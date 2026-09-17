@@ -20,7 +20,7 @@ namespace Ben.Data.WebApi.Controllers.Admin;
 /// not to make. Without a merge the only cure is a database console.</para>
 ///
 /// <para><b>It moves everything, then deletes.</b> Investigations, cases, calendar events, hosted
-/// events, field sessions and rooms all point at places; leaving any behind would orphan somebody's
+/// events, field sessions, rooms and posts about the place all point at places; leaving any behind would orphan somebody's
 /// work at a record nothing links to any more. The delete is the last statement, in the same
 /// transaction, so a failure half way leaves both places intact rather than one gutted.</para>
 ///
@@ -163,7 +163,9 @@ public sealed class AdminPlaceMergeController : BenControllerBase
     /// </summary>
     public sealed record MergeResult(
         Guid SurvivingPlaceId, int Investigations, int Cases, int CalendarEvents,
-        int FieldSessions, int Rooms, int HostedEvents);
+        int FieldSessions, int Rooms, int HostedEvents,
+        /// <summary>Posts about the place, moved with it (2026-09-17). Trailing and defaulted.</summary>
+        int Posts = 0);
 
     /// <summary>Moves everything from one place onto another and deletes the empty one.</summary>
     [HttpPost("{id:guid}/merge")]
@@ -192,6 +194,13 @@ public sealed class AdminPlaceMergeController : BenControllerBase
         var cases = await RepointAsync(db.Cases.Where(x => x.PlaceId == id),
             x => x.PlaceId = request.IntoPlaceId, ct);
         var events = await RepointAsync(db.OrgCalendarEvents.Where(x => x.PlaceId == id),
+            x => x.PlaceId = request.IntoPlaceId, ct);
+        // Posts ABOUT the place (2026-09-17). The foreign key is SetNull, so without this line a
+        // merge would not fail — it would quietly strip the place off every post about it, which
+        // is worse: the posts survive with their text and lose the one thing that put them on a
+        // page. Repointed here so they follow the record that is kept.
+        var posts = await RepointAsync(
+            db.OrgMessages.Where(x => x.PlaceId == id),
             x => x.PlaceId = request.IntoPlaceId, ct);
 
         // Hosted events (item 235) point at their venue with a NoAction key, so until this line
@@ -260,10 +269,11 @@ public sealed class AdminPlaceMergeController : BenControllerBase
 
         _log.LogInformation(
             "Place {Losing} merged into {Surviving}: {Investigations} investigations, {Cases} cases, "
-          + "{Events} events, {HostedEvents} hosted events, {Sessions} sessions, {Rooms} rooms moved.",
-            id, request.IntoPlaceId, investigations, cases, events, hostedEvents, sessions, rooms);
+          + "{Events} events, {HostedEvents} hosted events, {Sessions} sessions, {Rooms} rooms, "
+          + "{Posts} posts moved.",
+            id, request.IntoPlaceId, investigations, cases, events, hostedEvents, sessions, rooms, posts);
 
         return Ok(new MergeResult(
-            request.IntoPlaceId, investigations, cases, events, sessions, rooms, hostedEvents));
+            request.IntoPlaceId, investigations, cases, events, sessions, rooms, hostedEvents, posts));
     }
 }

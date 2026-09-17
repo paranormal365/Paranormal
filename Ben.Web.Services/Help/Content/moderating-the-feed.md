@@ -88,6 +88,19 @@ Those judgments are worth the click even when nothing is wrong: every one become
 example the site's classifier learns from, and the classifier is only ever as good as the record
 of what people who looked actually decided.
 
+## Posts about a place
+
+A post written on a public location's page is an ordinary feed post that also names that place, so
+everything on this page applies to it unchanged: it appears in the same queues, its photo goes
+through the same check, reports reach you the same way, and hiding it removes it from the place's
+page as well as from the feed. There is no separate place-moderation screen, and there is
+deliberately nothing to learn.
+
+One thing worth knowing: **anybody signed in may post about a public location**, which is wider than
+the feed's front page. That is the free lane working as intended — a shared record of somewhere
+anyone can visit is filled by visitors — but it does mean a place's page is the likeliest first stop
+for somebody with no group and no history. Private residences take no posts at all.
+
 ## Hidden, not deleted
 
 A hidden post is still there. Nothing is destroyed: its replies, its reports and the record of who

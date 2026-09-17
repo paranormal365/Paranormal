@@ -130,7 +130,8 @@ nothing: a server that skipped a release needs the older entries too.
    and the API alone would deploy cleanly and change nothing anybody can see. Check it afterwards:
    `/editors/canvas/` answers 200, and a board's card menu offers **Make a map** on a card with an
    address in it.
-2. **No migration.** The one new database row is a file type, and `UploadFileTypeSeeder` adds it on
+2. **No migration for the research board** (there is one for place posts — see 6). The one new
+   database row here is a file type, and `UploadFileTypeSeeder` adds it on
    startup as it does the others; running it again changes nothing. After deploying, Site
    Administration → File Types should list **Research** beside Case Evidence and Board Snapshot.
 3. **The API server needs to reach Apple's Maps API**, which it already does for every map on the
@@ -142,7 +143,16 @@ nothing: a server that skipped a release needs the older entries too.
    cards need too. Without them a card falls back to the site and address, which is what it did
    before — nothing breaks, the pictures are just missing.
 5. Nothing to turn on. Everything here is part of the research board, which is already on.
-6. **The API and the website both matter for a case's evidence, and for different reasons.** The API
+6. **One migration, and it must be applied before the website is deployed**: `PlacePosts` adds a
+   nullable `PlaceId` to `OrgMessages` with an index and a SetNull foreign key to `Places`. One
+   `AddColumn`, so SQL Server applies it in place with no table rebuild and no downtime.
+   `dotnet ef database update` applies it along with anything older. Deploy the API and the website
+   together afterwards: the website asks a place's page for its posts, and an older API simply
+   answers without them, which shows as a place with no posts rather than an error. Check it
+   afterwards: a public place's page offers a box under **Posts about this place** to anybody signed
+   in, and a private residence's page offers none. Nothing to turn on — place posts follow the
+   existing public-feed switch, so they appear only where the feed already does.
+7. **The API and the website both matter for a case's evidence, and for different reasons.** The API
    now answers a byte range for video, audio and images, which is what lets a recording play in the
    page at all — Safari refuses a `<video>` that cannot be seeked, and Ben's upload showed a black
    rectangle with dead controls until this. The website carries the new upload path: the browser

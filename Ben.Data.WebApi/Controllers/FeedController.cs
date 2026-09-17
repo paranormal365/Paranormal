@@ -106,7 +106,8 @@ public sealed class FeedController : BenControllerBase
     [AllowAnonymous]
     public async Task<ActionResult<FeedPageRecord>> GetFeed(
         [FromQuery] string? mode, [FromQuery] string? hashtag, [FromQuery] string? cursor,
-        CancellationToken ct, [FromQuery] Guid? author = null, [FromQuery] Guid? type = null)
+        CancellationToken ct, [FromQuery] Guid? author = null, [FromQuery] Guid? type = null,
+        [FromQuery] Guid? place = null)
     {
         // Guid.Empty for a visitor: they follow nobody and wrote nothing, so every per-reader flag
         // resolves false through the same queries a signed-in reader uses.
@@ -143,6 +144,14 @@ public sealed class FeedController : BenControllerBase
         if (type is { } experienceTypeId)
         {
             query = query.Where(m => m.FeedExperienceTypeId == experienceTypeId);
+        }
+
+        // One place's posts (2026-09-17) — the place page's section, and /feed/places/{id}.
+        // Combines like the type and the hashtag do. An unknown id is an empty page rather than an
+        // error: a place can be merged away after somebody shares the link.
+        if (place is { } aboutPlaceId)
+        {
+            query = query.Where(m => m.PlaceId == aboutPlaceId);
         }
 
         // Top-level only. Replies are read with the post they answer.
@@ -251,9 +260,30 @@ public sealed class FeedController : BenControllerBase
         await using var db = await _db.CreateDbContextAsync(ct);
         if (!await FeedEnabledAsync(db, ct)) return NotFound();
 
-        // Item 186 F2: anyone reads, people who belong here write.
-        if (await FeedParticipation.RefusalAsync(db, userId, ct) is { } refusal)
+        // ── Who may write (item 186 F2, widened for places 2026-09-17) ───────
+        // A post ABOUT a public place asks a different question from a post on the feed's front
+        // page: the front page is the site's conversation and having a voice in it is what
+        // belonging buys, while a public location's record is the free lane's whole purpose and the
+        // person with no group is exactly who fills it. A reply is judged by the thread it joins,
+        // so it takes its parent's place first, below.
+        var aboutPlaceId = request.PlaceId;
+        if (request.ParentMessageId is { } inheritFrom)
+        {
+            aboutPlaceId = await db.OrgMessages.AsNoTracking()
+                .Where(m => m.Id == inheritFrom)
+                .Select(m => m.PlaceId)
+                .FirstOrDefaultAsync(ct);
+        }
+
+        if (aboutPlaceId is not null)
+        {
+            if (FeedParticipation.PlaceRefusal(userId) is { } placeRefusal)
+                return BadRequest(placeRefusal);
+        }
+        else if (await FeedParticipation.RefusalAsync(db, userId, ct) is { } refusal)
+        {
             return BadRequest(refusal);
+        }
 
         var body = request.Body?.Trim();
         if (string.IsNullOrWhiteSpace(body)) return BadRequest("A post needs something in it.");
@@ -275,6 +305,27 @@ public sealed class FeedController : BenControllerBase
             var typeOk = await db.ExperienceTypes.AsNoTracking()
                 .AnyAsync(t => t.Id == chosenTypeId && t.IsActive && t.IsApproved, ct);
             if (!typeOk) return BadRequest("That category isn't available. Pick another, or none.");
+        }
+
+        // ── The place this post is about (2026-09-17) ────────────────────────
+        // Checked here rather than trusted: the id arrives from a browser, and the two things that
+        // matter about it are whether it exists and whether it is somebody's home. A residence is
+        // refused outright — publishing what happens inside one is theirs to agree to and there is
+        // no mechanism for asking, the same reason an investigation there cannot be made public.
+        //
+        // A reply's place is inherited above and is therefore already known-good, so it is not
+        // re-checked; re-checking would refuse a reply on a thread whose place has since been
+        // merged away, which punishes the wrong person.
+        if (request.PlaceId is { } aboutPlace && request.ParentMessageId is null)
+        {
+            var kind = await db.Places.AsNoTracking()
+                .Where(x => x.Id == aboutPlace)
+                .Select(x => (PlaceKind?)x.Kind)
+                .FirstOrDefaultAsync(ct);
+
+            if (kind is null) return NotFound("That place is no longer there.");
+            if (kind != PlaceKind.PublicLocation)
+                return BadRequest("Posts about somebody's home aren't shared here.");
         }
 
         // ── Case lineage (item 186 F7): the editor's "Post to the feed" ──────
@@ -334,6 +385,9 @@ public sealed class FeedController : BenControllerBase
             PostedLongitude = request.PostedLongitude,
             PostedPlaceName = string.IsNullOrWhiteSpace(request.PostedPlaceName)
                 ? null : request.PostedPlaceName.Trim(),
+            // The place it is ABOUT, which for a reply is the thread's rather than anything the
+            // caller sent.
+            PlaceId = aboutPlaceId,
             AttributedOrganizationId = lineageOrgId,
             AttributionState = OrgAttributionState.Unclaimed,
             // A scheduled post is dated the hour it goes up, not the hour it was typed. The feed
@@ -1038,6 +1092,33 @@ public sealed class FeedController : BenControllerBase
     /// One batch of queries for the whole page rather than a few per post — the N+1 this shape
     /// exists to avoid is the one that makes a feed slow exactly as it becomes worth reading.
     /// </remarks>
+    /// <summary>
+    /// The latest posts about one place, for the place's own page.
+    /// </summary>
+    /// <remarks>
+    /// <para>Lives here, on the controller that owns the feed's reading rules, so the place page
+    /// gets the real ones: <see cref="VisibleOrMineAwaiting"/> (hidden posts gone, an unreleased
+    /// scheduled post visible only to its author), <see cref="ExceptBlockedBy"/>, and the same
+    /// record mapper. A page with its own copy of any of those is a page that quietly stops
+    /// agreeing with the feed about who may see what.</para>
+    ///
+    /// <para>Top-level posts only. A reply is read with the post it answers, as in the feed.</para>
+    /// </remarks>
+    internal static async Task<IReadOnlyList<FeedPostRecord>> LatestForPlaceAsync(
+        BenDataContext db, Guid placeId, Guid readerId, int take, CancellationToken ct)
+    {
+        // The feed switch is NOT re-asked here. The place page decides whether to draw the section
+        // at all, and the alternative — this returning empty when the feed is off — would look
+        // like "nobody has posted" rather than "the feed is not on".
+        var posts = await ExceptBlockedBy(VisibleOrMineAwaiting(db, readerId), db, readerId)
+            .Where(m => m.PlaceId == placeId && m.ParentMessageId == null)
+            .OrderByDescending(m => m.DateCreated).ThenByDescending(m => m.Id)
+            .Take(take)
+            .ToListAsync(ct);
+
+        return await ToRecordsAsync(db, posts, readerId, ct);
+    }
+
     private static async Task<IReadOnlyList<FeedPostRecord>> ToRecordsAsync(
         BenDataContext db, IReadOnlyList<OrgMessage> posts, Guid readerId, CancellationToken ct)
     {
@@ -1166,6 +1247,26 @@ public sealed class FeedController : BenControllerBase
                 .Select(o => new { o.Id, o.Name, o.UrlName })
                 .ToDictionaryAsync(o => o.Id, o => (o.Name, o.UrlName), ct);
 
+        // Names for the places posts are about, in one lookup and resolved at read so a rename
+        // shows everywhere at once. A place with no name — an ordinary address somebody recorded —
+        // falls back to its town, because "at (unnamed)" tells a reader nothing.
+        var aboutPlaceIds = posts.Where(p => p.PlaceId is not null)
+                                 .Select(p => p.PlaceId!.Value)
+                                 .Distinct()
+                                 .ToList();
+        var aboutPlaceNames = aboutPlaceIds.Count == 0
+            ? []
+            : await db.Places.AsNoTracking()
+                .Where(x => aboutPlaceIds.Contains(x.Id))
+                .Select(x => new { x.Id, x.Name, x.City, x.State })
+                .ToDictionaryAsync(
+                    x => x.Id,
+                    x => string.IsNullOrWhiteSpace(x.Name)
+                        ? string.Join(", ", new[] { x.City, x.State }
+                            .Where(part => !string.IsNullOrWhiteSpace(part)))
+                        : x.Name!,
+                    ct);
+
         // Polls, for the handful of posts that carry one. Counted per page like the likes and the
         // replies: a per-row query is the N+1 that makes a feed slow exactly as it gets popular.
         var postIds = posts.Select(p => p.Id).ToList();
@@ -1235,6 +1336,11 @@ public sealed class FeedController : BenControllerBase
             p.PostedLatitude,
             p.PostedLongitude,
             p.PostedPlaceName,
+            p.PlaceId,
+            p.PlaceId is { } aboutPlace
+                ? aboutPlaceNames.GetValueOrDefault(aboutPlace) is { Length: > 0 } named
+                    ? named : null
+                : null,
             // AUTHOR-ONLY, and only while it is still in the future: an unreleased post is one
             // only its author can see at all, and they need to see that they scheduled it.
             readerId != Guid.Empty && p.AuthorAppUserId == readerId ? p.ScheduledForUtc : null))

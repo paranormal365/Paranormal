@@ -20,6 +20,11 @@ belongs there; this is for the part underneath.
 
 ## 2026-09-17
 
+- A feed post can name a public location it is about, and the feed can be narrowed to one. A place's
+  page returns its latest posts and says whether the reader may add one. Both the field and the
+  filter are optional additions, so an app that sends neither behaves as before; an older app shows a
+  place's posts as ordinary posts. Posting about a private residence is refused.
+- A place also answers with the caller's own groups' cases there, whatever their status.
 - A case can be created naming the shared place it concerns, either one already on file or one
   described with it, and a place's public page now also lists the cases published there. Both fields
   are optional additions, so an app that sends neither behaves exactly as before.

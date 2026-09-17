@@ -2817,6 +2817,17 @@ namespace Ben.Data.Source.Context
             modelBuilder.Entity<OrgMessage>()
                 .HasOne(e => e.Case).WithMany()
                 .HasForeignKey(e => e.CaseId).IsRequired(false).OnDelete(DeleteBehavior.NoAction);
+            // The place a post is ABOUT (2026-09-17). SetNull rather than NoAction: merging two
+            // records of one place deletes the loser, and a post about it must survive that with
+            // its text intact — the admin merge repoints these first, and this is the backstop for
+            // anything it misses. Indexed with the date because the place page reads the newest
+            // few, and filtered because almost no post has one.
+            modelBuilder.Entity<OrgMessage>()
+                .HasOne(e => e.Place).WithMany()
+                .HasForeignKey(e => e.PlaceId).IsRequired(false).OnDelete(DeleteBehavior.SetNull);
+            modelBuilder.Entity<OrgMessage>()
+                .HasIndex(e => new { e.PlaceId, e.DateCreated })
+                .HasFilter("[PlaceId] IS NOT NULL");
             modelBuilder.Entity<OrgMessage>()
                 .HasOne(e => e.CreatedByAppUser).WithMany()
                 .HasForeignKey(e => e.CreatedByAppUserId).OnDelete(DeleteBehavior.NoAction);

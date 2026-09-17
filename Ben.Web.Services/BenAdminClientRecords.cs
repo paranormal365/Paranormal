@@ -381,7 +381,27 @@ public sealed record PublicPlaceResponse(
     IReadOnlyList<PublicPlaceSessionRow>? Sessions = null,
     IReadOnlyList<PlaceEvidenceRow>? EventEvidence = null,
     /// <summary>Cases any group has published at this place (2026-09-17).</summary>
-    IReadOnlyList<PublicPlaceCaseRow>? Cases = null);
+    IReadOnlyList<PublicPlaceCaseRow>? Cases = null,
+    /// <summary>The latest posts about this place, newest first.</summary>
+    IReadOnlyList<Ben.Service.Models.Feed.FeedPostRecord>? Posts = null,
+    /// <summary>Whether this reader may add one. False for a visitor and at a private residence.</summary>
+    bool CanPost = false);
+
+/// <summary>A place's posts for a signed-in reader, and whether they may add one (2026-09-17).</summary>
+public sealed record PlacePostsRecord(
+    IReadOnlyList<Ben.Service.Models.Feed.FeedPostRecord> Posts,
+    bool CanPost);
+
+/// <summary>One of the caller's own groups' cases at a place (2026-09-17).</summary>
+public sealed record PlaceCaseRow(
+    Guid Id,
+    Guid OrganizationId,
+    string OrganizationName,
+    string CaseReference,
+    string Title,
+    Ben.Data.Common.Enums.CaseStatus Status,
+    DateTime DateCaseOpened,
+    bool IsPublished);
 
 /// <summary>One published case at a place. The title is already redacted by the server.</summary>
 public sealed record PublicPlaceCaseRow(

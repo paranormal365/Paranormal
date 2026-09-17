@@ -75,6 +75,17 @@ public sealed record FeedPostRecord(
     decimal? PostedLatitude = null,
     decimal? PostedLongitude = null,
     string? PostedPlaceName = null,
+    // ── The place this post is ABOUT (2026-09-17) ───────────────────────────
+    /// <summary>
+    /// The shared place the post is about, for one made on a place's page. Distinct from
+    /// <paramref name="PostedPlaceName"/>, which is where the author was standing.
+    /// </summary>
+    Guid? PlaceId = null,
+    /// <summary>
+    /// What that place is called, resolved at read so a rename shows everywhere at once. Falls
+    /// back to its address when the place has no name.
+    /// </summary>
+    string? AboutPlaceName = null,
     /// <summary>
     /// When it was set to appear, for a post that has not appeared yet.
     /// </summary>
@@ -153,7 +164,12 @@ public sealed record CreateFeedPostRequest(
     /// <summary>Where it was written, when the author chose to say. All three or none.</summary>
     decimal? PostedLatitude = null,
     decimal? PostedLongitude = null,
-    string? PostedPlaceName = null);
+    string? PostedPlaceName = null,
+    /// <summary>
+    /// The public location this post is about (2026-09-17). Must exist and must not be somebody's
+    /// home. A reply ignores it and takes its parent's place instead.
+    /// </summary>
+    Guid? PlaceId = null);
 
 // ── Org attribution (item 186 F7) ────────────────────────────────────────────
 

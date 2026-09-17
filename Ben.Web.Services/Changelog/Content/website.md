@@ -18,6 +18,12 @@ day-by-day account of building it would say nothing to anyone using it now.
 
 ## 2026-09-17
 
+- A public location's page now takes **posts**. Anybody signed in can add a note or a photograph
+  about somewhere anyone can visit, and it appears on the place's page and on the feed alike, with a
+  link back. Photos are checked, reported and hidden exactly as anywhere else on the feed. Somebody's
+  home takes no posts.
+- Signed in, a place also lists your own groups' cases there — published or not — so you can tell at
+  a glance whether your group already has one.
 - A case now names the place it is about. As you type the address, a place already on file that
   looks like it is offered, so your case joins the one everybody else has been working at instead of
   making a second copy of it. You say whether it is a public location or somebody's home, and the

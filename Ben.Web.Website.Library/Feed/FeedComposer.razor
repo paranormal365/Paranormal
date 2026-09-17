@@ -233,7 +233,11 @@
                 Use <code>@@name</code> to mention somebody and <code>#tag</code> to tag a post.
             </span>
 
+            @* A test hook on the one button that submits. There is more than one thing in this
+               row whose accessible name is "Post", so a test matching on the name alone can click
+               the wrong one and see nothing happen — which is exactly what it did (2026-09-17). *@
             <button type="button" class="btn btn-primary btn-sm ms-auto"
+                    data-testid="feed-composer-post"
                     disabled="@(_busy || !CanPost)" @onclick="PostAsync">
                 @(_busy ? "Posting…" : ButtonText)
             </button>
@@ -412,6 +416,16 @@
     /// <summary>Set to reply to a post rather than start one.</summary>
     [Parameter] public Guid? ParentPostId { get; set; }
 
+    /// <summary>
+    /// The public location this post is about, when the composer is on a place's page.
+    /// </summary>
+    /// <remarks>
+    /// Nothing to do with <c>_placeLatitude</c> and friends below, which are where the AUTHOR is
+    /// standing and are theirs to volunteer. This is what the post is about, and it is fixed by the
+    /// page rather than chosen in the box.
+    /// </remarks>
+    [Parameter] public Guid? AboutPlaceId { get; set; }
+
     [Parameter] public string Placeholder { get; set; } = "What did you find?";
     [Parameter] public string ButtonText { get; set; } = "Post";
 
@@ -524,7 +538,8 @@
                         : null,
                     postedLatitude: _placeLatitude,
                     postedLongitude: _placeLongitude,
-                    postedPlaceName: _placeName);
+                    postedPlaceName: _placeName,
+                    aboutPlaceId: AboutPlaceId);
             }
             catch (IOException)
             {

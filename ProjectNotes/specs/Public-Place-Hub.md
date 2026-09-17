@@ -383,7 +383,78 @@ grows its signed-in half anyway.
    place page's Published cases section shows a seeded published case; `?place=` pre-chooses.
 7. **Help.** `working-a-case.md` New Case paragraph (the kind choice, the offer). Changelog.
 
-## Phase 3 — Posts about a place
+## Phase 3 — Posts about a place — **BUILT 2026-09-17**
+
+### What shipped
+
+- Migration `PlacePosts`: `OrgMessages.PlaceId` nullable, `(PlaceId, DateCreated)` filtered index,
+  SetNull FK to `Places`. One `AddColumn`, applied to `IsHauntedDb_player`; production via the
+  runbook entry added with it.
+- `FeedParticipation.PlaceRefusal` — **signed in is enough**, beside the front page's stricter rule
+  so the difference is stated once and on purpose. D6, confirmed by Ben.
+- Write door: the place must exist and must be a `PublicLocation` (a residence is refused with a
+  sentence); a **reply inherits its parent's place** and cannot claim another; the place a reply
+  inherits is not re-validated, so a thread survives its place being merged away.
+- Read: `GET api/feed?place=`, and `FeedController.LatestForPlaceAsync` — which the place page calls
+  rather than writing a query of its own, so hidden posts, unreleased scheduled posts and the
+  reader's block list behave identically on both surfaces. `AboutPlaceName` resolved at read, with
+  the town as a fallback for a place with no name.
+- `PublicPlaceResponse` gains trailing `Posts` and `CanPost`. The place page grows the composer and
+  the cards, reusing `FeedComposer` and `FeedPostCard` rather than forking either; a new post goes
+  to the top of the list instead of reloading the page.
+- `/feed/places/{id}` for "See all", with the place's name as its heading. Promoted cards are kept
+  off it, as they are off a tag's and a type's.
+- Every feed card shows **at {place}** with a link home when the post has one — deliberately
+  distinct from "said at", which is where the author was standing.
+- `AdminPlaceMergeController` repoints posts and reports the count. This was the **quiet** failure:
+  the FK is SetNull, so without the repoint a merge would succeed and silently strip the place off
+  every post about it — the posts surviving with their text and losing the one thing that put them
+  on a page. Seen failing before being kept.
+- The Phase 2 leftover finished: `GET api/places/{id}/my-cases` and **Your groups' cases here**,
+  scoped to the caller's own memberships because another group's unpublished case at the same
+  building is their business.
+- Tests: `FeedPlacePostTests` (12 — carries the place, residence refused, unknown 404, the
+  signed-in-is-enough seam asserted in both directions at once, reply inherits, reply cannot claim
+  another, `?place=` filters, unknown filter empty, page carries posts and `CanPost`, home offers
+  nobody the box, hidden post gone, threads not replies), plus the merge repoint. Suite 6251/0.
+- Help: "Posting about a place" in the-feed, a paragraph in moderating-the-feed, two sections under
+  Place pages in working-a-case. Changelog both streams. Runbook entry for the migration.
+
+### Four things only driving it in a browser found
+
+Every one of these compiled, passed its own unit tests, and was wrong on the page.
+
+1. **The anonymous endpoint cannot answer "may you post".** The website calls
+   `api/public/places/{id}` through `GetAnonymousAsync` — deliberately, so published means published
+   and no second idea of visibility creeps in. So `CanPost` was always false and **the composer never
+   appeared for anybody.** Fixed by adding the signed-in `GET api/places/{id}/posts`, which is what
+   this page already does for investigations: two endpoints, both reading posts through
+   `FeedController.LatestForPlaceAsync`. The anonymous one now returns `CanPost: false` and says in
+   its own comment that this is structural, not an answer.
+2. **The signed-in load was being overwritten by the anonymous one.** `LoadArchiveAsync` runs after
+   it and had been given the posts too, so it clobbered the real answer with the anonymous one. It
+   now touches only the archive.
+3. **`<FeedComposer>` rendered as a literal `<feedcomposer>` HTML tag.** `Shared/PlaceView.razor`
+   had no `@using Ben.Web.Website.Library.Feed`, and Razor emits an unrecognised component as a raw
+   element with **no error and no warning**. The div was there, empty, and the page looked like a
+   data problem. Worth remembering as its own trap.
+4. **Two things in the composer's row have the accessible name "Post"**, so a test clicking by name
+   hit the wrong one and nothing happened — which read as the post being refused. The submit button
+   now carries `data-testid="feed-composer-post"`.
+
+And one real product bug the same pass found: **the box was offered when the feed was switched off**,
+because `CanPost` never asked. Clicking it would have been refused by an endpoint that 404s with the
+feed off. Both place-post reads now check `FeaturePublicFeed` first, with a test for it.
+
+### One bug this phase introduced and existing tests caught
+
+`PublicPlaceController` is anonymous and is reached with **no HttpContext at all** in eleven
+existing tests. Reading the caller's id through `User.FindFirst(...)` threw a
+`NullReferenceException`, which on the live site would have been a 500 on the most public page there
+is. Now null-safe the whole way down. Worth recording because the failure was invisible from the
+new code's own tests — every one of them supplies a context — and only the old ones found it.
+
+### As planned
 
 1. **Migration `PlacePosts`**: `OrgMessages.PlaceId uniqueidentifier NULL`, FK → `Places` (SetNull),
    index `(PlaceId, DateCreated)` filtered `PlaceId IS NOT NULL`. One `AddColumn` + one index. Apply to

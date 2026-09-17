@@ -59,6 +59,25 @@ public interface IBenPlacesClient
     Task<PlaceSummary?> GetPlaceSummaryAsync(Guid placeId, CancellationToken token = default);
 
     /// <summary>
+    /// The caller's own groups' cases at this place, whatever their status (2026-09-17).
+    /// </summary>
+    /// <remarks>
+    /// Answers the question a member arrives at a place with — do we already have a case here? —
+    /// which the public list cannot, because the answer is usually a case nobody published.
+    /// </remarks>
+    Task<LoadResult<PlaceCaseRow>> GetMyPlaceCasesAsync(Guid placeId, CancellationToken token = default);
+
+    /// <summary>
+    /// A place's posts for a signed-in reader, and whether they may add one (2026-09-17).
+    /// </summary>
+    /// <remarks>
+    /// The anonymous place endpoint carries the posts too, but it is called without a token on
+    /// purpose and so always answers "no" to whether you may post. This is the same question asked
+    /// as somebody.
+    /// </remarks>
+    Task<PlacePostsRecord?> GetPlacePostsAsync(Guid placeId, CancellationToken token = default);
+
+    /// <summary>
     /// Places that are probably the one being typed in — "did you mean this?" before a duplicate
     /// exists.
     /// </summary>
