@@ -152,15 +152,40 @@ export async function drawBoard(root, scene) {
         const colour = palette(e.colorKey) || c.edge;
         ctx.lineWidth = 2;
         ctx.strokeStyle = colour;
+        // A dashed connector is dashed in the picture too: the family tree's legend says the dashes
+        // mean siblings, and a legend that does not match the lines is worse than no legend.
+        if (e.dashed) ctx.setLineDash([8, 6]);
         ctx.stroke(new Path2D(e.path));
+        ctx.setLineDash([]);
         ctx.fillStyle = colour;
         for (const h of e.heads) {
+            // The shape travels with the points, because a head is no longer always a triangle.
+            if (h.shape === 'dot') {
+                const [cx, cy, r] = h.points;
+                ctx.beginPath();
+                ctx.arc(cx, cy, r, 0, Math.PI * 2);
+                ctx.fill();
+                continue;
+            }
             ctx.beginPath();
-            ctx.moveTo(h[0], h[1]);
-            ctx.lineTo(h[2], h[3]);
-            ctx.lineTo(h[4], h[5]);
+            ctx.moveTo(h.points[0], h.points[1]);
+            for (let i = 2; i < h.points.length; i += 2) ctx.lineTo(h.points[i], h.points[i + 1]);
             ctx.closePath();
             ctx.fill();
+        }
+        // The icon rides in the middle of the line, with the label pushed clear beneath it, exactly
+        // as the board draws it — a published picture that put them on top of each other would not be
+        // the board somebody published.
+        if (e.icon) {
+            ctx.font = `600 12px ${font}`;
+            ctx.textAlign = 'center';
+            ctx.textBaseline = 'middle';
+            ctx.lineWidth = 4;
+            ctx.strokeStyle = c.ground;
+            ctx.strokeText(e.icon, e.labelX, e.labelY);
+            ctx.fillStyle = c.text;
+            ctx.fillText(e.icon, e.labelX, e.labelY);
+            ctx.textAlign = 'start';
         }
         if (e.label) {
             ctx.font = `12px ${font}`;
@@ -168,9 +193,10 @@ export async function drawBoard(root, scene) {
             ctx.textBaseline = 'middle';
             ctx.lineWidth = 4;
             ctx.strokeStyle = c.ground;
-            ctx.strokeText(e.label, e.labelX, e.labelY);
+            const labelY = e.icon ? e.labelY + 16 : e.labelY;
+            ctx.strokeText(e.label, e.labelX, labelY);
             ctx.fillStyle = c.text;
-            ctx.fillText(e.label, e.labelX, e.labelY);
+            ctx.fillText(e.label, e.labelX, labelY);
             ctx.textAlign = 'start';
         }
     }

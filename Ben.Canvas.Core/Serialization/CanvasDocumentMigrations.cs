@@ -62,7 +62,22 @@ public static class CanvasDocumentMigrations
         var nodeIds = document.Nodes.Select(n => n.Id).ToHashSet();
         document.Edges.RemoveAll(e => !nodeIds.Contains(e.FromNodeId) || !nodeIds.Contains(e.ToNodeId));
         foreach (var edge in document.Edges)
+        {
             if (!CanvasPalette.IsValid(edge.ColorKey)) edge.ColorKey = null;
+
+            // The old single Arrow switch, resolved into the two ends once — here, on read, so that
+            // nothing downstream has to know whether a board predates M9. Null means "not chosen",
+            // which is exactly how a board written before markers existed is told apart from one that
+            // deliberately chose to draw nothing; a marker that WAS chosen is left alone.
+            edge.FromMarker ??= edge.Arrow == EdgeArrow.Both ? EdgeMarker.Arrow : EdgeMarker.None;
+            edge.ToMarker ??= edge.Arrow is EdgeArrow.End or EdgeArrow.Both ? EdgeMarker.Arrow : EdgeMarker.None;
+
+            // The icon is drawn inside the line, so it is clamped rather than allowed to run across
+            // the board. Blank reads as nothing, not as an empty box.
+            edge.Icon = string.IsNullOrWhiteSpace(edge.Icon)
+                ? null
+                : edge.Icon.Trim()[..Math.Min(CanvasEdge.MaxIconLength, edge.Icon.Trim().Length)];
+        }
 
         var maxZ = document.Nodes.Select(n => n.Z).Concat(document.Groups.Select(g => g.Z)).DefaultIfEmpty(-1).Max();
         if (document.NextZ <= maxZ) document.NextZ = maxZ + 1;

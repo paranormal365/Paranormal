@@ -61,3 +61,45 @@ public sealed class GroupFillConverter : ForgivingEnumConverter<Model.GroupFill>
 {
     protected override Model.GroupFill Fallback => Model.GroupFill.Outline;
 }
+
+/// <summary>A connector route this build does not know reads as the curve.</summary>
+public sealed class EdgeRouteConverter : ForgivingEnumConverter<Model.EdgeRoute>
+{
+    protected override Model.EdgeRoute Fallback => Model.EdgeRoute.Curve;
+}
+
+/// <summary>A connector line style this build does not know reads as solid.</summary>
+public sealed class EdgeLineConverter : ForgivingEnumConverter<Model.EdgeLine>
+{
+    protected override Model.EdgeLine Fallback => Model.EdgeLine.Solid;
+}
+
+/// <summary>
+/// A connector end marker, where <c>null</c> is a real answer meaning "not chosen yet".
+/// </summary>
+/// <remarks>
+/// The nullable form cannot share <see cref="ForgivingEnumConverter{T}"/>, which is for the value
+/// itself. Null stays null — that is how a board written before markers existed is told apart from one
+/// that deliberately chose no marker — and an unknown name reads as None.
+/// </remarks>
+public sealed class NullableEdgeMarkerConverter : System.Text.Json.Serialization.JsonConverter<Model.EdgeMarker?>
+{
+    public override Model.EdgeMarker? Read(
+        ref System.Text.Json.Utf8JsonReader reader, Type typeToConvert, System.Text.Json.JsonSerializerOptions options)
+    {
+        if (reader.TokenType is System.Text.Json.JsonTokenType.Null) return null;
+        if (reader.TokenType != System.Text.Json.JsonTokenType.String) return Model.EdgeMarker.None;
+
+        return Enum.TryParse<Model.EdgeMarker>(reader.GetString(), ignoreCase: true, out var value)
+               && Enum.IsDefined(value)
+            ? value
+            : Model.EdgeMarker.None;
+    }
+
+    public override void Write(
+        System.Text.Json.Utf8JsonWriter writer, Model.EdgeMarker? value, System.Text.Json.JsonSerializerOptions options)
+    {
+        if (value is null) writer.WriteNullValue();
+        else writer.WriteStringValue(value.Value.ToString());
+    }
+}

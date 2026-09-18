@@ -71,3 +71,24 @@
 
 .bc-edge:focus { outline: none; }
 .bc-edge:focus-visible .bc-edge__focus { display: inline; }
+
+/* A dashed connector. The dash rides on the visible line only — the hit path stays solid, or the
+   gaps would be unclickable and a dashed line would be harder to select than a solid one. */
+.bc-edge--dashed .bc-edge__line { stroke-dasharray: 8 6; }
+
+/* A diamond and a dot are filled like the arrow; they differ only in shape. Named classes rather
+   than inline fills so a theme can tell them apart later without touching the geometry. */
+.bc-edge__head--diamond,
+.bc-edge__head--dot { fill: var(--bc-edge-stroke); }
+
+/* The word at the middle of the line, with a halo so it reads over whatever it crosses. */
+.bc-edge__icon {
+    font-size: .75rem;
+    font-weight: 600;
+    fill: var(--bc-text);
+    paint-order: stroke;
+    stroke: var(--bc-surface-1);
+    stroke-width: 4px;
+    stroke-linejoin: round;
+    pointer-events: none;
+}

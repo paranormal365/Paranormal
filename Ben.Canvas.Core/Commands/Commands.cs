@@ -186,13 +186,29 @@ internal sealed class RemoveEdgeCommand(CanvasDocument document, CanvasEdge edge
 }
 
 /// <summary>The editable parts of a connector, captured whole so undo restores every one.</summary>
-internal readonly record struct EdgeSnapshot(CanvasSide? FromSide, CanvasSide? ToSide, string? Label, EdgeArrow Arrow, string? ColorKey)
+/// <summary>
+/// Everything about a connector that an edit can change, for the undo stack and for the
+/// did-anything-actually-change test.
+/// </summary>
+/// <remarks>
+/// EVERY editable field has to be here. The list is hand-written, and a field missing from it fails
+/// twice over: <c>CanvasStore.UpdateEdge</c> compares before against after and rejects the edit as a
+/// no-op, so the change never happens at all — and were it to happen, undo would not take it back.
+/// That is exactly how M9's route, line, markers and icon first behaved: every select in the
+/// properties panel did nothing, silently.
+/// </remarks>
+internal readonly record struct EdgeSnapshot(
+    CanvasSide? FromSide, CanvasSide? ToSide, string? Label, EdgeArrow Arrow, string? ColorKey,
+    EdgeMarker? FromMarker, EdgeMarker? ToMarker, EdgeLine Line, EdgeRoute Route, string? Icon)
 {
-    public static EdgeSnapshot Of(CanvasEdge e) => new(e.FromSide, e.ToSide, e.Label, e.Arrow, e.ColorKey);
+    public static EdgeSnapshot Of(CanvasEdge e) => new(
+        e.FromSide, e.ToSide, e.Label, e.Arrow, e.ColorKey,
+        e.FromMarker, e.ToMarker, e.Line, e.Route, e.Icon);
 
     public void ApplyTo(CanvasEdge e)
     {
         e.FromSide = FromSide; e.ToSide = ToSide; e.Label = Label; e.Arrow = Arrow; e.ColorKey = ColorKey;
+        e.FromMarker = FromMarker; e.ToMarker = ToMarker; e.Line = Line; e.Route = Route; e.Icon = Icon;
     }
 }
 
