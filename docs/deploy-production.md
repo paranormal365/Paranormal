@@ -165,11 +165,22 @@ nothing: a server that skipped a release needs the older entries too.
 8. **The audit fixes are code-only, and one of them is why this release should not wait.** No
    migration and no setting: `.\scripts\deploy-ishaunted.ps1 -Apps webapi,website`.
 
-   The reason to deploy promptly is that a place's page currently serves a **private residence's
-   street address, postcode and exact map pin to anybody holding the URL**, and the same projection
-   with no scoping to any signed-in account. That is live on production now. Deploying the API
-   alone fixes it — the withholding is entirely server-side — so if the website deploy has to wait
-   for any reason, deploy the API anyway.
+   The reason to deploy promptly is that a place's page serves a **private residence's street
+   address, postcode and exact map pin to anybody holding the URL**, and the same projection with
+   no scoping to any signed-in account. Deploying the API alone fixes it — the withholding is
+   entirely server-side — so if the website deploy has to wait for any reason, deploy the API
+   anyway.
+
+   **Nobody's home is exposed today, and this was checked rather than assumed** (added 2026-09-17,
+   correcting an earlier "that is live on production now" in this entry). All six places on the
+   live database are `PublicLocation`; there is not one `PrivateResidence` row, so the leaking
+   projection has nothing to leak. Deploy before that changes — the first person to add their own
+   house is the one exposed, and they will have no way of knowing. That is a reason to go now, and
+   a better one than a breach that is not happening:
+
+   ```sql
+   SELECT Kind, COUNT(*) FROM Places GROUP BY Kind;   -- Kind 1 = PrivateResidence, 2 = PublicLocation
+   ```
 
    Deploy both together for everything else, because several fixes are a new page or a new button
    against an endpoint that already exists:
