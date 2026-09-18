@@ -1840,7 +1840,7 @@
     private OverlayPlacement NewOverlayPlacement() =>
         OverlayPlacement.AtPlayhead(Playback.State.TimelineTime, Clips.TotalDuration);
 
-    private void AddTextOverlay()
+    private async Task AddTextOverlay()
     {
         var placement = NewOverlayPlacement();
         var overlay   = new TextOverlay
@@ -1851,9 +1851,12 @@
             Duration         = placement.Duration,
         };
         Clips.AddTextOverlay(overlay);
+
+        // Selected the moment it exists — see AddCalloutClip for why.
+        await SelectItem(overlay);
     }
 
-    private void AddCalloutClip()
+    private async Task AddCalloutClip()
     {
         // TimelineTime, not CurrentTime: in clip preview the media clock counts from the selected
         // clip's own start, so a callout added there landed earlier than the playhead by exactly
@@ -1867,6 +1870,16 @@
             Duration         = placement.Duration,
         };
         Clips.AddCallout(clip);
+
+        // And selected, so the properties panel is already showing the thing just made.
+        //
+        // It used to be added and left alone: the panel went on saying "Select a clip on the
+        // timeline to edit its properties" while the new callout sat unselected somewhere on the
+        // timeline, and the arrow — the whole point of a callout, and the way somebody points at
+        // the evidence in their footage — had to be hunted down and clicked before it could be
+        // aimed. Creating a thing and selecting it is one action to a person, not two.
+        // Found by pressing the button, 2026-09-18.
+        await SelectItem(clip);
     }
 
  // --- Drag-and-drop reorder ---
