@@ -534,6 +534,17 @@ until you use it. Everything is undoable, exports and imports, publishes to the 
   first edit." So a template is a pure function `Guid? caseId → CanvasDocument` in `Ben.Canvas.Core`,
   loaded by `New(caseId, template)`. The seeder already proves the shape (`SeededBoardTests` reads its
   board with the real reader). No API change, no migration.
+- *Every person in the family tree gets an empty picture frame.* Ben, mid-build 2026-09-18: *"include a
+  place to put a photo of the person - if they want to do that or even just using a male and female icon.
+  It should be up to the end user."* So a person is a PAIR — an Image block above a name note — and the
+  frame ships **empty**, which is a finished state rather than a gap: the image block already draws "No
+  picture yet. Paste or drop one here." A photo, a drawn icon, or nothing at all are all equally done,
+  which is the choice Ben asked to leave open, and a stock silhouette would have quietly made it for him.
+  `Fit` is `Cover` so whatever arrives fills the frame at everyone else's size instead of each portrait
+  being as tall as its own file. The connectors join the **names**, never the frames: a line into a photo
+  would move the moment somebody decided to go without one. There is no gendered symbol in the sprite and
+  none is added — the frame takes any picture, which covers the icon case without the site having an
+  opinion about it.
 - *The seam is the fragment.* The Research tab's New board already hands off `#handoff=&case=&org=`;
   it gains `template=<id>`, `CanvasHandoff.Parse` gains the arm, `Editor.razor` threads it to a
   `CanvasEditor.TemplateId` parameter, and `RestoreAsync` honours it **before** restoring the device
@@ -568,7 +579,7 @@ if it can be pasted. Every one of those is enforced by a test that already exist
 | M9-08 | `BoardData` (`DocumentId`, `Title`, optional `NodeId`, `NodeTitle`), `BoardNode` (icon `book-open`, board title, "→ card title" when a card is named, Open **button**; "no longer published" state), `CaseBoardPicker` (copy of `CaseFilePicker` over `server.ListAsync(caseId)` filtered to **published**; second step lists the published copy's blocks by `Words()` title, "the whole board" first; a one-line note at the top — *Only published boards can be linked. A board you are still working on appears here once it is published.* — in `CanvasCopy`, and an empty state that says the same when the case has none), action `case-boards`, rail button "Add from the case's boards" | Core/Model, Editor/Nodes, Chrome, Text |
 | M9-08b | Server invariant: `Publish` refuses a document whose `board` cards name an unpublished target (same `nodes[].data.kind` walk `SanitizeDocument` already does) and names it; `Delete` answers how many published boards link to the board, the website's confirm shows it, then deletes; the editor greys Publish and says why before the round trip | WebApi `CanvasDocumentController`, website confirm |
 | M9-09 | `BoardTrail` (view state: stack of `(serverId, title)`), Open = save, then open the target's **published copy**, push; a named card that still exists is selected and fitted to; a named card that is gone opens the board at fit-to-content, selects nothing, and toasts once; header **Back to <title>** beside `BackContent`, pop; trail cleared on case change; a 404 toasts and leaves the trail alone | Editor/Services, Chrome |
-| M9-10 | `BoardTemplates` in Core: `Blank`, `Moodboard`, `ResearchPlan`, `FamilyTree`, `Deck`; each a pure builder; every template validates, fits `MaxNodes`, and uses only palette tokens | Core/Templates (new) |
+| M9-10 | `BoardTemplates` in Core: `blank`, `moodboard`, `research-plan`, `family-tree`, `deck`; each a pure builder over a `BoardBuilder` that floors sizes at the registry's minimums, refuses anything but a palette key, and leaves `NextZ` ahead of the board; the family tree gives every person an EMPTY picture frame above their name | Core/Templates (new) |
 | M9-11 | `CanvasDocumentStore.New(caseId, template)`; `CanvasEditor.TemplateId`; `CanvasHandoff` `template` arm; `Editor.razor`; `RestoreAsync` ordering | Editor/Services, Wasm host, Lifecycle |
 | M9-12 | Research tab: New board becomes a choice of template (names and one line each), fragment carries `template=` | Website `CaseResearchBoards.razor` |
 | M9-13 | Help: Research section gains tables, shapes, fills, panels, connector styles, board links, templates; three pictures and a GIF; What's New; service changelog; product and persona PDFs | Help, Changelog, docs |
@@ -619,9 +630,15 @@ if it can be pasted. Every one of those is enforced by a test that already exist
 | M9-08 | the picker naming blocks differently from the picture | The_picker_lists_the_published_copys_blocks_by_their_snapshot_title |
 | M9-09 | Back after opening returns to the wrong board | Opening_a_board_card_pushes_and_back_pops |
 | M9-09 | switching without saving | Opening_a_board_card_saves_the_current_board_first |
-| M9-10 | a template that does not validate or overflows | Every_template_opens_and_fits_MaxNodes |
+| M9-10 | a template that does not validate or overflows | Every_template_opens_with_the_editors_own_reader, Every_template_fits_MaxNodes |
 | M9-10 | a deck frame that is not a panel | The_deck_template_is_panels_in_reading_order |
-| M9-10 | a template naming a raw colour | Templates_use_palette_tokens_only |
+| M9-10 | a template naming a raw colour | Templates_use_palette_tokens_only, A_template_may_not_name_a_colour |
+| M9-10 | a block placed under its kind's minimum | A_block_is_never_placed_under_its_own_minimum |
+| M9-10 | a template whose next block lands behind it | The_paint_counter_is_ahead_of_the_template |
+| M9-10 | a grouped block hanging outside its panel | Every_grouped_block_sits_in_a_group_that_exists |
+| M9-10 | a template shipping a board link | No_template_carries_a_board_link |
+| M9-10 | a template icon that is not in the sprite | Every_template_icon_exists_in_the_sprite |
+| M9-10 | a pre-filled portrait, or a frame the lines join | Every_person_in_the_family_tree_has_a_picture_frame_that_starts_empty |
 | M9-10 | a template presenting out of order | Slide_frames_in_a_deck_template_present_top_to_bottom |
 | M9-11 | a device restore beating an explicit template | A_template_request_wins_over_the_last_open_board |
 | M9-11 | a template applied on top of a `doc` | A_template_is_ignored_when_a_board_id_arrives |

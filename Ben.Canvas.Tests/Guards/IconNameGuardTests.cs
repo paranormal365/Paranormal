@@ -58,4 +58,19 @@ public sealed class IconNameGuardTests
         var missing = names.Where(n => !symbols.Contains(n)).ToList();
         Assert.True(missing.Count == 0, "These block icons are not in icons/sprite.svg: " + string.Join(", ", missing));
     }
+    /// <summary>
+    /// And the template pictures. These live in Core, which the source scan above does not reach — it
+    /// walks the editor library and the host only — so they are read from the catalogue itself.
+    /// </summary>
+    [Fact]
+    public void Every_template_icon_exists_in_the_sprite()
+    {
+        var symbols = Symbols();
+        var missing = Ben.Canvas.Core.Templates.BoardTemplates.All
+            .Where(t => !symbols.Contains(t.IconName))
+            .Select(t => $"{t.Id}: {t.IconName}")
+            .ToList();
+
+        Assert.True(missing.Count == 0, "These template icons are not in icons/sprite.svg: " + string.Join(", ", missing));
+    }
 }
