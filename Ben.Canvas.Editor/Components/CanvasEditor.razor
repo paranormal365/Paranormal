@@ -14,6 +14,7 @@
 *@
 @implements IAsyncDisposable
 @implements IKeyboardCommandTarget
+@inject BoardLinks Boards
 @inject CanvasStore Store
 @inject SelectionState Selection
 @inject CanvasViewportState Viewport
@@ -44,6 +45,7 @@
 <div class="@RootClass" data-bc-ready="@(_ready ? "true" : null)" @ref="_root">
     <CanvasHeaderBar DocumentTitle="@Store.Document.Title"
                      BackContent="@BackContent"
+                     BoardBack="@Boards.Back"
                      HostStatusContent="@HostStatusContent"
                      SaveState="@Documents.State"
                      AutosavePending="@Documents.AutosavePending"
@@ -116,6 +118,7 @@
         </FooterContent>
     </BcModal>
     <CaseFilePicker @bind-Visible="_caseFilesOpen" OrganizationId="@BoardOrganizationId" CaseId="@BoardCaseId" OnPick="AddCaseFile" OnPickNote="AddClientNote" />
+    <CaseBoardPicker @bind-Visible="_caseBoardsOpen" NodeId="@_boardLinkNodeId" OnPick="LinkBoard" />
     <BcModal @bind-Visible="_downloadOpen" Title="@CanvasCopy.Buttons.ExportBoard" OnClose="OnDownloadClosedAsync">
         <ChildContent>
             <p>@CanvasCopy.Sentences.ExportReady</p>

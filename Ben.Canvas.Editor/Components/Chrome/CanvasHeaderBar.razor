@@ -9,6 +9,16 @@
 *@
 
 <div class="bc-header">
+    @* Back to the board a link was followed from. The trail is view state, so this button exists only
+       while somebody is in the middle of reading across boards. *@
+    @if (BoardBack is { } crumb)
+    {
+        <button type="button" class="bc-header__button" data-bc-action="board-back"
+                aria-label="@($"Back to {crumb.Title}")" title="@($"Back to {crumb.Title}")"
+                @onclick="@(() => OnAction.InvokeAsync("board-back"))">
+            <BcIcon Name="arrow-left" /><span class="bc-header__label">Back to @crumb.Title</span>
+        </button>
+    }
     @if (BackContent is not null)
     {
         @BackContent
@@ -55,6 +65,9 @@
 
     /// <summary>The host's link back to where the board came from.</summary>
     [Parameter] public RenderFragment? BackContent { get; set; }
+
+    /// <summary>Where Back would return to, or null when no link has been followed.</summary>
+    [Parameter] public BoardCrumb? BoardBack { get; set; }
 
     /// <summary>The host's trailing slot, typically the sign-in chip.</summary>
     [Parameter] public RenderFragment? HostStatusContent { get; set; }

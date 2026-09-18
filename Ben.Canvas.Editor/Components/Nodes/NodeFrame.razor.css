@@ -22,6 +22,7 @@
 .bc-node--file { border-left-color: var(--bc-node-color, var(--bc-type-file)); }
 .bc-node--table { border-left-color: var(--bc-node-color, var(--bc-type-table)); }
 .bc-node--shape { border-left-color: var(--bc-node-color, var(--bc-type-shape)); }
+.bc-node--board { border-left-color: var(--bc-node-color, var(--bc-type-board)); }
 
 .bc-node:hover {
     border-color: color-mix(in srgb, var(--bc-accent) 50%, var(--bc-border));

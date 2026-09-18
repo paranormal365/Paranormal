@@ -393,7 +393,7 @@ public sealed class BlockRendererTests
     public void Every_type_maps_to_its_own_renderer()
     {
         Assert.Equal(typeof(CardNode), BlockRendererMap.RendererFor(CanvasNodeType.Card));
-        Assert.Equal(11, BlockRendererMap.All.Values.Distinct().Count());
+        Assert.Equal(12, BlockRendererMap.All.Values.Distinct().Count());
     }
 
     private static async Task<string> RenderRaw<TRenderer>(CanvasNode node) where TRenderer : BlockRendererBase

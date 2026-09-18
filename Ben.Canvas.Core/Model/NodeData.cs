@@ -28,6 +28,7 @@ namespace Ben.Canvas.Core.Model;
 [JsonDerivedType(typeof(VideoData), "video")]
 [JsonDerivedType(typeof(TableData), "table")]
 [JsonDerivedType(typeof(ShapeData), "shape")]
+[JsonDerivedType(typeof(BoardData), "board")]
 public abstract class NodeData
 {
     /// <summary>A deep copy.</summary>
@@ -365,4 +366,44 @@ public sealed class ShapeData : NodeData
     public string Text { get; set; } = "";
 
     public override NodeData Clone() => (ShapeData)MemberwiseClone();
+}
+
+/// <summary>
+/// A card that opens another board on the same case, and optionally one card on it.
+/// </summary>
+/// <remarks>
+/// <para><b>Ben, 2026-09-18:</b> "a family tree in one page and in another page create all news
+/// articles and create a link to open the other page to one of the cards… and a back button to go
+/// back."</para>
+///
+/// <para><b>It carries an id and a remembered title, and nothing else.</b> No copy of the target's
+/// contents and no preview — because only a PUBLISHED board may be linked, and a card that cached
+/// anything would be a way to read somebody's draft through a published board. The titles are what
+/// they were when picked, so the card still reads sensibly after a rename and still says something
+/// after a deletion.</para>
+///
+/// <para><b>A missing target is not an error.</b> Ben: "if… the card has been removed, default to
+/// opening the other page and not focusing in on that card." So <see cref="NodeId"/> is a hint,
+/// resolved against the target's published copy when the link is followed. Nothing on THIS board
+/// changes when a card disappears from another one — the link degrades where it is followed, in front
+/// of the person, rather than silently on somebody else's board.</para>
+/// </remarks>
+public sealed class BoardData : NodeData
+{
+    /// <summary>The most characters a remembered title may keep.</summary>
+    public const int MaxTitleLength = 120;
+
+    /// <summary>The board this card opens. Empty until one is picked.</summary>
+    public Guid DocumentId { get; set; }
+
+    /// <summary>What that board was called when it was picked.</summary>
+    public string Title { get; set; } = "";
+
+    /// <summary>One card on that board to open at, or null for the whole board.</summary>
+    public Guid? NodeId { get; set; }
+
+    /// <summary>What that card was called when it was picked.</summary>
+    public string? NodeTitle { get; set; }
+
+    public override NodeData Clone() => (BoardData)MemberwiseClone();
 }

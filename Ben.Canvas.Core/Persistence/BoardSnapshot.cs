@@ -185,6 +185,16 @@ public static class BoardSnapshot
             Filled: node.Fill == NodeFill.Solid);
     }
 
+    /// <summary>
+    /// What one block is called, in the same words the published picture prints.
+    /// </summary>
+    /// <remarks>
+    /// Public so the board-link picker can list a board's cards by the name a reader would recognise.
+    /// Pairing a node to its snapshot block by position or by index does not work — the scene is
+    /// ordered by paint order, not by where things sit — so the naming is asked for directly.
+    /// </remarks>
+    public static string TitleOf(CanvasNode node) => Words(node).Title;
+
     private static (string Title, IReadOnlyList<string> Lines) Words(CanvasNode node)
     {
         var display = BlockRegistry.Get(node.Type).DisplayName;
@@ -223,6 +233,10 @@ public static class BoardSnapshot
                     ? string.Join("  ", table.Rows[0].Where(c => !string.IsNullOrWhiteSpace(c)))
                     : "";
                 return (Or(heading, display), grid);
+            case BoardData board:
+                // The printed picture still says where a link went, and which card it aimed at.
+                return (Or(board.Title, display),
+                    string.IsNullOrWhiteSpace(board.NodeTitle) ? [] : [board.NodeTitle]);
             case ShapeData shape:
                 return (Or(shape.Text, display), []);
             case ImageData image:

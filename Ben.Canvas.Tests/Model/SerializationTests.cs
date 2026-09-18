@@ -40,7 +40,7 @@ public sealed class CanvasSerializerTests
         Assert.Null(problem);
         Assert.NotNull(read);
         Assert.Equal(original.Id, read.Id);
-        Assert.Equal(11, read.Nodes.Count);
+        Assert.Equal(12, read.Nodes.Count);
         Assert.Equal("heard at 3am", Assert.Single(read.Edges).Label);
         Assert.Equal("Basement", Assert.Single(read.Groups).Label);
     }
@@ -63,7 +63,7 @@ public sealed class CanvasSerializerTests
         var (read, problem) = CanvasSerializer.Parse(json);
         Assert.Null(problem);
         Assert.Equal("Porch hunt", read!.Title);
-        Assert.Equal(11, read.Nodes.Count);
+        Assert.Equal(12, read.Nodes.Count);
     }
 
     [Theory]

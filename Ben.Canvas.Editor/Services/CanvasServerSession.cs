@@ -91,6 +91,19 @@ public sealed class CanvasServerSession(
     }
 
     /// <summary>Opens a board from the server by id. Returns a sentence when it cannot be opened.</summary>
+    /// <summary>
+    /// Opens the PUBLISHED copy of a board, which is what a board link follows.
+    /// </summary>
+    /// <remarks>
+    /// The published copy even for the author: a link that opened your own draft would tell you
+    /// nothing about what the group can actually see through it.
+    /// </remarks>
+    public async Task<string?> OpenPublishedAsync(Guid serverId, CancellationToken ct = default)
+    {
+        var (record, problem) = await server.GetPublishedAsync(serverId, ct);
+        if (record is null) return problem ?? CanvasCopy.Sentences.ServerRefusedBoard;
+        return await OpenRecordAsync(record);
+    }
     public async Task<string?> OpenAsync(Guid serverId, CancellationToken ct = default)
     {
         var (record, problem) = await server.GetAsync(serverId, ct);

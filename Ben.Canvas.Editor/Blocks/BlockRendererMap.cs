@@ -26,6 +26,7 @@ public static class BlockRendererMap
         [CanvasNodeType.Text] = typeof(TextNode),
         [CanvasNodeType.Table] = typeof(TableNode),
         [CanvasNodeType.Shape] = typeof(ShapeNode),
+        [CanvasNodeType.Board] = typeof(BoardNode),
         [CanvasNodeType.File] = typeof(FileNode),
         [CanvasNodeType.Audio] = typeof(AudioNode),
         [CanvasNodeType.Video] = typeof(VideoNode),

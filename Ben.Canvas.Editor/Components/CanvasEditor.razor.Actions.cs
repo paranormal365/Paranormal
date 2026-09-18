@@ -129,6 +129,14 @@ public partial class CanvasEditor
                 Layout.Close();
                 _caseFilesOpen = CanPickCaseFiles;
                 break;
+            case "board-back":
+                await Boards.GoBackAsync();
+                break;
+            case "case-boards":
+                Layout.Close();
+                _boardLinkNodeId = SingleSelected() is { Type: CanvasNodeType.Board } picked ? picked.Id : Guid.Empty;
+                _caseBoardsOpen = BoardCaseId is not null;
+                break;
             case "add-card-here":
                 AddBlock(CanvasNodeType.Card, _menuWorld);
                 break;
@@ -221,7 +229,7 @@ public partial class CanvasEditor
         action.StartsWith("add-", StringComparison.Ordinal) && action != "add-menu"
         || action is "undo" or "redo" or "edit" or "duplicate" or "delete" or "lock" or "front" or "back" or "group"
             or "ungroup" or "rename" or "connect" or "paste" or "import" or "save-server" or "save-retry" or "publish"
-            or "publish-confirmed" or "conflict-mine" or "case-files" or "make-map";
+            or "publish-confirmed" or "conflict-mine" or "case-files" or "case-boards" or "make-map";
 
     /// <summary>
     /// Presenting is reading, not writing — so a view-only board presents like any other.
@@ -335,6 +343,39 @@ public partial class CanvasEditor
     /// server already, so nothing is copied to this device and the next save has nothing to upload.
     /// That is the whole point of picking rather than dropping — one copy of one piece of evidence.
     /// </remarks>
+    private bool _caseBoardsOpen;
+    private Guid _boardLinkNodeId;
+
+    /// <summary>
+    /// Fills in a board card from the picker, or adds one when the picker was opened from the rail.
+    /// </summary>
+    /// <remarks>
+    /// The card remembers the titles as they are now. That is on purpose: a board can be renamed or
+    /// deleted, and a card that kept only an id would have nothing to say when it happens.
+    /// </remarks>
+    private void LinkBoard((Guid BoardId, string BoardTitle, Guid? CardId, string? CardTitle) pick)
+    {
+        void Fill(BoardData data)
+        {
+            data.DocumentId = pick.BoardId;
+            data.Title = pick.BoardTitle;
+            data.NodeId = pick.CardId;
+            data.NodeTitle = pick.CardTitle;
+        }
+
+        if (_boardLinkNodeId != Guid.Empty && Store.FindNode(_boardLinkNodeId) is { Data: BoardData existing })
+        {
+            Store.UpdateNodeData(_boardLinkNodeId, d => Fill((BoardData)d));
+            return;
+        }
+
+        AddBlock(CanvasNodeType.Board, null, data =>
+        {
+            Fill((BoardData)data);
+            return data;
+        });
+    }
+
     private void AddCaseFile(CanvasCaseFile file)
     {
         var kind = CaseFileBlockKind.For(file.FileName, file.ContentType);

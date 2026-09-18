@@ -65,6 +65,7 @@
     --bc-type-file:       var(--bs-secondary-color, rgba(222, 226, 230, .75));
     --bc-type-table:      var(--bs-teal, #4a7c7c);
     --bc-type-shape:      var(--bs-purple, #8a5a8f);
+    --bc-type-board:      var(--bs-cyan, #3c6e91);
     --bc-on-accent:       var(--bs-white, #ffffff);
     --bc-type-group:      var(--bs-primary, #37508a);
 

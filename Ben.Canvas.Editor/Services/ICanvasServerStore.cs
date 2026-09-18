@@ -79,6 +79,15 @@ public interface ICanvasServerStore
     Task<(CanvasServerDocument? Document, string? Problem)> GetAsync(Guid id, CancellationToken ct = default);
 
     /// <summary>
+    /// The PUBLISHED copy of a board, or a problem when it has none.
+    /// </summary>
+    /// <remarks>
+    /// What a board link follows, for the author too: a link should open what a reader sees, or
+    /// checking your own link tells you nothing about what you shared.
+    /// </remarks>
+    Task<(CanvasServerDocument? Document, string? Problem)> GetPublishedAsync(Guid id, CancellationToken ct = default);
+
+    /// <summary>
     /// Creates the board when <paramref name="existingId"/> is null, otherwise replaces it if the server is still at
     /// <paramref name="revision"/>. The board's name travels inside the JSON as its title.
     /// </summary>

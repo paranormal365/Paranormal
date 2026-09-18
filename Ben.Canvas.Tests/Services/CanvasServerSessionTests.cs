@@ -46,6 +46,15 @@ public sealed class CanvasServerSessionTests
         public Task<(CanvasServerDocument? Document, string? Problem)> GetAsync(Guid id, CancellationToken ct = default) =>
             Task.FromResult(Boards.TryGetValue(id, out var b) ? ((CanvasServerDocument?)(b with { CanEdit = CanEdit }), (string?)null) : (null, CanvasCopy.Sentences.BoardGoneFromServer));
 
+        /// <summary>
+        /// A board link follows the PUBLISHED copy, so this answers only for a board that has one —
+        /// which is what makes "the target has gone" a state the tests can reach.
+        /// </summary>
+        public Task<(CanvasServerDocument? Document, string? Problem)> GetPublishedAsync(Guid id, CancellationToken ct = default) =>
+            Task.FromResult(Boards.TryGetValue(id, out var b) && b.PublishedAtUtc is not null
+                ? ((CanvasServerDocument?)(b with { CanEdit = CanEdit }), (string?)null)
+                : (null, CanvasCopy.Sentences.BoardGoneFromServer));
+
         public Task<CanvasSaveResult> SaveAsync(string documentJson, Guid? existingId, int revision, Guid? caseId, CancellationToken ct = default)
         {
             Log.Add("save");

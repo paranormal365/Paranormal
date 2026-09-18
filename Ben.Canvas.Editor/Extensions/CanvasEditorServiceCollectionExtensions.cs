@@ -93,6 +93,7 @@ public static class CanvasEditorServiceCollectionExtensions
         services.TryAddScoped<CanvasServerSession>();
         services.TryAddScoped<LinkPreviewResolver>();
         services.TryAddScoped<BoardSnapshotService>();
+        services.TryAddScoped<BoardLinks>();
 
         return services;
     }

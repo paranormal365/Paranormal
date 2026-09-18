@@ -50,6 +50,8 @@ public static class BlockRegistry
         // Square by default, because a circle and a diamond both want equal sides; small, because a
         // shape labels a region rather than holding a document.
         new(CanvasNodeType.Shape, "Shape", "square", 160, 160, 60, 60, true, true, _ => new ShapeData()),
+        // A link, not a document: as wide as a file row and no taller than the two lines it shows.
+        new(CanvasNodeType.Board, "Board", "book-open", 300, 96, 200, 80, true, false, _ => new BoardData()),
         // A CARD's size, not the film's. Ben, 2026-09-16: "The video should be card sized, not
         // original sized... so it doesn't take up the screen... maybe can resize the card to fit
         // the size the end user wants." A phone films 1080×1920; opened at its own size one clip

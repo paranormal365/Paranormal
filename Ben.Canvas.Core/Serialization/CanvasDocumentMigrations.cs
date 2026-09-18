@@ -86,6 +86,12 @@ public static class CanvasDocumentMigrations
         return document;
     }
 
+    /// <summary>Trimmed to what a card can show; blank reads as nothing.</summary>
+    private static string? Clamp(string? text) =>
+        string.IsNullOrWhiteSpace(text)
+            ? null
+            : text.Trim()[..Math.Min(BoardData.MaxTitleLength, text.Trim().Length)];
+
     private static void CleanData(NodeData data)
     {
         // A grid from a hand-edited file, a newer editor or a ragged selection is squared up rather
@@ -95,6 +101,13 @@ public static class CanvasDocumentMigrations
         // A shape kind this build does not know is drawn as a box rather than refusing the board:
         // a shape is decoration, and losing the whole board over one would be the worse trade.
         if (data is ShapeData shape && !Enum.IsDefined(shape.Kind)) shape.Kind = ShapeKind.Rectangle;
+
+        // A linked board can be renamed to anything, so the titles a card remembers are clamped.
+        if (data is BoardData board)
+        {
+            board.Title = Clamp(board.Title) ?? "";
+            board.NodeTitle = Clamp(board.NodeTitle);
+        }
 
         switch (data)
         {

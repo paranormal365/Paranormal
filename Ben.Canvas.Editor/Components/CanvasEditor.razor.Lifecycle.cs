@@ -60,6 +60,15 @@ public partial class CanvasEditor
     /// <summary>Reopens the last board and its view, or starts a new board.</summary>
     private async Task RestoreAsync()
     {
+        // The picker belongs to the editor, which owns the dialog; BoardLinks only asks for it.
+        Boards.Picker = nodeId =>
+        {
+            _boardLinkNodeId = nodeId;
+            _caseBoardsOpen = BoardCaseId is not null;
+            StateHasChanged();
+            return Task.CompletedTask;
+        };
+
         var (restored, problem) = await Documents.RestoreLastActiveAsync();
         if (!restored) Documents.New(CaseId);
         if (problem is not null) Toasts.Warning(CanvasCopy.Sentences.RestoreFailed(problem));
