@@ -505,10 +505,16 @@ until you use it. Everything is undoable, exports and imports, publishes to the 
   **a published board never points at an unpublished one** — held in three places, because a picker
   alone only stops the state being *created*: the picker lists **only published boards** on the case
   (`GetAll` already tells published from the caller's own drafts); `Publish` **refuses** a board carrying
-  a board card whose target is not published, and says which; and `Delete` **refuses** a board that
-  published boards link to, and says which. Following a card always opens the target's **published
-  copy** — the author too, so what they check is what a reader gets. A card whose target has gone says
-  so where it stands and does nothing; the picture and the deck treat it as inert. The card stores the
+  a board card whose target is not published, and says which; and `Delete` **warns** — *N published boards link here; their links will say this board no longer
+  exists* — and then deletes. Ben, 2026-09-18: *"if a published page is deleted, it should delete links
+  on other boards or when clicked, it should pop a message up saying the published page or board has
+  been deleted."* The message, not the cascade: deleting a card out of somebody else's published board
+  is the server rewriting a snapshot a reader may be looking at, and the additive guard exists to stop
+  exactly that. So the link stays, and it tells the truth **at rest** — every board card checks its
+  target when its board loads (one list call, the same one the picker makes) and shows *This board no
+  longer exists* in place — and **on click**, which pops the same sentence and does nothing else. The
+  picture and the deck treat such a card as inert. Following a live card always opens the target's
+  **published copy** — the author too, so what they check is what a reader gets. The card stores the
   target's id and the title it had when picked; nothing else, so it can never leak a draft's contents.
 - *A board card can point at one card on the other board, and a missing card is not an error.* Ben,
   2026-09-18: *"if there is a link to a card in a different page, and the card has been removed, default to
@@ -560,7 +566,7 @@ if it can be pasted. Every one of those is enforced by a test that already exist
 | M9-06 | `EdgeGeometry.Resolve(…, route)`; `EdgePath` corners; `ToSvgPath`/`PointAt`; hit sampling over corners; `ArrowHead(marker)`; `Head(marker)`; `SnapshotConnector` gains `Dash`, `Icon`, variable-length heads; painter | Core/Geometry, Editor/Board, Persistence, js |
 | M9-07 | Connector properties: line, route, each end's marker, icon; `bc-edge--dashed`; midpoint label already exists for the icon's placement | Chrome, EdgeLayer |
 | M9-08 | `BoardData` (`DocumentId`, `Title`, optional `NodeId`, `NodeTitle`), `BoardNode` (icon `book-open`, board title, "→ card title" when a card is named, Open **button**; "no longer published" state), `CaseBoardPicker` (copy of `CaseFilePicker` over `server.ListAsync(caseId)` filtered to **published**; second step lists the published copy's blocks by `Words()` title, "the whole board" first; a one-line note at the top — *Only published boards can be linked. A board you are still working on appears here once it is published.* — in `CanvasCopy`, and an empty state that says the same when the case has none), action `case-boards`, rail button "Add from the case's boards" | Core/Model, Editor/Nodes, Chrome, Text |
-| M9-08b | Server invariant: `Publish` refuses a document whose `board` cards name an unpublished target (same `nodes[].data.kind` walk `SanitizeDocument` already does); `Delete` refuses a board that published boards link to; both name the boards; the editor greys Publish and says why before the round trip | WebApi `CanvasDocumentController` |
+| M9-08b | Server invariant: `Publish` refuses a document whose `board` cards name an unpublished target (same `nodes[].data.kind` walk `SanitizeDocument` already does) and names it; `Delete` answers how many published boards link to the board, the website's confirm shows it, then deletes; the editor greys Publish and says why before the round trip | WebApi `CanvasDocumentController`, website confirm |
 | M9-09 | `BoardTrail` (view state: stack of `(serverId, title)`), Open = save, then open the target's **published copy**, push; a named card that still exists is selected and fitted to; a named card that is gone opens the board at fit-to-content, selects nothing, and toasts once; header **Back to <title>** beside `BackContent`, pop; trail cleared on case change; a 404 toasts and leaves the trail alone | Editor/Services, Chrome |
 | M9-10 | `BoardTemplates` in Core: `Blank`, `Moodboard`, `ResearchPlan`, `FamilyTree`, `Deck`; each a pure builder; every template validates, fits `MaxNodes`, and uses only palette tokens | Core/Templates (new) |
 | M9-11 | `CanvasDocumentStore.New(caseId, template)`; `CanvasEditor.TemplateId`; `CanvasHandoff` `template` arm; `Editor.razor`; `RestoreAsync` ordering | Editor/Services, Wasm host, Lifecycle |
@@ -601,7 +607,9 @@ if it can be pasted. Every one of those is enforced by a test that already exist
 | M9-08 | an empty picker with no explanation | An_empty_board_picker_says_publish_one_first |
 | M9-08 | a card storing anything but the target's id and title | A_board_card_carries_no_content_of_its_target |
 | M9-08b | publishing a board that links to a draft | Publishing_refuses_a_board_that_links_to_an_unpublished_board_and_names_it |
-| M9-08b | deleting a board that published boards link to | Deleting_a_linked_board_is_refused_and_names_the_boards |
+| M9-08b | deleting a linked board without a word | Deleting_a_linked_board_warns_how_many_published_boards_link_to_it |
+| M9-08 | a card whose target is deleted looking live until clicked | A_board_card_whose_target_is_gone_says_so_at_rest |
+| M9-08 | clicking a dead card doing anything but the message | Clicking_a_dead_board_card_pops_the_message_and_nothing_else |
 | M9-08b | the refusal arriving as a bare string | TierValidationShape-style: the refusal is a record the editor reads |
 | M9-09 | following a card to the draft rather than the published copy | Following_a_board_card_opens_the_published_copy |
 | M9-09 | a card whose target is gone opening nothing silently | A_board_card_whose_target_is_gone_says_so_and_stays_put |
@@ -633,10 +641,9 @@ dotnet test  Ben.Web.Tests
 **Risks named up front.** (1) The stale-editor edge above. (2) `Every_type_maps_to_its_own_renderer`
 hard-codes `9`; it becomes `12` and stays hard-coded on purpose — the number is the assertion. (3)
 `SnapshotConnector.Heads` changes shape; the published picture is regenerated on publish, never
-rewritten, so old pictures stand. (4) A board card's target can only stop being published by being deleted, and `Delete` now refuses
-while published boards link to it — so the "target gone" state should not arise; the card still handles
-it, because a rule enforced in one place and assumed in another is how the audit found most of its
-findings. (4b) The publish and delete refusals are **API changes**, small and additive; the editor greys
+rewritten, so old pictures stand. (4) A board card's target can stop existing — `Delete` warns and proceeds — so the dead-card state is
+expected, not exceptional: it is shown at rest and on click, and the at-rest check is one list call per
+board load, cached for the session. (4b) The publish and delete refusals are **API changes**, small and additive; the editor greys
 the button first so the round trip is the backstop, not the message. (5) Templates
 are code, so a change to one changes every *new* board from it and no existing board — which is the
 right way round, and the tests say so.
