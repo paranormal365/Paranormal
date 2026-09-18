@@ -519,7 +519,10 @@ until you use it. Everything is undoable, exports and imports, publishes to the 
   changes when the target card is removed — the link degrades at the moment it is followed, where the
   person can see what happened, not silently on somebody else's board. The picker's second step offers
   the published copy's blocks by the same title the published picture prints (`Words()`), so what you
-  pick is what a reader would recognise.
+  pick is what a reader would recognise. And the picker **says** the rule — Ben: *"a small note in the
+  page/card picker to let the end user know only published pages are in the list"* — because a board
+  that is missing from a list is a bug report waiting to happen unless the list says why; the same
+  sentence is its empty state.
 - *Templates are documents, not a server concept.* `CanvasDocumentController.Create` stores whatever
   document the client posts, and a new board is `CanvasDocumentStore.New(caseId)` — "not stored until its
   first edit." So a template is a pure function `Guid? caseId → CanvasDocument` in `Ben.Canvas.Core`,
@@ -556,7 +559,7 @@ if it can be pasted. Every one of those is enforced by a test that already exist
 | M9-05 | `CanvasEdge.Line` `Solid`/`Dashed`, `Route` `Curve`/`Straight`/`Elbow`, `FromMarker`/`ToMarker` `Arrow`/`Diamond`/`Dot`/`None` (replacing `Arrow`'s meaning, `Arrow` kept and mapped on read), `Icon` (≤ 8 chars at the midpoint) | Core/Model, Core/Serialization |
 | M9-06 | `EdgeGeometry.Resolve(…, route)`; `EdgePath` corners; `ToSvgPath`/`PointAt`; hit sampling over corners; `ArrowHead(marker)`; `Head(marker)`; `SnapshotConnector` gains `Dash`, `Icon`, variable-length heads; painter | Core/Geometry, Editor/Board, Persistence, js |
 | M9-07 | Connector properties: line, route, each end's marker, icon; `bc-edge--dashed`; midpoint label already exists for the icon's placement | Chrome, EdgeLayer |
-| M9-08 | `BoardData` (`DocumentId`, `Title`, optional `NodeId`, `NodeTitle`), `BoardNode` (icon `book-open`, board title, "→ card title" when a card is named, Open **button**; "no longer published" state), `CaseBoardPicker` (copy of `CaseFilePicker` over `server.ListAsync(caseId)` filtered to **published**; second step lists the published copy's blocks by `Words()` title, "the whole board" first), action `case-boards`, rail button "Add from the case's boards" | Core/Model, Editor/Nodes, Chrome |
+| M9-08 | `BoardData` (`DocumentId`, `Title`, optional `NodeId`, `NodeTitle`), `BoardNode` (icon `book-open`, board title, "→ card title" when a card is named, Open **button**; "no longer published" state), `CaseBoardPicker` (copy of `CaseFilePicker` over `server.ListAsync(caseId)` filtered to **published**; second step lists the published copy's blocks by `Words()` title, "the whole board" first; a one-line note at the top — *Only published boards can be linked. A board you are still working on appears here once it is published.* — in `CanvasCopy`, and an empty state that says the same when the case has none), action `case-boards`, rail button "Add from the case's boards" | Core/Model, Editor/Nodes, Chrome, Text |
 | M9-08b | Server invariant: `Publish` refuses a document whose `board` cards name an unpublished target (same `nodes[].data.kind` walk `SanitizeDocument` already does); `Delete` refuses a board that published boards link to; both name the boards; the editor greys Publish and says why before the round trip | WebApi `CanvasDocumentController` |
 | M9-09 | `BoardTrail` (view state: stack of `(serverId, title)`), Open = save, then open the target's **published copy**, push; a named card that still exists is selected and fitted to; a named card that is gone opens the board at fit-to-content, selects nothing, and toasts once; header **Back to <title>** beside `BackContent`, pop; trail cleared on case change; a 404 toasts and leaves the trail alone | Editor/Services, Chrome |
 | M9-10 | `BoardTemplates` in Core: `Blank`, `Moodboard`, `ResearchPlan`, `FamilyTree`, `Deck`; each a pure builder; every template validates, fits `MaxNodes`, and uses only palette tokens | Core/Templates (new) |
@@ -594,6 +597,8 @@ if it can be pasted. Every one of those is enforced by a test that already exist
 | M9-08 | a board card opening in a new tab | A_board_card_opens_with_a_button_not_a_link |
 | M9-08 | the picker listing boards of another case | The_board_picker_lists_only_this_cases_boards |
 | M9-08 | the picker offering a draft | The_board_picker_offers_only_published_boards |
+| M9-08 | the picker silent about why a board is missing | The_board_picker_says_only_published_boards_are_listed |
+| M9-08 | an empty picker with no explanation | An_empty_board_picker_says_publish_one_first |
 | M9-08 | a card storing anything but the target's id and title | A_board_card_carries_no_content_of_its_target |
 | M9-08b | publishing a board that links to a draft | Publishing_refuses_a_board_that_links_to_an_unpublished_board_and_names_it |
 | M9-08b | deleting a board that published boards link to | Deleting_a_linked_board_is_refused_and_names_the_boards |
