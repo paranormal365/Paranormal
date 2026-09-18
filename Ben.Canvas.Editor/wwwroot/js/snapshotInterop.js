@@ -97,6 +97,31 @@ function loadImage(url) {
 }
 
 /**
+ * The outline of a shape block: a rounded box, an ellipse, or a diamond through the box's edges.
+ * The diamond is a path rather than a rotated square, for the same reason the editor's is - a
+ * rotation on a box that is not square puts its corners outside the box.
+ */
+function shapePath(ctx, b) {
+    if (b.shape === 'ellipse') {
+        ctx.beginPath();
+        ctx.ellipse(b.x + b.width / 2, b.y + b.height / 2, b.width / 2, b.height / 2, 0, 0, Math.PI * 2);
+        return;
+    }
+
+    if (b.shape === 'diamond') {
+        ctx.beginPath();
+        ctx.moveTo(b.x + b.width / 2, b.y);
+        ctx.lineTo(b.x + b.width, b.y + b.height / 2);
+        ctx.lineTo(b.x + b.width / 2, b.y + b.height);
+        ctx.lineTo(b.x, b.y + b.height / 2);
+        ctx.closePath();
+        return;
+    }
+
+    roundRect(ctx, b.x, b.y, b.width, b.height, 8);
+}
+
+/**
  * Draws a scene and answers the PNG as bytes.
  * @param {HTMLElement} root The editor root, whose theme tokens colour the picture.
  * @param {object} scene SnapshotScene from C#.
@@ -205,6 +230,32 @@ export async function drawBoard(root, scene) {
 
     scene.blocks.forEach((b, i) => {
         const accent = palette(b.colorKey) || typeColour(b.kind);
+
+        // A SHAPE is its outline, so it is drawn as one rather than as a titled box with a word in
+        // it. Without this a published moodboard's theme bubbles came out as four grey rectangles
+        // (found by the templates walk, 2026-09-18).
+        if (b.shape) {
+            shapePath(ctx, b);
+            ctx.fillStyle = accent;
+            ctx.fill();
+            if (b.title) {
+                ctx.save();
+                shapePath(ctx, b);
+                ctx.clip();
+                ctx.font = `600 13px ${font}`;
+                ctx.fillStyle = tokenColour(ctx, style, '--bc-on-accent', '#ffffff');
+                ctx.textAlign = 'center';
+                ctx.textBaseline = 'middle';
+                // A diamond's usable width narrows towards its points, so the words get less room.
+                const room = b.width * (b.shape === 'rectangle' ? 0.86 : 0.56);
+                const lines = wrap(ctx, [b.title], room, 3);
+                lines.forEach((line, n) =>
+                    ctx.fillText(line, b.x + b.width / 2, b.y + b.height / 2 + (n - (lines.length - 1) / 2) * 17));
+                ctx.restore();
+            }
+            return;
+        }
+
         roundRect(ctx, b.x, b.y, b.width, b.height, 8);
         // A filled block IS its colour; an unfilled one keeps the surface and wears the colour as a
         // 3 px bar down its left edge, which is what every board written before M9 looks like.

@@ -391,9 +391,20 @@ public sealed class BoardTemplateTests
             Assert.Equal(ImageFit.Cover, picture.Fit);
         });
 
-        // A frame sits directly above the name it belongs to, and the lines join the NAMES: a line into
-        // a photo would move the moment somebody decided to go without one.
-        Assert.All(frames, f => Assert.Contains(names, n => n.X == f.X && n.Y == f.Y + f.Height));
+        // Small, and no smaller than the block allows. Ben's call of three, 2026-09-18: a frame is a
+        // real block whether a photograph lands in it or not, so an unused one is the smallest tile
+        // the editor permits rather than a box the width of the name.
+        var smallest = BlockRegistry.Get(CanvasNodeType.Image);
+        Assert.All(frames, f =>
+        {
+            Assert.Equal(smallest.MinWidth, f.Width);
+            Assert.Equal(smallest.MinHeight, f.Height);
+        });
+
+        // Each frame is centred directly above the name it belongs to, and the lines join the NAMES:
+        // a line into a photo would move the moment somebody decided to go without one.
+        Assert.All(frames, f => Assert.Contains(names, n =>
+            Math.Abs(n.X + n.Width / 2 - (f.X + f.Width / 2)) < 0.001 && n.Y == f.Y + f.Height));
 
         var joined = document.Edges.SelectMany(e => new[] { e.FromNodeId, e.ToNodeId }).ToHashSet();
         Assert.DoesNotContain(frames, f => joined.Contains(f.Id));

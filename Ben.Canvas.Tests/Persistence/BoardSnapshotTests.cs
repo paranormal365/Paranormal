@@ -96,4 +96,50 @@ public sealed class BoardSnapshotTests
 
         Assert.Equal((asset, ".png", upload), (block.AssetId, block.Ext, block.UploadFileId));
     }
+    /// <summary>
+    /// A shape's own shape reaches the published picture.
+    /// </summary>
+    /// <remarks>
+    /// Every other block is drawn as a titled rounded rectangle, which is right for all of them but
+    /// this one: a shape IS its outline. Without the kind travelling, a published moodboard's four
+    /// theme bubbles came out as four grey rectangles and a published diamond came out as the same
+    /// rectangle. Found by the templates walk on 2026-09-18; a picture is the only thing that could
+    /// have found it.
+    /// </remarks>
+    [Theory]
+    [InlineData(ShapeKind.Rectangle, "rectangle")]
+    [InlineData(ShapeKind.Ellipse, "ellipse")]
+    [InlineData(ShapeKind.Diamond, "diamond")]
+    public void A_shape_block_carries_which_shape_it_is(ShapeKind kind, string expected)
+    {
+        var shape = new CanvasNode
+        {
+            Type = CanvasNodeType.Shape,
+            Width = 160,
+            Height = 160,
+            Data = new ShapeData { Kind = kind, Text = "Why now" },
+        };
+
+        var block = Assert.Single(BoardSnapshot.Build(new CanvasDocument { Nodes = [shape] }).Blocks);
+
+        Assert.Equal(expected, block.Shape);
+        Assert.Equal("Why now", block.Title);
+    }
+
+    /// <summary>And nothing else claims to be a shape, or every block would be drawn as one.</summary>
+    [Fact]
+    public void Nothing_but_a_shape_carries_a_shape()
+    {
+        var document = new CanvasDocument
+        {
+            Nodes =
+            [
+                Card(0, 0),
+                new CanvasNode { Type = CanvasNodeType.Text, Width = 220, Height = 120, Data = new TextData { Text = "note" } },
+                new CanvasNode { Type = CanvasNodeType.Table, Width = 420, Height = 200, Data = new TableData { Rows = [["a", "b"], ["c", "d"]] } },
+            ],
+        };
+
+        Assert.All(BoardSnapshot.Build(document).Blocks, b => Assert.Null(b.Shape));
+    }
 }

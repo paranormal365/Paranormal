@@ -20,6 +20,17 @@ public static partial class BoardTemplates
     private const double Margin = 80;
     private const double Pad = 24;
 
+    /// <summary>
+    /// The vertical gap between one panel and the one below it.
+    /// </summary>
+    /// <remarks>
+    /// A group's name is drawn as a chip ABOVE its top edge, about thirty pixels tall, so a gap sized
+    /// only for breathing room puts the lower panel's name on the upper panel's bottom border. The
+    /// pictures from the templates walk showed exactly that on the research plan's quadrant and, more
+    /// narrowly, on the deck (2026-09-18) — which is the whole reason that walk takes pictures.
+    /// </remarks>
+    private const double LabelRoom = 56;
+
     // ── Moodboard ─────────────────────────────────────────────────────────
     //
     // Four coloured sections and a cluster of theme bubbles, as in the picture: each section takes a
@@ -41,7 +52,7 @@ public static partial class BoardTemplates
         {
             var (label, prompt, colour) = sections[i];
             var x = Margin + i % 2 * (w + Pad * 2);
-            var y = Margin + i / 2 * (h + Pad * 2);
+            var y = Margin + i / 2 * (h + LabelRoom);
 
             var group = b.Group(label, x, y, w, h, colour);
             b.Note(x + Pad, y + Pad * 2, prompt, w - Pad * 2, h - Pad * 3, colour, group);
@@ -95,7 +106,7 @@ public static partial class BoardTemplates
         for (var i = 0; i < quadrant.Length; i++)
         {
             var (label, colour) = quadrant[i];
-            b.Group(label, Margin + i % 2 * (qw + Pad), qy + i / 2 * (qh + Pad), qw, qh, colour, GroupFill.Outline);
+            b.Group(label, Margin + i % 2 * (qw + Pad), qy + i / 2 * (qh + LabelRoom), qw, qh, colour, GroupFill.Outline);
         }
 
         // When: a week of work, header row and four rows to fill in.
@@ -110,7 +121,7 @@ public static partial class BoardTemplates
                 ["3", "", "", ""],
                 ["4", "", "", ""],
             ],
-        }, 440, 260, "2");
+        }, 440, 210, "2");
     }
 
     // ── Family tree ───────────────────────────────────────────────────────
@@ -131,13 +142,23 @@ public static partial class BoardTemplates
     // decides to go without one.
     private static void FamilyTree(BoardBuilder b)
     {
-        const double nw = 200, photo = 150, nh = 92;
+        const double nw = 200, nh = 92;
+
+        // The frame is the image block's own MINIMUM, not the width of the name under it.
+        //
+        // Ben asked the right question mid-build (2026-09-18): "If they don't provide it, it doesn't
+        // take up space for it, right?" It does — a frame is a real block whether or not a photograph
+        // ever lands in it — so the shipped size is the smallest one the editor allows, centred over
+        // the name. An unused frame then reads as a small placeholder tile rather than a large empty
+        // box, and the tree is about a quarter shorter. Ben's call, of three offered.
+        const double photoW = 120, photoH = 90;
 
         // A person: a frame, a name under it, and the id of the name box, which is what lines join.
         Guid Person(double x, double y, string colour)
         {
-            b.Node(CanvasNodeType.Image, x, y, new ImageData { Fit = ImageFit.Cover }, nw, photo, colour);
-            return b.Note(x, y + photo, "Name\nb. — d. —", nw, nh, colour);
+            b.Node(CanvasNodeType.Image, x + (nw - photoW) / 2, y, new ImageData { Fit = ImageFit.Cover },
+                photoW, photoH, colour);
+            return b.Note(x, y + photoH, "Name\nb. — d. —", nw, nh, colour);
         }
 
         var grandfather = Person(420, Margin, "1");
@@ -149,9 +170,9 @@ public static partial class BoardTemplates
 
         var children = new[]
         {
-            Person(180, 400, "2"),
-            Person(460, 400, "2"),
-            Person(740, 400, "2"),
+            Person(180, 340, "2"),
+            Person(460, 340, "2"),
+            Person(740, 340, "2"),
         };
 
         foreach (var child in children)
@@ -161,15 +182,21 @@ public static partial class BoardTemplates
         b.Edge(children[0], children[1], EdgeRoute.Elbow, EdgeLine.Dashed, toMarker: EdgeMarker.None);
         b.Edge(children[1], children[2], EdgeRoute.Elbow, EdgeLine.Dashed, toMarker: EdgeMarker.None);
 
-        var grandchild = Person(460, 720, "3");
+        var grandchild = Person(460, 600, "3");
         b.Edge(children[1], grandchild, EdgeRoute.Elbow, toMarker: EdgeMarker.Arrow);
 
-        var legend = b.Group("Legend", Margin, 1040, 340, 240, "6");
-        b.Note(Margin + Pad, 1040 + Pad * 2,
+        // Beside the tree rather than under it, and tall enough for every line. Under it, the board was
+        // half as tall again and opened at 58% — small enough that the diamonds on the marriage line
+        // could not be made out, which is the one thing the legend is there to explain. The first
+        // pictures also cut this note off after "The frame above each name takes a photo", which is the
+        // half that says the photograph is optional.
+        const double legendX = 1060, legendY = Margin;
+        var legend = b.Group("Legend", legendX, legendY, 360, 360, "6");
+        b.Note(legendX + Pad, legendY + Pad * 2,
             "Solid line: parent to child.\nDashed line: siblings.\nDiamond at both ends: a marriage or partnership.\n\n"
             + "The frame above each name takes a photo — paste or drop one in. Leave it empty, or drop in "
             + "any picture you like instead; it is yours either way.",
-            340 - Pad * 2, 240 - Pad * 3, "6", legend);
+            360 - Pad * 2, 360 - Pad * 3, "6", legend);
     }
 
     // ── Presentation deck ─────────────────────────────────────────────────
@@ -193,7 +220,7 @@ public static partial class BoardTemplates
         {
             var (label, prompt) = slides[i];
             var x = Margin + i % 2 * (w + Pad * 2);
-            var y = Margin + i / 2 * (h + Pad * 2);
+            var y = Margin + i / 2 * (h + LabelRoom);
 
             var slide = b.Group(label, x, y, w, h, "1");
             b.Note(x + Pad, y + Pad * 2, prompt, w - Pad * 2, 96, "1", slide);

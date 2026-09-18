@@ -544,7 +544,13 @@ until you use it. Everything is undoable, exports and imports, publishes to the 
   being as tall as its own file. The connectors join the **names**, never the frames: a line into a photo
   would move the moment somebody decided to go without one. There is no gendered symbol in the sprite and
   none is added — the frame takes any picture, which covers the icon case without the site having an
-  opinion about it.
+  opinion about it. **The frame is the image block's own minimum (120x90), centred over the name**, not
+  the width of it: Ben asked the right follow-up — *"If they don't provide it, it doesn't take up space
+  for it, right?"* — and it does, because a frame is a real block whether a photograph lands in it or
+  not. So the shipped size is the smallest the editor allows, which makes an unused one a small tile
+  rather than a large empty box and takes about a quarter off the tree's height. His call, of three
+  offered; the other two were no frames at all with a worked example in the legend, and leaving it as
+  built.
 - *The seam is the fragment.* The Research tab's New board already hands off `#handoff=&case=&org=`;
   it gains `template=<id>`, `CanvasHandoff.Parse` gains the arm, `Editor.razor` threads it to a
   `CanvasEditor.TemplateId` parameter, and `RestoreAsync` honours it **before** restoring the device
@@ -592,7 +598,7 @@ if it can be pasted. Every one of those is enforced by a test that already exist
 | M9-11 | `CanvasDocumentStore.New(caseId, template)`; `CanvasEditor.TemplateId`; `CanvasHandoff` `template` arm; `Editor.razor`; `RestoreAsync` ordering | Editor/Services, Wasm host, Lifecycle |
 | M9-12 | Research tab: New board becomes a choice of template (names and one line each), fragment carries `template=` | Website `CaseResearchBoards.razor` |
 | M9-13 | Help: Research section gains tables, shapes, fills, panels, connector styles, board links, templates; three pictures and a GIF; What's New; service changelog; product and persona PDFs | Help, Changelog, docs |
-| M9-14 | Walks: `BlocksWalk` gains the new kinds; new `TemplatesWalk` shoots each template dark and light | Playwright/Capture |
+| M9-14 | Walks: `BlocksWalk` gains the new kinds; new `TemplatesWalk` shoots each template dark and light. **Earned its keep on the first run**: the group-name chip clipping the panel above (quadrant and deck), the legend cut off mid-sentence, the diamond drawing as an OCTAGON (a rotated square in a box that is not square), and shapes publishing as grey rectangles — four defects no unit test could see | Playwright/Capture |
 
 **Red first — the tests that must fail before each step and pass after.**
 

@@ -29,7 +29,8 @@ day-by-day account of building it would say nothing to anyone using it now.
   they held a house, four weeks of who is doing what, a set of readings. Tab moves along and out of the
   last cell into a new row, and the header row can be turned off.
 - A shape block puts a box, a circle or a diamond with a word or two in it on the board, for the
-  things a card would overdress — a theme, a question, a step, a label on part of the board.
+  things a card would overdress — a theme, a question, a step, a label on part of the board. A
+  published board now draws them as the shapes they are; they used to come out as plain boxes.
 - Pasting a grid of text onto a board now makes a table of it rather than a wall of words in a note.
 - Colour goes further. Any block can be filled with its colour rather than striped with it, and a
   group can be drawn as a filled, titled panel rather than an outline — so part of a board reads as a

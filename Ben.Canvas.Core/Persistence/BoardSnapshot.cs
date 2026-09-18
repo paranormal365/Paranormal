@@ -10,10 +10,20 @@ namespace Ben.Canvas.Core.Persistence;
 /// <summary>A block as the published picture draws it.</summary>
 /// <param name="Lines">The words under the title, in order; the drawer wraps and cuts them to the box.</param>
 /// <param name="ImageUrl">A displayable address for an image block's picture, filled in by the editor before drawing.</param>
+/// <param name="Shape">
+/// "rectangle", "ellipse" or "diamond" for a shape block; null for everything else.
+/// </param>
+/// <remarks>
+/// <b>Why <paramref name="Shape"/> is here.</b> Every block is drawn as a titled rounded rectangle,
+/// which is right for all of them but one: a shape IS its outline, so a published circle came out as
+/// a box and a published diamond came out as the same box. Caught by the templates walk on
+/// 2026-09-18 — the moodboard's theme bubbles published as four grey rectangles.
+/// </remarks>
 public sealed record SnapshotBlock(
     double X, double Y, double Width, double Height,
     string Kind, string? ColorKey, string Title, IReadOnlyList<string> Lines,
-    Guid? AssetId, string? Ext, Guid? UploadFileId, string? ImageUrl, bool Filled = false);
+    Guid? AssetId, string? Ext, Guid? UploadFileId, string? ImageUrl, bool Filled = false,
+    string? Shape = null);
 
 /// <summary>A connector as the published picture draws it.</summary>
 /// <param name="Path">The SVG path of the curve (a canvas Path2D reads it directly).</param>
@@ -182,7 +192,8 @@ public static class BoardSnapshot
             _ => ((Guid?)null, (string?)null, (Guid?)null),
         };
         return new SnapshotBlock(node.X, node.Y, node.Width, node.Height, kind, node.ColorKey, title, lines, assetId, ext, uploadId, null,
-            Filled: node.Fill == NodeFill.Solid);
+            Filled: node.Fill == NodeFill.Solid,
+            Shape: node.Data is ShapeData s ? s.Kind.ToString().ToLowerInvariant() : null);
     }
 
     /// <summary>

@@ -59,11 +59,20 @@ public class CanvasShapeTests : CanvasTestBase
     }
 
     /// <summary>
-    /// A circle has to actually be round, and a diamond actually turned. The class alone proves
-    /// nothing — the CSS is what draws it, and a missing rule leaves a square wearing the right name.
+    /// A circle has to actually be round, and a diamond actually diamond-shaped. The class alone
+    /// proves nothing — the CSS is what draws it, and a missing rule leaves a square wearing the
+    /// right name.
     /// </summary>
+    /// <remarks>
+    /// <b>A diamond is CUT, not turned</b> (changed 2026-09-18). It used to be a square with a
+    /// forty-five degree rotation, and the templates walk photographed what that actually produced: a
+    /// block's body is shorter than it is wide, because the title bar takes the difference, so the
+    /// rotated square's four corners fell outside the frame and were clipped away by its overflow —
+    /// drawing an OCTAGON. A clip-path polygon fills whatever box it is given. So this asserts the
+    /// polygon is there AND that no rotation has come back, because a rotation is what caused it.
+    /// </remarks>
     [Test]
-    public async Task An_ellipse_is_round_and_a_diamond_is_turned()
+    public async Task An_ellipse_is_round_and_a_diamond_is_cut_to_shape()
     {
         await StartCleanAsync();
         var shape = await AddNodeAsync("shape");
@@ -79,9 +88,17 @@ public class CanvasShapeTests : CanvasTestBase
         await shape.Locator("select").SelectOptionAsync("Diamond");
         await Page.Keyboard.PressAsync("Escape");
 
-        var transform = await shape.Locator(".bc-shape--diamond")
-            .EvaluateAsync<string>("e => getComputedStyle(e).transform");
-        Assert.That(transform, Does.StartWith("matrix"), "a diamond is a turned square, so it carries a transform");
+        var drawn = await shape.Locator(".bc-shape--diamond").EvaluateAsync<string[]>(
+            "e => [getComputedStyle(e).clipPath, getComputedStyle(e).transform]");
+
+        Assert.Multiple(() =>
+        {
+            Assert.That(drawn[0], Does.Contain("polygon"),
+                "a diamond is cut out of its box; without the clip-path it is a rounded square");
+            Assert.That(drawn[1], Is.EqualTo("none"),
+                "a rotation is what made this an octagon: a turned square's corners fall outside a box "
+                + "that is not square, and the frame clips them off");
+        });
     }
 
     /// <summary>A shape placed and not yet named still draws: that is how a moodboard is built.</summary>
