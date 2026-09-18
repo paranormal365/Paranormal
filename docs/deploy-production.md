@@ -263,6 +263,50 @@ nothing: a server that skipped a release needs the older entries too.
    Check it afterwards: a group's billing page still shows its plan, price and receipts, and a
    receipt still downloads.
 
+### 2026-09-18 — live configuration changed by hand (no deploy needed for these)
+
+Two **data** changes were applied directly to the live database. Neither needs a deploy; both are
+already in effect. Recorded here because a reseed, a restore or a migration has to know.
+
+1. **The price ladder gained a Free band.** Until now no band was priced at nothing, so
+   `TierAreaResolution.FreeTierAsync` returned null for any group with no subscription and every
+   capability check **failed open** — the whole paid lane included for free. The ladder is now:
+
+   | band | members | monthly |
+   |---|---|---|
+   | Free | 1–1 | $0 — excludes `PrivateResidenceCases` |
+   | Small Group | **2**–3 | $20 |
+   | Standard Group | 4–10 | $40 |
+   | Large Group | 11–25 | $60 |
+   | Enterprise | 26+ | $100 |
+
+   **Small Group moved from 1 to 2 in the same transaction and must stay there.** `Validate`
+   refuses an overlapping ladder and `Resolve` *throws* on one, which takes checkout, the permission
+   area gate and the renewal job down together. If you ever edit these bands, keep them contiguous
+   from 1 with an unbounded top.
+
+2. **A comp campaign exists**: 100% off, every period forever, one generated single-use code,
+   campaign capped at one redemption. It is how Apple-Beta — the iOS release test group — is given
+   Small Group free. The code is NOT recorded in this repository on purpose: this repo is public and
+   a free-forever code in it is a free plan for anybody who reads it. It is in the `CouponCodes`
+   table. To comp another group, raise the campaign cap on the coupon screen and generate a second
+   code; never reuse one, and never make it a shared code.
+
+**One deploy is still owed, and this is the reason to do it promptly.** Adding the Free band walled
+new groups in: a one-member group resolves to Free, Free lists at nothing, checkout refuses a zero
+list price, and `PaidPlan.WhyCannotAddMemberAsync` refuses the second member without a plan. Cannot
+buy because too small, cannot grow because has not bought — and **every group starts with one
+member**. The fix (`BillableUnits` prices a purchase at the cheapest band actually sold) is code and
+does nothing until the API ships:
+
+```bash
+.\scripts\deploy-ishaunted.ps1 -Apps webapi
+```
+
+Apple-Beta is not affected — it has two members and prices into Small Group — but any group created
+on the live site before that deploy is stuck. Check afterwards: a brand-new group's billing page
+offers a plan at $20 rather than refusing with "There is nothing to subscribe to at that size."
+
 ### 2026-09-16 — the case canvas becomes the Research tab
 
 1. Apply the migrations, in order, before deploying — `dotnet ef database update` applies all of them:
