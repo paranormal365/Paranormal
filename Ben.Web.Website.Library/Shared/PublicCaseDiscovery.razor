@@ -14,6 +14,18 @@
 @* Item 154: the discovery switch — off means this renders nothing at all. *@
 @if (Features.IsOn(SiteFeatures.Discovery))
 {
+    @* The loader stands in for the section only on the FIRST load, when there is nothing to keep.
+
+       It used to stand in for EVERY load, and that was the jump Ben reported on 2026-09-18: moving
+       the map re-asks for the cases in the new view, which set _loading, which took the whole
+       section — the 420px map with it — out of the page and put a small spinner in its place. The
+       page lost the best part of a thousand pixels, the browser clamped the scroll position because
+       there was no longer that much document, and when the answer arrived a moment later the section
+       came back underneath a reader who had been moved. Recorded: the page scrolled from the map up
+       to the feed, about a second after a zoom.
+
+       So a RELOAD leaves everything where it is and says so quietly instead (_refreshing below). It
+       also stops MapKit being destroyed and rebuilt on every pan, which it was. *@
     @if (_loading)
     {
         <div class="d-flex justify-content-center py-5">
@@ -26,7 +38,17 @@
         <div class="container-fluid px-3 mt-5" style="max-width:1000px;">
             <div class="d-flex align-items-baseline justify-content-between mb-2">
                 <h4 class="mb-0">Public Investigations</h4>
-                <span class="text-muted small">@_totalCount case@(_totalCount == 1 ? "" : "s") worldwide</span>
+                <span class="text-muted small">
+                    @if (_refreshing)
+                    {
+                        <span class="spinner-border spinner-border-sm me-1" role="status" aria-hidden="true"></span>
+                        <span>Updating…</span>
+                    }
+                    else
+                    {
+                        @($"{_totalCount} case{(_totalCount == 1 ? "" : "s")} worldwide")
+                    }
+                </span>
             </div>
             <p class="text-secondary small mb-3">
                 Click a marker or case below to view details.
@@ -239,7 +261,14 @@
     private double _mapZoom = 4;
 
     // ── Data ─────────────────────────────────────────────────────────────────
+    /// <summary>The first load, which has nothing on screen worth keeping.</summary>
     private bool   _loading    = true;
+
+    /// <summary>
+    /// A later load, for a view the person just moved to. Never unmounts anything: see the remark on
+    /// the loader above for what happened when it did.
+    /// </summary>
+    private bool   _refreshing;
     private int    _totalCount = 0;
     private int    _page       = 1;
     private int    _pageSize   = 18;
@@ -325,7 +354,8 @@
 
     private async Task LoadAsync(CancellationToken token = default)
     {
-        _loading = true;
+        // The first load may take the section over; every later one has to leave the page alone.
+        if (_loadedOnce) _refreshing = true; else _loading = true;
         StateHasChanged();
 
         // The map and the list are built from ONE answer, so they can never disagree. Bounded once
@@ -334,7 +364,7 @@
             page: 1, pageSize: 500, sort: _sort, bounds: _inView, token: token);
         if (response is null)
         {
-            _loading = false;
+            _loading = _refreshing = false;
             StateHasChanged();
             return;
         }
@@ -351,9 +381,12 @@
         SlicePage(allItems);
         await LoadVoteSummariesAsync();
 
-        _loading = false;
+        _loadedOnce = true;
+        _loading = _refreshing = false;
         StateHasChanged();
     }
+
+    private bool _loadedOnce;
 
     private void BuildMarkers(List<PublicCaseDiscoveryItem> all)
     {
