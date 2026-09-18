@@ -259,4 +259,92 @@ public sealed class TourAddOnServiceTests
         Assert.Empty(gateway.Charges);
         Assert.Contains("priced by its members", outcome.Note);
     }
+    // ── the frozen period price, and the price the add-on uses (2026-09-17) ──
+
+    /// <summary>
+    /// Adding a tour mid-period never rewrites what the period was sold for.
+    /// </summary>
+    /// <remarks>
+    /// This did <c>PriceAtPeriodStart += payable</c>. That field's own summary says what it is
+    /// for — "Price agreed for this period, copied from the tier so a later price change does not
+    /// silently rewrite what was charged" — and the add-on rewrote it to a figure that was never
+    /// the price of anything: a $30 month with a tour added half way through read $44.50, which is
+    /// neither what the period was sold for nor what the next one costs. The group sees it as
+    /// their period price, SuperAdmin sees it on the subscriptions grid, and a re-opened period
+    /// would snapshot it into the contract. The add-on's money is already in the ledger, with its
+    /// own tax, provider reference and receipt number.
+    /// </remarks>
+    [Fact]
+    public async Task Adding_a_tour_does_not_rewrite_what_the_period_was_sold_for()
+    {
+        var factory = Db();
+        var w = await SeedAsync(factory, paidTours: 1, liveTours: 2);
+        var gateway = new FakeGateway();
+
+        var outcome = await RunAsync(w, gateway);
+        Assert.True(outcome.Charged > 0m, "the fixture should have charged for the second tour");
+
+        await using var db = await factory.CreateDbContextAsync();
+        var sub = await db.OrganizationSubscriptions.SingleAsync();
+
+        Assert.Equal(30m, sub.PriceAtPeriodStart);     // the band's monthly price, untouched
+        Assert.Equal(2, sub.TourCountAtPeriodStart);   // the coverage marker still advances
+
+        // And the money is where money goes.
+        Assert.Equal(outcome.Charged, await db.BillingLedgerEntries
+            .Where(e => e.Kind == Ben.Data.Common.Enums.BillingLedgerKind.Payment)
+            .SumAsync(e => e.Amount));
+    }
+
+    /// <summary>
+    /// A price rise after the period was sold does not reach the group until they renew.
+    /// </summary>
+    /// <remarks>
+    /// The add-on priced the new tour from the live tier alone, so raising the price list charged
+    /// a group mid-period at the new rate for a period they had already bought — the one thing the
+    /// contract exists to prevent. EffectiveTermsResolver states the rule: the contract binds for
+    /// the rest of the period unless the live price has DROPPED, which is an improvement.
+    /// </remarks>
+    [Fact]
+    public async Task A_price_rise_mid_period_does_not_reach_a_tour_added_now()
+    {
+        var factory = Db();
+        var w = await SeedAsync(factory, paidTours: 1, liveTours: 2);
+
+        // The list price doubles after the period was sold at $30.
+        await using (var db = await factory.CreateDbContextAsync())
+        {
+            var price = await db.SubscriptionTierPrices.SingleAsync();
+            price.Price = 60m;
+            await db.SaveChangesAsync();
+        }
+
+        var gateway = new FakeGateway();
+        var outcome = await RunAsync(w, gateway);
+
+        // Half a 30-day month of ONE extra tour at the contracted $30, not at the new $60.
+        Assert.InRange(outcome.Charged, 14m, 17m);
+    }
+
+    /// <summary>A price CUT is passed on, because a cut is an improvement.</summary>
+    [Fact]
+    public async Task A_price_cut_mid_period_is_passed_on()
+    {
+        var factory = Db();
+        var w = await SeedAsync(factory, paidTours: 1, liveTours: 2);
+
+        await using (var db = await factory.CreateDbContextAsync())
+        {
+            var price = await db.SubscriptionTierPrices.SingleAsync();
+            price.Price = 10m;
+            await db.SaveChangesAsync();
+        }
+
+        var gateway = new FakeGateway();
+        var outcome = await RunAsync(w, gateway);
+
+        // Half a month of one tour at the cheaper $10.
+        Assert.InRange(outcome.Charged, 4m, 6m);
+    }
+
 }

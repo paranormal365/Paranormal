@@ -11,9 +11,21 @@ namespace Ben.Data.Source.Entities
     /// the subscription stops pointing at it; this row stays, because "why was this group charged
     /// less in March?" must remain answerable.</para>
     ///
-    /// <para>The unique index on organization and <b>coupon</b> — not code — is also what makes the
-    /// redemption limit safe: <c>Coupon.RedemptionCount</c> is a cache, and two simultaneous
-    /// redemptions of the last use race on it. The database decides.</para>
+    /// <para>The unique index on organization and <b>coupon</b> — not code — makes the
+    /// PER-ORGANIZATION limit safe: <c>Coupon.RedemptionCount</c> is a cache, and one group's two
+    /// simultaneous attempts race on it. There, the database decides.</para>
+    ///
+    /// <para><b>It does not make the CAMPAIGN limit safe, and this used to claim it did</b>
+    /// (2026-09-17 audit). The index constrains one organization against one coupon, so two
+    /// DIFFERENT groups taking the last slot of a hundred both read 99 &lt; 100, both pass
+    /// <c>CouponMath.WhyNotRedeemable</c>, both insert rows that collide with nothing, and the
+    /// counter reaches 101. No index can express "at most N rows for this coupon", so the cap
+    /// needs a conditional increment the database performs in one statement —
+    /// <c>UPDATE … SET Count = Count + 1 WHERE Id = @id AND Count &lt; Max</c>, claimed only when it
+    /// affects a row. That is an <c>ExecuteUpdateAsync</c>, which the InMemory provider the
+    /// fulfilment tests run on cannot execute, so it lands with those tests moved to
+    /// <c>SqliteTestDb</c> rather than as an untested change to the payment path. Recorded here
+    /// meanwhile so nobody reads the paragraph above and believes the cap is already held.</para>
     ///
     /// <para>Indexing on the coupon rather than the code is deliberate. A group handed two codes
     /// from the same batch has been handed the same offer twice, and letting them stack it is a

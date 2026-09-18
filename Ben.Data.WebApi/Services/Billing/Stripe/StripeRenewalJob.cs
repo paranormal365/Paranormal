@@ -150,8 +150,32 @@ public sealed class StripeRenewalJob : IScheduledJob
             return;
         }
 
-        // The frozen price, forever: the offer said what the ride costs, and unlike the group's
-        // banded subscription there is no live world to re-read — a seat has no band.
+        // Nor for a seat the group's plan now covers (2026-09-17 audit).
+        //
+        // A seat exists for one reason: the group had outgrown its band when this person joined.
+        // Nothing revisited that. A group on Small (five) whose sixth member took a $5 seat, then
+        // upgraded to Standard (twenty-five), went on paying Standard's price — which covers that
+        // member — while the member went on paying $5 a month of their own money for a place the
+        // group had already bought. Both charges are real, both recur, and nothing on either
+        // billing page says the other exists. It is the group's own upgrade that starts it, so the
+        // better the group does the longer it runs.
+        //
+        // Only the unambiguous case is decided here: when the band covers EVERYBODY, nobody is in
+        // overflow and every seat stops. A band that covers some but not all of the members
+        // holding seats needs a rule about WHICH seats survive — oldest absorbed first, or newest
+        // — and that is a pricing decision rather than a defect, so it is left as it is and
+        // recorded for Ben rather than invented here.
+        var bandCoversEveryone = await BandCoversEveryoneAsync(db, seat.OrganizationId, ct);
+        if (bandCoversEveryone)
+        {
+            _log.LogInformation(
+                "Seat {SeatId} not renewed — {OrganizationName}'s plan now covers every member.",
+                seat.Id, seat.Organization.Name);
+            return;
+        }
+
+        // The frozen price, forever: the offer said what the ride costs, and the seat's own price
+        // is never re-read from the live world — what varies is only whether it is owed at all.
         var (_, taxRate) = await TaxResolver.ForOrganizationAsync(db, seat.OrganizationId, ct);
         var tax = TaxResolver.TaxOn(seat.PriceAtStart, taxRate);
         var periodStart = seat.CurrentPeriodEnd!.Value;
@@ -188,6 +212,38 @@ public sealed class StripeRenewalJob : IScheduledJob
                 [StripeFulfillmentService.CheckoutFacts.Keys.Seat] = seat.Id.ToString(),
                 [StripeFulfillmentService.CheckoutFacts.Keys.PeriodStart] = periodStart.ToString("O"),
             }), ct);
+    }
+
+    /// <summary>
+    /// Whether the group's standing band now has room for every active member, so no one is in
+    /// overflow and no seat is owed.
+    /// </summary>
+    /// <remarks>
+    /// Mirrors the question <see cref="OverflowSeats.MaybeOfferSeatAsync"/> asks when it offers a
+    /// seat, so the two cannot disagree about what "past the band" means. Answers false whenever
+    /// it cannot tell — no standing subscription, no tier, a tier row that has gone — because a
+    /// seat that stops billing on a missing row would quietly cancel a debt the group still owes.
+    /// </remarks>
+    private static async Task<bool> BandCoversEveryoneAsync(
+        BenDataContext db, Guid organizationId, CancellationToken ct)
+    {
+        var sub = await db.OrganizationSubscriptions.AsNoTracking()
+            .FirstOrDefaultAsync(s => s.OrganizationId == organizationId, ct);
+        if (sub is null || sub.Status != SubscriptionStatus.Active
+            || sub.SubscriptionTierId is not { } tierId) return false;
+
+        var bandMax = await db.SubscriptionTiers.AsNoTracking()
+            .Where(t => t.Id == tierId)
+            .Select(t => t.MaxMembers)
+            .FirstOrDefaultAsync(ct);
+
+        // An unbounded band covers everybody by definition; that is what unbounded means.
+        if (bandMax is not { } max) return true;
+
+        var members = await db.OrganizationUserMemberships.AsNoTracking()
+            .CountAsync(m => m.OrganizationId == organizationId && m.IsActive, ct);
+
+        return members <= max;
     }
 
     private async Task RenewOneAsync(

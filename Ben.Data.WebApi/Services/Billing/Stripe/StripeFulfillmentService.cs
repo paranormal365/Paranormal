@@ -450,8 +450,40 @@ public sealed class StripeFulfillmentService
         var now = DateTime.UtcNow;
         var total = unit * count;
 
-        var (_, taxRate) = await TaxResolver.ForOrganizationAsync(db, organizationId, ct);
-        var tax = TaxResolver.TaxOn(total, taxRate);
+        // The tax the buyer was CHARGED, read back from the metadata (2026-09-17 audit).
+        //
+        // The credit checkout resolves the rate, works out the tax, writes both into the metadata
+        // AND adds the tax to what Stripe collects. This then threw those away and resolved the
+        // rate again from the live rules, filing that second answer in the ledger. The two differ
+        // whenever anything moved in between — a TaxRateRule edited, the group's first address
+        // added or changed — and the window is however long the webhook takes, which on a retry is
+        // hours. The card statement then says one number and the receipt says another, and the
+        // receipt is the document we hand over.
+        //
+        // TaxResolver's own summary states the rule this restores: "the rate is resolved at write
+        // time and frozen onto whatever document asked — a later rule edit never rewrites a bill
+        // already sent." The subscription path beside this one has always done it through
+        // CheckoutFacts; only the credit path read live.
+        //
+        // The live resolve stays as the fallback, for a session created before this shipped whose
+        // webhook arrives after it. It is the old behaviour, so such a session is no worse off.
+        var inv = System.Globalization.CultureInfo.InvariantCulture;
+        decimal taxRate, tax;
+        if (checkout.Metadata.TryGetValue(CheckoutFacts.Keys.TaxRate, out var rateRaw)
+            && decimal.TryParse(rateRaw, System.Globalization.NumberStyles.Number, inv, out taxRate)
+            && checkout.Metadata.TryGetValue(CheckoutFacts.Keys.TaxAmount, out var taxRaw)
+            && decimal.TryParse(taxRaw, System.Globalization.NumberStyles.Number, inv, out tax))
+        {
+            // Nothing to do: both figures came from the session the buyer actually paid.
+        }
+        else
+        {
+            _log.LogWarning(
+                "Event-credit payment {Reference} carries no frozen tax; resolving it live.", reference);
+            (_, taxRate) = await TaxResolver.ForOrganizationAsync(db, organizationId, ct);
+            tax = TaxResolver.TaxOn(total, taxRate);
+        }
+
         var description = count == 1 ? "1 event credit" : $"{count} event credits";
 
         for (var i = 0; i < count; i++)

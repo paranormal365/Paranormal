@@ -679,4 +679,130 @@ public sealed class SubscriptionLapseJobTests
         Assert.Equal(SubscriptionStatus.Active, seat.Status);
     }
 
+    // ── what the notice says the next bill is (2026-09-17 audit) ─────────────
+
+    /// <summary>Puts the group on a priced band at <paramref name="interval"/>.</summary>
+    private static async Task PriceAsync(
+        World w, BillingInterval interval, decimal price,
+        bool bandedByMembers = true, OrganizationKind kind = OrganizationKind.InvestigationGroup,
+        int tours = 0)
+    {
+        await using var db = await w.F.CreateDbContextAsync();
+        var tierId = Guid.NewGuid();
+        db.SubscriptionTiers.Add(new SubscriptionTier
+        {
+            Id = tierId, Name = "The band", MinMembers = 1, MaxMembers = null,
+            IsBandedByMembers = bandedByMembers, IsActive = true, SortOrder = 1,
+            DateCreated = DateTime.UtcNow, CreatedByAppUserId = w.OwnerId,
+        });
+        db.SubscriptionTierPrices.Add(new SubscriptionTierPrice
+        {
+            Id = Guid.NewGuid(), SubscriptionTierId = tierId, Interval = interval,
+            Price = price, IsActive = true,
+            DateCreated = DateTime.UtcNow, CreatedByAppUserId = w.OwnerId,
+        });
+
+        var org = await db.Organizations.SingleAsync(o => o.Id == w.OrgId);
+        org.Kind = kind;
+
+        var addressId = Guid.NewGuid();
+        for (var i = 0; i < tours; i++)
+            db.Tours.Add(new Tour
+            {
+                Id = Guid.NewGuid(), OrganizationId = w.OrgId, Name = $"Walk {i}",
+                UrlName = $"walk-{Guid.NewGuid():N}"[..12],
+                StartOrganizationAddressId = addressId,
+                DateCreated = DateTime.UtcNow, CreatedByAppUserId = w.OwnerId,
+            });
+        if (tours > 0)
+            db.OrganizationAddresses.Add(new OrganizationAddress
+            {
+                Id = addressId, OrganizationId = w.OrgId, OrganizationAddressTypeId = Guid.NewGuid(),
+                StreetAddress1 = "1 Printers Alley", City = "Nashville", State = "TN",
+                ZipCode = "37201", Country = "US",
+                DateCreated = DateTime.UtcNow, CreatedByAppUserId = w.OwnerId,
+            });
+
+        var sub = await db.OrganizationSubscriptions.SingleAsync();
+        sub.SubscriptionTierId = tierId;
+        sub.Interval = interval;
+        await db.SaveChangesAsync();
+    }
+
+    /// <summary>
+    /// A group billed quarterly is told its price per QUARTER.
+    /// </summary>
+    /// <remarks>
+    /// The cadence noun was <c>Interval == Yearly ? "year" : "month"</c>, so quarterly and
+    /// six-monthly groups were both told "per month" — beside their quarterly price. That
+    /// understates what is about to be taken by three, in the one letter whose whole purpose is
+    /// that the charge is expected.
+    /// </remarks>
+    [Fact]
+    public async Task A_quarterly_group_is_told_its_price_per_quarter()
+    {
+        var w = await SeedAsync(DateTime.UtcNow.AddDays(7));
+        await PriceAsync(w, BillingInterval.Quarterly, 40m);
+        await TrialEndingAsync(w);
+
+        await Job(w.F).RunAsync(default);
+
+        var body = await LatestNoticeBodyAsync(w);
+        Assert.Contains("per quarter", body);
+        Assert.DoesNotContain("per month", body);
+    }
+
+    /// <summary>
+    /// A tour business is told what its tours cost together, not what one costs.
+    /// </summary>
+    /// <remarks>
+    /// An unbanded business tier's price is a UNIT price — "$29 per month is for a single tour no
+    /// matter how many times scheduled" — so quoting it raw told a three-tour business $29 when
+    /// the invoice is $87. The admin coupon path already carries a fix and a comment for exactly
+    /// this; it was never carried across to the letter.
+    /// </remarks>
+    [Fact]
+    public async Task A_tour_business_is_quoted_for_all_of_its_tours()
+    {
+        var w = await SeedAsync(DateTime.UtcNow.AddDays(7));
+        await PriceAsync(w, BillingInterval.Monthly, 29m,
+            bandedByMembers: false, kind: OrganizationKind.GhostWalkingTour, tours: 3);
+        await TrialEndingAsync(w);
+
+        await Job(w.F).RunAsync(default);
+
+        var body = await LatestNoticeBodyAsync(w);
+        Assert.Contains("$87.00", body);
+        Assert.DoesNotContain("$29.00", body);
+    }
+
+    /// <summary>A monthly banded group reads exactly as it always did.</summary>
+    [Fact]
+    public async Task A_monthly_group_still_reads_per_month()
+    {
+        var w = await SeedAsync(DateTime.UtcNow.AddDays(7));
+        await PriceAsync(w, BillingInterval.Monthly, 15m);
+        await TrialEndingAsync(w);
+
+        await Job(w.F).RunAsync(default);
+
+        var body = await LatestNoticeBodyAsync(w);
+        Assert.Contains("$15.00 per month", body);
+    }
+
+    /// <summary>The price line only appears on the trial-ending wording, so this arranges one.</summary>
+    private static async Task TrialEndingAsync(World w)
+    {
+        await using var db = await w.F.CreateDbContextAsync();
+        db.CouponRedemptions.Add(new CouponRedemption
+        {
+            Id = Guid.NewGuid(), CouponId = Guid.NewGuid(), CouponCodeId = Guid.NewGuid(),
+            OrganizationId = w.OrgId, PeriodsRemaining = 1,
+            RedeemedAtUtc = DateTime.UtcNow.AddMonths(-3),
+            ListPrice = 49m, Discount = 49m, Payable = 0m,
+            DateCreated = DateTime.UtcNow, CreatedByAppUserId = w.OwnerId,
+        });
+        await db.SaveChangesAsync();
+    }
+
 }

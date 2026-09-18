@@ -1,5 +1,6 @@
 using Ben.Data.Common.Enums;
 using Ben.Data.Source.Context;
+using Ben.Data.Source.Services;
 using Ben.Data.WebApi.Services.Billing;
 using Microsoft.EntityFrameworkCore;
 
@@ -112,11 +113,16 @@ public sealed class SubscriptionLapseJob : IScheduledJob
             {
                 await _messages.SendAsync(
                     $"Your place in {seat.Organization.Name} was not renewed",
-                    $"The payment for your own place in {seat.Organization.Name} did not go "
-                  + "through, so it has stopped.\n\n"
+                    // Says WHAT happened, not why. A seat reaches here from a declined card and
+                    // also from the group upgrading to a band that covers everybody — in the
+                    // second case there is nothing wrong and nothing to pay, and a letter
+                    // announcing a failed payment would send somebody to their bank over good
+                    // news. The billing page is where the reason lives.
+                    $"Your own paid place in {seat.Organization.Name} has ended, so it is no "
+                  + "longer being charged.\n\n"
                   + "Nothing you have recorded is affected, and you are still a member of the "
-                  + "group. If you would like the place back, it can be paid for again from your "
-                  + "billing page.",
+                  + "group. Your billing page shows whether anything is owed, and a place can be "
+                  + "paid for again from there if you need one.",
                     [seat.AppUserId], seat.AppUserId, ct);
             }
             catch (Exception ex) when (ex is not OperationCanceledException)
@@ -320,9 +326,46 @@ public sealed class SubscriptionLapseJob : IScheduledJob
 
         if (price is not { } amount) return "what your plan lists";
 
-        var per = sub.Interval == BillingInterval.Yearly ? "year" : "month";
-        return $"{amount:C} per {per}";
+        // The WHOLE period's price, for a business billed per tour (2026-09-17 audit).
+        //
+        // A tier's price is a UNIT price for an unbanded business tier — "$29 per month is for a
+        // single tour no matter how many times scheduled" — so quoting it raw told a business with
+        // three tours $29.00 when the invoice is $87.00. This is the same defect the admin coupon
+        // path already carries a fix and a comment for; it was simply never carried across to the
+        // letter. The letter is the worse place for it: its entire purpose is that the first
+        // invoice is not a surprise.
+        var banded = await db.SubscriptionTiers.AsNoTracking()
+            .Where(t => t.Id == tierId).Select(t => t.IsBandedByMembers).FirstOrDefaultAsync(ct);
+
+        if (!banded && SubscriptionTierResolver.IsBusinessKind(sub.Organization.Kind))
+        {
+            // The LIVE count, because that is what the renewal will actually be billed for.
+            var tours = TourBilling.Units(
+                sub.Organization.Kind,
+                await BillableUnits.ActiveToursAsync(db, sub.OrganizationId, ct));
+            amount = TourBilling.ListPrice(amount, tours);
+        }
+
+        return $"{amount:C} {PerPeriod(sub.Interval)}";
     }
+
+    /// <summary>The cadence as a person would say it, for a sentence rather than a label.</summary>
+    /// <remarks>
+    /// This was <c>Interval == Yearly ? "year" : "month"</c>, so every cadence that is neither told
+    /// the reader "per month" (2026-09-17 audit). A group on quarterly billing was quoted its
+    /// QUARTERLY price per month — the figure and the cadence both wrong, in the direction that
+    /// understates what is about to be taken by three, in the one letter whose job is to make sure
+    /// the charge is expected. CouponMath.Describe and StripeFulfillmentService.Cadence already
+    /// spell all four out; this is the third such list, and the first one that was wrong.
+    /// </remarks>
+    private static string PerPeriod(BillingInterval interval) => interval switch
+    {
+        BillingInterval.Monthly    => "per month",
+        BillingInterval.Quarterly  => "per quarter",
+        BillingInterval.HalfYearly => "every six months",
+        BillingInterval.Yearly     => "per year",
+        _                          => "per period",
+    };
 
     // ── the lapse ─────────────────────────────────────────────────────────────
 

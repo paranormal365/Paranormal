@@ -99,7 +99,7 @@ public sealed class TourAddOnService
         var tiers = await db.SubscriptionTiers.AsNoTracking().Include(t => t.Prices).ToListAsync(ct);
         var tier = tiers.FirstOrDefault(t => t.Id == sub.SubscriptionTierId);
         if (tier is null || tier.IsBandedByMembers
-            || SubscriptionPricing.PriceFor(tier, sub.Interval) is not { } unitPrice)
+            || SubscriptionPricing.PriceFor(tier, sub.Interval) is not { } liveUnitPrice)
             return new Outcome(0m, "This plan is not priced per tour, so nothing changed.");
 
         if (units <= sub.TourCountAtPeriodStart)
@@ -107,6 +107,34 @@ public sealed class TourAddOnService
 
         if (sub.CurrentPeriodStart is not { } periodStart || sub.CurrentPeriodEnd is not { } periodEnd)
             return new Outcome(0m, "This tour is counted at your next renewal.");
+
+        // The CONTRACTED unit price, unless the live one is cheaper (2026-09-17 audit).
+        //
+        // This priced the new tour from the live tier alone, so a price rise reached a group in
+        // the middle of a period they had already bought — the one thing the contract exists to
+        // prevent. EffectiveTermsResolver.EffectivePrice states the rule for the same question:
+        // "the contract's for the rest of the period, unless the live price for the same band and
+        // cadence has dropped below it — a price cut is an improvement too." That method compares
+        // whole-period prices and a tour add-on needs the price of ONE unit, so the same rule is
+        // applied per unit here rather than re-derived differently.
+        //
+        // The contracted unit comes back out of the period price by the count it was sold for,
+        // which is exactly how PeriodOpener put it in: ListPrice(unitPrice, tourCount). That
+        // division is only sound because the add-on no longer adds itself back into
+        // PriceAtPeriodStart — it used to, and dividing a price with add-ons baked into it would
+        // have invented a unit price nobody was ever quoted.
+        var contract = await db.SubscriptionContractTerms.AsNoTracking()
+            .Where(t => t.OrganizationSubscriptionId == sub.Id && t.PeriodStartUtc == sub.CurrentPeriodStart)
+            .FirstOrDefaultAsync(ct);
+
+        var soldPeriodPrice = contract?.Price ?? sub.PriceAtPeriodStart;
+        var soldForTours    = Math.Max(1, sub.TourCountAtPeriodStart);
+        var contractedUnit  = soldPeriodPrice > 0m
+            ? Math.Round(soldPeriodPrice / soldForTours, 2, MidpointRounding.AwayFromZero)
+            : liveUnitPrice;
+
+        // Never more than either: the contract holds a rise off, and a cut is passed on.
+        var unitPrice = Math.Min(contractedUnit, liveUnitPrice);
 
         var extra = units - sub.TourCountAtPeriodStart;
         var now = DateTime.UtcNow;
@@ -217,8 +245,22 @@ public sealed class TourAddOnService
             DateCreated = now, CreatedByAppUserId = byUserId,
         };
 
+        // The COUNT moves, because it is the coverage marker this method exists to advance: it
+        // is what decides whether the next tour owes anything for this period.
         sub.TourCountAtPeriodStart = units;
-        sub.PriceAtPeriodStart += payable;
+
+        // The PRICE does not (2026-09-17 audit). This did `PriceAtPeriodStart += payable`, and
+        // that field's own summary says what it is for: "Price agreed for this period, copied from
+        // the tier so a later price change does not silently rewrite what was charged." A prorated
+        // mid-period add-on rewrote it — to a figure that was never the price of anything. A $30
+        // month with a tour added half way through read $44.50, which is neither what the period
+        // was sold for nor what the next one costs ($60, for two tours). It is shown to the group
+        // as their period price and to SuperAdmin on the subscriptions grid, and it is the value
+        // snapshotted into the contract if a period is ever re-opened from it.
+        //
+        // The add-on is already recorded where a charge belongs: its own Charge and Payment rows
+        // above, with the amount, the tax, the provider reference and a receipt number. Adding it
+        // here as well recorded the same money twice, in the one place designed not to move.
         sub.DateUpdated = now;
         sub.UpdatedByAppUserId = byUserId;
 
