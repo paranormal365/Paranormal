@@ -45,6 +45,12 @@
             </div>
         </fieldset>
 
+        @* The colour it already has, as the background instead of an edge bar: the sticky. *@
+        <label class="bc-check" for="bc-prop-fill">
+            <input id="bc-prop-fill" type="checkbox" class="form-check-input" checked="@(node.Fill == NodeFill.Solid)"
+                   @onchange="@(e => Store.SetFill([node.Id], e.Value is true ? NodeFill.Solid : NodeFill.Bar))" />
+            <span>Filled with its colour</span>
+        </label>
         <label class="bc-check" for="bc-prop-lock">
             <input id="bc-prop-lock" type="checkbox" class="form-check-input" checked="@node.Locked" @onchange="@(e => Store.SetLocked([node.Id], e.Value is true))" />
             <span>Locked</span>
@@ -129,6 +135,12 @@
                 }
             </div>
         </fieldset>
+        @* A panel is the moodboard's section and the deck's slide: solid, bordered, titled. *@
+        <label class="bc-check" for="bc-prop-group-panel">
+            <input id="bc-prop-group-panel" type="checkbox" class="form-check-input" checked="@(group.Fill == GroupFill.Panel)"
+                   @onchange="@(e => Store.SetGroupFill(group.Id, e.Value is true ? GroupFill.Panel : GroupFill.Outline))" />
+            <span>Draw as a panel</span>
+        </label>
         <p class="bc-props__hint">@Store.MembersOf(group.Id).Count() item(s)</p>
         <div class="bc-props__actions">
             <button type="button" class="btn btn-outline-secondary btn-sm" @onclick="@(() => Store.Ungroup(group.Id))">@CanvasCopy.Buttons.Ungroup</button>

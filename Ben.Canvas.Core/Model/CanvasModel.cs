@@ -8,6 +8,31 @@ namespace Ben.Canvas.Core.Model;
 /// <summary>The kinds of block a board holds.</summary>
 public enum CanvasNodeType { Card, Message, Map, Image, Link, Text, File, Audio, Video, Table, Shape }
 
+/// <summary>How a block wears its colour.</summary>
+/// <remarks>
+/// <para><b>Bar reproduces every board written before this existed</b>, which is why it is first and
+/// why the schema does not move: a 3 px accent bar down the left edge, as every block has had.</para>
+///
+/// <para><b>Solid is the sticky.</b> TextNode already calls itself "a sticky note of plain text"; what
+/// it lacked was a background. Turning the colour it already carries into the fill is what the
+/// moodboard's panels and the deck's slides are made of — and it works for a card or a picture caption
+/// too, which a separate StickyData never would.</para>
+///
+/// <para>FORMAT: written by name. An unknown value reads as Bar rather than refusing the board — a
+/// fill is decoration, and the reasoning is on ForgivingEnumConverter.</para>
+/// </remarks>
+public enum NodeFill { Bar, Solid }
+
+/// <summary>How a group is drawn.</summary>
+/// <remarks>
+/// <para><b>Outline is what a group has always looked like</b>: a dashed border and an 8% tint.</para>
+///
+/// <para><b>Panel is the moodboard's section and the deck's slide</b> — solid tint, solid border, the
+/// label as a title bar. It matters beyond looks: SlideOrder's first rule is that groups win, so a deck
+/// built from panels presents correctly with nothing else built.</para>
+/// </remarks>
+public enum GroupFill { Outline, Panel }
+
 /// <summary>A side of a rectangle, where a connector attaches.</summary>
 public enum CanvasSide { Top, Right, Bottom, Left }
 
@@ -71,6 +96,10 @@ public sealed class CanvasNode
     /// <summary>A palette token ("1".."6"), never a colour, so both themes work.</summary>
     public string? ColorKey { get; set; }
 
+    /// <summary>Whether the colour is a bar down the edge or the whole background.</summary>
+    [System.Text.Json.Serialization.JsonConverter(typeof(Serialization.NodeFillConverter))]
+    public NodeFill Fill { get; set; } = NodeFill.Bar;
+
     public Guid? GroupId { get; set; }
     public bool Locked { get; set; }
     public NodeData Data { get; set; } = new TextData();
@@ -79,7 +108,7 @@ public sealed class CanvasNode
     public CanvasNode Clone() => new()
     {
         Id = Id, Type = Type, X = X, Y = Y, Width = Width, Height = Height, Z = Z,
-        ColorKey = ColorKey, GroupId = GroupId, Locked = Locked, Data = Data.Clone(),
+        ColorKey = ColorKey, Fill = Fill, GroupId = GroupId, Locked = Locked, Data = Data.Clone(),
     };
 }
 
@@ -115,6 +144,10 @@ public sealed class CanvasGroup
     public double Height { get; set; }
     public int Z { get; set; }
     public string? ColorKey { get; set; }
+
+    /// <summary>Whether it is a dashed outline or a solid titled panel.</summary>
+    [System.Text.Json.Serialization.JsonConverter(typeof(Serialization.GroupFillConverter))]
+    public GroupFill Fill { get; set; } = GroupFill.Outline;
 
     public CanvasGroup Clone() => (CanvasGroup)MemberwiseClone();
 }

@@ -12,6 +12,25 @@ const FALLBACK = {
 };
 
 /** A theme token as a colour the canvas accepts; tokens that use color-mix() fall back when the canvas cannot parse them. */
+/* Blends two resolved colours. color-mix() is CSS; the canvas needs the arithmetic. */
+function mix(ctx, a, b, weight) {
+    const rgb = value => {
+        ctx.fillStyle = value;
+        const resolved = ctx.fillStyle;
+        if (resolved.startsWith('#')) {
+            return [1, 3, 5].map(i => parseInt(resolved.slice(i, i + 2), 16));
+        }
+        const parts = resolved.match(/[\d.]+/g) || ['0', '0', '0'];
+        return parts.slice(0, 3).map(Number);
+    };
+    const [ar, ag, ab] = rgb(a);
+    const [br, bg, bb] = rgb(b);
+    const at = Math.round(ar * weight + br * (1 - weight));
+    const gt = Math.round(ag * weight + bg * (1 - weight));
+    const bt = Math.round(ab * weight + bb * (1 - weight));
+    return `rgb(${at}, ${gt}, ${bt})`;
+}
+
 function tokenColour(ctx, style, name, fallback) {
     const value = style.getPropertyValue(name).trim();
     if (!value) return fallback;
@@ -106,11 +125,18 @@ export async function drawBoard(root, scene) {
 
     for (const g of scene.groups) {
         const colour = palette(g.colorKey) || c.accent;
+        // A panel is solid in its own colour with a solid edge; an outline keeps the dashed tint it
+        // has always had. Without this a published moodboard is a page of empty dashed rectangles.
+        const panel = g.fill === 'Panel';
         roundRect(ctx, g.x, g.y, g.width, g.height, 8);
-        ctx.fillStyle = c.group;
+        ctx.fillStyle = panel ? mix(ctx, colour, c.surface, 0.14) : c.group;
         ctx.fill();
-        ctx.setLineDash([6, 4]);
-        ctx.lineWidth = 2;
+        if (panel) {
+            ctx.lineWidth = 1;
+        } else {
+            ctx.setLineDash([6, 4]);
+            ctx.lineWidth = 2;
+        }
         ctx.strokeStyle = colour;
         ctx.stroke();
         ctx.setLineDash([]);
@@ -152,8 +178,13 @@ export async function drawBoard(root, scene) {
     const images = await Promise.all(scene.blocks.map(b => loadImage(b.imageUrl)));
 
     scene.blocks.forEach((b, i) => {
+        const accent = palette(b.colorKey) || typeColour(b.kind);
         roundRect(ctx, b.x, b.y, b.width, b.height, 8);
-        ctx.fillStyle = b.kind === 'text' ? tokenColour(ctx, style, '--bc-sticky-bg', c.surface) : c.surface;
+        // A filled block IS its colour; an unfilled one keeps the surface and wears the colour as a
+        // 3 px bar down its left edge, which is what every board written before M9 looks like.
+        ctx.fillStyle = b.filled
+            ? accent
+            : (b.kind === 'text' ? tokenColour(ctx, style, '--bc-sticky-bg', c.surface) : c.surface);
         ctx.fill();
         ctx.lineWidth = 1;
         ctx.strokeStyle = c.border;
@@ -162,8 +193,10 @@ export async function drawBoard(root, scene) {
         ctx.save();
         roundRect(ctx, b.x, b.y, b.width, b.height, 8);
         ctx.clip();
-        ctx.fillStyle = palette(b.colorKey) || typeColour(b.kind);
-        ctx.fillRect(b.x, b.y, 3, b.height);
+        if (!b.filled) {
+            ctx.fillStyle = accent;
+            ctx.fillRect(b.x, b.y, 3, b.height);
+        }
 
         const pad = 10;
         const inner = b.width - pad * 2;

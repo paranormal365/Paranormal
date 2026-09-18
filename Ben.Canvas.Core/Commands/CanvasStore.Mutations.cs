@@ -125,6 +125,16 @@ public sealed partial class CanvasStore
         return Execute(new SetNodePropertyCommand<string?>(nodes, "Colour", n => n.ColorKey, (n, v) => n.ColorKey = v, colorKey), CanvasChangeKind.NodeData);
     }
 
+    /// <summary>Whether a block wears its colour as an edge bar or as its whole background.</summary>
+    public bool SetFill(IEnumerable<Guid> ids, NodeFill fill)
+    {
+        var nodes = Resolve(ids).ToList();
+        if (nodes.Count == 0) return false;
+        return Execute(new SetNodePropertyCommand<NodeFill>(
+            nodes, fill == NodeFill.Solid ? "Fill" : "Unfill", n => n.Fill, (n, v) => n.Fill = v, fill),
+            CanvasChangeKind.NodeData);
+    }
+
     public bool SetLocked(IEnumerable<Guid> ids, bool locked)
     {
         var nodes = Resolve(ids).ToList();
@@ -286,6 +296,16 @@ public sealed partial class CanvasStore
         var clean = string.IsNullOrWhiteSpace(label) ? "Group" : label.Trim();
         if (clean == group.Label) return false;
         return Execute(new SetGroupPropertyCommand<string>(group, "Rename group", g => g.Label, (g, v) => g.Label = v, clean), CanvasChangeKind.Groups);
+    }
+
+    /// <summary>Whether a group is a dashed outline or a solid titled panel.</summary>
+    public bool SetGroupFill(Guid groupId, GroupFill fill)
+    {
+        var group = FindGroup(groupId);
+        if (group is null || group.Fill == fill) return false;
+        return Execute(new SetGroupPropertyCommand<GroupFill>(
+            group, fill == GroupFill.Panel ? "Make a panel" : "Make an outline",
+            g => g.Fill, (g, v) => g.Fill = v, fill), CanvasChangeKind.Groups);
     }
 
     public bool SetGroupColor(Guid groupId, string? colorKey)

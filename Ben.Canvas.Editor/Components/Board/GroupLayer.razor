@@ -11,7 +11,7 @@
     {
         var selected = Selection.GroupId == group.Id;
         var count = Store.MembersOf(group.Id).Count();
-        <div @key="group.Id" class="bc-group" role="group"
+        <div @key="group.Id" class="bc-group @(group.Fill == GroupFill.Panel ? "bc-group--panel" : null)" role="group"
              aria-label="@($"Group: {group.Label}, {(count == 1 ? "1 item" : $"{count} items")}")"
              data-bc-selected="@(selected ? "true" : null)"
              style="@GroupStyle(group)">

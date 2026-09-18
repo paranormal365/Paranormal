@@ -49,3 +49,15 @@ public sealed class ShapeKindConverter : ForgivingEnumConverter<Model.ShapeKind>
 {
     protected override Model.ShapeKind Fallback => Model.ShapeKind.Rectangle;
 }
+
+/// <summary>A block fill this build does not know reads as the accent bar.</summary>
+public sealed class NodeFillConverter : ForgivingEnumConverter<Model.NodeFill>
+{
+    protected override Model.NodeFill Fallback => Model.NodeFill.Bar;
+}
+
+/// <summary>A group fill this build does not know reads as the dashed outline.</summary>
+public sealed class GroupFillConverter : ForgivingEnumConverter<Model.GroupFill>
+{
+    protected override Model.GroupFill Fallback => Model.GroupFill.Outline;
+}

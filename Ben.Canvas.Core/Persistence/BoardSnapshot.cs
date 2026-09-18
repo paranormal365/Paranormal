@@ -13,7 +13,7 @@ namespace Ben.Canvas.Core.Persistence;
 public sealed record SnapshotBlock(
     double X, double Y, double Width, double Height,
     string Kind, string? ColorKey, string Title, IReadOnlyList<string> Lines,
-    Guid? AssetId, string? Ext, Guid? UploadFileId, string? ImageUrl);
+    Guid? AssetId, string? Ext, Guid? UploadFileId, string? ImageUrl, bool Filled = false);
 
 /// <summary>A connector as the published picture draws it.</summary>
 /// <param name="Path">The SVG path of the curve (a canvas Path2D reads it directly).</param>
@@ -21,7 +21,7 @@ public sealed record SnapshotBlock(
 public sealed record SnapshotConnector(string Path, IReadOnlyList<double[]> Heads, string? Label, double LabelX, double LabelY, string? ColorKey);
 
 /// <summary>A group as the published picture draws it.</summary>
-public sealed record SnapshotGroup(double X, double Y, double Width, double Height, string Label, string? ColorKey);
+public sealed record SnapshotGroup(double X, double Y, double Width, double Height, string Label, string? ColorKey, GroupFill Fill = GroupFill.Outline);
 
 /// <summary>
 /// Everything a published picture of a board needs, in world coordinates, and how big the picture is.
@@ -68,7 +68,7 @@ public static class BoardSnapshot
 
         var groups = document.Groups
             .OrderBy(g => g.Z)
-            .Select(g => new SnapshotGroup(g.X, g.Y, g.Width, g.Height, g.Label, g.ColorKey))
+            .Select(g => new SnapshotGroup(g.X, g.Y, g.Width, g.Height, g.Label, g.ColorKey, g.Fill))
             .ToList();
 
         var connectors = new List<SnapshotConnector>();
@@ -114,7 +114,8 @@ public static class BoardSnapshot
             ImageData i => (i.AssetId, i.OpfsExt, i.UploadFileId),
             _ => ((Guid?)null, (string?)null, (Guid?)null),
         };
-        return new SnapshotBlock(node.X, node.Y, node.Width, node.Height, kind, node.ColorKey, title, lines, assetId, ext, uploadId, null);
+        return new SnapshotBlock(node.X, node.Y, node.Width, node.Height, kind, node.ColorKey, title, lines, assetId, ext, uploadId, null,
+            Filled: node.Fill == NodeFill.Solid);
     }
 
     private static (string Title, IReadOnlyList<string> Lines) Words(CanvasNode node)
