@@ -118,6 +118,46 @@ public sealed class BillingLedgerTests
         Assert.Equal(0m, TaxResolver.TaxOn(10.00m, 0m));
     }
 
+    /// <summary>
+    /// A hand-recorded charge rounds away from zero, and its tax is a percentage of the figure
+    /// the row actually stores.
+    /// </summary>
+    /// <remarks>
+    /// <para><b>2026-09-17 audit.</b> The row stored <c>decimal.Round(amount, 2)</c> — no
+    /// MidpointRounding, so BANKER'S rounding, alone in a codebase that rounds money away from
+    /// zero everywhere else. And the tax was taken on the caller's UNROUNDED amount while Amount
+    /// held the rounded one, so the row did not reconcile against itself.</para>
+    ///
+    /// <para>$10.005 at 9.75% is the case that shows both: banker's files $10.00 where the
+    /// convention says $10.01, and the old tax base of $10.005 gives $0.98 against a stored
+    /// amount that implies $0.98 too — but from a number printed nowhere. Recomputing the tax
+    /// from the row is what an auditor does, and it has to come out to what is filed.</para>
+    /// </remarks>
+    [Fact]
+    public async Task A_recorded_charge_rounds_half_up_and_taxes_what_it_stores()
+    {
+        var (factory, orgId, adminId) = await SeedOrgAsync();
+
+        var record = Body(await Admin(factory, adminId).RecordCharge(
+            orgId, new RecordBillingEntryRequest(10.005m, "An awkward half cent", null, null, null), default));
+
+        Assert.Equal(10.01m, record.Amount);                                  // half-up, not 10.00
+        Assert.Equal(TaxResolver.TaxOn(record.Amount, 9.75m), record.TaxAmount);   // taxes what it stores
+    }
+
+    /// <summary>Ordinary amounts are untouched, so nothing that was already right moved.</summary>
+    [Fact]
+    public async Task An_ordinary_charge_is_unchanged()
+    {
+        var (factory, orgId, adminId) = await SeedOrgAsync();
+
+        var record = Body(await Admin(factory, adminId).RecordCharge(
+            orgId, new RecordBillingEntryRequest(100m, "Pro band", null, null, null), default));
+
+        Assert.Equal(100m, record.Amount);
+        Assert.Equal(9.75m, record.TaxAmount);
+    }
+
     [Fact]
     public async Task A_charge_computes_tax_from_the_groups_state_and_freezes_it_on_the_row()
     {

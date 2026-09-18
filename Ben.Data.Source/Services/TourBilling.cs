@@ -37,17 +37,38 @@ public static class TourBilling
     /// <param name="periodStart">When the paid period began.</param>
     /// <param name="periodEnd">When it ends.</param>
     /// <param name="now">The moment the unit is added.</param>
+    /// <param name="units">How many units are being added at once. Priced together, see below.</param>
     /// <returns>Zero when the period is over or malformed; otherwise the day-prorated share.</returns>
-    public static decimal Remainder(decimal unitPrice, DateTime periodStart, DateTime periodEnd, DateTime now)
+    /// <remarks>
+    /// <para><b>Rounded once, at the end</b> (2026-09-17 audit). The caller used to price one unit
+    /// and multiply — <c>Remainder(unitPrice, …) * extra</c> — which rounds a cent onto EACH unit
+    /// before multiplying. Three tours added to a $29 monthly plan on the first day came to $29.01,
+    /// because a third of $29 is $9.6667 and every one of them rounded up. Always up: the rounding
+    /// is away from zero, so the error never cancels, it accumulates against the customer and grows
+    /// with the number of tours. Taking the quantity here makes the multiplication happen before
+    /// the one rounding, which is the order money is supposed to be worked out in.</para>
+    ///
+    /// <para><b>The ratio is decimal, not double.</b> It was <c>(decimal)(daysLeft / totalDays)</c>
+    /// — a binary floating-point division converted afterwards, so the value being rounded already
+    /// carried a representation error. It is far too small to see on its own, but it lands next to
+    /// a rounding boundary: a true half-cent that comes back from <c>double</c> a hair under rounds
+    /// DOWN, and <see cref="MidpointRounding.AwayFromZero"/> was chosen precisely so half-cents go
+    /// up. Both operands are whole day counts, so dividing them as decimals is exact and the
+    /// boundary behaves as the convention says it does.</para>
+    /// </remarks>
+    public static decimal Remainder(
+        decimal unitPrice, DateTime periodStart, DateTime periodEnd, DateTime now, int units = 1)
     {
         var totalDays = (periodEnd - periodStart).TotalDays;
-        if (totalDays <= 0 || now >= periodEnd) return 0m;
+        if (totalDays <= 0 || now >= periodEnd || units <= 0) return 0m;
 
         // Whole days remaining, counting today as a day: a tour added at 11pm still ran that
         // evening. Capped at the period so a clock skew cannot bill more than a full unit.
         var daysLeft = Math.Min(Math.Ceiling((periodEnd - now).TotalDays), totalDays);
         if (daysLeft <= 0) return 0m;
 
-        return Math.Round(unitPrice * (decimal)(daysLeft / totalDays), 2, MidpointRounding.AwayFromZero);
+        return Math.Round(
+            unitPrice * units * ((decimal)daysLeft / (decimal)totalDays),
+            2, MidpointRounding.AwayFromZero);
     }
 }

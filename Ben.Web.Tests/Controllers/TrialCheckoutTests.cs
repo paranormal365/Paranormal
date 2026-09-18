@@ -266,4 +266,83 @@ public sealed class TrialCheckoutTests
         Assert.False(response.PaidWithoutCharge);
         Assert.Equal(15.00m, Assert.Single(gateway.Sessions).Payable);
     }
+    // ── buying a period you already have (2026-09-17 audit) ──────────────────
+
+    /// <summary>Seeds a standing subscription already paid through a future date.</summary>
+    private static async Task PaidThroughAsync(World w, BillingInterval interval, DateTime through)
+    {
+        await using var db = await w.F.CreateDbContextAsync();
+        db.OrganizationSubscriptions.Add(new OrganizationSubscription
+        {
+            Id = Guid.NewGuid(), OrganizationId = w.OrgId, Status = SubscriptionStatus.Active,
+            SubscriptionTierId = w.TierId, Interval = interval,
+            CurrentPeriodStart = DateTime.UtcNow.AddDays(-5), CurrentPeriodEnd = through,
+            PriceAtPeriodStart = 15m, MemberCountAtPeriodStart = 1,
+            DateCreated = DateTime.UtcNow.AddDays(-5), CreatedByAppUserId = w.OwnerId,
+        });
+        await db.SaveChangesAsync();
+    }
+
+    /// <summary>
+    /// A group already paid through a future date cannot buy the same cadence again.
+    /// </summary>
+    /// <remarks>
+    /// Nothing checked. An owner who pressed Subscribe twice — a double click, a stale tab, a back
+    /// button, or simply not believing the first one worked — opened a second checkout and paid
+    /// for a month they already owned. The period was overwritten rather than extended, so the
+    /// second payment bought nothing at all and left no trace of what it was for.
+    /// </remarks>
+    [Fact]
+    public async Task A_group_already_paid_through_cannot_buy_the_same_cadence_again()
+    {
+        var w = await SeedAsync();
+        await PaidThroughAsync(w, BillingInterval.Monthly, DateTime.UtcNow.AddDays(20));
+        var gateway = new FakeGateway();
+
+        var result = (await Build(w, gateway).Start(w.OrgId,
+            new StartCheckoutRequest(BillingInterval.Monthly, null), default)).Result;
+
+        var bad = Assert.IsType<BadRequestObjectResult>(result);
+        Assert.Contains("already paid through", Assert.IsType<string>(bad.Value));
+        Assert.Empty(gateway.Sessions);                       // no second charge was ever opened
+    }
+
+    /// <summary>
+    /// Changing cadence is not what the guard refuses. A group moving from monthly to yearly is
+    /// buying something different and must never be told it already owns it.
+    /// </summary>
+    /// <remarks>
+    /// The seeded band is sold monthly only, so this request is refused — by the pricing check,
+    /// with the pricing check's own sentence. That is the assertion: the refusal must not be the
+    /// already-paid-through one. Asserting merely "not a BadRequest" would pass for the wrong
+    /// reason here and fail for the wrong reason if the seed ever gained a yearly price.
+    /// </remarks>
+    [Fact]
+    public async Task Moving_to_a_different_cadence_is_not_refused_as_a_duplicate()
+    {
+        var w = await SeedAsync();
+        await PaidThroughAsync(w, BillingInterval.Monthly, DateTime.UtcNow.AddDays(20));
+        var gateway = new FakeGateway();
+
+        var result = (await Build(w, gateway).Start(w.OrgId,
+            new StartCheckoutRequest(BillingInterval.Yearly, null), default)).Result;
+
+        if (result is ObjectResult { Value: string reason })
+            Assert.DoesNotContain("already paid through", reason);
+    }
+
+    /// <summary>A lapsed group buys again freely — that is the renewal the whole site wants.</summary>
+    [Fact]
+    public async Task A_group_whose_period_has_ended_may_buy_again()
+    {
+        var w = await SeedAsync();
+        await PaidThroughAsync(w, BillingInterval.Monthly, DateTime.UtcNow.AddDays(-3));
+        var gateway = new FakeGateway();
+
+        var result = (await Build(w, gateway).Start(w.OrgId,
+            new StartCheckoutRequest(BillingInterval.Monthly, null), default)).Result;
+
+        Assert.IsNotType<BadRequestObjectResult>(result);
+    }
+
 }

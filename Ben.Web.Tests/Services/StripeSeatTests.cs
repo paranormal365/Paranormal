@@ -154,6 +154,37 @@ public sealed class StripeSeatTests
         Assert.Equal(end.AddMonths(1), seat.CurrentPeriodEnd);
     }
 
+    /// <summary>
+    /// A seat's idempotency key names the PERIOD it pays for, not the day the job happened to run.
+    /// </summary>
+    /// <remarks>
+    /// <para><b>2026-09-17 audit.</b> The organization path had already dropped the run date from
+    /// its key for this reason; the seat path kept <c>-{now:yyyyMMdd}</c>. Stripe expires an
+    /// idempotency key after 24 hours, so the key's job is to make two attempts at the SAME period
+    /// collide. Keyed on the run date they never collide across a date boundary: the job retrying
+    /// after midnight — a restart, a deploy, a transient failure at 23:59 — presents a brand new
+    /// key for a period already paid for, and the member is charged twice for one month.</para>
+    ///
+    /// <para>The period end is set to midnight tonight so the date under test is tomorrow's and
+    /// can never coincide with the run date, whatever hour the suite runs at.</para>
+    /// </remarks>
+    [Fact]
+    public async Task A_seat_charge_is_keyed_on_its_period_not_on_the_day_the_job_ran()
+    {
+        var factory = Db();
+        var end = DateTime.UtcNow.Date.AddDays(1);          // inside the one-day window, never today
+        await SeedSeatAsync(factory, SubscriptionStatus.Active, periodEnd: end);
+
+        var gateway = new FakeGateway();
+        await new StripeRenewalJob(factory, gateway, Fulfillment(factory),
+            NullLogger<StripeRenewalJob>.Instance).RunAsync(default);
+
+        var charge = Assert.Single(gateway.Charges);
+
+        Assert.Contains($"{end:yyyyMMdd}", charge.IdempotencyKey);
+        Assert.DoesNotContain($"{DateTime.UtcNow:yyyyMMdd}", charge.IdempotencyKey);
+    }
+
     [Fact]
     public async Task A_member_who_left_is_never_charged_for_the_seat_they_no_longer_occupy()
     {

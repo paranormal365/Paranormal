@@ -86,13 +86,29 @@ public sealed class AdminBillingController : BenControllerBase
         await using var db = await _db.CreateDbContextAsync(ct);
         if (!await db.Organizations.AnyAsync(o => o.Id == orgId, ct)) return NotFound("Organization not found.");
 
+        // Rounded ONCE, here, away from zero, and everything downstream uses this figure
+        // (2026-09-17 audit). Two things were wrong and they compounded:
+        //
+        //   * the row stored decimal.Round(request.Amount, 2), and decimal.Round with no mode is
+        //     BANKER'S rounding. Every other money figure on the site rounds away from zero, and
+        //     TaxResolver.TaxOn says why in its own summary — "the rounding every register uses".
+        //     A charge of $10.005 was filed as $10.00 where the convention says $10.01.
+        //   * the tax was worked out on request.Amount, the UNROUNDED figure, while Amount stored
+        //     the rounded one. So the row did not reconcile against itself: its tax was a
+        //     percentage of a number that appears nowhere on it, and a reader recomputing the tax
+        //     from the amount in front of them got a different answer than the one filed.
+        //
+        // The ledger is append-only and receipts are printed from it, so a row that disagrees with
+        // itself is not a rounding curiosity — it is a document somebody is handed.
+        var amount = Math.Round(request.Amount, 2, MidpointRounding.AwayFromZero);
+
         // Charges tax what will be owed; a payment taxes nothing itself — its tax was on the
         // charge it settles. Recording it separately would count the same tax twice.
         decimal ratePercent = 0m, tax = 0m;
         if (kind == BillingLedgerKind.Charge)
         {
             (_, ratePercent) = await TaxResolver.ForOrganizationAsync(db, orgId, ct);
-            tax = TaxResolver.TaxOn(request.Amount, ratePercent);
+            tax = TaxResolver.TaxOn(amount, ratePercent);
         }
 
         var entry = new BillingLedgerEntry
@@ -100,7 +116,7 @@ public sealed class AdminBillingController : BenControllerBase
             Id                 = Guid.NewGuid(),
             Kind               = kind,
             OrganizationId     = orgId,
-            Amount             = decimal.Round(request.Amount, 2),
+            Amount             = amount,
             TaxRatePercent     = ratePercent,
             TaxAmount          = tax,
             Description        = request.Description.Trim(),

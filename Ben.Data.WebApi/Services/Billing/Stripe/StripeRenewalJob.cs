@@ -165,7 +165,12 @@ public sealed class StripeRenewalJob : IScheduledJob
                 [StripeFulfillmentService.CheckoutFacts.Keys.Seat] = seat.Id.ToString(),
                 [StripeFulfillmentService.CheckoutFacts.Keys.PeriodStart] = periodStart.ToString("O"),
             },
-            IdempotencyKey: $"seat-{seat.Id:N}-{periodStart:yyyyMMdd}-{now:yyyyMMdd}"), ct);
+            // Stable for this seat and this period, exactly as the organization path above
+            // (2026-09-17 audit). This one kept the current date after that fix, so the hole the
+            // class remarks describe was still open here: a charge that succeeds while fulfilment
+            // fails leaves CurrentPeriodEnd unadvanced, the seat stays eligible, and at midnight
+            // UTC the key changes and Stripe takes a second, genuinely distinct payment.
+            IdempotencyKey: $"seat-{seat.Id:N}-{periodStart:yyyyMMdd}"), ct);
 
         if (!outcome.Succeeded)
         {

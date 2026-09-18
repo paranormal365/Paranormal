@@ -64,6 +64,73 @@ public sealed class SubscriptionLapseJob : IScheduledJob
         await SectionAsync("lapsing expired subscriptions", () => LapseExpiredAsync(now, ct), ct);
         await SectionAsync("offers to stranded clients",
                            () => OfferReassignmentToStrandedClientsAsync(now, ct), ct);
+        await SectionAsync("lapsing expired member seats", () => LapseExpiredSeatsAsync(now, ct), ct);
+    }
+
+    /// <summary>
+    /// An overflow seat whose period ended without being paid for stops being billed.
+    /// </summary>
+    /// <remarks>
+    /// <para><b>Nothing lapsed a seat before this</b> (2026-09-17 audit), and the consequence was
+    /// not merely an unpaid seat left Active. <c>StripeRenewalJob</c> selects seats on
+    /// <c>Status == Active &amp;&amp; CurrentPeriodEnd &lt;= now + RenewalWindow</c>, so a seat whose card
+    /// declined matched that window <b>forever</b> — retried every pass, indefinitely.</para>
+    ///
+    /// <para><b>And it back-charged.</b> Fulfilment dates the new period from the metadata's
+    /// period start, which is the stale end — so when the card finally worked, the seat advanced
+    /// one month, was still in the past, and was charged again the next day. Six missed months
+    /// became six charges in six days for one month of service. The organization path never had
+    /// this because THIS job removes it from <c>Status == Active</c>; seats were simply never
+    /// added here.</para>
+    ///
+    /// <para>The same rule the organizations use one method up: the period ended, so it lapsed.
+    /// The holder is told, because a seat going quiet is something they would otherwise discover
+    /// from a bank statement.</para>
+    /// </remarks>
+    private async Task LapseExpiredSeatsAsync(DateTime now, CancellationToken ct)
+    {
+        await using var db = await _dbFactory.CreateDbContextAsync(ct);
+
+        var expired = await db.MemberSeatSubscriptions
+            .Include(s => s.Organization)
+            .Where(s => s.Status == SubscriptionStatus.Active
+                     && s.CurrentPeriodEnd != null
+                     && s.CurrentPeriodEnd <= now)
+            .ToListAsync(ct);
+
+        foreach (var seat in expired)
+        {
+            seat.Status      = SubscriptionStatus.Lapsed;
+            seat.DateUpdated = now;
+
+            // Per seat, for the same reason every other notice in this job is: the letter commits
+            // on its own, so a marker saved after the loop would be discarded by the next throw
+            // and the same person written to again.
+            await db.SaveChangesAsync(ct);
+
+            try
+            {
+                await _messages.SendAsync(
+                    $"Your place in {seat.Organization.Name} was not renewed",
+                    $"The payment for your own place in {seat.Organization.Name} did not go "
+                  + "through, so it has stopped.\n\n"
+                  + "Nothing you have recorded is affected, and you are still a member of the "
+                  + "group. If you would like the place back, it can be paid for again from your "
+                  + "billing page.",
+                    [seat.AppUserId], seat.AppUserId, ct);
+            }
+            catch (Exception ex) when (ex is not OperationCanceledException)
+            {
+                // The seat has already stopped billing, which is the part that costs money. A
+                // letter that would not send must not undo that or stop the next seat.
+                _logger.LogWarning(ex,
+                    "Seat {SeatId} lapsed but its holder could not be told.", seat.Id);
+            }
+        }
+
+        if (expired.Count > 0)
+            _logger.LogInformation("{Count} member seats lapsed and will not be charged again.",
+                                   expired.Count);
     }
 
     /// <summary>Runs one duty, and lets the other two happen if it fails.</summary>

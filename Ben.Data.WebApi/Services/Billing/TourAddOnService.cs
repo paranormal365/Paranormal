@@ -110,7 +110,8 @@ public sealed class TourAddOnService
 
         var extra = units - sub.TourCountAtPeriodStart;
         var now = DateTime.UtcNow;
-        var payable = TourBilling.Remainder(unitPrice, periodStart, periodEnd, now) * extra;
+        // All the extra units priced together, so the cent is rounded once rather than per tour.
+        var payable = TourBilling.Remainder(unitPrice, periodStart, periodEnd, now, extra);
 
         // A coupon that is still running applies here too. Without this, a business three days
         // into "your first three months are free" was charged real money for its second tour —
@@ -120,9 +121,28 @@ public sealed class TourAddOnService
             .Where(r => r.OrganizationId == org.Id)
             .OrderByDescending(r => r.RedeemedAtUtc)
             .FirstOrDefaultAsync(ct);
-        if (redemption is not null && CouponMath.IsStillApplying(redemption))
-            payable = CouponMath.PriceFor(payable, redemption.Coupon).Payable;
 
+        // ...but only a PERCENTAGE one (2026-09-17 audit). A percentage is a statement about any
+        // amount, so taking it off an add-on is the same promise as taking it off the period. A
+        // FIXED amount is a statement about the period's own invoice, and it has already been spent
+        // there — the checkout and the renewal job both subtract it from the list price. Taking it
+        // off again here charged it twice, and then once more for every further tour, because
+        // nothing about an add-on decrements PeriodsRemaining. A $50-off coupon against tours
+        // prorating to $20 made every tour free, one at a time, for the whole period and every
+        // period the redemption still covered. That is unbounded, it is silent, and it reads as a
+        // working discount from every screen.
+        //
+        // The period's own price keeps the fixed amount in full; this only declines to spend it a
+        // second time. IsStillApplying still gates both, so an exhausted coupon discounts nothing.
+        if (redemption is not null
+            && CouponMath.IsStillApplying(redemption)
+            && redemption.Coupon?.PercentOff is > 0)
+        {
+            payable = CouponMath.PriceFor(payable, redemption.Coupon).Payable;
+        }
+
+        // Both inputs are already whole cents, so this changes nothing today. Kept as the last
+        // word on what is charged, so nothing upstream can ever hand the gateway a fraction.
         payable = Math.Round(payable, 2, MidpointRounding.AwayFromZero);
 
         // The period is all but over. Nothing meaningful is owed for the hours left, and the
@@ -135,6 +155,7 @@ public sealed class TourAddOnService
             await db.SaveChangesAsync(ct);
             return new Outcome(0m,
                 redemption is not null && CouponMath.IsStillApplying(redemption)
+                                       && redemption.Coupon?.PercentOff is > 0
                     ? $"Nothing to pay — your coupon covers this period. Your renewal on "
                       + $"{periodEnd:MM/dd/yyyy} will be for {units} tours."
                     : $"Nothing more this period — your renewal on {periodEnd:MM/dd/yyyy} covers {units} tours.");

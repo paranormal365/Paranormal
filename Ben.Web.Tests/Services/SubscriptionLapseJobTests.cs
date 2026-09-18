@@ -612,4 +612,71 @@ public sealed class SubscriptionLapseJobTests
         await using (var check = await w.F.CreateDbContextAsync())
             Assert.Equal(2, await check.UserMessageTos.CountAsync(t => t.ToAppUserId == w.ClientId));
     }
+    // ── overflow seats (2026-09-17 audit) ────────────────────────────────────
+
+    /// <summary>
+    /// A seat whose period ended without payment lapses, exactly as an organization's does.
+    /// </summary>
+    /// <remarks>
+    /// Nothing lapsed a seat before this. StripeRenewalJob selects seats on
+    /// <c>Status == Active &amp;&amp; CurrentPeriodEnd &lt;= now + window</c>, so a declined seat matched
+    /// that window forever — retried every pass, and then back-charged once the card worked,
+    /// because fulfilment dates the new period from the stale end. Six missed months became six
+    /// charges in six days for one month of service.
+    /// </remarks>
+    [Fact]
+    public async Task A_seat_whose_period_ended_stops_being_billed()
+    {
+        var w = await SeedAsync(DateTime.UtcNow.AddDays(-2));
+        var seatId = Guid.NewGuid();
+
+        await using (var db = await w.F.CreateDbContextAsync())
+        {
+            db.MemberSeatSubscriptions.Add(new MemberSeatSubscription
+            {
+                Id = seatId, OrganizationId = w.OrgId, AppUserId = w.ClientId,
+                Status = SubscriptionStatus.Active, Interval = BillingInterval.Monthly,
+                PriceAtStart = 5m,
+                CurrentPeriodStart = DateTime.UtcNow.AddMonths(-1).AddDays(-2),
+                CurrentPeriodEnd = DateTime.UtcNow.AddDays(-2),
+                DateCreated = DateTime.UtcNow, CreatedByAppUserId = w.OwnerId,
+            });
+            await db.SaveChangesAsync();
+        }
+
+        await Job(w.F).RunAsync(default);
+
+        await using var after = await w.F.CreateDbContextAsync();
+        var seat = await after.MemberSeatSubscriptions.SingleAsync(s => s.Id == seatId);
+        Assert.Equal(SubscriptionStatus.Lapsed, seat.Status);
+    }
+
+    /// <summary>A seat still inside its period is left alone.</summary>
+    [Fact]
+    public async Task A_seat_still_inside_its_period_is_untouched()
+    {
+        var w = await SeedAsync(DateTime.UtcNow.AddDays(-2));
+        var seatId = Guid.NewGuid();
+
+        await using (var db = await w.F.CreateDbContextAsync())
+        {
+            db.MemberSeatSubscriptions.Add(new MemberSeatSubscription
+            {
+                Id = seatId, OrganizationId = w.OrgId, AppUserId = w.ClientId,
+                Status = SubscriptionStatus.Active, Interval = BillingInterval.Monthly,
+                PriceAtStart = 5m,
+                CurrentPeriodStart = DateTime.UtcNow.AddDays(-2),
+                CurrentPeriodEnd = DateTime.UtcNow.AddDays(28),
+                DateCreated = DateTime.UtcNow, CreatedByAppUserId = w.OwnerId,
+            });
+            await db.SaveChangesAsync();
+        }
+
+        await Job(w.F).RunAsync(default);
+
+        await using var after = await w.F.CreateDbContextAsync();
+        var seat = await after.MemberSeatSubscriptions.SingleAsync(s => s.Id == seatId);
+        Assert.Equal(SubscriptionStatus.Active, seat.Status);
+    }
+
 }

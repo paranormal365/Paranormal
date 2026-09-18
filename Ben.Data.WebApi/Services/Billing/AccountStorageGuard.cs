@@ -96,12 +96,13 @@ public static class AccountStorageGuard
     public static async Task<string?> WhyCannotStoreAsync(
         BenDataContext db, Guid appUserId, long incomingBytes, CancellationToken ct)
     {
-        var inAPayingGroup = await db.OrganizationUserMemberships.AsNoTracking()
-            .Where(m => m.AppUserId == appUserId && m.IsActive)
-            .AnyAsync(m => db.OrganizationSubscriptions
-                .Any(s => s.OrganizationId == m.OrganizationId
-                       && s.Status == Ben.Data.Common.Enums.SubscriptionStatus.Active), ct);
-        if (inAPayingGroup) return null;
+        // Asked through PaidPlan rather than re-queried here (2026-09-17 audit). This held its own
+        // copy of that query — identical, so it was right, which is exactly how the drift starts:
+        // PaidPlan is where "covered by a plan somebody is paying for" is defined, and it says so
+        // in its own remarks ("there are now several callers and they must not drift"). A second
+        // copy means the next change to what counts as paid — seats, trials, a grace window —
+        // reaches storage only if somebody remembers this file.
+        if (await PaidPlan.CoversAsync(db, appUserId, ct)) return null;
 
         var cap = await CapBytesAsync(db, ct);
         var used = await UsedBytesAsync(db, appUserId, ct);
