@@ -155,6 +155,8 @@ public static class BoardSnapshot
                     ? string.Join("  ", table.Rows[0].Where(c => !string.IsNullOrWhiteSpace(c)))
                     : "";
                 return (Or(heading, display), grid);
+            case ShapeData shape:
+                return (Or(shape.Text, display), []);
             case ImageData image:
                 return (Or(image.Caption, display), []);
             default:

@@ -1,0 +1,51 @@
+.bc-shape {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    height: 100%;
+    padding: .5rem;
+    text-align: center;
+    overflow: hidden;
+    /* The block's own accent colour fills the shape: a shape IS its colour, unlike a card which
+       wears one as a bar. */
+    background: var(--bc-node-color, var(--bc-type-shape));
+    color: var(--bc-on-accent);
+}
+
+.bc-shape--rectangle { border-radius: var(--bc-radius); }
+.bc-shape--ellipse { border-radius: 50%; }
+
+/* A diamond is a square turned forty-five degrees, with its words turned back so they stay level. */
+.bc-shape--diamond {
+    border-radius: var(--bc-radius-sm);
+    transform: rotate(45deg);
+}
+
+.bc-shape--diamond .bc-shape__text {
+    transform: rotate(-45deg);
+}
+
+.bc-shape__text {
+    font-size: .8125rem;
+    font-weight: 600;
+    overflow-wrap: anywhere;
+}
+
+.bc-shape__edit {
+    display: flex;
+    flex-direction: column;
+    gap: .375rem;
+    height: 100%;
+}
+
+.bc-shape__input {
+    flex: 1 1 auto;
+    min-height: 0;
+    resize: none;
+    border: 1px solid var(--bc-border);
+    border-radius: var(--bc-radius-sm);
+    padding: .25rem .375rem;
+    background: var(--bc-surface-2);
+    color: var(--bc-text);
+    font-size: .8125rem;
+}

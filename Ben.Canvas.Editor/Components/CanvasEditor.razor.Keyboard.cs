@@ -173,6 +173,9 @@ public partial class CanvasEditor
             case CanvasCommand.AddTable:
                 await RunActionAsync("add-table");
                 break;
+            case CanvasCommand.AddShape:
+                await RunActionAsync("add-shape");
+                break;
             case CanvasCommand.AddCard:
                 await RunActionAsync("add-card");
                 break;

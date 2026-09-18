@@ -80,6 +80,8 @@
     --bc-type-text:       rgba(222, 226, 230, .75);
     --bc-type-file:       rgba(222, 226, 230, .75);
     --bc-type-table:      #4a7c7c;
+    --bc-type-shape:      #8a5a8f;
+    --bc-on-accent:       #ffffff;
     --bc-type-group:      #37508a;
 
     /* ── Palette a person picks for a block, group or connector (keys 1..6) ── */

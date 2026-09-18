@@ -27,6 +27,7 @@ namespace Ben.Canvas.Core.Model;
 [JsonDerivedType(typeof(AudioData), "audio")]
 [JsonDerivedType(typeof(VideoData), "video")]
 [JsonDerivedType(typeof(TableData), "table")]
+[JsonDerivedType(typeof(ShapeData), "shape")]
 public abstract class NodeData
 {
     /// <summary>A deep copy.</summary>
@@ -320,4 +321,48 @@ public sealed class TableData : NodeData
         HasHeaderRow = HasHeaderRow,
         Rows = [.. Rows.Select(r => new List<string>(r))],
     };
+}
+
+/// <summary>What a shape is drawn as.</summary>
+/// <remarks>
+/// <para>Three, and no more. Rectangle, ellipse and diamond cover every shape in the four boards Ben
+/// sent — the moodboard's theme bubbles and the family tree's marriage markers among them. The moment
+/// this carries stars and arrows it has stopped being a board piece and become a drawing tool, which
+/// is a different product.</para>
+///
+/// <para>FORMAT: written by name, so inserting a value later cannot turn every diamond on every board
+/// into an ellipse.</para>
+/// </remarks>
+public enum ShapeKind { Rectangle, Ellipse, Diamond }
+
+/// <summary>
+/// A plain shape with words in the middle of it: the sticky, the bubble, the marker.
+/// </summary>
+/// <remarks>
+/// <para><b>A shape is not a card.</b> A card is a thing with fields and a template; a shape is a
+/// colour and a word. Two of Ben's four boards are built from them, and drawing them as cards would
+/// have meant a card that hides everything a card is for.</para>
+///
+/// <para><b>An unknown kind reads as a rectangle</b> rather than refusing the board — a shape is
+/// decoration, and a board that will not open because a newer editor wrote "Star" is a far worse
+/// outcome than a star drawn as a box. That correction lives in the migrations, with the rest.</para>
+/// </remarks>
+public sealed class ShapeData : NodeData
+{
+    /// <summary>Which shape it is.</summary>
+    /// <remarks>
+    /// FORMAT: written as "shape", NOT as "kind". The polymorphic discriminator for every NodeData is
+    /// already called "kind" (see the attributes above), and a property that serializes to the same
+    /// name throws at configuration time and takes the WHOLE hierarchy down with it — a card, a note
+    /// and a map all stop reading, not just a shape. Caught by the table's round-trip test the moment
+    /// this type was added, which is the only reason it is not a released format bug.
+    /// </remarks>
+    [JsonPropertyName("shape")]
+    [JsonConverter(typeof(Serialization.ShapeKindConverter))]
+    public ShapeKind Kind { get; set; } = ShapeKind.Rectangle;
+
+    /// <summary>What it says. Empty is normal: a bubble is often placed before it is named.</summary>
+    public string Text { get; set; } = "";
+
+    public override NodeData Clone() => (ShapeData)MemberwiseClone();
 }

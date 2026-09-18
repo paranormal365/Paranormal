@@ -77,6 +77,10 @@ public static class CanvasDocumentMigrations
         // than refused: a table missing a cell is still a readable table.
         if (data is TableData table) table.Square();
 
+        // A shape kind this build does not know is drawn as a box rather than refusing the board:
+        // a shape is decoration, and losing the whole board over one would be the worse trade.
+        if (data is ShapeData shape && !Enum.IsDefined(shape.Kind)) shape.Kind = ShapeKind.Rectangle;
+
         switch (data)
         {
             case CardData card:

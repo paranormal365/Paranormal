@@ -328,11 +328,72 @@ public sealed class BlockRendererTests
         Assert.DoesNotContain("<input", html);
     }
 
+    // ── Shapes ──────────────────────────────────────────────────────────
+
+    private static CanvasNode Shape(ShapeKind kind, string text = "")
+    {
+        var node = TestBoards.Node(CanvasNodeType.Shape);
+        node.Data = new ShapeData { Kind = kind, Text = text };
+        return node;
+    }
+
+    /// <summary>
+    /// Each kind draws as itself. The class is what the CSS hangs the outline on, so it is the thing
+    /// worth asserting — a diamond that renders with the rectangle's class is a rectangle.
+    /// </summary>
+    [Theory]
+    [InlineData(ShapeKind.Rectangle, "bc-shape--rectangle")]
+    [InlineData(ShapeKind.Ellipse, "bc-shape--ellipse")]
+    [InlineData(ShapeKind.Diamond, "bc-shape--diamond")]
+    public async Task A_shape_draws_as_its_kind(ShapeKind kind, string expected)
+    {
+        Assert.Contains(expected, await Render<ShapeNode>(Shape(kind, "Theme")));
+    }
+
+    [Fact]
+    public async Task A_shape_shows_its_words()
+    {
+        Assert.Contains("Wellness", await Render<ShapeNode>(Shape(ShapeKind.Ellipse, "Wellness")));
+    }
+
+    /// <summary>A shape's text is text, for the reason a note's is.</summary>
+    [Fact]
+    public async Task A_shape_never_renders_markup()
+    {
+        var raw = await RenderRaw<ShapeNode>(Shape(ShapeKind.Rectangle, "<b>bold</b><img src=x>"));
+
+        Assert.DoesNotContain("<b>", raw);
+        Assert.DoesNotContain("<img", raw);
+    }
+
+    /// <summary>
+    /// A shape with nothing written in it is still a shape — the moodboard's bubbles are placed before
+    /// they are named — so it draws rather than showing the note's "double-click to write" line.
+    /// </summary>
+    [Fact]
+    public async Task An_empty_shape_still_draws()
+    {
+        var html = await Render<ShapeNode>(Shape(ShapeKind.Ellipse));
+
+        Assert.Contains("bc-shape--ellipse", html);
+    }
+
+    [Fact]
+    public async Task Editing_offers_the_words_and_the_kind()
+    {
+        var html = await Render<ShapeNode>(Shape(ShapeKind.Diamond, "Married"), editing: true);
+
+        Assert.Contains("<textarea", html);
+        Assert.Contains("aria-label=\"Shape text\"", html);
+        Assert.Contains("<select", html);
+        Assert.Contains("Diamond", html);
+    }
+
     [Fact]
     public void Every_type_maps_to_its_own_renderer()
     {
         Assert.Equal(typeof(CardNode), BlockRendererMap.RendererFor(CanvasNodeType.Card));
-        Assert.Equal(10, BlockRendererMap.All.Values.Distinct().Count());
+        Assert.Equal(11, BlockRendererMap.All.Values.Distinct().Count());
     }
 
     private static async Task<string> RenderRaw<TRenderer>(CanvasNode node) where TRenderer : BlockRendererBase

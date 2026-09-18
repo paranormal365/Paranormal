@@ -47,6 +47,9 @@ public static class BlockRegistry
         // is the one thing the block cannot know. Starts as a header and one row, two columns.
         new(CanvasNodeType.Table, "Table", "grid", 420, 200, 200, 100, true, true,
             _ => new TableData { HasHeaderRow = true, Rows = [["", ""], ["", ""]] }),
+        // Square by default, because a circle and a diamond both want equal sides; small, because a
+        // shape labels a region rather than holding a document.
+        new(CanvasNodeType.Shape, "Shape", "square", 160, 160, 60, 60, true, true, _ => new ShapeData()),
         // A CARD's size, not the film's. Ben, 2026-09-16: "The video should be card sized, not
         // original sized... so it doesn't take up the screen... maybe can resize the card to fit
         // the size the end user wants." A phone films 1080×1920; opened at its own size one clip

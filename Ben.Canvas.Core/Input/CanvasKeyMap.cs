@@ -37,6 +37,7 @@ public enum CanvasCommand
     AddImage,
     AddLink,
     AddTable,
+    AddShape,
     NextConnector,
     PreviousConnector,
 
@@ -135,6 +136,7 @@ public static class CanvasKeyMap
                 "c" => CanvasCommand.ConnectMode,
                 "t" => CanvasCommand.AddText,
                 "b" => CanvasCommand.AddTable,
+                "o" => CanvasCommand.AddShape,
                 "n" => CanvasCommand.AddCard,
                 "m" => CanvasCommand.AddMessage,
                 "i" => CanvasCommand.AddImage,
