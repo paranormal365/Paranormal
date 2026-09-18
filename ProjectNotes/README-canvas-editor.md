@@ -450,3 +450,155 @@ install has something to show, with a test that reads it back through the editor
 **The migration destroys rows.** `RetireResearchPages` drops `CaseResearchEntries` and
 `CaseResearchAttachments`; `Down` rebuilds them empty. Both runbooks carry the copy-first step.
 Applied to `IsHauntedDb_player` only; production gets it with the deploy.
+
+
+## M9 Pieces, styles, links and templates — planned 2026-09-18
+
+**What Ben asked for.** Four boards, sent as pictures: a *moodboard* (coloured section panels, circle
+"theme" bubbles, an image collage, shown as a blank template beside a filled sample); a *research plan*
+(coloured title tiles, cards holding a 2×2 matrix, a calendar grid and sticky clusters); a *family tree*
+(boxes joined by dashed sibling lines, marriage lines with diamond ends, a child line with a chick at its
+middle, all at right angles, with a legend); and a *presentation deck* (slide-sized frames with coloured
+backgrounds: agenda, timeline, steps, 2×2, table, charts). Then: *"add research note from case … a link to
+open the other page to one of the cards … and a back button to go back."* And the reminder from
+2026-09-14: *"Remind me later to have you create the table."* The vision those sit inside, in Ben's words:
+*"a combination of Notion, Canva, OneNote and Obsidian's Canvas."* M1–M8 built the Obsidian half. M9 is
+the pieces those four boards are made of, the styles that make them look designed, the link between
+boards, and templates that assemble them.
+
+**What Ben can open when it is done.** New board offers a template — Blank, Moodboard, Research plan,
+Family tree, Presentation deck — and opens with the frames, cards and connectors already placed. The rail
+adds a **table** (rows and columns, add or remove either, paste tab-separated text and get one) and a
+**shape** (rectangle, ellipse, diamond with centred text). Any card or note can be **filled** with its colour
+instead of carrying a bar — that is the sticky. A group can be a **panel**: solid tint, solid border, its
+label as a title bar — that is the section and the slide. A connector can be **dashed**, run **straight**
+or in **right angles**, end in an **arrow, a diamond, a dot or nothing** at either end, and carry a
+**small icon or word at its middle**. A card can name **another board on the case**, picked from a list
+the way a file is picked; opening it saves this board first, and the header shows **Back to <board>**
+until you use it. Everything is undoable, exports and imports, publishes to the picture, and presents.
+
+**Decisions, and why.**
+
+- *Sticky is not a new kind.* `TextNode` already calls itself "a sticky note of plain text"; what it lacks
+  is a fill. Every block already has a palette colour drawn as a 3 px bar. A `Fill` on the node — `Bar`
+  (today) or `Solid` — turns that colour into the background. Zero visual change to any existing board,
+  no migration, and it works for a card or a picture caption too.
+- *Panel is a group style, not a new kind.* `CanvasGroup` already has bounds, a label and a colour. `Fill`
+  — `Outline` (today: dashed, 8 %) or `Panel` (solid tint, solid border, label as a bar) — is the moodboard
+  section and the deck slide in one. `SlideOrder`'s first rule, groups win, means a deck template presents
+  correctly with nothing else built.
+- *Legend and 2×2 are templates, not kinds.* A panel with a note beside sample connectors is a legend; four
+  panels in a square are a matrix. Kinds are for things with their own data.
+- *Charts are not in M9.* A bar or bubble chart is data entry plus a renderer plus a snapshot painter — a
+  different product from a board piece. Named for M10 and left out on purpose.
+- *A board card opens with a button, not a link.* `boardGestures.js` already lets a `<button>` inside a
+  block escape drag and select (it is how a link card's Open works); a bare anchor would fight the board.
+  Open saves the current board first (`documents.SaveAsync()` already runs before a switch), then
+  `ServerSession.OpenAsync(id)`. A trail of `(serverId, title)` pairs gives the header its Back; it is
+  view state, never stored on the board. Alt+Left is deliberately not bound — it is Back in Chrome on
+  Windows, and the M8 notes already record why.
+- *Templates are documents, not a server concept.* `CanvasDocumentController.Create` stores whatever
+  document the client posts, and a new board is `CanvasDocumentStore.New(caseId)` — "not stored until its
+  first edit." So a template is a pure function `Guid? caseId → CanvasDocument` in `Ben.Canvas.Core`,
+  loaded by `New(caseId, template)`. The seeder already proves the shape (`SeededBoardTests` reads its
+  board with the real reader). No API change, no migration.
+- *The seam is the fragment.* The Research tab's New board already hands off `#handoff=&case=&org=`;
+  it gains `template=<id>`, `CanvasHandoff.Parse` gains the arm, `Editor.razor` threads it to a
+  `CanvasEditor.TemplateId` parameter, and `RestoreAsync` honours it **before** restoring the device
+  copy — an explicit request wins over what was open last time — and only when no `doc` arrived.
+- *Connector routing lives in one function.* `EdgeGeometry.Resolve` is called from exactly three places —
+  drawing, the published picture and hit-testing — so a `Route` is answered there and all three follow.
+  `Straight` is the existing cubic with its controls on its ends; `Elbow` is a polyline, so `EdgePath` grows
+  an optional corner list and `ToSvgPath`, `PointAt` and the hit sampler learn it. Heads are built by hand in
+  two places (`EdgeLayer.ArrowHead`, `BoardSnapshot.Head`); each gets a marker argument and
+  `SnapshotConnector.Heads` stops meaning "six numbers each".
+- *Schema stays at 1.* Every new field has a default that reproduces today's look, and `Upgrade` already
+  clears what cannot be right, so old boards open unchanged. The real compatibility edge is the other way:
+  a browser holding a **stale** editor meets a board with `kind: "table"` and the reader fails on the
+  unknown kind by design. The host and the API deploy together and the shell has a freshness test
+  (`CanvasHostFreshnessTests`), so that is the accepted risk, written here rather than discovered.
+
+**Pieces, by the machinery each touches.** A new kind is: an enum value → `XData : NodeData` with its
+`[JsonDerivedType]` → one `BlockRegistry` line → `Nodes/XNode.razor : BlockRendererBase` → a
+`BlockRendererMap` entry → a `RailOrder` slot, `CanvasCommand.AddX`, its keymap letter and its keyboard
+arm → a `Words()` arm for the picture → a `--bc-type-x` token in both theme files → a `PastePlacer` arm
+if it can be pasted. Every one of those is enforced by a test that already exists.
+
+| Step | Builds | Where |
+|---|---|---|
+| M9-01 | `TableData` (rows of cells, header flag), `TableNode` (table at rest; cells, add/remove row and column ≥44 px in edit), `PasteIntent.Table` from tab-separated text with two or more columns in two or more rows, placed before `Text`; chord `b`; icon `grid` | Core/Model, Editor/Nodes, Core/Paste |
+| M9-02 | `ShapeData` (`Rectangle`, `Ellipse`, `Diamond`, text), `ShapeNode` (solid palette fill, centred text); chord `o`; icon `circle` | Core/Model, Editor/Nodes |
+| M9-03 | `CanvasNode.Fill` `Bar`/`Solid`; `NodeFrame` paints it; properties panel toggle beside the swatches; `SnapshotBlock.Filled` and the painter | Core/Model, Editor/Nodes, Chrome, Persistence, js |
+| M9-04 | `CanvasGroup.Fill` `Outline`/`Panel`; `GroupLayer` styles; properties toggle; `SnapshotGroup.Fill` and the painter; `Group(ids, label, fill)` | Core/Model, Editor/Board, Chrome, Persistence, js |
+| M9-05 | `CanvasEdge.Line` `Solid`/`Dashed`, `Route` `Curve`/`Straight`/`Elbow`, `FromMarker`/`ToMarker` `Arrow`/`Diamond`/`Dot`/`None` (replacing `Arrow`'s meaning, `Arrow` kept and mapped on read), `Icon` (≤ 8 chars at the midpoint) | Core/Model, Core/Serialization |
+| M9-06 | `EdgeGeometry.Resolve(…, route)`; `EdgePath` corners; `ToSvgPath`/`PointAt`; hit sampling over corners; `ArrowHead(marker)`; `Head(marker)`; `SnapshotConnector` gains `Dash`, `Icon`, variable-length heads; painter | Core/Geometry, Editor/Board, Persistence, js |
+| M9-07 | Connector properties: line, route, each end's marker, icon; `bc-edge--dashed`; midpoint label already exists for the icon's placement | Chrome, EdgeLayer |
+| M9-08 | `BoardData` (`DocumentId`, `Title`), `BoardNode` (icon `book-open`, title, Open **button**), `CaseBoardPicker` (copy of `CaseFilePicker` over `server.ListAsync(caseId)`), action `case-boards`, rail button "Add from the case's boards" | Core/Model, Editor/Nodes, Chrome |
+| M9-09 | `BoardTrail` (view state: stack of `(serverId, title)`), Open = save then `OpenAsync`, push; header **Back to <title>** beside `BackContent`, pop; trail cleared on case change | Editor/Services, Chrome |
+| M9-10 | `BoardTemplates` in Core: `Blank`, `Moodboard`, `ResearchPlan`, `FamilyTree`, `Deck`; each a pure builder; every template validates, fits `MaxNodes`, and uses only palette tokens | Core/Templates (new) |
+| M9-11 | `CanvasDocumentStore.New(caseId, template)`; `CanvasEditor.TemplateId`; `CanvasHandoff` `template` arm; `Editor.razor`; `RestoreAsync` ordering | Editor/Services, Wasm host, Lifecycle |
+| M9-12 | Research tab: New board becomes a choice of template (names and one line each), fragment carries `template=` | Website `CaseResearchBoards.razor` |
+| M9-13 | Help: Research section gains tables, shapes, fills, panels, connector styles, board links, templates; three pictures and a GIF; What's New; service changelog; product and persona PDFs | Help, Changelog, docs |
+| M9-14 | Walks: `BlocksWalk` gains the new kinds; new `TemplatesWalk` shoots each template dark and light | Playwright/Capture |
+
+**Red first — the tests that must fail before each step and pass after.**
+
+| Step | Break | Test that fails |
+|---|---|---|
+| M9-01 | a kind with no descriptor | Every_node_type_has_a_descriptor (exists) |
+| M9-01 | a kind with no renderer | Every_block_type_has_a_renderer (exists) |
+| M9-01 | renderer count left at 9 | Every_type_maps_to_its_own_renderer (exists; count moves) |
+| M9-01 | a table that does not round-trip its cells | A_table_round_trips_every_cell |
+| M9-01 | a table at rest rendered as text | A_table_at_rest_is_a_table_element_with_a_header_row |
+| M9-01 | a cell input with no label | Every_table_cell_in_edit_names_its_row_and_column |
+| M9-01 | tab-separated text pasted as a note | Tab_separated_text_becomes_a_table |
+| M9-01 | one column mistaken for a table | A_single_column_of_text_stays_a_note |
+| M9-01 | a command with no keyboard arm | Every_canvas_command_has_a_case (exists) |
+| M9-02 | shape text off centre / an unknown shape kind | A_shape_centres_its_text; An_unknown_shape_kind_reads_as_a_rectangle |
+| M9-03 | an old board opening with a fill | A_board_with_no_fill_field_reads_as_bar |
+| M9-03 | a solid fill ignoring the theme | CanvasThemeTokenTests (exists) |
+| M9-04 | a panel losing its label | A_panel_group_keeps_its_label_as_a_title |
+| M9-04 | the picture ignoring a panel | A_panel_group_carries_its_fill_to_the_snapshot |
+| M9-05 | `Arrow` on an old board read as no markers | An_old_arrow_maps_to_an_end_marker |
+| M9-05 | an icon longer than eight characters stored | A_connector_icon_is_clamped_on_read |
+| M9-06 | a straight route that curves | A_straight_route_is_a_line |
+| M9-06 | an elbow with an oblique segment | An_elbow_route_turns_only_at_right_angles |
+| M9-06 | a corner the hit-test cannot find | Elbow_hit_test_finds_the_corner |
+| M9-06 | a diamond drawn as a triangle | A_diamond_head_has_four_points_and_a_dot_is_round |
+| M9-06 | a dashed connector solid in the picture | A_dashed_connector_is_flagged_for_the_painter |
+| M9-07 | a connector's icon control with no label | LabelAssociation / RazorMarkupGuardTests (exist) |
+| M9-08 | a board card opening in a new tab | A_board_card_opens_with_a_button_not_a_link |
+| M9-08 | the picker listing boards of another case | The_board_picker_lists_only_this_cases_boards |
+| M9-09 | Back after opening returns to the wrong board | Opening_a_board_card_pushes_and_back_pops |
+| M9-09 | switching without saving | Opening_a_board_card_saves_the_current_board_first |
+| M9-10 | a template that does not validate or overflows | Every_template_opens_and_fits_MaxNodes |
+| M9-10 | a deck frame that is not a panel | The_deck_template_is_panels_in_reading_order |
+| M9-10 | a template naming a raw colour | Templates_use_palette_tokens_only |
+| M9-10 | a template presenting out of order | Slide_frames_in_a_deck_template_present_top_to_bottom |
+| M9-11 | a device restore beating an explicit template | A_template_request_wins_over_the_last_open_board |
+| M9-11 | a template applied on top of a `doc` | A_template_is_ignored_when_a_board_id_arrives |
+| M9-11 | an unknown template id | An_unknown_template_opens_a_blank_board_and_says_so |
+| M9-12 | New board losing the template in the fragment | Playwright `CanvasTemplatesTests.New_board_from_the_deck_template_opens_with_its_frames` |
+| M9-08/09 | link → open → back, end to end | Playwright `CanvasBoardLinksTests.Open_another_board_and_come_back` |
+
+**Proof to run.**
+
+```
+dotnet build Ben.slnx -warnaserror
+dotnet test  Ben.Canvas.Tests
+dotnet test  Ben.Web.Tests
+./scripts/run-e2e.sh --filter "TestCategory=Canvas"
+```
+
+**Risks named up front.** (1) The stale-editor edge above. (2) `Every_type_maps_to_its_own_renderer`
+hard-codes `9`; it becomes `12` and stays hard-coded on purpose — the number is the assertion. (3)
+`SnapshotConnector.Heads` changes shape; the published picture is regenerated on publish, never
+rewritten, so old pictures stand. (4) A board card's Open on a board that has since been deleted: the
+picker lists live boards, and Open on a 404 says so in a toast and leaves the trail alone. (5) Templates
+are code, so a change to one changes every *new* board from it and no existing board — which is the
+right way round, and the tests say so.
+
+**Not in M9.** Charts (M10). Cross-case board links (a board names a board on its own case; the picker
+is scoped there, and the additive guard already stops a link from becoming an edit elsewhere). A template
+gallery with pictures (names and a sentence in M9; pictures once the walk has shot them). Table cell
+merging, formulas, sorting. Connector waypoints you can drag (Elbow is automatic).
