@@ -20,6 +20,7 @@
 .bc-node--link { border-left-color: var(--bc-node-color, var(--bc-type-link)); }
 .bc-node--text { border-left-color: var(--bc-node-color, var(--bc-type-text)); }
 .bc-node--file { border-left-color: var(--bc-node-color, var(--bc-type-file)); }
+.bc-node--table { border-left-color: var(--bc-node-color, var(--bc-type-table)); }
 
 .bc-node:hover {
     border-color: color-mix(in srgb, var(--bc-accent) 50%, var(--bc-border));

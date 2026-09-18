@@ -1,0 +1,159 @@
+@*
+    A grid of plain cells. At rest it is a real <table> - so it reads as a grid to a screen reader and
+    pastes back out as one - with the header row as <th> when the table has one. While editing every
+    cell is a text box that names where it is, and the row and column controls sit beside the grid.
+
+    Cell text is text, never markup: a pasted grid can carry anything, and the note's own rule applies
+    here for the same reason.
+*@
+@inherits BlockRendererBase
+@if (Editing)
+{
+    <div class="bc-table bc-table--edit">
+        <table class="bc-table__grid">
+            @if (Table.HasHeaderRow && Table.Rows.Count > 0)
+            {
+                <thead>
+                    <tr>
+                        @for (var c = 0; c < Table.Rows[0].Count; c++)
+                        {
+                            var column = c;
+                            <th scope="col">
+                                @* The ref goes on the first cell only, and Razor cannot bind one
+                                   conditionally - so the branch is in the markup, not the binding. *@
+                                @if (column == 0)
+                                {
+                                    <input @ref="FirstField" class="form-control form-control-sm bc-table__input"
+                                           aria-label="@HeaderLabel(column)"
+                                           value="@Table.Rows[0][column]"
+                                           @oninput="@(e => Set(0, column, e.Value?.ToString()))" />
+                                }
+                                else
+                                {
+                                    <input class="form-control form-control-sm bc-table__input"
+                                           aria-label="@HeaderLabel(column)"
+                                           value="@Table.Rows[0][column]"
+                                           @oninput="@(e => Set(0, column, e.Value?.ToString()))" />
+                                }
+                            </th>
+                        }
+                    </tr>
+                </thead>
+            }
+            <tbody>
+                @for (var r = Table.HasHeaderRow ? 1 : 0; r < Table.Rows.Count; r++)
+                {
+                    var row = r;
+                    <tr>
+                        @for (var c = 0; c < Table.Rows[row].Count; c++)
+                        {
+                            var column = c;
+                            <td>
+                                @if (row == 0 && column == 0)
+                                {
+                                    <input @ref="FirstField" class="form-control form-control-sm bc-table__input"
+                                           aria-label="@CellLabel(row, column)"
+                                           value="@Table.Rows[row][column]"
+                                           @oninput="@(e => Set(row, column, e.Value?.ToString()))" />
+                                }
+                                else
+                                {
+                                    <input class="form-control form-control-sm bc-table__input"
+                                           aria-label="@CellLabel(row, column)"
+                                           value="@Table.Rows[row][column]"
+                                           @oninput="@(e => Set(row, column, e.Value?.ToString()))" />
+                                }
+                            </td>
+                        }
+                    </tr>
+                }
+            </tbody>
+        </table>
+
+        @* Icon buttons, so each carries its words - the markup guard requires it, and a grid of
+           unlabelled plus and minus signs is unreadable anyway. *@
+        <div class="bc-table__controls">
+            <button type="button" class="btn btn-sm btn-outline-secondary" title="Add row" aria-label="Add row"
+                    @onclick="@(() => Table.InsertRow(Table.Rows.Count))">
+                <BcIcon Name="plus" /><span class="bc-table__control-text">Add row</span>
+            </button>
+            <button type="button" class="btn btn-sm btn-outline-secondary" title="Add column" aria-label="Add column"
+                    @onclick="@(() => Table.InsertColumn(Table.ColumnCount))">
+                <BcIcon Name="plus" /><span class="bc-table__control-text">Add column</span>
+            </button>
+            @if (Table.Rows.Count > TableData.MinRows)
+            {
+                <button type="button" class="btn btn-sm btn-outline-secondary" title="Remove row" aria-label="Remove row"
+                        @onclick="@(() => Table.RemoveRow(Table.Rows.Count - 1))">
+                    <BcIcon Name="minus" /><span class="bc-table__control-text">Remove row</span>
+                </button>
+            }
+            @if (Table.ColumnCount > TableData.MinColumns)
+            {
+                <button type="button" class="btn btn-sm btn-outline-secondary" title="Remove column" aria-label="Remove column"
+                        @onclick="@(() => Table.RemoveColumn(Table.ColumnCount - 1))">
+                    <BcIcon Name="minus" /><span class="bc-table__control-text">Remove column</span>
+                </button>
+            }
+        </div>
+    </div>
+}
+else
+{
+    <div class="bc-table">
+        <table class="bc-table__grid">
+            @if (Table.HasHeaderRow && Table.Rows.Count > 0)
+            {
+                <thead>
+                    <tr>
+                        @foreach (var cell in Table.Rows[0])
+                        {
+                            <th scope="col">@cell</th>
+                        }
+                    </tr>
+                </thead>
+            }
+            <tbody>
+                @for (var r = Table.HasHeaderRow ? 1 : 0; r < Table.Rows.Count; r++)
+                {
+                    <tr>
+                        @foreach (var cell in Table.Rows[r])
+                        {
+                            <td>@cell</td>
+                        }
+                    </tr>
+                }
+            </tbody>
+        </table>
+    </div>
+}
+@code {
+    private TableData Table => Data as TableData ?? new TableData();
+
+    private void Set(int row, int column, string? value)
+    {
+        if (row < Table.Rows.Count && column < Table.Rows[row].Count)
+            Table.Rows[row][column] = value ?? "";
+    }
+
+    /// <summary>
+    /// A header cell says which column it is, because "row 1" alone does not locate it.
+    /// </summary>
+    private string HeaderLabel(int column) => $"Column {column + 1} heading";
+
+    /// <summary>
+    /// A body cell is named by its column's heading where there is one, because that is how a person
+    /// reads the grid; by number where there is not.
+    /// </summary>
+    private string CellLabel(int row, int column)
+    {
+        var line = Table.HasHeaderRow ? row : row + 1;
+        var heading = Table.HasHeaderRow && Table.Rows.Count > 0 && column < Table.Rows[0].Count
+            ? Table.Rows[0][column]
+            : "";
+
+        return string.IsNullOrWhiteSpace(heading)
+            ? $"Column {column + 1}, row {line}"
+            : $"{heading}, row {line}";
+    }
+}

@@ -63,6 +63,7 @@
     --bc-type-link:       var(--bs-link-color, #8796b9);
     --bc-type-text:       var(--bs-secondary-color, rgba(222, 226, 230, .75));
     --bc-type-file:       var(--bs-secondary-color, rgba(222, 226, 230, .75));
+    --bc-type-table:      var(--bs-teal, #4a7c7c);
     --bc-type-group:      var(--bs-primary, #37508a);
 
     --bc-color-1:         var(--bs-primary, #37508a);

@@ -6,7 +6,7 @@ namespace Ben.Canvas.Core.Model;
 // them; add new members at the end. A board saved today must open in every later version.
 
 /// <summary>The kinds of block a board holds.</summary>
-public enum CanvasNodeType { Card, Message, Map, Image, Link, Text, File, Audio, Video }
+public enum CanvasNodeType { Card, Message, Map, Image, Link, Text, File, Audio, Video, Table }
 
 /// <summary>A side of a rectangle, where a connector attaches.</summary>
 public enum CanvasSide { Top, Right, Bottom, Left }

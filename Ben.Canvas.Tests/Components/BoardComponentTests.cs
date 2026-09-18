@@ -325,7 +325,9 @@ public sealed class EditorChromeTests
         var html = await RenderHelper.RenderAsync<ToolRail>();
         var rail = Regex.Match(html, "<nav class=\"bc-rail\".*?</nav>", RegexOptions.Singleline).Value;
         var buttons = Regex.Matches(rail, "<button[^>]*>").Select(m => m.Value).ToList();
-        Assert.Equal(7, buttons.Count);
+        // Six block kinds, the case-files picker and Paste. The number is the assertion: a rail that
+        // silently grew a button is a rail somebody added a kind to without naming it.
+        Assert.Equal(8, buttons.Count);
         Assert.All(buttons, b => Assert.Matches("aria-label=\"(Add |Paste\")", b));
     }
 

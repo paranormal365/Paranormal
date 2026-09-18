@@ -73,6 +73,10 @@ public static class CanvasDocumentMigrations
 
     private static void CleanData(NodeData data)
     {
+        // A grid from a hand-edited file, a newer editor or a ragged selection is squared up rather
+        // than refused: a table missing a cell is still a readable table.
+        if (data is TableData table) table.Square();
+
         switch (data)
         {
             case CardData card:

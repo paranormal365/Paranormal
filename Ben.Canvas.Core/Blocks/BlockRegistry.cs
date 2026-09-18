@@ -43,6 +43,10 @@ public static class BlockRegistry
         new(CanvasNodeType.File, "File", "file", 260, 72, 200, 72, false, false, _ => new FileData()),
         // Sound is a waveform and a play button — wide enough to scrub, no taller than it needs.
         new(CanvasNodeType.Audio, "Audio", "music", 340, 132, 240, 116, true, false, _ => new AudioData()),
+        // Wide by default and resizable both ways: a grid is read across, and how many rows it needs
+        // is the one thing the block cannot know. Starts as a header and one row, two columns.
+        new(CanvasNodeType.Table, "Table", "grid", 420, 200, 200, 100, true, true,
+            _ => new TableData { HasHeaderRow = true, Rows = [["", ""], ["", ""]] }),
         // A CARD's size, not the film's. Ben, 2026-09-16: "The video should be card sized, not
         // original sized... so it doesn't take up the screen... maybe can resize the card to fit
         // the size the end user wants." A phone films 1080×1920; opened at its own size one clip

@@ -143,6 +143,18 @@ public static class BoardSnapshot
                     lines.Add(string.Create(CultureInfo.InvariantCulture, $"{map.Latitude:F5}, {map.Longitude:F5}"));
                 lines.AddRange(map.Pins.Where(p => !string.IsNullOrWhiteSpace(p.Title)).Select(p => "• " + p.Title));
                 return (display, lines);
+            case TableData table:
+                // The header names it where there is one, and each row prints as its cells joined —
+                // the published picture is a picture, so a grid drawn as lines of text reads better
+                // there than a grid drawn badly.
+                var grid = table.Rows.Skip(table.HasHeaderRow ? 1 : 0)
+                    .Select(r => string.Join("  ", r.Where(c => !string.IsNullOrWhiteSpace(c))))
+                    .Where(line => line.Length > 0)
+                    .ToList();
+                var heading = table.HasHeaderRow && table.Rows.Count > 0
+                    ? string.Join("  ", table.Rows[0].Where(c => !string.IsNullOrWhiteSpace(c)))
+                    : "";
+                return (Or(heading, display), grid);
             case ImageData image:
                 return (Or(image.Caption, display), []);
             default:
