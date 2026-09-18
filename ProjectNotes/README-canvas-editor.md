@@ -510,6 +510,16 @@ until you use it. Everything is undoable, exports and imports, publishes to the 
   copy** — the author too, so what they check is what a reader gets. A card whose target has gone says
   so where it stands and does nothing; the picture and the deck treat it as inert. The card stores the
   target's id and the title it had when picked; nothing else, so it can never leak a draft's contents.
+- *A board card can point at one card on the other board, and a missing card is not an error.* Ben,
+  2026-09-18: *"if there is a link to a card in a different page, and the card has been removed, default to
+  opening the other page and not focusing in on that card."* So `BoardData` carries an optional target
+  block id and the title that block had when picked. Opening looks the block up in the target's
+  **published copy**: found, the view fits to it and selects it; gone, the board opens at fit-to-content
+  with nothing selected and a quiet note that the card is no longer there. Nothing on the source board
+  changes when the target card is removed — the link degrades at the moment it is followed, where the
+  person can see what happened, not silently on somebody else's board. The picker's second step offers
+  the published copy's blocks by the same title the published picture prints (`Words()`), so what you
+  pick is what a reader would recognise.
 - *Templates are documents, not a server concept.* `CanvasDocumentController.Create` stores whatever
   document the client posts, and a new board is `CanvasDocumentStore.New(caseId)` — "not stored until its
   first edit." So a template is a pure function `Guid? caseId → CanvasDocument` in `Ben.Canvas.Core`,
@@ -546,9 +556,9 @@ if it can be pasted. Every one of those is enforced by a test that already exist
 | M9-05 | `CanvasEdge.Line` `Solid`/`Dashed`, `Route` `Curve`/`Straight`/`Elbow`, `FromMarker`/`ToMarker` `Arrow`/`Diamond`/`Dot`/`None` (replacing `Arrow`'s meaning, `Arrow` kept and mapped on read), `Icon` (≤ 8 chars at the midpoint) | Core/Model, Core/Serialization |
 | M9-06 | `EdgeGeometry.Resolve(…, route)`; `EdgePath` corners; `ToSvgPath`/`PointAt`; hit sampling over corners; `ArrowHead(marker)`; `Head(marker)`; `SnapshotConnector` gains `Dash`, `Icon`, variable-length heads; painter | Core/Geometry, Editor/Board, Persistence, js |
 | M9-07 | Connector properties: line, route, each end's marker, icon; `bc-edge--dashed`; midpoint label already exists for the icon's placement | Chrome, EdgeLayer |
-| M9-08 | `BoardData` (`DocumentId`, `Title`), `BoardNode` (icon `book-open`, title, Open **button**; "no longer published" state), `CaseBoardPicker` (copy of `CaseFilePicker` over `server.ListAsync(caseId)` filtered to **published**), action `case-boards`, rail button "Add from the case's boards" | Core/Model, Editor/Nodes, Chrome |
+| M9-08 | `BoardData` (`DocumentId`, `Title`, optional `NodeId`, `NodeTitle`), `BoardNode` (icon `book-open`, board title, "→ card title" when a card is named, Open **button**; "no longer published" state), `CaseBoardPicker` (copy of `CaseFilePicker` over `server.ListAsync(caseId)` filtered to **published**; second step lists the published copy's blocks by `Words()` title, "the whole board" first), action `case-boards`, rail button "Add from the case's boards" | Core/Model, Editor/Nodes, Chrome |
 | M9-08b | Server invariant: `Publish` refuses a document whose `board` cards name an unpublished target (same `nodes[].data.kind` walk `SanitizeDocument` already does); `Delete` refuses a board that published boards link to; both name the boards; the editor greys Publish and says why before the round trip | WebApi `CanvasDocumentController` |
-| M9-09 | `BoardTrail` (view state: stack of `(serverId, title)`), Open = save, then open the target's **published copy**, push; header **Back to <title>** beside `BackContent`, pop; trail cleared on case change; a 404 toasts and leaves the trail alone | Editor/Services, Chrome |
+| M9-09 | `BoardTrail` (view state: stack of `(serverId, title)`), Open = save, then open the target's **published copy**, push; a named card that still exists is selected and fitted to; a named card that is gone opens the board at fit-to-content, selects nothing, and toasts once; header **Back to <title>** beside `BackContent`, pop; trail cleared on case change; a 404 toasts and leaves the trail alone | Editor/Services, Chrome |
 | M9-10 | `BoardTemplates` in Core: `Blank`, `Moodboard`, `ResearchPlan`, `FamilyTree`, `Deck`; each a pure builder; every template validates, fits `MaxNodes`, and uses only palette tokens | Core/Templates (new) |
 | M9-11 | `CanvasDocumentStore.New(caseId, template)`; `CanvasEditor.TemplateId`; `CanvasHandoff` `template` arm; `Editor.razor`; `RestoreAsync` ordering | Editor/Services, Wasm host, Lifecycle |
 | M9-12 | Research tab: New board becomes a choice of template (names and one line each), fragment carries `template=` | Website `CaseResearchBoards.razor` |
@@ -590,6 +600,10 @@ if it can be pasted. Every one of those is enforced by a test that already exist
 | M9-08b | the refusal arriving as a bare string | TierValidationShape-style: the refusal is a record the editor reads |
 | M9-09 | following a card to the draft rather than the published copy | Following_a_board_card_opens_the_published_copy |
 | M9-09 | a card whose target is gone opening nothing silently | A_board_card_whose_target_is_gone_says_so_and_stays_put |
+| M9-09 | a named card that exists not focused | A_card_link_selects_and_fits_to_the_card_when_it_still_exists |
+| M9-09 | a named card that is gone treated as an error | A_card_link_whose_card_is_gone_opens_the_board_at_fit_and_selects_nothing |
+| M9-09 | the lookup reading the draft rather than the published copy | A_card_link_is_resolved_against_the_published_copy |
+| M9-08 | the picker naming blocks differently from the picture | The_picker_lists_the_published_copys_blocks_by_their_snapshot_title |
 | M9-09 | Back after opening returns to the wrong board | Opening_a_board_card_pushes_and_back_pops |
 | M9-09 | switching without saving | Opening_a_board_card_saves_the_current_board_first |
 | M9-10 | a template that does not validate or overflows | Every_template_opens_and_fits_MaxNodes |
