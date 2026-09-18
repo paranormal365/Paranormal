@@ -16,6 +16,33 @@ read. Add today's heading at the top when you ship something people can see.
 The history before 2026-08-22 is summarised rather than listed: the site was not yet open, and a
 day-by-day account of building it would say nothing to anyone using it now.
 
+## 2026-09-18
+
+- New board now asks what to start from. Five choices: a blank board, a moodboard of coloured
+  sections with a cluster of themes, a research plan with a four-square and a grid of four weeks, a
+  family tree, and a presentation deck of slide frames. Everything on one is yours to move, rename or
+  delete — it is a head start, not a form.
+- The family tree gives every person a photo frame above their name. It starts empty, and empty is
+  finished: paste a photograph in, put any picture you like there instead, or leave them all blank and
+  let the names do the work. The lines join the names, so going without a photograph moves nothing.
+- A board can hold a grid. A table block is for anything that reads across — owners and the years
+  they held a house, four weeks of who is doing what, a set of readings. Tab moves along and out of the
+  last cell into a new row, and the header row can be turned off.
+- A shape block puts a box, a circle or a diamond with a word or two in it on the board, for the
+  things a card would overdress — a theme, a question, a step, a label on part of the board.
+- Pasting a grid of text onto a board now makes a table of it rather than a wall of words in a note.
+- Colour goes further. Any block can be filled with its colour rather than striped with it, and a
+  group can be drawn as a filled, titled panel rather than an outline — so part of a board reads as a
+  section of it. Both are kept when the board is published.
+- A line can say what it means. Choose its route (a curve, a straight line, or right angles), what
+  each end looks like (an arrow, a diamond, a dot or nothing, per end), whether it is solid or dashed,
+  a label along it, and a one- or two-character badge on it.
+- A card can now open another board. One board fills up, so a card can point at another board on
+  the same case — and at one card on it — with a Back button to return the way you came. Only published
+  boards can be linked to, and the picker says so; a board with a link on it will not publish until its
+  target is published. If the target is deleted, the card says so when clicked rather than going
+  anywhere, and if only the card you pointed at is gone, the board still opens.
+
 ## 2026-09-17
 
 - Your two-week renewal notice now quotes the right number. A group billed quarterly or every six

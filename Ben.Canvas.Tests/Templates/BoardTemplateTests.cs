@@ -341,7 +341,9 @@ public sealed class BoardTemplateTests
     {
         var document = Build("family-tree");
 
-        Assert.NotEmpty(document.Edges);
+        // One marriage, three parent-to-child, two sibling links and one grandchild. Hard-coded on
+        // purpose: the e2e counts the drawn lines, and the two numbers must move together.
+        Assert.Equal(7, document.Edges.Count);
         Assert.All(document.Edges, e => Assert.Equal(EdgeRoute.Elbow, e.Route));
 
         Assert.Contains(document.Edges, e => e.Line == EdgeLine.Dashed);

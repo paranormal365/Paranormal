@@ -549,6 +549,15 @@ until you use it. Everything is undoable, exports and imports, publishes to the 
   it gains `template=<id>`, `CanvasHandoff.Parse` gains the arm, `Editor.razor` threads it to a
   `CanvasEditor.TemplateId` parameter, and `RestoreAsync` honours it **before** restoring the device
   copy — an explicit request wins over what was open last time — and only when no `doc` arrived.
+  **Built 2026-09-18, and the fragment arrives LATE.** The host must exchange the sign-in code with
+  the API before it can pass anything down, and Blazor renders at the first await, so the editor's
+  startup can run with every parameter still null. The case already coped with that (`OnParametersSet`
+  exists for it); the template did not, and the result was a race — the first e2e run failed on the
+  deck and passed on the family tree in the same run. So the template question is settled by an
+  idempotent `SettleTemplateAsync`, asked in the restore, again at the end of startup, and again
+  whenever parameters change; a `doc` settles it without laying anything out, so a template arriving
+  after the board it lost to cannot still replace it. Nothing below the browser could see this: the
+  four `CanvasTemplatesTests` are the guard.
 - *Connector routing lives in one function.* `EdgeGeometry.Resolve` is called from exactly three places —
   drawing, the published picture and hit-testing — so a `Route` is answered there and all three follow.
   `Straight` is the existing cubic with its controls on its ends; `Elbow` is a polyline, so `EdgePath` grows

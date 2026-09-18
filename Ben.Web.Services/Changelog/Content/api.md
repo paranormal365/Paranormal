@@ -18,6 +18,14 @@ read.
 This stream deliberately does not repeat the website's list. A change people meet as a page
 belongs there; this is for the part underneath.
 
+## 2026-09-18
+
+- A board that links to another board is checked when it is published: the service refuses to publish
+  one whose target has not been published, and says which. A picker that only offers published boards
+  stops the state being created; holding the rule here stops it being reached any other way.
+- Reading a board by its published copy is now a request of its own, so following a link to another
+  board never reaches its author's unpublished draft.
+
 ## 2026-09-17
 
 - Money figures are worked out and filed more carefully. Several sums rounded a fraction of a cent
