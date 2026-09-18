@@ -287,6 +287,53 @@ public sealed class CanvasServerSessionTests
         Assert.Null(rig.Device.Documents.CurrentServerId);
     }
 
+    /// <summary>
+    /// A board somebody just started from a template is not replaced by the case's newest board.
+    /// </summary>
+    /// <remarks>
+    /// This is the one seam templates could have broken silently. A new board from a template is
+    /// unsaved, so opening the case afterwards — which every load does — would list the case's boards,
+    /// find a newer one and open it, and the frames somebody picked a second earlier would be gone with
+    /// no message. The case and the organisation are still adopted, so the first save still lands in
+    /// the right place; only the OPENING is declined.
+    /// </remarks>
+    [Fact]
+    public async Task A_board_just_started_from_a_template_is_not_replaced_by_the_cases_newest()
+    {
+        var rig = await new Rig().StartedAsync();
+        rig.Device.Store.AddNode(Card());
+        await rig.Session.SaveToCaseAsync();
+
+        // A second board, started from a template a moment ago and not saved anywhere yet.
+        rig.Device.Documents.New(Case, "deck");
+        var localId = rig.Device.Documents.CurrentLocalId;
+
+        Assert.Null(await rig.Session.OpenForCaseAsync(Case, Org, keepWhatIsOpen: true));
+
+        Assert.Equal(4, rig.Device.Store.Document.Groups.Count);
+        Assert.Equal(localId, rig.Device.Documents.CurrentLocalId);
+        Assert.Null(rig.Device.Documents.CurrentServerId);
+        Assert.Equal(Org, rig.Device.Documents.CurrentOrganizationId);
+        Assert.True(rig.Access.CanEdit);
+    }
+
+    /// <summary>And without that, the case's newest board is what opens — the ordinary load.</summary>
+    [Fact]
+    public async Task Without_that_the_cases_newest_board_opens_as_it_always_has()
+    {
+        var rig = await new Rig().StartedAsync();
+        rig.Device.Store.AddNode(Card());
+        await rig.Session.SaveToCaseAsync();
+        var id = rig.Device.Documents.CurrentServerId!.Value;
+
+        rig.Device.Documents.New(Case, "deck");
+
+        Assert.Null(await rig.Session.OpenForCaseAsync(Case, Org));
+
+        Assert.Equal(id, rig.Device.Documents.CurrentServerId);
+        Assert.Empty(rig.Device.Store.Document.Groups);
+    }
+
     [Fact]
     public async Task Pictures_are_uploaded_before_the_board_and_once_only()
     {

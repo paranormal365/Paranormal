@@ -25,7 +25,7 @@ public sealed class CanvasEditorContractTests
     public void The_host_parameters_are_the_agreed_set()
     {
         Assert.Equal(
-            new[] { "BackContent", "CaseId", "HostStatusContent", "OpenServerDocumentId", "OrganizationId", "ShowDiagnostics" },
+            new[] { "BackContent", "CaseId", "HostStatusContent", "OpenServerDocumentId", "OrganizationId", "ShowDiagnostics", "TemplateId" },
             Parameters().Keys.OrderBy(k => k, StringComparer.Ordinal));
     }
 
@@ -47,6 +47,7 @@ public sealed class CanvasEditorContractTests
         Assert.Equal(typeof(Guid?), p["OrganizationId"]);
         Assert.Equal(typeof(Guid?), p["OpenServerDocumentId"]);
         Assert.Equal(typeof(bool), p["ShowDiagnostics"]);
+        Assert.Equal(typeof(string), p["TemplateId"]);
         Assert.Equal(typeof(RenderFragment), p["HostStatusContent"]);
         Assert.Equal(typeof(RenderFragment), p["BackContent"]);
     }

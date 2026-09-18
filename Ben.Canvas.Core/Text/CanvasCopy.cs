@@ -201,6 +201,11 @@ public static class CanvasCopy
         public static string RestoreFailed(string problem) =>
             string.Format(Invariant, "The last board on this device could not be opened, so a new board was started. {0}", EndSentence(problem));
 
+        public static string UnknownTemplate(string id) =>
+            string.Format(Invariant,
+                "There is no board template called \"{0}\", so a blank board was started instead. The link may be from an older version of the site.",
+                id);
+
         public const string ImportNotABoard =
             "That file is not a board saved from IsHaunted Canvas. Choose a file that ends in .ishcanvas.";
 

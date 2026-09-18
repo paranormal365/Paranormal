@@ -15,10 +15,20 @@ namespace Ben.Wasm.Canvas.Services;
 /// <param name="DocumentId">The server board to open once signed in, or null.</param>
 /// <param name="CaseId">The case new boards belong to, or null.</param>
 /// <param name="OrganizationId">The organisation that owns the case, or null.</param>
-public readonly record struct CanvasHandoff(string? Code, Guid? DocumentId, Guid? CaseId, Guid? OrganizationId)
+/// <param name="Template">A board template to start from, by id, or null.</param>
+public readonly record struct CanvasHandoff(
+    string? Code, Guid? DocumentId, Guid? CaseId, Guid? OrganizationId, string? Template = null)
 {
+    /// <summary>The most characters a template id may be, so a padded fragment is not carried around.</summary>
+    /// <remarks>
+    /// The editor already treats an unknown id as "open a blank board and say so", so this is only about
+    /// not passing a kilobyte of someone's paste through to a toast.
+    /// </remarks>
+    public const int MaxTemplateLength = 64;
+
     /// <summary>Whether the URL carried anything worth acting on.</summary>
-    public bool IsPresent => Code is not null || DocumentId is not null || CaseId is not null || OrganizationId is not null;
+    public bool IsPresent => Code is not null || DocumentId is not null || CaseId is not null
+        || OrganizationId is not null || Template is not null;
 
     /// <summary>Nothing arrived; an ordinary visit.</summary>
     public static CanvasHandoff None => new(null, null, null, null);
@@ -38,7 +48,7 @@ public readonly record struct CanvasHandoff(string? Code, Guid? DocumentId, Guid
         var hash = fragment.IndexOf('#');
         if (hash >= 0) fragment = fragment[(hash + 1)..];
 
-        string? code = null;
+        string? code = null, template = null;
         Guid? doc = null, @case = null, org = null;
 
         foreach (var part in fragment.Split('&', StringSplitOptions.RemoveEmptyEntries))
@@ -73,10 +83,17 @@ public readonly record struct CanvasHandoff(string? Code, Guid? DocumentId, Guid
                 case "org" when Guid.TryParse(value, out var o):
                     org = o;
                     break;
+
+                // Not checked against the catalogue here: the host does not hold it, and an id this
+                // build does not know is already a blank board with a sentence. Only the length is
+                // capped, so a mangled paste cannot travel any further than this line.
+                case "template" when value.Length <= MaxTemplateLength:
+                    template = value;
+                    break;
             }
         }
 
-        return new(code, doc, @case, org);
+        return new(code, doc, @case, org, template);
     }
 }
 

@@ -139,6 +139,15 @@
     /// <summary>A server board to open once the editor has restored its local state.</summary>
     [Parameter] public Guid? OpenServerDocumentId { get; set; }
 
+    /// <summary>A board template to start from, by id, when the host asked for a new board from one.</summary>
+    /// <remarks>
+    /// An explicit request beats whatever this device had open last, and is ignored when
+    /// <see cref="OpenServerDocumentId"/> arrived — a link to a particular board is more specific still,
+    /// and laying a template over it would throw that board away. An id this build does not know opens a
+    /// blank board and says so, because the id travels in a URL fragment.
+    /// </remarks>
+    [Parameter] public string? TemplateId { get; set; }
+
     /// <summary>Whether operator diagnostics are drawn. A display decision, not a security boundary.</summary>
     [Parameter] public bool ShowDiagnostics { get; set; }
 

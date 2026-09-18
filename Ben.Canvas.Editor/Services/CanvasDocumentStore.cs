@@ -3,6 +3,7 @@ using Ben.Canvas.Core.Geometry;
 using Ben.Canvas.Core.Model;
 using Ben.Canvas.Core.Persistence;
 using Ben.Canvas.Core.Serialization;
+using Ben.Canvas.Core.Templates;
 using Microsoft.Extensions.Logging;
 using Microsoft.JSInterop;
 
@@ -150,10 +151,16 @@ public sealed class CanvasDocumentStore : IAsyncDisposable
         return (true, null);
     }
 
-    /// <summary>Starts an empty board. It is not stored until its first edit.</summary>
-    public void New(Guid? caseId)
+    /// <summary>Starts a board. It is not stored until its first edit.</summary>
+    /// <param name="caseId">The case it belongs to, when it was started from one.</param>
+    /// <param name="templateId">
+    /// A template to lay out, or null for an empty board. An id this build does not know lays out an
+    /// empty board rather than throwing, because the id arrives in a URL fragment where anything can
+    /// turn up; the caller says so, since only it has somewhere to say it.
+    /// </param>
+    public void New(Guid? caseId, string? templateId = null)
     {
-        LoadWithoutEditing(new CanvasDocument { CaseId = caseId });
+        LoadWithoutEditing(BoardTemplates.Create(templateId, caseId));
         CurrentLocalId = Guid.NewGuid();
         CurrentServerId = null;
         ChangedSinceServer = false;

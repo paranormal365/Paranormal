@@ -1,3 +1,4 @@
+using Ben.Canvas.Core.Templates;
 using Ben.Canvas.Core.Text;
 using Microsoft.Extensions.Logging;
 
@@ -69,20 +70,50 @@ public partial class CanvasEditor
             return Task.CompletedTask;
         };
 
-        var (restored, problem) = await Documents.RestoreLastActiveAsync();
-        if (!restored) Documents.New(CaseId);
+        // Which of the three ways of arriving wins is decided in one place, in Core, so the order can
+        // be read back from its tests rather than inferred from this sequence.
+        var plan = BoardOpenPolicy.For(OpenServerDocumentId, TemplateId);
+        _templateApplied = plan.Template;
+
+        var restored = false;
+        string? problem = null;
+
+        if (plan.Template is { } template)
+        {
+            Documents.New(CaseId, template);
+
+            // Stored at once, unlike a blank board. A template already holds what the person asked for,
+            // so closing the tab before typing must not lose the frames and hand back a blank board the
+            // next time they open the editor.
+            await Documents.SaveAsync();
+
+            if (plan.SayUnknownTemplate is { } unknown)
+                Toasts.Warning(CanvasCopy.Sentences.UnknownTemplate(unknown));
+        }
+        else
+        {
+            (restored, problem) = await Documents.RestoreLastActiveAsync();
+            if (!restored) Documents.New(CaseId);
+        }
+
         if (problem is not null) Toasts.Warning(CanvasCopy.Sentences.RestoreFailed(problem));
 
         // The server comes after the device copy, so a slow or failed request still leaves a board open (M6).
         var opened = await OpenFromServerAsync();
 
         if ((restored || opened) && await Documents.LoadViewAsync() is { } view) Viewport.Set(view);
-        else if (opened) FitToContent();
+        else if (opened || _templateApplied is not null) FitToContent();
         await Bridge.PushViewportAsync();
     }
 
     /// <summary>What was last opened from the server, so a re-render or a second sign-in event does not open it again.</summary>
     private (Guid?, Guid?)? _serverOpened;
+
+    /// <summary>
+    /// The template this load actually laid out, or null. Held past the restore because the case's own
+    /// newest board is opened afterwards, and it must not replace a board somebody just chose.
+    /// </summary>
+    private string? _templateApplied;
 
     /// <summary>
     /// The host usually learns the case (from the site's hand-off) after the editor has started, so a case or board
@@ -103,7 +134,7 @@ public partial class CanvasEditor
 
         var problem = OpenServerDocumentId is { } id
             ? await ServerSession.OpenAsync(id)
-            : await ServerSession.OpenForCaseAsync(CaseId!.Value, OrganizationId);
+            : await ServerSession.OpenForCaseAsync(CaseId!.Value, OrganizationId, keepWhatIsOpen: _templateApplied is not null);
 
         Documents.SetOrganization(OrganizationId);
         if (ServerSession.PendingConflict is not null) _conflictOpen = true;

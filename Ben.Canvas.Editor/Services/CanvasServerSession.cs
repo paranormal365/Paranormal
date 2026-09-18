@@ -116,10 +116,21 @@ public sealed class CanvasServerSession(
     /// case's newest board (the copy on this device when there is one), otherwise a new board for the case.
     /// A newer server copy replaces an unchanged device copy, and becomes a conflict when both changed.
     /// </summary>
-    public async Task<string?> OpenForCaseAsync(Guid caseId, Guid? organizationId, CancellationToken ct = default)
+    /// <param name="keepWhatIsOpen">
+    /// The board already open was chosen deliberately a moment ago — from a template — so the case's
+    /// newest board must not replace it. The case and the organisation are still adopted, so the first
+    /// save lands in the right place; this only declines to OPEN anything.
+    /// </param>
+    public async Task<string?> OpenForCaseAsync(Guid caseId, Guid? organizationId, bool keepWhatIsOpen = false, CancellationToken ct = default)
     {
         documents.SetOrganization(organizationId);
         var sameCase = store.Document.CaseId == caseId;
+
+        if (keepWhatIsOpen)
+        {
+            access.Set(true);
+            return null;
+        }
 
         if (!server.IsAvailable)
         {
