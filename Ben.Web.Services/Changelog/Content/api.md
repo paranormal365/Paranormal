@@ -20,6 +20,22 @@ belongs there; this is for the part underneath.
 
 ## 2026-09-17
 
+- Money figures are worked out and filed more carefully. Several sums rounded a fraction of a cent
+  the wrong way, or rounded each item before adding rather than once at the end, and one rounded
+  the amount by one convention while taxing it by another — so a record could disagree with itself.
+  Amounts on existing records are unchanged; this is about what is written from now on.
+- Tax charged for event credits is the tax that is filed. It was being worked out again when the
+  payment came back, so a change to a tax rule or to a group's address in between could leave a
+  receipt saying something different from the card statement.
+- A renewal attempt is now recognised as the same attempt when it is retried across a date
+  boundary, so a retry cannot become a second payment for one period.
+- A subscription period's agreed price is no longer altered by anything bought mid-period. The extra
+  purchase is recorded as its own charge and payment, which is where it belongs.
+- A group's capabilities and permission areas now come from a plan that is actually standing, so
+  they match what the checks enforce. A plan that has ended no longer supplies them.
+- A place of your own in a group is no longer retried indefinitely when a payment has failed; it
+  ends, and you are told once.
+
 - A place tells a stranger less about a private residence. Its street address, postcode and exact
   position are no longer returned to an anonymous caller, and its name is withheld as well, because
   a home is often named after the family in it; the city, the state and an approximate position

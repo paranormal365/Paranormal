@@ -191,6 +191,56 @@ nothing: a server that skipped a release needs the older entries too.
    the city and state with no street address and no exact pin; then Moderation → Place Archive
    answers 200 and lists whatever is held.
 
+9. **The billing fixes are code-only too — API only, no migration and no setting**:
+   `.\scripts\deploy-ishaunted.ps1 -Apps webapi`. Nothing on the website changes for them.
+
+   **Two are actively costing money right now, and both are on the API alone:**
+
+   - A SuperAdmin editing a subscription's period set its provider to "Manual", and the renewal job
+     only charges subscriptions marked "Stripe". Any group whose period has been hand-adjusted
+     since Stripe went live **has stopped being billed**, with every provider reference still in
+     place so nothing looks wrong on any screen. Worth checking after deploying: Site Administration
+     → Subscriptions, look for an Active group on a paid band whose provider reads Manual and that
+     you did not set up manually. The fix stops it recurring; it cannot repair a row already
+     flipped, so those need setting back to Stripe by hand.
+
+     The rows to look at, read-only — a group with a saved card that the renewal job is skipping,
+     which is the exact signature of the bug (a genuinely manual group has no `ProviderCustomerRef`):
+
+     ```sql
+     SELECT o.Name, s.ProviderName, s.Status, s.CurrentPeriodEnd, s.DateUpdated
+     FROM   OrganizationSubscriptions s
+     JOIN   Organizations o ON o.Id = s.OrganizationId
+     WHERE  s.Status = 1                      -- Active
+       AND  s.ProviderName <> 'Stripe'
+       AND  s.ProviderCustomerRef IS NOT NULL
+       AND  s.ProviderPaymentMethodRef IS NOT NULL
+     ORDER  BY s.CurrentPeriodEnd;
+     ```
+
+     Anything it returns was set up to be charged automatically and is not being. Setting
+     `ProviderName` back to `'Stripe'` resumes it at the next period end; decide per group whether
+     to also collect the periods that were missed, because the fix deliberately does not
+     back-charge anybody.
+   - An overflow seat was never lapsed, so a seat whose card declined was retried on every pass
+     indefinitely, and back-charged every missed month at once when the card finally worked. After
+     deploying, the lapse job ends any seat already past its period end on its next run and writes
+     to the holder once.
+
+   Two more change what a person is charged, in their favour, from the moment it lands: a member
+   stops paying for their own seat once the group's plan grows to cover them, and a tour added
+   mid-period is priced at the rate the group signed up at rather than a price that has risen since.
+
+   Event-credit receipts now record the tax that was actually charged rather than re-deriving it, so
+   a receipt and the card statement cannot disagree. Rows already written are not rewritten — the
+   ledger is append-only — so any existing mismatch stays as it is and is corrected, if it matters,
+   with an Adjustment row the way the ledger's own rules say.
+
+   An older website against this API is safe: nothing here changes a contract the website reads.
+
+   Check it afterwards: a group's billing page still shows its plan, price and receipts, and a
+   receipt still downloads.
+
 ### 2026-09-16 — the case canvas becomes the Research tab
 
 1. Apply the migrations, in order, before deploying — `dotnet ef database update` applies all of them:

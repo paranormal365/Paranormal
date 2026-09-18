@@ -18,6 +18,24 @@ day-by-day account of building it would say nothing to anyone using it now.
 
 ## 2026-09-17
 
+- Your two-week renewal notice now quotes the right number. A group billed quarterly or every six
+  months was shown its price "per month", and a tour business was shown the price of one tour
+  rather than of all of them. The notice exists so the charge is never a surprise, so both are
+  worth saying plainly.
+- Paying for a place of your own in a group stops when the group's plan grows to cover you. It used
+  to carry on alongside what the group was already paying, so the group's own upgrade quietly left
+  you paying twice.
+- Adding a tour part way through a period is priced at the rate you signed up at, not at a price
+  that has gone up since. If the price has come DOWN, you get the lower one.
+- Buying a plan you are already paid up for is now refused, with the date you are covered to,
+  instead of taking a second payment for a month you already own. Changing between monthly and
+  yearly still works exactly as before.
+- A group whose plan has ended no longer keeps the things the plan paid for. Everything already
+  recorded stays readable, as it always has.
+- Coupon codes handle some odd cases properly: a code with a fixed amount beside a zero percentage
+  now takes the amount off instead of nothing, and a code that would have ADDED to the price is
+  refused outright.
+
 - Places are searchable now. "What's near you" has a fourth tab: public locations near you that
   groups have published work at. A location only appears once there is something to read at it, and
   somebody's home never appears.
