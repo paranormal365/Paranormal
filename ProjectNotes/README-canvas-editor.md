@@ -497,6 +497,19 @@ until you use it. Everything is undoable, exports and imports, publishes to the 
   `ServerSession.OpenAsync(id)`. A trail of `(serverId, title)` pairs gives the header its Back; it is
   view state, never stored on the board. Alt+Left is deliberately not bound — it is Back in Chrome on
   Windows, and the M8 notes already record why.
+- *Only a published board can be linked, and the server holds the line.* Ben, 2026-09-18: *"the only
+  way for it to hit the load link to other page is if the other page has been published … it will cause
+  issues if one is not published and one that is published has a link to a page which is not published."*
+  A published board is what a reader sees; a draft is its author's alone. A link from the first to the
+  second would hand a reader a door into somebody's private work, or a 404. So the rule is an invariant —
+  **a published board never points at an unpublished one** — held in three places, because a picker
+  alone only stops the state being *created*: the picker lists **only published boards** on the case
+  (`GetAll` already tells published from the caller's own drafts); `Publish` **refuses** a board carrying
+  a board card whose target is not published, and says which; and `Delete` **refuses** a board that
+  published boards link to, and says which. Following a card always opens the target's **published
+  copy** — the author too, so what they check is what a reader gets. A card whose target has gone says
+  so where it stands and does nothing; the picture and the deck treat it as inert. The card stores the
+  target's id and the title it had when picked; nothing else, so it can never leak a draft's contents.
 - *Templates are documents, not a server concept.* `CanvasDocumentController.Create` stores whatever
   document the client posts, and a new board is `CanvasDocumentStore.New(caseId)` — "not stored until its
   first edit." So a template is a pure function `Guid? caseId → CanvasDocument` in `Ben.Canvas.Core`,
@@ -533,8 +546,9 @@ if it can be pasted. Every one of those is enforced by a test that already exist
 | M9-05 | `CanvasEdge.Line` `Solid`/`Dashed`, `Route` `Curve`/`Straight`/`Elbow`, `FromMarker`/`ToMarker` `Arrow`/`Diamond`/`Dot`/`None` (replacing `Arrow`'s meaning, `Arrow` kept and mapped on read), `Icon` (≤ 8 chars at the midpoint) | Core/Model, Core/Serialization |
 | M9-06 | `EdgeGeometry.Resolve(…, route)`; `EdgePath` corners; `ToSvgPath`/`PointAt`; hit sampling over corners; `ArrowHead(marker)`; `Head(marker)`; `SnapshotConnector` gains `Dash`, `Icon`, variable-length heads; painter | Core/Geometry, Editor/Board, Persistence, js |
 | M9-07 | Connector properties: line, route, each end's marker, icon; `bc-edge--dashed`; midpoint label already exists for the icon's placement | Chrome, EdgeLayer |
-| M9-08 | `BoardData` (`DocumentId`, `Title`), `BoardNode` (icon `book-open`, title, Open **button**), `CaseBoardPicker` (copy of `CaseFilePicker` over `server.ListAsync(caseId)`), action `case-boards`, rail button "Add from the case's boards" | Core/Model, Editor/Nodes, Chrome |
-| M9-09 | `BoardTrail` (view state: stack of `(serverId, title)`), Open = save then `OpenAsync`, push; header **Back to <title>** beside `BackContent`, pop; trail cleared on case change | Editor/Services, Chrome |
+| M9-08 | `BoardData` (`DocumentId`, `Title`), `BoardNode` (icon `book-open`, title, Open **button**; "no longer published" state), `CaseBoardPicker` (copy of `CaseFilePicker` over `server.ListAsync(caseId)` filtered to **published**), action `case-boards`, rail button "Add from the case's boards" | Core/Model, Editor/Nodes, Chrome |
+| M9-08b | Server invariant: `Publish` refuses a document whose `board` cards name an unpublished target (same `nodes[].data.kind` walk `SanitizeDocument` already does); `Delete` refuses a board that published boards link to; both name the boards; the editor greys Publish and says why before the round trip | WebApi `CanvasDocumentController` |
+| M9-09 | `BoardTrail` (view state: stack of `(serverId, title)`), Open = save, then open the target's **published copy**, push; header **Back to <title>** beside `BackContent`, pop; trail cleared on case change; a 404 toasts and leaves the trail alone | Editor/Services, Chrome |
 | M9-10 | `BoardTemplates` in Core: `Blank`, `Moodboard`, `ResearchPlan`, `FamilyTree`, `Deck`; each a pure builder; every template validates, fits `MaxNodes`, and uses only palette tokens | Core/Templates (new) |
 | M9-11 | `CanvasDocumentStore.New(caseId, template)`; `CanvasEditor.TemplateId`; `CanvasHandoff` `template` arm; `Editor.razor`; `RestoreAsync` ordering | Editor/Services, Wasm host, Lifecycle |
 | M9-12 | Research tab: New board becomes a choice of template (names and one line each), fragment carries `template=` | Website `CaseResearchBoards.razor` |
@@ -569,6 +583,13 @@ if it can be pasted. Every one of those is enforced by a test that already exist
 | M9-07 | a connector's icon control with no label | LabelAssociation / RazorMarkupGuardTests (exist) |
 | M9-08 | a board card opening in a new tab | A_board_card_opens_with_a_button_not_a_link |
 | M9-08 | the picker listing boards of another case | The_board_picker_lists_only_this_cases_boards |
+| M9-08 | the picker offering a draft | The_board_picker_offers_only_published_boards |
+| M9-08 | a card storing anything but the target's id and title | A_board_card_carries_no_content_of_its_target |
+| M9-08b | publishing a board that links to a draft | Publishing_refuses_a_board_that_links_to_an_unpublished_board_and_names_it |
+| M9-08b | deleting a board that published boards link to | Deleting_a_linked_board_is_refused_and_names_the_boards |
+| M9-08b | the refusal arriving as a bare string | TierValidationShape-style: the refusal is a record the editor reads |
+| M9-09 | following a card to the draft rather than the published copy | Following_a_board_card_opens_the_published_copy |
+| M9-09 | a card whose target is gone opening nothing silently | A_board_card_whose_target_is_gone_says_so_and_stays_put |
 | M9-09 | Back after opening returns to the wrong board | Opening_a_board_card_pushes_and_back_pops |
 | M9-09 | switching without saving | Opening_a_board_card_saves_the_current_board_first |
 | M9-10 | a template that does not validate or overflows | Every_template_opens_and_fits_MaxNodes |
@@ -593,12 +614,16 @@ dotnet test  Ben.Web.Tests
 **Risks named up front.** (1) The stale-editor edge above. (2) `Every_type_maps_to_its_own_renderer`
 hard-codes `9`; it becomes `12` and stays hard-coded on purpose — the number is the assertion. (3)
 `SnapshotConnector.Heads` changes shape; the published picture is regenerated on publish, never
-rewritten, so old pictures stand. (4) A board card's Open on a board that has since been deleted: the
-picker lists live boards, and Open on a 404 says so in a toast and leaves the trail alone. (5) Templates
+rewritten, so old pictures stand. (4) A board card's target can only stop being published by being deleted, and `Delete` now refuses
+while published boards link to it — so the "target gone" state should not arise; the card still handles
+it, because a rule enforced in one place and assumed in another is how the audit found most of its
+findings. (4b) The publish and delete refusals are **API changes**, small and additive; the editor greys
+the button first so the round trip is the backstop, not the message. (5) Templates
 are code, so a change to one changes every *new* board from it and no existing board — which is the
 right way round, and the tests say so.
 
 **Not in M9.** Charts (M10). Cross-case board links (a board names a board on its own case; the picker
-is scoped there, and the additive guard already stops a link from becoming an edit elsewhere). A template
+is scoped there, and the additive guard already stops a link from becoming an edit elsewhere). Linking
+to a draft, ever — by rule, above. A template
 gallery with pictures (names and a sentence in M9; pictures once the walk has shot them). Table cell
 merging, formulas, sorting. Connector waypoints you can drag (Elbow is automatic).
