@@ -161,9 +161,16 @@ five:
 **Everything on a template is yours.** Move it, rename it, recolour it, delete it. It is a head start,
 not a form, and nothing on it is treated differently from something you put there yourself.
 
+![Choosing what a new board starts from](/help/media/working-a-case/board-templates.png)
+*New board: five things to start from, and one line each on what you would get.*
+
 **The family tree's photo frames start empty**, and empty is finished. Paste or drop a photograph into
 one, or put any picture you like there instead, or leave them all blank and let the names do the work.
 The lines join the **names** rather than the frames, so going without a photograph moves nothing.
+
+![The family tree template, as it opens](/help/media/working-a-case/board-family-tree.png)
+*The family tree as it opens: names, right-angled lines, a small photo frame above each name, and a
+legend saying what the lines mean.*
 
 ![A case's research boards](/help/media/working-a-case/research-boards.png)
 *The Research tab: the boards on this case, who wrote each one, and whether it has been published.*
