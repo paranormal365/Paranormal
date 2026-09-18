@@ -61,6 +61,13 @@
 
         @* ── Map ──────────────────────────────────────────────────────────────── *@
         <div class="container-fluid px-3 mb-4" style="max-width:1000px;">
+            @* The fixed height and the clipping belong to the MAP, not to the note under it.
+
+               They used to wrap both: a 420-pixel box with overflow:hidden holding a 420-pixel map
+               AND the sentence below it, so the sentence began at 427 pixels and was cut off in its
+               entirety. Nobody had ever read it — and it is the line that explains the pins are an
+               approximate area rather than somebody's address, which is a privacy promise the product
+               makes deliberately. Found by crawling the site for visual faults, 2026-09-18. *@
             <div style="height:420px; border-radius:.5rem; overflow:hidden;">
                 @* A pan or a zoom re-asks for the cases inside the new view, and the list below
                    follows the same answer. Map and list must never disagree: a reader has no way
@@ -70,14 +77,14 @@
                 <BenMap Pins="@_mapPins" Height="420px" FitToPins="false"
                         CenterLatitude="@_mapLat" CenterLongitude="@_mapLon" Zoom="@_mapZoom"
                         OnPinClicked="@OnMarkerClicked" OnViewportChanged="@OnMapViewportChanged" />
-
-                @* Said plainly, because a pin on a map reads as an address whether or not it is one.
-                   These are cell centres several miles across; the property is somewhere nearby. *@
-                <p class="text-secondary small mt-2 mb-0">
-                    Pins show an approximate area, not an address. Case locations are deliberately
-                    published to within a few miles.
-                </p>
             </div>
+
+            @* Said plainly, because a pin on a map reads as an address whether or not it is one.
+               These are cell centres several miles across; the property is somewhere nearby. *@
+            <p class="text-secondary small mt-2 mb-0">
+                Pins show an approximate area, not an address. Case locations are deliberately
+                published to within a few miles.
+            </p>
         </div>
 
         @* ── Case popup ───────────────────────────────────────────────────────── *@

@@ -744,3 +744,23 @@ textarea.form-control::placeholder {
 .k-calendar td.ben-cal-has-entries.k-selected .k-link::after {
     background: var(--bs-body-bg);
 }
+
+/* Secondary text follows the theme it is drawn on.
+
+   The night theme sets --bs-secondary-rgb to 108,117,125 — Bootstrap's LIGHT-mode grey — while
+   separately defining --bs-secondary-color as rgba(222,226,230,.75) for exactly this job. Since
+   .text-secondary is built from the -rgb variable, every caption, hint and help line on the site
+   rendered the light-mode grey on a dark page: measured 3.29:1 against the page's own #212529,
+   where the minimum for text that size is 4.5:1. The theme's own token gives 7.31:1.
+
+   Found by crawling the site for visual faults on 2026-09-18, after Ben asked whether anything else
+   looked like the unpadded card on the home page. It is the most widespread one: .text-secondary is
+   how nearly every explanatory line on the site is drawn.
+
+   Scoped to .text-secondary rather than redefining --bs-secondary-rgb, because that variable also
+   colours secondary buttons, borders and backgrounds — none of which are wrong, and all of which
+   would move if the variable changed. */
+[data-bs-theme="dark"] .text-secondary,
+html.set-nav-dark .text-secondary {
+    color: var(--bs-secondary-color) !important;
+}
