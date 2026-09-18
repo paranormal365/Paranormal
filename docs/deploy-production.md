@@ -194,12 +194,23 @@ nothing: a server that skipped a release needs the older entries too.
 9. **The billing fixes are code-only too — API only, no migration and no setting**:
    `.\scripts\deploy-ishaunted.ps1 -Apps webapi`. Nothing on the website changes for them.
 
-   **Two are actively costing money right now, and both are on the API alone:**
+   **Nothing here has harmed a live customer, and that was checked rather than assumed.** This
+   entry first said two of these were "actively costing money right now". That was wrong: it was
+   inferred from the code without looking at the data. A read-only pass over the live database on
+   2026-09-17 found **no subscriptions, no seats, no ledger rows and no coupon redemptions at
+   all** — so there is nothing to repair and no back-billing to decide about. Every fix below is
+   preventive, and the first group to subscribe is the one it protects.
+
+   Re-run that check before believing this paragraph on a later date, because it stops being true
+   the moment somebody subscribes. The query under the first item is the one to start from.
+
+   **Two of them would bite hardest once there IS a paying customer, and both are on the API alone:**
 
    - A SuperAdmin editing a subscription's period set its provider to "Manual", and the renewal job
-     only charges subscriptions marked "Stripe". Any group whose period has been hand-adjusted
-     since Stripe went live **has stopped being billed**, with every provider reference still in
-     place so nothing looks wrong on any screen. Worth checking after deploying: Site Administration
+     only charges subscriptions marked "Stripe". Any group whose period is hand-adjusted after
+     subscribing **silently stops being billed**, with every provider reference still in place so
+     nothing looks wrong on any screen. No group is in that state today — see above — but it is a
+     single period edit away, and the edit is a routine thing to do. Worth checking: Site Administration
      → Subscriptions, look for an Active group on a paid band whose provider reads Manual and that
      you did not set up manually. The fix stops it recurring; it cannot repair a row already
      flipped, so those need setting back to Stripe by hand.
