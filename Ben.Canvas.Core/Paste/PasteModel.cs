@@ -110,6 +110,9 @@ public abstract record PasteIntent
     /// </summary>
     public sealed record Place(string Address) : PasteIntent;
     public sealed record Html(string Markup, string PlainText) : PasteIntent;
+    /// <summary>A grid pasted as tab-separated text, already squared up.</summary>
+    public sealed record Table(List<List<string>> Rows, bool HasHeaderRow) : PasteIntent;
+
     public sealed record Text(string Value) : PasteIntent;
 }
 

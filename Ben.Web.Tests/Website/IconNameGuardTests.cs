@@ -70,4 +70,21 @@ public sealed class IconNameGuardTests
             "these icons are not in /icons/sprite.svg, and a missing symbol renders as an empty "
           + "300×150 box rather than as nothing:\n  " + string.Join("\n  ", missing));
     }
+    /// <summary>
+    /// And the board-template icons, which the scan above cannot see: the picker renders
+    /// <c>Name="@template.IconName"</c>, so the literals live in a list rather than in markup.
+    /// </summary>
+    [Fact]
+    public void Every_board_template_icon_exists_in_the_sprite()
+    {
+        var symbols = SpriteSymbols();
+
+        var missing = Ben.Web.Website.Library.Manage.Messenger.CanvasBoardTemplates.All
+            .Where(t => !symbols.Contains(t.IconName))
+            .Select(t => $"{t.Id}: {t.IconName}")
+            .ToList();
+
+        Assert.True(missing.Count == 0,
+            "these board-template icons are not in /icons/sprite.svg: " + string.Join(", ", missing));
+    }
 }

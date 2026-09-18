@@ -93,6 +93,15 @@ public static partial class PasteClassifier
             return new PastePlan(intents, refusals);
         }
 
+        // 4c. A grid. After everything more specific — a pasted board, a file, a single URL,
+        // coordinates and an address all beat it — and before the HTML and plain-text fallbacks,
+        // which would otherwise land a spreadsheet as one note full of tab characters.
+        if (TableDetector.TryParse(plain, options.MaxTableCells, out var grid))
+        {
+            intents.Add(new PasteIntent.Table(grid, HasHeaderRow: true));
+            return new PastePlan(intents, refusals);
+        }
+
         // 5. Formatted text.
         if (html is not null)
         {
@@ -320,6 +329,8 @@ public static class PastePlacer
                     Pins = [new MapPin { Latitude = map.Latitude, Longitude = map.Longitude, Title = map.Address }],
                 }),
                 PasteIntent.Html markup => Node(CanvasNodeType.Message, x, y, new MessageData { Html = htmlToAllowed(markup.Markup), TimestampUtc = nowUtc }),
+                PasteIntent.Table table => Node(CanvasNodeType.Table, x, y,
+                    new TableData { HasHeaderRow = table.HasHeaderRow, Rows = table.Rows }),
                 PasteIntent.Text text => Node(CanvasNodeType.Text, x, y, new TextData { Text = text.Value }),
                 _ => throw new ArgumentOutOfRangeException(nameof(plan), intent.GetType().Name, "Unknown paste intent."),
             });

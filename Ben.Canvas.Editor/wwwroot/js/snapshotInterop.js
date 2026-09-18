@@ -12,6 +12,25 @@ const FALLBACK = {
 };
 
 /** A theme token as a colour the canvas accepts; tokens that use color-mix() fall back when the canvas cannot parse them. */
+/* Blends two resolved colours. color-mix() is CSS; the canvas needs the arithmetic. */
+function mix(ctx, a, b, weight) {
+    const rgb = value => {
+        ctx.fillStyle = value;
+        const resolved = ctx.fillStyle;
+        if (resolved.startsWith('#')) {
+            return [1, 3, 5].map(i => parseInt(resolved.slice(i, i + 2), 16));
+        }
+        const parts = resolved.match(/[\d.]+/g) || ['0', '0', '0'];
+        return parts.slice(0, 3).map(Number);
+    };
+    const [ar, ag, ab] = rgb(a);
+    const [br, bg, bb] = rgb(b);
+    const at = Math.round(ar * weight + br * (1 - weight));
+    const gt = Math.round(ag * weight + bg * (1 - weight));
+    const bt = Math.round(ab * weight + bb * (1 - weight));
+    return `rgb(${at}, ${gt}, ${bt})`;
+}
+
 function tokenColour(ctx, style, name, fallback) {
     const value = style.getPropertyValue(name).trim();
     if (!value) return fallback;
@@ -78,6 +97,31 @@ function loadImage(url) {
 }
 
 /**
+ * The outline of a shape block: a rounded box, an ellipse, or a diamond through the box's edges.
+ * The diamond is a path rather than a rotated square, for the same reason the editor's is - a
+ * rotation on a box that is not square puts its corners outside the box.
+ */
+function shapePath(ctx, b) {
+    if (b.shape === 'ellipse') {
+        ctx.beginPath();
+        ctx.ellipse(b.x + b.width / 2, b.y + b.height / 2, b.width / 2, b.height / 2, 0, 0, Math.PI * 2);
+        return;
+    }
+
+    if (b.shape === 'diamond') {
+        ctx.beginPath();
+        ctx.moveTo(b.x + b.width / 2, b.y);
+        ctx.lineTo(b.x + b.width, b.y + b.height / 2);
+        ctx.lineTo(b.x + b.width / 2, b.y + b.height);
+        ctx.lineTo(b.x, b.y + b.height / 2);
+        ctx.closePath();
+        return;
+    }
+
+    roundRect(ctx, b.x, b.y, b.width, b.height, 8);
+}
+
+/**
  * Draws a scene and answers the PNG as bytes.
  * @param {HTMLElement} root The editor root, whose theme tokens colour the picture.
  * @param {object} scene SnapshotScene from C#.
@@ -106,11 +150,18 @@ export async function drawBoard(root, scene) {
 
     for (const g of scene.groups) {
         const colour = palette(g.colorKey) || c.accent;
+        // A panel is solid in its own colour with a solid edge; an outline keeps the dashed tint it
+        // has always had. Without this a published moodboard is a page of empty dashed rectangles.
+        const panel = g.fill === 'Panel';
         roundRect(ctx, g.x, g.y, g.width, g.height, 8);
-        ctx.fillStyle = c.group;
+        ctx.fillStyle = panel ? mix(ctx, colour, c.surface, 0.14) : c.group;
         ctx.fill();
-        ctx.setLineDash([6, 4]);
-        ctx.lineWidth = 2;
+        if (panel) {
+            ctx.lineWidth = 1;
+        } else {
+            ctx.setLineDash([6, 4]);
+            ctx.lineWidth = 2;
+        }
         ctx.strokeStyle = colour;
         ctx.stroke();
         ctx.setLineDash([]);
@@ -126,15 +177,40 @@ export async function drawBoard(root, scene) {
         const colour = palette(e.colorKey) || c.edge;
         ctx.lineWidth = 2;
         ctx.strokeStyle = colour;
+        // A dashed connector is dashed in the picture too: the family tree's legend says the dashes
+        // mean siblings, and a legend that does not match the lines is worse than no legend.
+        if (e.dashed) ctx.setLineDash([8, 6]);
         ctx.stroke(new Path2D(e.path));
+        ctx.setLineDash([]);
         ctx.fillStyle = colour;
         for (const h of e.heads) {
+            // The shape travels with the points, because a head is no longer always a triangle.
+            if (h.shape === 'dot') {
+                const [cx, cy, r] = h.points;
+                ctx.beginPath();
+                ctx.arc(cx, cy, r, 0, Math.PI * 2);
+                ctx.fill();
+                continue;
+            }
             ctx.beginPath();
-            ctx.moveTo(h[0], h[1]);
-            ctx.lineTo(h[2], h[3]);
-            ctx.lineTo(h[4], h[5]);
+            ctx.moveTo(h.points[0], h.points[1]);
+            for (let i = 2; i < h.points.length; i += 2) ctx.lineTo(h.points[i], h.points[i + 1]);
             ctx.closePath();
             ctx.fill();
+        }
+        // The icon rides in the middle of the line, with the label pushed clear beneath it, exactly
+        // as the board draws it — a published picture that put them on top of each other would not be
+        // the board somebody published.
+        if (e.icon) {
+            ctx.font = `600 12px ${font}`;
+            ctx.textAlign = 'center';
+            ctx.textBaseline = 'middle';
+            ctx.lineWidth = 4;
+            ctx.strokeStyle = c.ground;
+            ctx.strokeText(e.icon, e.labelX, e.labelY);
+            ctx.fillStyle = c.text;
+            ctx.fillText(e.icon, e.labelX, e.labelY);
+            ctx.textAlign = 'start';
         }
         if (e.label) {
             ctx.font = `12px ${font}`;
@@ -142,9 +218,10 @@ export async function drawBoard(root, scene) {
             ctx.textBaseline = 'middle';
             ctx.lineWidth = 4;
             ctx.strokeStyle = c.ground;
-            ctx.strokeText(e.label, e.labelX, e.labelY);
+            const labelY = e.icon ? e.labelY + 16 : e.labelY;
+            ctx.strokeText(e.label, e.labelX, labelY);
             ctx.fillStyle = c.text;
-            ctx.fillText(e.label, e.labelX, e.labelY);
+            ctx.fillText(e.label, e.labelX, labelY);
             ctx.textAlign = 'start';
         }
     }
@@ -152,8 +229,39 @@ export async function drawBoard(root, scene) {
     const images = await Promise.all(scene.blocks.map(b => loadImage(b.imageUrl)));
 
     scene.blocks.forEach((b, i) => {
+        const accent = palette(b.colorKey) || typeColour(b.kind);
+
+        // A SHAPE is its outline, so it is drawn as one rather than as a titled box with a word in
+        // it. Without this a published moodboard's theme bubbles came out as four grey rectangles
+        // (found by the templates walk, 2026-09-18).
+        if (b.shape) {
+            shapePath(ctx, b);
+            ctx.fillStyle = accent;
+            ctx.fill();
+            if (b.title) {
+                ctx.save();
+                shapePath(ctx, b);
+                ctx.clip();
+                ctx.font = `600 13px ${font}`;
+                ctx.fillStyle = tokenColour(ctx, style, '--bc-on-accent', '#ffffff');
+                ctx.textAlign = 'center';
+                ctx.textBaseline = 'middle';
+                // A diamond's usable width narrows towards its points, so the words get less room.
+                const room = b.width * (b.shape === 'rectangle' ? 0.86 : 0.56);
+                const lines = wrap(ctx, [b.title], room, 3);
+                lines.forEach((line, n) =>
+                    ctx.fillText(line, b.x + b.width / 2, b.y + b.height / 2 + (n - (lines.length - 1) / 2) * 17));
+                ctx.restore();
+            }
+            return;
+        }
+
         roundRect(ctx, b.x, b.y, b.width, b.height, 8);
-        ctx.fillStyle = b.kind === 'text' ? tokenColour(ctx, style, '--bc-sticky-bg', c.surface) : c.surface;
+        // A filled block IS its colour; an unfilled one keeps the surface and wears the colour as a
+        // 3 px bar down its left edge, which is what every board written before M9 looks like.
+        ctx.fillStyle = b.filled
+            ? accent
+            : (b.kind === 'text' ? tokenColour(ctx, style, '--bc-sticky-bg', c.surface) : c.surface);
         ctx.fill();
         ctx.lineWidth = 1;
         ctx.strokeStyle = c.border;
@@ -162,8 +270,10 @@ export async function drawBoard(root, scene) {
         ctx.save();
         roundRect(ctx, b.x, b.y, b.width, b.height, 8);
         ctx.clip();
-        ctx.fillStyle = palette(b.colorKey) || typeColour(b.kind);
-        ctx.fillRect(b.x, b.y, 3, b.height);
+        if (!b.filled) {
+            ctx.fillStyle = accent;
+            ctx.fillRect(b.x, b.y, 3, b.height);
+        }
 
         const pad = 10;
         const inner = b.width - pad * 2;

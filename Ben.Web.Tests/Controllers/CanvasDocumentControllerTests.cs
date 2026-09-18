@@ -189,6 +189,24 @@ public sealed class CanvasDocumentControllerTests
         return (CanvasDocumentRecord)Assert.IsType<CreatedAtActionResult>(result.Result).Value!;
     }
 
+    /// <summary>A board whose only block is a card pointing at another board.</summary>
+    private static JsonElement BoardLinkingTo(Guid target, string title = "Index board")
+        => JsonDocument.Parse(JsonSerializer.Serialize(new
+        {
+            schemaVersion = 1,
+            title,
+            nodes = new object[]
+            {
+                new
+                {
+                    id = Guid.NewGuid(), type = "Board", x = 0, y = 0, width = 300, height = 96,
+                    data = new { kind = "board", documentId = target, title = "The other board" },
+                },
+            },
+            edges = Array.Empty<object>(),
+            groups = Array.Empty<object>(),
+        })).RootElement;
+
     /// <summary>Marks a board published in the database, for tests where filing a real picture is beside the point.</summary>
     private static async Task<CanvasDocumentRecord> MarkPublishedAsync(World w, CanvasDocumentRecord board)
     {
@@ -964,4 +982,128 @@ public sealed class CanvasDocumentControllerTests
         Assert.Empty(await db.CaseFiles.ToListAsync());
         delete.Ingest.Verify(i => i.DeleteAllAsync(It.IsAny<string>(), It.IsAny<CancellationToken>()), Times.Once);
     }
+    // ── a published board never points at an unpublished one (M9-08b) ─────────
+
+    /// <summary>
+    /// Publishing is refused while a board links to one nobody has published, and the refusal names it.
+    /// </summary>
+    /// <remarks>
+    /// <para>Ben's rule, 2026-09-18: "the only way for it to hit the load link to other page is if
+    /// the other page has been published … it will cause issues if one is not published and one that
+    /// is published has a link to a page which is not published."</para>
+    ///
+    /// <para><b>Why the server and not only the picker.</b> The picker lists published boards only,
+    /// so it stops the state being CREATED — and does nothing about a target deleted or a request
+    /// crafted between the pick and the publish. What is at stake is a reader handed a door into
+    /// somebody's private draft, or a dead end, so the rule is held where it cannot be bypassed.</para>
+    /// </remarks>
+    [Fact]
+    public async Task Publishing_refuses_a_board_that_links_to_an_unpublished_board_and_names_it()
+    {
+        var w = await SeedAsync();
+        var draft = await CreateOnCaseAsync(w, title: "A draft nobody has seen");
+
+        var built = Build(w.Factory, w.EditorId);
+        IngestSucceeds(built);
+        var index = (CanvasDocumentRecord)Assert.IsType<CreatedAtActionResult>(
+            (await built.Controller.Create(w.CaseId, BoardLinkingTo(draft.Id), default)).Result).Value!;
+
+        var refused = Assert.IsType<BadRequestObjectResult>(
+            (await built.Controller.Publish(index.Id, Upload(PngBytes()), default)).Result);
+
+        Assert.Contains("A draft nobody has seen", refused.Value!.ToString());
+        Assert.Contains("not been published", refused.Value!.ToString());
+
+        // And it really did not publish.
+        await using var db = await w.Factory.CreateDbContextAsync();
+        Assert.Null((await db.CanvasDocuments.SingleAsync(d => d.Id == index.Id)).PublishedJson);
+    }
+
+    /// <summary>Once the target is published, the board that links to it publishes too.</summary>
+    [Fact]
+    public async Task Publishing_is_allowed_once_the_board_it_links_to_is_published()
+    {
+        var w = await SeedAsync();
+        var target = await CreatePublishedOnCaseAsync(w, title: "The other board");
+
+        var built = Build(w.Factory, w.EditorId);
+        IngestSucceeds(built);
+        var index = (CanvasDocumentRecord)Assert.IsType<CreatedAtActionResult>(
+            (await built.Controller.Create(w.CaseId, BoardLinkingTo(target.Id), default)).Result).Value!;
+
+        Assert.IsType<OkObjectResult>((await built.Controller.Publish(index.Id, Upload(PngBytes()), default)).Result);
+    }
+
+    /// <summary>
+    /// A link to a board that no longer exists is refused too, and says so rather than naming a board
+    /// it cannot find.
+    /// </summary>
+    [Fact]
+    public async Task Publishing_refuses_a_board_that_links_to_one_that_no_longer_exists()
+    {
+        var w = await SeedAsync();
+
+        var built = Build(w.Factory, w.EditorId);
+        IngestSucceeds(built);
+        var index = (CanvasDocumentRecord)Assert.IsType<CreatedAtActionResult>(
+            (await built.Controller.Create(w.CaseId, BoardLinkingTo(Guid.NewGuid()), default)).Result).Value!;
+
+        var refused = Assert.IsType<BadRequestObjectResult>(
+            (await built.Controller.Publish(index.Id, Upload(PngBytes()), default)).Result);
+
+        Assert.Contains("no longer exists", refused.Value!.ToString());
+    }
+
+    /// <summary>A board with no links publishes exactly as it always did.</summary>
+    [Fact]
+    public async Task A_board_with_no_links_still_publishes()
+    {
+        var w = await SeedAsync();
+        var built = Build(w.Factory, w.EditorId);
+        IngestSucceeds(built);
+        var board = await CreateOnCaseAsync(w);
+
+        Assert.IsType<OkObjectResult>((await built.Controller.Publish(board.Id, Upload(PngBytes()), default)).Result);
+    }
+
+    /// <summary>
+    /// A board link opens the target's PUBLISHED copy, for the author too.
+    /// </summary>
+    /// <remarks>
+    /// Otherwise checking your own link would tell you nothing about what the group can see through
+    /// it. And asking for a published copy of a board that has none is, to a link, the same as gone.
+    /// </remarks>
+    [Fact]
+    public async Task Asking_for_the_published_copy_gives_the_published_copy_even_to_its_author()
+    {
+        var w = await SeedAsync();
+        var board = await CreatePublishedOnCaseAsync(w);
+
+        // Change the draft after publishing, so the two copies differ. If-Match is the contract, and
+        // the board is at revision 1 having just been created and published.
+        var editing = Build(w.Factory, w.EditorId, ifMatch: "\"1\"");
+        Assert.IsType<OkObjectResult>(
+            (await editing.Controller.Update(board.Id, Board("Henderson board", "<p>Later thinking</p>"), default)).Result);
+
+        var built = Build(w.Factory, w.EditorId);
+        var published = (CanvasDocumentRecord)Assert.IsType<OkObjectResult>(
+            (await built.Controller.GetById(board.Id, default, published: true)).Result).Value!;
+        var draft = (CanvasDocumentRecord)Assert.IsType<OkObjectResult>(
+            (await built.Controller.GetById(board.Id, default)).Result).Value!;
+
+        Assert.DoesNotContain("Later thinking", published.DocumentJson);
+        Assert.Contains("Later thinking", draft.DocumentJson);
+    }
+
+    [Fact]
+    public async Task Asking_for_the_published_copy_of_an_unpublished_board_is_not_found()
+    {
+        var w = await SeedAsync();
+        var board = await CreateOnCaseAsync(w);
+
+        // NotFound with no body: to a link, a board with no published copy is the same as gone.
+        Assert.IsAssignableFrom<NotFoundResult>(
+            (await Build(w.Factory, w.EditorId).Controller.GetById(board.Id, default, published: true)).Result);
+    }
+
 }

@@ -80,6 +80,7 @@ public sealed class ServiceRegistrationTests
         public bool IsAvailable => true;
         public Task<(IReadOnlyList<CanvasServerSummary>? Items, string? Problem)> ListAsync(Guid? caseId, CancellationToken ct = default) => throw new NotSupportedException();
         public Task<(CanvasServerDocument? Document, string? Problem)> GetAsync(Guid id, CancellationToken ct = default) => throw new NotSupportedException();
+        public Task<(CanvasServerDocument? Document, string? Problem)> GetPublishedAsync(Guid id, CancellationToken ct = default) => throw new NotSupportedException();
         public Task<CanvasSaveResult> SaveAsync(string documentJson, Guid? existingId, int revision, Guid? caseId, CancellationToken ct = default) => throw new NotSupportedException();
         public Task<(CanvasServerDocument? Document, string? Problem)> PublishAsync(Guid id, byte[] png, string fileName, CancellationToken ct = default) => throw new NotSupportedException();
         public Task<(bool Ok, string? Problem)> DeleteAsync(Guid id, CancellationToken ct = default) => throw new NotSupportedException();

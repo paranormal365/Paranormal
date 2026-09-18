@@ -49,6 +49,54 @@ public sealed class CanvasHandoffServiceTests
         Assert.Equal(org, handoff.OrganizationId);
     }
 
+    /// <summary>The template a New board click chose travels in the same fragment.</summary>
+    [Fact]
+    public void A_template_in_the_fragment_is_read()
+    {
+        Guid @case = Guid.NewGuid(), org = Guid.NewGuid();
+
+        var handoff = CanvasHandoff.Parse($"{Base}#handoff=abc&case={@case}&org={org}&template=family-tree");
+
+        Assert.Equal("family-tree", handoff.Template);
+        Assert.Equal(@case, handoff.CaseId);
+        Assert.Equal(org, handoff.OrganizationId);
+        Assert.Null(handoff.DocumentId);
+    }
+
+    /// <summary>
+    /// A template on its own is worth acting on, so a fragment carrying only one is still a handoff.
+    /// </summary>
+    [Fact]
+    public void A_template_on_its_own_is_present()
+    {
+        var handoff = CanvasHandoff.Parse($"{Base}#template=deck");
+
+        Assert.True(handoff.IsPresent);
+        Assert.Equal("deck", handoff.Template);
+    }
+
+    /// <summary>
+    /// The id is not checked against the catalogue here — the host does not hold the catalogue, and the
+    /// editor already turns an unknown id into a blank board with a sentence. Only the length is capped,
+    /// so a mangled paste cannot travel any further than the parse.
+    /// </summary>
+    [Fact]
+    public void An_absurdly_long_template_is_dropped_rather_than_carried()
+    {
+        var absurd = new string('x', CanvasHandoff.MaxTemplateLength + 1);
+
+        Assert.Null(CanvasHandoff.Parse($"{Base}#template={absurd}").Template);
+        Assert.Equal(new string('x', CanvasHandoff.MaxTemplateLength),
+            CanvasHandoff.Parse($"{Base}#template={new string('x', CanvasHandoff.MaxTemplateLength)}").Template);
+    }
+
+    /// <summary>An unknown id is carried through; refusing it here would hide it from the sentence.</summary>
+    [Fact]
+    public void An_unknown_template_id_is_still_carried_to_the_editor()
+    {
+        Assert.Equal("moodboard-v2", CanvasHandoff.Parse($"{Base}#template=moodboard-v2").Template);
+    }
+
     /// <summary>The video editor's key means nothing here; a canvas link names a doc.</summary>
     [Fact]
     public void A_project_key_is_not_a_canvas_handoff()

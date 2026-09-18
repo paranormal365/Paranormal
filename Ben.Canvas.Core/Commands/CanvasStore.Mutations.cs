@@ -65,6 +65,42 @@ public sealed partial class CanvasStore
         return Execute(new ResizeNodeCommand(node, before, after), CanvasChangeKind.NodeGeometry);
     }
 
+    /// <summary>
+    /// Grows a block to fit what is being typed into it, mid-edit, with no undo entry of its own.
+    /// </summary>
+    /// <remarks>
+    /// <para><b>Nothing is pushed on the history.</b> The edit session commits the whole thing as one
+    /// step when editing ends, carrying the rectangle with it — see <see cref="ReplaceNodeData"/>'s
+    /// sizeBefore. What this does is make the growth VISIBLE while somebody is still typing: the frame
+    /// is drawn from the block's rectangle and redraws only when the block's version moves, so a height
+    /// written straight onto the node changed nothing on screen until the edit ended. Found exactly
+    /// that way while walking the board, 2026-09-18.</para>
+    ///
+    /// <para>It only ever grows, and only on an axis the block may be resized on.</para>
+    /// </remarks>
+    public bool FitNodeWhileEditing(Guid id, double width, double height)
+    {
+        var node = FindNode(id);
+        if (node is null || node.Locked) return false;
+
+        var descriptor = BlockRegistry.Get(node.Type);
+
+        var wanted = descriptor.ResizableWidth
+            ? Math.Max(node.Width, Math.Max(descriptor.MinWidth, Finite(width, node.Width)))
+            : node.Width;
+
+        var tall = descriptor.ResizableHeight
+            ? Math.Max(node.Height, Math.Max(descriptor.MinHeight, Finite(height, node.Height)))
+            : node.Height;
+
+        if (wanted == node.Width && tall == node.Height) return false;
+
+        node.Width = wanted;
+        node.Height = tall;
+        Notify(CanvasChangeKind.NodeGeometry, [id]);
+        return true;
+    }
+
     public bool BringToFront(IEnumerable<Guid> ids)
     {
         var nodes = Resolve(ids).OrderBy(n => n.Z).ThenBy(n => n.Id).ToList();
@@ -95,13 +131,29 @@ public sealed partial class CanvasStore
     }
 
     /// <summary>Replaces a block's data whole - the single commit point for an in-block edit session.</summary>
-    public bool ReplaceNodeData(Guid id, NodeData data)
+    /// <param name="sizeBefore">
+    /// The block's rectangle when the edit began, when the block resized ITSELF during the edit (a grid
+    /// growing as rows are added). Passing it puts the content and the room for it in one undo step.
+    /// Omit it for every other block: their size is nobody's business but the author's.
+    /// </param>
+    public bool ReplaceNodeData(Guid id, NodeData data, WorldRect? sizeBefore = null)
     {
         ArgumentNullException.ThrowIfNull(data);
         var node = FindNode(id);
         if (node is null) return false;
-        if (SameData(node.Data, data)) return false;
-        return Execute(new UpdateNodeDataCommand(node, node.Data.Clone(), data.Clone()), CanvasChangeKind.NodeData);
+
+        var now = CanvasHitTester.RectOf(node);
+        var moved = sizeBefore is { } was && was != now;
+
+        // Nothing changed at all: neither the content nor the room it sits in.
+        if (SameData(node.Data, data) && !moved) return false;
+
+        return Execute(
+            new UpdateNodeDataCommand(
+                node, node.Data.Clone(), data.Clone(),
+                moved ? sizeBefore : null,
+                moved ? now : null),
+            CanvasChangeKind.NodeData);
     }
 
     /// <summary>
@@ -123,6 +175,16 @@ public sealed partial class CanvasStore
         var nodes = Resolve(ids).ToList();
         if (nodes.Count == 0) return false;
         return Execute(new SetNodePropertyCommand<string?>(nodes, "Colour", n => n.ColorKey, (n, v) => n.ColorKey = v, colorKey), CanvasChangeKind.NodeData);
+    }
+
+    /// <summary>Whether a block wears its colour as an edge bar or as its whole background.</summary>
+    public bool SetFill(IEnumerable<Guid> ids, NodeFill fill)
+    {
+        var nodes = Resolve(ids).ToList();
+        if (nodes.Count == 0) return false;
+        return Execute(new SetNodePropertyCommand<NodeFill>(
+            nodes, fill == NodeFill.Solid ? "Fill" : "Unfill", n => n.Fill, (n, v) => n.Fill = v, fill),
+            CanvasChangeKind.NodeData);
     }
 
     public bool SetLocked(IEnumerable<Guid> ids, bool locked)
@@ -286,6 +348,16 @@ public sealed partial class CanvasStore
         var clean = string.IsNullOrWhiteSpace(label) ? "Group" : label.Trim();
         if (clean == group.Label) return false;
         return Execute(new SetGroupPropertyCommand<string>(group, "Rename group", g => g.Label, (g, v) => g.Label = v, clean), CanvasChangeKind.Groups);
+    }
+
+    /// <summary>Whether a group is a dashed outline or a solid titled panel.</summary>
+    public bool SetGroupFill(Guid groupId, GroupFill fill)
+    {
+        var group = FindGroup(groupId);
+        if (group is null || group.Fill == fill) return false;
+        return Execute(new SetGroupPropertyCommand<GroupFill>(
+            group, fill == GroupFill.Panel ? "Make a panel" : "Make an outline",
+            g => g.Fill, (g, v) => g.Fill = v, fill), CanvasChangeKind.Groups);
     }
 
     public bool SetGroupColor(Guid groupId, string? colorKey)
