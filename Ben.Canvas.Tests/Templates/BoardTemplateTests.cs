@@ -98,6 +98,30 @@ public sealed class BoardTemplateTests
     }
 
     /// <summary>
+    /// A block big enough to show what the template put in it.
+    /// </summary>
+    /// <remarks>
+    /// The research plan's calendar was typed as 210 pixels tall, and when a grid row grew from 29 to
+    /// its real 38.5 the template kept the old number and opened with its last week cut off — nothing
+    /// failed, the board just lied. Every template now asks <see cref="BlockFit"/> the same question
+    /// the editor asks, and this holds them to it.
+    /// </remarks>
+    [Theory]
+    [MemberData(nameof(AllIds))]
+    public void Nothing_is_too_small_for_what_the_template_put_in_it(string id)
+    {
+        Assert.All(Build(id).Nodes, n =>
+        {
+            if (BlockFit.For(n.Data) is not { } needed) return;
+
+            Assert.True(n.Width >= needed.Width,
+                $"{id}: a {n.Type} is {n.Width} wide and its content needs {needed.Width}");
+            Assert.True(n.Height >= needed.Height,
+                $"{id}: a {n.Type} is {n.Height} tall and its content needs {needed.Height}");
+        });
+    }
+
+    /// <summary>
     /// No block or panel is smaller than its own kind allows, or the first drag on it jumps.
     /// </summary>
     [Theory]

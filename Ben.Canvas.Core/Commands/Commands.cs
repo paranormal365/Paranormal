@@ -126,13 +126,44 @@ internal sealed class SetZOrderCommand(IReadOnlyList<CanvasNode> nodes, int[] be
     public IEnumerable<Guid> NodeIds => nodes.Select(n => n.Id);
 }
 
-internal sealed class UpdateNodeDataCommand(CanvasNode node, NodeData before, NodeData after) : IEditorCommand, ITouchesNodes, IHoldsData
+/// <param name="sizeBefore">
+/// The block's rectangle when the edit began, and <paramref name="sizeAfter"/> the one it ended with.
+/// Both null for an edit that changed nothing but the content, which is almost all of them.
+/// </param>
+/// <remarks>
+/// <b>Why an edit carries a rectangle.</b> A grid grows itself as rows are added, because a button in
+/// a block's own toolbar has to produce a row somebody can see. That growth is a consequence of the
+/// edit rather than a second thing the person did, so it belongs in the SAME undo step — otherwise one
+/// Ctrl+Z leaves a two-row table in a block sized for five, and a second is needed to finish the job.
+/// </remarks>
+internal sealed class UpdateNodeDataCommand(
+    CanvasNode node, NodeData before, NodeData after,
+    WorldRect? sizeBefore = null, WorldRect? sizeAfter = null)
+    : IEditorCommand, ITouchesNodes, IHoldsData
 {
     public string Description { get; } = $"Edit {Describe.Kind(node.Type)}";
 
     // Clones on the way in and out, so a later edit to the live data can never rewrite what undo restores.
-    public void Execute() => node.Data = after.Clone();
-    public void Undo() => node.Data = before.Clone();
+    public void Execute()
+    {
+        node.Data = after.Clone();
+        Apply(sizeAfter);
+    }
+
+    public void Undo()
+    {
+        node.Data = before.Clone();
+        Apply(sizeBefore);
+    }
+
+    private void Apply(WorldRect? rect)
+    {
+        if (rect is not { } r) return;
+        node.X = r.X;
+        node.Y = r.Y;
+        node.Width = r.Width;
+        node.Height = r.Height;
+    }
 
     public IEnumerable<Guid> NodeIds => [node.Id];
     public IEnumerable<NodeData> HeldData => [before, after];

@@ -159,4 +159,45 @@ public class CanvasConnectorStyleTests : CanvasTestBase
         await edge.Locator(".bc-edge__hit").ClickAsync(new() { Force = true });
         await Expect(edge).ToHaveAttributeAsync("data-bc-selected", "true");
     }
+    /// <summary>
+    /// The Arrow choice means exactly what it says, whatever the per-end markers held before.
+    /// </summary>
+    /// <remarks>
+    /// <para>There are two ways to put a head on a connector — the three-way <b>Arrow</b> choice that
+    /// every board before M9 used, and a marker per end — and the per-end markers win when they are
+    /// set. So the panel could contradict itself: choosing "Arrows at both ends" on a connector whose
+    /// end held a Diamond drew a diamond at one end and an arrow at the other, and "No arrow" sat
+    /// happily above a visible diamond. Found by walking the board on 2026-09-18.</para>
+    ///
+    /// <para>Asserting the DRAWN heads rather than the select's value is the point: the bug was that
+    /// the control and the drawing disagreed, so reading the control back would have proved nothing.</para>
+    /// </remarks>
+    [Test]
+    public async Task Arrows_at_both_ends_means_two_arrows_whatever_the_ends_held_before()
+    {
+        var edge = await ConnectedAsync();
+
+        await Page.SelectOptionAsync("#bc-prop-edge-to-marker", "Diamond");
+        await Expect(edge.Locator(".bc-edge__head--diamond")).ToHaveCountAsync(1);
+
+        await Page.SelectOptionAsync("#bc-prop-edge-arrow", "Both");
+
+        await Expect(edge.Locator(".bc-edge__head--arrow")).ToHaveCountAsync(2);
+        await Expect(edge.Locator(".bc-edge__head--diamond")).ToHaveCountAsync(0);
+    }
+
+    /// <summary>And "No arrow" leaves nothing at either end, including a diamond somebody chose.</summary>
+    [Test]
+    public async Task No_arrow_clears_both_ends()
+    {
+        var edge = await ConnectedAsync();
+
+        await Page.SelectOptionAsync("#bc-prop-edge-from-marker", "Dot");
+        await Page.SelectOptionAsync("#bc-prop-edge-to-marker", "Diamond");
+        await Expect(edge.Locator("[class*=bc-edge__head]")).ToHaveCountAsync(2);
+
+        await Page.SelectOptionAsync("#bc-prop-edge-arrow", "None");
+
+        await Expect(edge.Locator("[class*=bc-edge__head]")).ToHaveCountAsync(0);
+    }
 }

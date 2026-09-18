@@ -168,6 +168,68 @@ public sealed class CanvasServerTests : CanvasTestBase
         Assert.That(board.GetProperty("publishedUploadFileId").ValueKind, Is.EqualTo(JsonValueKind.String));
     }
 
+    /// <summary>
+    /// Following a link across boards leaves a path in the header, and any crumb on it goes back.
+    /// </summary>
+    /// <remarks>
+    /// <para><b>Ben, 2026-09-18:</b> "Instead of a back button, what about creating breadcrumbs to
+    /// navigate."</para>
+    ///
+    /// <para><b>Why this is worth its runtime.</b> <c>BoardTrailTests</c> holds the arithmetic of the
+    /// path — what a crumb drops and what it opens — but nothing below a browser can hold that the
+    /// header is TOLD about it. Following a link opens a board, saves, re-renders and redraws the
+    /// header in one go; this is the only level at which "the crumb appeared, and clicking it went
+    /// back" is a fact rather than an inference. Seen failing with the path not handed to the
+    /// header.</para>
+    /// </remarks>
+    [Test]
+    public async Task Following_a_link_leaves_a_path_in_the_header()
+    {
+        // Two published boards on the case: one to link from, one to link to.
+        await OpenCaseAsync($"case={_case}&org={_org}");
+        await AddNodeAsync("card");
+        await PublishAsync();
+        var target = await SavedBoardIdAsync();
+        var targetTitle = (await _api.BoardAsync(target)).GetProperty("name").GetString();
+
+        var crumbs = Page.Locator(".bc-header__crumb");
+        await Expect(crumbs).ToHaveCountAsync(0, new() { Timeout = 10_000 });
+
+        // A card on THIS board that opens that one.
+        await Page.ClickAsync(".bc-rail [data-bc-action='case-boards']");
+        await Page.Locator("[role='dialog'] button", new() { HasTextString = targetTitle! }).First.ClickAsync();
+        await Page.Locator("[role='dialog'] button", new() { HasTextString = "The whole board" }).First.ClickAsync();
+
+        var card = Page.Locator(".bc-node--board");
+        await Expect(card).ToHaveCountAsync(1, new() { Timeout = 10_000 });
+        await card.Locator("button", new() { HasTextString = "Open" }).First.ClickAsync();
+
+        // The path names where the link was followed FROM, and the title is where it led.
+        await Expect(crumbs).ToHaveCountAsync(1, new() { Timeout = 20_000 });
+        await Expect(crumbs.First).ToHaveTextAsync(targetTitle!);
+
+        // And the crumb goes back, clearing the path behind it.
+        await crumbs.First.ClickAsync();
+        await Expect(crumbs).ToHaveCountAsync(0, new() { Timeout = 20_000 });
+
+        // Settled before the test ends. A crumb opens a board, and leaving that request in flight
+        // hands the NEXT test a page that is still navigating — which is how this fixture's other
+        // tests started timing out waiting for a Save button that had not been drawn yet.
+        await Expect(Page.Locator(".bc-header__title")).ToHaveTextAsync(targetTitle!, new() { Timeout = 20_000 });
+        await Expect(SaveState).Not.ToContainTextAsync("Saving", new() { Timeout = 20_000 });
+    }
+
+    private async Task PublishAsync()
+    {
+        await SaveButton.ClickAsync();
+        await Expect(SaveState).ToContainTextAsync("Saved to case", new() { Timeout = 15_000 });
+        await Page.ClickAsync(".bc-header [data-bc-action='publish']");
+        var confirm = Page.Locator("[role='dialog']", new() { HasTextString = "Publish this board?" });
+        await confirm.Locator("button", new() { HasTextString = "Publish" }).ClickAsync();
+        await Expect(Page.Locator(".bc-toast, [role='status']", new() { HasTextString = "Published to the case." }).First)
+            .ToBeVisibleAsync(new() { Timeout = 30_000 });
+    }
+
     /// <summary>Screenshots of the case flow for the milestone report. Opt-in with BEN_CANVAS_WALK=1.</summary>
     [Test]
     [Category("Capture")]

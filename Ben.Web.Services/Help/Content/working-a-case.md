@@ -302,10 +302,15 @@ on since*.
 
 ### A card that opens another board
 
-One board fills up. **Add → Board** puts down a card that opens another board on this case — a family
-tree on one, the newspaper articles on another, and a card on each that reaches the other. Pick the
-board, and optionally one card on it to arrive at. A **Back** button appears on the board you opened,
-so you can return the way you came.
+One board fills up. The **book** button on the left puts down a card that opens another board on this
+case — a family tree on one, the newspaper articles on another, and a card on each that reaches the
+other. Pick the board, and optionally one card on it to arrive at.
+
+**The header shows the way you came.** Follow a link and the boards you came through appear before the
+title, oldest first: *Family tree / Newspapers / **Deeds***. Click any of them to go back to that one —
+not just the last. The path is only ever what you actually walked, so following a link back to where
+you started adds a stop rather than removing one, and going back clears everything after the stop you
+picked.
 
 **Only published boards can be linked to**, and the picker says so: a card pointing at somebody's
 draft would be a way to read it through a board they had published. This has two consequences worth

@@ -10,6 +10,8 @@
 @if (Editing)
 {
     <div class="bc-table bc-table--edit">
+        @* The grid scrolls; the buttons below it do not. *@
+        <div class="bc-table__grid-scroll">
         <table class="bc-table__grid">
             @if (Table.HasHeaderRow && Table.Rows.Count > 0)
             {
@@ -69,16 +71,17 @@
                 }
             </tbody>
         </table>
+        </div>
 
         @* Icon buttons, so each carries its words - the markup guard requires it, and a grid of
            unlabelled plus and minus signs is unreadable anyway. *@
         <div class="bc-table__controls">
             <button type="button" class="btn btn-sm btn-outline-secondary" title="Add row" aria-label="Add row"
-                    @onclick="@(() => Table.InsertRow(Table.Rows.Count))">
+                    @onclick="@(() => Grow(() => Table.InsertRow(Table.Rows.Count)))">
                 <BcIcon Name="plus" /><span class="bc-table__control-text">Add row</span>
             </button>
             <button type="button" class="btn btn-sm btn-outline-secondary" title="Add column" aria-label="Add column"
-                    @onclick="@(() => Table.InsertColumn(Table.ColumnCount))">
+                    @onclick="@(() => Grow(() => Table.InsertColumn(Table.ColumnCount)))">
                 <BcIcon Name="plus" /><span class="bc-table__control-text">Add column</span>
             </button>
             @if (Table.Rows.Count > TableData.MinRows)
@@ -129,6 +132,33 @@ else
 }
 @code {
     private TableData Table => Data as TableData ?? new TableData();
+
+    /// <summary>
+    /// Changes the grid and makes the block big enough to show the result.
+    /// </summary>
+    /// <remarks>
+    /// <para><b>Why the block grows.</b> Walking the board on 2026-09-18 found that <b>Add row</b>
+    /// produced a row nobody could see: the grid overflows its block, so the fourth row of a four-row
+    /// table sat below the bottom edge behind an inner scrollbar that nobody looks for on a canvas. A
+    /// button in a block's own toolbar has to produce something visible.</para>
+    ///
+    /// <para><b>Why it does not resize through a command.</b> This is the middle of an edit session:
+    /// the body is working on a copy of the data, and the session commits once when editing ends,
+    /// carrying the rectangle with it (<c>CanvasNodeHost</c>). A resize command here would be a second
+    /// undo step, so one Ctrl+Z would leave a two-row table in a block sized for five. The growth is a
+    /// consequence of the edit, so it undoes with it — <c>FitNodeWhileEditing</c> writes the rectangle
+    /// and redraws the frame without touching the history.</para>
+    ///
+    /// <para>It only ever grows: shrinking would fight a size somebody chose by dragging a corner, and
+    /// would snap a deliberately roomy table shut the moment a row came out of it.</para>
+    /// </remarks>
+    private void Grow(Action change)
+    {
+        change();
+
+        var (width, height) = BlockFit.Grown(Table, Node.Width, Node.Height, editing: true);
+        Store.FitNodeWhileEditing(Node.Id, width, height);
+    }
 
     private void Set(int row, int column, string? value)
     {

@@ -45,7 +45,7 @@
 <div class="@RootClass" data-bc-ready="@(_ready ? "true" : null)" @ref="_root">
     <CanvasHeaderBar DocumentTitle="@Store.Document.Title"
                      BackContent="@BackContent"
-                     BoardBack="@Boards.Back"
+                     BoardTrail="@Boards.Trail"
                      HostStatusContent="@HostStatusContent"
                      SaveState="@Documents.State"
                      AutosavePending="@Documents.AutosavePending"
@@ -208,6 +208,16 @@
         Access.Changed += OnServerChanged;
         Presentation.Changed += OnPresentationChanged;
 
+        // The board-link trail. BoardLinks raises this event for exactly this purpose — its own
+        // remark says "so the header can redraw its breadcrumbs" — and nothing was listening to it.
+        //
+        // In practice the header does redraw anyway: following a link opens a board, which raises
+        // Documents.Changed, and Playwright's own waiting sees the crumbs appear with or without this
+        // line. So this is belt and braces rather than a fix for anything observed, and it is kept
+        // because the path can move WITHOUT a board opening — Clear() on leaving a case does exactly
+        // that, and nothing else would tell the header.
+        Boards.Changed += OnBoardTrailChanged;
+
         // A piece somebody else put on a case board stays theirs: the screen locks it, and the store refuses the
         // command anyway, so a menu item or a keyboard shortcut cannot reach round the lock (Ben, 2026-09-16).
         Store.MayChangePiece = Access.MayChange;
@@ -221,6 +231,9 @@
     private ICanvasSignInState? SignIn { get; set; }
 
     private void OnServerChanged() => _ = InvokeAsync(StateHasChanged);
+
+    /// <summary>A link was followed or Back was pressed: the header's Back button follows the trail.</summary>
+    private void OnBoardTrailChanged() => _ = InvokeAsync(StateHasChanged);
 
     /// <summary>The walk moved: the bar, the dimming and the root's class all follow from its state.</summary>
     private void OnPresentationChanged() => _ = InvokeAsync(StateHasChanged);

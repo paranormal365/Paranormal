@@ -452,7 +452,33 @@ install has something to show, with a test that reads it back through the editor
 Applied to `IsHauntedDb_player` only; production gets it with the deploy.
 
 
-## M9 Pieces, styles, links and templates — planned 2026-09-18
+## M9 Pieces, styles, links and templates — planned and BUILT 2026-09-18
+
+**Status: all fourteen steps built 2026-09-18.** `Ben.Canvas.Tests` 1,167 · `Ben.Web.Tests` 6,453 ·
+canvas Blocks+Shell 28 · `Ben.Web.Playwright` Canvas category 11. Two things are worth carrying forward
+out of the build rather than out of the plan:
+
+- *The handoff fragment arrives LATE, and a new parameter has to cope with that.* The host exchanges the
+  sign-in code with the API before it can pass anything down, and Blazor renders at the first await, so
+  this component's startup can run with every parameter still null. `CaseId` had always coped
+  (`OnParametersSet` exists for it); `TemplateId` did not, and the result was a race that the e2e caught
+  by failing on the deck and passing on the family tree in the same run. Anything added to
+  `CanvasEditor`'s parameters from here needs the same treatment — see `SettleTemplateAsync`.
+- *The walks are not decoration.* Their first run found four defects no unit test could see: the group
+  name chip clipping the panel above, a note clipped past its box, the diamond drawing as an OCTAGON (a
+  rotated square in a box that is not square), and shapes publishing as grey rectangles because the kind
+  never left C#. Two of those had shipped in M9-02.
+- *Walking the board by hand found four more* (2026-09-18), all in pieces whose unit tests were green:
+  an empty table cell had no height, so a new grid drew as two nine-pixel hairlines in a block five
+  times taller than itself; **Add row** put the new row below the block's bottom edge, behind an inner
+  scrollbar nobody looks for on a canvas; the legacy three-way **Arrow** choice and the per-end markers
+  could contradict each other, so "Arrows at both ends" left a diamond at one end; and the board-link
+  path was a single Back button, which Ben replaced with breadcrumbs. The lesson is the shape of the
+  gaps: every one was a block or a panel behaving correctly in isolation and badly in use.
+- *A stale WebAssembly build will waste an hour.* Restarting the canvas host is not enough — the
+  browser keeps the old assemblies, and the editor then behaves like code that is no longer there. It
+  cost a wrong diagnosis on the day (a missing event subscription that turned out to be fine). Clear
+  the site's storage and load with a changed query string before believing anything a walk shows.
 
 **What Ben asked for.** Four boards, sent as pictures: a *moodboard* (coloured section panels, circle
 "theme" bubbles, an image collage, shown as a blank template beside a filled sample); a *research plan*

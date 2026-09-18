@@ -132,6 +132,12 @@ public partial class CanvasEditor
             case "board-back":
                 await Boards.GoBackAsync();
                 break;
+            // A breadcrumb: "board-crumb:2" is the third stop on the path. The index travels in the
+            // action because the header speaks to the editor through one string channel.
+            case var crumb when crumb.StartsWith("board-crumb:", StringComparison.Ordinal)
+                                && int.TryParse(crumb["board-crumb:".Length..], out var stop):
+                await Boards.GoToAsync(stop);
+                break;
             case "case-boards":
                 Layout.Close();
                 _boardLinkNodeId = SingleSelected() is { Type: CanvasNodeType.Board } picked ? picked.Id : Guid.Empty;

@@ -1,5 +1,23 @@
 .bc-table { height: 100%; overflow: auto; }
 
+/* While editing, the grid scrolls and the buttons do not.
+   They used to sit INSIDE the one scrolling box, so the rows they add pushed them out of sight - and
+   the grid lost sixty-four pixels to them, which is why the block grew a row short. Found by walking
+   the board, 2026-09-18. */
+.bc-table--edit {
+    display: flex;
+    flex-direction: column;
+    overflow: hidden;
+}
+
+.bc-table--edit .bc-table__grid-scroll {
+    flex: 1 1 auto;
+    min-height: 0;
+    overflow: auto;
+}
+
+.bc-table--edit .bc-table__controls { flex: 0 0 auto; }
+
 .bc-table__grid {
     width: 100%;
     border-collapse: collapse;
@@ -13,6 +31,12 @@
     text-align: left;
     vertical-align: top;
     overflow-wrap: anywhere;
+    /* A cell has to be a cell when it is empty.
+       Without this an empty row is its padding and nothing else - about nine pixels - so a new table
+       drew as two hairlines nobody could read or aim a double-click at, inside a block five times
+       taller than its own grid. On a collapsed-border table `height` is a MINIMUM, so a cell with
+       two lines in it still grows. Found by walking the board, 2026-09-18. */
+    height: 1.75rem;
 }
 
 .bc-table__grid th {

@@ -45,7 +45,11 @@ public static class BlockRegistry
         new(CanvasNodeType.Audio, "Audio", "music", 340, 132, 240, 116, true, false, _ => new AudioData()),
         // Wide by default and resizable both ways: a grid is read across, and how many rows it needs
         // is the one thing the block cannot know. Starts as a header and one row, two columns.
-        new(CanvasNodeType.Table, "Table", "grid", 420, 200, 200, 100, true, true,
+        //
+        // 140 tall, not 200: a header and one row is about 56 pixels of grid, and at 200 a new table
+        // was five-sixths empty space, which reads as something failing to load. 140 leaves room for
+        // two or three more rows, which is what somebody is about to type.
+        new(CanvasNodeType.Table, "Table", "grid", 420, 140, 200, 100, true, true,
             _ => new TableData { HasHeaderRow = true, Rows = [["", ""], ["", ""]] }),
         // Square by default, because a circle and a diamond both want equal sides; small, because a
         // shape labels a region rather than holding a document.

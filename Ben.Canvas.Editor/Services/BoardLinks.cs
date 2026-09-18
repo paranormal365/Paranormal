@@ -40,15 +40,26 @@ public sealed class BoardLinks(
     SelectionState selection,
     CanvasViewportState viewport)
 {
-    private readonly List<BoardCrumb> _trail = [];
+    private readonly BoardTrail _trail = new();
     private readonly HashSet<Guid> _published = [];
     private readonly HashSet<Guid> _missing = [];
     private Guid? _knownForCase;
 
     /// <summary>Where Back would go, or null when there is nowhere to go back to.</summary>
-    public BoardCrumb? Back => _trail.Count == 0 ? null : _trail[^1];
+    public BoardCrumb? Back => _trail.Last;
 
-    /// <summary>Raised when the trail changes, so the header can redraw its Back button.</summary>
+    /// <summary>
+    /// Every board a link was followed from, oldest first — the path to where you are now.
+    /// </summary>
+    /// <remarks>
+    /// <b>Ben, 2026-09-18:</b> "Instead of a back button, what about creating breadcrumbs to navigate."
+    /// The trail was always the whole path; only its last stop was ever shown, which is ambiguous the
+    /// moment somebody follows two links — one Back leaves them somewhere they cannot name. The path
+    /// says where they are and lets them leave from any point on it.
+    /// </remarks>
+    public IReadOnlyList<BoardCrumb> Trail => _trail.Stops;
+
+    /// <summary>Raised when the trail changes, so the header can redraw its breadcrumbs.</summary>
     public event Action? Changed;
 
     /// <summary>Asks the picker to open for this card. Set by the editor, which owns the dialog.</summary>
@@ -119,7 +130,7 @@ public sealed class BoardLinks(
             return;
         }
 
-        if (here is { } from) _trail.Add(new BoardCrumb(from, hereTitle));
+        _trail.Push(here, hereTitle);
         Changed?.Invoke();
 
         FocusOn(link);
@@ -128,10 +139,20 @@ public sealed class BoardLinks(
     /// <summary>Goes back one stop, to the board that was open before.</summary>
     public async Task GoBackAsync(CancellationToken ct = default)
     {
-        if (_trail.Count == 0) return;
+        await GoToAsync(_trail.Stops.Count - 1, ct);
+    }
 
-        var crumb = _trail[^1];
-        _trail.RemoveAt(_trail.Count - 1);
+    /// <summary>
+    /// Goes back to one stop on the path, dropping everything after it.
+    /// </summary>
+    /// <param name="index">
+    /// Which crumb, counted from the start of the path. Out of range does nothing: the path is view
+    /// state, and a stale click is not worth a refusal.
+    /// </param>
+    public async Task GoToAsync(int index, CancellationToken ct = default)
+    {
+        if (_trail.GoTo(index) is not { } crumb) return;
+
         Changed?.Invoke();
 
         await documents.SaveAsync();
@@ -143,7 +164,7 @@ public sealed class BoardLinks(
     /// <summary>Forgets the trail, which belongs to one case's worth of reading.</summary>
     public void Clear()
     {
-        if (_trail.Count == 0 && _missing.Count == 0) return;
+        if (_trail.Stops.Count == 0 && _missing.Count == 0) return;
         _trail.Clear();
         _missing.Clear();
         _knownForCase = null;

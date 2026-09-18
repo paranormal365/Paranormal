@@ -9,22 +9,35 @@
 *@
 
 <div class="bc-header">
-    @* Back to the board a link was followed from. The trail is view state, so this button exists only
-       while somebody is in the middle of reading across boards. *@
-    @if (BoardBack is { } crumb)
-    {
-        <button type="button" class="bc-header__button" data-bc-action="board-back"
-                aria-label="@($"Back to {crumb.Title}")" title="@($"Back to {crumb.Title}")"
-                @onclick="@(() => OnAction.InvokeAsync("board-back"))">
-            <BcIcon Name="arrow-left" /><span class="bc-header__label">Back to @crumb.Title</span>
-        </button>
-    }
     @if (BackContent is not null)
     {
         @BackContent
         <span class="vr" aria-hidden="true"></span>
     }
-    <h1 class="bc-header__title text-truncate">@DocumentTitle</h1>
+    @* The path taken across boards, and the board at the end of it.
+
+       Ben, 2026-09-18: "Instead of a back button, what about creating breadcrumbs to navigate." One
+       Back button was ambiguous the moment somebody followed two links - it left them somewhere they
+       could not name. The path says where they are and lets them leave from any point on it.
+
+       It exists only while a link has been followed; on an ordinary board the title stands alone, as
+       it always has. *@
+    @if (BoardTrail.Count > 0)
+    {
+        <nav class="bc-header__trail" aria-label="Boards you came through">
+            @for (var i = 0; i < BoardTrail.Count; i++)
+            {
+                var index = i;
+                var crumb = BoardTrail[index];
+                <button type="button" class="bc-header__crumb" data-bc-action="board-crumb"
+                        data-bc-crumb="@index"
+                        aria-label="@($"Back to {crumb.Title}")" title="@crumb.Title"
+                        @onclick="@(() => OnAction.InvokeAsync($"board-crumb:{index}"))">@crumb.Title</button>
+                <span class="bc-header__crumb-sep" aria-hidden="true">/</span>
+            }
+        </nav>
+    }
+    <h1 class="bc-header__title text-truncate" aria-current="@(BoardTrail.Count > 0 ? "page" : null)">@DocumentTitle</h1>
     <SaveStateIndicator State="SaveState" AutosavePending="AutosavePending" OnRetry="@(() => OnAction.InvokeAsync("save-retry"))" OnResolveConflict="@(() => OnAction.InvokeAsync("resolve-conflict"))" />
     <div class="bc-header__actions">
         <button type="button" class="bc-header__button" data-bc-action="undo" disabled="@(!CanUndo)"
@@ -66,8 +79,8 @@
     /// <summary>The host's link back to where the board came from.</summary>
     [Parameter] public RenderFragment? BackContent { get; set; }
 
-    /// <summary>Where Back would return to, or null when no link has been followed.</summary>
-    [Parameter] public BoardCrumb? BoardBack { get; set; }
+    /// <summary>The boards a link was followed from, oldest first. Empty on an ordinary board.</summary>
+    [Parameter] public IReadOnlyList<BoardCrumb> BoardTrail { get; set; } = [];
 
     /// <summary>The host's trailing slot, typically the sign-in chip.</summary>
     [Parameter] public RenderFragment? HostStatusContent { get; set; }

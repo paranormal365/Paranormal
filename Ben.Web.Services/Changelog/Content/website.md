@@ -31,6 +31,11 @@ day-by-day account of building it would say nothing to anyone using it now.
 - A shape block puts a box, a circle or a diamond with a word or two in it on the board, for the
   things a card would overdress — a theme, a question, a step, a label on part of the board. A
   published board now draws them as the shapes they are; they used to come out as plain boxes.
+- A table grows as you fill it in. Adding a row or a column makes the block big enough to show it,
+  rather than leaving the new row below the bottom edge, and an empty grid is now a grid you can read
+  and click into rather than a pair of hairlines. One undo takes back the rows and the room together.
+- Choosing "Arrows at both ends" on a connector now puts arrows at both ends. It used to leave
+  whatever you had already chosen for one end, so the words and the line could disagree.
 - Pasting a grid of text onto a board now makes a table of it rather than a wall of words in a note.
 - Colour goes further. Any block can be filled with its colour rather than striped with it, and a
   group can be drawn as a filled, titled panel rather than an outline — so part of a board reads as a
@@ -39,7 +44,8 @@ day-by-day account of building it would say nothing to anyone using it now.
   each end looks like (an arrow, a diamond, a dot or nothing, per end), whether it is solid or dashed,
   a label along it, and a one- or two-character badge on it.
 - A card can now open another board. One board fills up, so a card can point at another board on
-  the same case — and at one card on it — with a Back button to return the way you came. Only published
+  the same case — and at one card on it. The header then shows the boards you came through, oldest
+  first, and any one of them takes you back to it. Only published
   boards can be linked to, and the picker says so; a board with a link on it will not publish until its
   target is published. If the target is deleted, the card says so when clicked rather than going
   anywhere, and if only the card you pointed at is gone, the board still opens.

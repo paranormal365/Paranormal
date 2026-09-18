@@ -1,3 +1,4 @@
+using Ben.Canvas.Core.Blocks;
 using Ben.Canvas.Core.Model;
 
 namespace Ben.Canvas.Core.Templates;
@@ -110,7 +111,12 @@ public static partial class BoardTemplates
         }
 
         // When: a week of work, header row and four rows to fill in.
-        b.Node(CanvasNodeType.Table, Margin + 700, qy, new TableData
+        //
+        // Sized from BlockFit rather than by hand. It WAS a hand-typed 210, and when a grid row grew
+        // from 29 pixels to its real 38.5 the template kept the old number and published a calendar
+        // with its last week cut off — caught by looking at the board, 2026-09-18. Asking the same
+        // function the editor asks means the two cannot drift again.
+        var week = new TableData
         {
             HasHeaderRow = true,
             Rows =
@@ -121,7 +127,10 @@ public static partial class BoardTemplates
                 ["3", "", "", ""],
                 ["4", "", "", ""],
             ],
-        }, 440, 210, "2");
+        };
+
+        var needs = BlockFit.For(week)!.Value;
+        b.Node(CanvasNodeType.Table, Margin + 700, qy, week, Math.Max(440, needs.Width), needs.Height, "2");
     }
 
     // ── Family tree ───────────────────────────────────────────────────────
