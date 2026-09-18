@@ -154,5 +154,63 @@ public sealed class BlocksWalk : PageTest
         await board.FocusAsync();
         await page.Keyboard.PressAsync("Home");
         await Shot("group");
+
+        // ── the kinds M9 added ────────────────────────────────────────────
+        //
+        // Their own picture rather than a seventh block squeezed into the one above: a grid and a
+        // shape are wider and shorter than a card, and crowding them in would photograph neither
+        // well. There is no BOARD card here on purpose — one can only point at a PUBLISHED board on
+        // a case, and this walk signs into nothing, so a board card would photograph its own
+        // "nothing chosen yet" state and teach the wrong thing.
+        // Select-all reaches the blocks, not the group they were in, so the group is cleared by hand
+        // first — otherwise the shot keeps an empty dashed rectangle nobody asked for.
+        await page.Locator(".bc-group__label").First.ClickAsync();
+        await page.Keyboard.PressAsync("Delete");
+        await page.WaitForTimeoutAsync(150);
+        await board.FocusAsync();
+        await page.Keyboard.PressAsync("ControlOrMeta+a");
+        await page.Keyboard.PressAsync("Delete");
+        await page.WaitForTimeoutAsync(200);
+
+        var (table, _) = await Add("table");
+        await Drag(table, -300, -150);
+        await Edit(table);
+
+        // A table starts as a header and one row, two columns wide, so the grid is grown first.
+        await table.GetByRole(AriaRole.Button, new() { Name = "Add column" }).ClickAsync();
+        await table.GetByRole(AriaRole.Button, new() { Name = "Add column" }).ClickAsync();
+        await table.GetByRole(AriaRole.Button, new() { Name = "Add row" }).ClickAsync();
+
+        string[][] grid =
+        [
+            ["Owner", "From", "To", "Buried"],
+            ["Whitfield", "1924", "1951", "Mount Olivet"],
+            ["Hallam", "1951", "1982", "Mount Olivet"],
+        ];
+        var boxes = table.Locator(".bc-table__input");
+        for (var r = 0; r < grid.Length; r++)
+            for (var c = 0; c < grid[r].Length; c++)
+                await boxes.Nth(r * grid[r].Length + c).FillAsync(grid[r][c]);
+
+        await EndEdit();
+
+        var (shape, shapeId) = await Add("shape");
+        await Drag(shape, 330, -170);
+        await Edit(shape);
+        await page.SelectOptionAsync($"#bc-shape-kind-{shapeId}", "Ellipse");
+        await shape.Locator(".bc-shape__input").FillAsync("Who used the upstairs room?");
+        await EndEdit();
+
+        var (diamond, diamondId) = await Add("shape");
+        await Drag(diamond, 330, 130);
+        await Edit(diamond);
+        await page.SelectOptionAsync($"#bc-shape-kind-{diamondId}", "Diamond");
+        await diamond.Locator(".bc-shape__input").FillAsync("Deeds first?");
+        await EndEdit();
+
+        await page.Mouse.ClickAsync(700, 880);
+        await board.FocusAsync();
+        await page.Keyboard.PressAsync("Home");
+        await Shot("grids-and-shapes");
     }
 }

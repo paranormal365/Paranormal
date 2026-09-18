@@ -20,6 +20,9 @@
 .bc-node--link { border-left-color: var(--bc-node-color, var(--bc-type-link)); }
 .bc-node--text { border-left-color: var(--bc-node-color, var(--bc-type-text)); }
 .bc-node--file { border-left-color: var(--bc-node-color, var(--bc-type-file)); }
+.bc-node--table { border-left-color: var(--bc-node-color, var(--bc-type-table)); }
+.bc-node--shape { border-left-color: var(--bc-node-color, var(--bc-type-shape)); }
+.bc-node--board { border-left-color: var(--bc-node-color, var(--bc-type-board)); }
 
 .bc-node:hover {
     border-color: color-mix(in srgb, var(--bc-accent) 50%, var(--bc-border));
@@ -107,4 +110,18 @@
 
 @media (prefers-reduced-motion: reduce) {
     .bc-node { transition: none; }
+}
+
+/* A filled block: the colour it already carries becomes the background, and the edge bar goes —
+   two accents saying the same thing reads as a mistake. Text is forced to the on-accent token
+   rather than left to inherit, because a mid-tone fill under body text fails contrast either way. */
+.bc-node--filled {
+    background: var(--bc-node-color, var(--bc-type-card));
+    border-left-color: transparent;
+    color: var(--bc-on-accent);
+}
+
+.bc-node--filled .bc-node__head,
+.bc-node--filled .bc-node__title {
+    color: var(--bc-on-accent);
 }

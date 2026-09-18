@@ -146,7 +146,12 @@ public sealed class CanvasDocumentController : BenControllerBase
     /// <response code="404">No such board, or not one the caller may read.</response>
     [HttpGet("{id:guid}")]
     [ProducesResponseType(typeof(CanvasDocumentRecord), 200)]
-    public async Task<ActionResult<CanvasDocumentRecord>> GetById(Guid id, CancellationToken ct)
+    /// <param name="published">
+    /// Ask for the PUBLISHED copy even when the caller could edit the draft. Board links use this: a
+    /// link opens what a reader would see, for the author too, so what they check is what is shared.
+    /// </param>
+    public async Task<ActionResult<CanvasDocumentRecord>> GetById(
+        Guid id, CancellationToken ct, [FromQuery] bool published = false)
     {
         var userId = GetCurrentUserIdOrThrow();
         await using var db = await _db.CreateDbContextAsync(ct);
@@ -184,8 +189,12 @@ public sealed class CanvasDocumentController : BenControllerBase
             IsPublished = entity.PublishedJson is not null,
             HasUnpublishedChanges = entity.PublishedJson is not null && entity.Revision > (entity.PublishedRevision ?? 0),
         };
-        if (!canEdit && entity.PublishedJson is { } published)
-            record = record with { DocumentJson = published, Revision = entity.PublishedRevision ?? entity.Revision };
+        // The published copy is served to anyone who cannot edit, and to anyone who asks for it.
+        if ((!canEdit || published) && entity.PublishedJson is { } publishedJson)
+            record = record with { DocumentJson = publishedJson, Revision = entity.PublishedRevision ?? entity.Revision };
+
+        // Asked for a published copy of a board that has none: to a link that is the same as gone.
+        if (published && entity.PublishedJson is null) return NotFound();
 
         return Ok(record);
     }
@@ -412,6 +421,34 @@ public sealed class CanvasDocumentController : BenControllerBase
         if (!string.Equals(file.ContentType, "image/png", StringComparison.OrdinalIgnoreCase)
             || !await StartsWithPngSignatureAsync(file, ct))
             return BadRequest("The snapshot must be a PNG.");
+
+        // A PUBLISHED board may never point at an unpublished one (Ben, 2026-09-18). The picker only
+        // offers published boards, but a target can be deleted or a request crafted between picking
+        // and publishing — and the consequence of getting it wrong is a reader handed a door into
+        // somebody's private draft, or a dead end. So the rule is held here, where it cannot be
+        // bypassed, and it names the boards rather than refusing in the abstract.
+        if (CanvasBoardLinks.TargetsIn(board.DocumentJson) is { Count: > 0 } targets)
+        {
+            var unpublished = await db.CanvasDocuments.AsNoTracking()
+                .Where(d => targets.Contains(d.Id) && d.PublishedJson == null)
+                .Select(d => d.Name)
+                .ToListAsync(ct);
+
+            var missing = targets.Count - await db.CanvasDocuments.AsNoTracking()
+                .CountAsync(d => targets.Contains(d.Id), ct);
+
+            if (unpublished.Count > 0)
+                return BadRequest(
+                    unpublished.Count == 1
+                        ? $"This board links to \u201c{unpublished[0]}\u201d, which has not been published yet. "
+                          + "Publish that board first, or take the link off this one."
+                        : $"This board links to {unpublished.Count} boards that have not been published yet "
+                          + $"({string.Join(", ", unpublished)}). Publish them first, or take the links off.");
+
+            if (missing > 0)
+                return BadRequest(
+                    "This board links to a board that no longer exists. Take the link off before publishing.");
+        }
 
         var storedName   = $"{Guid.NewGuid():N}.png";
         var storagePath  = _fileStorage.CaseFilePath(onCase.Id, $"files/{storedName}");

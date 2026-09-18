@@ -49,6 +49,19 @@ public sealed class HttpCanvasServerStore(IHttpClientFactory http, IOptions<Canv
         }
     }
 
+    public async Task<(CanvasServerDocument? Document, string? Problem)> GetPublishedAsync(Guid id, CancellationToken ct = default)
+    {
+        if (Unavailable() is { } refusal) return (null, refusal);
+        var (response, problem) = await SendAsync(
+            new HttpRequestMessage(HttpMethod.Get, $"{Base}/api/canvas-documents/{id}?published=true"), ct);
+        if (response is null) return (null, problem);
+        using (response)
+        {
+            if (response.StatusCode != HttpStatusCode.OK) return (null, await DescribeAsync(response, ct));
+            return (await response.Content.ReadFromJsonAsync<CanvasServerDocument>(Json, ct), null);
+        }
+    }
+
     public async Task<CanvasSaveResult> SaveAsync(string documentJson, Guid? existingId, int revision, Guid? caseId, CancellationToken ct = default)
     {
         if (Unavailable() is { } refusal) return new(CanvasSaveOutcome.Failed, null, refusal);

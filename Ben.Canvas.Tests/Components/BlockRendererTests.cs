@@ -232,11 +232,168 @@ public sealed class BlockRendererTests
     public void No_proxy_address_without_an_https_source() =>
         Assert.Null(LinkNode.ImageProxyUrl("https://ishaunted.com/webapi", "http://example.com/a.png"));
 
+    // ── Tables ──────────────────────────────────────────────────────────
+
+    private static CanvasNode Table(bool header = true, params string[][] rows)
+    {
+        var node = TestBoards.Node(CanvasNodeType.Table);
+        node.Data = new TableData { HasHeaderRow = header, Rows = [.. rows.Select(r => r.ToList())] };
+        return node;
+    }
+
+    /// <summary>
+    /// At rest a table is a real table element, so it reads as a grid to a screen reader and to anyone
+    /// copying it back out — not a stack of divs that merely looks like one.
+    /// </summary>
+    [Fact]
+    public async Task A_table_at_rest_is_a_table_element_with_a_header_row()
+    {
+        var html = await Render<TableNode>(Table(true, ["Name", "Born"], ["Walt", "1901"]));
+
+        Assert.Contains("<table", html);
+        Assert.Contains("<th", html);
+        Assert.Contains("Walt", html);
+        Assert.Equal(2, Regex.Matches(html, "<tr").Count);
+    }
+
+    /// <summary>A table with the header switched off has no header cells at all.</summary>
+    [Fact]
+    public async Task A_table_without_a_header_row_has_no_header_cells()
+    {
+        var html = await Render<TableNode>(Table(false, ["Walt", "1901"], ["Roy", "1893"]));
+
+        Assert.DoesNotContain("<th", html);
+    }
+
+    /// <summary>
+    /// Cell text is text. A pasted grid can carry anything, and a table that rendered markup would be
+    /// the same hole the note was closed for.
+    /// </summary>
+    [Fact]
+    public async Task A_table_never_renders_markup()
+    {
+        var raw = await RenderRaw<TableNode>(Table(false, ["<b>bold</b>", "<img src=x>"]));
+
+        Assert.DoesNotContain("<b>", raw);
+        Assert.DoesNotContain("<img", raw);
+    }
+
+    /// <summary>
+    /// Every cell input names where it is. A grid of unlabelled boxes is unusable with a screen reader,
+    /// and the repo's own guard only checks that a label points at an id — not that it says anything.
+    /// </summary>
+    [Fact]
+    public async Task Every_table_cell_in_edit_names_its_row_and_column()
+    {
+        var html = await Render<TableNode>(Table(true, ["Name", "Born"], ["Walt", "1901"]), editing: true);
+
+        Assert.Equal(4, Regex.Matches(html, "<input").Count);
+        Assert.Contains("aria-label=\"Name, row 1\"", html);
+        Assert.Contains("aria-label=\"Born, row 1\"", html);
+    }
+
+    /// <summary>
+    /// A table with no header names its columns by position, because "row 1" alone does not say which
+    /// cell of the row a person is in.
+    /// </summary>
+    [Fact]
+    public async Task A_headerless_table_names_its_cells_by_column_number()
+    {
+        var html = await Render<TableNode>(Table(false, ["Walt", "1901"]), editing: true);
+
+        Assert.Contains("aria-label=\"Column 1, row 1\"", html);
+    }
+
+    /// <summary>
+    /// The row and column controls are only offered while editing, and each says what it does — they are
+    /// icon buttons, which the markup guard requires to carry a label.
+    /// </summary>
+    [Fact]
+    public async Task Editing_offers_labelled_row_and_column_controls()
+    {
+        var html = await Render<TableNode>(Table(true, ["Name", "Born"], ["Walt", "1901"]), editing: true);
+
+        Assert.Contains("Add row", html);
+        Assert.Contains("Add column", html);
+        Assert.Contains("Remove row", html);
+        Assert.Contains("Remove column", html);
+    }
+
+    [Fact]
+    public async Task A_table_at_rest_offers_no_controls()
+    {
+        var html = await Render<TableNode>(Table(true, ["Name", "Born"], ["Walt", "1901"]));
+
+        Assert.DoesNotContain("Add row", html);
+        Assert.DoesNotContain("<input", html);
+    }
+
+    // ── Shapes ──────────────────────────────────────────────────────────
+
+    private static CanvasNode Shape(ShapeKind kind, string text = "")
+    {
+        var node = TestBoards.Node(CanvasNodeType.Shape);
+        node.Data = new ShapeData { Kind = kind, Text = text };
+        return node;
+    }
+
+    /// <summary>
+    /// Each kind draws as itself. The class is what the CSS hangs the outline on, so it is the thing
+    /// worth asserting — a diamond that renders with the rectangle's class is a rectangle.
+    /// </summary>
+    [Theory]
+    [InlineData(ShapeKind.Rectangle, "bc-shape--rectangle")]
+    [InlineData(ShapeKind.Ellipse, "bc-shape--ellipse")]
+    [InlineData(ShapeKind.Diamond, "bc-shape--diamond")]
+    public async Task A_shape_draws_as_its_kind(ShapeKind kind, string expected)
+    {
+        Assert.Contains(expected, await Render<ShapeNode>(Shape(kind, "Theme")));
+    }
+
+    [Fact]
+    public async Task A_shape_shows_its_words()
+    {
+        Assert.Contains("Wellness", await Render<ShapeNode>(Shape(ShapeKind.Ellipse, "Wellness")));
+    }
+
+    /// <summary>A shape's text is text, for the reason a note's is.</summary>
+    [Fact]
+    public async Task A_shape_never_renders_markup()
+    {
+        var raw = await RenderRaw<ShapeNode>(Shape(ShapeKind.Rectangle, "<b>bold</b><img src=x>"));
+
+        Assert.DoesNotContain("<b>", raw);
+        Assert.DoesNotContain("<img", raw);
+    }
+
+    /// <summary>
+    /// A shape with nothing written in it is still a shape — the moodboard's bubbles are placed before
+    /// they are named — so it draws rather than showing the note's "double-click to write" line.
+    /// </summary>
+    [Fact]
+    public async Task An_empty_shape_still_draws()
+    {
+        var html = await Render<ShapeNode>(Shape(ShapeKind.Ellipse));
+
+        Assert.Contains("bc-shape--ellipse", html);
+    }
+
+    [Fact]
+    public async Task Editing_offers_the_words_and_the_kind()
+    {
+        var html = await Render<ShapeNode>(Shape(ShapeKind.Diamond, "Married"), editing: true);
+
+        Assert.Contains("<textarea", html);
+        Assert.Contains("aria-label=\"Shape text\"", html);
+        Assert.Contains("<select", html);
+        Assert.Contains("Diamond", html);
+    }
+
     [Fact]
     public void Every_type_maps_to_its_own_renderer()
     {
         Assert.Equal(typeof(CardNode), BlockRendererMap.RendererFor(CanvasNodeType.Card));
-        Assert.Equal(9, BlockRendererMap.All.Values.Distinct().Count());
+        Assert.Equal(12, BlockRendererMap.All.Values.Distinct().Count());
     }
 
     private static async Task<string> RenderRaw<TRenderer>(CanvasNode node) where TRenderer : BlockRendererBase

@@ -68,3 +68,16 @@
     width: 220px;
     margin-bottom: .25rem;
 }
+
+/* A panel: the moodboard's section and the deck's slide. Solid tint, solid border, and the label
+   reads as a title rather than a tag pinned to the corner. */
+.bc-group--panel {
+    border-style: solid;
+    border-width: 1px;
+    background: color-mix(in srgb, var(--bc-node-color, var(--bc-group-stroke)) 14%, var(--bc-surface-2));
+}
+
+.bc-group--panel .bc-group__label {
+    background: color-mix(in srgb, var(--bc-node-color, var(--bc-group-stroke)) 28%, var(--bc-surface-3));
+    border-radius: var(--bc-radius-sm) var(--bc-radius-sm) 0 0;
+}

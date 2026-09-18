@@ -11,6 +11,7 @@
 <CanvasEditor CaseId="@_caseId"
               OrganizationId="@_orgId"
               OpenServerDocumentId="@_openId"
+              TemplateId="@_template"
               ShowDiagnostics="@_showDiagnostics"
               HostStatusContent="@SignInChipFragment"
               BackContent="@BackLink" />
@@ -19,6 +20,7 @@
     private Guid? _caseId;
     private Guid? _orgId;
     private Guid? _openId;
+    private string? _template;
     private bool _showDiagnostics;
 
     private RenderFragment SignInChipFragment => __builder =>
@@ -55,6 +57,7 @@
         _openId = handoff.DocumentId;
         _caseId = handoff.CaseId;
         _orgId = handoff.OrganizationId;
+        _template = handoff.Template;
 
         await RefreshAsync();
     }

@@ -1,0 +1,53 @@
+.bc-shape {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    height: 100%;
+    padding: .5rem;
+    text-align: center;
+    overflow: hidden;
+    /* The block's own accent colour fills the shape: a shape IS its colour, unlike a card which
+       wears one as a bar. */
+    background: var(--bc-node-color, var(--bc-type-shape));
+    color: var(--bc-on-accent);
+}
+
+.bc-shape--rectangle { border-radius: var(--bc-radius); }
+.bc-shape--ellipse { border-radius: 50%; }
+
+/* A diamond is cut out of the box rather than made by turning one.
+   It WAS a rotated square, and the templates walk photographed the result: the block's body is
+   shorter than it is wide (the title bar takes the difference), so the rotated square's four corners
+   fell outside the frame and were clipped away by its overflow - drawing an octagon. A clip-path
+   fills whatever box it is given, reads as a diamond at any width, and needs no counter-rotation of
+   the words, so they cannot come out upside down either. Fixed 2026-09-18. */
+.bc-shape--diamond {
+    clip-path: polygon(50% 0, 100% 50%, 50% 100%, 0 50%);
+    /* Room for the sloped sides: text against a diagonal edge reads as text falling off. */
+    padding: .5rem 22%;
+}
+
+.bc-shape__text {
+    font-size: .8125rem;
+    font-weight: 600;
+    overflow-wrap: anywhere;
+}
+
+.bc-shape__edit {
+    display: flex;
+    flex-direction: column;
+    gap: .375rem;
+    height: 100%;
+}
+
+.bc-shape__input {
+    flex: 1 1 auto;
+    min-height: 0;
+    resize: none;
+    border: 1px solid var(--bc-border);
+    border-radius: var(--bc-radius-sm);
+    padding: .25rem .375rem;
+    background: var(--bc-surface-2);
+    color: var(--bc-text);
+    font-size: .8125rem;
+}

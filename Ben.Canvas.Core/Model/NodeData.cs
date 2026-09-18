@@ -26,6 +26,9 @@ namespace Ben.Canvas.Core.Model;
 [JsonDerivedType(typeof(FileData), "file")]
 [JsonDerivedType(typeof(AudioData), "audio")]
 [JsonDerivedType(typeof(VideoData), "video")]
+[JsonDerivedType(typeof(TableData), "table")]
+[JsonDerivedType(typeof(ShapeData), "shape")]
+[JsonDerivedType(typeof(BoardData), "board")]
 public abstract class NodeData
 {
     /// <summary>A deep copy.</summary>
@@ -220,4 +223,187 @@ public sealed class VideoData : NodeData
     public string? Caption { get; set; }
 
     public override NodeData Clone() => (VideoData)MemberwiseClone();
+}
+
+/// <summary>
+/// A grid of plain cells: rows of strings, rectangular, with an optional header row.
+/// </summary>
+/// <remarks>
+/// <para><b>Ben asked for this on 2026-09-14</b> ("Remind me later to have you create the table") and
+/// again when the four boards arrived, two of which are grids. It is the plainest useful table and
+/// deliberately stays that way: no merged cells, no formulas, no sorting.</para>
+///
+/// <para><b>Merged cells are the line.</b> Merging turns a rectangle of strings into a graph, and every
+/// operation here — insert, remove, square up, render, snapshot — would have to learn about it. None of
+/// the boards Ben sent needs one, so the shape stays rectangular and <see cref="Square"/> is free to
+/// assume it.</para>
+///
+/// <para><b>Rectangular is an invariant, not a hope.</b> A hand-edited file, a newer editor, or a
+/// ragged spreadsheet selection can all produce short rows, so the reader squares the grid up rather
+/// than refusing it — the rule <c>CanvasDocumentMigrations</c> states: a value that cannot be right is
+/// corrected. Every mutator below preserves it.</para>
+/// </remarks>
+public sealed class TableData : NodeData
+{
+    /// <summary>The smallest grid that can be typed into and read.</summary>
+    public const int MinRows = 1;
+
+    /// <summary>The same, across.</summary>
+    public const int MinColumns = 1;
+
+    /// <summary>Whether the first row is a header, drawn and announced as one.</summary>
+    public bool HasHeaderRow { get; set; } = true;
+
+    /// <summary>The cells, row by row. Every row has the same number, which <see cref="Square"/> enforces.</summary>
+    public List<List<string>> Rows { get; set; } = [];
+
+    /// <summary>Columns in the grid: the width of the first row, or zero when there are no rows.</summary>
+    [JsonIgnore]
+    public int ColumnCount => Rows.Count == 0 ? 0 : Rows[0].Count;
+
+    /// <summary>
+    /// Makes the grid rectangular and non-empty: short rows are padded to the widest, long ones are
+    /// left alone (that width becomes the grid's), and an empty grid becomes one usable cell.
+    /// </summary>
+    /// <remarks>
+    /// Called on read and after any paste. Running it twice gives the same grid as running it once,
+    /// which is the same rule the document migrations hold themselves to.
+    /// </remarks>
+    public void Square()
+    {
+        Rows ??= [];
+        Rows.RemoveAll(r => r is null);
+
+        if (Rows.Count == 0) Rows.Add([]);
+
+        var width = Math.Max(MinColumns, Rows.Max(r => r.Count));
+
+        foreach (var row in Rows)
+        {
+            for (var i = 0; i < row.Count; i++) row[i] ??= "";
+            while (row.Count < width) row.Add("");
+        }
+    }
+
+    /// <summary>Inserts an empty column at <paramref name="at"/>, in every row.</summary>
+    public void InsertColumn(int at)
+    {
+        Square();
+        at = Math.Clamp(at, 0, ColumnCount);
+        foreach (var row in Rows) row.Insert(at, "");
+    }
+
+    /// <summary>Removes a column from every row. The last column stays: a table with none cannot be typed into.</summary>
+    public void RemoveColumn(int at)
+    {
+        Square();
+        if (ColumnCount <= MinColumns || at < 0 || at >= ColumnCount) return;
+        foreach (var row in Rows) row.RemoveAt(at);
+    }
+
+    /// <summary>Inserts an empty row at <paramref name="at"/>, with a cell per column.</summary>
+    public void InsertRow(int at)
+    {
+        Square();
+        at = Math.Clamp(at, 0, Rows.Count);
+        Rows.Insert(at, [.. Enumerable.Repeat("", ColumnCount)]);
+    }
+
+    /// <summary>Removes a row. The last row stays, for the reason the last column does.</summary>
+    public void RemoveRow(int at)
+    {
+        Square();
+        if (Rows.Count <= MinRows || at < 0 || at >= Rows.Count) return;
+        Rows.RemoveAt(at);
+    }
+
+    public override NodeData Clone() => new TableData
+    {
+        HasHeaderRow = HasHeaderRow,
+        Rows = [.. Rows.Select(r => new List<string>(r))],
+    };
+}
+
+/// <summary>What a shape is drawn as.</summary>
+/// <remarks>
+/// <para>Three, and no more. Rectangle, ellipse and diamond cover every shape in the four boards Ben
+/// sent — the moodboard's theme bubbles and the family tree's marriage markers among them. The moment
+/// this carries stars and arrows it has stopped being a board piece and become a drawing tool, which
+/// is a different product.</para>
+///
+/// <para>FORMAT: written by name, so inserting a value later cannot turn every diamond on every board
+/// into an ellipse.</para>
+/// </remarks>
+public enum ShapeKind { Rectangle, Ellipse, Diamond }
+
+/// <summary>
+/// A plain shape with words in the middle of it: the sticky, the bubble, the marker.
+/// </summary>
+/// <remarks>
+/// <para><b>A shape is not a card.</b> A card is a thing with fields and a template; a shape is a
+/// colour and a word. Two of Ben's four boards are built from them, and drawing them as cards would
+/// have meant a card that hides everything a card is for.</para>
+///
+/// <para><b>An unknown kind reads as a rectangle</b> rather than refusing the board — a shape is
+/// decoration, and a board that will not open because a newer editor wrote "Star" is a far worse
+/// outcome than a star drawn as a box. That correction lives in the migrations, with the rest.</para>
+/// </remarks>
+public sealed class ShapeData : NodeData
+{
+    /// <summary>Which shape it is.</summary>
+    /// <remarks>
+    /// FORMAT: written as "shape", NOT as "kind". The polymorphic discriminator for every NodeData is
+    /// already called "kind" (see the attributes above), and a property that serializes to the same
+    /// name throws at configuration time and takes the WHOLE hierarchy down with it — a card, a note
+    /// and a map all stop reading, not just a shape. Caught by the table's round-trip test the moment
+    /// this type was added, which is the only reason it is not a released format bug.
+    /// </remarks>
+    [JsonPropertyName("shape")]
+    [JsonConverter(typeof(Serialization.ShapeKindConverter))]
+    public ShapeKind Kind { get; set; } = ShapeKind.Rectangle;
+
+    /// <summary>What it says. Empty is normal: a bubble is often placed before it is named.</summary>
+    public string Text { get; set; } = "";
+
+    public override NodeData Clone() => (ShapeData)MemberwiseClone();
+}
+
+/// <summary>
+/// A card that opens another board on the same case, and optionally one card on it.
+/// </summary>
+/// <remarks>
+/// <para><b>Ben, 2026-09-18:</b> "a family tree in one page and in another page create all news
+/// articles and create a link to open the other page to one of the cards… and a back button to go
+/// back."</para>
+///
+/// <para><b>It carries an id and a remembered title, and nothing else.</b> No copy of the target's
+/// contents and no preview — because only a PUBLISHED board may be linked, and a card that cached
+/// anything would be a way to read somebody's draft through a published board. The titles are what
+/// they were when picked, so the card still reads sensibly after a rename and still says something
+/// after a deletion.</para>
+///
+/// <para><b>A missing target is not an error.</b> Ben: "if… the card has been removed, default to
+/// opening the other page and not focusing in on that card." So <see cref="NodeId"/> is a hint,
+/// resolved against the target's published copy when the link is followed. Nothing on THIS board
+/// changes when a card disappears from another one — the link degrades where it is followed, in front
+/// of the person, rather than silently on somebody else's board.</para>
+/// </remarks>
+public sealed class BoardData : NodeData
+{
+    /// <summary>The most characters a remembered title may keep.</summary>
+    public const int MaxTitleLength = 120;
+
+    /// <summary>The board this card opens. Empty until one is picked.</summary>
+    public Guid DocumentId { get; set; }
+
+    /// <summary>What that board was called when it was picked.</summary>
+    public string Title { get; set; } = "";
+
+    /// <summary>One card on that board to open at, or null for the whole board.</summary>
+    public Guid? NodeId { get; set; }
+
+    /// <summary>What that card was called when it was picked.</summary>
+    public string? NodeTitle { get; set; }
+
+    public override NodeData Clone() => (BoardData)MemberwiseClone();
 }

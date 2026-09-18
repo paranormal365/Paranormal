@@ -450,3 +450,264 @@ install has something to show, with a test that reads it back through the editor
 **The migration destroys rows.** `RetireResearchPages` drops `CaseResearchEntries` and
 `CaseResearchAttachments`; `Down` rebuilds them empty. Both runbooks carry the copy-first step.
 Applied to `IsHauntedDb_player` only; production gets it with the deploy.
+
+
+## M9 Pieces, styles, links and templates — planned and BUILT 2026-09-18
+
+**Status: all fourteen steps built 2026-09-18.** `Ben.Canvas.Tests` 1,167 · `Ben.Web.Tests` 6,453 ·
+canvas Blocks+Shell 28 · `Ben.Web.Playwright` Canvas category 11. Two things are worth carrying forward
+out of the build rather than out of the plan:
+
+- *The handoff fragment arrives LATE, and a new parameter has to cope with that.* The host exchanges the
+  sign-in code with the API before it can pass anything down, and Blazor renders at the first await, so
+  this component's startup can run with every parameter still null. `CaseId` had always coped
+  (`OnParametersSet` exists for it); `TemplateId` did not, and the result was a race that the e2e caught
+  by failing on the deck and passing on the family tree in the same run. Anything added to
+  `CanvasEditor`'s parameters from here needs the same treatment — see `SettleTemplateAsync`.
+- *The walks are not decoration.* Their first run found four defects no unit test could see: the group
+  name chip clipping the panel above, a note clipped past its box, the diamond drawing as an OCTAGON (a
+  rotated square in a box that is not square), and shapes publishing as grey rectangles because the kind
+  never left C#. Two of those had shipped in M9-02.
+- *Walking the board by hand found four more* (2026-09-18), all in pieces whose unit tests were green:
+  an empty table cell had no height, so a new grid drew as two nine-pixel hairlines in a block five
+  times taller than itself; **Add row** put the new row below the block's bottom edge, behind an inner
+  scrollbar nobody looks for on a canvas; the legacy three-way **Arrow** choice and the per-end markers
+  could contradict each other, so "Arrows at both ends" left a diamond at one end; and the board-link
+  path was a single Back button, which Ben replaced with breadcrumbs. The lesson is the shape of the
+  gaps: every one was a block or a panel behaving correctly in isolation and badly in use.
+- *A stale WebAssembly build will waste an hour.* Restarting the canvas host is not enough — the
+  browser keeps the old assemblies, and the editor then behaves like code that is no longer there. It
+  cost a wrong diagnosis on the day (a missing event subscription that turned out to be fine). Clear
+  the site's storage and load with a changed query string before believing anything a walk shows.
+
+**What Ben asked for.** Four boards, sent as pictures: a *moodboard* (coloured section panels, circle
+"theme" bubbles, an image collage, shown as a blank template beside a filled sample); a *research plan*
+(coloured title tiles, cards holding a 2×2 matrix, a calendar grid and sticky clusters); a *family tree*
+(boxes joined by dashed sibling lines, marriage lines with diamond ends, a child line with a chick at its
+middle, all at right angles, with a legend); and a *presentation deck* (slide-sized frames with coloured
+backgrounds: agenda, timeline, steps, 2×2, table, charts). Then: *"add research note from case … a link to
+open the other page to one of the cards … and a back button to go back."* And the reminder from
+2026-09-14: *"Remind me later to have you create the table."* The vision those sit inside, in Ben's words:
+*"a combination of Notion, Canva, OneNote and Obsidian's Canvas."* M1–M8 built the Obsidian half. M9 is
+the pieces those four boards are made of, the styles that make them look designed, the link between
+boards, and templates that assemble them.
+
+**What Ben can open when it is done.** New board offers a template — Blank, Moodboard, Research plan,
+Family tree, Presentation deck — and opens with the frames, cards and connectors already placed. The rail
+adds a **table** (rows and columns, add or remove either, paste tab-separated text and get one) and a
+**shape** (rectangle, ellipse, diamond with centred text). Any card or note can be **filled** with its colour
+instead of carrying a bar — that is the sticky. A group can be a **panel**: solid tint, solid border, its
+label as a title bar — that is the section and the slide. A connector can be **dashed**, run **straight**
+or in **right angles**, end in an **arrow, a diamond, a dot or nothing** at either end, and carry a
+**small icon or word at its middle**. A card can name **another board on the case**, picked from a list
+the way a file is picked; opening it saves this board first, and the header shows **Back to <board>**
+until you use it. Everything is undoable, exports and imports, publishes to the picture, and presents.
+
+**Decisions, and why.**
+
+- *Sticky is not a new kind.* `TextNode` already calls itself "a sticky note of plain text"; what it lacks
+  is a fill. Every block already has a palette colour drawn as a 3 px bar. A `Fill` on the node — `Bar`
+  (today) or `Solid` — turns that colour into the background. Zero visual change to any existing board,
+  no migration, and it works for a card or a picture caption too.
+- *Panel is a group style, not a new kind.* `CanvasGroup` already has bounds, a label and a colour. `Fill`
+  — `Outline` (today: dashed, 8 %) or `Panel` (solid tint, solid border, label as a bar) — is the moodboard
+  section and the deck slide in one. `SlideOrder`'s first rule, groups win, means a deck template presents
+  correctly with nothing else built.
+- *Legend and 2×2 are templates, not kinds.* A panel with a note beside sample connectors is a legend; four
+  panels in a square are a matrix. Kinds are for things with their own data.
+- *Charts are not in M9.* A bar or bubble chart is data entry plus a renderer plus a snapshot painter — a
+  different product from a board piece. Named for M10 and left out on purpose.
+- *A board card opens with a button, not a link.* `boardGestures.js` already lets a `<button>` inside a
+  block escape drag and select (it is how a link card's Open works); a bare anchor would fight the board.
+  Open saves the current board first (`documents.SaveAsync()` already runs before a switch), then
+  `ServerSession.OpenAsync(id)`. A trail of `(serverId, title)` pairs gives the header its Back; it is
+  view state, never stored on the board. Alt+Left is deliberately not bound — it is Back in Chrome on
+  Windows, and the M8 notes already record why.
+- *Only a published board can be linked, and the server holds the line.* Ben, 2026-09-18: *"the only
+  way for it to hit the load link to other page is if the other page has been published … it will cause
+  issues if one is not published and one that is published has a link to a page which is not published."*
+  A published board is what a reader sees; a draft is its author's alone. A link from the first to the
+  second would hand a reader a door into somebody's private work, or a 404. So the rule is an invariant —
+  **a published board never points at an unpublished one** — held in three places, because a picker
+  alone only stops the state being *created*: the picker lists **only published boards** on the case
+  (`GetAll` already tells published from the caller's own drafts); `Publish` **refuses** a board carrying
+  a board card whose target is not published, and says which; and `Delete` **warns** — *N published boards link here; their links will say this board no longer
+  exists* — and then deletes. Ben, 2026-09-18: *"if a published page is deleted, it should delete links
+  on other boards or when clicked, it should pop a message up saying the published page or board has
+  been deleted."* The message, not the cascade: deleting a card out of somebody else's published board
+  is the server rewriting a snapshot a reader may be looking at, and the additive guard exists to stop
+  exactly that. So the link stays, and it tells the truth **at rest** — every board card checks its
+  target when its board loads (one list call, the same one the picker makes) and shows *This board no
+  longer exists* in place — and **on click**, which pops the same sentence and does nothing else. The
+  picture and the deck treat such a card as inert. Following a live card always opens the target's
+  **published copy** — the author too, so what they check is what a reader gets. The card stores the
+  target's id and the title it had when picked; nothing else, so it can never leak a draft's contents.
+- *A board card can point at one card on the other board, and a missing card is not an error.* Ben,
+  2026-09-18: *"if there is a link to a card in a different page, and the card has been removed, default to
+  opening the other page and not focusing in on that card."* So `BoardData` carries an optional target
+  block id and the title that block had when picked. Opening looks the block up in the target's
+  **published copy**: found, the view fits to it and selects it; gone, the board opens at fit-to-content
+  with nothing selected and a quiet note that the card is no longer there. Nothing on the source board
+  changes when the target card is removed — the link degrades at the moment it is followed, where the
+  person can see what happened, not silently on somebody else's board. The picker's second step offers
+  the published copy's blocks by the same title the published picture prints (`Words()`), so what you
+  pick is what a reader would recognise. And the picker **says** the rule — Ben: *"a small note in the
+  page/card picker to let the end user know only published pages are in the list"* — because a board
+  that is missing from a list is a bug report waiting to happen unless the list says why; the same
+  sentence is its empty state.
+- *Templates are documents, not a server concept.* `CanvasDocumentController.Create` stores whatever
+  document the client posts, and a new board is `CanvasDocumentStore.New(caseId)` — "not stored until its
+  first edit." So a template is a pure function `Guid? caseId → CanvasDocument` in `Ben.Canvas.Core`,
+  loaded by `New(caseId, template)`. The seeder already proves the shape (`SeededBoardTests` reads its
+  board with the real reader). No API change, no migration.
+- *Every person in the family tree gets an empty picture frame.* Ben, mid-build 2026-09-18: *"include a
+  place to put a photo of the person - if they want to do that or even just using a male and female icon.
+  It should be up to the end user."* So a person is a PAIR — an Image block above a name note — and the
+  frame ships **empty**, which is a finished state rather than a gap: the image block already draws "No
+  picture yet. Paste or drop one here." A photo, a drawn icon, or nothing at all are all equally done,
+  which is the choice Ben asked to leave open, and a stock silhouette would have quietly made it for him.
+  `Fit` is `Cover` so whatever arrives fills the frame at everyone else's size instead of each portrait
+  being as tall as its own file. The connectors join the **names**, never the frames: a line into a photo
+  would move the moment somebody decided to go without one. There is no gendered symbol in the sprite and
+  none is added — the frame takes any picture, which covers the icon case without the site having an
+  opinion about it. **The frame is the image block's own minimum (120x90), centred over the name**, not
+  the width of it: Ben asked the right follow-up — *"If they don't provide it, it doesn't take up space
+  for it, right?"* — and it does, because a frame is a real block whether a photograph lands in it or
+  not. So the shipped size is the smallest the editor allows, which makes an unused one a small tile
+  rather than a large empty box and takes about a quarter off the tree's height. His call, of three
+  offered; the other two were no frames at all with a worked example in the legend, and leaving it as
+  built.
+- *The seam is the fragment.* The Research tab's New board already hands off `#handoff=&case=&org=`;
+  it gains `template=<id>`, `CanvasHandoff.Parse` gains the arm, `Editor.razor` threads it to a
+  `CanvasEditor.TemplateId` parameter, and `RestoreAsync` honours it **before** restoring the device
+  copy — an explicit request wins over what was open last time — and only when no `doc` arrived.
+  **Built 2026-09-18, and the fragment arrives LATE.** The host must exchange the sign-in code with
+  the API before it can pass anything down, and Blazor renders at the first await, so the editor's
+  startup can run with every parameter still null. The case already coped with that (`OnParametersSet`
+  exists for it); the template did not, and the result was a race — the first e2e run failed on the
+  deck and passed on the family tree in the same run. So the template question is settled by an
+  idempotent `SettleTemplateAsync`, asked in the restore, again at the end of startup, and again
+  whenever parameters change; a `doc` settles it without laying anything out, so a template arriving
+  after the board it lost to cannot still replace it. Nothing below the browser could see this: the
+  four `CanvasTemplatesTests` are the guard.
+- *Connector routing lives in one function.* `EdgeGeometry.Resolve` is called from exactly three places —
+  drawing, the published picture and hit-testing — so a `Route` is answered there and all three follow.
+  `Straight` is the existing cubic with its controls on its ends; `Elbow` is a polyline, so `EdgePath` grows
+  an optional corner list and `ToSvgPath`, `PointAt` and the hit sampler learn it. Heads are built by hand in
+  two places (`EdgeLayer.ArrowHead`, `BoardSnapshot.Head`); each gets a marker argument and
+  `SnapshotConnector.Heads` stops meaning "six numbers each".
+- *Schema stays at 1.* Every new field has a default that reproduces today's look, and `Upgrade` already
+  clears what cannot be right, so old boards open unchanged. The real compatibility edge is the other way:
+  a browser holding a **stale** editor meets a board with `kind: "table"` and the reader fails on the
+  unknown kind by design. The host and the API deploy together and the shell has a freshness test
+  (`CanvasHostFreshnessTests`), so that is the accepted risk, written here rather than discovered.
+
+**Pieces, by the machinery each touches.** A new kind is: an enum value → `XData : NodeData` with its
+`[JsonDerivedType]` → one `BlockRegistry` line → `Nodes/XNode.razor : BlockRendererBase` → a
+`BlockRendererMap` entry → a `RailOrder` slot, `CanvasCommand.AddX`, its keymap letter and its keyboard
+arm → a `Words()` arm for the picture → a `--bc-type-x` token in both theme files → a `PastePlacer` arm
+if it can be pasted. Every one of those is enforced by a test that already exists.
+
+| Step | Builds | Where |
+|---|---|---|
+| M9-01 | `TableData` (rows of cells, header flag), `TableNode` (table at rest; cells, add/remove row and column ≥44 px in edit), `PasteIntent.Table` from tab-separated text with two or more columns in two or more rows, placed before `Text`; chord `b`; icon `grid` | Core/Model, Editor/Nodes, Core/Paste |
+| M9-02 | `ShapeData` (`Rectangle`, `Ellipse`, `Diamond`, text), `ShapeNode` (solid palette fill, centred text); chord `o`; icon `circle` | Core/Model, Editor/Nodes |
+| M9-03 | `CanvasNode.Fill` `Bar`/`Solid`; `NodeFrame` paints it; properties panel toggle beside the swatches; `SnapshotBlock.Filled` and the painter | Core/Model, Editor/Nodes, Chrome, Persistence, js |
+| M9-04 | `CanvasGroup.Fill` `Outline`/`Panel`; `GroupLayer` styles; properties toggle; `SnapshotGroup.Fill` and the painter; `Group(ids, label, fill)` | Core/Model, Editor/Board, Chrome, Persistence, js |
+| M9-05 | `CanvasEdge.Line` `Solid`/`Dashed`, `Route` `Curve`/`Straight`/`Elbow`, `FromMarker`/`ToMarker` `Arrow`/`Diamond`/`Dot`/`None` (replacing `Arrow`'s meaning, `Arrow` kept and mapped on read), `Icon` (≤ 8 chars at the midpoint) | Core/Model, Core/Serialization |
+| M9-06 | `EdgeGeometry.Resolve(…, route)`; `EdgePath` corners; `ToSvgPath`/`PointAt`; hit sampling over corners; `ArrowHead(marker)`; `Head(marker)`; `SnapshotConnector` gains `Dash`, `Icon`, variable-length heads; painter | Core/Geometry, Editor/Board, Persistence, js |
+| M9-07 | Connector properties: line, route, each end's marker, icon; `bc-edge--dashed`; midpoint label already exists for the icon's placement | Chrome, EdgeLayer |
+| M9-08 | `BoardData` (`DocumentId`, `Title`, optional `NodeId`, `NodeTitle`), `BoardNode` (icon `book-open`, board title, "→ card title" when a card is named, Open **button**; "no longer published" state), `CaseBoardPicker` (copy of `CaseFilePicker` over `server.ListAsync(caseId)` filtered to **published**; second step lists the published copy's blocks by `Words()` title, "the whole board" first; a one-line note at the top — *Only published boards can be linked. A board you are still working on appears here once it is published.* — in `CanvasCopy`, and an empty state that says the same when the case has none), action `case-boards`, rail button "Add from the case's boards" | Core/Model, Editor/Nodes, Chrome, Text |
+| M9-08b | Server invariant: `Publish` refuses a document whose `board` cards name an unpublished target (same `nodes[].data.kind` walk `SanitizeDocument` already does) and names it; `Delete` answers how many published boards link to the board, the website's confirm shows it, then deletes; the editor greys Publish and says why before the round trip | WebApi `CanvasDocumentController`, website confirm |
+| M9-09 | `BoardTrail` (view state: stack of `(serverId, title)`), Open = save, then open the target's **published copy**, push; a named card that still exists is selected and fitted to; a named card that is gone opens the board at fit-to-content, selects nothing, and toasts once; header **Back to <title>** beside `BackContent`, pop; trail cleared on case change; a 404 toasts and leaves the trail alone | Editor/Services, Chrome |
+| M9-10 | `BoardTemplates` in Core: `blank`, `moodboard`, `research-plan`, `family-tree`, `deck`; each a pure builder over a `BoardBuilder` that floors sizes at the registry's minimums, refuses anything but a palette key, and leaves `NextZ` ahead of the board; the family tree gives every person an EMPTY picture frame above their name | Core/Templates (new) |
+| M9-11 | `CanvasDocumentStore.New(caseId, template)`; `CanvasEditor.TemplateId`; `CanvasHandoff` `template` arm; `Editor.razor`; `RestoreAsync` ordering | Editor/Services, Wasm host, Lifecycle |
+| M9-12 | Research tab: New board becomes a choice of template (names and one line each), fragment carries `template=` | Website `CaseResearchBoards.razor` |
+| M9-13 | Help: Research section gains tables, shapes, fills, panels, connector styles, board links, templates; three pictures and a GIF; What's New; service changelog; product and persona PDFs | Help, Changelog, docs |
+| M9-14 | Walks: `BlocksWalk` gains the new kinds; new `TemplatesWalk` shoots each template dark and light. **Earned its keep on the first run**: the group-name chip clipping the panel above (quadrant and deck), the legend cut off mid-sentence, the diamond drawing as an OCTAGON (a rotated square in a box that is not square), and shapes publishing as grey rectangles — four defects no unit test could see | Playwright/Capture |
+
+**Red first — the tests that must fail before each step and pass after.**
+
+| Step | Break | Test that fails |
+|---|---|---|
+| M9-01 | a kind with no descriptor | Every_node_type_has_a_descriptor (exists) |
+| M9-01 | a kind with no renderer | Every_block_type_has_a_renderer (exists) |
+| M9-01 | renderer count left at 9 | Every_type_maps_to_its_own_renderer (exists; count moves) |
+| M9-01 | a table that does not round-trip its cells | A_table_round_trips_every_cell |
+| M9-01 | a table at rest rendered as text | A_table_at_rest_is_a_table_element_with_a_header_row |
+| M9-01 | a cell input with no label | Every_table_cell_in_edit_names_its_row_and_column |
+| M9-01 | tab-separated text pasted as a note | Tab_separated_text_becomes_a_table |
+| M9-01 | one column mistaken for a table | A_single_column_of_text_stays_a_note |
+| M9-01 | a command with no keyboard arm | Every_canvas_command_has_a_case (exists) |
+| M9-02 | shape text off centre / an unknown shape kind | A_shape_centres_its_text; An_unknown_shape_kind_reads_as_a_rectangle |
+| M9-03 | an old board opening with a fill | A_board_with_no_fill_field_reads_as_bar |
+| M9-03 | a solid fill ignoring the theme | CanvasThemeTokenTests (exists) |
+| M9-04 | a panel losing its label | A_panel_group_keeps_its_label_as_a_title |
+| M9-04 | the picture ignoring a panel | A_panel_group_carries_its_fill_to_the_snapshot |
+| M9-05 | `Arrow` on an old board read as no markers | An_old_arrow_maps_to_an_end_marker |
+| M9-05 | an icon longer than eight characters stored | A_connector_icon_is_clamped_on_read |
+| M9-06 | a straight route that curves | A_straight_route_is_a_line |
+| M9-06 | an elbow with an oblique segment | An_elbow_route_turns_only_at_right_angles |
+| M9-06 | a corner the hit-test cannot find | Elbow_hit_test_finds_the_corner |
+| M9-06 | a diamond drawn as a triangle | A_diamond_head_has_four_points_and_a_dot_is_round |
+| M9-06 | a dashed connector solid in the picture | A_dashed_connector_is_flagged_for_the_painter |
+| M9-07 | a connector's icon control with no label | LabelAssociation / RazorMarkupGuardTests (exist) |
+| M9-08 | a board card opening in a new tab | A_board_card_opens_with_a_button_not_a_link |
+| M9-08 | the picker listing boards of another case | The_board_picker_lists_only_this_cases_boards |
+| M9-08 | the picker offering a draft | The_board_picker_offers_only_published_boards |
+| M9-08 | the picker silent about why a board is missing | The_board_picker_says_only_published_boards_are_listed |
+| M9-08 | an empty picker with no explanation | An_empty_board_picker_says_publish_one_first |
+| M9-08 | a card storing anything but the target's id and title | A_board_card_carries_no_content_of_its_target |
+| M9-08b | publishing a board that links to a draft | Publishing_refuses_a_board_that_links_to_an_unpublished_board_and_names_it |
+| M9-08b | deleting a linked board without a word | Deleting_a_linked_board_warns_how_many_published_boards_link_to_it |
+| M9-08 | a card whose target is deleted looking live until clicked | A_board_card_whose_target_is_gone_says_so_at_rest |
+| M9-08 | clicking a dead card doing anything but the message | Clicking_a_dead_board_card_pops_the_message_and_nothing_else |
+| M9-08b | the refusal arriving as a bare string | TierValidationShape-style: the refusal is a record the editor reads |
+| M9-09 | following a card to the draft rather than the published copy | Following_a_board_card_opens_the_published_copy |
+| M9-09 | a card whose target is gone opening nothing silently | A_board_card_whose_target_is_gone_says_so_and_stays_put |
+| M9-09 | a named card that exists not focused | A_card_link_selects_and_fits_to_the_card_when_it_still_exists |
+| M9-09 | a named card that is gone treated as an error | A_card_link_whose_card_is_gone_opens_the_board_at_fit_and_selects_nothing |
+| M9-09 | the lookup reading the draft rather than the published copy | A_card_link_is_resolved_against_the_published_copy |
+| M9-08 | the picker naming blocks differently from the picture | The_picker_lists_the_published_copys_blocks_by_their_snapshot_title |
+| M9-09 | Back after opening returns to the wrong board | Opening_a_board_card_pushes_and_back_pops |
+| M9-09 | switching without saving | Opening_a_board_card_saves_the_current_board_first |
+| M9-10 | a template that does not validate or overflows | Every_template_opens_with_the_editors_own_reader, Every_template_fits_MaxNodes |
+| M9-10 | a deck frame that is not a panel | The_deck_template_is_panels_in_reading_order |
+| M9-10 | a template naming a raw colour | Templates_use_palette_tokens_only, A_template_may_not_name_a_colour |
+| M9-10 | a block placed under its kind's minimum | A_block_is_never_placed_under_its_own_minimum |
+| M9-10 | a template whose next block lands behind it | The_paint_counter_is_ahead_of_the_template |
+| M9-10 | a grouped block hanging outside its panel | Every_grouped_block_sits_in_a_group_that_exists |
+| M9-10 | a template shipping a board link | No_template_carries_a_board_link |
+| M9-10 | a template icon that is not in the sprite | Every_template_icon_exists_in_the_sprite |
+| M9-10 | a pre-filled portrait, or a frame the lines join | Every_person_in_the_family_tree_has_a_picture_frame_that_starts_empty |
+| M9-10 | a template presenting out of order | Slide_frames_in_a_deck_template_present_top_to_bottom |
+| M9-11 | a device restore beating an explicit template | A_template_request_wins_over_the_last_open_board |
+| M9-11 | a template applied on top of a `doc` | A_template_is_ignored_when_a_board_id_arrives |
+| M9-11 | an unknown template id | An_unknown_template_opens_a_blank_board_and_says_so |
+| M9-12 | New board losing the template in the fragment | Playwright `CanvasTemplatesTests.New_board_from_the_deck_template_opens_with_its_frames` |
+| M9-08/09 | link → open → back, end to end | Playwright `CanvasBoardLinksTests.Open_another_board_and_come_back` |
+
+**Proof to run.**
+
+```
+dotnet build Ben.slnx -warnaserror
+dotnet test  Ben.Canvas.Tests
+dotnet test  Ben.Web.Tests
+./scripts/run-e2e.sh --filter "TestCategory=Canvas"
+```
+
+**Risks named up front.** (1) The stale-editor edge above. (2) `Every_type_maps_to_its_own_renderer`
+hard-codes `9`; it becomes `12` and stays hard-coded on purpose — the number is the assertion. (3)
+`SnapshotConnector.Heads` changes shape; the published picture is regenerated on publish, never
+rewritten, so old pictures stand. (4) A board card's target can stop existing — `Delete` warns and proceeds — so the dead-card state is
+expected, not exceptional: it is shown at rest and on click, and the at-rest check is one list call per
+board load, cached for the session. (4b) The publish and delete refusals are **API changes**, small and additive; the editor greys
+the button first so the round trip is the backstop, not the message. (5) Templates
+are code, so a change to one changes every *new* board from it and no existing board — which is the
+right way round, and the tests say so.
+
+**Not in M9.** Charts (M10). Cross-case board links (a board names a board on its own case; the picker
+is scoped there, and the additive guard already stops a link from becoming an edit elsewhere). Linking
+to a draft, ever — by rule, above. A template
+gallery with pictures (names and a sentence in M9; pictures once the walk has shot them). Table cell
+merging, formulas, sorting. Connector waypoints you can drag (Elbow is automatic).

@@ -1574,6 +1574,7 @@ public sealed class HelpMediaCapture : BenTestBase
         if (!await OpenOrgCaseAsync("Paranormal365", "Belmont"))
             Assert.Ignore("The seeded Belmont case is not in this database.");
 
+        var caseUrl = Page.Url;
         await ClickUntilUrlAsync(Page.Locator("#case-edit"), @"/cases/[0-9a-f\-]+/edit$");
         await Expect(Page.Locator("#case-edit-description .k-editor")).ToBeVisibleAsync(new() { Timeout = 15_000 });
         await ShootAsync("working-a-case", "edit-case.png", proves: "Status and publishing");
@@ -1583,6 +1584,33 @@ public sealed class HelpMediaCapture : BenTestBase
         await OpenTabAsync("Research", boards);
         await SkipAnyTourAsync();
         await ShootAsync("working-a-case", "research-boards.png", proves: "Previous owners and where they are buried");
+
+        // The choice New board opens (M9-12). The help section that describes the five templates is
+        // the one place a reader has to recognise this dialog, and a table of names is not a picture
+        // of it.
+        await Page.Locator("#research-new-board").ClickAsync();
+        await Expect(Page.Locator("[data-testid=board-template-list]")).ToBeVisibleAsync(new() { Timeout = 15_000 });
+        await ShootAsync("working-a-case", "board-templates.png", proves: "Presentation deck");
+
+        // And what one of them actually opens. The family tree, because it is the template whose
+        // shape is least guessable from its name and the one carrying Ben's photo frames.
+        await Page.Locator("#board-template-family-tree").ClickAsync();
+        await Page.WaitForURLAsync(new System.Text.RegularExpressions.Regex(@"localhost:5125"), new() { Timeout = 30_000 });
+        await Expect(Page.Locator("[data-bc-ready=true]")).ToBeVisibleAsync(new() { Timeout = 60_000 });
+        await Page.WaitForTimeoutAsync(2_000);   // the board's first framing animation
+
+        // The storage warning is a toast, not part of the board: a help picture of the family tree
+        // should not carry one, and it appears on a first load in a fresh browser every time.
+        var toasts = Page.Locator(".bc-toasts .toast .btn-close");
+        for (var open = await toasts.CountAsync(); open > 0; open--)
+            await toasts.First.ClickAsync();
+        await Page.WaitForTimeoutAsync(400);
+
+        await ShootAsync("working-a-case", "board-family-tree.png", proves: "No picture yet");
+
+        await Page.GotoAsync(caseUrl, new() { Timeout = 30_000 });
+        await OpenTabAsync("Research", boards);
+        await SkipAnyTourAsync();
 
         // Into the canvas itself. A separate application on its own host, so the wait is for the editor's own
         // ready flag rather than for anything the site renders.

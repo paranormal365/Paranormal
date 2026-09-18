@@ -47,7 +47,12 @@ public sealed class BoardAccessTests
             "resolve-conflict", "conflict-theirs", "conflict-export", "export", "save", "add-card-here", "add-text-here",
             // Presenting is reading: it moves the camera and nothing else, and the meeting where a case
             // is talked through is exactly the room where the person driving may only read it.
-            "present", "present-next", "present-previous", "present-stop"];
+            "present", "present-next", "present-previous", "present-stop",
+            // Going back to the board a link was followed from is reading too, and for the same
+            // reason: a reader walking across published research is exactly who board links are for,
+            // so a view-only board must be able to follow one and return. The save it does on the way
+            // is refused by the save path's own guard, not by this list.
+            "board-back"];
 
         Assert.All(actions.Except(allowed), a => Assert.True(CanvasEditor.ChangesTheBoard(a), $"{a} changes the board but a view-only board would allow it."));
         Assert.All(["zoom-in", "fit", "export", "help", "more", "add-menu"], a => Assert.False(CanvasEditor.ChangesTheBoard(a), $"{a} must stay allowed."));

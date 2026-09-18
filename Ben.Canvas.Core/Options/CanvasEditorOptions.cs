@@ -156,6 +156,14 @@ public sealed class CanvasEditorOptions
     public int MaxHtmlChars { get; set; } = 200_000;
     public int MaxPasteItems { get; set; } = 20;
 
+    /// <summary>The most cells a pasted grid may bring. Beyond it the paste stays a note.</summary>
+    /// <remarks>
+    /// A grid past this is refused whole rather than truncated: half a table is worse than none,
+    /// because nobody can see which half is missing. 40 x 40 is far past any grid somebody means to
+    /// paste onto a board and far short of a sheet pasted by accident.
+    /// </remarks>
+    public int MaxTableCells { get; set; } = 1_600;
+
     /// <summary>Refuses a configuration that would misbehave later, naming what is wrong.</summary>
     public void Validate()
     {

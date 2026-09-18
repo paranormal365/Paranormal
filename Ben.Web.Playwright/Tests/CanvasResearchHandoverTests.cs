@@ -20,6 +20,19 @@ namespace Ben.Web.Playwright.Tests;
 [Category("Canvas")]
 public class CanvasResearchHandoverTests : BenTestBase
 {
+    /// <summary>
+    /// New board, then a template from the picker it opens. Blank is the picker's first offer and is
+    /// what "New board" used to do on its own (2026-09-18, M9-12).
+    /// </summary>
+    private async Task StartABoardAsync(string templateId)
+    {
+        await Page.Locator("#research-new-board").ClickAsync();
+
+        var offer = Page.Locator($"#board-template-{templateId}");
+        await Expect(offer).ToBeVisibleAsync(new() { Timeout = 15_000 });
+        await offer.ClickAsync();
+    }
+
     private async Task OpenResearchTabAsync()
     {
         await LoginAsync(SuperAdminEmail, SuperAdminPassword);
@@ -46,7 +59,7 @@ public class CanvasResearchHandoverTests : BenTestBase
         await OpenResearchTabAsync();
 
         var caseUrl = Page.Url;
-        await Page.Locator("#research-new-board").ClickAsync();
+        await StartABoardAsync("blank");
 
         // The canvas is a separate application: the site leaves, carrying the handover in the fragment.
         await Page.WaitForURLAsync(new System.Text.RegularExpressions.Regex(@"localhost:5125"), new() { Timeout = 30_000 });

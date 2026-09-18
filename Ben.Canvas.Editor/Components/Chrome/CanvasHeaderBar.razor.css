@@ -23,6 +23,64 @@
     line-height: 1.2;
 }
 
+/* The path across boards. It sits before the title, which is the stop you are on.
+
+   The strip scrolls rather than wrapping: a header that grows a second line moves the whole board
+   down, and a path is usually two or three stops. Each title is clamped so one long board name
+   cannot push the rest off. */
+.bc-header__trail {
+    display: flex;
+    align-items: center;
+    gap: .125rem;
+    min-width: 0;
+    max-width: 40%;
+    overflow-x: auto;
+    scrollbar-width: none;
+}
+
+/* In a narrow header there is no room for a path AND a title, and the title is where you are - which
+   matters more than how you got there. The last stop stays, so leaving is always one click. */
+@media (max-width: 900px) {
+    .bc-header__trail { max-width: 9rem; }
+    .bc-header__crumb:not(:nth-last-of-type(1)) { display: none; }
+    .bc-header__crumb-sep:not(:nth-last-of-type(1)) { display: none; }
+}
+
+.bc-header__trail::-webkit-scrollbar { display: none; }
+
+.bc-header__crumb {
+    /* Never shrinks. Allowed to, it collapsed to "P / E/" in a narrow header - a crumb of one letter
+       names nothing, and the strip already scrolls, which is the right answer to not enough room. */
+    flex: 0 0 auto;
+    max-width: 14ch;
+    overflow: hidden;
+    border: 0;
+    border-radius: var(--bc-radius-sm);
+    padding: .125rem .25rem;
+    background: transparent;
+    color: var(--bc-text-muted);
+    font-size: .8125rem;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+
+.bc-header__crumb:hover {
+    background: var(--bc-surface-3);
+    color: var(--bc-text);
+    text-decoration: underline;
+}
+
+.bc-header__crumb:focus-visible {
+    outline: 2px solid var(--bc-accent);
+    outline-offset: 1px;
+}
+
+.bc-header__crumb-sep {
+    flex: 0 0 auto;
+    color: var(--bc-text-muted);
+    font-size: .8125rem;
+}
+
 .bc-header__actions {
     display: flex;
     align-items: center;

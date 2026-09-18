@@ -27,6 +27,13 @@
                 @onclick="@(() => OnAction.InvokeAsync("case-files"))">
             <BcIcon Name="folder" />
         </button>
+    @* Ben, 2026-09-18: "like the add file from case, we have add research note from case". Only
+       published boards can be linked, and the picker says so. *@
+    <button type="button" class="bc-rail__button" data-bc-action="case-boards"
+            aria-label="Link to one of the case's boards" title="Link to one of the case's boards"
+            @onclick="@(() => OnAction.InvokeAsync("case-boards"))">
+        <BcIcon Name="book-open" />
+    </button>
     }
     @* No Blazor click: pasteInterop.js reads the clipboard inside this button's own click, which iOS requires. *@
     <button type="button" class="bc-rail__button" data-bc-action="paste" aria-label="Paste" title="Paste">
@@ -59,7 +66,7 @@
 
 @code {
     private static readonly CanvasNodeType[] RailOrder =
-        [CanvasNodeType.Card, CanvasNodeType.Text, CanvasNodeType.Message, CanvasNodeType.Map, CanvasNodeType.Image, CanvasNodeType.Link];
+        [CanvasNodeType.Card, CanvasNodeType.Text, CanvasNodeType.Table, CanvasNodeType.Shape, CanvasNodeType.Message, CanvasNodeType.Map, CanvasNodeType.Image, CanvasNodeType.Link];
 
     [Parameter] public EventCallback<string> OnAction { get; set; }
     [Parameter] public bool CanUndo { get; set; }

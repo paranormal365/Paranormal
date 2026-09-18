@@ -10,18 +10,43 @@ namespace Ben.Canvas.Core.Persistence;
 /// <summary>A block as the published picture draws it.</summary>
 /// <param name="Lines">The words under the title, in order; the drawer wraps and cuts them to the box.</param>
 /// <param name="ImageUrl">A displayable address for an image block's picture, filled in by the editor before drawing.</param>
+/// <param name="Shape">
+/// "rectangle", "ellipse" or "diamond" for a shape block; null for everything else.
+/// </param>
+/// <remarks>
+/// <b>Why <paramref name="Shape"/> is here.</b> Every block is drawn as a titled rounded rectangle,
+/// which is right for all of them but one: a shape IS its outline, so a published circle came out as
+/// a box and a published diamond came out as the same box. Caught by the templates walk on
+/// 2026-09-18 — the moodboard's theme bubbles published as four grey rectangles.
+/// </remarks>
 public sealed record SnapshotBlock(
     double X, double Y, double Width, double Height,
     string Kind, string? ColorKey, string Title, IReadOnlyList<string> Lines,
-    Guid? AssetId, string? Ext, Guid? UploadFileId, string? ImageUrl);
+    Guid? AssetId, string? Ext, Guid? UploadFileId, string? ImageUrl, bool Filled = false,
+    string? Shape = null);
 
 /// <summary>A connector as the published picture draws it.</summary>
 /// <param name="Path">The SVG path of the curve (a canvas Path2D reads it directly).</param>
 /// <param name="Heads">Arrowhead triangles, six numbers each (three points).</param>
-public sealed record SnapshotConnector(string Path, IReadOnlyList<double[]> Heads, string? Label, double LabelX, double LabelY, string? ColorKey);
+public sealed record SnapshotConnector(
+    string Path, IReadOnlyList<SnapshotHead> Heads, string? Label, double LabelX, double LabelY, string? ColorKey,
+    bool Dashed = false, string? Icon = null);
+
+/// <summary>
+/// One end marker as the published picture draws it.
+/// </summary>
+/// <remarks>
+/// Every head used to be six numbers meaning "a triangle". That stopped being true the moment a
+/// connector could end in a diamond or a dot, so the shape travels with the points: a polygon arrives
+/// as flat x,y pairs the painter fills without knowing which it is, and a dot — which cannot be
+/// written as a polygon — arrives as its centre and radius instead.
+/// </remarks>
+/// <param name="Shape">"arrow", "diamond" or "dot".</param>
+/// <param name="Points">Flat x,y pairs for a polygon, or centre x, centre y, radius for a dot.</param>
+public sealed record SnapshotHead(string Shape, IReadOnlyList<double> Points);
 
 /// <summary>A group as the published picture draws it.</summary>
-public sealed record SnapshotGroup(double X, double Y, double Width, double Height, string Label, string? ColorKey);
+public sealed record SnapshotGroup(double X, double Y, double Width, double Height, string Label, string? ColorKey, GroupFill Fill = GroupFill.Outline);
 
 /// <summary>
 /// Everything a published picture of a board needs, in world coordinates, and how big the picture is.
@@ -68,7 +93,7 @@ public static class BoardSnapshot
 
         var groups = document.Groups
             .OrderBy(g => g.Z)
-            .Select(g => new SnapshotGroup(g.X, g.Y, g.Width, g.Height, g.Label, g.ColorKey))
+            .Select(g => new SnapshotGroup(g.X, g.Y, g.Width, g.Height, g.Label, g.ColorKey, g.Fill))
             .ToList();
 
         var connectors = new List<SnapshotConnector>();
@@ -78,12 +103,21 @@ public static class BoardSnapshot
             var to = document.Nodes.FirstOrDefault(n => n.Id == edge.ToNodeId);
             if (from is null || to is null) continue;
 
-            var path = EdgeGeometry.Resolve(CanvasHitTester.RectOf(from), CanvasHitTester.RectOf(to), edge.FromSide, edge.ToSide);
-            var heads = new List<double[]>();
-            if (edge.Arrow is EdgeArrow.End or EdgeArrow.Both) heads.Add(Head(path.P2, path.P3));
-            if (edge.Arrow is EdgeArrow.Both) heads.Add(Head(path.P1, path.P0));
+            var path = EdgeGeometry.Resolve(
+                CanvasHitTester.RectOf(from), CanvasHitTester.RectOf(to), edge.FromSide, edge.ToSide, edge.Route);
+
+            // Each end draws whatever it was given. The migrations have already turned an old board's
+            // single Arrow switch into these two, so there is one code path for every era.
+            var heads = new List<SnapshotHead>();
+            if (Shaped(edge.EffectiveToMarker) is { } toShape) heads.Add(Head(path.EndControl, path.P3, toShape));
+            if (Shaped(edge.EffectiveFromMarker) is { } fromShape) heads.Add(Head(path.StartControl, path.P0, fromShape));
+
             var mid = path.MidPoint;
-            connectors.Add(new SnapshotConnector(path.ToSvgPath(), heads, string.IsNullOrWhiteSpace(edge.Label) ? null : edge.Label, mid.X, mid.Y, edge.ColorKey));
+            connectors.Add(new SnapshotConnector(
+                path.ToSvgPath(), heads,
+                string.IsNullOrWhiteSpace(edge.Label) ? null : edge.Label, mid.X, mid.Y, edge.ColorKey,
+                Dashed: edge.Line == EdgeLine.Dashed,
+                Icon: string.IsNullOrWhiteSpace(edge.Icon) ? null : edge.Icon));
         }
 
         var blocks = document.Nodes
@@ -95,14 +129,57 @@ public static class BoardSnapshot
     }
 
     /// <summary>An arrowhead pointing from <paramref name="from"/> to <paramref name="tip"/>, 12 world units long.</summary>
-    private static double[] Head(CanvasPoint from, CanvasPoint tip)
+    /// <summary>The shape name for a marker, or null when the end draws nothing.</summary>
+    private static string? Shaped(EdgeMarker marker) => marker switch
+    {
+        EdgeMarker.Arrow => "arrow",
+        EdgeMarker.Diamond => "diamond",
+        EdgeMarker.Dot => "dot",
+        _ => null,
+    };
+
+    /// <summary>
+    /// One end marker, as points the painter can fill without knowing which shape it is.
+    /// </summary>
+    /// <remarks>
+    /// A dot is the exception and carries centre-then-radius, because an arc cannot be written as a
+    /// polygon. The shape name travels with it so the painter knows which of the two it has.
+    /// </remarks>
+    private static SnapshotHead Head(CanvasPoint from, CanvasPoint tip, string shape)
     {
         const double length = 12, halfWidth = 6;
         var angle = Math.Atan2(tip.Y - from.Y, tip.X - from.X);
         var (cos, sin) = (Math.Cos(angle), Math.Sin(angle));
+
+        if (shape == "dot")
+        {
+            const double r = halfWidth * 0.7;
+            return new SnapshotHead(shape, [tip.X - cos * r, tip.Y - sin * r, r]);
+        }
+
         var baseX = tip.X - length * cos;
         var baseY = tip.Y - length * sin;
-        return [tip.X, tip.Y, baseX - halfWidth * sin, baseY + halfWidth * cos, baseX + halfWidth * sin, baseY - halfWidth * cos];
+
+        if (shape == "diamond")
+        {
+            // A rhombus centred on the end: along the line one way, across it the other.
+            var cx = tip.X - cos * length / 2;
+            var cy = tip.Y - sin * length / 2;
+            return new SnapshotHead(shape,
+            [
+                cx + cos * length / 2, cy + sin * length / 2,
+                cx - sin * halfWidth,  cy + cos * halfWidth,
+                cx - cos * length / 2, cy - sin * length / 2,
+                cx + sin * halfWidth,  cy - cos * halfWidth,
+            ]);
+        }
+
+        return new SnapshotHead(shape,
+        [
+            tip.X, tip.Y,
+            baseX - halfWidth * sin, baseY + halfWidth * cos,
+            baseX + halfWidth * sin, baseY - halfWidth * cos,
+        ]);
     }
 
     private static SnapshotBlock ToBlock(CanvasNode node)
@@ -114,8 +191,20 @@ public static class BoardSnapshot
             ImageData i => (i.AssetId, i.OpfsExt, i.UploadFileId),
             _ => ((Guid?)null, (string?)null, (Guid?)null),
         };
-        return new SnapshotBlock(node.X, node.Y, node.Width, node.Height, kind, node.ColorKey, title, lines, assetId, ext, uploadId, null);
+        return new SnapshotBlock(node.X, node.Y, node.Width, node.Height, kind, node.ColorKey, title, lines, assetId, ext, uploadId, null,
+            Filled: node.Fill == NodeFill.Solid,
+            Shape: node.Data is ShapeData s ? s.Kind.ToString().ToLowerInvariant() : null);
     }
+
+    /// <summary>
+    /// What one block is called, in the same words the published picture prints.
+    /// </summary>
+    /// <remarks>
+    /// Public so the board-link picker can list a board's cards by the name a reader would recognise.
+    /// Pairing a node to its snapshot block by position or by index does not work — the scene is
+    /// ordered by paint order, not by where things sit — so the naming is asked for directly.
+    /// </remarks>
+    public static string TitleOf(CanvasNode node) => Words(node).Title;
 
     private static (string Title, IReadOnlyList<string> Lines) Words(CanvasNode node)
     {
@@ -143,6 +232,24 @@ public static class BoardSnapshot
                     lines.Add(string.Create(CultureInfo.InvariantCulture, $"{map.Latitude:F5}, {map.Longitude:F5}"));
                 lines.AddRange(map.Pins.Where(p => !string.IsNullOrWhiteSpace(p.Title)).Select(p => "• " + p.Title));
                 return (display, lines);
+            case TableData table:
+                // The header names it where there is one, and each row prints as its cells joined —
+                // the published picture is a picture, so a grid drawn as lines of text reads better
+                // there than a grid drawn badly.
+                var grid = table.Rows.Skip(table.HasHeaderRow ? 1 : 0)
+                    .Select(r => string.Join("  ", r.Where(c => !string.IsNullOrWhiteSpace(c))))
+                    .Where(line => line.Length > 0)
+                    .ToList();
+                var heading = table.HasHeaderRow && table.Rows.Count > 0
+                    ? string.Join("  ", table.Rows[0].Where(c => !string.IsNullOrWhiteSpace(c)))
+                    : "";
+                return (Or(heading, display), grid);
+            case BoardData board:
+                // The printed picture still says where a link went, and which card it aimed at.
+                return (Or(board.Title, display),
+                    string.IsNullOrWhiteSpace(board.NodeTitle) ? [] : [board.NodeTitle]);
+            case ShapeData shape:
+                return (Or(shape.Text, display), []);
             case ImageData image:
                 return (Or(image.Caption, display), []);
             default:

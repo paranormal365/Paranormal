@@ -65,7 +65,10 @@
         + (Candidate ? " bc-node--candidate" : "")
         // While a board is being presented this marks the card being talked about; the CSS dims the
         // rest. Always true when nobody is presenting, so the class costs nothing the rest of the time.
-        + (OnStage ? " bc-node--onstage" : "");
+        + (OnStage ? " bc-node--onstage" : "")
+        // Solid turns the block's palette colour into its background instead of an edge bar: the
+        // sticky, and what the moodboard's panels and the deck's slides are built from.
+        + (Node.Fill == NodeFill.Solid ? " bc-node--filled" : "");
 
     private string Style
     {

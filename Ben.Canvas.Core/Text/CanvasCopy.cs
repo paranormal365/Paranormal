@@ -161,6 +161,20 @@ public static class CanvasCopy
 
         public const string PublishDone = "Published to the case.";
 
+        /// <summary>A card pointing at a board that has been deleted.</summary>
+        public static string LinkedBoardGone(string title) =>
+            string.IsNullOrWhiteSpace(title)
+                ? "That board no longer exists."
+                : $"\u201c{title}\u201d no longer exists. It may have been deleted.";
+
+        /// <summary>A card pointing at one card on a board, where that card has since been removed.</summary>
+        public const string LinkedCardGone =
+            "The card this link pointed at is no longer on that board, so the whole board is shown.";
+
+        /// <summary>Said in the picker, and as its empty state.</summary>
+        public const string OnlyPublishedBoardsLink =
+            "Only published boards can be linked. A board you are still working on appears here once it is published.";
+
         public static string AssetNotStored(string name) =>
             string.Format(Invariant, "{0} could not be kept on this device (storage may be full). Export the board, then try again.", name);
 
@@ -186,6 +200,11 @@ public static class CanvasCopy
 
         public static string RestoreFailed(string problem) =>
             string.Format(Invariant, "The last board on this device could not be opened, so a new board was started. {0}", EndSentence(problem));
+
+        public static string UnknownTemplate(string id) =>
+            string.Format(Invariant,
+                "There is no board template called \"{0}\", so a blank board was started instead. The link may be from an older version of the site.",
+                id);
 
         public const string ImportNotABoard =
             "That file is not a board saved from IsHaunted Canvas. Choose a file that ends in .ishcanvas.";

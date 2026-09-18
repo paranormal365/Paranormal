@@ -142,7 +142,35 @@ The case's **Research** tab lists its boards. A board is a space to think on: ca
 files, recordings, links and maps, laid out and joined up the way the thinking actually went. It is
 where you write up what a deed, an obituary, a newspaper archive or a walk round a cemetery told you.
 
-**New board** opens the board editor on this case, already signed in. **Open** returns to one.
+**New board** asks what to start from, then opens the board editor on this case, already signed in.
+**Open** returns to one.
+
+### Something to start from
+
+A blank board is the right start for some things and a cold start for others, so **New board** offers
+five:
+
+| | |
+|---|---|
+| **Blank board** | nothing on it. What New board always did. |
+| **Moodboard** | four coloured sections — feel, places, sound, references — and a cluster of themes joined to a middle one. For the atmosphere of a place before the facts of it. |
+| **Research plan** | what to ask, where to look, a four-square of what is worth doing, and a grid of four weeks. For deciding what to do next. |
+| **Family tree** | names in boxes joined at right angles, with a photo frame above every name and a legend saying what the lines mean. |
+| **Presentation deck** | four slide frames with room for a heading and points. Present it straight away; the frames are the slides. |
+
+**Everything on a template is yours.** Move it, rename it, recolour it, delete it. It is a head start,
+not a form, and nothing on it is treated differently from something you put there yourself.
+
+![Choosing what a new board starts from](/help/media/working-a-case/board-templates.png)
+*New board: five things to start from, and one line each on what you would get.*
+
+**The family tree's photo frames start empty**, and empty is finished. Paste or drop a photograph into
+one, or put any picture you like there instead, or leave them all blank and let the names do the work.
+The lines join the **names** rather than the frames, so going without a photograph moves nothing.
+
+![The family tree template, as it opens](/help/media/working-a-case/board-family-tree.png)
+*The family tree as it opens: names, right-angled lines, a small photo frame above each name, and a
+legend saying what the lines mean.*
 
 ![A case's research boards](/help/media/working-a-case/research-boards.png)
 *The Research tab: the boards on this case, who wrote each one, and whether it has been published.*
@@ -198,6 +226,32 @@ published to the case — how to reach somebody belongs on the case itself.
 A card's heading shows its title. Until you give it one, the heading is the kind of card it is —
 *Quote*, *Person* — rather than the word "Card", which every card would share.
 
+### Grids and shapes
+
+Not everything worth putting on a board is a card.
+
+**A table** is for anything that reads across: a list of owners and the years they held a house, four
+weeks of who is doing what, a set of readings. It starts as a header row and one row beneath, two
+columns wide. Click a cell and type; **Tab** moves along and out of the last cell into a new row.
+While a table is selected, the buttons above it add and remove rows and columns, and the first row can
+be turned off when the grid has no headings.
+
+**A shape** is a box, a circle or a diamond with a word or two in it, for the things a card would
+overdress: a theme, a question, a step in a process, a label on a region of the board. Pick which
+shape while it is selected.
+
+### Colour, panels and fills
+
+Every block takes one of six colours, chosen while it is selected. Two switches change how that colour
+is used:
+
+| | |
+|---|---|
+| **Filled with its colour** | the whole block takes the colour rather than a stripe down its edge. Good for shapes and for the one card that matters most; harder to read for a card with a lot of words in it. |
+| **Draw as a panel** | on a group: the area is filled and titled rather than outlined, so it reads as a section of the board instead of a ring round some cards. |
+
+Both are kept when the board is published, so a reader sees the board you laid out.
+
 ### One card after another
 
 Select a card and four small **+** handles appear, one on each side. That is how a train of thought
@@ -219,6 +273,22 @@ both the card and its arrow.
 ![Growing a card, then presenting the board](/help/media/working-a-case/board-grow-and-present.gif)
 *A handle makes the next card, one Undo takes it back, and the board is presented a card at a time.*
 
+### What a line says
+
+Select a line and it can be told what it means:
+
+| | |
+|---|---|
+| **Route** | *Curve* is the default. *Straight* is the shortest way between two blocks. *Elbow* turns right angles, which is what a family tree or an org chart needs. |
+| **Ends** | an arrow, a diamond, a dot or nothing, chosen for each end separately. A diamond at both ends and no arrow reads as "these two are joined", with neither one first. |
+| **Line** | solid or dashed. Dashed is for a weaker claim: a maybe, a sibling, a link somebody has not confirmed. |
+| **Label** | a few words along the middle of the line. |
+| **Icon** | one or two characters in a small badge on the line, for marking several lines as the same kind of thing at a glance. |
+
+None of this means anything to the site — a dashed line is not a lesser record — so say what your
+lines mean somewhere on the board. The family tree template comes with a legend for exactly that
+reason.
+
 ### Drafts and publishing
 
 **A new board is yours alone.** Nobody else on the case sees it, or knows it exists, until you
@@ -229,6 +299,31 @@ machine as you work, and **Save to case** puts it on the server.
 case's files. Carry on afterwards and your changes are yours again until you publish once more; the
 group keeps reading the published version in the meantime, and the list says *published, and written
 on since*.
+
+### A card that opens another board
+
+One board fills up. The **book** button on the left puts down a card that opens another board on this
+case — a family tree on one, the newspaper articles on another, and a card on each that reaches the
+other. Pick the board, and optionally one card on it to arrive at.
+
+**The header shows the way you came.** Follow a link and the boards you came through appear before the
+title, oldest first: *Family tree / Newspapers / **Deeds***. Click any of them to go back to that one —
+not just the last. The path is only ever what you actually walked, so following a link back to where
+you started adds a stop rather than removing one, and going back clears everything after the stop you
+picked.
+
+**Only published boards can be linked to**, and the picker says so: a card pointing at somebody's
+draft would be a way to read it through a board they had published. This has two consequences worth
+knowing:
+
+- A board that has a link on it **cannot be published** until the board it points at is published.
+  You are told which one.
+- If the board you linked to is **deleted or unpublished**, the card stays where it is and says so
+  when it is clicked. Nothing on your board is silently rewritten by something happening on somebody
+  else's.
+
+**If the card you pointed at is gone** but the board is still there, the link opens that board without
+trying to find it, rather than refusing. The card you picked is a place to land, not a promise.
 
 ### Presenting a board
 

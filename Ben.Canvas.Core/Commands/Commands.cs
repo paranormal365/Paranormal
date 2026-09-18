@@ -126,13 +126,44 @@ internal sealed class SetZOrderCommand(IReadOnlyList<CanvasNode> nodes, int[] be
     public IEnumerable<Guid> NodeIds => nodes.Select(n => n.Id);
 }
 
-internal sealed class UpdateNodeDataCommand(CanvasNode node, NodeData before, NodeData after) : IEditorCommand, ITouchesNodes, IHoldsData
+/// <param name="sizeBefore">
+/// The block's rectangle when the edit began, and <paramref name="sizeAfter"/> the one it ended with.
+/// Both null for an edit that changed nothing but the content, which is almost all of them.
+/// </param>
+/// <remarks>
+/// <b>Why an edit carries a rectangle.</b> A grid grows itself as rows are added, because a button in
+/// a block's own toolbar has to produce a row somebody can see. That growth is a consequence of the
+/// edit rather than a second thing the person did, so it belongs in the SAME undo step — otherwise one
+/// Ctrl+Z leaves a two-row table in a block sized for five, and a second is needed to finish the job.
+/// </remarks>
+internal sealed class UpdateNodeDataCommand(
+    CanvasNode node, NodeData before, NodeData after,
+    WorldRect? sizeBefore = null, WorldRect? sizeAfter = null)
+    : IEditorCommand, ITouchesNodes, IHoldsData
 {
     public string Description { get; } = $"Edit {Describe.Kind(node.Type)}";
 
     // Clones on the way in and out, so a later edit to the live data can never rewrite what undo restores.
-    public void Execute() => node.Data = after.Clone();
-    public void Undo() => node.Data = before.Clone();
+    public void Execute()
+    {
+        node.Data = after.Clone();
+        Apply(sizeAfter);
+    }
+
+    public void Undo()
+    {
+        node.Data = before.Clone();
+        Apply(sizeBefore);
+    }
+
+    private void Apply(WorldRect? rect)
+    {
+        if (rect is not { } r) return;
+        node.X = r.X;
+        node.Y = r.Y;
+        node.Width = r.Width;
+        node.Height = r.Height;
+    }
 
     public IEnumerable<Guid> NodeIds => [node.Id];
     public IEnumerable<NodeData> HeldData => [before, after];
@@ -186,13 +217,29 @@ internal sealed class RemoveEdgeCommand(CanvasDocument document, CanvasEdge edge
 }
 
 /// <summary>The editable parts of a connector, captured whole so undo restores every one.</summary>
-internal readonly record struct EdgeSnapshot(CanvasSide? FromSide, CanvasSide? ToSide, string? Label, EdgeArrow Arrow, string? ColorKey)
+/// <summary>
+/// Everything about a connector that an edit can change, for the undo stack and for the
+/// did-anything-actually-change test.
+/// </summary>
+/// <remarks>
+/// EVERY editable field has to be here. The list is hand-written, and a field missing from it fails
+/// twice over: <c>CanvasStore.UpdateEdge</c> compares before against after and rejects the edit as a
+/// no-op, so the change never happens at all — and were it to happen, undo would not take it back.
+/// That is exactly how M9's route, line, markers and icon first behaved: every select in the
+/// properties panel did nothing, silently.
+/// </remarks>
+internal readonly record struct EdgeSnapshot(
+    CanvasSide? FromSide, CanvasSide? ToSide, string? Label, EdgeArrow Arrow, string? ColorKey,
+    EdgeMarker? FromMarker, EdgeMarker? ToMarker, EdgeLine Line, EdgeRoute Route, string? Icon)
 {
-    public static EdgeSnapshot Of(CanvasEdge e) => new(e.FromSide, e.ToSide, e.Label, e.Arrow, e.ColorKey);
+    public static EdgeSnapshot Of(CanvasEdge e) => new(
+        e.FromSide, e.ToSide, e.Label, e.Arrow, e.ColorKey,
+        e.FromMarker, e.ToMarker, e.Line, e.Route, e.Icon);
 
     public void ApplyTo(CanvasEdge e)
     {
         e.FromSide = FromSide; e.ToSide = ToSide; e.Label = Label; e.Arrow = Arrow; e.ColorKey = ColorKey;
+        e.FromMarker = FromMarker; e.ToMarker = ToMarker; e.Line = Line; e.Route = Route; e.Icon = Icon;
     }
 }
 

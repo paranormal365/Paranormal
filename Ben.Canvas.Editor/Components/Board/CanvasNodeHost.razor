@@ -49,16 +49,24 @@
         if (Editing && _draft is null)
         {
             _draft = Node.Data.Clone();
+
+            // And the room it was in. A grid grows itself as rows are added (BlockFit), and that growth
+            // has to undo with the rows rather than as a step of its own.
+            _rectOnEntry = CanvasHitTester.RectOf(Node);
         }
         else if (!Editing && _draft is not null)
         {
             var draft = _draft;
+            var was = _rectOnEntry;
             _draft = null;
-            Commit(draft);
+            _rectOnEntry = null;
+            Commit(draft, was);
         }
     }
 
-    private void Commit(NodeData draft)
+    private WorldRect? _rectOnEntry;
+
+    private void Commit(NodeData draft, WorldRect? rectOnEntry)
     {
         if (draft is MessageData message)
         {
@@ -73,7 +81,7 @@
         if (draft is TextData text && text.Text.Length > Options.Value.MaxTextChars)
             text.Text = text.Text[..Options.Value.MaxTextChars];
 
-        Store.ReplaceNodeData(Node.Id, draft);
+        Store.ReplaceNodeData(Node.Id, draft, rectOnEntry);
     }
 
     protected override bool ShouldRender() =>

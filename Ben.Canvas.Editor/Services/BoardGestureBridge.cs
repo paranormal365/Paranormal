@@ -399,7 +399,7 @@ public sealed class BoardGestureBridge : IAsyncDisposable
         var paths = _store.Document.Edges
             .Select(e => (e, from: _store.FindNode(e.FromNodeId), to: _store.FindNode(e.ToNodeId)))
             .Where(t => t.from is not null && t.to is not null)
-            .Select(t => (t.e.Id, EdgeGeometry.Resolve(CanvasHitTester.RectOf(t.from!), CanvasHitTester.RectOf(t.to!), t.e.FromSide, t.e.ToSide)))
+            .Select(t => (t.e.Id, EdgeGeometry.Resolve(CanvasHitTester.RectOf(t.from!), CanvasHitTester.RectOf(t.to!), t.e.FromSide, t.e.ToSide, t.e.Route)))
             .ToList();
         return BezierHitTester.HitTest(paths, new CanvasPoint(worldX, worldY), ViewportMath.ScreenPxToWorld(_viewport.Current, 8));
     }
