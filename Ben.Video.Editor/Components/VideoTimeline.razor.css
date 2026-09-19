@@ -556,9 +556,13 @@
 
 .bv-clip-chip:active { cursor: grabbing; }
 
-.bv-clip-chip--video    { background: #1c2a3a; border-color: #2b4a6a; }
-.bv-clip-chip--audio    { background: #1a2a1a; border-color: #2a5a2a; }
-.bv-clip-chip--text     { background: #2a1a2a; border-color: #5a2a5a; }
+/* These three carry their own dark fill in BOTH themes — a timeline chip is a coloured block, not
+   a panel — so they have to carry their own text colour too. They did not, and inherited it: in the
+   light theme every clip's name, length and icon was #505050 on #1c2a3a, between 1.46:1 and 2.04:1.
+   The whole timeline was unreadable with the lights on (2026-09-18 audit). */
+.bv-clip-chip--video    { background: #1c2a3a; border-color: #2b4a6a; color: #dee2e6; }
+.bv-clip-chip--audio    { background: #1a2a1a; border-color: #2a5a2a; color: #dee2e6; }
+.bv-clip-chip--text     { background: #2a1a2a; border-color: #5a2a5a; color: #dee2e6; }
 
 .bv-clip-chip--selected {
     border-color: var(--bv-accent, var(--kendo-color-primary)) !important;
@@ -627,7 +631,11 @@
 
 .bv-clip-chip__dur {
     font-size: .65rem;
-    color: var(--kendo-color-subtle-text, var(--bv-text-muted));
+    /* Quieter than the name, but quieter than the CHIP's own text — not than the page's. The theme
+       token is a colour for a panel, and on a chip's dark fill it was the least readable thing in
+       the timeline at 1.46:1. */
+    color: inherit;
+    opacity: .72;
     font-variant-numeric: tabular-nums;
     flex-shrink: 0;
 }

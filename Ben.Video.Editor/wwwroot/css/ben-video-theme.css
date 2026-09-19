@@ -72,6 +72,12 @@
        against a light page, which is a chip you cannot read. */
     --bv-attention:     color-mix(in srgb, var(--bs-warning, #aaa256) 60%, var(--bs-body-color, #dee2e6) 40%);
 
+    /* "Working, nothing to do" — the engine-ready chip. Same trap as --bv-attention one line up:
+       the raw green measured 2.55:1 against a light page, so the word telling you the renderer is
+       ready was the least readable thing in the toolbar. Mixed toward the body colour so it darkens
+       on a light page and stays comfortably clear of the dark one (2026-09-18 audit). */
+    --bv-ok:            color-mix(in srgb, #4caf89 45%, var(--bs-body-color, #dee2e6) 55%);
+
     /* ── Tokens the components ask for but nothing ever defined ─────────────
        Each of these is the fallback half of a var(--kendo-…, var(--bv-…)) pair, so it only
        came into play if the host had no Kendo theme — at which point the property dropped

@@ -115,7 +115,7 @@
     border-color: var(--bv-attention);
     animation: bv-status-pulse 1.4s ease-in-out infinite;
 }
-.bv-status--ready       { color: #4caf89; border-color: #4caf89; }
+.bv-status--ready       { color: var(--bv-ok, #4caf89); border-color: var(--bv-ok, #4caf89); }
 .bv-status--error       { color: #e06c75; border-color: #e06c75; }
 
 /* A stuck engine used to be visible only on the diagnostics chip, which most people never see, so
