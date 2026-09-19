@@ -18,6 +18,9 @@ day-by-day account of building it would say nothing to anyone using it now.
 
 ## 2026-09-19
 
+- Reopening a case clears its closed date. A case put back to Proposed, Accepted, Active or
+  Summarized used to keep the date it was closed on, so a case being worked on still read
+  "Closed" in its details.
 - Line breaks in a feed post are kept. A post typed as three short lines arrived as one
   run-on paragraph. Names and tags in a post read as links now, and rows in the message list
   light up under the pointer and show where the keyboard is. None of that styling had ever

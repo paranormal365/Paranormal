@@ -1,6 +1,7 @@
 using AutoMapper;
 using Ben.Data.Common.Constants;
 using Ben.Data.Common.Enums;
+using Ben.Data.Common.Helpers;
 using Ben.Data.Source.Context;
 using Ben.Data.WebApi.Services;
 using Ben.Data.Source.Entities;
@@ -734,8 +735,9 @@ public sealed class CaseController : BenControllerBase
         if (request.IsPublic && !entity.IsPublic) entity.WasPublicBeforeLapse = null;
         entity.IsPublic             = request.IsPublic;
         entity.CaseManagerAppUserId = request.CaseManagerAppUserId;
-        if (request.Status is CaseStatus.Closed or CaseStatus.Haunted or CaseStatus.Public && entity.DateCaseClosed is null)
-            entity.DateCaseClosed = DateTime.UtcNow;
+        // Set on the way out, cleared on the way back in — see CaseClosureDate. This line used
+        // only ever to SET it, so reopening a case left it claiming to be closed.
+        entity.DateCaseClosed = CaseClosureDate.After(request.Status, entity.DateCaseClosed, DateTime.UtcNow);
         entity.DateUpdated          = DateTime.UtcNow;
         entity.UpdatedByAppUserId   = userId == Guid.Empty ? null : userId;
 
