@@ -72,6 +72,13 @@ cat > "$PLIST" <<PLIST
     <!-- Restart if it dies, but not if it exits cleanly (a deliberate shutdown should stay down). -->
     <key>KeepAlive</key>          <dict><key>SuccessfulExit</key><false/></dict>
     <key>ProcessType</key>        <string>Adaptive</string>
+    <!-- launchd starts a process with its working directory at "/" unless told otherwise, and an
+         ASP.NET Core app that is not told where its content root is takes it from there — which
+         put a recursive file watch over the whole filesystem and pinned a core for as long as the
+         service was up (2026-09-19). Program.cs states the content root itself now, so this is
+         belt and braces; it also stops anything else the app does with relative paths resolving
+         against the root of the disk. -->
+    <key>WorkingDirectory</key>   <string>$DEST_APP/Contents/MacOS</string>
     <key>StandardOutPath</key>    <string>$LOG_DIR/sidecar.log</string>
     <key>StandardErrorPath</key>  <string>$LOG_DIR/sidecar.log</string>
 </dict>

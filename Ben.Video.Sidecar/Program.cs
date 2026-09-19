@@ -10,7 +10,25 @@ using Ben.Video.Sidecar.Storage;
 using Ben.Video.Sidecar.Validation;
 using Microsoft.AspNetCore.RateLimiting;
 
-var builder = WebApplication.CreateBuilder(args);
+// The content root is the app's own folder, stated rather than inherited.
+//
+// CreateBuilder takes the content root from the CURRENT DIRECTORY when it is not told otherwise,
+// and then the default configuration watches appsettings.json in it with reloadOnChange — which
+// puts a recursive PhysicalFileProvider watch on that directory. Installed, this runs from a
+// LaunchAgent, and launchd starts a process with its working directory set to "/". So the watch
+// was over the whole filesystem: every change anywhere on the machine arrived as an FSEvent and
+// was stat()ed, one thread pinned a core for as long as the app was up, and the heap climbed to
+// 2.9 GB. Measured 2026-09-19 after it had been running just under four hours, by which point a
+// /v1/health request answering a small object took 340ms — the very call the editor polls to
+// decide whether native acceleration is there.
+//
+// AppContext.BaseDirectory is where this app's own files actually are, however it was launched,
+// so it is the right answer for a bundle, for `dotnet run`, and for the tests alike.
+var builder = WebApplication.CreateBuilder(new WebApplicationOptions
+{
+    Args            = args,
+    ContentRootPath = AppContext.BaseDirectory,
+});
 
 builder.Services.Configure<SidecarOptions>(builder.Configuration.GetSection("Sidecar"));
 builder.Services.AddSingleton<AuthFailureThrottle>();
