@@ -18,6 +18,11 @@ day-by-day account of building it would say nothing to anyone using it now.
 
 ## 2026-09-19
 
+- Every make is offered when you add a piece of equipment. Makes that already have something
+  in the category you picked come first, and the rest say *(no models in this category yet)* —
+  so the first person to own, say, a FLIR audio recorder can still choose FLIR and add the
+  model. Picking one of those now says the model list is empty and points at the box that adds
+  one, instead of leaving a blank list with no explanation.
 - Arrows in the video editor draw their whole arrow. The line was missing, so pointing at
   something in a clip left a small arrowhead floating on its own — and the head is bigger now on a
   long arrow, instead of staying the same size however far it reaches.
