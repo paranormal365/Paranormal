@@ -143,6 +143,11 @@ Item **#95** turned out to be already done, with only its header left stale — 
 `Ben.Web.Website/wwwroot/css/app.css` had never been committed, while `App.razor` has always linked
 it. It is here now.
 
+> **Corrected later.** `App.razor` links `@Assets["app.css"]`, which resolves to `wwwroot/app.css`,
+> not to `wwwroot/css/app.css`. The file added here was never loaded by any page, and neither were
+> the rules two later commits put into it. Its rules now live in scoped stylesheets beside their
+> components and the file is gone — see `README-dead-app-css-scoped.md`.
+
 ## Verifying it
 
 The stack is the API on :5252 and the site on :5079, both run from their own project directories —
