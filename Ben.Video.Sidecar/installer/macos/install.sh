@@ -192,6 +192,7 @@ Installed:
   agent    $PLIST
   logs     $LOG_DIR/sidecar.log
 
-It starts automatically at login.
+It is not running now, and it will not start at login. It starts by itself the moment the
+video editor looks for it, and stops again after fifteen quiet minutes.
 To remove it: ~/Applications/Uninstall BenVideo Sidecar.command  (right-click -> Open)
 EOF
