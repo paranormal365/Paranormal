@@ -10,7 +10,7 @@
   <PropertyGroup>
     <!-- Kept identical to Ben.Video.Core SidecarContracts.SidecarRelease.Version, which is what
          the editor compares an installed sidecar against. A guard test holds the two together. -->
-    <Version>1.1.0</Version>
+    <Version>1.1.1</Version>
     <TargetFramework>net10.0</TargetFramework>
     <Nullable>enable</Nullable>
     <ImplicitUsings>enable</ImplicitUsings>

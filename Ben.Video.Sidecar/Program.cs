@@ -98,6 +98,12 @@ var resolvedPort  = launchdSocket is null
     ? ResolveFreePort(sidecarOptions.Port, sidecarOptions.PortScanRange)
     : sidecarOptions.Port;
 
+// Idle shutdown only where something brings the process back - see
+// IdleShutdownPolicy.EffectiveTimeout. Without this, Windows stopped the sidecar fifteen quiet
+// minutes after login and nothing started it again until the next login (1.1.0).
+builder.Services.PostConfigure<SidecarOptions>(o =>
+    o.IdleTimeout = IdleShutdownPolicy.EffectiveTimeout(o.IdleTimeout, restartedOnDemand: launchdSocket is not null));
+
 builder.WebHost.ConfigureKestrel(kestrel =>
 {
     if (launchdSocket is { } handle)
