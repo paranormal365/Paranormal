@@ -20,7 +20,15 @@ public class EventFilesTests : BenTestBase
     private readonly string _fileName = $"poster-{Guid.NewGuid():N}"[..15] + ".txt";
 
     [SetUp]
-    public async Task Start() => _orgId = await OrgIdBySlugAsync("paranormal365");
+    public async Task Start()
+    {
+        _orgId = await OrgIdBySlugAsync("paranormal365");
+
+        // The seed leaves this event in Draft on purpose, and the public endpoints below
+        // answer only for a published one. This fixture used to inherit a publish from
+        // whichever earlier run happened to do it (item 243); it does its own now.
+        await PublishSeededEventAsync(_orgId, RoomsEventId);
+    }
 
     [TearDown]
     public async Task RemoveWhatThisRunAdded()
