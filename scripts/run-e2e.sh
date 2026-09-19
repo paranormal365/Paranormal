@@ -136,6 +136,11 @@ done
 STARTED_PIDS=()
 LOG_DIR="$(mktemp -d)"
 
+# A fixed path pointing at this run's throwaway directory, so scripts/e2e-progress.sh can answer
+# "where are we?" without being told where to look. Overwritten by each run; nothing depends on it
+# surviving (2026-09-19).
+echo "$LOG_DIR" > "${TMPDIR:-/tmp}/ben-e2e-current"
+
 cleanup() {
   if [[ $KEEP -eq 1 ]]; then
     echo ""
@@ -279,11 +284,37 @@ echo ""
 # -p:IsTestProject=true is NOT optional: the csproj sets it false to stay out of the solution's
 # test run, and without the override `dotnet test` finds zero tests and EXITS 0 — a silent pass
 # that has been reported as a real one before.
+# What this run intends to do, before it starts doing it — so progress can be reported as "N of M"
+# rather than "no failures yet", which reads the same at one minute and at thirty. The build this
+# does is the one the run needs anyway, so --no-build below spends it rather than repeating it.
+{
+  echo "E2E_STARTED=$(date +%s)"
+  echo "E2E_DB=$DB_NAME"
+  echo "E2E_FILTER=${PASSTHROUGH[*]:-}"
+} > "$LOG_DIR/meta"
+
+echo "   listing what will run…"
 set +e
 dotnet test Ben.Web.Playwright -p:IsTestProject=true -c Release --nologo \
-  -e BEN_BASE_URL="$WEB_URL" -e BEN_E2E_API_LOG="$LOG_DIR/api.log" "${PASSTHROUGH[@]:-}" 2>&1 | tee "$LOG_DIR/e2e.log"
+  --list-tests "${PASSTHROUGH[@]:-}" 2>/dev/null \
+  | sed -n '/The following Tests are available/,$p' | tail -n +2 \
+  | sed 's/^[[:space:]]*//' | grep -v '^$' > "$LOG_DIR/planned.txt"
+set -e
+echo "   $(wc -l < "$LOG_DIR/planned.txt" | tr -d ' ') tests to run"
+echo ""
+
+# verbosity=normal so the log carries one line per test as it finishes; the terminal keeps the
+# quiet view it has always had by filtering that stream down to what a person watching cares about.
+# scripts/e2e-progress.sh reads the log, not the terminal.
+set +e
+dotnet test Ben.Web.Playwright -p:IsTestProject=true -c Release --nologo --no-build \
+  --logger "console;verbosity=normal" \
+  -e BEN_BASE_URL="$WEB_URL" -e BEN_E2E_API_LOG="$LOG_DIR/api.log" "${PASSTHROUGH[@]:-}" 2>&1 \
+  | tee "$LOG_DIR/e2e.log" \
+  | grep -E --line-buffered '^( *(Failed|Error) |Passed!|Failed!|Test run|A total of)' || true
 STATUS=${PIPESTATUS[0]}
 set -e
+touch "$LOG_DIR/.finished"
 
 echo ""
 echo "── Result ──────────────────────────────────────────────────────────────"
