@@ -922,14 +922,29 @@
     /// </remarks>
     private void FadeClip(TrackItem item, bool fadeIn)
     {
-        if (item is not VideoClip clip) return;
-
-        var seconds = Math.Min(1.0, clip.EffectiveLength / 4);
+        // Audio too. Fading a sound in and out is the commonest edit there is on an audio clip,
+        // and the store, the model and the properties panel have all supported it for a while —
+        // only this menu refused, showing a person the two items they wanted greyed out with
+        // nothing to say why (2026-09-18 audit).
+        var seconds = Math.Min(1.0, item.EffectiveLength / 4);
         if (seconds <= 0) return;
 
-        Clips.UpdateClipEffects(clip.Id, fadeIn
-            ? clip.Effects with { FadeInSeconds  = seconds }
-            : clip.Effects with { FadeOutSeconds = seconds });
+        switch (item)
+        {
+            case VideoClip clip:
+                Clips.UpdateClipEffects(clip.Id, fadeIn
+                    ? clip.Effects with { FadeInSeconds  = seconds }
+                    : clip.Effects with { FadeOutSeconds = seconds });
+                break;
+
+            // UpdateAudioFade takes both at once and clamps them against the TRIMMED length, so
+            // the one that is not being set has to be passed through as it stands.
+            case AudioClip audio:
+                Clips.UpdateAudioFade(audio.Id,
+                    fadeIn ? seconds : audio.FadeInSeconds,
+                    fadeIn ? audio.FadeOutSeconds : seconds);
+                break;
+        }
     }
 
     private async Task OpenClipMenu(MouseEventArgs e, TrackItem item)
@@ -1002,10 +1017,10 @@
                transitions-9). *@
             new() { Text = "Fade In", Icon = SvgIcon.BrightnessContrast,
                     Action = () => { FadeClip(item, fadeIn: true); return Task.CompletedTask; },
-                    IsDisabled = locked || item is not VideoClip },
+                    IsDisabled = locked || item is not (VideoClip or AudioClip) },
             new() { Text = "Fade Out", Icon = SvgIcon.BrightnessContrast,
                     Action = () => { FadeClip(item, fadeIn: false); return Task.CompletedTask; },
-                    IsDisabled = locked || item is not VideoClip },
+                    IsDisabled = locked || item is not (VideoClip or AudioClip) },
             new() { IsSeparator = true },
             new() { Text = "Speed: 0.5×", Action = () => { SetSpeed(item, 0.5); return Task.CompletedTask; }, IsDisabled = locked || item is not VideoClip },
             new() { Text = "Speed: 1×",   Action = () => { SetSpeed(item, 1.0); return Task.CompletedTask; }, IsDisabled = locked || item is not VideoClip },
