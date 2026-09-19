@@ -2324,11 +2324,13 @@ public sealed class ClipStore
 
         var to = track.Items.FirstOrDefault(i => i.Id == transition.ToClipId);
         var duration = transition.Duration;
+        // Only reopen an overlap this transition is actually holding open — see IsOnItsJunction.
+        var holdsTheOverlap = IsOnItsJunction(track, transition);
 
         using (BeginBatch())
         {
             RemoveClip(transitionId);
-            if (to is not null && !track.IsLocked) ShiftFrom(track, to, duration);
+            if (to is not null && holdsTheOverlap && !track.IsLocked) ShiftFrom(track, to, duration);
         }
 
         ResortSequential(track);
@@ -2796,20 +2798,32 @@ public sealed class ClipStore
         }
     }
 
+    /// <summary>
+    /// Is this transition still sitting on the junction between the two clips it names?
+    /// </summary>
+    /// <remarks>
+    /// One rule, because two callers need the same answer and gave different ones. Reconciliation
+    /// asked it to decide what to drop; <see cref="RemoveTransition"/> asked a weaker version of
+    /// it — only whether the FOLLOWING clip was still there — to decide whether to reopen the
+    /// overlap. So removing a transition whose PRECEDING clip had gone pushed the surviving clip
+    /// a second to the right and opened a second of black at the head of the video, for an overlap
+    /// that had already been closed (2026-09-18 audit).
+    /// </remarks>
+    private static bool IsOnItsJunction(TimelineTrack track, Transition t)
+    {
+        var from = track.Items.FirstOrDefault(i => i.Id == t.FromClipId);
+        var to   = track.Items.FirstOrDefault(i => i.Id == t.ToClipId);
+
+        if (from is null || to is null) return false;
+
+        // The junction is where the first one ends, less the overlap the transition itself opened.
+        var junction = from.TimelinePosition + from.EffectiveLength - t.Duration;
+        return Math.Abs(to.TimelinePosition - junction) <= 0.05;
+    }
+
     private void ReconcileTransitions(TimelineTrack track)
     {
-        var stale = track.Items.OfType<Transition>().Where(t =>
-        {
-            var from = track.Items.FirstOrDefault(i => i.Id == t.FromClipId);
-            var to   = track.Items.FirstOrDefault(i => i.Id == t.ToClipId);
-
-            if (from is null || to is null) return true;
-
-            // Still adjacent? The junction is where the first one ends, less the overlap the
-            // transition itself opened.
-            var junction = from.TimelinePosition + from.EffectiveLength - t.Duration;
-            return Math.Abs(to.TimelinePosition - junction) > 0.05;
-        }).ToList();
+        var stale = track.Items.OfType<Transition>().Where(t => !IsOnItsJunction(track, t)).ToList();
 
         if (stale.Count == 0) return;
 
