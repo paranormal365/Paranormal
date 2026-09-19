@@ -18,6 +18,21 @@ day-by-day account of building it would say nothing to anyone using it now.
 
 ## 2026-09-19
 
+- Opening the Messages tab of a case nobody has written to yet no longer breaks the page. It
+  ended with "An unhandled error has occurred" and needed a reload; it now shows the empty
+  thread and the box to write in.
+- Reopening a case clears its closed date. A case put back to Proposed, Accepted, Active or
+  Summarized used to keep the date it was closed on, so a case being worked on still read
+  "Closed" in its details.
+- Line breaks in a feed post are kept. A post typed as three short lines arrived as one
+  run-on paragraph. Names and tags in a post read as links now, and rows in the message list
+  light up under the pointer and show where the keyboard is. None of that styling had ever
+  reached a page.
+- Every make is offered when you add a piece of equipment. Makes that already have something
+  in the category you picked come first, and the rest say *(no models in this category yet)* —
+  so the first person to own, say, a FLIR audio recorder can still choose FLIR and add the
+  model. Picking one of those now says the model list is empty and points at the box that adds
+  one, instead of leaving a blank list with no explanation.
 - Arrows in the video editor draw their whole arrow. The line was missing, so pointing at
   something in a clip left a small arrowhead floating on its own — and the head is bigger now on a
   long arrow, instead of staying the same size however far it reaches.

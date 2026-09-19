@@ -2,11 +2,22 @@
     One post's own styles (item 233, 2026-09-11).
 
     Scoped to this component rather than added to the site stylesheet, which is where the feed's
-    other rules went and where they have been sitting unread: `Ben.Web.Website/wwwroot/css/app.css`
-    is not referenced by anything — the page loads `wwwroot/app.css` through `Assets["app.css"]` —
-    so `.bv-feed-post__body`'s pre-wrap and the mention colours have never applied. A scoped file
-    is served with the component that needs it and cannot go quiet the same way.
+    other rules went and where they sat unread: `Ben.Web.Website/wwwroot/css/app.css` was not
+    referenced by anything — the page loads `wwwroot/app.css` through `Assets["app.css"]` — so
+    `.bv-feed-post__body`'s pre-wrap never applied. That file is gone now and its rule is below,
+    where it is served with the component that needs it and cannot go quiet the same way.
 */
+
+/* Line breaks the author typed are line breaks the reader sees. Without this a post written as
+   three short lines arrives as one run-on paragraph, which is not what they wrote.
+
+   The rule sits on the wrapper written in FeedPostCard.razor, not on the <FeedText> inside it, so
+   it needs no `::deep`: the child's text is a descendant, and `white-space` and `word-break` are
+   inherited properties that reach it through the wrapper. */
+.bv-feed-post__body {
+    white-space: pre-wrap;
+    word-break: break-word;
+}
 
 /* "said at {place}" — the mark and the name on one line, the mark opening the spot in Maps.
    A full-width map under every post would make a scrolling feed unreadable, so it is a square. */

@@ -1,0 +1,17 @@
+/*
+    Mentions and tags are links inside a run of prose, so they take their colour from the theme's
+    own link colour rather than a fixed one — the feed is read in both palettes.
+
+    Both anchors are written in FeedText.razor itself and so carry this component's scope
+    attribute; a `::deep` here would match nothing.
+*/
+.bv-feed-mention,
+.bv-feed-tag {
+    text-decoration: none;
+    font-weight: 500;
+}
+
+.bv-feed-mention:hover,
+.bv-feed-tag:hover {
+    text-decoration: underline;
+}
