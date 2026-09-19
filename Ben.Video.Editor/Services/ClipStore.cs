@@ -689,6 +689,9 @@ public sealed class ClipStore
             PushCommand(cmd);
             cmd.Execute();
             RenumberItems(track);
+            // Deleting a clip is the plainest way there is to destroy a junction, and this was not
+            // one of the places that checked — see NoTransitionOutlivesItsJunctionTests.
+            ReconcileTransitions(track);
             Notify();
             return;
         }
@@ -925,6 +928,9 @@ public sealed class ClipStore
             ItemRemoved?.Invoke(itemId);
             RenumberItems(track);
             PushCommand(new RemoveClipCommand(track, item, idx));
+            // As for RippleDeleteClip above: a transition whose clip has just gone has no junction
+            // left to sit on, and export would otherwise apply it to whichever pair is there.
+            ReconcileTransitions(track);
             Notify();
             return;
         }
@@ -1218,6 +1224,9 @@ public sealed class ClipStore
                 AudioClip a => new UpdateAudioTrimCommand(a, originalStart, originalEnd, nowStart, nowEnd),
                 _           => new UpdateTrimCommand(item, originalStart, originalEnd, nowStart, nowEnd),
             });
+            // Trimming moves the junction the transition was sitting on — see
+            // NoTransitionOutlivesItsJunctionTests. Once, here at the commit, not per drag frame.
+            ReconcileTransitions(track);
             Notify();
             return;
         }
@@ -1250,6 +1259,8 @@ public sealed class ClipStore
                 clip.StartTrim = start;
                 clip.EndTrim   = end;
                 PushCommand(new UpdateTrimCommand(clip, oldStart, oldEnd, start, end));
+                // As for CommitTrim: a new In or Out point moves the junction.
+                ReconcileTransitions(track);
                 Notify();
                 return;
         }
@@ -1709,6 +1720,9 @@ public sealed class ClipStore
             var cmd = new MoveClipCommand(item, deltaSeconds);
             PushCommand(cmd);
             cmd.Execute();
+            // Dragging a clip reconciled (CommitDraggedPosition); nudging it with the keyboard
+            // landed in the same place and did not.
+            ReconcileTransitions(track);
             Notify();
             return;
         }
@@ -2730,8 +2744,17 @@ public sealed class ClipStore
     /// export then matched transitions to junctions by position and applied it to whichever pair
     /// happened to be there (2026-09-05 audit, transitions-5).</para>
     ///
-    /// <para>Called after every edit that can move a clip. Silent by design — a transition whose
-    /// junction a person has just deleted is not news.</para>
+    /// <para>Called after every edit that can move a clip or remove one. That sentence used to be
+    /// here and was not true: it was called from a split and the two drag commits, and from
+    /// nothing else — so deleting a clip, ripple-deleting one, trimming one, or nudging one with
+    /// the keyboard all left the transition behind. Ripple-deleting the first of two joined clips
+    /// left a one-second transition sitting at 0.0s on a track with one clip on it, which is
+    /// exactly the state transitions-5 existed to prevent (2026-09-18 audit). The call sites are
+    /// held by <c>NoTransitionOutlivesItsJunctionTests</c>, one test per edit.</para>
+    ///
+    /// <para>Silent on screen — a transition whose junction a person has just deleted is not news
+    /// — but no longer silent to history: what it removes goes through a command, so undo can put
+    /// the effect back.</para>
     /// </remarks>
     /// <summary>
     /// Pushes apart any clips that overlap without a transition to justify it.
