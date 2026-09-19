@@ -18,6 +18,9 @@ day-by-day account of building it would say nothing to anyone using it now.
 
 ## 2026-09-19
 
+- Opening the Messages tab of a case nobody has written to yet no longer breaks the page. It
+  ended with "An unhandled error has occurred" and needed a reload; it now shows the empty
+  thread and the box to write in.
 - Reopening a case clears its closed date. A case put back to Proposed, Accepted, Active or
   Summarized used to keep the date it was closed on, so a case being worked on still read
   "Closed" in its details.
