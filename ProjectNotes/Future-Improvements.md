@@ -12474,11 +12474,15 @@ fails at once, a claimed row is not claimed twice, running twice sends once),
 diagnostics controller may take `SmtpEmailService` directly).
 
 
-## 240. Two branches parked with real work on them (HOUSEKEEPING — come back to both)
+## 240. Two branches parked with real work on them (CLOSED 2026-09-19 — both merged)
 
 Found on 2026-09-12 while clearing stale worktrees. Both worktrees are gone; **both branches are
 kept and pushed**, and neither is merged. Written down because a branch nobody has a note about is
 a branch nobody remembers, and one of these was only ever in a working directory.
+
+**Both merged to develop and master on 2026-09-19.** A and B below record what they were; what
+follows each is what finishing them actually took, because neither was the straight "build it and
+merge" this entry assumed.
 
 ### A. `feature/equipment-make-category-filter` — Ben: *"save the equipment one and make a note to come back to it later"*
 
@@ -12503,6 +12507,36 @@ What it does, from the diff:
 check the help wording against the shipped screens, then merge. It is self-contained and touches
 nothing item 235 touches.
 
+### A, as finished (2026-09-19)
+
+**It was not self-contained after all.** The WIP branched from 2026-08-19. On 2026-09-05, commit
+`dccb09eb` fixed the same complaint from the other end: `GET brands?categoryId=` narrows the make
+list server-side, so choosing "Audio Recorder" stopped offering tripod makes. The WIP, written
+before that and unaware of it, keeps every make and LABELS the ones with nothing in the category.
+Two deliberate decisions in opposite directions.
+
+**Dropping a make turned out to introduce a defect.** The catalog refuses a near-duplicate make
+with a "did you mean". Choose Audio Recorder, type "FLIR", and the suggestion offered is the FLIR
+the category filter is hiding; taking it re-posts the name, the server returns the existing row,
+and `_brandId` is set to a make that is not in the filtered list. `BenSelect` renders its
+placeholder when the value matches no option, so the picker then reads "Choose a make…" while a
+make IS chosen, over an empty model list with nothing said about it.
+
+**Both answers are in.** Every make stays listed; makes with something in the chosen category sort
+first and the rest are labelled "(no models in this category yet)". The coverage set is the
+narrowing endpoint's own answer — the same call asked twice — so the labels follow the server's
+rule, carve-out for the caller's own pending proposal included, rather than a second copy of that
+rule in the browser. That also replaced the WIP's whole-category model search, which shipped every
+model in a category to the browser to collect brand ids.
+
+**The fixture it left behind failed on its first run, correctly.** It read the model select the
+instant a make was picked, which is before the server has answered, so it called Olympus a dead end
+while the API was serving it the one model the seed gives it. Waiting for the select to be
+*enabled* does not help — it is enabled, holding the previous make's answer. The editor now says
+which make its model list belongs to (`data-model-list-for`, a make id or "loading"), and the
+fixture waits for that. Green afterwards: 5 passed, 0 skipped, so it found a genuine dead end
+rather than ignoring itself.
+
 ### B. `claude/xenodochial-pare-b58e81` — the dead stylesheet
 
 Tip `faf4046a`, one commit ahead of master: *"The stylesheet nothing ever loaded, and the three
@@ -12514,6 +12548,22 @@ three components were rendering without styling somebody had written for them.
 `README-remaining-work-nine-phases.md` at the repository ROOT, which is no longer where those live
 — all 118 of them moved to `ProjectNotes/FeatureHistory/` on 2026-09-12. `git mv` both as part of
 the merge, or the root fills up again.
+
+### B, as finished (2026-09-19)
+
+The README warning was right and cost one `git mv`; the correction this branch adds to
+`README-remaining-work-nine-phases.md` followed that file through its rename on its own.
+
+**The one conflict was `FeedPostCard.razor.css`, added on both sides.** Item 233 (2026-09-11) gave
+the same component a scoped file for the "said at {place}" mark, and its header comment records the
+same discovery this branch acts on. Both sets of rules kept; the header now says the dead file is
+gone rather than that it sits unread.
+
+Verified structurally rather than by eye, since these rules had never applied and a mistake would
+look identical to the old behaviour: all five are in the library's scoped bundle carrying their
+components' scope attributes, each class is still written in the `.razor` file whose scope that is
+(develop had edited all three components since), and the website's own bundle `@import`s the
+library's — so they reach the page.
 
 
 ## 241. The research document, next: a canvas you edit in the browser (PRODUCT — being built as a separate WASM project)
