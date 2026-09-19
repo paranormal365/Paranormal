@@ -98,6 +98,29 @@
                     break;
             }
 
+            @* Shown for ANY sidecar whose version we know — connected, found-but-unpaired, or
+               paired-and-rejected alike. It first sat inside the connected branch only, which is
+               the state somebody with a WORKING old sidecar is in; but a sidecar that has not been
+               paired yet is just as out of date, and that is the more likely state for somebody
+               who has not touched this in months (2026-09-19).
+
+               The only thing that will ever tell somebody their sidecar is old: there is no
+               auto-updater and no update feed, so an install from before 1.1.0 — which watched the
+               whole filesystem and pinned a core for as long as it ran — would otherwise stay that
+               way for ever. A quiet line, not a warning: nothing in front of them is broken. *@
+            @if (IsSidecarOutOfDate)
+            {
+                <p class="bv-sidecar-panel__update">
+                    A newer sidecar is available (@Options.PublishedSidecarVersion; you have
+                    @NativeSidecar.Info?.AppVersion).
+                    @if (Options.SidecarDownloadUrl is { Length: > 0 } updateUrl)
+                    {
+                        <a href="@updateUrl" target="_blank" rel="noopener">Download it</a>
+                        <text> and run the installer over the top — your pairing is kept.</text>
+                    }
+                </p>
+            }
+
         </div>
     </WindowContent>
     <WindowActions>
@@ -113,6 +136,13 @@
 
     private string _code = string.Empty;
     private bool _pairing;
+
+    /// <summary>
+    /// True only when both versions are known and the installed one is genuinely older — see
+    /// SidecarUpdateCheck for why every uncertain case answers no.
+    /// </summary>
+    private bool IsSidecarOutOfDate =>
+        SidecarUpdateCheck.IsOutOfDate(NativeSidecar.Info?.AppVersion, Options.PublishedSidecarVersion);
 
     private async Task RetryAsync() => await NativeSidecar.ProbeAsync();
 

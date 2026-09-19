@@ -70,7 +70,12 @@
     /* "Needs your attention, but nothing is wrong" — the sidecar and diagnostics chips. Mixed
        toward the body colour for the same reason as --bv-accent: the raw amber measured 1.5:1
        against a light page, which is a chip you cannot read. */
-    --bv-attention:     color-mix(in srgb, var(--bs-warning, #aaa256) 60%, var(--bs-body-color, #dee2e6) 40%);
+    /* 40/60, not 60/40. The first attempt at this mix fixed the worst of it — the raw amber was
+       1.5:1 on a light page — but stopped at 60% warning, which measures 3.97:1 on white and
+       3.77:1 on the #f8f9fa panels: still under the 4.5:1 small text needs, and still the colour
+       of the sidecar chip and of the line saying a clip's media is missing. At 40% it is 4.98:1
+       and 4.72:1 in the day theme, 9.10:1 and 7.86:1 at night (2026-09-19). */
+    --bv-attention:     color-mix(in srgb, var(--bs-warning, #aaa256) 40%, var(--bs-body-color, #dee2e6) 60%);
 
     /* "Working, nothing to do" — the engine-ready chip. Same trap as --bv-attention one line up:
        the raw green measured 2.55:1 against a light page, so the word telling you the renderer is

@@ -320,8 +320,12 @@
 
 /* V-4: a bin card whose bytes are not here. The words already say so; this makes the card
    findable in a grid of twenty without reading every line. */
+/* --bv-attention, not the raw warning colour. The theme mixes that one toward the body colour for
+   exactly this reason — see its definition — because the flat amber measures 2.49:1 on a light
+   page, and "media missing" is the line telling somebody their clip will not render
+   (2026-09-19). */
 .bv-clip-card__meta--missing {
-    color: var(--kendo-color-warning, #f0ad4e);
+    color: var(--bv-attention, var(--kendo-color-warning, #f0ad4e));
 }
 
 /* ── Error banner ───────────────────────────────────────────────────────── */
