@@ -117,6 +117,82 @@ happens: the website's settings go into `appsettings.json` rather than `appsetti
 (same reason as the API, below), Serilog's own copy of the connection string is patched in *both*
 applications, and the sidecar zips are staged under `/files` instead of inside the editor.
 
+## Releasing a new sidecar
+
+The sidecar is not deployed. It is a desktop app people install on their own machines, and the
+deploy only STAGES the installers it finds in the drop folder — it never builds them. There is also
+no auto-updater and no update feed, so the only thing that will ever tell somebody their sidecar is
+old is the editor's own notice, and that notice believes whatever the site advertises.
+
+**The artifacts go in the drop folder BEFORE the site that advertises them goes out.** The editor
+compares the installed version against `SidecarRelease.Version` and sends people to the downloads
+page. Deploy a site that advertises 1.1.0 while the drop folder still holds the 1.0.0 `.dmg`, and
+every user is told to update and handed back exactly what they already have — which teaches them to
+ignore the notice for the release where it matters.
+
+### 1. Bump the version, in both places
+
+`Ben.Video.Core/SidecarContracts/SidecarRelease.cs` and `<Version>` in
+`Ben.Video.Sidecar/Ben.Video.Sidecar.csproj` must hold the same number. One is what the sidecar
+reports from `/v1/health`, the other is what the site advertises; `SidecarReleaseVersionTests`
+fails the build if they drift, because bumping one and forgetting the other nags everybody for ever
+or nobody at all, and neither failure shows up anywhere except in a user's face.
+
+Bump it when you PUBLISH, not when you change the code.
+
+### 2. Build the installers — on two different machines
+
+Neither can be built on the server alone, and that is not a limitation anyone can work around: the
+Mac formats need Mac tooling and the Windows one needs Inno Setup.
+
+| Artifact | Build it on | Why there |
+|---|---|---|
+| `BenVideoSidecar-osx-arm64.dmg` | macOS | `hdiutil` makes the disk image, `pkgbuild` the package, and the SDK ad-hoc-signs the apphost |
+| `BenVideoSidecar-osx-x64.dmg` | macOS | same |
+| `BenVideoSidecar-win-x64.exe` | Windows | `build-installer.ps1` needs Inno Setup's `ISCC.exe` |
+
+The .NET payload itself cross-publishes, so `build.sh` runs anywhere. It is only the packaging that
+is tied to a platform.
+
+```bash
+# macOS, once per architecture
+Ben.Video.Sidecar/installer/macos/build.sh      osx-arm64
+Ben.Video.Sidecar/installer/macos/build-dmg.sh  osx-arm64
+Ben.Video.Sidecar/installer/macos/build.sh      osx-x64
+Ben.Video.Sidecar/installer/macos/build-dmg.sh  osx-x64
+```
+
+```powershell
+# Windows
+Ben.Video.Sidecar\installer\windows\build.sh              # the payload
+Ben.Video.Sidecar\installer\windows\build-installer.ps1   # wraps it with Inno Setup
+```
+
+### 3. Put them in the drop folder, then deploy
+
+Copy every `.dmg` and `.exe` into the drop folder the deploy reads (`-SidecarDrop`, defaulting to
+`Ben.Video.Sidecar/installer/dist`). `deploy-ishaunted.ps1` copies each one to
+`/files/sidecar-video/<rid>/` and writes the SHA-256 `checksums.txt` beside it — the only integrity
+story an unsigned build has.
+
+A missing file is not silent: the deploy warns `No installer for <rid> ... the downloads page will
+404 that link` and names both build steps. Read those warnings — a 404 on the downloads page is
+what the update notice sends people to.
+
+### 4. Check it
+
+- `https://ishaunted.com/files/sidecar-video/osx-arm64/BenVideoSidecar-osx-arm64.dmg` downloads
+- its `checksums.txt` matches `shasum -a 256` of the file you built
+- the editor's Native acceleration panel, against an OLD sidecar, offers the update
+
+### History
+
+**1.1.0** — the first release worth telling anybody about, and the reason the notice exists at all.
+1.0.0 resolved its content root to `/` under launchd and put a recursive file watch over the entire
+filesystem: a pinned CPU core for as long as it ran, 2.9 GB resident, and `/v1/health` answering in
+340ms. It also ran from login to shutdown whether or not anyone opened the editor. 1.1.0 starts on
+demand when the editor looks for it and stops fifteen minutes after the editor closes.
+
 ## What a release needs besides the deploy
 
 Newest first. Each entry is what the database or the site settings need for that release, in the order to do it. Remove
