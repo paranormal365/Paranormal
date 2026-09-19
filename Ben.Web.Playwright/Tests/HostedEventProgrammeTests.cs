@@ -27,6 +27,12 @@ public class HostedEventProgrammeTests : BenTestBase
     {
         _api = await Playwright.APIRequest.NewContextAsync(new() { BaseURL = ApiUrl });
         _orgId = await OrgIdBySlugAsync("paranormal365");
+
+        // The seed leaves this event in Draft on purpose, and the public endpoints below
+        // answer only for a published one. This fixture used to inherit a publish from
+        // whichever earlier run happened to do it (item 243); it does its own now.
+        await PublishSeededEventAsync(_orgId, RoomsEventId);
+
         await EnsureTheGuestHasAConfirmedPlaceAsync();
         await LeaveEverythingAsync();
     }

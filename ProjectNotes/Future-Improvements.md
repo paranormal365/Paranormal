@@ -12660,7 +12660,7 @@ clip on a Windows-class server. **Needs from Ben:** real recordings, including p
 ### Video (separate item when it comes)
 MCP is a protocol for connecting tools to an assistant, not a model. Long-feed analysis is motion detection / background
 subtraction plus a small vision model; MCP could let an assistant use its results.
-## 243. Nine tests that only pass on a database somebody has already run the suite against (OPEN — found 2026-09-19)
+## 243. Nine tests that only pass on a database somebody has already run the suite against (CLOSED 2026-09-19 — all nine fixed)
 
 A full run on a genuinely fresh database — `BEN_E2E_DB=IsHauntedDb_e2e_clean` — came back 693/9.
 The same nine had passed that morning on `IsHauntedDb_e2e`, before any change. They are not
@@ -12707,6 +12707,43 @@ would hide the same class of bug next time.
   card with votable evidence — the seed does not make.
 - `A_post_about_a_place_appears_there_and_on_the_feed` — waits 30s for a "Latest" button on the
   feed. A feed with nothing in it does not draw its sort control.
+
+### How each was fixed (2026-09-19)
+
+**The eight event ones — five fixtures, not four.** `EventGalleryTests`, `EventFilesTests`,
+`EventRoomTests`, `HostedEventProgrammeTests` and `EventAfterTests` publish the seeded event
+themselves in their setup, through the product's own endpoint. `BenTestBase.PublishSeededEventAsync`
+does it and answers with the public slug. Safe to repeat: the controller asks the entitlement only
+when `FirstPublishedUtc` is null, and the first publish is free anyway — tier capabilities are
+EXCLUDED per tier and nothing excludes `HostEvents`. A refusal now carries the server's own sentence
+instead of "not on the public site".
+
+`EventAfterTests` was missed on the first pass and cost a run to find; the guest's review page is
+public-side like the other four.
+
+**The risk in that approach, answered by evidence rather than argument.** Fifteen fixtures use the
+seeded event and only five need its public face; the other ten drive manage pages that work on a
+Draft, and a published event is not editable the way a draft is. Publishing it could have broken
+them. It did not — `Copying_an_event_makes_a_draft_and_says_what_to_check`, the layout designer, the
+seats and the staff fixtures all passed in the same run, after the publish. That is the only reason
+it is left published rather than restored in a teardown.
+
+**The feed one was the harness, not the test.** `TurnTheFeedOnAsync` wrote the setting and then
+polled `/api/feed` until the API agreed — and handed the browser a website that had not heard.
+`FeatureGate` reads `SiteFeaturesProvider`, a singleton on a 30-second snapshot which nothing primes
+when the switch arrives through the API rather than the admin page. The old database carried the
+feed already on, so the gap never showed. It polls the WEBSITE's own `/feed` for the tab strip now,
+for forty seconds — long enough to outlast a snapshot that refreshed the instant before the write.
+
+**And the vote one pressed a button before the circuit was live.** Opening the three choices is a
+round trip; the home page renders long before the circuit exists and a press in that window is lost.
+`ClickUntilAsync` is what this harness has for exactly that.
+
+Nothing was made weaker. Each test arranges the state it needs instead of finding it arranged.
+
+**Verified on a third fresh database** (`IsHauntedDb_e2e_v3`): 702 passed, 0 failed, 81 skipped.
+Three fresh builds in a row — 693/9, then 701/1, then 702/0 — each one a different database, because
+a fix for "depends on a used database" proves nothing when it is only checked on a used one.
 
 ### What to do about the database itself
 
