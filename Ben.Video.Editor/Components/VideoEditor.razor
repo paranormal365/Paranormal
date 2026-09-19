@@ -850,6 +850,13 @@
         {
             await Keyboard.RegisterAsync(this);
 
+            // The sidecar stops itself once nothing has asked it for anything, so that it is not a
+            // service running all day for somebody who never opens the editor. While this editor is
+            // on screen, that is exactly what is asking. Started unconditionally: the heartbeat is
+            // a no-op until a sidecar has actually been discovered, and starting it here means it
+            // is already running whenever one turns up.
+            StartSidecarHeartbeat();
+
             // Before the project loads, so the editor paints once at the size it will keep rather
             // than snapping from the defaults after the first frame.
             await RestoreLayoutAsync();
@@ -1129,6 +1136,40 @@
             _fullQualityStalled = stalled;
             StateHasChanged();
         }), null, TimeSpan.FromSeconds(2), TimeSpan.FromSeconds(2));
+    }
+
+    /// <summary>Tells a connected sidecar the editor is still open.</summary>
+    private Timer? _sidecarHeartbeat;
+
+    /// <summary>
+    /// Often enough that a fifteen-minute idle timeout can never expire with the editor open, and
+    /// rare enough to be nothing: one loopback GET a minute.
+    /// </summary>
+    private static readonly TimeSpan SidecarHeartbeatEvery = TimeSpan.FromMinutes(1);
+
+    /// <summary>
+    /// Keeps the sidecar alive for exactly as long as this editor is on screen.
+    /// </summary>
+    /// <remarks>
+    /// The sidecar is started on demand by launchd and stops itself once nothing has asked it for
+    /// anything, so that it is not a service running all day for a person who never opens the
+    /// editor (Ben, 2026-09-19). Without a heartbeat it would measure "time since the last render"
+    /// rather than "time since the editor was closed", and stop underneath somebody who had been
+    /// editing locally for an hour — costing them every retained segment, since a new process gets
+    /// a new InstanceId and the remote-segment index is dropped with it.
+    /// </remarks>
+    private void StartSidecarHeartbeat()
+    {
+        StopSidecarHeartbeat();
+        _sidecarHeartbeat = new Timer(
+            _ => _ = NativeSidecar.HeartbeatAsync(),
+            null, SidecarHeartbeatEvery, SidecarHeartbeatEvery);
+    }
+
+    private void StopSidecarHeartbeat()
+    {
+        _sidecarHeartbeat?.Dispose();
+        _sidecarHeartbeat = null;
     }
 
     private void StopStallWatch()
@@ -3570,6 +3611,9 @@
         Ffmpeg.OnWorkerCrashed  -= OnFfmpegWorkerCrashed;
         PreviewQuality.OnChanged -= OnPreviewQualityChanged;
         StopStallWatch();
+        // Stop telling the sidecar the editor is open, because it is not. With nothing else
+        // asking, it now reaches its idle timeout and ends itself, which is the point of it.
+        StopSidecarHeartbeat();
         _unloadSelfRef?.Dispose();
         Ffmpeg.OnStateChanged   -= OnFfmpegStateChangedForBackgroundRender;
         RenderStatus.OnChanged  -= OnRenderStatusChangedForSharpen;
