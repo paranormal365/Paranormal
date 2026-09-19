@@ -1491,6 +1491,15 @@ public sealed class ClipStore
             var oldSpeed = clip.Speed;
             clip.Speed = speed;
             PushCommand(new UpdateSpeedCommand(clip, oldSpeed, speed));
+
+            // Speed changes how much timeline the clip occupies, so it can move the junction under
+            // a transition and it can push the clip into its neighbour. Slowing a clip down is an
+            // edit that creates an overlap like any other, and every edit that creates one resolves
+            // it up front — otherwise only the render would know, having pushed the next clip later
+            // to make room (2026-09-18 audit).
+            ReconcileTransitions(track);
+            CloseUnjustifiedOverlaps(track);
+
             Notify();
             return;
         }

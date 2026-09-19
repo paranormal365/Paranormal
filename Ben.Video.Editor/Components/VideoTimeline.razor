@@ -1141,9 +1141,18 @@
             await _markerMenu.ShowAsync(e.ClientX, e.ClientY);
     }
 
+    /// <summary>
+    /// Through the store, like every other edit.
+    /// </summary>
+    /// <remarks>
+    /// This used to set <c>vc.Speed</c> on the model and call NotifyChanged, going nowhere near
+    /// <c>ClipStore.UpdateClipSpeed</c> — which the properties panel's own slider has always used.
+    /// So a speed picked from the timeline's menu pushed no command and could not be undone, and
+    /// it skipped the clamp and the overlap the store resolves afterwards (2026-09-18 audit).
+    /// </remarks>
     private void SetSpeed(TrackItem item, double speed)
     {
-        if (item is VideoClip vc) { vc.Speed = speed; Clips.NotifyChanged(); }
+        if (item is VideoClip vc) Clips.UpdateClipSpeed(vc.Id, speed);
     }
 
     private async Task SeparateAudioAsync(VideoClip clip)
