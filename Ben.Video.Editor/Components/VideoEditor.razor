@@ -1861,6 +1861,25 @@
 
     // ── Timeline handlers ─────────────────────────────────────────────────────
 
+    /// <summary>
+    /// Forgets every layer selection, so exactly one can then be set.
+    /// </summary>
+    /// <remarks>
+    /// The properties panel chooses its editor from these fields with an if/else-if chain, so any
+    /// one of them left standing outranks the selection actually made. Clearing them together is
+    /// what makes "one thing is selected" true rather than merely intended.
+    /// </remarks>
+    private void ClearLayerSelections()
+    {
+        _selectedClip        = null;
+        _selectedAudioClip   = null;
+        _selectedImageClip   = null;
+        _selectedTransition  = null;
+        _selectedTextOverlay = null;
+        _selectedCallout     = null;
+        _selectedClipArt     = null;
+    }
+
     private async Task OnTimelineItemSelected(TrackItem item)
     {
         // Auto-switch to Properties and make sure the panel is showing.
@@ -1880,69 +1899,51 @@
         // clip on its own is still what clicking a card in the Media tab does.
         Playback.SetTimelineTime(item.TimelinePosition);
 
+        // ONE thing is selected, so every other selection is cleared first.
+        //
+        // Each branch below used to clear its own idea of what else might be selected, and no two
+        // agreed: the TextOverlay branch left _selectedCallout standing, the Transition branch left
+        // the callout and the clip art, and the VideoClip branch left all four of them. The panel
+        // picks its editor with an if/else-if chain that tests _selectedCallout well before
+        // _selectedTextOverlay, so the stale one won — select a callout, then a title, and you were
+        // still looking at the callout's shape and colours with no way to reach the title's words.
+        // Measured on the running editor, 2026-09-18: the chip highlighted correctly every time
+        // while the panel never changed.
+        //
+        // Clearing the lot in one place makes that impossible rather than merely fixed, and a
+        // selection added later cannot reintroduce it by forgetting a line.
+        ClearLayerSelections();
+
         if (item is VideoClip clip)
         {
-            _selectedAudioClip  = null;
-            _selectedTransition = null;
             _selectedClip = clip;
-            StateHasChanged();
         }
         else if (item is AudioClip audio)
         {
-            _selectedClip       = null;
-            _selectedTransition = null;
-            _selectedAudioClip  = audio;
-            StateHasChanged();
+            _selectedAudioClip = audio;
         }
         else if (item is Transition transition)
         {
-            _selectedClip        = null;
-            _selectedAudioClip   = null;
-            _selectedTextOverlay = null;
-            _selectedTransition  = transition;
-            StateHasChanged();
+            _selectedTransition = transition;
         }
         else if (item is TextOverlay textOverlay)
         {
-            _selectedClip        = null;
-            _selectedAudioClip   = null;
-            _selectedImageClip   = null;
-            _selectedTransition  = null;
             _selectedTextOverlay = textOverlay;
-            StateHasChanged();
         }
         else if (item is ImageClip imageClip)
         {
-            _selectedClip        = null;
-            _selectedAudioClip   = null;
-            _selectedTransition  = null;
-            _selectedTextOverlay = null;
-            _selectedImageClip   = imageClip;
-            _selectedCallout     = null;
-            StateHasChanged();
+            _selectedImageClip = imageClip;
         }
         else if (item is CalloutClip callout)
         {
-            _selectedClip        = null;
-            _selectedAudioClip   = null;
-            _selectedTransition  = null;
-            _selectedTextOverlay = null;
-            _selectedImageClip   = null;
-            _selectedClipArt     = null;
-            _selectedCallout     = callout;
-            StateHasChanged();
+            _selectedCallout = callout;
         }
         else if (item is ClipArtClip clipArt)
         {
-            _selectedClip        = null;
-            _selectedAudioClip   = null;
-            _selectedTransition  = null;
-            _selectedTextOverlay = null;
-            _selectedImageClip   = null;
-            _selectedCallout     = null;
-            _selectedClipArt     = clipArt;
-            StateHasChanged();
+            _selectedClipArt = clipArt;
         }
+
+        StateHasChanged();
     }
 
     /// <summary>

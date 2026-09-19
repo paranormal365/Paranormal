@@ -124,9 +124,27 @@
             var _dc = _importStatuses.Count(s => s.IsDone);
             var _tc = _importStatuses.Count;
         }
+        @{
+            var _failed = _importStatuses.Count(s => s.Stage == ImportStage.Error);
+            var _stopped = _importStatuses.Count(s => s.Stage == ImportStage.Cancelled);
+        }
+        @* "Complete" only when everything actually arrived. IsDone counts an Error as finished —
+           which is right for the progress bar and wrong for the headline, so a batch in which every
+           single file had failed still announced "Import Complete" (found 2026-09-18). *@
         @if (_tc > 0 && _importStatuses.All(s => s.IsDone))
         {
-            <span>Import Complete (@_tc file@(_tc == 1 ? "" : "s"))</span>
+            @if (_failed == 0 && _stopped == 0)
+            {
+                <span>Import Complete (@_tc file@(_tc == 1 ? "" : "s"))</span>
+            }
+            else if (_failed == _tc)
+            {
+                <span>Nothing could be imported (@_tc file@(_tc == 1 ? "" : "s"))</span>
+            }
+            else
+            {
+                <span>Imported @(_tc - _failed - _stopped) of @_tc@(_failed > 0 ? $" — {_failed} failed" : "")@(_stopped > 0 ? $" — {_stopped} stopped" : "")</span>
+            }
         }
         else
         {
@@ -1984,6 +2002,29 @@
             _showImportWindow = true;
             StateHasChanged();
 
+            // The engine, before anything asks it to do work.
+            //
+            // Importing used to assume it was already loaded, because the toolbar has an Initialize
+            // button and the developer had always pressed it. Anyone who picked a file first got
+            // FfmpegService's own guard thrown at them verbatim — "FfmpegService is not ready
+            // (current state: Idle). Call LoadAsync() first." — on every file, with the window above
+            // still titled "Import Complete". Found by importing a picture into a freshly opened
+            // editor, 2026-09-18.
+            //
+            // LoadAsync is documented safe to call repeatedly and returns at once when it is already
+            // Ready, so this costs nothing in the ordinary case and removes a prerequisite nobody
+            // should have to know about.
+            try
+            {
+                await Ffmpeg.LoadAsync();
+            }
+            catch (Exception ex)
+            {
+                ErrorLog.Log("ClipBrowser.EnsureFfmpeg", ex);
+                // Not fatal here: each file reports its own failure below, and an image that needs
+                // no transcoding may still succeed.
+            }
+
             // Generate instant browser preview URLs before touching ffmpeg
             for (var i = 0; i < count; i++)
             {
@@ -2107,6 +2148,22 @@
             var meta = await SidecarMedia.TryGetMetadataAsync(clipId, ext, ct)
                        ?? await Ffmpeg.GetMetadataAsync(memFsName);
             status.MetaText = $"{FormatDuration(meta.Duration)} · {meta.Width}×{meta.Height}";
+
+            // Nothing readable came back, so this is not a video.
+            //
+            // The probe answers zeroes for a file that never decoded, and those zeroes used to sail
+            // straight into a VideoClip: a text file renamed .mp4 imported as "Done ✓", sat in the
+            // bin as "0:00", and would have gone into a compiled exhibit as a black gap. On a tool
+            // whose output is evidence, silently accepting rubbish is the worst of the options.
+            // Found by importing eighteen bytes of prose named broken-clip.mp4, 2026-09-18.
+            //
+            // Deliberately the narrowest test that still catches it: a real video with an odd
+            // container may well probe an unknown duration, and a single-frame file a duration of
+            // zero, but both report a picture size. Only a file where NOTHING was readable is
+            // refused, so this cannot turn a working import away.
+            if (meta.Duration <= 0 && meta.Width <= 0 && meta.Height <= 0)
+                throw new InvalidOperationException(
+                    "That file could not be read as a video — it may be damaged, or not a video at all.");
 
             ct.ThrowIfCancellationRequested();
             Update(status, ImportStage.Thumbnails, 66);
