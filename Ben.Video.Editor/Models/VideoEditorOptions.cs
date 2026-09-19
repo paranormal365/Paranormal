@@ -281,6 +281,23 @@ public sealed class VideoEditorOptions
     public string? SidecarDownloadUrl { get; set; }
 
     /// <summary>
+    /// The sidecar version this host is currently handing out, e.g. "1.1.0.0". Null says nothing.
+    /// </summary>
+    /// <remarks>
+    /// <para>Paired with <see cref="SidecarDownloadUrl"/>: the editor already learns the INSTALLED
+    /// version from the sidecar's own health endpoint, so this is the other half of "is yours
+    /// older than ours?". There is no auto-updater and no update feed — the sidecar is installed
+    /// once from a .dmg or .exe and nothing has ever told anybody a newer one exists, so an
+    /// install from before 2026-09-19 would go on watching the whole filesystem for ever.</para>
+    ///
+    /// <para>A host setting for the same reason the download URL is one, and because it has to be
+    /// bumped in the same breath as uploading a new build. Leave it null and the editor never
+    /// mentions updates, which is right for a host that ships no sidecar of its own —
+    /// see <see cref="SidecarUpdateCheck"/> for how carefully "null" is honoured.</para>
+    /// </remarks>
+    public string? PublishedSidecarVersion { get; set; }
+
+    /// <summary>
     /// Whether to show the operator tools — the ffmpeg diagnostics chip and the panel behind it
     /// (MEMFS residency, worker state, the raw ffmpeg log).
     /// </summary>

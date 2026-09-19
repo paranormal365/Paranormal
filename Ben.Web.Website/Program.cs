@@ -49,6 +49,11 @@ builder.Services.AddBenVideoEditor(options =>
     // editor pages are elsewhere entirely (2026-09-05 audit, F17).
     options.SidecarDownloadUrl = "/editors/video/downloads/";
 
+    // What that page is handing out, so the editor can tell somebody their installed sidecar is
+    // older than it. Nothing else tells them: there is no auto-updater and no update feed, so an
+    // install from before 1.1.0 would otherwise go on watching the whole filesystem for ever.
+    options.PublishedSidecarVersion = Ben.Video.Core.SidecarContracts.SidecarRelease.Version;
+
     // Media library, shared asset catalog and Save-to-server. The catalog's read endpoints are
     // anonymous by design, so its named HttpClient carries no auth handler.
     VideoEditorHostDefaults.ApplyServerIntegration(options, builder.Configuration["WebApi:BaseUrl"]);

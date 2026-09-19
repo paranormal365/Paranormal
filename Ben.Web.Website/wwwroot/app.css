@@ -764,3 +764,24 @@ textarea.form-control::placeholder {
 html.set-nav-dark .text-secondary {
     color: var(--bs-secondary-color) !important;
 }
+
+/* ...and the DAY theme's own secondary text was failing the same test from the other side.
+
+   The template sets --bs-secondary-color to rgba(70, 79, 87, 0.70) on :root. Composited, that is
+   rgb(126,132,137): 3.80:1 on white and 3.69:1 on the #f8f9fa panels, where small text needs
+   4.5:1. It is the token nearly every quiet line on the site resolves to — captions, hints, help
+   lines, table meta — and inside the video editor it is the timeline's heading and duration, the
+   preview timecode, the media-card meta and the panel tabs, all measured at 3.69:1 on 2026-09-19.
+
+   Replaced with a solid rather than a translucent colour on purpose. An alpha colour takes its
+   contrast from whatever happens to be behind it, which is precisely how one token produced 3.80
+   in one place and 3.69 in another; a solid gives the same answer everywhere it is used. #667380
+   keeps the template's blue-grey cast and measures 4.85:1 on white and 4.60:1 on #f8f9fa, while
+   staying plainly quieter than body text at 8.06:1 — muted is still the point.
+
+   Scoped away from the night theme, which sets its own value and already passes at 7.31:1 (see
+   the rule above). Placeholder text has its own token, --input-placeholder-color, and is left
+   alone here. */
+:root:not([data-bs-theme="dark"]) {
+    --bs-secondary-color: #667380;
+}
