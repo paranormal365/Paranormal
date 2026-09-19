@@ -12660,3 +12660,76 @@ clip on a Windows-class server. **Needs from Ben:** real recordings, including p
 ### Video (separate item when it comes)
 MCP is a protocol for connecting tools to an assistant, not a model. Long-feed analysis is motion detection / background
 subtraction plus a small vision model; MCP could let an assistant use its results.
+## 243. Nine tests that only pass on a database somebody has already run the suite against (OPEN — found 2026-09-19)
+
+A full run on a genuinely fresh database — `BEN_E2E_DB=IsHauntedDb_e2e_clean` — came back 693/9.
+The same nine had passed that morning on `IsHauntedDb_e2e`, before any change. They are not
+regressions. They are tests that depend on data an earlier run wrote, and the only reason nobody
+had noticed is that `IsHauntedDb_e2e` had never once been reset since item 200 created it.
+
+**This is the exact failure `scripts/run-e2e.sh` was built to prevent**, and its own header says so:
+
+> the drift MASKED a real bug: seeded groups were being created without their roles, ladder and
+> duties, and nobody could see it because the backfill on the next startup covered for it. It only
+> appeared on a genuinely fresh database.
+
+Giving the suite its own database stopped it writing to the dev one. It did not stop the suite
+writing to *itself*, and eight months of runs have left `IsHauntedDb_e2e` a place where these nine
+tests are true.
+
+### The eight hosted-event ones
+
+`A_guests_review_page_says_reviews_open_once_the_event_is_over`,
+`A_public_file_reaches_a_visitor_and_a_staff_file_does_not`,
+`A_picture_added_by_the_host_leads_the_event_page`, `On_a_phone_the_ask_button_stays_on_screen`,
+`A_guest_posts_a_photo_and_the_organizer_sees_it_on_the_wall`, `The_add_photos_page_fits_a_phone`,
+`The_room_shows_on_the_event_page_and_a_post_can_be_taken_down`.
+
+Each asks `GET /api/public/hosted-events/{RoomsEventId}` and asserts it answers. That endpoint
+requires `LifecycleState` in `HostedEventStates.OnThePublicSite` — Published, Live or Ended.
+`HostedEventDemoSeeder` creates both seeded events as `Draft`, **on purpose**, and says why:
+
+> Draft on purpose: the point of the seed is a plan to arrange, and publishing it would spend one
+> of the group's credits every time a database is built.
+
+So the seed is right and the tests are wrong. They pass only where some earlier run's test published
+that event and the row stayed. **The fix belongs in the fixtures**: publish the event as part of
+their own setup and assert afterwards, rather than inheriting a published one. Four files share the
+same `SlugAsync()` shape, so one helper covers all of them.
+
+A seeder change would be the wrong fix twice over — it would overrule a deliberate decision, and it
+would hide the same class of bug next time.
+
+### The other two
+
+- `List_AuthUser_SeesVoteButtons` — presses the vote button on the home page's first card and waits
+  for "Confirms the findings". The popover never opened on a fresh database. Whatever it needs — a
+  card with votable evidence — the seed does not make.
+- `A_post_about_a_place_appears_there_and_on_the_feed` — waits 30s for a "Latest" button on the
+  feed. A feed with nothing in it does not draw its sort control.
+
+### What to do about the database itself
+
+`BEN_E2E_DB=<name>` already gives a fresh database AND a fresh uploads directory. Once these nine
+are honest, the suite should run on a fresh name regularly — a green that depends on eight months of
+residue is not a green. Worth deciding whether every run gets a fresh database, or whether that is
+reserved for a weekly check, since a fresh build costs migration and seeding time on every run.
+
+### Already fixed on the way to finding this (2026-09-19)
+
+Three separate fixtures were poisoning the ground for the ones after them, and they are done:
+
+- `AudioScrubModeTests` uploaded a 7MB MP3 into the seeded Belmont case on every run and never
+  removed it. That case held **399 files**; the Files tab rendered a wall of audio players, the
+  newest waveform could not decode in time, and both tests failed saying "Create Region" was
+  disabled. They were right about the button and wrong about why — the page was drowning. It now
+  clears every test-audio card before uploading.
+- `A_case_shows_its_contact_with_the_manager_fallback_and_a_choice_sticks` opened "the first card
+  whose reference contains #2026-", so it broke the moment anything added a case to that group. It
+  names Belmont now, as its three siblings already did.
+- `RouteCrawlTests` decided a page was broken by regex-matching the phrase "An unhandled error has
+  occurred" anywhere in the body — so `/changes` failed the crawl for *quoting* it in a changelog
+  line. It reads the chrome rather than the content now. Its 404 pattern had also never matched the
+  page's actual words.
+
+
