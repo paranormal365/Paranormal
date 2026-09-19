@@ -18,6 +18,10 @@ day-by-day account of building it would say nothing to anyone using it now.
 
 ## 2026-09-19
 
+- Line breaks in a feed post are kept. A post typed as three short lines arrived as one
+  run-on paragraph. Names and tags in a post read as links now, and rows in the message list
+  light up under the pointer and show where the keyboard is. None of that styling had ever
+  reached a page.
 - Every make is offered when you add a piece of equipment. Makes that already have something
   in the category you picked come first, and the rest say *(no models in this category yet)* —
   so the first person to own, say, a FLIR audio recorder can still choose FLIR and add the
