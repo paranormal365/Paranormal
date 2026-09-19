@@ -2122,7 +2122,7 @@ public sealed class ClipStore
         var fromEndSeconds = from.TimelinePosition + from.EffectiveLength;
         var transition = new Transition
         {
-            Name             = $"{style}",
+            Name             = TransitionStyleName.For(style),
             Style            = style,
             FromClipId       = fromClipId,
             ToClipId         = toClipId,
@@ -2276,7 +2276,7 @@ public sealed class ClipStore
 
         transition.Style    = style;
         transition.Duration = durationSeconds;
-        transition.Name     = $"{style}";
+        transition.Name     = TransitionStyleName.For(style);
 
         if (fromItem is not null)
         {

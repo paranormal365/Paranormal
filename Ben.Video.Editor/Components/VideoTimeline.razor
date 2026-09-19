@@ -592,30 +592,25 @@
                                     var trkId  = track.Id;
                                     var junction = (trkId, fromId, toId);
 
-                                    <div class="bv-transition-insert-wrap">
+                                    @* The button is placed the way the clips are — absolutely, from
+                                       its own position — because the lane's normal flow is empty
+                                       once every chip is absolute, and a button left in that flow
+                                       lands at x=0 of the track instead of on its cut. *@
+                                    var junctionPxStr =
+                                        (TransitionJunctionAnchor.Seconds(
+                                             item.TimelinePosition + ItemDuration(item),
+                                             nextClip.TimelinePosition) * Timeline.PxPerSecond)
+                                        .ToString("F0", System.Globalization.CultureInfo.InvariantCulture) + "px";
+
+                                    <div class="bv-transition-insert-wrap" style="left: @junctionPxStr">
                                         <button class="bv-transition-insert"
                                                 title="Add transition — drag a style from the Transitions tab, or click to choose"
                                                 data-track-id="@trkId"
                                                 data-from-id="@fromId"
                                                 data-to-id="@toId"
-                                                @onclick="() => ToggleStylePicker(junction)">
+                                                @onclick="e => OpenStylePickerAsync(e, junction)">
                                             …
                                         </button>
-
-                                        @if (_openStylePickerFor == junction)
-                                        {
-                                            <div class="bv-transition-style-picker__backdrop" @onclick="ClosePicker"></div>
-                                            <div class="bv-transition-style-picker">
-                                                @foreach (var style in _pickerStyles)
-                                                {
-                                                    var capturedStyle = style;
-                                                    <button class="bv-transition-style-picker__item"
-                                                            @onclick="() => InsertTransition(trkId, fromId, toId, capturedStyle)">
-                                                        @capturedStyle
-                                                    </button>
-                                                }
-                                            </div>
-                                        }
                                     </div>
                                 }
                             }
@@ -862,6 +857,21 @@
                         OnClick="@(async (BvMenuItem i) => { if (i.Action is not null) await i.Action(); })">
     </TelerikContextMenu>
 
+    <!-- The style picker for an empty junction. It used to be a hand-rolled popover anchored to
+         the little "…" button, opening downwards — and that button lives in the timeline, which is
+         the bottom strip of an editor whose shell is overflow:hidden and whose page does not
+         scroll. Sixteen styles are 418px tall, so thirteen of them were drawn past the bottom of
+         the window and could not be clicked at all. The same TelerikContextMenu the other three
+         menus here use renders at body level and flips when it would not fit (2026-09-18 audit). -->
+    <TelerikContextMenu @ref="_stylePickerMenu"
+                        Data="@_stylePickerItems"
+                        TextField="Text"
+                        IconField="Icon"
+                        SeparatorField="IsSeparator"
+                        DisabledField="IsDisabled"
+                        OnClick="@(async (BvMenuItem i) => { if (i.Action is not null) await i.Action(); })">
+    </TelerikContextMenu>
+
 </footer>
 
 @code {
@@ -895,6 +905,7 @@
     private TelerikContextMenu<BvMenuItem>? _trackMenu;
     private TelerikContextMenu<BvMenuItem>? _markerMenu;
     private TelerikContextMenu<BvMenuItem>? _transitionMenu;
+    private TelerikContextMenu<BvMenuItem>? _stylePickerMenu;
 
     private List<BvMenuItem> _clipMenuItems       = [];
     private List<BvMenuItem> _trackMenuItems      = [];
@@ -1033,7 +1044,7 @@
         [
             .. _pickerStyles.Select(style => new BvMenuItem
             {
-                Text   = $"Replace: {style}",
+                Text   = $"Replace: {TransitionStyleName.For(style)}",
                 Action = () =>
                 {
                     Clips.UpdateTransition(transition.Id, style, transition.Duration);
@@ -1792,19 +1803,29 @@
 
     // ── Transition style picker (item #57 T3 — replaces the old hardcoded-Fade insert) ──────
 
-    private (Guid TrackId, Guid FromId, Guid ToId)? _openStylePickerFor;
     private static readonly List<TransitionStyle> _pickerStyles =
         Enum.GetValues<TransitionStyle>().Where(s => s != TransitionStyle.Cut).ToList();
 
-    private void ToggleStylePicker((Guid TrackId, Guid FromId, Guid ToId) junction) =>
-        _openStylePickerFor = _openStylePickerFor == junction ? null : junction;
+    private List<BvMenuItem> _stylePickerItems = [];
 
-    private void ClosePicker() => _openStylePickerFor = null;
+    private async Task OpenStylePickerAsync(MouseEventArgs e, (Guid TrackId, Guid FromId, Guid ToId) junction)
+    {
+        _stylePickerItems =
+        [
+            .. _pickerStyles.Select(style => new BvMenuItem
+            {
+                Text   = TransitionStyleName.For(style),
+                Action = () => { InsertTransition(junction.TrackId, junction.FromId, junction.ToId, style); return Task.CompletedTask; },
+            }),
+        ];
+
+        if (_stylePickerMenu is not null)
+            await _stylePickerMenu.ShowAsync(e.ClientX, e.ClientY);
+    }
 
     private void InsertTransition(Guid trackId, Guid fromId, Guid toId, TransitionStyle style = TransitionStyle.Fade)
     {
         Clips.AddTransition(trackId, fromId, toId, style, 1.0);
-        _openStylePickerFor = null;
     }
 
     /// <summary>
@@ -2550,6 +2571,9 @@
     private static string ItemTitle(TrackItem item) => item switch
     {
         TextOverlay to => to.Text,
+        // From the style, not the stored Name: a project saved before transitions were given
+        // readable names would otherwise show "WipeLeft" on its chip for ever (2026-09-18 audit).
+        Transition t   => TransitionStyleName.For(t.Style),
         _              => item.Name
     };
 
