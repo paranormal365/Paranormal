@@ -3,6 +3,8 @@ using Ben.Data.Common.Interfaces;
 using Ben.Data.Source.Context;
 using Ben.Data.Source.Entities;
 using Ben.Data.WebApi.Services;
+using Ben.Data.WebApi.Services.Events;
+using Ben.Data.WebApi.Services.Tours;
 using Ben.Service.Models.Entities;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Identity;
@@ -45,6 +47,7 @@ public sealed class PublicEventAttendanceController : BenControllerBase
     private readonly UserManager<AppUser> _users;
     private readonly Ben.Data.WebApi.Services.UserHandleService _handles;
     private readonly Ben.Data.Common.SiteIdentity _site;
+    private readonly Ben.Data.WebApi.Services.Tours.TourGuestMailer _tourMail;
     private readonly ILogger<PublicEventAttendanceController> _logger;
 
     /// <summary>A link is good for a fortnight — long enough to act on, short enough to expire.</summary>
@@ -74,8 +77,10 @@ public sealed class PublicEventAttendanceController : BenControllerBase
     public PublicEventAttendanceController(
         IDbContextFactory<BenDataContext> db, IEmailService email, UserManager<AppUser> users,
         IOptions<Ben.Data.Common.SiteIdentity> site, ILogger<PublicEventAttendanceController> logger,
-        Ben.Data.WebApi.Services.UserHandleService handles)
+        Ben.Data.WebApi.Services.UserHandleService handles,
+        Ben.Data.WebApi.Services.Tours.TourGuestMailer tourMail)
     {
+        _tourMail = tourMail;
         _handles = handles;
         _db     = db;
         _email  = email;
@@ -108,9 +113,29 @@ public sealed class PublicEventAttendanceController : BenControllerBase
         if (DateTime.UtcNow > ev.RsvpClosingTime)
             return Conflict("Sign-ups for this event have closed.");
 
-        var accepted = await db.OrgCalendarEventAttendees
-            .CountAsync(a => a.OrgCalendarEventId == eventId && a.RsvpStatus == RsvpStatus.Accepted, ct);
-        if (ev.AttendeeCapacity is int cap && accepted >= cap)
+        // A hosted event (item 235) wears an umbrella calendar row, and its own rules are the ones
+        // that answer here: called off, unpublished, past its deadline, or not selling day passes.
+        // Each refusal says what to do instead rather than leaving somebody hunting for a phone
+        // number the page may not carry.
+        var hosted = await HostedEventGuestDoor.BehindAsync(db, ev, ct);
+        if (hosted is not null
+            && HostedEventGuestDoor.WhyTheEmailDoorIsClosed(hosted, DateTime.UtcNow) is { } shut)
+            return Conflict(shut);
+
+        // Item 235 slice 11d: a hosted event's organizer has to be able to reach whoever asks, so
+        // the name and a phone are required here and nowhere else on this door.
+        if (hosted is not null
+            && BookingContact.WhyNotEnough(request.FirstName, request.LastName, request.Phone) is { } missing)
+            return BadRequest(missing);
+
+        // Counted in PLACES (item 234), and a TOUR date is not refused for fullness at all: a
+        // request holds nothing, so the overflow is a waiting list the business works through.
+        // A hosted event is the same and for the same reason — the venue decides, and refusing a
+        // request because the house is full would close the very waiting list the host wants.
+        var held = TourSeats.PlacesTaken(await db.OrgCalendarEventAttendees.AsNoTracking()
+            .Where(a => a.OrgCalendarEventId == eventId).ToListAsync(ct));
+        if (!TourSeats.IsTourDate(ev) && hosted is null
+            && ev.AttendeeCapacity is int cap && held >= cap)
             return Conflict("This event is full.");
 
         // Reuse the pending row for a repeat request rather than accumulating one per attempt —
@@ -161,6 +186,13 @@ public sealed class PublicEventAttendanceController : BenControllerBase
                 OrgCalendarEventId = eventId,
                 Email              = email,
                 DisplayName        = string.IsNullOrWhiteSpace(request.DisplayName) ? null : request.DisplayName.Trim(),
+                FirstName          = hosted is null ? null : BookingContact.Trimmed(request.FirstName),
+                LastName           = hosted is null ? null : BookingContact.Trimmed(request.LastName),
+                Phone              = hosted is null ? null : BookingContact.Trimmed(request.Phone),
+                // On a tour date and on a hosted event, where the number asked for is part of the
+                // ask. Every other event seats one person per sign-up (item 234).
+                Seats              = TourSeats.IsTourDate(ev) || hosted is not null
+                                         ? TourSeats.Clamp(request.Seats) : null,
                 Token              = token,
                 DateExpires        = DateTime.UtcNow.Add(LinkLifetime),
                 DateCreated        = DateTime.UtcNow,
@@ -174,6 +206,15 @@ public sealed class PublicEventAttendanceController : BenControllerBase
             invite.DateExpires = DateTime.UtcNow.Add(LinkLifetime);
             invite.DateUpdated = DateTime.UtcNow;
             if (!string.IsNullOrWhiteSpace(request.DisplayName)) invite.DisplayName = request.DisplayName.Trim();
+            if (hosted is not null)
+            {
+                invite.FirstName = BookingContact.Trimmed(request.FirstName);
+                invite.LastName  = BookingContact.Trimmed(request.LastName);
+                invite.Phone     = BookingContact.Trimmed(request.Phone);
+            }
+            // Asking again with a different party size is the newer answer, not a second guest.
+            if (TourSeats.IsTourDate(ev) || hosted is not null)
+                invite.Seats = TourSeats.Clamp(request.Seats);
         }
 
         await db.SaveChangesAsync(ct);
@@ -219,12 +260,18 @@ public sealed class PublicEventAttendanceController : BenControllerBase
     /// </remarks>
     [HttpPost("{token}/confirm")]
     [AllowAnonymous]
-    public async Task<ActionResult<EventAttendanceConfirmation>> Confirm(string token, CancellationToken ct)
+    public async Task<ActionResult<EventAttendanceConfirmation>> Confirm(
+        string token,
+        [FromServices] Services.Events.EventGuestMailer hostedMail,
+        [FromServices] Services.EmailLinkAccounts accounts,
+        CancellationToken ct)
     {
         await using var db = await _db.CreateDbContextAsync(ct);
 
         var invite = await db.EventAttendanceInvites
             .Include(i => i.OrgCalendarEvent).ThenInclude(e => e.Organization)
+            // The tour, so the paused/retired check below has something to read.
+            .Include(i => i.OrgCalendarEvent).ThenInclude(e => e.Tour)
             .FirstOrDefaultAsync(i => i.Token == token, ct);
 
         if (invite is null || invite.DateExpires < DateTime.UtcNow)
@@ -243,46 +290,50 @@ public sealed class PublicEventAttendanceController : BenControllerBase
         if (invite.InvitedByAppUserId is null && DateTime.UtcNow > ev.RsvpClosingTime)
             return Conflict("Sign-ups for this event have closed.");
 
+        // Item 233: a tour that has been paused or retired since the link was sent takes nobody,
+        // whoever sent it. An organiser's latitude is about somebody standing in front of them on
+        // a night the walk is running; it is not a way to join a walk that is not.
+        if (PublicEventController.WhyTourIsNotTakingSignUps(ev) is { } tourClosed)
+            return Conflict(tourClosed);
+
+        // Item 235: the same re-check for a hosted event, whose own state is the one that answers.
+        // A host's own link keeps its latitude over the deadline and over nothing else — an event
+        // called off since the letter went out takes nobody.
+        var hosted = await HostedEventGuestDoor.BehindAsync(db, ev, ct);
+        if (hosted is not null
+            && HostedEventGuestDoor.WhyTheEmailDoorIsClosed(
+                   hosted, DateTime.UtcNow, invite.InvitedByAppUserId is not null) is { } shut)
+            return Conflict(shut);
+
         var attendees = await db.OrgCalendarEventAttendees
             .Where(a => a.OrgCalendarEventId == ev.Id)
             .ToListAsync(ct);
 
-        var user = await _users.FindByEmailAsync(invite.Email);
-        if (user is null)
-        {
-            user = new AppUser
-            {
-                Id                 = Guid.NewGuid(),
-                Email              = invite.Email,
-                UserName           = invite.Email,
-                NormalizedEmail    = invite.Email.ToUpperInvariant(),
-                NormalizedUserName = invite.Email.ToUpperInvariant(),
-                // They proved it by clicking a link sent to it, which is what confirmation means.
-                EmailConfirmed     = true,
-                DisplayName        = invite.DisplayName ?? invite.Email.Split('@')[0],
-                // C1: allocated at creation. A guest who signs up at a walking tour and is then
-                // invisible to every @mention is a person the group cannot talk to afterwards.
-                Handle             = await _handles.AllocateAsync(invite.DisplayName, invite.Email, ct),
-                DateCreated        = DateTime.UtcNow,
-            };
+        var user = await accounts.FindOrCreateAsync(
+            invite.Email, invite.DisplayName, invite.FirstName, invite.LastName, ct);
+        if (user is null) return BadRequest("That account could not be created.");
 
-            // No password. They can set one whenever they want an account they sign into; until
-            // then this exists so the group has somebody to reach and they have somewhere to look.
-            var created = await _users.CreateAsync(user);
-            if (!created.Succeeded)
-            {
-                _logger.LogWarning("Could not create an account for an event attendee: {Errors}",
-                    string.Join("; ", created.Errors.Select(e => e.Description)));
-                return BadRequest("That account could not be created.");
-            }
-        }
+        // ── A tour date asks; everything else simply comes (item 234) ────────
+        // Confirming the emailed link proves the address. On a TOUR date it does not also reserve
+        // a place: the guide or manager approves that, which is where the business says the money
+        // is settled. Every other kind of event keeps the rule it had.
+        //
+        // A HOSTED event is a tour date in this one respect (item 235, DECISION 7): the venue
+        // decides, so the click asks and holds nothing. Writing an accepted row here would have
+        // the public count, the reminder and the phone all saying somebody had a place at a
+        // weekend the host had never looked at.
+        var isTour = TourSeats.IsTourDate(ev);
+        var asksRatherThanComes = isTour || hosted is not null;
+        var wantedSeats = TourSeats.Clamp(invite.Seats);
 
         // Capacity is likewise the organiser's own number, and likewise theirs to override in
         // person — the direct AddAttendee path has never checked it either. A guest who asked for
-        // their own link still cannot walk past a full house.
-        var alreadyFull = invite.InvitedByAppUserId is null
+        // their own link still cannot walk past a full house. Counted in PLACES, and never applied
+        // to a tour date, where confirming holds nothing.
+        var alreadyFull = !asksRatherThanComes
+            && invite.InvitedByAppUserId is null
             && ev.AttendeeCapacity is int cap
-            && attendees.Count(a => a.RsvpStatus == RsvpStatus.Accepted && a.AppUserId != user.Id) >= cap;
+            && TourSeats.PlacesTaken(attendees, excludingAppUserId: user.Id) >= cap;
         if (alreadyFull) return Conflict("This event filled up before you confirmed.");
 
         var attendee = attendees.FirstOrDefault(a => a.AppUserId == user.Id);
@@ -293,7 +344,9 @@ public sealed class PublicEventAttendanceController : BenControllerBase
                 Id                 = Guid.NewGuid(),
                 OrgCalendarEventId = ev.Id,
                 AppUserId          = user.Id,
-                RsvpStatus         = RsvpStatus.Accepted,
+                RsvpStatus         = asksRatherThanComes ? RsvpStatus.Invited : RsvpStatus.Accepted,
+                SeatStatus         = asksRatherThanComes ? TourSeatStatus.Requested : null,
+                Seats              = asksRatherThanComes ? wantedSeats : 1,
                 DateRsvp           = DateTime.UtcNow,
                 DateCreated        = DateTime.UtcNow,
                 CreatedByAppUserId = user.Id,
@@ -301,8 +354,31 @@ public sealed class PublicEventAttendanceController : BenControllerBase
         }
         else
         {
-            attendee.RsvpStatus = RsvpStatus.Accepted;
-            attendee.DateRsvp   = DateTime.UtcNow;
+            // A confirmed hosted booking already holds this row, and its Accepted/Reserved pair is
+            // what every count on the site reads. A second link clicked afterwards must not quietly
+            // demote a place the venue has already agreed to.
+            var alreadyDecided = hosted is not null && attendee.SeatStatus == TourSeatStatus.Reserved;
+            if (!alreadyDecided)
+            {
+                attendee.RsvpStatus = asksRatherThanComes ? RsvpStatus.Invited : RsvpStatus.Accepted;
+                attendee.SeatStatus = asksRatherThanComes ? TourSeatStatus.Requested : null;
+                attendee.Seats      = asksRatherThanComes ? wantedSeats : 1;
+                attendee.DateRsvp   = DateTime.UtcNow;
+            }
+        }
+
+        // Item 235: the click is the ask. One live booking per person per event, so a second link
+        // adds nothing — and the host decides this from their own board, which is the only place
+        // a day pass starts counting.
+        HostedEventBooking? asked = null;
+        if (hosted is not null)
+        {
+            asked = await HostedEventGuestDoor.AddDayPassRequestAsync(
+                db, hosted, user.Id, invite.Seats, note: null, ct);
+            if (asked is not null) asked.ContactPhone = invite.Phone;
+            if (invite.FirstName is { } first && invite.LastName is { } last)
+                await BookingContact.FillEmptyNamesAsync(
+                    db, user.Id, new BookingContact.Details(first, last, invite.Phone ?? ""), ct);
         }
 
         invite.DateConfirmed        = DateTime.UtcNow;
@@ -312,8 +388,36 @@ public sealed class PublicEventAttendanceController : BenControllerBase
 
         await db.SaveChangesAsync(ct);
 
+        // Item 233: now that they are actually coming, the tour's own welcome — with the walk as
+        // a calendar file. The mail before this one was a one-line "confirm you're coming" sent
+        // to an address nobody had proved yet; this is the first point at which there is somebody
+        // to write to.
+        //
+        // Item 234 holds that mail back on a TOUR date until the business approves the seat. "Here
+        // is where to stand" is untrue of a request nobody has looked at, and a guest who acted on
+        // it would turn up to a walk that had never reserved them a place.
+        //
+        // A hosted event holds it back for the same reason and sends its own in phase 2.3: the
+        // tour's welcome talks about a meeting point and a guide, and a weekend at a hotel has
+        // neither.
+        if (!asksRatherThanComes)
+            await _tourMail.SendSignUpAsync(db, ev.Id, invite.Email, invite.DisplayName ?? user.DisplayName, ct);
+
+        // A hosted event's own acknowledgement (item 235 phase 6). The page they land on says the
+        // same thing, but a link clicked on a phone in a car park is a page nobody reads twice,
+        // and "nothing is held yet" is the part that must survive being half-read.
+        if (asked is not null)
+            await hostedMail.SendAskedAsync(db, asked.Id, ct);
+
         return Ok(new EventAttendanceConfirmation(
-            ev.Id, ev.Title, ev.Organization.Name, ev.Organization.UrlName, ev.UrlName, ev.StartDateTime));
+            ev.Id, ev.Title, ev.Organization.Name, ev.Organization.UrlName, ev.UrlName,
+            ev.StartDateTime,
+            HostedEventId: hosted?.Id,
+            PartySize: wantedSeats,
+            // Asked rather than assumed: an email-link account has no password, but this link may
+            // equally have been clicked by somebody who has had one for years, and offering to set
+            // a password to them reads as a warning that something is wrong with their account.
+            AccountHasNoPassword: !await _users.HasPasswordAsync(user)));
     }
 
     // ── Plumbing ─────────────────────────────────────────────────────────────

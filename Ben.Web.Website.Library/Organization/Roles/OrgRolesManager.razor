@@ -93,12 +93,8 @@ else
                         @* text-nowrap keeps the pair on one line; stacked grid buttons read as
                            two rows of a different table (Ben, 2026-08-23). *@
                         <span class="text-nowrap">
-                        <button type="button" class="btn @(ThemeConstants.Button.FillMode.Outline == ThemeConstants.Button.FillMode.Solid ? "btn-secondary" : "btn-outline-secondary") btn-sm" @onclick="@(() => EditRole(row))"><BenIcon Name="edit-2" Class="me-1" />
-                            Edit
-                        </button>
-                        <button type="button" class="btn @(ThemeConstants.Button.FillMode.Outline == ThemeConstants.Button.FillMode.Solid ? "btn-danger" : "btn-outline-danger") btn-sm ms-1" @onclick="@(() => ConfirmDelete(row))"><BenIcon Name="trash-2" Class="me-1" />
-                            Delete
-                        </button>
+                        <BenGridAction Icon="edit-2" Label="Edit" OnClick="@(() => EditRole(row))" />
+                        <BenGridAction Icon="trash-2" Label="Delete" Tone="GridActionTone.Danger" OnClick="@(() => ConfirmDelete(row))" />
                         </span>
                     }
                 </Template>

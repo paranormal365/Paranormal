@@ -86,10 +86,39 @@ public sealed class ClientStatusMailer
             return;
         }
 
-        var clients = await db.CaseClientAccesses.AsNoTracking()
+        // ── who "the client" is ───────────────────────────────────────────────
+        //
+        // The PRIMARY client has no CaseClientAccess row. Those exist only for CO-clients — the
+        // people a client invites — and the client who asked for the investigation reaches their
+        // case through Case.ClientRequest.AppUserId instead.
+        //
+        // So asking only the access table meant the one person who most needed telling was never
+        // told, and for the common shape (a case with no co-clients) this logged "no client to
+        // mail" and mailed nobody at all. Every status change — accepted, active, being written
+        // up, closed, transferred — and every visit scheduled, moved or cancelled went nowhere,
+        // against your-case.md's own promise: "an email goes to your confirmed address".
+        //
+        // SubscriptionLapseJob.ClientsOfCaseAsync had exactly this bug and was fixed with a
+        // paragraph explaining it; this mailer was not (2026-09-17 audit).
+        var clientIds = await db.CaseClientAccesses.AsNoTracking()
             .Where(a => a.CaseId == c.Id)
-            .Select(a => new { a.AppUserId, a.AppUser.Email, a.AppUser.EmailConfirmed })
+            .Select(a => a.AppUserId)
             .ToListAsync(ct);
+
+        var primaryId = await db.Cases.AsNoTracking()
+            .Where(x => x.Id == c.Id && x.ClientRequest != null)
+            .Select(x => (Guid?)x.ClientRequest!.AppUserId)
+            .FirstOrDefaultAsync(ct);
+
+        // Front of the list, and never twice — a primary client may also hold an access row.
+        if (primaryId is { } pid && pid != Guid.Empty && !clientIds.Contains(pid))
+            clientIds.Insert(0, pid);
+
+        var clients = await db.AppUsers.AsNoTracking()
+            .Where(u => clientIds.Contains(u.Id))
+            .Select(u => new { AppUserId = u.Id, u.Email, u.EmailConfirmed })
+            .ToListAsync(ct);
+
         if (clients.Count == 0)
         {
             _log.LogInformation("Client status mail: case {CaseId} ({What}) has no client to mail.", c.Id, what);

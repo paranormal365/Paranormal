@@ -82,15 +82,15 @@ else
                     <div class="col-12 mt-2"><p class="text-secondary small mb-1">Audit Fields</p></div>
                     <div class="col-md-6">
                         <label class="form-label fw-semibold">Date Created</label>
-                        <TelerikDateTimePicker @bind-Value="@_edit.DateCreated" Format="@DateTimeViewerExtensions.DateTimeNoSecondsPattern" Width="100%" />
+                        <BenDateField Mode="DateEntryMode.DateTime" @bind-Value="@_edit.DateCreated" Width="100%" />
                     </div>
                     <div class="col-md-6">
                         <label class="form-label fw-semibold">Date Updated</label>
-                        <TelerikDateTimePicker @bind-Value="@_edit.DateUpdated" Format="@DateTimeViewerExtensions.DateTimeNoSecondsPattern" Width="100%" />
+                        <BenDateField Mode="DateEntryMode.DateTime" @bind-Value="@_edit.DateUpdated" Width="100%" />
                     </div>
                     <div class="col-md-6">
                         <label class="form-label fw-semibold">Lockout End</label>
-                        <TelerikDateTimePicker @bind-Value="@_edit.LockoutEnd" Format="@DateTimeViewerExtensions.DateTimeNoSecondsPattern" Width="100%" />
+                        <BenDateField Mode="DateEntryMode.DateTime" @bind-Value="@_edit.LockoutEnd" Width="100%" />
                     </div>
                     <div class="col-md-3">
                         <label class="form-label fw-semibold">Access Failed Count</label>
@@ -117,15 +117,24 @@ else
                         <GridColumn Field="@nameof(UserAddressAdminRecord.ZipCode)" Title="Zip" Width="90px" />
                         <GridColumn Field="@nameof(UserAddressAdminRecord.IsPublic)" Title="Public" Width="70px" />
                         @* Edit + Map + Directions + a Delete icon. *@
-                        <GridCommandColumn Width="320px">
-                            <GridCommandButton Icon="@SvgIcon.Pencil"
-                                OnClick="@((GridCommandEventArgs e) => OpenSubDialog("address", e.Items.First()))">Edit</GridCommandButton>
-                            <GridCommandButton Icon="@SvgIcon.MapMarker"
-                                OnClick="@((GridCommandEventArgs e) => OpenAddressMap((UserAddressAdminRecord)e.Items.First()))">Map</GridCommandButton>
-                            <GridCommandButton Icon="@SvgIcon.Directions"
-                                OnClick="@((GridCommandEventArgs e) => OpenDirections((UserAddressAdminRecord)e.Items.First()))">Directions</GridCommandButton>
-                            <GridCommandButton Icon="@SvgIcon.Trash" ThemeColor="@ThemeConstants.Button.ThemeColor.Error"
-                                OnClick="@((GridCommandEventArgs e) => DeleteAddress((UserAddressAdminRecord)e.Items.First()))"></GridCommandButton>
+                        <GridCommandColumn Width="172px">
+                            <GridCommandButton OnClick="@((GridCommandEventArgs e) => OpenSubDialog("address", e.Items.First()))"
+                                Title="Edit"
+                                Class="ben-grid-action"
+                                FillMode="@ThemeConstants.Button.FillMode.Outline"><BenIcon Name="edit-2" /></GridCommandButton>
+                            <GridCommandButton OnClick="@((GridCommandEventArgs e) => OpenAddressMap((UserAddressAdminRecord)e.Items.First()))"
+                                Title="Show on a map"
+                                Class="ben-grid-action"
+                                FillMode="@ThemeConstants.Button.FillMode.Outline"><BenIcon Name="map" /></GridCommandButton>
+                            <GridCommandButton OnClick="@((GridCommandEventArgs e) => OpenDirections((UserAddressAdminRecord)e.Items.First()))"
+                                Title="Directions"
+                                Class="ben-grid-action"
+                                FillMode="@ThemeConstants.Button.FillMode.Outline"><BenIcon Name="navigation" /></GridCommandButton>
+                            <GridCommandButton ThemeColor="@ThemeConstants.Button.ThemeColor.Error"
+                                OnClick="@((GridCommandEventArgs e) => DeleteAddress((UserAddressAdminRecord)e.Items.First()))"
+                                Title="Delete"
+                                Class="ben-grid-action"
+                                FillMode="@ThemeConstants.Button.FillMode.Outline"><BenIcon Name="trash-2" /></GridCommandButton>
                         </GridCommandColumn>
                     </GridColumns>
                 </TelerikGrid>
@@ -141,11 +150,16 @@ else
                         <GridColumn Field="@nameof(UserEmailAdminRecord.EmailAddress)" Title="Email" />
                         <GridColumn Field="@nameof(UserEmailAdminRecord.IsPrimary)" Title="Primary" Width="80px" />
                         <GridColumn Field="@nameof(UserEmailAdminRecord.IsPublic)" Title="Public" Width="70px" />
-                        <GridCommandColumn Width="130px">
-                            <GridCommandButton Icon="@SvgIcon.Pencil"
-                                OnClick="@((GridCommandEventArgs e) => OpenSubDialog("email", e.Items.First()))">Edit</GridCommandButton>
-                            <GridCommandButton Icon="@SvgIcon.Trash" ThemeColor="@ThemeConstants.Button.ThemeColor.Error"
-                                OnClick="@((GridCommandEventArgs e) => DeleteEmail((UserEmailAdminRecord)e.Items.First()))"></GridCommandButton>
+                        <GridCommandColumn Width="100px">
+                            <GridCommandButton OnClick="@((GridCommandEventArgs e) => OpenSubDialog("email", e.Items.First()))"
+                                Title="Edit"
+                                Class="ben-grid-action"
+                                FillMode="@ThemeConstants.Button.FillMode.Outline"><BenIcon Name="edit-2" /></GridCommandButton>
+                            <GridCommandButton ThemeColor="@ThemeConstants.Button.ThemeColor.Error"
+                                OnClick="@((GridCommandEventArgs e) => DeleteEmail((UserEmailAdminRecord)e.Items.First()))"
+                                Title="Delete"
+                                Class="ben-grid-action"
+                                FillMode="@ThemeConstants.Button.FillMode.Outline"><BenIcon Name="trash-2" /></GridCommandButton>
                         </GridCommandColumn>
                     </GridColumns>
                 </TelerikGrid>
@@ -162,11 +176,16 @@ else
                         <GridColumn Field="@nameof(UserPhoneAdminRecord.IsPrimary)" Title="Primary" Width="80px" />
                         <GridColumn Field="@nameof(UserPhoneAdminRecord.IsCellular)" Title="Cell" Width="70px" />
                         <GridColumn Field="@nameof(UserPhoneAdminRecord.IsPublic)" Title="Public" Width="70px" />
-                        <GridCommandColumn Width="130px">
-                            <GridCommandButton Icon="@SvgIcon.Pencil"
-                                OnClick="@((GridCommandEventArgs e) => OpenSubDialog("phone", e.Items.First()))">Edit</GridCommandButton>
-                            <GridCommandButton Icon="@SvgIcon.Trash" ThemeColor="@ThemeConstants.Button.ThemeColor.Error"
-                                OnClick="@((GridCommandEventArgs e) => DeletePhone((UserPhoneAdminRecord)e.Items.First()))"></GridCommandButton>
+                        <GridCommandColumn Width="100px">
+                            <GridCommandButton OnClick="@((GridCommandEventArgs e) => OpenSubDialog("phone", e.Items.First()))"
+                                Title="Edit"
+                                Class="ben-grid-action"
+                                FillMode="@ThemeConstants.Button.FillMode.Outline"><BenIcon Name="edit-2" /></GridCommandButton>
+                            <GridCommandButton ThemeColor="@ThemeConstants.Button.ThemeColor.Error"
+                                OnClick="@((GridCommandEventArgs e) => DeletePhone((UserPhoneAdminRecord)e.Items.First()))"
+                                Title="Delete"
+                                Class="ben-grid-action"
+                                FillMode="@ThemeConstants.Button.FillMode.Outline"><BenIcon Name="trash-2" /></GridCommandButton>
                         </GridCommandColumn>
                     </GridColumns>
                 </TelerikGrid>
@@ -182,12 +201,21 @@ else
                         <GridColumn Field="@nameof(UserLinkAdminRecord.LinkUrl)" Title="URL" />
                         <GridColumn Field="@nameof(UserLinkAdminRecord.DisplayText)" Title="Label" Width="120px" />
                         <GridColumn Field="@nameof(UserLinkAdminRecord.IsPublic)" Title="Public" Width="70px" />
-                        <GridColumn Field="@nameof(UserLinkAdminRecord.IsActive)" Title="Active" Width="70px" />
-                        <GridCommandColumn Width="130px">
-                            <GridCommandButton Icon="@SvgIcon.Pencil"
-                                OnClick="@((GridCommandEventArgs e) => OpenSubDialog("link", e.Items.First()))">Edit</GridCommandButton>
-                            <GridCommandButton Icon="@SvgIcon.Trash" ThemeColor="@ThemeConstants.Button.ThemeColor.Error"
-                                OnClick="@((GridCommandEventArgs e) => DeleteLink((UserLinkAdminRecord)e.Items.First()))"></GridCommandButton>
+                        <GridColumn Field="@nameof(UserLinkAdminRecord.IsActive)" Title="Active" Width="70px">
+                            <Template>
+                                <span class="badge @(((UserLinkAdminRecord)context).IsActive ? "bg-success" : "bg-secondary")">@(((UserLinkAdminRecord)context).IsActive ? "Yes" : "No")</span>
+                            </Template>
+                        </GridColumn>
+                        <GridCommandColumn Width="100px">
+                            <GridCommandButton OnClick="@((GridCommandEventArgs e) => OpenSubDialog("link", e.Items.First()))"
+                                Title="Edit"
+                                Class="ben-grid-action"
+                                FillMode="@ThemeConstants.Button.FillMode.Outline"><BenIcon Name="edit-2" /></GridCommandButton>
+                            <GridCommandButton ThemeColor="@ThemeConstants.Button.ThemeColor.Error"
+                                OnClick="@((GridCommandEventArgs e) => DeleteLink((UserLinkAdminRecord)e.Items.First()))"
+                                Title="Delete"
+                                Class="ben-grid-action"
+                                FillMode="@ThemeConstants.Button.FillMode.Outline"><BenIcon Name="trash-2" /></GridCommandButton>
                         </GridCommandColumn>
                     </GridColumns>
                 </TelerikGrid>
@@ -203,11 +231,16 @@ else
                         <GridColumn Field="@nameof(UserNoteAdminRecord.NoteSubject)" Title="Subject" Width="150px" />
                         <GridColumn Field="@nameof(UserNoteAdminRecord.NoteBody)" Title="Body" />
                         <GridColumn Field="@nameof(UserNoteAdminRecord.NoteBody)" Title="Body" />
-                        <GridCommandColumn Width="130px">
-                            <GridCommandButton Icon="@SvgIcon.Pencil"
-                                OnClick="@((GridCommandEventArgs e) => OpenSubDialog("note", e.Items.First()))">Edit</GridCommandButton>
-                            <GridCommandButton Icon="@SvgIcon.Trash" ThemeColor="@ThemeConstants.Button.ThemeColor.Error"
-                                OnClick="@((GridCommandEventArgs e) => DeleteNote((UserNoteAdminRecord)e.Items.First()))"></GridCommandButton>
+                        <GridCommandColumn Width="100px">
+                            <GridCommandButton OnClick="@((GridCommandEventArgs e) => OpenSubDialog("note", e.Items.First()))"
+                                Title="Edit"
+                                Class="ben-grid-action"
+                                FillMode="@ThemeConstants.Button.FillMode.Outline"><BenIcon Name="edit-2" /></GridCommandButton>
+                            <GridCommandButton ThemeColor="@ThemeConstants.Button.ThemeColor.Error"
+                                OnClick="@((GridCommandEventArgs e) => DeleteNote((UserNoteAdminRecord)e.Items.First()))"
+                                Title="Delete"
+                                Class="ben-grid-action"
+                                FillMode="@ThemeConstants.Button.FillMode.Outline"><BenIcon Name="trash-2" /></GridCommandButton>
                         </GridCommandColumn>
                     </GridColumns>
                 </TelerikGrid>
@@ -224,17 +257,21 @@ else
                             </Template>
                         </GridColumn>
                         <GridColumn Field="@nameof(OrganizationUserMembershipAdminRecord.Role)" Title="Role" Width="130px" />
-                        <GridColumn Field="@nameof(OrganizationUserMembershipAdminRecord.IsActive)" Title="Active" Width="70px" />
+                        <GridColumn Field="@nameof(OrganizationUserMembershipAdminRecord.IsActive)" Title="Active" Width="70px">
+                            <Template>
+                                <span class="badge @(((OrganizationUserMembershipAdminRecord)context).IsActive ? "bg-success" : "bg-secondary")">@(((OrganizationUserMembershipAdminRecord)context).IsActive ? "Yes" : "No")</span>
+                            </Template>
+                        </GridColumn>
                         <GridColumn Field="@nameof(OrganizationUserMembershipAdminRecord.DateCreated)" Title="Joined" Width="110px">
                             <Template>
                                 @(((OrganizationUserMembershipAdminRecord)context).DateCreated.ToViewerLocalTime(UserState).ToDisplayDate())
                             </Template>
                         </GridColumn>
-                        <GridCommandColumn Width="80px">
-                            <GridCommandButton Icon="@SvgIcon.Eye"
-                                OnClick="@((GridCommandEventArgs e) => ViewOrganization((OrganizationUserMembershipAdminRecord)e.Items.First()))">
-                                View
-                            </GridCommandButton>
+                        <GridCommandColumn Width="72px">
+                            <GridCommandButton OnClick="@((GridCommandEventArgs e) => ViewOrganization((OrganizationUserMembershipAdminRecord)e.Items.First()))"
+                                Title="View the group"
+                                Class="ben-grid-action"
+                                FillMode="@ThemeConstants.Button.FillMode.Outline"><BenIcon Name="eye" /></GridCommandButton>
                         </GridCommandColumn>
                     </GridColumns>
                 </TelerikGrid>
@@ -264,18 +301,21 @@ else
                             </Template>
                         </GridColumn>
                         <GridColumn Field="@nameof(UploadFileAdminRecord.IsPublic)" Title="Public" Width="70px" />
-                        <GridCommandColumn Width="130px">
+                        <GridCommandColumn Width="100px">
                             @{ var fc = (UploadFileAdminRecord)context; }
                             @if (fc.ContentType.StartsWith("image/"))
                             {
-                                <GridCommandButton Icon="@SvgIcon.Pencil"
-                                    Size="@ThemeConstants.Button.Size.Small"
-                                    OnClick="@((GridCommandEventArgs e) => OpenImageEditor((UploadFileAdminRecord)e.Items.First()))">
-                                    Edit
-                                </GridCommandButton>
+                                <GridCommandButton Size="@ThemeConstants.Button.Size.Small"
+                                    OnClick="@((GridCommandEventArgs e) => OpenImageEditor((UploadFileAdminRecord)e.Items.First()))"
+                                    Title="Edit image"
+                                    Class="ben-grid-action"
+                                    FillMode="@ThemeConstants.Button.FillMode.Outline"><BenIcon Name="image" /></GridCommandButton>
                             }
-                            <GridCommandButton Icon="@SvgIcon.Trash" ThemeColor="@ThemeConstants.Button.ThemeColor.Error"
-                                OnClick="@((GridCommandEventArgs e) => DeleteFile((UploadFileAdminRecord)e.Items.First()))"></GridCommandButton>
+                            <GridCommandButton ThemeColor="@ThemeConstants.Button.ThemeColor.Error"
+                                OnClick="@((GridCommandEventArgs e) => DeleteFile((UploadFileAdminRecord)e.Items.First()))"
+                                Title="Delete"
+                                Class="ben-grid-action"
+                                FillMode="@ThemeConstants.Button.FillMode.Outline"><BenIcon Name="trash-2" /></GridCommandButton>
                         </GridCommandColumn>
                     </GridColumns>
                 </TelerikGrid>
@@ -759,14 +799,15 @@ else
         _isSavingRoles = true; _rolesError = null; _successMessage = null;
 
         var wanted = _roleSelection.Where(kv => kv.Value).Select(kv => kv.Key).ToList();
-        var saved = await AdminClient.SetUserRolesAsync(UserId, wanted);
+        var (saved, error) = await AdminClient.SetUserRolesAsync(UserId, wanted);
 
         _isSavingRoles = false;
         if (saved is null)
         {
-            // The server's two refusals are both about SuperAdmin — your own, or the last one.
-            _rolesError = "The roles were not saved. You cannot remove your own SuperAdmin role, "
-                        + "or the last SuperAdmin on the site.";
+            // The server's own words. This used to name the two SuperAdmin rules whatever had actually gone wrong, so
+            // a save refused for any other reason — a role the site does not define, a session that had ended — read as
+            // a rule about SuperAdmin that had nothing to do with it (Ben, 2026-09-15).
+            _rolesError = error ?? "The roles were not saved, and the server did not say why. Try again in a moment.";
             return;
         }
 
@@ -971,7 +1012,7 @@ else
 
     private void ViewOrganization(OrganizationUserMembershipAdminRecord m)
     {
-        var returnUrl = Uri.EscapeDataString(NavManager.Uri);
+        var returnUrl = Uri.EscapeDataString("/" + NavManager.ToBaseRelativePath(NavManager.Uri));
         NavManager.NavigateTo($"/organizations/{m.OrganizationId}?returnUrl={returnUrl}");
     }
 

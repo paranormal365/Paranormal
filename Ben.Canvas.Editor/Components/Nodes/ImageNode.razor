@@ -1,0 +1,73 @@
+@*
+    An image box. The picture's address comes from a store (the device store in M4, the case in M6); until
+    then it says what to do. The caption is its alternative text.
+*@
+@inherits BlockRendererBase
+@implements IDisposable
+@inject CanvasAssetStore Assets
+@inject ICanvasMediaStore Media
+
+<figure class="bc-image-wrap">
+    @if (Shown is not null)
+    {
+        <img class="bc-image bc-image--@Image.Fit.ToString().ToLowerInvariant()" src="@Shown"
+             alt="@(string.IsNullOrWhiteSpace(Image.Caption) ? "Picture on the board" : Image.Caption)" draggable="false" decoding="async" />
+    }
+    else
+    {
+        <div class="bc-image__placeholder">
+            <BcIcon Name="image" />
+            <span>No picture yet. Paste or drop one here.</span>
+        </div>
+    }
+
+    @if (Editing)
+    {
+        <div class="bc-image__edit">
+            <label class="bc-field" for="@($"bc-cap-{Node.Id:N}")"><span class="bc-field__label">Caption</span>
+                <input @ref="FirstField" id="@($"bc-cap-{Node.Id:N}")" class="form-control form-control-sm" @bind="Image.Caption" @bind:event="oninput" />
+            </label>
+            <label class="bc-field" for="@($"bc-fit-{Node.Id:N}")"><span class="bc-field__label">Fit</span>
+                <select id="@($"bc-fit-{Node.Id:N}")" class="form-select form-select-sm" @bind="Image.Fit">
+                    <option value="@ImageFit.Contain">Fit inside</option>
+                    <option value="@ImageFit.Cover">Fill the box</option>
+                </select>
+            </label>
+        </div>
+    }
+    else if (!string.IsNullOrWhiteSpace(Image.Caption))
+    {
+        <figcaption class="bc-image__caption">@Image.Caption</figcaption>
+    }
+</figure>
+
+@code {
+    /// <summary>The picture's display address, when a store has one.</summary>
+    [Parameter] public string? Src { get; set; }
+
+    private ImageData Image => Data as ImageData ?? new ImageData();
+
+    private string? _stored;
+
+    private string? Shown => Src ?? _stored;
+
+    protected override void OnInitialized() => Assets.Ready += OnAssetsReady;
+
+    protected override async Task OnParametersSetAsync() => _stored = await LookUpAsync();
+
+    /// <summary>The copy on this device first (no network); otherwise the case's copy, a thumbnail for a small box.</summary>
+    private async Task<string?> LookUpAsync()
+    {
+        var local = Image.AssetId is { } id ? await Assets.GetUrlAsync(id, Image.OpfsExt) : null;
+        if (local is not null || Image.UploadFileId is not { } uploaded) return local;
+        return await Media.GetDisplayUrlAsync(uploaded, thumbnail: Node.Width <= 400);
+    }
+
+    private void OnAssetsReady() => _ = InvokeAsync(async () =>
+    {
+        _stored = await LookUpAsync();
+        StateHasChanged();
+    });
+
+    public void Dispose() => Assets.Ready -= OnAssetsReady;
+}

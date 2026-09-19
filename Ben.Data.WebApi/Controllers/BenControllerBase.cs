@@ -1,4 +1,7 @@
+using Ben.Data.Common.Constants;
 using Ben.Data.WebApi.Services;
+using Ben.Service.RepositoryService.GenericInterfaces;
+using Microsoft.EntityFrameworkCore;
 using Microsoft.AspNetCore.Authentication;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.AspNetCore.Mvc;
@@ -59,6 +62,10 @@ public abstract class BenControllerBase : ControllerBase
             && entra.Principal.IsInRole(Ben.Data.Common.Constants.RoleNames.SuperAdmin);
     }
 
+    /// <summary>The refusal for a Viewer who tries to change a group's work — a sentence, not a bare 403.</summary>
+    protected static ObjectResult ViewerReadOnly()
+        => new("You're a viewer in this group: you can see its work but not change it.") { StatusCode = 403 };
+
     /// <summary>
     /// Returns the current user's AppUser Guid.
     /// Prefers the <c>app_user_id</c> claim injected by EntraClaimsTransformation;
@@ -106,6 +113,28 @@ public abstract class BenControllerBase : ControllerBase
     /// perfectly quiet application writing no audit rows at all, discoverable only by noticing
     /// their absence. Same reasoning already applied to upload metadata extraction.
     /// </remarks>
+    /// <summary>
+    /// Saves, then records in the audit log how one entity changed (item 235 phase 17a, audit finding A3).
+    /// </summary>
+    /// <remarks>
+    /// <para>For the changes somebody will later ask about — who called a weekend off, who withdrew a pass, who turned
+    /// a party down. The row's own <c>UpdatedBy</c> answers "who last touched it"; the audit log answers "what
+    /// happened, in order".</para>
+    ///
+    /// <para><b>The before is taken from the change tracker</b>, so a caller changes the entity as it always did and
+    /// swaps one line. The audit service is found on the request rather than injected: a controller built directly
+    /// by a unit test has no request services, and the save must work there exactly as it did.</para>
+    /// </remarks>
+    protected async Task SaveAndAuditAsync<TEntity>(DbContext db, TEntity entity, Guid entityId, Guid userId, CancellationToken ct)
+        where TEntity : class
+    {
+        var before = db.Entry(entity).OriginalValues.ToObject();
+        await db.SaveChangesAsync(ct);
+
+        if (HttpContext?.RequestServices?.GetService<IAuditLogService>() is { } audit)
+            await TryAuditAsync(audit.LogUpdateAsync(typeof(TEntity).Name, entityId, before, entity, userId, AppSources.WebApi));
+    }
+
     protected async Task TryAuditAsync(Task auditTask)
     {
         try

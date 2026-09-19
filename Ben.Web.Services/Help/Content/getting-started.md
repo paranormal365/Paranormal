@@ -52,6 +52,15 @@ Anyone with an account can vote on a published case, and on individual pieces of
 it. There are three answers: **confirms**, **inconclusive**, and **disputes**. You get one vote,
 and changing your mind replaces it rather than adding a second.
 
+![The vote button with its three choices open, and the row of actions beside it](/help/media/getting-started/case-actions.png)
+*One button to vote with, and the choices it offers. Everything in the row explains itself when you
+hover over it.*
+
+Voting is **one button**, under the counts. It carries a hollow thumb until you have voted, and the
+filled mark of your own answer afterwards, so you can always see what you said without reading a
+legend. Press it and the three choices appear underneath; pause on one and it tells you what it
+means. Pressing your own answer again takes the vote back.
+
 Alongside the three counts you will see a single **score**. It is the votes added up, with confirms
 counting **+1**, disputes **−1**, and inconclusive **0** — so a green **+4** means the people who
 looked lean towards something being there, and a red **−3** means they lean the other way.
@@ -63,15 +72,60 @@ The score is always shown with the number of votes behind it, because **+4** fro
 **+4** from ninety are not the same claim. A score of **0** can mean the case is evenly split or
 that everyone was undecided — the counts beside it tell you which.
 
+### The other buttons beside it
+
+Four more buttons sit in the same row, all the same height, and none of them carries a word — hover
+over one and it says what it is.
+
+- **Share** opens the places a case can go when you hover over it: Facebook, X, Bluesky, Reddit,
+  WhatsApp, email, and **Copy link**. On a phone, where there is nothing to hover over, pressing the
+  button opens your own share sheet instead.
+- **Repost** puts the case on the feed as a post by you. It is a link to the case — posting on
+  behalf of a group takes permission, and this is one person saying *look at this*.
+- **Comments** takes you straight down to the comments on this page, with the number on it.
+- **Report** flags the case for a site moderator. Reporting never hides anything by itself.
+
+If you are not signed in the counts are still there, with **Sign in** under them.
+
+## Commenting on a published case
+
+Under a published case is a box to say something about it. Comments are plain text — no formatting,
+no attachments — and yours can be deleted by you at any time. Somebody else's can be reported, which
+sends it to the same moderation queue as anything else.
+
+A web address typed into a comment, a message or a feed post gets a small card under it showing what
+it points at. Cards are only ever built for addresses **on this site** — a case, a tour, an event or
+a group — out of records we already hold, so they stay correct when something is renamed. A link
+somewhere else stays a link, with the site it belongs to named under it.
+
 ## Finding what's near you
 
 ![The Find Groups page listing nearby groups](/help/media/getting-started/find-groups.png)
 *Browse Groups lists every group, closest first once you have given it a place to measure from.*
 
-The home page shows what's happening close to you — groups that serve your area, and public events
-you could attend. If your browser allows it, this uses your current location automatically; if not,
-type a city, address, or zip code instead. Either way, choose how far to look with the distance
-dropdown.
+The home page shows what's happening close to you — walks you could book, public events you could
+attend, and groups that serve your area. If your browser allows it, this uses your current location
+automatically; if not, type a city, address, or zip code instead. Either way, choose how far to look
+with the distance dropdown.
+
+![What's near you, with tours, events and groups on separate tabs](/help/media/getting-started/whats-near-you.png)
+*Each tab carries its count, so you can see the shape of what was found before opening anything.
+A tab only appears when there is something behind it.*
+
+**Places** is the fourth tab, and it is a different kind of answer from the other three. A place is a
+location rather than an organisation or a date — a cave, a mill, a hotel — and the tab lists the
+ones near you that groups have actually published work at. Opening one shows everything anybody has
+shared about that location: which groups have investigated there, what they concluded, recorded
+sessions, photographs from events held there, and what visitors have posted.
+
+A place only appears once there is something to read at it. A location gets a record the moment the
+first group types its address, so listing every one of them would be a directory of addresses
+rather than somewhere worth going. **Private residences never appear**, whatever has happened at
+them.
+
+Tours open first, because a walk with a date on it is the most useful thing the page can hand you.
+Every tour card leads with a picture; a walk that has not put one up yet gets a plate drawn from its
+own name, so it is the same colour here, on the group's page, and on the tour's own page.
 
 Once you belong to a group, your Home becomes your desk: the next investigation you are on, the
 open cases in your groups (yours first), how many messages and requests are waiting, and any gear
@@ -299,6 +353,10 @@ number is always the sum of the rows underneath it. If the bell says four, four 
 | Equipment requests & overdue gear | Waiting on your decision, or late back. |
 | Posts that mention you | Somebody named you with an **@name** in the feed. |
 | Unread messages | Sent to you through the platform. |
+| Bookings waiting on you | Somebody asked for, or picked, a place at an event you decide bookings for. |
+| Holds running out | Places picked at your event that lapse within a day unless somebody confirms them. |
+| A venue answered you | Your booking at an event has been decided. |
+| Your hold is running out | You picked places, the venue has not confirmed them, and they lapse within a day. |
 
 ![The notifications page](/help/media/getting-started/notifications.png)
 *Everything waiting on you, grouped by what it is.*
@@ -308,6 +366,9 @@ zeroes.
 
 **The colour means age, not importance.** A single item from last week is coloured more urgently
 than five from this morning, because the old one is the one somebody is still waiting on.
+
+If you decide bookings for a group, the page also has **Letters about bookings**, where you choose
+how often that group writes to you about them.
 
 Opening something is what clears it — a message you have read, a post you have opened, a request you
 have answered. Nothing disappears before you have seen it.
@@ -343,6 +404,10 @@ what you're starting and its name and web address, where you work (optional, it 
 you" search), whether you're taking applications, then a review. Only the first step is required,
 and closing the tab keeps a draft so you can pick up where you left off.
 
+You can also start from the **Pricing** page: each plan's **Start a group on this plan** button
+opens the same steps with that plan named at the top, and when the group is created you go to its
+billing page to confirm the plan. Starting on the free plan works the same way, with nothing to pay.
+
 The first question is **what kind of group this is**, because it decides what everything else
 starts as:
 
@@ -368,13 +433,118 @@ an "Investigator Role" for exactly this). Titles like *Probationary* or *Senior 
 are seniority labels and open nothing by themselves; if a tab you expect is missing, it's a
 role you're missing, not a bug — ask whoever runs your group.
 
+## Investigating on your own
+
+You do not need a group. Open any **public location's** page — a landmark, a cemetery, a museum —
+and, signed in with no group of your own, it offers **Start investigating on your own**.
+
+Pressing it explains the bargain before anything happens, and then does two things at once: it
+creates a private space of your own to keep investigations in, and it opens the form to schedule
+your first visit to the place you were already looking at. The space is free, it is yours, nobody
+else joins it, and it never appears in any list of groups — it exists so the rest of the site has
+somewhere to hang your work, because investigations, evidence and reports all belong to something.
+
+![Starting on your own](/help/media/getting-started/investigate-alone.png)
+*What the button explains before it does anything: a space of your own, free, and what you record at
+a public place is public.*
+
+**What you record at a public location is public.** That is the bargain and it is worth
+understanding before you start: your visit joins that place's own page, where anybody can read it.
+One person's night somewhere is an anecdote; the same place recorded by eleven people is a record
+worth having, and free accounts are what fill it. A plan is what makes your work yours instead —
+see [Having a plan, and not having one](organization-administration#having-a-plan-and-not-having-one).
+
+Somebody's home is never part of this. Private-residence work is client work, it belongs to the
+paid lane, and a home's page offers none of these buttons.
+
+You can also simply **post** about a public place, with no space and no visit: see
+[Posting about a place](the-feed#posting-about-a-place). And what you record on the phone can be
+published to a place's archive the same way — see [the mobile apps](the-mobile-apps).
+
+## A group's own pages
+
+Every group has a page of its own at `/o/their-name`, and everything they publish hangs off it: a
+strip of pills across the top takes you to their **Cases**, their **Events**, any pages they have
+written, and back to their home.
+
+![A group's public page](/help/media/getting-started/group-page.png)
+*What the group is, where it works, how many people, and the next night you could turn up to.*
+
+**Cases** is what they have published of their investigations.
+
+![A group's published investigations](/help/media/getting-started/group-cases.png)
+*A case the group concluded is haunted is marked down its left edge. The whole card opens it.*
+
+Each case has a page with the group's summary, what they found if they chose to publish it, a
+timeline of what happened and when, and a community rating you can vote in once you are signed in.
+
+## What's on
+
+**What's On** in the menu lists every public night any group has opened to anyone — walks,
+investigations and open meetings together, soonest first.
+
+![What's on, grouped by the night each event happens](/help/media/getting-started/whats-on.png)
+*Grouped by the day, so the date is said once and each night under it only has to tell you what is
+different about it. The bar on the right is how full it is.*
+
+**Every time is the event's own.** A walk that starts at eight in Nashville reads as eight wherever
+in the world you are reading it, with the zone named beside it — so this page, the event's page, the
+email you are sent and the calendar file all agree. An event whose group has not said which zone it
+runs on is shown in UTC and says so.
+
 ## Going to a group's public event
 
 Public events are open to anyone — you'll find them on a group's page and under **Join a Group**.
 Say you're coming with your email address, click the link we send, and you're on the list (that
 also creates you an account, with no password to invent).
 
+![One public event, with the date, the sign-up and where to meet](/help/media/getting-started/event-page.png)
+*Coming along is the first thing on the page. Where you meet is drawn on a map when the event is a
+tour date, because a walk's meeting point is exact; an ordinary event only gives a town.*
+
 Afterwards, if you captured something, the event's page lets you **offer it to the group**. A
 member reviews every submission. If yours is accepted it becomes part of that event's public
 record, credited to you; if it's declined you're told why, and your file stays private. You can
 see where each of your submissions stands on the same page.
+
+## Ghost walks and tours
+
+A tour is a walk somebody sells: it has a meeting point, a length, and dates you can sign up for.
+They show up on the map on the front page, in **What's near you**, and on the business's own page,
+and each has a page of its own with its pictures, its guides, and when it runs.
+
+![A tour's page](/help/media/getting-started/tour-page.png)
+
+### Asking for a place
+
+You **ask** for a place on a walk, and the tour confirms it. Say how many of you are coming — a
+sign-up can hold several places — and the page will say *your seat is with the tour* until somebody
+there decides.
+
+![Your seat on a walk](/help/media/getting-started/tour-seat.png)
+*Two places reserved, and the optional way to say you have seen it.*
+
+When it is approved you get an email with the meeting point, the time in the tour's own zone, who
+is leading it and what they look like, and a calendar file so your phone reminds you. You get the
+same again the night before. If you are asked for something the tour cannot fit, they will say so
+and you can try another night.
+
+**Money is arranged with the business.** Nothing is taken through this site; the tour's page and
+the email say how they want to be paid, and approving your seat is them saying that side of it is
+settled between you.
+
+Once a seat is reserved, **Got it** tells the tour you have seen it. That is entirely optional —
+your place is held either way — and it simply lets them know you are expecting to be there.
+
+A walk that is full still takes requests. It becomes a waiting list rather than a closed door, and
+the tour will come back to you if room appears.
+
+Afterwards you can rate the walk out of five and say a few words, and anything you sent in from the
+night is on the tour's page for you to download.
+
+**Times are the event's own.** A walk that starts at eight in Nashville reads as eight wherever
+you are reading it, with the zone named beside it, so the page, the email and the calendar file
+all agree. An event whose group has not said which zone it runs on is shown in UTC and says so.
+
+At the foot of a tour's page you may find the accounts that walk goes with — their site, Instagram,
+YouTube and so on — if the business has added them.

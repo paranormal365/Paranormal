@@ -1,0 +1,330 @@
+@page "/moderation/archive"
+@namespace Ben.Web.Website.Library.SuperAdmin
+@using Ben.Data.Common.Enums
+@using Ben.Service.Models.Feed
+@using Ben.Web.Services
+@using Ben.Web.Services.WebApi
+@using Ben.Web.Website.Library.Kit
+
+@inject IBenAdminClient Api
+@inject IBenUserState UserState
+@inject NavigationManager NavManager
+
+<PageTitle>Moderation — The place archive</PageTitle>
+
+@*
+    The place archive's review queue (2026-09-17 audit).
+
+    Why this page exists: two flag paths could send something to Held and nothing could ever bring
+    it back. A reader flags a published field session from the place page, or a piece of event
+    evidence; the state goes to Held; the public archive serves only Approved. The release
+    endpoints were written and never called from anywhere, so "the flag acts, then a person
+    decides" — the rule the flag's own design note states — had no second half. One flag from one
+    signed-in stranger permanently removed somebody's contribution.
+
+    Two kinds under one heading, because the reviewer is answering the same question about both:
+    should a stranger see this at this place. They are separate lists because a night's recording
+    and a guest's single photograph are different amounts of looking.
+
+    Nothing here deletes. Holding leaves the file where it is with a note.
+*@
+
+<div class="container-fluid px-3 py-3" style="max-width:1100px;">
+
+    <div class="d-flex align-items-start justify-content-between mb-3 flex-wrap gap-2">
+        <div>
+            <h3 class="mb-0">The place archive<HelpLink Slug="moderating-the-feed" /></h3>
+            <p class="text-secondary small mb-0">
+                Published sessions and event evidence that somebody flagged, or that a screener
+                could not clear. Nothing here is visible at its place until it is approved.
+            </p>
+        </div>
+
+        <div class="form-check form-switch">
+            <input class="form-check-input" type="checkbox" role="switch"
+                   id="archive-include-held" checked="@_includeHeld"
+                   @onchange="ToggleHeldAsync" />
+            <label class="form-check-label small" for="archive-include-held">
+                Show what is already held
+            </label>
+        </div>
+    </div>
+
+    <p class="small mb-3">
+        <a href="/moderation/media">The feed's queue is over here</a>.
+    </p>
+
+    @if (_error is not null)
+    {
+        <div class="alert alert-danger" data-testid="archive-queue-error">@_error</div>
+    }
+
+    @if (_loading)
+    {
+        <p class="text-secondary">Loading…</p>
+    }
+    else
+    {
+        <h5 class="mt-4">Field sessions <span class="text-secondary fw-normal">(@_sessions.Count)</span></h5>
+
+        @if (_sessionResult.Failed)
+        {
+            <BenListState TItem="ArchiveMediaReviewRow" Result="@_sessionResult" OnRetry="@(() => LoadAsync())" />
+        }
+        else if (_sessions.Count == 0)
+        {
+            <p class="text-secondary" data-testid="no-sessions-waiting">
+                No sessions are waiting.
+            </p>
+        }
+        else
+        {
+            @foreach (var row in _sessions)
+            {
+                <div class="card mb-3" data-testid="archive-session-row">
+                    <div class="card-body">
+                        <div class="d-flex align-items-baseline gap-2 mb-2 flex-wrap">
+                            <strong>@row.ContributorName</strong>
+                            <span class="text-secondary small">
+                                published @row.PublishedAtUtc.ToViewerLocalTime(UserState).ToDisplayDateTime()
+                            </span>
+                            @if (row.State == FeedMediaReviewState.Held)
+                            {
+                                <span class="badge bg-danger">Held</span>
+                            }
+                        </div>
+
+                        <p class="mb-2">
+                            @* The place is what the decision turns on: a landmark and an address a
+                               reviewer does not recognise are different questions. *@
+                            <a href="@($"/places/{row.PlaceId}")" target="_blank">
+                                @(row.PlaceName ?? "A place with no name on file")
+                            </a>
+                            @if (!string.IsNullOrWhiteSpace(row.LocationLabel))
+                            {
+                                <span class="text-secondary"> · @row.LocationLabel</span>
+                            }
+                            <span class="text-secondary">
+                                · @row.FileCount file@(row.FileCount == 1 ? "" : "s")
+                                · recorded @row.StartedAt.ToViewerLocalTime(UserState).ToDisplayDateTime()
+                            </span>
+                        </p>
+
+                        @* Why it was held. Written by the flag and, until this page, read by
+                           nobody — the entity doc called it "for the moderator queue". *@
+                        @if (!string.IsNullOrWhiteSpace(row.Note))
+                        {
+                            <p class="text-secondary small mb-2" data-testid="archive-session-note">
+                                <em>@row.Note</em>
+                            </p>
+                        }
+
+                        <div class="d-flex gap-2">
+                            @if (row.State != FeedMediaReviewState.Approved)
+                            {
+                                <button type="button" class="btn btn-success btn-sm"
+                                        disabled="@(_deciding == row.SessionId)"
+                                        data-testid="approve-session"
+                                        @onclick="() => DecideSessionAsync(row, approve: true)">
+                                    Approve
+                                </button>
+                            }
+                            @if (row.State != FeedMediaReviewState.Held)
+                            {
+                                <button type="button" class="btn btn-outline-danger btn-sm"
+                                        disabled="@(_deciding == row.SessionId)"
+                                        @onclick="() => DecideSessionAsync(row, approve: false)">
+                                    Hold
+                                </button>
+                            }
+                        </div>
+                    </div>
+                </div>
+            }
+        }
+
+        <h5 class="mt-4">Event evidence <span class="text-secondary fw-normal">(@_evidence.Count)</span></h5>
+
+        @if (_evidenceResult.Failed)
+        {
+            <BenListState TItem="ArchiveEvidenceReviewRow" Result="@_evidenceResult" OnRetry="@(() => LoadAsync())" />
+        }
+        else if (_evidence.Count == 0)
+        {
+            <p class="text-secondary" data-testid="no-evidence-waiting">
+                No event evidence is waiting.
+            </p>
+        }
+        else
+        {
+            @foreach (var row in _evidence)
+            {
+                <div class="card mb-3" data-testid="archive-evidence-row">
+                    <div class="card-body">
+                        <div class="d-flex align-items-baseline gap-2 mb-2 flex-wrap">
+                            <strong>@row.ContributorName</strong>
+                            <span class="text-secondary small">
+                                published @row.PublishedAtUtc.ToViewerLocalTime(UserState).ToDisplayDateTime()
+                            </span>
+                            @if (row.State == FeedMediaReviewState.Held)
+                            {
+                                <span class="badge bg-danger">Held</span>
+                            }
+                        </div>
+
+                        <p class="mb-2">
+                            @row.EventTitle
+                            @if (row.PlaceId is { } placeId)
+                            {
+                                <span class="text-secondary"> · </span>
+                                <a href="@($"/places/{placeId}")" target="_blank">
+                                    @(row.PlaceName ?? "the place")
+                                </a>
+                            }
+                        </p>
+
+                        @* What the photographer said it shows. The same picture reads differently
+                           under a different caption, and deciding without it is deciding on half. *@
+                        @if (!string.IsNullOrWhiteSpace(row.Caption))
+                        {
+                            <p class="mb-2">@row.Caption</p>
+                        }
+
+                        @if (!string.IsNullOrWhiteSpace(row.Note))
+                        {
+                            <p class="text-secondary small mb-2" data-testid="archive-evidence-note">
+                                <em>@row.Note</em>
+                            </p>
+                        }
+
+                        <div class="d-flex gap-2">
+                            @if (row.State != FeedMediaReviewState.Approved)
+                            {
+                                <button type="button" class="btn btn-success btn-sm"
+                                        disabled="@(_deciding == row.SubmissionId)"
+                                        data-testid="approve-evidence"
+                                        @onclick="() => DecideEvidenceAsync(row, approve: true)">
+                                    Approve
+                                </button>
+                            }
+                            @if (row.State != FeedMediaReviewState.Held)
+                            {
+                                <button type="button" class="btn btn-outline-danger btn-sm"
+                                        disabled="@(_deciding == row.SubmissionId)"
+                                        @onclick="() => DecideEvidenceAsync(row, approve: false)">
+                                    Hold
+                                </button>
+                            }
+                        </div>
+                    </div>
+                </div>
+            }
+        }
+    }
+</div>
+
+@code {
+    private readonly List<ArchiveMediaReviewRow> _sessions = [];
+    private readonly List<ArchiveEvidenceReviewRow> _evidence = [];
+    private LoadResult<ArchiveMediaReviewRow> _sessionResult;
+    private LoadResult<ArchiveEvidenceReviewRow> _evidenceResult;
+
+    /// <summary>
+    /// Held is shown by default, unlike the feed's queue.
+    /// </summary>
+    /// <remarks>
+    /// The feed's piles are a triage tool for a queue that fills up. This one exists because
+    /// things were stuck in Held with no way out, so the pile that was invisible is the pile
+    /// somebody most needs to see on arriving.
+    /// </remarks>
+    private bool _includeHeld = true;
+
+    private string? _error;
+    private bool _loading = true;
+    private Guid? _deciding;
+
+    protected override async Task OnInitializedAsync()
+    {
+        if (!await UserState.WaitUntilAuthReadyAsync(RendererInfo.IsInteractive)) return;
+
+        // Moderators and SuperAdmins, matching the feed's queue and the server's own policy.
+        if (!UserState.IsModerator && !UserState.IsSuperAdmin)
+        {
+            NavManager.NavigateTo(SignInLink.ForRefusal(NavManager, UserState));
+            return;
+        }
+
+        await LoadAsync();
+    }
+
+    private async Task ToggleHeldAsync(ChangeEventArgs e)
+    {
+        _includeHeld = e.Value is true;
+        await LoadAsync();
+    }
+
+    private async Task LoadAsync()
+    {
+        _loading = true;
+        _error = null;
+        StateHasChanged();
+
+        try
+        {
+            _sessionResult = await Api.GetArchiveMediaReviewAsync(_includeHeld);
+            _sessions.Clear();
+            _sessions.AddRange(_sessionResult.Items);
+
+            _evidenceResult = await Api.GetArchiveEvidenceReviewAsync(_includeHeld);
+            _evidence.Clear();
+            _evidence.AddRange(_evidenceResult.Items);
+        }
+        finally
+        {
+            _loading = false;
+            StateHasChanged();
+        }
+    }
+
+    /// <remarks>
+    /// Removed locally rather than by reloading, like the feed's queue: the one just handled
+    /// should go away without the list jumping back to the top.
+    /// </remarks>
+    private async Task DecideSessionAsync(ArchiveMediaReviewRow row, bool approve)
+    {
+        _deciding = row.SessionId;
+        try
+        {
+            if (!await Api.ReviewArchiveMediaAsync(row.SessionId, approve))
+            {
+                _error = "Couldn't record that decision. Try again in a moment.";
+                return;
+            }
+
+            _sessions.Remove(row);
+        }
+        finally
+        {
+            _deciding = null;
+        }
+    }
+
+    private async Task DecideEvidenceAsync(ArchiveEvidenceReviewRow row, bool approve)
+    {
+        _deciding = row.SubmissionId;
+        try
+        {
+            if (!await Api.ReviewArchiveEvidenceAsync(row.SubmissionId, approve))
+            {
+                _error = "Couldn't record that decision. Try again in a moment.";
+                return;
+            }
+
+            _evidence.Remove(row);
+        }
+        finally
+        {
+            _deciding = null;
+        }
+    }
+}

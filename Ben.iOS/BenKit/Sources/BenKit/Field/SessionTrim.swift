@@ -39,6 +39,47 @@ public struct SessionWindow: Sendable, Equatable {
     }
 }
 
+/// What one upload is allowed to carry.
+///
+/// **The phone is not limited. The upload is.** Ben, 2026-09-12: record as much of the room as
+/// the night needs, at whatever the camera gives — storage on the device is the investigator's
+/// own business, and a session that stopped recording because an app decided five minutes was
+/// enough is a session that missed the thing it was there for. What cannot be unlimited is the
+/// package: video is one or two orders of magnitude heavier than everything else a session holds,
+/// and it goes up a phone's upstream connection into an account with a storage allowance.
+///
+/// So the window decides. Send five minutes of video, move the window, send the next five. The
+/// readings, marks, photographs and audio are not rationed — only video is, because only video
+/// is the problem.
+public enum UploadAllowance: Sendable {
+    /// Video seconds permitted in a single upload.
+    public static let videoSeconds: TimeInterval = 5 * 60
+
+    /// Said the way a person reads it: "5 minutes".
+    public static var spokenVideo: String {
+        "\(Int(videoSeconds / 60)) minutes"
+    }
+
+    /// The ceiling on everything else, together, in one upload.
+    ///
+    /// **Why bytes and not minutes for the rest.** Nothing else in a session is heavy enough to
+    /// ration by the clock, and rationing it by the clock would punish the cheap channels for
+    /// video's sins. A five-hour night is roughly a megabyte of readings and marks, and AAC audio
+    /// runs near a megabyte a minute — so a whole night of sound and instruments together lands
+    /// around a third of this, and goes in one send. Photographs are the only other thing that
+    /// can add up, and they add up in bytes, which is what this counts.
+    ///
+    /// **Why this number.** A personal account holds 2 GB (`AccountStorageGuard`), so this is a
+    /// quarter of somebody's whole allowance in a single upload — generous enough that an ordinary
+    /// night never meets it, small enough that four careless ones cannot silently fill an account
+    /// or park a phone on a home connection for an hour.
+    public static let maximumBytes: Int64 = 500 * 1024 * 1024
+
+    public static var spokenSize: String {
+        ByteCountFormatter.string(fromByteCount: maximumBytes, countStyle: .file)
+    }
+}
+
 /// One recording or photograph, as the plan needs to see it.
 public struct TrimmableMedia: Sendable, Equatable {
     public var relativePath: String
@@ -47,12 +88,35 @@ public struct TrimmableMedia: Sendable, Equatable {
     public var startedAt: Date
     /// How long it runs. Nil for a photograph, and nil for a recording nothing has measured yet.
     public var duration: TimeInterval?
+    /// What the file weighs on the phone. Nil when nothing recorded it, in which case it is
+    /// counted as nothing rather than guessed at.
+    public var byteCount: Int64?
+    /// The picture's shape, read off the file, so a smaller-quality estimate is arithmetic rather
+    /// than a guess. Nil for anything that is not video.
+    public var videoHeight: Int?
+    public var videoFrameRate: Double?
 
-    public init(relativePath: String, kind: CaptureKind, startedAt: Date, duration: TimeInterval?) {
+    public init(relativePath: String, kind: CaptureKind, startedAt: Date, duration: TimeInterval?,
+                byteCount: Int64? = nil,
+                videoHeight: Int? = nil, videoFrameRate: Double? = nil) {
         self.relativePath = relativePath
         self.kind = kind
         self.startedAt = startedAt
         self.duration = duration
+        self.byteCount = byteCount
+        self.videoHeight = videoHeight
+        self.videoFrameRate = videoFrameRate
+    }
+
+    /// Roughly what would go up if only `seconds` of this file were sent.
+    ///
+    /// Bitrate is near enough constant within one recording, so a proportion of the length is a
+    /// proportion of the bytes. It is an estimate and is labelled as one wherever it is shown.
+    func approximateBytes(forSeconds seconds: TimeInterval) -> Int64 {
+        guard let byteCount else { return 0 }
+        guard let duration, duration > 0 else { return byteCount }
+        let fraction = min(1, max(0, seconds / duration))
+        return Int64((Double(byteCount) * fraction).rounded())
     }
 
     /// True for the kinds that occupy a stretch of time rather than a moment.
@@ -98,6 +162,86 @@ public struct SessionTrimPlan: Sendable, Equatable {
     public var includedPaths: [String] {
         media.filter { $0.outcome != .leftOut }.map(\.media.relativePath)
     }
+
+    // ── How much video one upload may carry ───────────────────────────────────
+
+    /// Seconds of video this window would actually send, cuts counted at their cut length.
+    ///
+    /// A clip whose length nothing has measured counts as nothing. That is not a loophole worth
+    /// closing with a guess: refusing an upload on a number we do not have would block somebody
+    /// over a file that may be four seconds long.
+    public var videoSecondsSent: TimeInterval {
+        media.reduce(0) { total, decision in
+            guard decision.media.kind == .video else { return total }
+            switch decision.outcome {
+            case .leftOut:            return total
+            case .cut(_, let length): return total + length
+            case .sentWhole:          return total + (decision.media.duration ?? 0)
+            }
+        }
+    }
+
+    /// Whether this window carries more video than one upload is allowed.
+    public var exceedsVideoAllowance: Bool {
+        videoSecondsSent > UploadAllowance.videoSeconds + 1   // a second of slack for rounding
+    }
+
+    /// How much has to come off before it will go.
+    public var videoSecondsOverAllowance: TimeInterval {
+        max(0, videoSecondsSent - UploadAllowance.videoSeconds)
+    }
+
+    /// About how many bytes of media this window would send. Readings and marks are not counted:
+    /// a whole night of them is a megabyte or so, and pretending to weigh them to the byte would
+    /// dress an estimate up as an audit.
+    public var approximateBytesSent: Int64 {
+        media.reduce(0) { total, decision in
+            switch decision.outcome {
+            case .leftOut:            return total
+            case .sentWhole:          return total + (decision.media.byteCount ?? 0)
+            case .cut(_, let length): return total + decision.media.approximateBytes(forSeconds: length)
+            }
+        }
+    }
+
+    /// Whether this window is heavier than one upload may be.
+    public var exceedsSizeAllowance: Bool {
+        approximateBytesSent > UploadAllowance.maximumBytes
+    }
+
+    /// What the same window would weigh with the video sent at a smaller quality.
+    ///
+    /// Only video is touched. Re-encoding a photograph to save a few hundred kilobytes would cost
+    /// its detail for nothing, and audio is not where the weight is.
+    public func approximateBytesSent(atVideoQuality quality: VideoQuality) -> Int64 {
+        media.reduce(0) { total, decision in
+            let item = decision.media
+            let sent: Int64
+            switch decision.outcome {
+            case .leftOut:            return total
+            case .sentWhole:          sent = item.byteCount ?? 0
+            case .cut(_, let length): sent = item.approximateBytes(forSeconds: length)
+            }
+            guard item.kind == .video, quality.changesAnything else { return total + sent }
+            return total + quality.approximateBytes(from: sent,
+                                                    sourceHeight: item.videoHeight,
+                                                    sourceFrameRate: item.videoFrameRate)
+        }
+    }
+
+    /// Whether sending the video smaller is enough to get this window under the ceiling.
+    public func fits(atVideoQuality quality: VideoQuality) -> Bool {
+        approximateBytesSent(atVideoQuality: quality) <= UploadAllowance.maximumBytes
+    }
+
+    /// The smallest change that would let this window go, or nil when no quality is enough and
+    /// the window itself has to come in.
+    public func smallestQualityThatFits() -> VideoQuality? {
+        VideoQuality.offered.first(where: fits(atVideoQuality:))
+    }
+
+    /// Whether anything at all stops this window going up as one upload.
+    public var exceedsAnAllowance: Bool { exceedsVideoAllowance || exceedsSizeAllowance }
 
     /// Decides what a window sends.
     ///

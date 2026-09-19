@@ -592,30 +592,25 @@
                                     var trkId  = track.Id;
                                     var junction = (trkId, fromId, toId);
 
-                                    <div class="bv-transition-insert-wrap">
+                                    @* The button is placed the way the clips are — absolutely, from
+                                       its own position — because the lane's normal flow is empty
+                                       once every chip is absolute, and a button left in that flow
+                                       lands at x=0 of the track instead of on its cut. *@
+                                    var junctionPxStr =
+                                        (TransitionJunctionAnchor.Seconds(
+                                             item.TimelinePosition + ItemDuration(item),
+                                             nextClip.TimelinePosition) * Timeline.PxPerSecond)
+                                        .ToString("F0", System.Globalization.CultureInfo.InvariantCulture) + "px";
+
+                                    <div class="bv-transition-insert-wrap" style="left: @junctionPxStr">
                                         <button class="bv-transition-insert"
                                                 title="Add transition — drag a style from the Transitions tab, or click to choose"
                                                 data-track-id="@trkId"
                                                 data-from-id="@fromId"
                                                 data-to-id="@toId"
-                                                @onclick="() => ToggleStylePicker(junction)">
+                                                @onclick="e => OpenStylePickerAsync(e, junction)">
                                             …
                                         </button>
-
-                                        @if (_openStylePickerFor == junction)
-                                        {
-                                            <div class="bv-transition-style-picker__backdrop" @onclick="ClosePicker"></div>
-                                            <div class="bv-transition-style-picker">
-                                                @foreach (var style in _pickerStyles)
-                                                {
-                                                    var capturedStyle = style;
-                                                    <button class="bv-transition-style-picker__item"
-                                                            @onclick="() => InsertTransition(trkId, fromId, toId, capturedStyle)">
-                                                        @capturedStyle
-                                                    </button>
-                                                }
-                                            </div>
-                                        }
                                     </div>
                                 }
                             }
@@ -862,6 +857,21 @@
                         OnClick="@(async (BvMenuItem i) => { if (i.Action is not null) await i.Action(); })">
     </TelerikContextMenu>
 
+    <!-- The style picker for an empty junction. It used to be a hand-rolled popover anchored to
+         the little "…" button, opening downwards — and that button lives in the timeline, which is
+         the bottom strip of an editor whose shell is overflow:hidden and whose page does not
+         scroll. Sixteen styles are 418px tall, so thirteen of them were drawn past the bottom of
+         the window and could not be clicked at all. The same TelerikContextMenu the other three
+         menus here use renders at body level and flips when it would not fit (2026-09-18 audit). -->
+    <TelerikContextMenu @ref="_stylePickerMenu"
+                        Data="@_stylePickerItems"
+                        TextField="Text"
+                        IconField="Icon"
+                        SeparatorField="IsSeparator"
+                        DisabledField="IsDisabled"
+                        OnClick="@(async (BvMenuItem i) => { if (i.Action is not null) await i.Action(); })">
+    </TelerikContextMenu>
+
 </footer>
 
 @code {
@@ -895,6 +905,7 @@
     private TelerikContextMenu<BvMenuItem>? _trackMenu;
     private TelerikContextMenu<BvMenuItem>? _markerMenu;
     private TelerikContextMenu<BvMenuItem>? _transitionMenu;
+    private TelerikContextMenu<BvMenuItem>? _stylePickerMenu;
 
     private List<BvMenuItem> _clipMenuItems       = [];
     private List<BvMenuItem> _trackMenuItems      = [];
@@ -911,22 +922,46 @@
     /// </remarks>
     private void FadeClip(TrackItem item, bool fadeIn)
     {
-        if (item is not VideoClip clip) return;
-
-        var seconds = Math.Min(1.0, clip.EffectiveLength / 4);
+        // Audio too. Fading a sound in and out is the commonest edit there is on an audio clip,
+        // and the store, the model and the properties panel have all supported it for a while —
+        // only this menu refused, showing a person the two items they wanted greyed out with
+        // nothing to say why (2026-09-18 audit).
+        var seconds = Math.Min(1.0, item.EffectiveLength / 4);
         if (seconds <= 0) return;
 
-        Clips.UpdateClipEffects(clip.Id, fadeIn
-            ? clip.Effects with { FadeInSeconds  = seconds }
-            : clip.Effects with { FadeOutSeconds = seconds });
+        switch (item)
+        {
+            case VideoClip clip:
+                Clips.UpdateClipEffects(clip.Id, fadeIn
+                    ? clip.Effects with { FadeInSeconds  = seconds }
+                    : clip.Effects with { FadeOutSeconds = seconds });
+                break;
+
+            // UpdateAudioFade takes both at once and clamps them against the TRIMMED length, so
+            // the one that is not being set has to be passed through as it stands.
+            case AudioClip audio:
+                Clips.UpdateAudioFade(audio.Id,
+                    fadeIn ? seconds : audio.FadeInSeconds,
+                    fadeIn ? audio.FadeOutSeconds : seconds);
+                break;
+        }
     }
 
     private async Task OpenClipMenu(MouseEventArgs e, TrackItem item)
     {
+        // Read the playhead BEFORE selecting. Selecting a clip moves the playhead to that clip's
+        // start (VideoEditor.OnTimelineItemSelected, deliberately, since the 2026-09-05 audit) —
+        // so asking afterwards whether the playhead is strictly inside the clip was asking whether
+        // the clip's own start is after itself. It never is: "Split at Playhead" was disabled every
+        // single time it was opened, in the only way the menu can be opened, and splitting was
+        // reachable only by knowing the S shortcut. The playhead a person means is the one they
+        // were looking at when they right-clicked (2026-09-18 audit).
+        var playhead = Playback.State.TimelineTime;
+
         await SelectItem(item);
+
         // Inside this clip's own span on the timeline, not "between zero and its length" —
         // which was only the same question for a clip starting at zero.
-        var playhead  = Playback.State.TimelineTime;
         var canSplit  = item is VideoClip vc2 &&
                         playhead > vc2.TimelinePosition &&
                         playhead < vc2.TimelinePosition + vc2.TrimmedDuration;
@@ -962,8 +997,10 @@
                     {
                         if (item is VideoClip vc3)
                             // Absolute playhead → the clip's own offset; see
-                            // ClipStore.SplitClipAtTimelineTime.
-                            Clips.SplitClipAtTimelineTime(vc3.Id, Playback.State.TimelineTime);
+                            // ClipStore.SplitClipAtTimelineTime. The captured playhead, not the
+                            // live one — by now selecting has moved the live one to this clip's
+                            // start, where the cut would be a no-op.
+                            Clips.SplitClipAtTimelineTime(vc3.Id, playhead);
                         return Task.CompletedTask;
                     }, IsDisabled = locked || !canSplit },
             new() { Text = "Separate Audio", Icon = SvgIcon.VolumeUp,
@@ -980,10 +1017,10 @@
                transitions-9). *@
             new() { Text = "Fade In", Icon = SvgIcon.BrightnessContrast,
                     Action = () => { FadeClip(item, fadeIn: true); return Task.CompletedTask; },
-                    IsDisabled = locked || item is not VideoClip },
+                    IsDisabled = locked || item is not (VideoClip or AudioClip) },
             new() { Text = "Fade Out", Icon = SvgIcon.BrightnessContrast,
                     Action = () => { FadeClip(item, fadeIn: false); return Task.CompletedTask; },
-                    IsDisabled = locked || item is not VideoClip },
+                    IsDisabled = locked || item is not (VideoClip or AudioClip) },
             new() { IsSeparator = true },
             new() { Text = "Speed: 0.5×", Action = () => { SetSpeed(item, 0.5); return Task.CompletedTask; }, IsDisabled = locked || item is not VideoClip },
             new() { Text = "Speed: 1×",   Action = () => { SetSpeed(item, 1.0); return Task.CompletedTask; }, IsDisabled = locked || item is not VideoClip },
@@ -1033,7 +1070,7 @@
         [
             .. _pickerStyles.Select(style => new BvMenuItem
             {
-                Text   = $"Replace: {style}",
+                Text   = $"Replace: {TransitionStyleName.For(style)}",
                 Action = () =>
                 {
                     Clips.UpdateTransition(transition.Id, style, transition.Duration);
@@ -1104,9 +1141,18 @@
             await _markerMenu.ShowAsync(e.ClientX, e.ClientY);
     }
 
+    /// <summary>
+    /// Through the store, like every other edit.
+    /// </summary>
+    /// <remarks>
+    /// This used to set <c>vc.Speed</c> on the model and call NotifyChanged, going nowhere near
+    /// <c>ClipStore.UpdateClipSpeed</c> — which the properties panel's own slider has always used.
+    /// So a speed picked from the timeline's menu pushed no command and could not be undone, and
+    /// it skipped the clamp and the overlap the store resolves afterwards (2026-09-18 audit).
+    /// </remarks>
     private void SetSpeed(TrackItem item, double speed)
     {
-        if (item is VideoClip vc) { vc.Speed = speed; Clips.NotifyChanged(); }
+        if (item is VideoClip vc) Clips.UpdateClipSpeed(vc.Id, speed);
     }
 
     private async Task SeparateAudioAsync(VideoClip clip)
@@ -1792,19 +1838,29 @@
 
     // ── Transition style picker (item #57 T3 — replaces the old hardcoded-Fade insert) ──────
 
-    private (Guid TrackId, Guid FromId, Guid ToId)? _openStylePickerFor;
     private static readonly List<TransitionStyle> _pickerStyles =
         Enum.GetValues<TransitionStyle>().Where(s => s != TransitionStyle.Cut).ToList();
 
-    private void ToggleStylePicker((Guid TrackId, Guid FromId, Guid ToId) junction) =>
-        _openStylePickerFor = _openStylePickerFor == junction ? null : junction;
+    private List<BvMenuItem> _stylePickerItems = [];
 
-    private void ClosePicker() => _openStylePickerFor = null;
+    private async Task OpenStylePickerAsync(MouseEventArgs e, (Guid TrackId, Guid FromId, Guid ToId) junction)
+    {
+        _stylePickerItems =
+        [
+            .. _pickerStyles.Select(style => new BvMenuItem
+            {
+                Text   = TransitionStyleName.For(style),
+                Action = () => { InsertTransition(junction.TrackId, junction.FromId, junction.ToId, style); return Task.CompletedTask; },
+            }),
+        ];
+
+        if (_stylePickerMenu is not null)
+            await _stylePickerMenu.ShowAsync(e.ClientX, e.ClientY);
+    }
 
     private void InsertTransition(Guid trackId, Guid fromId, Guid toId, TransitionStyle style = TransitionStyle.Fade)
     {
         Clips.AddTransition(trackId, fromId, toId, style, 1.0);
-        _openStylePickerFor = null;
     }
 
     /// <summary>
@@ -1840,7 +1896,7 @@
     private OverlayPlacement NewOverlayPlacement() =>
         OverlayPlacement.AtPlayhead(Playback.State.TimelineTime, Clips.TotalDuration);
 
-    private void AddTextOverlay()
+    private async Task AddTextOverlay()
     {
         var placement = NewOverlayPlacement();
         var overlay   = new TextOverlay
@@ -1851,9 +1907,12 @@
             Duration         = placement.Duration,
         };
         Clips.AddTextOverlay(overlay);
+
+        // Selected the moment it exists — see AddCalloutClip for why.
+        await SelectItem(overlay);
     }
 
-    private void AddCalloutClip()
+    private async Task AddCalloutClip()
     {
         // TimelineTime, not CurrentTime: in clip preview the media clock counts from the selected
         // clip's own start, so a callout added there landed earlier than the playhead by exactly
@@ -1867,6 +1926,16 @@
             Duration         = placement.Duration,
         };
         Clips.AddCallout(clip);
+
+        // And selected, so the properties panel is already showing the thing just made.
+        //
+        // It used to be added and left alone: the panel went on saying "Select a clip on the
+        // timeline to edit its properties" while the new callout sat unselected somewhere on the
+        // timeline, and the arrow — the whole point of a callout, and the way somebody points at
+        // the evidence in their footage — had to be hunted down and clicked before it could be
+        // aimed. Creating a thing and selecting it is one action to a person, not two.
+        // Found by pressing the button, 2026-09-18.
+        await SelectItem(clip);
     }
 
  // --- Drag-and-drop reorder ---
@@ -2537,6 +2606,9 @@
     private static string ItemTitle(TrackItem item) => item switch
     {
         TextOverlay to => to.Text,
+        // From the style, not the stored Name: a project saved before transitions were given
+        // readable names would otherwise show "WipeLeft" on its chip for ever (2026-09-18 audit).
+        Transition t   => TransitionStyleName.For(t.Style),
         _              => item.Name
     };
 

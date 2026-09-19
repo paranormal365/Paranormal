@@ -135,20 +135,30 @@ public sealed class AdminAppUserController : AdminEntityControllerBase<AppUser, 
         if (toAdd.Count == 0 && toRemove.Count == 0)
             return Ok(new AppUserRolesAdminRecord(id, before));
 
-        if (toRemove.Count > 0)
+        // Identity THROWS rather than failing for two ordinary states — a role whose lookup name does not match its
+        // name, and a membership that is already there or already gone — and an exception here reaches the page as a
+        // 500 with no body, which reads as "the server did not say why" (Ben, 2026-09-15). Named instead.
+        try
         {
-            var removed = await _userManager.RemoveFromRolesAsync(user, toRemove);
-            if (!removed.Succeeded)
-                return BadRequest(removed.Errors.Select(e => e.Description));
-        }
-        if (toAdd.Count > 0)
-        {
-            var added = await _userManager.AddToRolesAsync(user, toAdd);
-            if (!added.Succeeded)
-                return BadRequest(added.Errors.Select(e => e.Description));
-        }
+            if (toRemove.Count > 0)
+            {
+                var removed = await _userManager.RemoveFromRolesAsync(user, toRemove);
+                if (!removed.Succeeded)
+                    return BadRequest(string.Join(" ", removed.Errors.Select(e => e.Description)));
+            }
+            if (toAdd.Count > 0)
+            {
+                var added = await _userManager.AddToRolesAsync(user, toAdd);
+                if (!added.Succeeded)
+                    return BadRequest(string.Join(" ", added.Errors.Select(e => e.Description)));
+            }
 
-        await _userManager.UpdateSecurityStampAsync(user);
+            await _userManager.UpdateSecurityStampAsync(user);
+        }
+        catch (InvalidOperationException ex)
+        {
+            return BadRequest($"The account system refused the change: {ex.Message}");
+        }
 
         var after = before.Except(toRemove, StringComparer.OrdinalIgnoreCase)
             .Concat(toAdd)
@@ -183,8 +193,11 @@ public sealed class AdminAppUserController : AdminEntityControllerBase<AppUser, 
         user.Handle = await _handles.AllocateAsync(user.DisplayName, user.Email, ct);
 
         var result = await _userManager.CreateAsync(user, request.Password);
+        // One sentence the New User page shows as it is. This used to be a JSON list of Identity's descriptions, which
+        // the website could not show as prose, so it said "the server rejected the request" for every refusal — and a
+        // SuperAdmin adding a family member could not tell a space in the username from a taken email (2026-09-15).
         if (!result.Succeeded)
-            return BadRequest(result.Errors.Select(e => e.Description));
+            return BadRequest(string.Join(" ", result.Errors.Select(e => e.Description)));
 
         if (request.IsSuperAdmin)
             await _userManager.AddToRoleAsync(user, RoleNames.SuperAdmin);

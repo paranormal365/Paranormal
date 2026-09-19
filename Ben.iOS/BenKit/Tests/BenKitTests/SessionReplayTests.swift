@@ -204,27 +204,106 @@ struct SessionReplayTests {
         #expect(replay.timeline.endedAt == start.addingTimeInterval(42))
     }
 
-    @Test func playingAdvancesThePlayheadAndStopsAtTheEnd() async throws {
+    /// The playhead follows ELAPSED TIME, not the number of ticks that happened to fire.
+    ///
+    /// This is the arithmetic on its own, with no scheduler in it — which is the point. Playback
+    /// used to add a fixed amount per tick, so a device too busy to run the ticks played the
+    /// session back slower than the speed on the label, and in the limit did not move at all.
+    /// A tick-counting implementation cannot satisfy this test, because it has no notion of how
+    /// long the tick actually took.
+    ///
+    /// Compared within a millisecond rather than exactly: a `Date` holds seconds since 2001 as a
+    /// Double, so at 780 million seconds there are only about seven digits left after the point.
+    /// The arithmetic is right; the epoch is just large.
+    @Test func thePlayheadIsMeasuredNotCounted() {
+        // 400ms of real time at 8x is 3.2 seconds of the night, however many ticks fired.
+        let after = SessionReplay.playhead(
+            from: start, elapsed: .milliseconds(400), rate: 8,
+            endingAt: start.addingTimeInterval(3600))
+        #expect(abs(after.timeIntervalSince(start) - 3.2) < 0.001)
+
+        // One slow tick covers what several quick ones would have.
+        let slow = SessionReplay.playhead(
+            from: start, elapsed: .milliseconds(900), rate: 1,
+            endingAt: start.addingTimeInterval(3600))
+        #expect(abs(slow.timeIntervalSince(start) - 0.9) < 0.001)
+    }
+
+    @Test func thePlayheadNeverRunsPastTheEndOfTheSession() {
+        // A starved ticker can wake long after the session finished; the clamp is what stops it
+        // reporting a moment the night never had.
+        let end = start.addingTimeInterval(10)
+        let after = SessionReplay.playhead(
+            from: start, elapsed: .seconds(60), rate: 8, endingAt: end)
+        #expect(after == end)
+    }
+
+    /// Changing speed must not throw away the time since the last tick.
+    ///
+    /// Re-anchoring is right — without it a change to 8x would re-scale every second already
+    /// played — but it has to anchor where the playhead *is*, not where the last tick left it.
+    /// Anchoring on the stored value drops everything since that tick, which at 64x is over six
+    /// seconds of the night per change, gone silently.
+    @Test func changingSpeedDoesNotLoseTheTimeSinceTheLastTick() async throws {
         let replay = try await loaded([reading(0, emf: 48)],
-                                      endedAt: start.addingTimeInterval(1))
+                                      endedAt: start.addingTimeInterval(7200))
+        replay.setRate(32)
+        let began = ContinuousClock.now
+        replay.play()
+
+        // Twenty changes to the SAME speed. Nothing about playback should change; each one is
+        // simply an opportunity to lose the fraction of a tick that had accrued.
+        for _ in 0..<20 {
+            try await Task.sleep(for: .milliseconds(50))
+            replay.setRate(32)
+        }
+
+        let moved = replay.playhead.timeIntervalSince(start)
+        let real = ContinuousClock.now - began
+        replay.pause()
+
+        let realSeconds = Double(real.components.seconds)
+                        + Double(real.components.attoseconds) / 1e18
+        // Two ticks of slack: the playhead is read between ticks, so it always trails a little.
+        // The defect loses about twenty times that, and a starved machine only makes `real`
+        // larger, which the measured playhead follows.
+        #expect(moved > realSeconds * 32 - 2 * 0.1 * 32)
+    }
+
+    /// Playing moves the playhead, and reaching the end stops it.
+    ///
+    /// Waits on the VALUE rather than on the clock. The first version slept 400ms and then
+    /// asserted, which failed once inside a full parallel suite: the ticker was starved for the
+    /// whole window and the playhead had not moved. A fixed sleep is a bet on the machine being
+    /// idle.
+    @Test func playingAdvancesThePlayheadAndStopsAtTheEnd() async throws {
+        // A long timeline, so this is about the playhead MOVING — reaching the end is the test
+        // below. At 8x the old one finished in two ticks, which made its final assertion
+        // ("not playing") true whether or not pause() did anything.
+        let replay = try await loaded([reading(0, emf: 48)],
+                                      endedAt: start.addingTimeInterval(600))
         replay.setRate(8)
         replay.play()
         #expect(replay.isPlaying)
 
-        try await Task.sleep(for: .milliseconds(400))
+        try await waitUntil("the playhead moves") { await replay.playhead > self.start }
 
-        #expect(replay.playhead > start)
         replay.pause()
         #expect(!replay.isPlaying)
+
+        // Paused means paused: it does not creep on afterwards.
+        let parked = replay.playhead
+        try await Task.sleep(for: .milliseconds(250))
+        #expect(replay.playhead == parked)
     }
 
-    @Test func playbackSpeedIsClampedToSomethingUsable() async throws {
-        let replay = try await loaded([reading(0, emf: 48)])
-        // Guards the crash this found: under @Observable a self-assigning didSet recurses
-        // forever, so clamping goes through a method.
-        replay.setRate(1_000)
-        #expect(replay.rate == 64)      // a five-hour vigil is not watched at 1x
-        replay.setRate(0.001)
-        #expect(replay.rate == 0.5)
+    @Test func reachingTheEndStopsPlaybackOnItsOwn() async throws {
+        let end = start.addingTimeInterval(1)
+        let replay = try await loaded([reading(0, emf: 48)], endedAt: end)
+        replay.setRate(64)            // a second of session at 64x is over in ~16ms
+        replay.play()
+
+        try await waitUntil("playback stops at the end") { await !replay.isPlaying }
+        #expect(replay.playhead == end)
     }
 }

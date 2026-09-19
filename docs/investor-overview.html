@@ -69,7 +69,7 @@
   <div class="tagline">The professional platform for paranormal investigation —<br>and the community built around it.</div>
   <div class="rule"></div>
   <div class="meta">
-    Investor Overview · August 2026<br><br>
+    Investor Overview · September 2026<br><br>
     Prepared by Ben Clark<br>
     Confidential — for discussion purposes
   </div>
@@ -110,6 +110,20 @@ required. A group that adopts IsHaunted.com moves its whole working life here.
 <figure>
   <img src="investor-media/case-detail.png" alt="Case detail" style="width:90%; margin:0 auto;">
   <figcaption>A case is a complete record: overview, timeline, investigations, files, transfers, messages, reports, research, notes and video — one tab each.</figcaption>
+</figure>
+
+<p>
+Research is where a case's history gets told: each research note is a <strong>page</strong> built from
+blocks — formatted text, pictures, documents, link cards and maps — pasted or dropped in anywhere and
+dragged into order, the way people already work in OneNote or Notion. A page saves itself, stays a
+private draft until published, and takes its place on the case timeline by the date it is about. A map
+holds the places the investigator chose, never the client's address, with walking or driving routes
+between them and the distance and time of each leg.
+</p>
+
+<figure>
+  <img src="../Ben.Web.Website/wwwroot/help/media/working-a-case/research-map.png" alt="A map block on a research page" style="width:70%; margin:0 auto;">
+  <figcaption>A research page's map: the library holding the old city directories, and the cemetery where the previous owners are buried, with the driving route between them.</figcaption>
 </figure>
 
 <h3>For everyone else: the public stage</h3>
@@ -182,6 +196,34 @@ the viewer first. One switch turns it on.
   </figure>
 </div>
 
+<div class="kicker">A third customer</div>
+<h2>Hosted events: haunted weekends, sold out</h2>
+<p class="lead">
+Haunted hotels, historic theatres and event companies run séance weekends, dinners and evenings of
+evidence, and sell them with a web form and a spreadsheet. IsHaunted.com now runs the whole thing:
+the venue's rooms or a seat plan, bookings with holds that lapse on their own, confirmations carrying
+a QR pass, a door that checks people in by scan or by name — with no signal, on the iPhone — menus and
+dietary sheets for the kitchen, a programme guests sign up for, and a room where guests share photos.
+</p>
+<p>
+Venues get a public page and say which organizers may host under their roof; IsHaunted keeps it
+trustworthy with an events dashboard, removal with the credit returned, and an appeal a person reads.
+The model is simple and additive: <strong>$99 an event credit</strong>, however many nights, or unlimited
+events on a business plan — and <strong>guests pay the venue directly</strong>, so there is no ticket fee
+to compete on and no guest money to hold.
+</p>
+
+<div class="fig-pair" style="grid-template-columns: 1.45fr 0.55fr; align-items: start;">
+  <figure>
+    <img src="media/hosted-events/walk/45-public-event.png" alt="A hosted event's public page">
+    <figcaption>A hosted event's page, with the venue's photographs, the nights and what is left.</figcaption>
+  </figure>
+  <figure>
+    <img src="../Ben.Web.Website/wwwroot/help/media/the-mobile-apps/iphone-door-scanned.png" alt="The door on the iPhone">
+    <figcaption>The door on the iPhone: scan a pass, tap the party, check them in — offline.</figcaption>
+  </figure>
+</div>
+
 <div class="kicker">What exists today</div>
 <h2>Built, tested, and deployed</h2>
 <p>The platform is deployed at <strong>ishaunted.com</strong>. This is not a prototype and not a
@@ -189,6 +231,9 @@ deck — it is a working product with production-grade engineering discipline:</
 <div class="two-col">
 <ul>
   <li>Full case lifecycle: intake requests, case records, timelines, investigations, findings, reports</li>
+  <li>Research pages: a reusable block editor with autosave, private drafts and publishing, maps with
+      walking and driving routes, and link cards fetched safely on our own servers</li>
+  <li>Formatted case descriptions, notes and client messages, cleaned before they are stored</li>
   <li>Browser video editor with native helper app for full-speed rendering</li>
   <li>Server-side EVP detection with an accuracy-gated fixture suite</li>
   <li>Audio tooling: waveform players, spectrograms, region notes, clip extraction, case mixes</li>
@@ -197,6 +242,10 @@ deck — it is a working product with production-grade engineering discipline:</
   <li>Per-group public websites (CMS): pages, layouts, logos, embedded cases and galleries</li>
   <li>Equipment: personal and group inventories, a moderated global catalog, lending with condition photos</li>
   <li>Events: public listings, RSVPs, attendee evidence submission, reminder automation</li>
+  <li>Hosted events: room and seat plans, holds, a booking board, QR passes, staff and the door,
+      menus and dietary sheets, programmes, files, a guest photo room, venue approval, reviews,
+      and SuperAdmin oversight with removal and appeals</li>
+  <li>Ghost walking tours: tour pages, dates, capacity, reminders with the guide, and reviews</li>
   <li>Roles &amp; permissions: per-group custom roles with per-table grants, tier-aware</li>
   <li>Community: profiles, @handles, following, hashtags, and the full public feed — anonymous
       scroll, ranked timeline, photo and video posts screened on our own servers before they
@@ -205,13 +254,15 @@ deck — it is a working product with production-grade engineering discipline:</
       group-authored promotional ads with platform review, served nearest-viewer-first</li>
   <li>Native iPhone and iPad app on the same API, running on device today</li>
   <li>Field Kit: the phone as an offline recording instrument, replayed on either side</li>
-  <li>Billing foundation: tiers by member count, contract-terms freezing, coupons, referral
-      tracking, an append-only financial ledger with receipts and per-state tax</li>
+  <li>Billing: tiers by member count, contract-terms freezing, coupons, referral tracking, event
+      credits, an append-only financial ledger with receipts and per-state tax, card payments
+      through Stripe, a buy button on every plan, and a switch that takes plans off sale</li>
   <li>In-app help system with full product documentation, generated to PDF</li>
 </ul>
 </div>
 <div class="callout avoid-break">
-<strong>Engineering discipline as an asset:</strong> 3,270 automated unit tests and a 350+ scenario
+<strong>Engineering discipline as an asset:</strong> more than 9,100 automated unit tests across
+the server, website and media tooling, 440+ in the iPhone app's core library, and a 700+ scenario
 browser test suite run against every change; an append-only audit trail on financial records;
 additive-only database migrations; and a documented decision record covering 180+ tracked product
 items. The codebase is built to be operated, audited, and grown.
@@ -248,6 +299,9 @@ the activity that grows the community.</p>
       upgrade-aware messaging in the product.</li>
   <li><strong>Referral program</strong> — per-referrer coupon campaigns with frozen-money attribution and
       a commission ledger; referral links land visitors on pre-discounted pricing.</li>
+  <li><strong>Event credits</strong> — $99 publishes one hosted event however many nights it runs, good
+      for a year and returned if the event is called off in time; business plans host without limit.</li>
+  <li><strong>Tour operators</strong> — ghost walks priced per tour, not per guide, with every date included.</li>
   <li><strong>Group promotion</strong> — groups author ads, the platform reviews them, and placements run
       across the site; location-targeted feed placement is on the roadmap below.</li>
 </ul>
@@ -277,10 +331,9 @@ the activity that grows the community.</p>
 </tr>
 <tr>
   <td><strong>Payments integration</strong></td>
-  <td>Card processing for subscriptions and overflow seats on top of the existing billing domain
-  (tiers, contracts, ledger, receipts, tax are already built and tested — the processor plugs into
-  a finished frame).</td>
-  <td>Designed; the manual billing path runs today.</td>
+  <td>Card processing for subscriptions, overflow seats and event credits on top of the existing
+  billing domain (tiers, contracts, ledger, receipts, tax).</td>
+  <td><strong>Live.</strong> Stripe checkout and webhooks feed the same ledger the manual path uses.</td>
 </tr>
 <tr>
   <td><strong>iPhone &amp; iPad app</strong></td>
@@ -294,8 +347,9 @@ the activity that grows the community.</p>
   investigations with a map of where you've been, and public events with RSVP and add-to-calendar
   all work against the live API today, as does <strong>Sign in with Apple</strong> — the server
   validates Apple's token and links it to an existing account by verified email rather than
-  creating a duplicate. Enrolment in the Apple Developer Program is the remaining step before
-  submission.</td>
+  creating a duplicate. <strong>Submitted to the App Store</strong>; hosted-event passes that open
+  offline, the event's programme and menus, a door scanner that works with no signal, and sharing
+  photos to an event from the Photos app have been added since.</td>
 </tr>
 <tr>
   <td><strong>Field Kit</strong></td>
@@ -355,7 +409,7 @@ to walk through the product live; everything shown here is a login away.
 <p><strong>Ben Clark</strong><br>ben.clark@vanderbilt.edu · ishaunted.com</p>
 
 <div class="footer-note">
-This document describes the product and its roadmap as of August 2026. Screenshots are of the
+This document describes the product and its roadmap as of September 2026. Screenshots are of the
 running application against demonstration data. It contains no financial projections; figures
 cited (test counts, tracked items) are drawn directly from the project's repository and are
 verifiable on request.

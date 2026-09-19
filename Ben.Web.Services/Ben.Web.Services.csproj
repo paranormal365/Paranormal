@@ -23,6 +23,9 @@
          served raw to anyone who guesses its name, which would hand out the app-administration
          documents past their audience gate. -->
     <EmbeddedResource Include="Help\Content\*.md" />
+    <!-- The public changelog, embedded for the same reason: a file under wwwroot is served raw,
+         and these are rendered through the site so the audience and the shape stay ours. -->
+    <EmbeddedResource Include="Changelog\Content\*.md" />
     <!-- Screenshots for the administrator documents, for the same reason. These are inlined as
          data URIs at render time rather than served: an <img> carries no bearer token, so an
          authorised image endpoint would 401 for precisely the readers allowed to see it. The

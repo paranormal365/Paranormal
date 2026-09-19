@@ -13,6 +13,10 @@ struct SignInView: View {
     @State private var countdown: Int = 0
     @State private var countdownTask: Task<Void, Never>?
 
+    /// Sign in with Apple's whole flow, owned HERE rather than by the section that draws the
+    /// button, so the form it leads to is presented by the form — see ``AppleSignInFlow``.
+    @State private var apple = AppleSignInFlow()
+
     private var session: SessionStore { dependencies.session }
 
     var body: some View {
@@ -55,7 +59,7 @@ struct SignInView: View {
                               || session.state == .fetchingIdentity)
                 }
 
-                AppleSignInSection { dismiss() }
+                AppleSignInSection(flow: apple) { dismiss() }
             }
             .navigationTitle("Sign in")
             .navigationBarTitleDisplayMode(.inline)
@@ -79,6 +83,15 @@ struct SignInView: View {
             }
             .onDisappear { countdownTask?.cancel() }
         }
+        // On the navigation stack, NOT on the Apple section, and not stacked on the form beside
+        // the two-factor sheet either. A presentation asked for by a section whose own rows are
+        // changing that same instant — the spinner going away as the answer arrives — is torn down
+        // along with the sign-in sheet that contains it. Nothing appeared and the app fell back to
+        // a signed-out profile with no message, which is what App Review reported on 2026-09-12.
+        .sheet(isPresented: $apple.collecting) {
+            AppleProfileSheet(flow: apple) { dismiss() }
+                .environment(dependencies)
+        }
     }
 
     private func startCountdown(from retryAfter: TimeInterval?) {
@@ -89,9 +102,16 @@ struct SignInView: View {
         }
         countdown = Int(retryAfter.rounded(.up))
         countdownTask = Task {
-            while countdown > 0, !Task.isCancelled {
-                try? await Task.sleep(for: .seconds(1))
-                countdown -= 1
+            // Measured against a deadline rather than counted down a tick at a time. A sleep
+            // promises "at least", so a phone that is busy — which after several failed sign-ins
+            // it may well be — makes a counted countdown run slow, and somebody sits watching a
+            // lock that lifted a while ago.
+            let began = ContinuousClock.now
+            while !Task.isCancelled {
+                try? await Task.sleep(for: .milliseconds(250))
+                countdown = max(0, Int((retryAfter - (ContinuousClock.now - began).inSeconds)
+                                           .rounded(.up)))
+                if countdown == 0 { return }
             }
         }
     }

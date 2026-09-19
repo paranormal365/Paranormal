@@ -1,0 +1,322 @@
+@page "/admin/events"
+@namespace Ben.Web.Website.Library.SuperAdmin
+
+@inject IBenAdminClient AdminClient
+@inject IBenUserState UserState
+@inject NavigationManager NavManager
+
+@using Ben.Web.Website.Library.Manage.Events
+
+<PageTitle>SuperAdmin — Events</PageTitle>
+
+@* Every hosted event on the site, for the people who run it (item 235 phase 17b).
+
+   Ben, 2026-09-13: "a list like the user list but with user name, event name and dates, with view icon and delete
+   icon". Delete is removal, on a page of its own like deleting a person, because what it does — the credit, the
+   guests, the letter, the appeal — needs saying before it is done.
+
+   APPEALS FIRST. An organizer waiting on an answer is the one thing on this page with somebody on the other end of
+   it, so the waiting appeals sit above the list. *@
+
+<div class="container-fluid px-3">
+    <div class="row mb-3 align-items-center">
+        <div class="col">
+            <h3 class="mb-0">All events <HelpLink Slug="site-administration" Anchor="hosted-events" /></h3>
+            <p class="text-secondary small mb-0">Every hosted event, whoever runs it, in every state.</p>
+        </div>
+        <div class="col-auto">
+            <a href="/admin/dashboard?tab=events" class="btn btn-outline-secondary">
+                <BenIcon Name="bar-chart-2" Class="me-1" />Events dashboard
+            </a>
+        </div>
+    </div>
+
+    @if (_note is { Length: > 0 })
+    {
+        <div class="alert alert-success py-2" id="events-note">@_note</div>
+    }
+    @if (_error is { Length: > 0 })
+    {
+        <div class="alert alert-danger py-2" id="events-error" role="alert">@_error</div>
+    }
+
+    <BenItemState TItem="AdminHostedEventsRecord" Result="_result" Loading="_loading"
+                  LoadingText="Loading every event…" OnRetry="LoadAsync">
+        <ChildContent Context="all">
+
+            @* ── Appeals ─────────────────────────────────────────────────── *@
+            <div class="card mb-3 @(Waiting(all).Count > 0 ? "border-warning" : null)" id="appeals">
+                <div class="card-header fw-semibold">
+                    @(Waiting(all).Count == 0 ? "No appeals waiting" : $"Appeals waiting ({Waiting(all).Count})")
+                </div>
+                @if (all.Appeals.Count == 0)
+                {
+                    <div class="card-body text-secondary small">
+                        When an organizer appeals a removal, it waits here for an answer.
+                    </div>
+                }
+                else
+                {
+                    <ul class="list-group list-group-flush">
+                        @foreach (var appeal in all.Appeals)
+                        {
+                            var a = appeal;
+                            <li class="list-group-item" id="@($"appeal-{a.RemovalId}")">
+                                <div class="d-flex flex-wrap justify-content-between gap-2">
+                                    <div>
+                                        <a class="fw-semibold" href="@($"/organizations/{a.OrganizationId}/events/{a.HostedEventId}")">@a.EventName</a>
+                                        <span class="text-secondary"> · @a.OrganizationName · @a.StartsOn.ToDisplayDate()</span>
+                                    </div>
+                                    <span class="badge @AppealCss(a.AppealState)">@AppealWords(a.AppealState)</span>
+                                </div>
+                                <div class="small text-secondary mt-1">
+                                    Removed @a.RemovedUtc.ToViewerLocalTime(UserState).ToDisplayDate() by @a.RemovedByName,
+                                    when it was @EventStateWords.Of(a.PreviousState).
+                                    @(a.CreditReturned ? "Its credit went back." : "No credit to return.")
+                                    @if (a.RemovalNote is { Length: > 0 } why)
+                                    {
+                                        <span class="d-block">Note at removal: “@why”</span>
+                                    }
+                                </div>
+                                @if (a.AppealMessage is { Length: > 0 } said)
+                                {
+                                    <blockquote class="border-start ps-2 my-2 appeal-message">
+                                        @said
+                                        <footer class="small text-secondary">
+                                            @a.AppealedByName, @a.AppealedUtc?.ToViewerLocalTime(UserState).ToDisplayDate()
+                                        </footer>
+                                    </blockquote>
+                                }
+                                @if (a.AppealState is HostedEventAppealState.Waiting)
+                                {
+                                    <label class="form-label small mb-1" for="@($"appeal-note-{a.RemovalId}")">
+                                        Your answer (the organizer reads it; needed to decline)
+                                    </label>
+                                    <textarea class="form-control form-control-sm mb-2" rows="2" maxlength="2000"
+                                              id="@($"appeal-note-{a.RemovalId}")"
+                                              @bind="_answers[a.RemovalId]" @bind:event="oninput"></textarea>
+                                    <div class="d-flex gap-2">
+                                        <button type="button" class="btn btn-sm btn-success" id="@($"appeal-uphold-{a.RemovalId}")"
+                                                disabled="@_busy" @onclick="() => DecideAsync(a, true)">
+                                            Uphold — bring it back as a draft
+                                        </button>
+                                        <button type="button" class="btn btn-sm btn-outline-danger" id="@($"appeal-decline-{a.RemovalId}")"
+                                                disabled="@_busy" @onclick="() => DecideAsync(a, false)">
+                                            Decline
+                                        </button>
+                                    </div>
+                                }
+                                else if (a.DecisionNote is { Length: > 0 } answer)
+                                {
+                                    <div class="small">@a.DecidedByName answered: “@answer”</div>
+                                }
+                            </li>
+                        }
+                    </ul>
+                }
+            </div>
+
+            @* ── Every event ─────────────────────────────────────────────── *@
+            <div class="mb-3 d-flex flex-wrap align-items-center gap-2">
+                <label class="visually-hidden" for="events-search">Search events</label>
+                <input type="text" class="form-control" id="events-search" style="max-width:320px;"
+                       placeholder="Search by event, group, organizer or place…" @bind="_search" @bind:event="oninput" />
+                <label class="visually-hidden" for="events-state">State</label>
+                <select class="form-select" id="events-state" style="max-width:220px;" @bind="_state">
+                    <option value="">Every state</option>
+                    @foreach (var state in Enum.GetValues<HostedEventLifecycleState>())
+                    {
+                        <option value="@((int)state)">@EventStateWords.Label(state)</option>
+                    }
+                </select>
+                <span class="text-secondary small">@Filtered(all).Count of @all.Events.Count</span>
+            </div>
+
+            @if (all.Events.Count == 0)
+            {
+                <div class="text-secondary" id="events-none">No group has created a hosted event yet.</div>
+            }
+            else
+            {
+                <TelerikGrid Data="@Filtered(all)" TItem="AdminHostedEventRow" Pageable="true" PageSize="25" Sortable="true"
+                             Class="admin-events-grid">
+                    @* Every screen of the event, one click from the list: the SuperAdmin's way into any event's
+                       board, door or files without being a member of the group that runs it. The screens come
+                       from EventScreens, which a guard holds to every event page there is. *@
+                    <DetailTemplate>
+                        @{ var row = (AdminHostedEventRow)context; }
+                        <div class="p-2 ms-3" id="@($"screens-{row.Id}")">
+                            <div class="small text-secondary mb-2">Every screen of @row.EventName</div>
+                            <div class="d-flex flex-wrap gap-2">
+                                @foreach (var screen in Manage.Events.EventScreens.Organizer)
+                                {
+                                    <a class="btn btn-sm btn-outline-secondary" href="@screen.Href(row.OrganizationId, row.Id)">@screen.Label</a>
+                                }
+                                <a class="btn btn-sm btn-outline-secondary" href="@Manage.Events.EventScreens.PhotoWall(row.Id)">Photo wall</a>
+                                @if (row.State is HostedEventLifecycleState.Published or HostedEventLifecycleState.Live or HostedEventLifecycleState.Ended)
+                                {
+                                    <a class="btn btn-sm btn-outline-primary" target="_blank"
+                                       href="@Manage.Events.EventScreens.PublicPage(row.OrganizationUrlName, row.UrlName)">
+                                        <BenIcon Name="external-link" Class="me-1" />The public page
+                                    </a>
+                                }
+                            </div>
+                        </div>
+                    </DetailTemplate>
+                    <GridColumns>
+                        <GridColumn Field="@nameof(AdminHostedEventRow.CreatedByName)" Title="Organizer" Width="200px">
+                            <Template>
+                                @{ var row = (AdminHostedEventRow)context; }
+                                <UserNameLink AppUserId="@row.CreatedByAppUserId" DisplayName="@(row.CreatedByName ?? "—")" />
+                                <div class="small text-secondary text-truncate">@row.OrganizationName</div>
+                            </Template>
+                        </GridColumn>
+                        <GridColumn Field="@nameof(AdminHostedEventRow.EventName)" Title="Event" Width="240px">
+                            <Template>
+                                @{ var row = (AdminHostedEventRow)context; }
+                                <div class="fw-semibold">@row.EventName</div>
+                                <div class="small text-secondary text-truncate">
+                                    @(string.Join(" · ", new[] { row.VenueName, Where(row) }.Where(x => !string.IsNullOrEmpty(x))))
+                                </div>
+                            </Template>
+                        </GridColumn>
+                        <GridColumn Field="@nameof(AdminHostedEventRow.StartsOn)" Title="Dates" Width="170px">
+                            <Template>
+                                @{ var row = (AdminHostedEventRow)context; }
+                                <span class="text-nowrap">@Dates(row)</span>
+                            </Template>
+                        </GridColumn>
+                        <GridColumn Field="@nameof(AdminHostedEventRow.State)" Title="State" Width="150px">
+                            <Template>
+                                @{ var row = (AdminHostedEventRow)context; }
+                                <EventStateBadge State="@row.State" />
+                                @if (row.AppealState is HostedEventAppealState.Waiting)
+                                {
+                                    <span class="badge bg-warning text-dark ms-1">Appealed</span>
+                                }
+                            </Template>
+                        </GridColumn>
+                        <GridColumn Field="@nameof(AdminHostedEventRow.ConfirmedPeople)" Title="Coming" Width="100px">
+                            <Template>
+                                @{ var row = (AdminHostedEventRow)context; }
+                                @row.ConfirmedPeople
+                                @if (row.WaitingParties > 0)
+                                {
+                                    <span class="small text-secondary d-block">@row.WaitingParties waiting</span>
+                                }
+                            </Template>
+                        </GridColumn>
+                        <GridColumn Title="Actions" Width="110px" Sortable="false" Filterable="false" Context="cell">
+                            <Template>
+                                @{ var row = (AdminHostedEventRow)cell; }
+                                <div class="text-nowrap">
+                                    <BenGridAction Icon="eye" Label="View this event" Tone="GridActionTone.Primary" Href="@($"/organizations/{row.OrganizationId}/events/{row.Id}")" id="@($"view-{row.Id}")" />
+                                    @if (row.State is HostedEventLifecycleState.Removed)
+                                    {
+                                        <BenGridAction Icon="trash-2" Label="Already removed" Tone="GridActionTone.Danger" Disabled="true" />
+                                    }
+                                    else
+                                    {
+                                        <BenGridAction Icon="trash-2" Label="Remove this event" Tone="GridActionTone.Danger" Href="@($"/admin/events/{row.Id}/remove")" id="@($"remove-{row.Id}")" />
+                                    }
+                                </div>
+                            </Template>
+                        </GridColumn>
+                    </GridColumns>
+                </TelerikGrid>
+            }
+        </ChildContent>
+    </BenItemState>
+</div>
+
+@code {
+    private ItemResult<AdminHostedEventsRecord> _result;
+    private bool _loading = true;
+    private bool _busy;
+    private string _search = "";
+    private string _state = "";
+    private string? _note;
+    private string? _error;
+    private readonly Dictionary<Guid, string> _answers = new();
+
+    protected override async Task OnAfterRenderAsync(bool firstRender)
+    {
+        if (!firstRender) return;
+        if (!await UserState.WaitUntilAuthReadyAsync(RendererInfo.IsInteractive)) return;
+        if (!UserState.IsSuperAdmin || UserState.IsImpersonating) { NavManager.NavigateTo(Ben.Web.Website.Library.Kit.SignInLink.ForRefusal(NavManager, UserState)); return; }
+
+        await LoadAsync();
+        StateHasChanged();
+    }
+
+    private async Task LoadAsync()
+    {
+        _loading = true;
+        _result = await AdminClient.GetAdminHostedEventsAsync();
+        Answers(_result.Item);
+        _loading = false;
+    }
+
+    private void Answers(AdminHostedEventsRecord? all)
+    {
+        foreach (var a in all?.Appeals ?? [])
+            _answers.TryAdd(a.RemovalId, "");
+    }
+
+    private static IReadOnlyList<AdminHostedEventAppealRecord> Waiting(AdminHostedEventsRecord all)
+        => [.. all.Appeals.Where(a => a.AppealState is HostedEventAppealState.Waiting)];
+
+    private List<AdminHostedEventRow> Filtered(AdminHostedEventsRecord all)
+    {
+        IEnumerable<AdminHostedEventRow> rows = all.Events;
+        if (int.TryParse(_state, out var state))
+            rows = rows.Where(r => (int)r.State == state);
+        if (_search.Trim() is { Length: > 0 } q)
+            rows = rows.Where(r => new[] { r.EventName, r.OrganizationName, r.CreatedByName, r.VenueName, r.City }
+                .Any(x => x?.Contains(q, StringComparison.OrdinalIgnoreCase) == true));
+        return rows.ToList();
+    }
+
+    private static string? Where(AdminHostedEventRow row)
+        => string.Join(", ", new[] { row.City, row.Region }.Where(x => !string.IsNullOrWhiteSpace(x))) is { Length: > 0 } w ? w : null;
+
+    private static string Dates(AdminHostedEventRow row)
+        => row.StartsOn.Date == row.EndsOn.Date
+            ? row.StartsOn.ToDisplayDate()
+            : $"{row.StartsOn.ToDisplayDate()} – {row.EndsOn.ToDisplayDate()}";
+
+    private static string AppealWords(HostedEventAppealState state) => state switch
+    {
+        HostedEventAppealState.Waiting => "Waiting",
+        HostedEventAppealState.Upheld => "Upheld",
+        HostedEventAppealState.Declined => "Declined",
+        _ => "Not appealed",
+    };
+
+    private static string AppealCss(HostedEventAppealState state) => state switch
+    {
+        HostedEventAppealState.Waiting => "bg-warning text-dark",
+        HostedEventAppealState.Upheld => "bg-success",
+        HostedEventAppealState.Declined => "bg-secondary",
+        _ => "bg-body-secondary text-body",
+    };
+
+    private async Task DecideAsync(AdminHostedEventAppealRecord appeal, bool uphold)
+    {
+        _busy = true;
+        _error = null;
+        _note = null;
+        var (all, error) = await AdminClient.DecideHostedEventAppealAsync(appeal.RemovalId,
+            new DecideHostedEventAppealRequest(uphold, _answers.GetValueOrDefault(appeal.RemovalId)));
+        _busy = false;
+
+        if (all is null)
+        {
+            _error = error ?? "That appeal couldn't be answered just now.";
+            return;
+        }
+        _result = ItemResult<AdminHostedEventsRecord>.Ok(all);
+        Answers(all);
+        _note = all.Note;
+    }
+}

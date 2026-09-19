@@ -13,6 +13,24 @@ internal static class OrganizationSeeder
         var enabled = config.GetValue<bool>("SeedData:SeedOrganization:Enabled");
         if (!enabled) return;
 
+        // ── Putting a seeded password back (2026-09-11) ──────────────────────
+        //
+        // Off unless somebody asks for it, by design. The seeder's ordinary job is to CREATE the
+        // accounts it lists and then leave them alone, and a seeder that silently rewrote
+        // passwords on every start would be a standing way to take over a real account — the same
+        // reason an administrator may switch two-factor off and never on.
+        //
+        // It exists because james.thornton@benco.dev stopped accepting the password in the
+        // configuration, which makes every test and capture that signs in as the member seat fail
+        // on the login page with "Invalid email or password" — a broken fixture wearing the
+        // costume of a broken feature. Turn it on for one run:
+        //
+        //     SeedData__SeedOrganization__ResetPasswords=true dotnet run
+        //
+        // Only accounts listed under SeedData:SeedOrganization:Users are touched, and only to the
+        // password already written beside them there.
+        var resetPasswords = config.GetValue<bool>("SeedData:SeedOrganization:ResetPasswords");
+
         var orgName    = config["SeedData:SeedOrganization:OrgName"];
         var orgUrlName = config["SeedData:SeedOrganization:OrgUrlName"];
         var ownerEmail = config["SeedData:SuperAdmin:Email"];
@@ -48,6 +66,30 @@ internal static class OrganizationSeeder
                 continue;
 
             var user = await userManager.FindByEmailAsync(email);
+
+            if (user is not null && resetPasswords)
+            {
+                // Checked before it is rewritten, so a run that changes nothing says nothing —
+                // and so the log names the account that had actually drifted.
+                if (!await userManager.CheckPasswordAsync(user, password))
+                {
+                    var token = await userManager.GeneratePasswordResetTokenAsync(user);
+                    var reset = await userManager.ResetPasswordAsync(user, token, password);
+                    Console.WriteLine(reset.Succeeded
+                        ? $"[OrganizationSeeder] Reset the seeded password for {email}."
+                        : $"[OrganizationSeeder] Could not reset {email}: "
+                          + string.Join(", ", reset.Errors.Select(e => e.Description)));
+
+                    // A lockout left over from the failed sign-ins would keep the seat shut even
+                    // with the right password now on it.
+                    if (reset.Succeeded)
+                    {
+                        await userManager.SetLockoutEndDateAsync(user, null);
+                        await userManager.ResetAccessFailedCountAsync(user);
+                    }
+                }
+            }
+
             if (user is null)
             {
                 user = new AppUser

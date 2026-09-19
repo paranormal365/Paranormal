@@ -37,7 +37,11 @@ public static class ArchiveMediaPublication
                      && s.PlaceId != null
                      && s.Place!.Kind == PlaceKind.PublicLocation
                      && s.MediaReviewState == FeedMediaReviewState.Approved)
-            .AnyAsync(s => s.Files.Any(f => f.UploadFileId == uploadFileId), ct);
+            // A recording with a file of its own is asked for by that file's id; one inside the
+            // session's .ben has no file of its own and is asked for by its row's id. Both are the
+            // id the listing below hands out, so the page and the door agree.
+            .AnyAsync(s => s.Files.Any(f => f.UploadFileId == uploadFileId
+                                         || (f.Id == uploadFileId && f.BundleEntryPath != null)), ct);
 
     /// <summary>
     /// The files of one published session that may currently be shown, in document order.
@@ -50,20 +54,34 @@ public static class ArchiveMediaPublication
     /// </remarks>
     public static async Task<IReadOnlyList<ArchiveMediaItem>> ServableFilesAsync(
         BenDataContext db, Guid fieldSessionId, CancellationToken ct)
-        => await db.FieldSessionUploads.AsNoTracking()
+    {
+        var rows = await db.FieldSessionUploads.AsNoTracking()
             .Where(s => s.Id == fieldSessionId
                      && s.PublishedAtUtc != null
                      && s.PlaceId != null
                      && s.Place!.Kind == PlaceKind.PublicLocation
                      && s.MediaReviewState == FeedMediaReviewState.Approved)
             .SelectMany(s => s.Files)
+            // A recording sent on its own has an UploadFile; one sent inside the session's .ben has
+            // the path of its member instead (since 2026-09-16 the archive serves those too, as a
+            // range of the session file — the same way the share link and the phone read them).
+            .Where(f => f.UploadFileId != null || f.BundleEntryPath != null)
             .OrderBy(f => f.RelativePath)
-            .Select(f => new ArchiveMediaItem(
-                f.UploadFileId,
-                f.RelativePath,
-                f.UploadFile.ContentType,
-                f.UploadFile.FileName))
+            .Select(f => new
+            {
+                f.Id, f.UploadFileId, f.RelativePath, f.ContentType,
+                UploadContentType = f.UploadFile != null ? f.UploadFile.ContentType : null,
+                UploadFileName = f.UploadFile != null ? f.UploadFile.FileName : null,
+            })
             .ToListAsync(ct);
+
+        return rows.Select(r => new ArchiveMediaItem(
+                r.UploadFileId ?? r.Id,
+                r.RelativePath,
+                r.UploadContentType ?? r.ContentType ?? Services.FieldSessionFileGuard.ContentTypeFor(r.RelativePath),
+                r.UploadFileName ?? Path.GetFileName(r.RelativePath)))
+            .ToList();
+    }
 }
 
 /// <summary>
@@ -152,6 +170,10 @@ public sealed record PlaceEvidenceRow(
 /// <param name="ContentType">
 /// The type of the copy that will actually be SERVED, which for a sanitized derivative is not
 /// necessarily the type the device uploaded.
+/// </param>
+/// <param name="UploadFileId">
+/// The id the media route takes: the UploadFile's for a recording sent on its own, the session file
+/// row's for one inside the session's .ben. A visitor's page never needs to know which.
 /// </param>
 public sealed record ArchiveMediaItem(
     Guid UploadFileId,

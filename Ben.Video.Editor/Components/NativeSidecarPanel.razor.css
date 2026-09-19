@@ -53,3 +53,18 @@
     font-size: 0.85em;
     opacity: 0.85;
 }
+
+/* The "a newer sidecar is available" line. Quiet on purpose: nothing is broken, the sidecar in
+   front of the person is working, and this is the only channel that will ever mention an update
+   (2026-09-19). --bv-attention rather than the raw warning colour, for the contrast reason in the
+   theme file. */
+.bv-sidecar-panel__update {
+    margin-top: .5rem;
+    font-size: .8rem;
+    color: var(--bv-attention, var(--bv-text-muted));
+}
+
+.bv-sidecar-panel__update a {
+    color: inherit;
+    text-decoration: underline;
+}

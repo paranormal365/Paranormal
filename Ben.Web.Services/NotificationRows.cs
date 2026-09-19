@@ -108,6 +108,60 @@ public static class NotificationRows
                 $"Sent to you through the platform · oldest {NotificationBadge.DescribeAge(s.SystemMessages.OldestUnreadUtc)}",
                 "bell", "/notifications", s.SystemMessages));
 
+        // ── Tour seats (item 234) ────────────────────────────────────────────
+        // The business's queue first: somebody is standing at the other end of it waiting to be
+        // told whether they have a place.
+        if (s.TourSeatsToDecide is { Count: > 0 } toDecide)
+            rows.Add(new("Sign-ups waiting on you",
+                $"People asking for places on your tours · oldest {NotificationBadge.DescribeAge(toDecide.OldestUnreadUtc)}",
+                "user-check", "/organizations", toDecide));
+
+        if (s.MyTourSeats is { Count: > 0 } mine)
+            rows.Add(new("A tour answered you",
+                $"Your seat has been decided · {NotificationBadge.DescribeAge(mine.OldestUnreadUtc)}",
+                "calendar", "/events", mine));
+
+        // ── Hosted-event bookings (item 235) ─────────────────────────────────
+        // Their own rows rather than folded into the tour ones. A row reading "sign-ups waiting"
+        // that lands on a walk's screen when what is waiting is a hotel weekend sends somebody to
+        // the wrong page, and the two are decided from different screens.
+        // A group asking to use your building (phase 9). Its own row, because it is answered from
+        // the venue's page and by the people who answer for the building, not from a booking board.
+        if (s.VenueRequestsToDecide is { Count: > 0 } venue)
+            rows.Add(new("Groups asking to use your venue",
+                $"Events waiting for your yes or no · oldest {NotificationBadge.DescribeAge(venue.OldestUnreadUtc)}",
+                "map-pin", "/organizations", venue));
+
+        // Holds about to run out come first: the clock decides those if nobody does (phase 8).
+        if (s.EventHoldsLapsing is { Count: > 0 } lapsing)
+            rows.Add(new("Holds running out",
+                $"Seats held at your events lapse within a day unless somebody confirms them · oldest {NotificationBadge.DescribeAge(lapsing.OldestUnreadUtc)}",
+                "clock", "/organizations", lapsing));
+
+        if (s.EventBookingsToDecide is { Count: > 0 } bookings)
+            rows.Add(new("Bookings waiting on you",
+                $"People asking for a place at your events · oldest {NotificationBadge.DescribeAge(bookings.OldestUnreadUtc)}",
+                "home", "/organizations", bookings));
+
+        // /my-events and not /events: the second is what is ON, a list of everybody's evenings,
+        // and a row saying a venue answered YOU that lands there leaves somebody hunting for
+        // their own booking in it (item 235 phase 6, defect 16).
+        if (s.MyEventBookings is { Count: > 0 } myBookings)
+            rows.Add(new("A venue answered you",
+                $"Your booking has been decided · {NotificationBadge.DescribeAge(myBookings.OldestUnreadUtc)}",
+                "key", "/my-events", myBookings));
+
+        // A class moved or cancelled after the guest planned their evening around it (phase 10).
+        if (s.EventScheduleChanges is { Count: > 0 } changed)
+            rows.Add(new("The programme changed",
+                $"A session at an event you're going to has moved or been cancelled · {NotificationBadge.DescribeAge(changed.OldestUnreadUtc)}",
+                "calendar", "/my-events", changed));
+
+        if (s.MyEventHoldLapsing is { Count: > 0 } myHold)
+            rows.Add(new("Your hold is running out",
+                $"The venue has not confirmed it yet, and it lapses within a day · {NotificationBadge.DescribeAge(myHold.OldestUnreadUtc)}",
+                "clock", "/my-events", myHold));
+
         // Last: being named on a public post waits on nothing. It still gets a row, because the
         // total counts it and a number that explains everything except one item reads as wrong.
         if (s.FeedMentions.Count > 0)

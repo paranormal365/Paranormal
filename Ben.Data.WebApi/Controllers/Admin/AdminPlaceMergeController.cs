@@ -19,10 +19,10 @@ namespace Ben.Data.WebApi.Controllers.Admin;
 /// testing left three "Bell Witch Cave" records, which is precisely the mess the feature promises
 /// not to make. Without a merge the only cure is a database console.</para>
 ///
-/// <para><b>It moves everything, then deletes.</b> Investigations, cases, calendar events, field
-/// sessions and rooms all point at places; leaving any behind would orphan somebody's work at a
-/// record nothing links to any more. The delete is the last statement, in the same transaction, so
-/// a failure half way leaves both places intact rather than one gutted.</para>
+/// <para><b>It moves everything, then deletes.</b> Investigations, cases, calendar events, hosted
+/// events, field sessions, rooms and posts about the place all point at places; leaving any behind would orphan somebody's
+/// work at a record nothing links to any more. The delete is the last statement, in the same
+/// transaction, so a failure half way leaves both places intact rather than one gutted.</para>
 ///
 /// <para><b>SuperAdmin only, and irreversible.</b> Nothing records which place a row used to point
 /// at, so a merge cannot be undone by anything short of restoring a backup. That is acceptable for
@@ -163,7 +163,9 @@ public sealed class AdminPlaceMergeController : BenControllerBase
     /// </summary>
     public sealed record MergeResult(
         Guid SurvivingPlaceId, int Investigations, int Cases, int CalendarEvents,
-        int FieldSessions, int Rooms);
+        int FieldSessions, int Rooms, int HostedEvents,
+        /// <summary>Posts about the place, moved with it (2026-09-17). Trailing and defaulted.</summary>
+        int Posts = 0);
 
     /// <summary>Moves everything from one place onto another and deletes the empty one.</summary>
     [HttpPost("{id:guid}/merge")]
@@ -193,6 +195,22 @@ public sealed class AdminPlaceMergeController : BenControllerBase
             x => x.PlaceId = request.IntoPlaceId, ct);
         var events = await RepointAsync(db.OrgCalendarEvents.Where(x => x.PlaceId == id),
             x => x.PlaceId = request.IntoPlaceId, ct);
+        // Posts ABOUT the place (2026-09-17). The foreign key is SetNull, so without this line a
+        // merge would not fail — it would quietly strip the place off every post about it, which
+        // is worse: the posts survive with their text and lose the one thing that put them on a
+        // page. Repointed here so they follow the record that is kept.
+        var posts = await RepointAsync(
+            db.OrgMessages.Where(x => x.PlaceId == id),
+            x => x.PlaceId = request.IntoPlaceId, ct);
+
+        // Hosted events (item 235) point at their venue with a NoAction key, so until this line
+        // existed a merge of any place that had ever hosted one reached the delete below and was
+        // refused by SQL — and the duplicate most worth folding is exactly the record with a
+        // weekend on it. The umbrella calendar row moved above; the event it belongs to has to
+        // move with it, or the two would disagree about where the weekend is.
+        var hostedEvents = await RepointAsync(db.HostedEvents.Where(x => x.PlaceId == id),
+            x => x.PlaceId = request.IntoPlaceId, ct);
+
         var sessions = await RepointAsync(db.FieldSessionUploads.Where(x => x.PlaceId == id),
             x => x.PlaceId = request.IntoPlaceId, ct);
 
@@ -201,6 +219,46 @@ public sealed class AdminPlaceMergeController : BenControllerBase
         // pair remains distinguishable by the group that named them.
         var rooms = await RepointAsync(db.PlaceRooms.Where(x => x.PlaceId == id),
             x => x.PlaceId = request.IntoPlaceId, ct);
+
+        // Venues (item 235 phase 9). A yes given for one record of the building is a yes for the
+        // building, so grants move. Profiles move too, except where the same group already
+        // describes the surviving record — then the losing one goes, and only a verification is
+        // carried across, and only when the surviving record has no verified venue of its own.
+        // Two groups each proved to be the venue is a contradiction the index refuses; a merge is
+        // not the place to decide which of them is right, so the second verification is dropped
+        // and a SuperAdmin re-decides it as a claim.
+        await RepointAsync(db.OrganizationVenueGrants.Where(x => x.PlaceId == id),
+            x => x.PlaceId = request.IntoPlaceId, ct);
+        await RepointAsync(db.PlaceContacts.Where(x => x.PlaceId == id),
+            x => x.PlaceId = request.IntoPlaceId, ct);
+        await RepointAsync(db.VenuePlaceClaims.Where(x => x.PlaceId == id),
+            x => x.PlaceId = request.IntoPlaceId, ct);
+
+        var survivingProfiles = await db.OrganizationVenueProfiles
+            .Where(v => v.PlaceId == request.IntoPlaceId).ToListAsync(ct);
+        var survivorVerified = survivingProfiles.Any(v => v.VerifiedUtc != null);
+
+        foreach (var profile in await db.OrganizationVenueProfiles.Where(v => v.PlaceId == id).ToListAsync(ct))
+        {
+            var twin = survivingProfiles.FirstOrDefault(v => v.OrganizationId == profile.OrganizationId);
+            if (twin is not null)
+            {
+                if (profile.VerifiedUtc is not null && !survivorVerified)
+                {
+                    twin.VerifiedUtc = profile.VerifiedUtc;
+                    survivorVerified = true;
+                }
+                db.OrganizationVenueProfiles.Remove(profile);
+                continue;
+            }
+
+            profile.PlaceId = request.IntoPlaceId;
+            if (profile.VerifiedUtc is not null)
+            {
+                if (survivorVerified) { profile.VerifiedUtc = null; profile.IsPublished = false; }
+                else survivorVerified = true;
+            }
+        }
 
         db.Places.Remove(losing);
         await db.SaveChangesAsync(ct);
@@ -211,10 +269,11 @@ public sealed class AdminPlaceMergeController : BenControllerBase
 
         _log.LogInformation(
             "Place {Losing} merged into {Surviving}: {Investigations} investigations, {Cases} cases, "
-          + "{Events} events, {Sessions} sessions, {Rooms} rooms moved.",
-            id, request.IntoPlaceId, investigations, cases, events, sessions, rooms);
+          + "{Events} events, {HostedEvents} hosted events, {Sessions} sessions, {Rooms} rooms, "
+          + "{Posts} posts moved.",
+            id, request.IntoPlaceId, investigations, cases, events, hostedEvents, sessions, rooms, posts);
 
         return Ok(new MergeResult(
-            request.IntoPlaceId, investigations, cases, events, sessions, rooms));
+            request.IntoPlaceId, investigations, cases, events, sessions, rooms, hostedEvents, posts));
     }
 }

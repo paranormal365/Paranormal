@@ -90,9 +90,18 @@ public sealed class OrgPublicController : ControllerBase
             .Where(a => a.OrganizationId == org.Id)
             .Select(a => new { a.DisplayLabel, a.RadiusMiles })
             .FirstOrDefaultAsync(ct);
+        // Honours the two switches the owner actually set (2026-09-17 audit).
+        //
+        // This took the first address by Id with no filter at all, so an owner could mark an
+        // address Private — and see a grey "Private" badge confirming it — while this line put
+        // that address's city and state on the group's public page. PublicDisplayMode.Hidden means
+        // "show nothing to this audience" and was equally ignored. RegionOnly still discloses a
+        // region, which a city and state are, so it passes.
         var city = await db.OrganizationAddresses.AsNoTracking()
-            .Where(a => a.OrganizationId == org.Id)
-            .OrderBy(a => a.Id)
+            .Where(a => a.OrganizationId == org.Id
+                     && a.Visibility == Ben.Data.Common.Enums.OrganizationAddressVisibility.Public
+                     && a.PublicDisplayMode != Ben.Data.Common.Enums.OrganizationAddressDisplayMode.Hidden)
+            .OrderBy(a => a.SortOrder).ThenBy(a => a.Id)
             .Select(a => new { a.City, a.State })
             .FirstOrDefaultAsync(ct);
         var place = city is not null && !string.IsNullOrWhiteSpace(city.City)
@@ -103,8 +112,14 @@ public sealed class OrgPublicController : ControllerBase
 
         var members = await db.OrganizationUserMemberships.AsNoTracking()
             .CountAsync(m => m.OrganizationId == org.Id && m.IsActive, ct);
+        // PUBLISHED, not merely flagged: the same two conditions the group's public case list uses.
+        // Counting the flag alone made this number disagree with the list under it — the flag is an
+        // intention recorded well before a case is published, and from 2026-09-17 an unpaid
+        // account's cases carry it from the moment they are opened.
         var publicCases = await db.Cases.AsNoTracking()
-            .CountAsync(c => c.OrganizationId == org.Id && c.IsPublic, ct);
+            .CountAsync(c => c.OrganizationId == org.Id
+                          && c.IsPublic
+                          && (c.Status == CaseStatus.Public || c.Status == CaseStatus.Haunted), ct);
 
         var now = DateTime.UtcNow;
         var next = await db.OrgCalendarEvents.AsNoTracking()
@@ -112,7 +127,8 @@ public sealed class OrgPublicController : ControllerBase
             .OrderBy(e => e.StartDateTime)
             .Select(e => new OrgPublicNextEvent(
                 e.Id, e.Title, e.UrlName, e.StartDateTime, e.IsAllDay, e.Location, null,
-                e.AttendeeCapacity, e.Attendees.Count(a => a.RsvpStatus == RsvpStatus.Accepted)))
+                e.AttendeeCapacity, e.Attendees.Count(a => a.RsvpStatus == RsvpStatus.Accepted),
+                e.TimeZoneId ?? (e.Tour != null ? e.Tour.TimeZoneId : null)))
             .FirstOrDefaultAsync(ct);
 
         return new OrgPublicFacts(areaServed, org.IsAcceptingClients, org.IsAcceptingApplications,
@@ -219,7 +235,12 @@ public sealed record OrgPublicFacts(
     int PublicCaseCount,
     OrgPublicNextEvent? NextPublicEvent);
 
-public sealed record OrgPublicNextEvent(Guid Id, string Title, string? UrlName, DateTime StartDateTime, bool IsAllDay, string? City, string? State, int? AttendeeCapacity, int AttendingCount);
+public sealed record OrgPublicNextEvent(
+    Guid Id, string Title, string? UrlName, DateTime StartDateTime, bool IsAllDay,
+    string? City, string? State, int? AttendeeCapacity, int AttendingCount,
+    // The IANA zone the night happens in, when it is recorded — today, the tour's. Null means
+    // nobody has said, and the reader is shown UTC and told so; see EventClock.
+    string? TimeZoneId = null);
 
 
 public sealed record OrgPublicPageResponse(

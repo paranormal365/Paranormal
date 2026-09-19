@@ -76,6 +76,29 @@ public class MyContactInfoControllerTests
     private static T Value<T>(ActionResult<T> result)
         => Assert.IsAssignableFrom<T>(Assert.IsType<OkObjectResult>(result.Result).Value);
 
+    /// <summary>
+    /// Ages an address's last confirmation send, and optionally marks it confirmed.
+    /// </summary>
+    /// <remarks>
+    /// Adding an address now issues a confirmation of its own, so a test that then asks for
+    /// another one is inside the resend cooldown — which is correct behaviour and not what those
+    /// tests are about. Aging the stamp puts them back on the ground they meant to stand on.
+    /// </remarks>
+    private static async Task AgeAsync(
+        IDbContextFactory<BenDataContext> factory, Guid id, bool confirmed = false)
+    {
+        await using var db = await factory.CreateDbContextAsync();
+        var row = await db.UserEmails.FirstAsync(e => e.Id == id);
+        row.DateValidationSent = DateTime.UtcNow.AddHours(-1);
+        if (confirmed)
+        {
+            row.IsValidated = true;
+            row.DateValidated = DateTime.UtcNow;
+            row.ValidationToken = null;
+        }
+        await db.SaveChangesAsync();
+    }
+
     // ── Ownership ─────────────────────────────────────────────────────────────
 
     [Fact]
@@ -86,7 +109,8 @@ public class MyContactInfoControllerTests
         var stranger = Guid.NewGuid();
 
         var created = Value(await Build(factory, owner).CreateEmail(
-            new UpsertMyEmailRequest(EmailTypeId, "owner@example.test", false, false), default));
+            new UpsertMyEmailRequest(EmailTypeId, "owner@example.test", false, false),
+            UnconfiguredEmail(), Config(), default));
 
         var update = await Build(factory, stranger).UpdateEmail(
             created.Id, new UpsertMyEmailRequest(EmailTypeId, "hijack@example.test", false, false), default);
@@ -105,8 +129,8 @@ public class MyContactInfoControllerTests
         var mine = Guid.NewGuid();
         var theirs = Guid.NewGuid();
 
-        await Build(factory, mine).CreateEmail(new UpsertMyEmailRequest(EmailTypeId, "mine@example.test", false, false), default);
-        await Build(factory, theirs).CreateEmail(new UpsertMyEmailRequest(EmailTypeId, "theirs@example.test", false, false), default);
+        await Build(factory, mine).CreateEmail(new UpsertMyEmailRequest(EmailTypeId, "mine@example.test", false, false), UnconfiguredEmail(), Config(), default);
+        await Build(factory, theirs).CreateEmail(new UpsertMyEmailRequest(EmailTypeId, "theirs@example.test", false, false), UnconfiguredEmail(), Config(), default);
 
         var rows = Value(await Build(factory, mine).GetEmails(default)).ToList();
 
@@ -122,7 +146,8 @@ public class MyContactInfoControllerTests
         var factory = await SeedAsync();
 
         var result = await Build(factory, Guid.NewGuid()).CreateEmail(
-            new UpsertMyEmailRequest(EmailTypeId, "new@example.test", false, IsPublic: true), default);
+            new UpsertMyEmailRequest(EmailTypeId, "new@example.test", false, IsPublic: true),
+            UnconfiguredEmail(), Config(), default);
 
         // Refused outright rather than silently coerced to false — a client that asked for public
         // and got private without being told would ship that bug.
@@ -136,7 +161,8 @@ public class MyContactInfoControllerTests
         var userId = Guid.NewGuid();
 
         var created = Value(await Build(factory, userId).CreateEmail(
-            new UpsertMyEmailRequest(EmailTypeId, "later@example.test", false, false), default));
+            new UpsertMyEmailRequest(EmailTypeId, "later@example.test", false, false),
+            UnconfiguredEmail(), Config(), default));
 
         var result = await Build(factory, userId).UpdateEmail(
             created.Id, new UpsertMyEmailRequest(EmailTypeId, "later@example.test", false, IsPublic: true), default);
@@ -151,7 +177,8 @@ public class MyContactInfoControllerTests
         var userId = Guid.NewGuid();
 
         var created = Value(await Build(factory, userId).CreateEmail(
-            new UpsertMyEmailRequest(EmailTypeId, "before@example.test", false, false), default));
+            new UpsertMyEmailRequest(EmailTypeId, "before@example.test", false, false),
+            UnconfiguredEmail(), Config(), default));
 
         // Validate and publish it, the way the redemption endpoint would.
         await using (var db = await factory.CreateDbContextAsync())
@@ -181,7 +208,8 @@ public class MyContactInfoControllerTests
         var userId = Guid.NewGuid();
 
         var created = Value(await Build(factory, userId).CreateEmail(
-            new UpsertMyEmailRequest(EmailTypeId, "steady@example.test", false, false), default));
+            new UpsertMyEmailRequest(EmailTypeId, "steady@example.test", false, false),
+            UnconfiguredEmail(), Config(), default));
 
         await using (var db = await factory.CreateDbContextAsync())
         {
@@ -208,7 +236,11 @@ public class MyContactInfoControllerTests
         var userId = Guid.NewGuid();
 
         var created = Value(await Build(factory, userId).CreateEmail(
-            new UpsertMyEmailRequest(EmailTypeId, "confirm@example.test", false, false), default));
+            new UpsertMyEmailRequest(EmailTypeId, "confirm@example.test", false, false),
+            UnconfiguredEmail(), Config(), default));
+
+        // Adding it already sent one, so step outside the cooldown to ask for another.
+        await AgeAsync(factory, created.Id);
 
         var response = Value(await Build(factory, userId).SendValidation(
             created.Id, UnconfiguredEmail(), Config(), default));
@@ -230,7 +262,9 @@ public class MyContactInfoControllerTests
         var userId = Guid.NewGuid();
 
         var created = Value(await Build(factory, userId).CreateEmail(
-            new UpsertMyEmailRequest(EmailTypeId, "twice@example.test", false, false), default));
+            new UpsertMyEmailRequest(EmailTypeId, "twice@example.test", false, false),
+            UnconfiguredEmail(), Config(), default));
+        await AgeAsync(factory, created.Id);
 
         await Build(factory, userId).SendValidation(created.Id, UnconfiguredEmail(), Config(), default);
         var second = await Build(factory, userId).SendValidation(created.Id, UnconfiguredEmail(), Config(), default);
@@ -245,7 +279,9 @@ public class MyContactInfoControllerTests
         var userId = Guid.NewGuid();
 
         var created = Value(await Build(factory, userId).CreateEmail(
-            new UpsertMyEmailRequest(EmailTypeId, "reissue@example.test", false, false), default));
+            new UpsertMyEmailRequest(EmailTypeId, "reissue@example.test", false, false),
+            UnconfiguredEmail(), Config(), default));
+        await AgeAsync(factory, created.Id);
 
         var first = Value(await Build(factory, userId).SendValidation(created.Id, UnconfiguredEmail(), Config(), default));
 
@@ -273,7 +309,8 @@ public class MyContactInfoControllerTests
         var userId = Guid.NewGuid();
 
         var created = Value(await Build(factory, userId).CreateEmail(
-            new UpsertMyEmailRequest(EmailTypeId, "done@example.test", false, false), default));
+            new UpsertMyEmailRequest(EmailTypeId, "done@example.test", false, false),
+            UnconfiguredEmail(), Config(), default));
 
         await using (var db = await factory.CreateDbContextAsync())
         {
@@ -295,10 +332,21 @@ public class MyContactInfoControllerTests
         var factory = await SeedAsync();
         var userId = Guid.NewGuid();
 
+        // Primary now requires a confirmed address, so both are added, confirmed, and then
+        // promoted — which is the real sequence a person goes through.
         var first = Value(await Build(factory, userId).CreateEmail(
-            new UpsertMyEmailRequest(EmailTypeId, "one@example.test", IsPrimary: true, false), default));
+            new UpsertMyEmailRequest(EmailTypeId, "one@example.test", false, false),
+            UnconfiguredEmail(), Config(), default));
         var second = Value(await Build(factory, userId).CreateEmail(
-            new UpsertMyEmailRequest(EmailTypeId, "two@example.test", IsPrimary: true, false), default));
+            new UpsertMyEmailRequest(EmailTypeId, "two@example.test", false, false),
+            UnconfiguredEmail(), Config(), default));
+        await AgeAsync(factory, first.Id, confirmed: true);
+        await AgeAsync(factory, second.Id, confirmed: true);
+
+        await Build(factory, userId).UpdateEmail(first.Id,
+            new UpsertMyEmailRequest(EmailTypeId, "one@example.test", IsPrimary: true, false), default);
+        await Build(factory, userId).UpdateEmail(second.Id,
+            new UpsertMyEmailRequest(EmailTypeId, "two@example.test", IsPrimary: true, false), default);
 
         var rows = Value(await Build(factory, userId).GetEmails(default)).ToList();
 
@@ -331,8 +379,17 @@ public class MyContactInfoControllerTests
         var theirs = Guid.NewGuid();
 
         var minePrimary = Value(await Build(factory, mine).CreateEmail(
-            new UpsertMyEmailRequest(EmailTypeId, "mine@example.test", IsPrimary: true, false), default));
-        await Build(factory, theirs).CreateEmail(
+            new UpsertMyEmailRequest(EmailTypeId, "mine@example.test", false, false),
+            UnconfiguredEmail(), Config(), default));
+        var theirsPrimary = Value(await Build(factory, theirs).CreateEmail(
+            new UpsertMyEmailRequest(EmailTypeId, "theirs@example.test", false, false),
+            UnconfiguredEmail(), Config(), default));
+        await AgeAsync(factory, minePrimary.Id, confirmed: true);
+        await AgeAsync(factory, theirsPrimary.Id, confirmed: true);
+
+        await Build(factory, mine).UpdateEmail(minePrimary.Id,
+            new UpsertMyEmailRequest(EmailTypeId, "mine@example.test", IsPrimary: true, false), default);
+        await Build(factory, theirs).UpdateEmail(theirsPrimary.Id,
             new UpsertMyEmailRequest(EmailTypeId, "theirs@example.test", IsPrimary: true, false), default);
 
         var rows = Value(await Build(factory, mine).GetEmails(default)).ToList();
@@ -349,7 +406,8 @@ public class MyContactInfoControllerTests
         var factory = await SeedAsync();
 
         var result = await Build(factory, Guid.NewGuid()).CreateEmail(
-            new UpsertMyEmailRequest(Guid.NewGuid(), "typeless@example.test", false, false), default);
+            new UpsertMyEmailRequest(Guid.NewGuid(), "typeless@example.test", false, false),
+            UnconfiguredEmail(), Config(), default);
 
         Assert.IsType<BadRequestObjectResult>(result.Result);
     }
@@ -467,10 +525,202 @@ public class MyContactInfoControllerTests
             }
         };
 
-        await controller.CreateEmail(new UpsertMyEmailRequest(EmailTypeId, "audited@example.test", false, false), default);
+        await controller.CreateEmail(new UpsertMyEmailRequest(EmailTypeId, "audited@example.test", false, false), UnconfiguredEmail(), Config(), default);
 
         audit.Verify(a => a.LogCreateAsync(
             nameof(UserEmail), It.IsAny<Guid>(), It.IsAny<object>(), userId,
             It.IsAny<string>()), Times.Once);
     }
+
+    // ── Adding an address confirms it, and cannot make it primary (item 237, 2026-09-12) ──
+
+    /// <remarks>
+    /// Ben added an address, marked it primary, and nothing had ever checked that he could read
+    /// it. Two halves to that: the confirmation was never sent unless somebody found a button, and
+    /// primary was not governed by the rule that already governed public.
+    /// </remarks>
+
+    [Fact]
+    public async Task Adding_an_address_issues_its_confirmation_without_being_asked()
+    {
+        var factory = await SeedAsync();
+
+        var created = Value(await Build(factory, Guid.NewGuid()).CreateEmail(
+            new UpsertMyEmailRequest(EmailTypeId, "fresh@example.test", false, false),
+            UnconfiguredEmail(), Config(), default));
+
+        // The link exists and is handed back, because on a machine with no mail server it is the
+        // only way through — and every environment today has no mail server.
+        Assert.NotNull(created.ValidationLink);
+        Assert.StartsWith("https://example.test/validate-email/", created.ValidationLink);
+        Assert.False(created.ValidationEmailSent);
+
+        // And the row was actually stamped, so the link in hand is the live one.
+        await using var db = await factory.CreateDbContextAsync();
+        var row = await db.UserEmails.FirstAsync(e => e.Id == created.Id);
+        Assert.NotNull(row.ValidationToken);
+        Assert.NotNull(row.DateValidationSent);
+        Assert.False(row.IsValidated);
+    }
+
+    [Fact]
+    public async Task The_confirmation_is_emailed_when_there_is_a_mail_server()
+    {
+        var factory = await SeedAsync();
+
+        var mail = new Mock<IEmailService>();
+        mail.SetupGet(x => x.IsConfigured).Returns(true);
+        mail.Setup(x => x.SendAsync(It.IsAny<string>(), It.IsAny<string>(), It.IsAny<string>(),
+                                    It.IsAny<CancellationToken>()))
+            .Returns(Task.CompletedTask);
+
+        var created = Value(await Build(factory, Guid.NewGuid()).CreateEmail(
+            new UpsertMyEmailRequest(EmailTypeId, "mailed@example.test", false, false),
+            mail.Object, Config(), default));
+
+        Assert.True(created.ValidationEmailSent);
+        // Sent to the address being confirmed, and to no other.
+        mail.Verify(x => x.SendAsync("mailed@example.test", It.IsAny<string>(), It.IsAny<string>(),
+                                     It.IsAny<CancellationToken>()), Times.Once);
+    }
+
+    [Fact]
+    public async Task A_mail_server_that_throws_does_not_lose_the_address()
+    {
+        // The address is saved and the link works. Failing the whole request over a mail server
+        // would lose both, and the person would not know which.
+        var factory = await SeedAsync();
+
+        var mail = new Mock<IEmailService>();
+        mail.SetupGet(x => x.IsConfigured).Returns(true);
+        mail.Setup(x => x.SendAsync(It.IsAny<string>(), It.IsAny<string>(), It.IsAny<string>(),
+                                    It.IsAny<CancellationToken>()))
+            .ThrowsAsync(new InvalidOperationException("relay refused"));
+
+        var created = Value(await Build(factory, Guid.NewGuid()).CreateEmail(
+            new UpsertMyEmailRequest(EmailTypeId, "unlucky@example.test", false, false),
+            mail.Object, Config(), default));
+
+        Assert.False(created.ValidationEmailSent);
+        Assert.NotNull(created.ValidationLink);
+    }
+
+    [Fact]
+    public async Task A_new_address_cannot_be_created_primary()
+    {
+        // The defect. Primary is the address this person is presented by, so an address nobody
+        // has proved they can read must not take it — the same rule public already had.
+        var factory = await SeedAsync();
+
+        var result = await Build(factory, Guid.NewGuid()).CreateEmail(
+            new UpsertMyEmailRequest(EmailTypeId, "claimed@example.test", IsPrimary: true, false),
+            UnconfiguredEmail(), Config(), default);
+
+        Assert.IsType<BadRequestObjectResult>(result.Result);
+    }
+
+    [Fact]
+    public async Task An_unconfirmed_address_cannot_be_made_primary_by_update()
+    {
+        var factory = await SeedAsync();
+        var userId = Guid.NewGuid();
+
+        var created = Value(await Build(factory, userId).CreateEmail(
+            new UpsertMyEmailRequest(EmailTypeId, "waiting@example.test", false, false),
+            UnconfiguredEmail(), Config(), default));
+
+        var result = await Build(factory, userId).UpdateEmail(
+            created.Id,
+            new UpsertMyEmailRequest(EmailTypeId, "waiting@example.test", IsPrimary: true, false),
+            default);
+
+        Assert.IsType<BadRequestObjectResult>(result.Result);
+
+        await using var db = await factory.CreateDbContextAsync();
+        Assert.False((await db.UserEmails.FirstAsync(e => e.Id == created.Id)).IsPrimary);
+    }
+
+    [Fact]
+    public async Task A_confirmed_address_can_be_made_primary()
+    {
+        // The other half: the rule has to let go once the address is proved, or nobody could ever
+        // have a primary address at all.
+        var factory = await SeedAsync();
+        var userId = Guid.NewGuid();
+
+        var created = Value(await Build(factory, userId).CreateEmail(
+            new UpsertMyEmailRequest(EmailTypeId, "proved@example.test", false, false),
+            UnconfiguredEmail(), Config(), default));
+
+        await using (var db = await factory.CreateDbContextAsync())
+        {
+            var row = await db.UserEmails.FirstAsync(e => e.Id == created.Id);
+            row.IsValidated = true;
+            row.DateValidated = DateTime.UtcNow;
+            row.ValidationToken = null;
+            await db.SaveChangesAsync();
+        }
+
+        var updated = Value(await Build(factory, userId).UpdateEmail(
+            created.Id,
+            new UpsertMyEmailRequest(EmailTypeId, "proved@example.test", IsPrimary: true, false),
+            default));
+
+        Assert.True(updated.IsPrimary);
+    }
+
+    [Fact]
+    public async Task Changing_the_address_of_a_primary_row_is_refused_rather_than_leaving_it_primary()
+    {
+        // The trap in fixing this: re-typing the address clears validation, and a row that stayed
+        // primary through that would be exactly the state the rule exists to prevent — an
+        // unproven address presented as somebody's main one.
+        var factory = await SeedAsync();
+        var userId = Guid.NewGuid();
+
+        var created = Value(await Build(factory, userId).CreateEmail(
+            new UpsertMyEmailRequest(EmailTypeId, "first@example.test", false, false),
+            UnconfiguredEmail(), Config(), default));
+
+        await using (var db = await factory.CreateDbContextAsync())
+        {
+            var row = await db.UserEmails.FirstAsync(e => e.Id == created.Id);
+            row.IsValidated = true;
+            row.IsPrimary = true;
+            await db.SaveChangesAsync();
+        }
+
+        var result = await Build(factory, userId).UpdateEmail(
+            created.Id,
+            new UpsertMyEmailRequest(EmailTypeId, "second@example.test", IsPrimary: true, false),
+            default);
+
+        Assert.IsType<BadRequestObjectResult>(result.Result);
+
+        await using var check = await factory.CreateDbContextAsync();
+        var after = await check.UserEmails.FirstAsync(e => e.Id == created.Id);
+        Assert.Equal("first@example.test", after.EmailAddress);   // nothing changed
+        Assert.True(after.IsValidated);
+    }
+
+
+    [Fact]
+    public async Task Asking_for_another_link_straight_after_adding_is_throttled()
+    {
+        // A consequence of sending on add, pinned so it is deliberate: the link has just gone, and
+        // pressing the button again within the minute is a double-click rather than a person who
+        // genuinely needs a second one. The refusal says so.
+        var factory = await SeedAsync();
+        var userId = Guid.NewGuid();
+
+        var created = Value(await Build(factory, userId).CreateEmail(
+            new UpsertMyEmailRequest(EmailTypeId, "eager@example.test", false, false),
+            UnconfiguredEmail(), Config(), default));
+
+        var again = await Build(factory, userId).SendValidation(
+            created.Id, UnconfiguredEmail(), Config(), default);
+
+        Assert.IsType<BadRequestObjectResult>(again.Result);
+    }
+
 }

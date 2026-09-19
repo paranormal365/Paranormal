@@ -154,14 +154,44 @@ public sealed class SubscriptionLimitGuard
             : null;
     }
 
+    /// <summary>
+    /// The number a limit actually holds for this organization, or null when nothing caps it.
+    /// </summary>
+    /// <remarks>
+    /// For limits that are a <b>quantity</b> rather than a ceiling to compare a count against —
+    /// how many days a photograph is kept, how long a recording may be (item 233). The refusal
+    /// wording above is meaningless for those; the number is the whole answer.
+    /// </remarks>
+    public async Task<int?> ValueOfAsync(
+        Guid organizationId, SubscriptionLimit limit, CancellationToken ct = default)
+        => (await EffectiveLimitAsync(organizationId, limit, ct)).Max;
+
     /// <summary>The cap that actually binds, with the band name for the refusal sentence.</summary>
     private async Task<(int? Max, string TierName)> EffectiveLimitAsync(
         Guid organizationId, SubscriptionLimit limit, CancellationToken ct)
     {
         await using var db = await _dbFactory.CreateDbContextAsync(ct);
 
+        // The STANDING row if there is one, else the newest — and never an arbitrary one
+        // (2026-09-17 audit). This took FirstOrDefault with no ordering at all, so a group with
+        // more than one row got whichever the database handed back. Rows accumulate: lapsing
+        // leaves the old row behind and re-subscribing writes a new one, so a group that lapsed on
+        // Small and came back on Standard could be enforced against Small's caps, refusing a
+        // paying customer records they had just bought, with the answer changing between calls.
+        //
+        // Deliberately NOT the same rule as TierAreaResolution.EffectiveTierAsync, which drops a
+        // lapsed group to the free tier. These numbers include PhotoRetentionDays and
+        // RecordingRetentionDays, which MediaRetentionPolicy feeds to the job that DELETES; making
+        // a lapse shorten retention would erase a group's photographs for missing a payment, and
+        // item 84's rule is the opposite — "read access continues, everything already here stays
+        // readable". A lapsed group is stopped from ADDING by RefusalIfLapsedAsync above, which is
+        // the whole of what lapsing is meant to cost. So the caps it already had simply stand.
         var sub = await db.OrganizationSubscriptions.AsNoTracking()
-            .FirstOrDefaultAsync(s => s.OrganizationId == organizationId, ct);
+            .Where(s => s.OrganizationId == organizationId)
+            .OrderByDescending(s => s.Status == Ben.Data.Common.Enums.SubscriptionStatus.Active
+                                 || s.Status == Ben.Data.Common.Enums.SubscriptionStatus.Free)
+            .ThenByDescending(s => s.DateCreated)
+            .FirstOrDefaultAsync(ct);
 
         // A group with no subscription row sits on whatever the resolver says its member count
         // buys — which for enforcement means the band the resolver picks, with no contract.
@@ -211,6 +241,14 @@ public sealed class SubscriptionLimitGuard
         SubscriptionLimit.PublishedPages       => "public pages",
         SubscriptionLimit.CustomRoles          => "custom roles",
         SubscriptionLimit.CasesPerPeriod       => "new cases this period",
+        SubscriptionLimit.TourGalleryImages    => "pictures on a tour",
+        SubscriptionLimit.PhotoRetentionDays   => "how long photographs are kept",
+        SubscriptionLimit.RecordingRetentionDays => "how long recordings are kept",
+        SubscriptionLimit.RecordingMinutes     => "how long a recording may be",
+        SubscriptionLimit.ActiveHostedEvents   => "events at once",
+        SubscriptionLimit.EventSessions        => "sessions on an event's programme",
+        SubscriptionLimit.EventStaff           => "people on an event's staff",
+        SubscriptionLimit.EventFilesMegabytes  => "files kept with an event",
         _                                      => limit.ToString(),
     };
 
@@ -225,6 +263,14 @@ public sealed class SubscriptionLimitGuard
         SubscriptionLimit.PublishedPages       => $"{max} public page(s)",
         SubscriptionLimit.CustomRoles          => $"{max} custom role(s)",
         SubscriptionLimit.CasesPerPeriod       => $"{max} new case(s) a period",
+        SubscriptionLimit.TourGalleryImages    => $"{max} picture(s) per tour",
+        SubscriptionLimit.PhotoRetentionDays   => $"photographs kept {max} day(s)",
+        SubscriptionLimit.RecordingRetentionDays => $"recordings kept {max} day(s)",
+        SubscriptionLimit.RecordingMinutes     => $"{max} minute(s) per recording",
+        SubscriptionLimit.ActiveHostedEvents   => $"{max} event(s) running at once",
+        SubscriptionLimit.EventSessions        => $"{max} session(s) on an event's programme",
+        SubscriptionLimit.EventStaff           => $"{max} person or people on an event's staff",
+        SubscriptionLimit.EventFilesMegabytes  => max >= 1024 ? $"{max / 1024m:0.#} GB of files per event" : $"{max} MB of files per event",
         _                                      => max.ToString(),
     };
 }

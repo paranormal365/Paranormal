@@ -1,0 +1,237 @@
+@page "/organizations/{OrgId:guid}/events/{EventId:guid}/files"
+@namespace Ben.Web.Website.Library.Manage.Events
+
+@inject IBenAdminClient AdminClient
+@inject IBenUserState UserState
+@inject IMediaUrlBuilder MediaUrls
+
+@using Ben.Data.Common.Enums
+@using Ben.Service.Models.Entities
+@using Ben.Web.Services.WebApi
+@using Ben.Web.Website.Library.Kit
+@using Ben.Web.Website.Library.Manage.Icon
+
+@* An event's files, and who each one is for (item 235 phase 11).
+
+   WHO IT IS FOR IS CHOSEN WITH THE FILE, and a new one starts with the event's own people only. A
+   file that is wrongly private is noticed the first time a guest asks for it; one that is wrongly
+   public is never un-published.
+
+   FOLDERS ARE A WORD. "Guest pack", "Stewards" — a handful of piles, offered back as suggestions
+   once used, not a tree. *@
+
+<PageTitle>@(_event?.Name is { Length: > 0 } n ? $"Files — {n}" : "Files")</PageTitle>
+
+<div class="container-fluid py-3" style="max-width:1000px;">
+
+    <div class="text-secondary small">
+        <a href="@($"/organizations/{OrgId}/events")">Events</a>
+        @if (_event is { } crumb)
+        {
+            <text> · </text><a href="@($"/organizations/{OrgId}/events/{EventId}")">@crumb.Name</a>
+        }
+    </div>
+
+    <h1 class="h3 mb-1">
+        Files
+        <HelpLink Slug="organization-administration" Anchor="hosted-events" />
+    </h1>
+    <p class="text-secondary small mb-3">
+        The guest pack, the stewards' briefing, the poster. Each file says who may download it, and the
+        site checks every time.
+    </p>
+
+    @if (_note is { Length: > 0 })
+    {
+        <div class="alert alert-success py-2" id="files-note" role="status">@_note</div>
+    }
+    @if (_error is { Length: > 0 })
+    {
+        <div class="alert alert-danger py-2" id="files-error" role="alert">@_error</div>
+    }
+
+    <div class="card mb-4" id="file-add">
+        <div class="card-header fw-semibold">Add a file</div>
+        <div class="card-body">
+            <div class="row g-2 align-items-end">
+                <div class="col-12 col-md-6">
+                    <label class="form-label small mb-1" for="file-input">File</label>
+                    <InputFile id="file-input" class="form-control" OnChange="Picked" />
+                </div>
+                <div class="col-6 col-md-3">
+                    <label class="form-label small mb-1" for="file-folder">Folder</label>
+                    <input class="form-control" id="file-folder" maxlength="80" list="file-folders"
+                           placeholder="e.g. Guest pack" @bind="_folder" />
+                    <datalist id="file-folders">
+                        @foreach (var f in Folders)
+                        {
+                            <option value="@f"></option>
+                        }
+                    </datalist>
+                </div>
+                <div class="col-6 col-md-3">
+                    <label class="form-label small mb-1" for="file-audience">Who it's for</label>
+                    <select class="form-select" id="file-audience" @bind="_audience">
+                        @foreach (var (value, words) in Audiences)
+                        {
+                            <option value="@value">@words</option>
+                        }
+                    </select>
+                </div>
+                <div class="col-12">
+                    <label class="form-label small mb-1" for="file-description">What it is</label>
+                    <input class="form-control" id="file-description" maxlength="500"
+                           placeholder="e.g. Parking, the door code and what to bring" @bind="_description" />
+                </div>
+            </div>
+            <button type="button" class="btn btn-primary mt-3" id="file-upload"
+                    disabled="@(_busy || _picked is null)" @onclick="UploadAsync">
+                @(_busy ? "Adding…" : "Add it")
+            </button>
+        </div>
+    </div>
+
+    @if (_loading || _files.Failed)
+    {
+        <BenListState TItem="HostedEventFileRecord" Result="_files" Loading="_loading"
+                      LoadingText="Loading the files…" OnRetry="LoadAsync" />
+    }
+    else if (_rows.Count == 0)
+    {
+        <div class="alert alert-light border" id="files-empty">No files yet.</div>
+    }
+    else
+    {
+        @foreach (var pile in _rows.GroupBy(r => r.Folder))
+        {
+            <h2 class="h6 text-secondary text-uppercase small mt-3 mb-2">@(pile.Key ?? "Not in a folder")</h2>
+            <div class="list-group">
+                @foreach (var row in pile)
+                {
+                    var r = row;
+                    var key = r.Id.ToString("N");
+                    <div class="list-group-item event-file" data-file="@r.Id">
+                        <div class="d-flex flex-column flex-md-row gap-2 align-items-md-center">
+                            <div class="flex-grow-1 text-break">
+                                <a href="@MediaUrls.EventFile(EventId, r.Id)" download>@r.FileName</a>
+                                <span class="small text-secondary">· @Size(r.FileSize)</span>
+                                @if (r.Description is { Length: > 0 } d)
+                                {
+                                    <div class="small text-secondary">@d</div>
+                                }
+                            </div>
+                            <div class="d-flex flex-wrap gap-2 align-items-center">
+                                <label class="visually-hidden" for="@($"file-audience-{key}")">Who it's for</label>
+                                <select class="form-select form-select-sm" style="width:auto;" id="@($"file-audience-{key}")"
+                                        value="@r.Audience" @onchange="e => ChangeAudienceAsync(r, e)">
+                                    @foreach (var (value, words) in Audiences)
+                                    {
+                                        <option value="@value">@words</option>
+                                    }
+                                </select>
+                                <button type="button" class="btn btn-outline-danger btn-sm" disabled="@_busy"
+                                        @onclick="() => DeleteAsync(r)">Remove</button>
+                            </div>
+                        </div>
+                    </div>
+                }
+            </div>
+        }
+    }
+</div>
+
+@code {
+    [Parameter] public Guid OrgId { get; set; }
+    [Parameter] public Guid EventId { get; set; }
+
+    private static readonly (EventFileAudience Value, string Words)[] Audiences =
+    [
+        (EventFileAudience.Staff, "The event's people only"),
+        (EventFileAudience.Attendees, "Confirmed guests"),
+        (EventFileAudience.Public, "Anybody"),
+    ];
+
+    private HostedEventRecord? _event;
+    private LoadResult<HostedEventFileRecord> _files;
+    private List<HostedEventFileRecord> _rows = [];
+    private bool _loading = true;
+    private bool _busy;
+    private string? _note;
+    private string? _error;
+
+    private IBrowserFile? _picked;
+    private string? _folder;
+    private string? _description;
+    private EventFileAudience _audience = EventFileAudience.Staff;
+
+    private IEnumerable<string> Folders => _rows.Select(r => r.Folder).OfType<string>().Distinct().Order();
+
+    protected override async Task OnAfterRenderAsync(bool firstRender)
+    {
+        if (!firstRender) return;
+        if (!await UserState.WaitUntilAuthReadyAsync(RendererInfo.IsInteractive)) return;
+
+        await LoadAsync();
+        StateHasChanged();
+    }
+
+    private async Task LoadAsync()
+    {
+        _loading = true;
+        _event ??= await AdminClient.GetHostedEventAsync(OrgId, EventId);
+        _files = await AdminClient.GetEventFilesAsync(OrgId, EventId);
+        _rows = [.. _files.Items];
+        _loading = false;
+    }
+
+    private void Picked(InputFileChangeEventArgs e) => _picked = e.File;
+
+    private async Task UploadAsync()
+    {
+        if (_picked is null) return;
+        var name = _picked.Name;
+
+        await SendAsync(async () =>
+        {
+            using var content = new MultipartFormDataContent();
+            content.Add(new StreamContent(_picked.OpenReadStream(long.MaxValue)), "file", _picked.Name);
+            content.Add(new StringContent(_folder ?? ""), "folder");
+            content.Add(new StringContent(_description ?? ""), "description");
+            content.Add(new StringContent(((int)_audience).ToString()), "audience");
+            return await AdminClient.AddEventFileAsync(OrgId, EventId, content);
+        }, $"Added {name}.");
+
+        if (_error is null) { _picked = null; _description = null; }
+    }
+
+    private Task ChangeAudienceAsync(HostedEventFileRecord r, ChangeEventArgs e)
+    {
+        if (!Enum.TryParse<EventFileAudience>(e.Value?.ToString(), out var audience)) return Task.CompletedTask;
+        return SendAsync(() => AdminClient.UpdateEventFileAsync(OrgId, EventId, r.Id,
+            new UpdateHostedEventFileRequest(r.Folder, r.Description, audience, r.SortOrder)),
+            $"{r.FileName} is now for {Audiences.First(a => a.Value == audience).Words.ToLowerInvariant()}.");
+    }
+
+    private Task DeleteAsync(HostedEventFileRecord r)
+        => SendAsync(() => AdminClient.DeleteEventFileAsync(OrgId, EventId, r.Id), $"Removed {r.FileName}.");
+
+    private async Task SendAsync(Func<Task<(List<HostedEventFileRecord>? Result, string? Error)>> send, string said)
+    {
+        _busy = true;
+        _note = null;
+        _error = null;
+        var (rows, error) = await send();
+        _busy = false;
+        if (rows is null) { _error = error ?? "That couldn't be saved just now."; return; }
+        _rows = rows;
+        _files = LoadResult<HostedEventFileRecord>.Ok(rows);
+        _note = said;
+    }
+
+    internal static string Size(long bytes) => bytes switch
+    {
+        < 1024 => $"{bytes} bytes",
+        < 1024 * 1024 => $"{bytes / 1024.0:0} KB",
+        _ => $"{bytes / (1024.0 * 1024):0.#} MB",
+    };
+}

@@ -127,6 +127,14 @@ public static class CouponMath
             return "That code takes nothing off.";
         if (coupon.PercentOff is { } pct && pct > 100)
             return "That code takes off more than the whole price.";
+        // A coupon that ADDS money is not a coupon (2026-09-17 audit). Neither field was checked
+        // for being below zero, and a negative one survived because hasPercent/hasAmount test
+        // "is > 0" — so a coupon carrying PercentOff -10 alongside a real AmountOff passed every
+        // check here and then made PriceFor return a NEGATIVE discount, billing 110% of list.
+        // PeriodPrice's own contract says "Discount: never more than ListPrice. Payable: never
+        // negative", and this was the one input that broke it.
+        if (coupon.PercentOff is < 0 || coupon.AmountOff is < 0)
+            return "That code adds to the price rather than taking anything off.";
         if (coupon.Duration == CouponDuration.Repeating && coupon.DurationPeriods is not > 0)
             return "That code repeats, but for no periods.";
         if (coupon.ValidFromUtc is { } from && coupon.RedeemByUtc is { } by && from > by)
@@ -177,11 +185,20 @@ public static class CouponMath
         if (listPrice <= 0 || coupon is null || Misconfiguration(coupon) is not null)
             return new PeriodPrice(listPrice, 0m, listPrice);
 
-        var discount = coupon.PercentOff is { } pct
+        // "is > 0", matching Misconfiguration exactly (2026-09-17 audit). This asked "is PercentOff
+        // not null", which is a DIFFERENT question, and the gap between the two was the bug: a
+        // coupon of PercentOff 0 with AmountOff $5 is well-formed by every check above — zero is
+        // not a percentage discount, so hasPercent is false and the fixed amount is what the coupon
+        // means — but this branch matched the non-null zero, worked out 0% of the price, and threw
+        // the $5 away. The code read as applied and took nothing off. Two definitions of "this is a
+        // percentage coupon" in one file will always drift; there is now one.
+        var discount = coupon.PercentOff is > 0 and { } pct
             ? Math.Round(listPrice * pct / 100m, 2, MidpointRounding.AwayFromZero)
             : coupon.AmountOff ?? 0m;
 
-        discount = Math.Min(discount, listPrice);
+        // Clamped at both ends. The upper bound was always here; the lower one is what stops any
+        // future negative from turning a discount into a surcharge, whatever route it arrived by.
+        discount = Math.Clamp(discount, 0m, listPrice);
 
         return new PeriodPrice(listPrice, discount, listPrice - discount);
     }

@@ -1,0 +1,329 @@
+@page "/organizations/{OrgId:guid}/events/{EventId:guid}/dining"
+@namespace Ben.Web.Website.Library.Manage.Events
+
+@inject IBenAdminClient AdminClient
+@inject IBenUserState UserState
+@inject IJSRuntime JS
+
+@using Ben.Service.Models.Entities
+@using Ben.Web.Services.WebApi
+@using Ben.Web.Website.Library.Kit
+
+@* Who sits where, at each sitting (item 235 phase 13).
+
+   TAP A PARTY, THEN TAP A TABLE. It works the same with a mouse and a thumb, and a room of twelve tables is
+   a list, not a drawing: what the kitchen and the dining room need is who is at Table 4 and what they can't
+   eat, and that prints.
+
+   CONFIRMED PARTIES ONLY, AND ONLY THE ONES HERE THAT NIGHT. A party that cancels drops off its table by
+   itself. *@
+
+<PageTitle>@(_event?.Name is { Length: > 0 } n ? $"Dining — {n}" : "Dining")</PageTitle>
+
+<div class="container-fluid py-3 dining" style="max-width:1200px;">
+    <div class="text-secondary small d-print-none">
+        <a href="@($"/organizations/{OrgId}/events")">Events</a>
+        @if (_event is { } crumb)
+        {
+            <text> · </text><a href="@($"/organizations/{OrgId}/events/{EventId}")">@crumb.Name</a>
+            <text> · </text><a href="@($"/organizations/{OrgId}/events/{EventId}/menus")">Menus</a>
+        }
+    </div>
+
+    <h1 class="h3 mb-1">Dining tables <HelpLink Slug="organization-administration" Anchor="hosted-events" /></h1>
+    <p class="text-secondary small mb-3 d-print-none">
+        Choose a sitting, tap a party, then tap the table they sit at. Only confirmed bookings that are here that night
+        are listed.
+    </p>
+
+    @if (_note is { Length: > 0 }) { <div class="alert alert-success py-2 d-print-none" id="dining-note" role="status">@_note</div> }
+    @if (_error is { Length: > 0 }) { <div class="alert alert-danger py-2 d-print-none" id="dining-error" role="alert">@_error</div> }
+
+    <BenItemState TItem="HostedEventDiningRecord" Result="_dining" Loading="_loading" LoadingText="Loading the dining room…" OnRetry="LoadAsync">
+        <ChildContent Context="d">
+            @if (d.Sittings.Count == 0)
+            {
+                <div class="alert alert-light border" id="dining-no-sittings">
+                    There are no sittings yet. <a href="@($"/organizations/{OrgId}/events/{EventId}/menus")">Add the meals</a> first, then seat people here.
+                </div>
+            }
+            else
+            {
+                <div class="d-flex flex-wrap gap-1 mb-3 d-print-none" role="group" aria-label="Sitting">
+                    @foreach (var sitting in d.Sittings)
+                    {
+                        var thisOne = sitting;
+                        <button type="button" id="@($"dining-sitting-{thisOne.Id:N}")"
+                                class="btn btn-sm @(thisOne.Id == d.SittingId ? "btn-primary" : "btn-outline-primary")"
+                                disabled="@_busy" @onclick="() => ChooseSittingAsync(thisOne.Id)">
+                            @thisOne.NightDate.ToString("ddd MM/dd") · @thisOne.Title
+                            @if (thisOne.Seated > 0) { <span class="badge text-bg-secondary ms-1">@thisOne.Seated</span> }
+                        </button>
+                    }
+                </div>
+
+                @if (Current(d) is { } current)
+                {
+                    <h2 class="h5 d-none d-print-block">@current.NightDate.ToString("dddd MM/dd/yyyy") · @current.Title</h2>
+
+                    <div class="d-flex flex-wrap gap-2 align-items-end mb-3 d-print-none">
+                        @if (Others(d).Count > 0)
+                        {
+                            <div>
+                                <label class="form-label small mb-1" for="dining-same-as">Seat like another sitting</label>
+                                <select class="form-select form-select-sm" id="dining-same-as" @bind="_sameAs">
+                                    <option value="">Choose a sitting…</option>
+                                    @foreach (var other in Others(d))
+                                    {
+                                        <option value="@other.Id">@other.NightDate.ToString("ddd MM/dd") · @other.Title</option>
+                                    }
+                                </select>
+                            </div>
+                            <button type="button" class="btn btn-sm btn-outline-secondary" id="dining-same-as-go"
+                                    disabled="@(_busy || string.IsNullOrEmpty(_sameAs))" @onclick="SameAsAsync">Seat the same way</button>
+                        }
+                        <button type="button" class="btn btn-sm btn-outline-secondary ms-auto" id="dining-print" @onclick="PrintAsync">Print table list</button>
+                        <button type="button" class="btn btn-sm btn-outline-secondary" id="dining-edit-tables"
+                                @onclick="() => _editingTables = !_editingTables">@(_editingTables ? "Done with tables" : "Set up tables")</button>
+                    </div>
+                }
+
+                @if (_editingTables || d.Tables.Count == 0)
+                {
+                    <div class="card mb-3 d-print-none" id="dining-tables-editor">
+                        <div class="card-header fw-semibold">The tables</div>
+                        <div class="card-body">
+                            @for (var i = 0; i < _tableForms.Count; i++)
+                            {
+                                var index = i;
+                                var form = _tableForms[i];
+                                <div class="row g-2 align-items-end mb-2">
+                                    <div class="col-7 col-md-5">
+                                        <label class="form-label small mb-1" for="@($"dining-table-name-{form.Key:N}")">Name</label>
+                                        <input class="form-control form-control-sm" id="@($"dining-table-name-{form.Key:N}")" maxlength="60" @bind="form.Name" />
+                                    </div>
+                                    <div class="col-3 col-md-2">
+                                        <label class="form-label small mb-1" for="@($"dining-table-seats-{form.Key:N}")">Seats</label>
+                                        <input class="form-control form-control-sm" id="@($"dining-table-seats-{form.Key:N}")" type="number" min="1" max="40" @bind="form.Seats" />
+                                    </div>
+                                    <div class="col-2 col-md-2">
+                                        <button type="button" class="btn btn-sm btn-outline-danger" aria-label="@($"Remove {form.Name}")"
+                                                @onclick="() => _tableForms.RemoveAt(index)">✕</button>
+                                    </div>
+                                </div>
+                            }
+                            <div class="d-flex flex-wrap gap-2 mt-2">
+                                <button type="button" class="btn btn-sm btn-outline-secondary" id="dining-add-table" @onclick="AddTable">Add a table</button>
+                                <button type="button" class="btn btn-sm btn-outline-secondary" id="dining-add-six" @onclick="() => AddTables(6, 8)">Add 6 tables of 8</button>
+                                <button type="button" class="btn btn-sm btn-primary ms-auto" id="dining-save-tables" disabled="@_busy" @onclick="SaveTablesAsync">Save tables</button>
+                            </div>
+                            <p class="small text-secondary mt-2 mb-0">Removing a table unseats whoever sits at it.</p>
+                        </div>
+                    </div>
+                }
+
+                @if (d.SittingId is not null && d.Tables.Count > 0)
+                {
+                    <div class="row g-3">
+                        <div class="col-12 col-lg-4 d-print-none">
+                            <div class="card" id="dining-tray">
+                                <div class="card-header fw-semibold">Still to seat (@Unseated(d).Sum(p => p.PartySize - p.Seated))</div>
+                                @if (d.Parties.Count == 0)
+                                {
+                                    <div class="card-body text-secondary small" id="dining-no-parties">No confirmed bookings are here for this sitting.</div>
+                                }
+                                else
+                                {
+                                    <ul class="list-group list-group-flush">
+                                        @foreach (var party in d.Parties)
+                                        {
+                                            var thisParty = party;
+                                            var left = thisParty.PartySize - thisParty.Seated;
+                                            <li class="list-group-item p-0">
+                                                <button type="button" class="dining-party w-100 text-start btn btn-link text-decoration-none p-2 @(_selected == thisParty.BookingId ? "dining-party--chosen" : "")"
+                                                        aria-pressed="@(_selected == thisParty.BookingId)" disabled="@(left == 0)"
+                                                        @onclick="() => Choose(thisParty)">
+                                                    <span class="fw-semibold text-body">@thisParty.LeadName</span>
+                                                    <span class="small text-secondary d-block">
+                                                        @(left == 0 ? $"All {thisParty.PartySize} seated" : $"{left} of {thisParty.PartySize} to seat")
+                                                        @if (thisParty.DietaryNotes.Count > 0) { <span class="badge text-bg-warning ms-1">@thisParty.DietaryNotes.Count dietary</span> }
+                                                    </span>
+                                                </button>
+                                            </li>
+                                        }
+                                    </ul>
+                                }
+                            </div>
+                        </div>
+
+                        <div class="col-12 col-lg-8">
+                            @if (_selected is { } chosenId && d.Parties.FirstOrDefault(p => p.BookingId == chosenId) is { } chosen)
+                            {
+                                <div class="alert alert-info py-2 d-flex flex-wrap align-items-center gap-2 d-print-none" id="dining-choosing">
+                                    <span>Seat <strong>@chosen.LeadName</strong> —</span>
+                                    <label class="visually-hidden" for="dining-how-many">How many</label>
+                                    <input class="form-control form-control-sm" style="width:5rem;" type="number" min="1"
+                                           max="@(chosen.PartySize - chosen.Seated)" id="dining-how-many" @bind="_howMany" />
+                                    <span>people. Now tap a table.</span>
+                                    <button type="button" class="btn btn-sm btn-link ms-auto" @onclick="() => _selected = null">Cancel</button>
+                                </div>
+                            }
+
+                            <div class="row g-2" id="dining-tables">
+                                @foreach (var table in d.Tables)
+                                {
+                                    var thisTable = table;
+                                    var seated = d.Seats.Where(s => s.TableId == thisTable.Id).ToList();
+                                    var used = seated.Sum(s => s.People);
+                                    <div class="col-12 col-sm-6 col-xl-4">
+                                        <div class="card h-100 dining-table @(_selected is not null && used < thisTable.Seats ? "dining-table--open" : "")" data-table="@thisTable.Id">
+                                            <button type="button" class="card-header d-flex justify-content-between align-items-center border-0 text-start"
+                                                    id="@($"dining-table-{thisTable.Id:N}")" disabled="@(_busy || _selected is null)"
+                                                    @onclick="() => SeatAtAsync(thisTable)">
+                                                <span class="fw-semibold">@thisTable.Name</span>
+                                                <span class="badge @(used >= thisTable.Seats ? "text-bg-secondary" : "text-bg-primary")">@used/@thisTable.Seats</span>
+                                            </button>
+                                            <ul class="list-group list-group-flush small">
+                                                @foreach (var seat in seated)
+                                                {
+                                                    var thisSeat = seat;
+                                                    var who = d.Parties.FirstOrDefault(p => p.BookingId == thisSeat.BookingId);
+                                                    <li class="list-group-item">
+                                                        <div class="d-flex justify-content-between gap-2">
+                                                            <span>@(who?.LeadName ?? "A party") · @thisSeat.People</span>
+                                                            <button type="button" class="btn btn-sm btn-link p-0 d-print-none" disabled="@_busy"
+                                                                    aria-label="@($"Unseat {who?.LeadName}")" @onclick="() => UnseatAsync(thisSeat)">Unseat</button>
+                                                        </div>
+                                                        @if (who is { DietaryNotes.Count: > 0 })
+                                                        {
+                                                            <div class="text-warning-emphasis">@string.Join("; ", who.DietaryNotes)</div>
+                                                        }
+                                                    </li>
+                                                }
+                                            </ul>
+                                        </div>
+                                    </div>
+                                }
+                            </div>
+                        </div>
+                    </div>
+                }
+            }
+        </ChildContent>
+    </BenItemState>
+</div>
+
+@code {
+    [Parameter] public Guid OrgId { get; set; }
+    [Parameter] public Guid EventId { get; set; }
+    [SupplyParameterFromQuery(Name = "sitting")] public Guid? Sitting { get; set; }
+
+    private HostedEventRecord? _event;
+    private ItemResult<HostedEventDiningRecord> _dining;
+    private bool _loading = true, _busy, _editingTables;
+    private string? _note, _error, _sameAs;
+    private Guid? _selected;
+    private int _howMany = 1;
+    private List<TableForm> _tableForms = [];
+
+    private sealed class TableForm
+    {
+        public Guid Key { get; } = Guid.NewGuid();
+        public Guid? Id { get; init; }
+        public string Name { get; set; } = "";
+        public int Seats { get; set; } = 8;
+    }
+
+    protected override async Task OnAfterRenderAsync(bool firstRender)
+    {
+        if (!firstRender) return;
+        if (!await UserState.WaitUntilAuthReadyAsync(RendererInfo.IsInteractive)) return;
+        await LoadAsync();
+        StateHasChanged();
+    }
+
+    private async Task LoadAsync()
+    {
+        _loading = true;
+        _event ??= await AdminClient.GetHostedEventAsync(OrgId, EventId);
+        Take(await AdminClient.GetEventDiningAsync(OrgId, EventId, Sitting));
+        _loading = false;
+    }
+
+    private void Take(ItemResult<HostedEventDiningRecord> result)
+    {
+        _dining = result;
+        if (result.Item is { } d)
+        {
+            _tableForms = [.. d.Tables.Select(t => new TableForm { Id = t.Id, Name = t.Name, Seats = t.Seats })];
+            // The chosen party stays chosen only while it still has somebody to seat.
+            var party = _selected is { } chosen ? d.Parties.FirstOrDefault(p => p.BookingId == chosen) : null;
+            if (party is null || party.Seated >= party.PartySize) _selected = null;
+            else _howMany = Math.Min(_howMany, party.PartySize - party.Seated);
+        }
+    }
+
+    private void Take((HostedEventDiningRecord? Result, string? Error) sent)
+    {
+        _busy = false;
+        if (sent.Result is null) { _error = sent.Error ?? "That couldn't be saved just now."; return; }
+        _note = sent.Result.Sentence;
+        Take(ItemResult<HostedEventDiningRecord>.Ok(sent.Result));
+    }
+
+    private static HostedEventDiningSittingRecord? Current(HostedEventDiningRecord d) => d.Sittings.FirstOrDefault(s => s.Id == d.SittingId);
+    private static IReadOnlyList<HostedEventDiningSittingRecord> Others(HostedEventDiningRecord d) => [.. d.Sittings.Where(s => s.Id != d.SittingId && s.Seated > 0)];
+    private static IEnumerable<HostedEventDiningPartyRecord> Unseated(HostedEventDiningRecord d) => d.Parties.Where(p => p.Seated < p.PartySize);
+
+    private async Task ChooseSittingAsync(Guid sittingId)
+    {
+        _busy = true; _note = null; _error = null; _selected = null;
+        Take(await AdminClient.GetEventDiningAsync(OrgId, EventId, sittingId));
+        _busy = false;
+    }
+
+    private void Choose(HostedEventDiningPartyRecord party)
+    {
+        _selected = _selected == party.BookingId ? null : party.BookingId;
+        _howMany = party.PartySize - party.Seated;
+    }
+
+    private async Task SeatAtAsync(HostedEventDiningTableRecord table)
+    {
+        if (_selected is not { } bookingId || _dining.Item?.SittingId is not { } sittingId) return;
+        _busy = true; _note = null; _error = null;
+        Take(await AdminClient.SeatEventPartyAsync(OrgId, EventId, sittingId, new SeatHostedEventPartyRequest(bookingId, table.Id, _howMany)));
+    }
+
+    private async Task UnseatAsync(HostedEventDiningSeatRecord seat)
+    {
+        if (_dining.Item?.SittingId is not { } sittingId) return;
+        _busy = true; _note = null; _error = null;
+        Take(await AdminClient.UnseatEventPartyAsync(OrgId, EventId, sittingId, seat.Id));
+    }
+
+    private async Task SameAsAsync()
+    {
+        if (_dining.Item?.SittingId is not { } sittingId || !Guid.TryParse(_sameAs, out var from)) return;
+        _busy = true; _note = null; _error = null;
+        Take(await AdminClient.SeatSameAsSittingAsync(OrgId, EventId, sittingId, from));
+        _sameAs = null;
+    }
+
+    private void AddTable() => _tableForms.Add(new TableForm { Name = $"Table {_tableForms.Count + 1}" });
+
+    private void AddTables(int count, int seats)
+    {
+        for (var i = 0; i < count; i++) _tableForms.Add(new TableForm { Name = $"Table {_tableForms.Count + 1}", Seats = seats });
+    }
+
+    private async Task SaveTablesAsync()
+    {
+        _busy = true; _note = null; _error = null;
+        Take(await AdminClient.SetEventDiningTablesAsync(OrgId, EventId, _dining.Item?.SittingId,
+            new SetHostedEventDiningTablesRequest([.. _tableForms.Select(t => new HostedEventDiningTableInput(t.Name, t.Seats, t.Id))])));
+        if (_error is null) _editingTables = false;
+    }
+
+    private async Task PrintAsync() => await JS.InvokeVoidAsync("window.print");
+}

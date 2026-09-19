@@ -1,0 +1,48 @@
+@*
+    The only thing on screen while a board is being presented: where you are, a way back and forward,
+    and a way out. Everything else in the editor is hidden by CSS, because the point of presenting is
+    that the room looks at the card and not at the toolbars.
+
+    Ben, 2026-09-16: "presentation mode like miro where you can create the cards like slides."
+*@
+
+<div class="bc-present" role="group" aria-label="Presenting">
+    <button type="button" class="bc-present__button" data-bc-action="present-previous"
+            disabled="@(!HasPrevious)" aria-label="Previous card" title="Previous card (left arrow)"
+            @onclick="@(() => OnAction.InvokeAsync("present-previous"))">
+        <BcIcon Name="chevron-left" />
+    </button>
+
+    @* aria-live so a screen reader is told where the walk has got to, not left behind by it. *@
+    <span class="bc-present__where" aria-live="polite" data-bc-present-counter>
+        <span class="bc-present__count">@(Index + 1) / @Count</span>
+        @if (!string.IsNullOrWhiteSpace(Title))
+        {
+            <span class="bc-present__title text-truncate">@Title</span>
+        }
+    </span>
+
+    <button type="button" class="bc-present__button" data-bc-action="present-next"
+            disabled="@(!HasNext)" aria-label="Next card" title="Next card (right arrow)"
+            @onclick="@(() => OnAction.InvokeAsync("present-next"))">
+        <BcIcon Name="chevron-right" />
+    </button>
+
+    <button type="button" class="bc-present__button bc-present__stop" data-bc-action="present-stop"
+            aria-label="Stop presenting" title="Stop presenting (Escape)"
+            @onclick="@(() => OnAction.InvokeAsync("present-stop"))">
+        <BcIcon Name="x" />
+    </button>
+</div>
+
+@code {
+    [Parameter] public EventCallback<string> OnAction { get; set; }
+
+    /// <summary>Which stop is showing, counting from zero; the bar shows it counting from one.</summary>
+    [Parameter] public int Index { get; set; }
+
+    [Parameter] public int Count { get; set; }
+    [Parameter] public string? Title { get; set; }
+    [Parameter] public bool HasNext { get; set; }
+    [Parameter] public bool HasPrevious { get; set; }
+}

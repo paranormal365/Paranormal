@@ -68,6 +68,28 @@
 .app-footer-link,
 .app-footer-link:hover { color: inherit; opacity: .85; }
 
+/* On a phone the copyright and five links did not fit one line: the footer is a flex row that does not wrap, and "Terms"
+   sat past the right edge where nobody could reach it (UI test pass, 2026-09-14). It wraps, the copyright on a line of
+   its own and the links spaced evenly beneath. */
+@media (max-width: 575.98px) {
+    .app-footer {
+        flex-wrap: wrap;
+        row-gap: .35rem;
+        height: auto;
+        padding-block: .6rem;
+    }
+
+    .app-footer .app-footer-text {
+        flex-basis: 100%;
+    }
+
+    .app-footer .app-footer-link {
+        margin-left: 0 !important;   /* Bootstrap's ms-3 utility is !important */
+        margin-right: 1rem;
+        white-space: nowrap;
+    }
+}
+
 /* ── Blazor's error bar ─────────────────────────────────────────────────── */
 #blazor-error-ui {
     background: var(--bs-warning-bg-subtle, #ffe69c);
@@ -95,27 +117,30 @@
    the same colour as text on the page background instead, where the darkest of them get hard to
    read against the dark surface.
 
-   The nudge here is deliberately small: enough to lift the resting text off the background,
-   not enough to turn the brand colours pastel. Hover still fills with the true colour.
-   These sit below the 4.5:1 WCAG AA text threshold by design — the palette is the priority. */
+   The text is lifted toward white until it reads at 4.5:1 (WCAG AA) on both the card surface
+   (#272b30) and the page (#373b41) — each colour by its own amount, because a deep navy needs far
+   more than a bright green. It was a smaller nudge, below AA by choice; the UI test pass of
+   2026-09-14 found "View" on the home page's case cards reading as a disabled button beside a
+   white one, and Ben chose readable. The border keeps more of the true colour, and hover still
+   fills with it. */
 :root[data-bs-theme="dark"] .btn-outline-primary {
-    --bs-btn-color:        color-mix(in srgb, var(--bs-primary) 78%, #fff);
-    --bs-btn-border-color: color-mix(in srgb, var(--bs-primary) 88%, #fff);
+    --bs-btn-color:        color-mix(in srgb, var(--bs-primary) 52%, #fff);
+    --bs-btn-border-color: color-mix(in srgb, var(--bs-primary) 70%, #fff);
 }
 
 :root[data-bs-theme="dark"] .btn-outline-info {
-    --bs-btn-color:        color-mix(in srgb, var(--bs-info) 72%, #fff);
-    --bs-btn-border-color: color-mix(in srgb, var(--bs-info) 85%, #fff);
+    --bs-btn-color:        color-mix(in srgb, var(--bs-info) 49%, #fff);
+    --bs-btn-border-color: color-mix(in srgb, var(--bs-info) 68%, #fff);
 }
 
 :root[data-bs-theme="dark"] .btn-outline-danger {
-    --bs-btn-color:        color-mix(in srgb, var(--bs-danger) 85%, #fff);
-    --bs-btn-border-color: color-mix(in srgb, var(--bs-danger) 92%, #fff);
+    --bs-btn-color:        color-mix(in srgb, var(--bs-danger) 63%, #fff);
+    --bs-btn-border-color: color-mix(in srgb, var(--bs-danger) 80%, #fff);
 }
 
 :root[data-bs-theme="dark"] .btn-outline-success {
-    --bs-btn-color:        color-mix(in srgb, var(--bs-success) 88%, #fff);
-    --bs-btn-border-color: color-mix(in srgb, var(--bs-success) 94%, #fff);
+    --bs-btn-color:        color-mix(in srgb, var(--bs-success) 78%, #fff);
+    --bs-btn-border-color: color-mix(in srgb, var(--bs-success) 88%, #fff);
 }
 
 /* ── Button size ────────────────────────────────────────────────────────────
@@ -395,6 +420,52 @@ html[data-bs-theme="dark"] {
     --app-nav-bg: color-mix(in srgb, var(--primary-900) 55%, var(--secondary-800) 45%);
 }
 
+/* ── Bold in running text ────────────────────────────────────────────────────
+   The template sets b and strong to weight 500 everywhere, a notch above the 400 around them — right for its own
+   interface labels, but the bold somebody puts in a case note, a message, a timeline entry, a description or a research
+   page was all but invisible, and so was the B button's effect while typing (UI test pass, 2026-09-14). Inside running
+   text — a paragraph, a list item, a quotation, or the editor itself — bold is bold. */
+p strong, p b,
+li strong, li b,
+blockquote strong, blockquote b,
+.ProseMirror strong, .ProseMirror b {
+    font-weight: 700 !important;   /* the template's rule is itself !important; this one is more specific */
+}
+
+/* ── The bell's count ────────────────────────────────────────────────────────
+   The template caps .badge-icon at 28px with an ellipsis, sized for one or two digits. The bell shows "99+", which the
+   cap cut to "9…" — a count that reads as nine (UI test pass, 2026-09-14). */
+.notification-bell .badge-icon {
+    max-width: none;
+    padding-inline: .3em;
+}
+
+/* ── The navigation's filter box ─────────────────────────────────────────────
+   The sidebar is dark in both themes, but in light mode the box took the page's placeholder colour — dark grey on the
+   dark navigation, so "Filter" all but vanished (UI test pass, 2026-09-14). The placeholder follows the sidebar. */
+.app-sidebar #searchInput {
+    --ben-placeholder-color: rgba(255, 255, 255, .55);   /* the site-wide placeholder rule reads this, !important */
+}
+
+/* ── The brand on a phone's light header ─────────────────────────────────────
+   Below 992px the brand sits on the header's own ground rather than the navigation's, and in light mode that ground is
+   white — the mark is a pale ghost drawn for a dark backdrop, so it read as a faint outline. It gets the navigation's
+   colour behind it, as it has beside the sidebar on a wide screen (UI test pass, 2026-09-14). */
+html:not([data-bs-theme="dark"]) .ben-mark-on-light {
+    /* The same answer for the mark wherever it stands on a light card — the sign-in page's, found the same day. */
+    background-color: var(--app-nav-bg, #2f3849);
+    border-radius: 50%;
+    padding: 6px;
+}
+
+@media (max-width: 991.98px) {
+    html:not([data-bs-theme="dark"]) .app-header .ben-brand img {
+        background-color: var(--app-nav-bg, #2f3849);
+        border-radius: 50%;
+        padding: 2px;
+    }
+}
+
 /* ── Brand block ─────────────────────────────────────────────────────────────
    The template puts its logo in the header, in a block exactly the sidebar's width
    (`.app-header .app-logo { width: var(--menu-width) }`) and painted the navigation's colour, so
@@ -581,14 +652,56 @@ textarea.form-control::placeholder {
    self-correcting and cannot hide anything. The explicit widths below still keep the common cases
    on one line. Item 139.
 
-   `white-space: normal` alone, deliberately. The first version also set `display: flex` here,
-   which turned out to be redundant: `telerik-night.css` already makes command cells flex. Adding
-   it again only risked a second opinion about a `<td>`'s formatting context in a file that does
-   not own that decision. Measured with the cell constrained to 220px: the buttons wrap, the last
-   one is fully visible, and the header and body columns still line up. */
+   `white-space: normal` alone, deliberately. Command cells are ordinary table cells — a `<td>`
+   made `display: flex` loses its place in the row, and its bottom border then stops short of the
+   rest of the row's (beta feedback, 2026-09-14; the spacing now lives on the buttons in
+   `telerik-night.css`). The buttons are inline-flex, so they wrap like words when the column is
+   too narrow: the row grows taller and the last button stays whole. */
 .k-grid td.k-command-cell,
 .k-grid .k-table-td.k-command-cell {
     white-space: normal;
+}
+
+/* ── Row actions are icons ────────────────────────────────────────────────────
+   Ben, 2026-09-14: no text in grid buttons; an icon, with its words in a tooltip. `.ben-grid-action`
+   is both Kit/BenGridAction and any GridCommandButton given that class, so the two look identical.
+   A 2rem square (32px) — over the 24px WCAG 2.2 minimum target, and small enough that four actions
+   still fit a 180px column on one line. The theme's shrunken-button padding (telerik-night.css)
+   would make an icon-only command button a lopsided rectangle, so padding is set here in both
+   directions. */
+.k-grid .ben-grid-action,
+.ben-grid-action {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    min-width: 2rem;
+    min-height: 2rem;
+    padding: 0.25rem;
+    line-height: 1;
+}
+
+.ben-grid-action-tip {
+    display: inline-block;
+}
+
+.ben-grid-action-tip > .ben-grid-action:disabled {
+    pointer-events: none;
+}
+
+.ben-grid-action .sa-icon {
+    width: 1rem;
+    height: 1rem;
+}
+
+.ben-grid-action + .ben-grid-action,
+.ben-grid-action + .ben-grid-action-tip,
+.ben-grid-action-tip + .ben-grid-action,
+.ben-grid-action-tip + .ben-grid-action-tip {
+    margin-inline-start: 0.25rem;
+}
+
+.k-grid .k-command-cell > .ben-grid-action + .ben-grid-action {
+    margin-inline-start: 0;
 }
 
 /* ── Dropdown popups are not limited to the width of what opened them ────────
@@ -610,4 +723,65 @@ textarea.form-control::placeholder {
 .k-animation-container:has(.k-list-container) > .k-popup,
 .k-animation-container:has(.k-list-container) .k-list-container {
     min-width: 100%;
+}
+
+/* A day on a calendar that has something logged on it: a dot under the number (client test pass P.6, 2026-09-14). Telerik
+   draws the cells, so the class it is given is styled here rather than in a component's scoped sheet. */
+.k-calendar td.ben-cal-has-entries .k-link {
+    position: relative;
+}
+.k-calendar td.ben-cal-has-entries .k-link::after {
+    content: "";
+    position: absolute;
+    left: 50%;
+    bottom: 2px;
+    width: 5px;
+    height: 5px;
+    margin-left: -2.5px;
+    border-radius: 50%;
+    background: var(--bs-primary);
+}
+.k-calendar td.ben-cal-has-entries.k-selected .k-link::after {
+    background: var(--bs-body-bg);
+}
+
+/* Secondary text follows the theme it is drawn on.
+
+   The night theme sets --bs-secondary-rgb to 108,117,125 — Bootstrap's LIGHT-mode grey — while
+   separately defining --bs-secondary-color as rgba(222,226,230,.75) for exactly this job. Since
+   .text-secondary is built from the -rgb variable, every caption, hint and help line on the site
+   rendered the light-mode grey on a dark page: measured 3.29:1 against the page's own #212529,
+   where the minimum for text that size is 4.5:1. The theme's own token gives 7.31:1.
+
+   Found by crawling the site for visual faults on 2026-09-18, after Ben asked whether anything else
+   looked like the unpadded card on the home page. It is the most widespread one: .text-secondary is
+   how nearly every explanatory line on the site is drawn.
+
+   Scoped to .text-secondary rather than redefining --bs-secondary-rgb, because that variable also
+   colours secondary buttons, borders and backgrounds — none of which are wrong, and all of which
+   would move if the variable changed. */
+[data-bs-theme="dark"] .text-secondary,
+html.set-nav-dark .text-secondary {
+    color: var(--bs-secondary-color) !important;
+}
+
+/* ...and the DAY theme's own secondary text was failing the same test from the other side.
+
+   The template sets --bs-secondary-color to rgba(70, 79, 87, 0.70) on :root. Composited, that is
+   rgb(126,132,137): 3.80:1 on white and 3.69:1 on the #f8f9fa panels, where small text needs
+   4.5:1. It is the token nearly every quiet line on the site resolves to — captions, hints, help
+   lines, table meta — and inside the video editor it is the timeline's heading and duration, the
+   preview timecode, the media-card meta and the panel tabs, all measured at 3.69:1 on 2026-09-19.
+
+   Replaced with a solid rather than a translucent colour on purpose. An alpha colour takes its
+   contrast from whatever happens to be behind it, which is precisely how one token produced 3.80
+   in one place and 3.69 in another; a solid gives the same answer everywhere it is used. #667380
+   keeps the template's blue-grey cast and measures 4.85:1 on white and 4.60:1 on #f8f9fa, while
+   staying plainly quieter than body text at 8.06:1 — muted is still the point.
+
+   Scoped away from the night theme, which sets its own value and already passes at 7.31:1 (see
+   the rule above). Placeholder text has its own token, --input-placeholder-color, and is left
+   alone here. */
+:root:not([data-bs-theme="dark"]) {
+    --bs-secondary-color: #667380;
 }

@@ -197,7 +197,10 @@
 .bv-clip-card__thumb-placeholder {
     position: relative;
     font-size: 1.25rem;
-    color: #444;
+    /* The tile behind it is #111 in both themes, so this needs a fixed light colour rather than a
+       dark one: #444 on #111 measured 1.94:1, and the play glyph is the only thing saying the tile
+       is a video at all while its thumbnail is still being made (2026-09-18 audit). */
+    color: #9aa4ad;
 }
 
 /* On-demand preview trigger for Server-tab video rows — hidden until hover, matches the
@@ -317,8 +320,12 @@
 
 /* V-4: a bin card whose bytes are not here. The words already say so; this makes the card
    findable in a grid of twenty without reading every line. */
+/* --bv-attention, not the raw warning colour. The theme mixes that one toward the body colour for
+   exactly this reason — see its definition — because the flat amber measures 2.49:1 on a light
+   page, and "media missing" is the line telling somebody their clip will not render
+   (2026-09-19). */
 .bv-clip-card__meta--missing {
-    color: var(--kendo-color-warning, #f0ad4e);
+    color: var(--bv-attention, var(--kendo-color-warning, #f0ad4e));
 }
 
 /* ── Error banner ───────────────────────────────────────────────────────── */

@@ -163,3 +163,70 @@ public sealed class FeedTextSegmenterTests
         Assert.Empty(FeedTextSegmenter.Segment(null));
     }
 }
+
+/// <summary>
+/// Web addresses in a body (item 233, Ben 2026-09-11).
+/// </summary>
+/// <remarks>
+/// The interesting cases are all about where a link STOPS. A body is a sentence, and a sentence
+/// puts punctuation after a link that is not part of it — which is exactly the kind of edge the
+/// segmenter was moved out of a Razor file to make reachable.
+/// </remarks>
+public sealed class FeedTextSegmenterUrlTests
+{
+    private static IReadOnlyList<FeedSegment> Urls(string body) =>
+        [.. FeedTextSegmenter.Segment(body).Where(s => s.Kind == FeedSegmentKind.Url)];
+
+    [Theory]
+    [InlineData("look at https://example.com/a", "https://example.com/a")]
+    [InlineData("http://example.com works too", "http://example.com")]
+    [InlineData("HTTPS://EXAMPLE.COM shouting", "HTTPS://EXAMPLE.COM")]
+    public void An_address_is_found(string body, string expected) =>
+        Assert.Equal(expected, Assert.Single(Urls(body)).Value);
+
+    [Theory]
+    // The sentence's own punctuation is not part of the address.
+    [InlineData("see https://example.com/a.", "https://example.com/a")]
+    [InlineData("see https://example.com/a, then go", "https://example.com/a")]
+    [InlineData("see https://example.com/a!?", "https://example.com/a")]
+    [InlineData("\"https://example.com/a\"", "https://example.com/a")]
+    [InlineData("(https://example.com/a)", "https://example.com/a")]
+    public void Sentence_punctuation_is_left_out(string body, string expected) =>
+        Assert.Equal(expected, Assert.Single(Urls(body)).Value);
+
+    [Fact]
+    public void A_closing_bracket_that_belongs_to_the_address_is_kept()
+    {
+        // The case this rule exists for: people paste these.
+        const string body = "https://en.wikipedia.org/wiki/Nosferatu_(1922_film)";
+        Assert.Equal(body, Assert.Single(Urls(body)).Value);
+    }
+
+    [Theory]
+    [InlineData("nothing here at all")]
+    [InlineData("example.com without a scheme")]          // guessing turns full stops into links
+    [InlineData("mailto:somebody@example.com")]
+    [InlineData("https://")]                               // a scheme and nothing after it
+    [InlineData("ahttps://example.com")]                   // not at a word boundary
+    public void Everything_else_is_plain_text(string body) => Assert.Empty(Urls(body));
+
+    [Fact]
+    public void An_address_does_not_swallow_what_follows_it()
+    {
+        var segments = FeedTextSegmenter.Segment("go to https://example.com/a and tell @sarah");
+
+        Assert.Equal("https://example.com/a", segments.Single(s => s.Kind == FeedSegmentKind.Url).Value);
+        // The mention after it still resolves — a URL that ran to the end of the body would have
+        // eaten it, which is the failure this asserts against.
+        Assert.Contains(segments, s => s.Kind == FeedSegmentKind.Mention && s.Value == "sarah");
+    }
+
+    [Fact]
+    public void The_runs_still_rebuild_the_original_body()
+    {
+        // The property that keeps rendering honest: whatever the split decides, putting the runs
+        // back together must give exactly what the author typed.
+        const string body = "read (https://example.com/a), then ask @sarah about #ghosts.";
+        Assert.Equal(body, string.Concat(FeedTextSegmenter.Segment(body).Select(s => s.Text)));
+    }
+}

@@ -74,5 +74,55 @@ public sealed class MapKitTokenService : IDisposable
         return Es256Jwt.Sign(_key, header, claims);
     }
 
+    /// <summary>Apple's snapshot service.</summary>
+    public const string SnapshotBase = "https://snapshot.apple-mapkit.com";
+
+    /// <summary>
+    /// A signed Maps Web Snapshot address: a still picture of a place, fetched by the browser straight from Apple.
+    /// </summary>
+    /// <remarks>
+    /// <para>For the canvas editor's map boxes (canvas plan R35). The picture is never stored by us - Apple's terms
+    /// allow map data to be kept only temporarily - so the address expires after <see cref="Lifetime"/> and the
+    /// browser's own cache is the only copy.</para>
+    ///
+    /// <para>Apple's signing: the path and query, with <c>teamId</c> and <c>keyId</c> added, signed ES256 in the raw
+    /// r||s form, base64url without padding, and <c>signature</c> appended last. Every value is URL-encoded before
+    /// signing, and the order signed is the order sent.</para>
+    /// </remarks>
+    /// <param name="width">Picture width in points, 50 to 640 (Apple's limits).</param>
+    /// <param name="height">Picture height in points, 50 to 640.</param>
+    /// <param name="colorScheme">"light" or "dark".</param>
+    public string SnapshotUrl(double latitude, double longitude, int zoom, int width, int height, string colorScheme, DateTimeOffset now)
+    {
+        if (_key is null)
+            throw new InvalidOperationException("MapKit signing is not configured.");
+        if (latitude is < -90 or > 90 || double.IsNaN(latitude)) throw new ArgumentOutOfRangeException(nameof(latitude));
+        if (longitude is < -180 or > 180 || double.IsNaN(longitude)) throw new ArgumentOutOfRangeException(nameof(longitude));
+        if (zoom is < 3 or > 20) throw new ArgumentOutOfRangeException(nameof(zoom));
+        if (width is < 50 or > 640) throw new ArgumentOutOfRangeException(nameof(width));
+        if (height is < 50 or > 640) throw new ArgumentOutOfRangeException(nameof(height));
+        if (colorScheme is not ("light" or "dark")) throw new ArgumentOutOfRangeException(nameof(colorScheme));
+
+        var point = string.Create(System.Globalization.CultureInfo.InvariantCulture, $"{latitude:F6},{longitude:F6}");
+        var annotations = JsonSerializer.Serialize(new[] { new { point, color = "c0392b", markerStyle = "balloon" } });
+        var parameters = new (string Name, string Value)[]
+        {
+            ("center", point),
+            ("z", zoom.ToString(System.Globalization.CultureInfo.InvariantCulture)),
+            ("size", string.Create(System.Globalization.CultureInfo.InvariantCulture, $"{width}x{height}")),
+            ("scale", "2"),
+            ("t", "standard"),
+            ("colorScheme", colorScheme),
+            ("annotations", annotations),
+            ("expires", now.Add(Lifetime).ToUnixTimeSeconds().ToString(System.Globalization.CultureInfo.InvariantCulture)),
+            ("teamId", _options.TeamId),
+            ("keyId", _options.KeyId),
+        };
+
+        var pathAndQuery = "/api/v1/snapshot?" + string.Join("&", parameters.Select(p => $"{p.Name}={Uri.EscapeDataString(p.Value)}"));
+        var signature = _key.SignData(System.Text.Encoding.UTF8.GetBytes(pathAndQuery), HashAlgorithmName.SHA256, DSASignatureFormat.IeeeP1363FixedFieldConcatenation);
+        return $"{SnapshotBase}{pathAndQuery}&signature={Es256Jwt.Base64Url(signature)}";
+    }
+
     public void Dispose() => _key?.Dispose();
 }

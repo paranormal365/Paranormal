@@ -214,7 +214,8 @@ public sealed class PublicCaseDiscoveryController : ControllerBase
                 TotalVotes:        vc?.Total        ?? 0,
                 ApproxLatitude:    approxLat,
                 ApproxLongitude:   approxLon,
-                ClientName:        PublicClientName.For(c));
+                ClientName:        PublicClientName.For(c),
+                IsPublic:          c.IsPublic && (c.Status == CaseStatus.Public || c.Status == CaseStatus.Haunted));
         }).ToList();
 
         // Sort
@@ -232,16 +233,46 @@ public sealed class PublicCaseDiscoveryController : ControllerBase
     /// Used by <c>PublicCaseDiscovery.razor</c> to pre-load summaries for all
     /// visible list-cards without firing one request per card.
     /// </summary>
+    /// <remarks>
+    /// <para><b>The voting switch is asked here, in the action.</b> This is the batch sibling of
+    /// <c>api/public/cases/{caseId}/votes</c>, which carries <c>[FeatureGated]</c> at the class —
+    /// but this one lives on the DISCOVERY controller, which is deliberately ungated (discovery
+    /// gates the "near you" panel and the maps, not the case directory). So the voting gate had a
+    /// hole one route away from itself, and a site whose admin page said Voting was Off still
+    /// answered batch tallies to anything holding the URL (2026-09-17 audit).</para>
+    ///
+    /// <para><c>FeatureGatedAttribute</c> is <c>AttributeTargets.Class</c> on purpose — "gating
+    /// per action is how one endpoint eventually forgets" — so it cannot be used here, and this is
+    /// the exception the rule anticipated rather than a way around it. 404, matching the attribute:
+    /// a switched-off section looks like one that was never built.</para>
+    /// </remarks>
     [HttpGet("vote-summaries")]
     public async Task<ActionResult<IReadOnlyList<CaseVoteSummary>>> GetVoteSummaries(
         [FromQuery] Guid[] caseIds, CancellationToken ct)
     {
-        if (caseIds.Length == 0) return Ok(Array.Empty<CaseVoteSummary>());
-
         await using var db = await _db.CreateDbContextAsync(ct);
 
+        if (!await Services.SiteSettingsService.GetBoolAsync(
+                db, Services.SiteSettingKeys.FeatureVoting,
+                Services.SiteSettingKeys.DefaultFor(Services.SiteSettingKeys.FeatureVoting), ct))
+            return NotFound();
+
+        if (caseIds.Length == 0) return Ok(Array.Empty<CaseVoteSummary>());
+
+        // Only published cases answer. Votes can only be CAST on a published case, so without this
+        // the reachable disclosure was the tally of a case that has since been unpublished — a
+        // surface that should have gone dark with the case and did not (2026-09-17 audit). An id
+        // that is not published now returns a zero row, exactly like an id with no votes, so this
+        // is not an existence oracle either.
+        var published = await db.Cases.AsNoTracking()
+            .Where(c => caseIds.Contains(c.Id)
+                     && c.IsPublic
+                     && (c.Status == CaseStatus.Public || c.Status == CaseStatus.Haunted))
+            .Select(c => c.Id)
+            .ToListAsync(ct);
+
         var votes = await db.CaseVotes.AsNoTracking()
-            .Where(v => caseIds.Contains(v.CaseId))
+            .Where(v => published.Contains(v.CaseId))
             .ToListAsync(ct);
 
         // Resolve the authenticated user's ID (null when anonymous)
@@ -304,4 +335,7 @@ public sealed record PublicCaseDiscoveryItem(
     int      Score,
     decimal? ApproxLatitude,
     decimal? ApproxLongitude,
-    string?  ClientName);
+    string?  ClientName,
+    // False for a case shown only because this caller may already open it (their group's, or their own as a client), so
+    // the card can say it is not public — the section is headed "Public Investigations". Trailing and defaulted: additive.
+    bool     IsPublic = true);

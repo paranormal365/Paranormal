@@ -1,4 +1,5 @@
 import SwiftUI
+import UniformTypeIdentifiers
 import BenKit
 
 /// Field Kit's front door: what you've recorded, and the button that starts recording.
@@ -12,6 +13,18 @@ struct FieldKitHomeView: View {
 
     @State private var starting = false
     @State private var errorMessage: String?
+
+    /// Opening a `.ben` from the Files app — the door for a bundle somebody else handed over.
+    @State private var choosingBundle = false
+    /// This account's sessions on the server that are not on this phone, for pulling back down.
+    /// Everything the server holds for this account, as last read. Filtered against the phone's
+    /// own sessions at draw time, so a session deleted from this phone appears here at once
+    /// rather than after the tab is left and come back to.
+    @State private var serverSessions: [FieldUploadClient.ServerSession] = []
+    @State private var showingAllOnServer = false
+    /// How many server sessions are listed before "Show all".
+    private static let serverRowsShown = 3
+    @State private var downloading: UUID?
 
     private var store: FieldSessionStore { dependencies.fieldKit }
 
@@ -52,10 +65,27 @@ struct FieldKitHomeView: View {
                 }
             }
 
+            // Bringing a session in, rather than making one. Ben, 2026-09-16: "someone else can
+            // share their .ben file with another person on the iphone and the other person can
+            // view it like they had recorded it themselves" — and pulling your own back down.
+            if case .ready = store.state {
+                Section {
+                    Button {
+                        choosingBundle = true
+                    } label: {
+                        Label("Open a .ben file", systemImage: "doc.badge.arrow.up")
+                    }
+                    .accessibilityIdentifier("open-field-bundle")
+                } footer: {
+                    Text("A session somebody sent you — by AirDrop, in a message, from Files — opens here and plays exactly as it did for them.")
+                }
+
+            }
+
             let finished = store.sessions.filter { !$0.isOpen }
             if finished.isEmpty {
                 Section {
-                    Text("Nothing recorded yet. A session logs magnetic field, sound and where you were, and holds the photos and audio you capture along the way.")
+                    Text("Nothing recorded yet. A session logs magnetic field, sound and where you were, and holds the photos, video and audio you capture along the way.")
                         .font(.callout)
                         .foregroundStyle(Theme.fog)
                 }
@@ -77,11 +107,57 @@ struct FieldKitHomeView: View {
                     }
                 }
             }
+
+            // After this phone's own sessions, because a person who has sent up every night for a
+            // year has a long list here, and the sessions on the phone are the ones they came for.
+            if case .ready = store.state, !onTheServer.isEmpty {
+                let pullable = onTheServer.filter(\.canBePulledBack)
+                let older = onTheServer.count - pullable.count
+                let shown = showingAllOnServer ? pullable : Array(pullable.prefix(Self.serverRowsShown))
+                Section {
+                    ForEach(shown) { session in
+                        HStack {
+                            VStack(alignment: .leading, spacing: 3) {
+                                Text(session.title).foregroundStyle(Theme.bone)
+                                Text(serverDetail(session)).font(.caption).foregroundStyle(Theme.fog)
+                            }
+                            Spacer()
+                            if downloading == session.id {
+                                ProgressView()
+                            } else {
+                                Button {
+                                    Task { await download(session) }
+                                } label: {
+                                    Image(systemName: "arrow.down.circle")
+                                }
+                                .disabled(downloading != nil)
+                                .accessibilityLabel("Download \(session.title) to this phone")
+                                .accessibilityIdentifier("download-field-session")
+                            }
+                        }
+                    }
+                    if pullable.count > Self.serverRowsShown {
+                        Button(showingAllOnServer ? "Show fewer" : "Show all \(pullable.count)") {
+                            showingAllOnServer.toggle()
+                        }
+                        .accessibilityIdentifier("show-all-server-sessions")
+                    }
+                } header: {
+                    Text("On the server, not on this phone")
+                } footer: {
+                    // Only sessions the server can hand back get a button. The older kind is
+                    // counted rather than listed with a Download that would only be refused.
+                    Text("Sessions you sent from another device, or cleared from this one. Downloading brings the whole night back — readings, marks and recordings."
+                         + (older > 0
+                            ? " \(older == 1 ? "One older session was" : "\(older) older sessions were") sent before session files existed and can't be pulled back; they're still on the website."
+                            : ""))
+                }
+            }
         }
         .navigationTitle("Field Kit")
         .sheet(isPresented: $starting) {
-            StartSessionSheet { label, investigation in
-                await start(label: label, investigation: investigation)
+            StartSessionSheet { label, investigation, channels in
+                await start(label: label, investigation: investigation, channels: channels)
             }
             .environment(dependencies)
         }
@@ -92,15 +168,76 @@ struct FieldKitHomeView: View {
         } message: {
             Text(errorMessage ?? "")
         }
+        // Whatever door a bundle came through, this is where it is said when it would not open:
+        // the screen the session would have appeared on.
+        .alert("Couldn't open that session",
+               isPresented: Binding(get: { store.importProblem != nil },
+                                    set: { if !$0 { store.importProblem = nil } })) {
+            Button("OK", role: .cancel) { store.importProblem = nil }
+        } message: {
+            Text(store.importProblem ?? "")
+        }
+        // `.data` beside the app's own type: a .ben mailed through something that did not keep
+        // its type arrives as plain data, and refusing it there would be refusing the common case.
+        .fileImporter(isPresented: $choosingBundle,
+                      allowedContentTypes: [.fieldSessionBundle, .data]) { result in
+            guard case .success(let url) = result else { return }
+            Task { await FieldBundleOpener.open(url, dependencies: dependencies, router: router) }
+        }
         .onAppear { store.load() }
+        .task { await loadServerSessions() }
     }
 
-    private func start(label: String?, investigation: MyInvestigation?) async {
+    /// The server's list, less what is already here. Best-effort: signed out, or no signal, and
+    /// the section simply does not appear.
+    private func loadServerSessions() async {
+        guard dependencies.session.me != nil else { serverSessions = []; return }
+        guard case .ok(let sessions) = await dependencies.fieldUpload.mySessions() else { return }
+        serverSessions = sessions
+    }
+
+    /// The server's list, less what is already here.
+    private var onTheServer: [FieldUploadClient.ServerSession] {
+        let here = Set(store.sessions.map(\.id))
+        return serverSessions.filter { !here.contains($0.deviceSessionId) }
+    }
+
+    private func serverDetail(_ session: FieldUploadClient.ServerSession) -> String {
+        var parts: [String] = []
+        if let started = session.startedAt {
+            parts.append(started.formatted(date: .abbreviated, time: .shortened))
+        }
+        parts.append("\(session.readingCount) readings")
+        if session.markerCount > 0 { parts.append("\(session.markerCount) marked") }
+        if !session.files.isEmpty { parts.append("\(session.files.count) recordings") }
+        return parts.joined(separator: " · ")
+    }
+
+    /// Pulls one session down as the `.ben` it was sent as, and opens it.
+    private func download(_ session: FieldUploadClient.ServerSession) async {
+        downloading = session.id
+        defer { downloading = nil }
+        let destination = FileManager.default.temporaryDirectory
+            .appendingPathComponent("download-\(session.id.uuidString.lowercased()).ben")
+        switch await dependencies.fieldUpload.downloadBundle(sessionId: session.id, to: destination) {
+        case .success(let url):
+            await FieldBundleOpener.open(url, dependencies: dependencies, router: router,
+                                         serverSessionId: session.id)
+            try? FileManager.default.removeItem(at: url)
+            await loadServerSessions()
+        case .failure(let error):
+            store.importProblem = error.message
+        }
+    }
+
+    private func start(label: String?, investigation: MyInvestigation?,
+                       channels: CaptureChannels) async {
         do {
             let id = try store.startSession(
                 locationLabel: label,
                 investigationId: investigation?.investigationId,
-                investigationTitle: investigation?.title)
+                investigationTitle: investigation?.title,
+                channels: channels)
             starting = false
             router.push(.fieldSession(id))
         } catch {
@@ -163,6 +300,14 @@ private struct SessionRow: View {
         if summary.captureCount > 0 {
             parts.append("\(summary.captureCount) captured")
         }
+        // A session that arrived as a .ben says so, and says which kind: another person's night
+        // handed over, or this person's own pulled back from the server.
+        if summary.wasRecordedElsewhere(thisDeviceId: DeviceModel.vendorIdentifier()) {
+            parts.append("shared with you")
+        } else if summary.isImported {
+            // Your own night, back on this phone — from the server, or from a file you had kept.
+            parts.append(summary.serverSessionId != nil ? "from the server" : "opened from a file")
+        }
         return parts.joined(separator: " · ")
     }
 
@@ -183,9 +328,13 @@ private struct StartSessionSheet: View {
     @Environment(AppDependencies.self) private var dependencies
     @Environment(\.dismiss) private var dismiss
 
-    var onStart: (String?, MyInvestigation?) async -> Void
+    var onStart: (String?, MyInvestigation?, CaptureChannels) async -> Void
 
     @State private var label = ""
+    /// What this session will record. Chosen HERE, not hunted for on the live screen: video was
+    /// off by default and its button only appears once the channel is on, so the camera was
+    /// effectively invisible to anyone who did not already know where to look.
+    @State private var channels: CaptureChannels = .default
     @State private var investigations: [MyInvestigation] = []
     /// Selected by id, not by value — MyInvestigation is a server-shaped record and
     /// making it Hashable to please a Picker would be the tail wagging the dog.
@@ -217,11 +366,34 @@ private struct StartSessionSheet: View {
                 }
 
                 Section {
+                    ForEach(CaptureChannels.orderedForDisplay, id: \.rawValue) { channel in
+                        Toggle(isOn: Binding(
+                            get: { channels.contains(channel) },
+                            set: { isOn in
+                                if isOn { channels.insert(channel) } else { channels.remove(channel) }
+                            })
+                        ) {
+                            VStack(alignment: .leading, spacing: 1) {
+                                Label(channel.title, systemImage: channel.icon)
+                                Text(channel.costNote)
+                                    .font(.caption2).foregroundStyle(Theme.fog)
+                            }
+                        }
+                        .tint(Theme.ecto)
+                        .accessibilityIdentifier("start-channel-\(channel.title.lowercased())")
+                    }
+                } header: {
+                    Text("What to record")
+                } footer: {
+                    Text("You can change any of these while the session is running.")
+                }
+
+                Section {
                     Button {
                         Task {
                             busy = true
                             await onStart(label.trimmingCharacters(in: .whitespacesAndNewlines)
-                                            .isEmpty ? nil : label, chosenInvestigation)
+                                            .isEmpty ? nil : label, chosenInvestigation, channels)
                             busy = false
                         }
                     } label: {

@@ -183,17 +183,17 @@
                         <div class="d-flex gap-1">
                             @if (!row.IsRetired)
                             {
-                                <button type="button" class="btn btn-secondary btn-sm" @onclick="@(() => OpenBorrow(row.Id, row.DisplayName))">Borrow</button>
+                                <BenGridAction Icon="log-out" Label="Borrow" OnClick="@(() => OpenBorrow(row.Id, row.DisplayName))" />
                             }
-                            <button type="button" class="btn btn-secondary btn-sm" @onclick="@(() => NavManager.NavigateTo($"/organizations/{OrgId}/equipment/{row.Id}"))">History</button>
+                            <BenGridAction Icon="clock" Label="History" OnClick="@(() => NavManager.NavigateTo($"/organizations/{OrgId}/equipment/{row.Id}"))" />
                             @* Buttons render from the server's verdict, never from a guess. *@
                             @if (row.Flags.CanEdit)
                             {
-                                <button type="button" class="btn btn-secondary btn-sm" @onclick="@(() => OpenEditor(row))"><BenIcon Name="edit-2" Class="me-1" />Edit</button>
+                                <BenGridAction Icon="edit-2" Label="Edit" OnClick="@(() => OpenEditor(row))" />
                             }
                             @if (row.Flags.CanDelete)
                             {
-                                <button type="button" class="btn btn-danger btn-sm" @onclick="@(() => _pendingDelete = row)"><BenIcon Name="trash-2" Class="me-1" />Delete</button>
+                                <BenGridAction Icon="trash-2" Label="Delete" Tone="GridActionTone.Danger" OnClick="@(() => _pendingDelete = row)" />
                             }
                         </div>
                     </Template>
@@ -254,7 +254,7 @@
                         {
                             @* The server decides whether this caller may actually ask; the dialog
                                shows its answer, including the reason when it is no. *@
-                            <button type="button" class="btn btn-secondary btn-sm" @onclick="@(() => OpenBorrow(row.Id, row.DisplayName))">Ask to borrow</button>
+                            <BenGridAction Icon="log-out" Label="Ask to borrow" OnClick="@(() => OpenBorrow(row.Id, row.DisplayName))" />
                         }
                     </Template>
                 </GridColumn>

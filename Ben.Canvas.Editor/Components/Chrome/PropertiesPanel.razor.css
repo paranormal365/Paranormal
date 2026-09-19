@@ -1,0 +1,110 @@
+.bc-props {
+    grid-area: props;
+    min-width: 0;
+    overflow-y: auto;
+    overscroll-behavior: contain;
+    padding: .75rem;
+    border-left: 1px solid var(--bc-border);
+    background: var(--bc-surface-2);
+    color: var(--bc-text);
+    z-index: 10;
+    touch-action: manipulation;
+}
+
+.bc-props__head {
+    display: flex;
+    align-items: center;
+    gap: .5rem;
+    margin-bottom: .75rem;
+}
+
+.bc-props__title {
+    margin: 0;
+    font-size: 1rem;
+    font-weight: 600;
+}
+
+.bc-props__grid {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: .5rem;
+    margin-bottom: .75rem;
+}
+
+.bc-props__section {
+    margin: 0 0 .75rem;
+    padding: 0;
+    border: 0;
+}
+
+.bc-props__actions {
+    display: flex;
+    flex-wrap: wrap;
+    gap: .5rem;
+    margin-top: .75rem;
+}
+
+.bc-props__actions .btn { min-height: 36px; }
+
+.bc-props__hint {
+    color: var(--bc-text-muted);
+    font-size: .875rem;
+}
+
+.bc-props__stats {
+    display: grid;
+    grid-template-columns: auto 1fr;
+    gap: .25rem .75rem;
+    font-size: .875rem;
+}
+
+.bc-props__stats dd { margin: 0; }
+
+.bc-field {
+    display: flex;
+    flex-direction: column;
+    gap: .25rem;
+    margin-bottom: .5rem;
+}
+
+.bc-field__label {
+    color: var(--bc-text-muted);
+    font-size: .75rem;
+    float: none;
+    padding: 0;
+    margin: 0 0 .25rem;
+}
+
+.bc-check {
+    display: flex;
+    align-items: center;
+    gap: .5rem;
+    min-height: var(--bc-tap);
+}
+
+.bc-swatches {
+    display: flex;
+    flex-wrap: wrap;
+    gap: .375rem;
+}
+
+.bc-swatch {
+    width: 28px;
+    height: 28px;
+    border-radius: 50%;
+    border: 2px solid var(--bc-border);
+    padding: 0;
+}
+
+.bc-swatch--default { background: var(--bc-surface-3); }
+.bc-swatch--1 { background: var(--bc-color-1); }
+.bc-swatch--2 { background: var(--bc-color-2); }
+.bc-swatch--3 { background: var(--bc-color-3); }
+.bc-swatch--4 { background: var(--bc-color-4); }
+.bc-swatch--5 { background: var(--bc-color-5); }
+.bc-swatch--6 { background: var(--bc-color-6); }
+
+.bc-swatch--on {
+    outline: 2px solid var(--bc-focus-ring);
+    outline-offset: 2px;
+}

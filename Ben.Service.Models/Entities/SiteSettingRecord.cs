@@ -19,6 +19,16 @@ namespace Ben.Service.Models.Entities;
 /// had to carry "Accepts true or false" in its description — an instruction that only existed
 /// because the control was a text box.
 /// </param>
+/// <param name="Group">
+/// The section the admin page files this under. Stated by the server, like the label and the
+/// description, because the seed that declares settings lives there. Empty means the server did
+/// not file it anywhere — which a guard on the server refuses, so it should never be seen.
+/// </param>
+/// <param name="GroupBlurb">
+/// The line under that section's heading. Sent with every setting rather than looked up on the
+/// client, so the words and the grouping cannot drift apart — a page that spells a section name
+/// slightly differently from the server would silently lose its own heading.
+/// </param>
 /// <param name="DefaultWhenUnset">
 /// What an on/off setting <i>does</i> while nothing is stored. Sent because the switch used to be
 /// drawn from the stored value alone: a flag nobody had ever set read as null, rendered "Off", and
@@ -35,7 +45,9 @@ public sealed record SiteSettingRecord(
     DateTime DateUpdated,
     bool IsMultiLine = false,
     bool IsBoolean = false,
-    bool DefaultWhenUnset = false);
+    bool DefaultWhenUnset = false,
+    string Group = "",
+    string GroupBlurb = "");
 
 /// <param name="Value">Empty or whitespace clears the setting.</param>
 public sealed record SetSiteSettingRequest(string? Value);

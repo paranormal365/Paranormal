@@ -182,14 +182,39 @@ public sealed class TimelineSequencerTests
     /// The source time never leaves the trimmed region, so a speed above one cannot ask a video
     /// element to seek past the end of its own file.
     /// </summary>
+    /// <remarks>
+    /// This used to ask at t=3.9, because a 4× clip of four trimmed seconds used to COVER four
+    /// seconds of timeline — VideoClip.EffectiveLength ignored speed. It covers one second now
+    /// (2026-09-18 audit), which is the length the export always rendered it at, and the whole of
+    /// that second maps inside the trim by arithmetic rather than by the clamp. Asked near the end
+    /// of the clip's real span, so the check still bites if that arithmetic drifts.
+    /// </remarks>
     [Fact]
     public void The_source_time_stays_inside_the_trim()
     {
         var clip = Video(position: 0, duration: 10, startTrim: 2, endTrim: 6, speed: 4.0);
 
-        var frame = TimelineSequencer.Resolve([VideoTrack(clip)], 3.9);
+        var frame = TimelineSequencer.Resolve([VideoTrack(clip)], 0.975);
 
         Assert.InRange(frame.PictureSourceTime, 2, 6);
+    }
+
+    /// <summary>
+    /// A sped-up clip ends where the render ends it, not four times later.
+    /// </summary>
+    /// <remarks>
+    /// While EffectiveLength ignored speed, a 4× clip of four trimmed seconds went on covering the
+    /// timeline for three seconds after the render had finished with it — the preview froze on the
+    /// clip's last frame while the exported file had already cut away (2026-09-18 audit).
+    /// </remarks>
+    [Fact]
+    public void A_sped_up_clip_stops_covering_the_timeline_when_it_ends()
+    {
+        var clip = Video(position: 0, duration: 10, startTrim: 2, endTrim: 6, speed: 4.0);
+
+        var frame = TimelineSequencer.Resolve([VideoTrack(clip)], 1.5);
+
+        Assert.Null(frame.Picture);
     }
 
     [Fact]

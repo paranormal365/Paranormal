@@ -50,7 +50,7 @@ public class CaseControllerTests
                 : new CaseRecord { Title = "", StreetAddress1 = "", City = "", State = "", ZipCode = "", Country = "", DateCaseOpened = DateTime.UtcNow, DateCreated = DateTime.UtcNow });
         m.Setup(x => x.Map<IEnumerable<CaseRecord>>(It.IsAny<object>()))
             .Returns<object>(o => o is IEnumerable<Case> list
-                ? list.Select(c => new CaseRecord { Id = c.Id, OrganizationId = c.OrganizationId, Title = c.Title, Status = c.Status, CaseYear = c.CaseYear, OrgCaseNumber = c.OrgCaseNumber, StreetAddress1 = c.StreetAddress1, City = c.City, State = c.State, ZipCode = c.ZipCode, Country = c.Country, DateCaseOpened = c.DateCaseOpened, DateCreated = c.DateCreated })
+                ? list.Select(c => new CaseRecord { Id = c.Id, OrganizationId = c.OrganizationId, Title = c.Title, Status = c.Status, CaseYear = c.CaseYear, OrgCaseNumber = c.OrgCaseNumber, StreetAddress1 = c.StreetAddress1, City = c.City, State = c.State, ZipCode = c.ZipCode, Country = c.Country, DateCaseOpened = c.DateCaseOpened, DateCreated = c.DateCreated, CaseManagerAppUserId = c.CaseManagerAppUserId, CaseManagerDisplayName = c.CaseManagerAppUser?.DisplayName })
                 : []);
         m.Setup(x => x.Map<CaseTimelineEntryRecord>(It.IsAny<object>()))
             .Returns<object>(o => o is CaseTimelineEntry e
@@ -58,7 +58,7 @@ public class CaseControllerTests
                 : new CaseTimelineEntryRecord { DateCreated = DateTime.UtcNow });
         m.Setup(x => x.Map<IEnumerable<CaseTimelineEntryRecord>>(It.IsAny<object>()))
             .Returns<object>(o => o is IEnumerable<CaseTimelineEntry> list
-                ? list.Select(e => new CaseTimelineEntryRecord { Id = e.Id, CaseId = e.CaseId, EntryType = e.EntryType, Title = e.Title, InvestigationId = e.InvestigationId, DateCreated = e.DateCreated })
+                ? list.Select(e => new CaseTimelineEntryRecord { Id = e.Id, CaseId = e.CaseId, EntryType = e.EntryType, Title = e.Title, InvestigationId = e.InvestigationId, EventDateTime = e.EventDateTime, DateCreated = e.DateCreated })
                 : []);
         return m.Object;
     }
@@ -67,7 +67,7 @@ public class CaseControllerTests
     {
         var claims = new List<Claim> { new(ClaimTypes.NameIdentifier, userId.ToString()) };
         if (isSuperAdmin) claims.Add(new Claim(ClaimTypes.Role, RoleNames.SuperAdmin));
-        var ctrl = new CaseController(factory, CreateMapper(), new Ben.Data.WebApi.Services.Billing.SubscriptionLimitGuard(factory), new Ben.Service.RepositoryService.Services.OrganizationSecurityService(factory), new Ben.Data.WebApi.Services.RequestReviewNotifier(factory, new Ben.Data.WebApi.Services.PlatformMessageService(factory)), Ben.Web.Tests.TestMailer.Quiet());
+        var ctrl = new CaseController(factory, CreateMapper(), new Ben.Data.WebApi.Services.Billing.SubscriptionLimitGuard(factory), new Ben.Service.RepositoryService.Services.OrganizationSecurityService(factory), new Ben.Data.WebApi.Services.RequestReviewNotifier(factory, new Ben.Data.WebApi.Services.PlatformMessageService(factory)), Ben.Web.Tests.TestMailer.Quiet(), new Ben.Data.WebApi.Services.CmsMarkupSanitizer());
         ctrl.ControllerContext = new ControllerContext
         {
             HttpContext = new DefaultHttpContext
@@ -144,8 +144,13 @@ public class CaseControllerTests
 
     // ── Create ────────────────────────────────────────────────────────────────
 
+    /// <summary>
+    /// Ben, 2026-09-17: "I proposed a case, but I should be able to accept it as it was created by
+    /// me... unless I say it is up to a group decision, it should be accepted." A case opened by
+    /// somebody who may change a case's status was proposed to nobody.
+    /// </summary>
     [Fact]
-    public async Task Create_Admin_ReturnsCreated()
+    public async Task Create_Admin_ReturnsCreated_AndAcceptsIt()
     {
         var (factory, orgId, userId) = await SeedAsync();
         var ctrl   = Build(factory, userId);
@@ -153,6 +158,18 @@ public class CaseControllerTests
         var created = Assert.IsType<CreatedAtActionResult>(result.Result);
         var dto = Assert.IsType<CaseRecord>(created.Value);
         Assert.Equal("Haunted House", dto.Title);
+        Assert.Equal(CaseStatus.Accepted, dto.Status);
+    }
+
+    /// <summary>Asking for the group's decision leaves the case waiting, as every case used to.</summary>
+    [Fact]
+    public async Task Create_PutToTheGroup_LeavesItProposed()
+    {
+        var (factory, orgId, userId) = await SeedAsync();
+        var ctrl = Build(factory, userId);
+        var request = MakeCreateRequest("Up to everyone") with { PutToTheGroup = true };
+
+        var dto = (CaseRecord)((CreatedAtActionResult)(await ctrl.Create(orgId, request, default)).Result!).Value!;
         Assert.Equal(CaseStatus.Proposed, dto.Status);
     }
 
@@ -191,6 +208,12 @@ public class CaseControllerTests
     }
 
     // ── Update ────────────────────────────────────────────────────────────────
+    //
+    // These pass isPublic: TRUE, and it is not what any of them is about. The seeded org pays
+    // nothing, so from 2026-09-17 a case it opens is created public, and an update that asked for
+    // false would be refused with "a case at a public location is public on this account" — the
+    // rule these tests would then be accidentally testing instead of titles, managers and dates.
+    // Sending the case's own state leaves each one about the thing it is named for.
 
     [Fact]
     public async Task Update_Admin_UpdatesTitleAndStatus()
@@ -199,7 +222,7 @@ public class CaseControllerTests
         var ctrl    = Build(factory, userId);
         var caseId  = ((CaseRecord)((CreatedAtActionResult)(await ctrl.Create(orgId, MakeCreateRequest(), default)).Result!).Value!).Id;
 
-        var result = await ctrl.Update(orgId, caseId, new UpdateCaseRequest("Updated", null, CaseStatus.Accepted, null, false, null), default);
+        var result = await ctrl.Update(orgId, caseId, new UpdateCaseRequest("Updated", null, CaseStatus.Accepted, null, true, null), default);
         var ok  = Assert.IsType<OkObjectResult>(result.Result);
         var dto = Assert.IsType<CaseRecord>(ok.Value);
         Assert.Equal("Updated", dto.Title);
@@ -232,11 +255,38 @@ public class CaseControllerTests
         var caseId = ((CaseRecord)((CreatedAtActionResult)(await ctrl.Create(orgId, MakeCreateRequest(), default)).Result!).Value!).Id;
 
         var result = await ctrl.Update(orgId, caseId,
-            new UpdateCaseRequest("Assigned", null, CaseStatus.Accepted, null, false, managerId), default);
+            new UpdateCaseRequest("Assigned", null, CaseStatus.Accepted, null, true, managerId), default);
 
         var dto = Assert.IsType<CaseRecord>(Assert.IsType<OkObjectResult>(result.Result).Value);
         Assert.Equal(managerId, dto.CaseManagerAppUserId);
         Assert.Equal("Dana Holt", dto.CaseManagerDisplayName);
+    }
+
+    [Fact]
+    public async Task GetAll_NamesEachCasesManager()
+    {
+        // UI test pass, 2026-09-14: the Cases tab said "Manager: Unassigned" on every case, including the Belmont case
+        // whose manager is Sarah — the list query loaded cases without the manager navigation the name is mapped from
+        // (the same bug W-A9 fixed for Update, one query over).
+        var (factory, orgId, userId) = await SeedAsync();
+        var managerId = Guid.NewGuid();
+        await using (var db = await factory.CreateDbContextAsync())
+        {
+            db.Users.Add(new AppUser
+            {
+                Id = managerId, UserName = "mgr@t.com", NormalizedUserName = "MGR@T.COM",
+                Email = "mgr@t.com", NormalizedEmail = "MGR@T.COM",
+                DisplayName = "Dana Holt", DateCreated = DateTime.UtcNow,
+            });
+            await db.SaveChangesAsync();
+        }
+        var ctrl   = Build(factory, userId);
+        var caseId = ((CaseRecord)((CreatedAtActionResult)(await ctrl.Create(orgId, MakeCreateRequest(), default)).Result!).Value!).Id;
+        await ctrl.Update(orgId, caseId, new UpdateCaseRequest("Assigned", null, CaseStatus.Accepted, null, true, managerId), default);
+
+        var ok = Assert.IsType<OkObjectResult>((await Build(factory, userId).GetAll(orgId, default)).Result);
+
+        Assert.Equal("Dana Holt", Assert.Single((IEnumerable<CaseRecord>)ok.Value!).CaseManagerDisplayName);
     }
 
     [Fact]
@@ -246,7 +296,7 @@ public class CaseControllerTests
         var ctrl   = Build(factory, userId);
         var caseId = ((CaseRecord)((CreatedAtActionResult)(await ctrl.Create(orgId, MakeCreateRequest(), default)).Result!).Value!).Id;
 
-        await ctrl.Update(orgId, caseId, new UpdateCaseRequest(null, null, CaseStatus.Closed, null, false, null), default);
+        await ctrl.Update(orgId, caseId, new UpdateCaseRequest(null, null, CaseStatus.Closed, null, true, null), default);
 
         await using var db = await factory.CreateDbContextAsync();
         var c = await db.Cases.FindAsync(caseId);
@@ -266,10 +316,10 @@ public class CaseControllerTests
         var admin = Build(factory, adminId);
         var caseId = ((CaseRecord)((CreatedAtActionResult)(await admin.Create(orgId, MakeCreateRequest(), default)).Result!).Value!).Id;
         // Assign case manager
-        await admin.Update(orgId, caseId, new UpdateCaseRequest(null, null, CaseStatus.Accepted, null, false, managerId), default);
+        await admin.Update(orgId, caseId, new UpdateCaseRequest(null, null, CaseStatus.Accepted, null, true, managerId), default);
 
         var mgr = Build(factory, managerId);
-        var result = await mgr.Update(orgId, caseId, new UpdateCaseRequest("Mgr Updated", null, CaseStatus.Accepted, null, false, managerId), default);
+        var result = await mgr.Update(orgId, caseId, new UpdateCaseRequest("Mgr Updated", null, CaseStatus.Accepted, null, true, managerId), default);
         Assert.IsType<OkObjectResult>(result.Result);
     }
 
@@ -1071,5 +1121,140 @@ public class CaseControllerTests
         Assert.NotNull(saved.UrlName);
         Assert.DoesNotContain("evaluator", saved.UrlName, StringComparison.OrdinalIgnoreCase);
         Assert.DoesNotContain("casey", saved.UrlName, StringComparison.OrdinalIgnoreCase);
+    }
+
+    // ── Who published this case's footage (2026-09-17 audit) ────────────────────────────────
+    //
+    // FeedPostConsent is append-only and its entity doc states its purpose: "When a client asks
+    // 'who put this footage up', this row is the answer." The whole table was write-only — the
+    // only other references in the tree were two purges — so the question had no answer anywhere.
+
+    private static async Task<Guid> SeedCaseWithConsentAsync(
+        IDbContextFactory<BenDataContext> factory, Guid orgId, Guid userId, bool postStillExists)
+    {
+        await using var db = await factory.CreateDbContextAsync();
+
+        var caseId = Guid.NewGuid();
+        db.Cases.Add(new Case
+        {
+            Id = caseId, OrganizationId = orgId, Title = "A private engagement",
+            CaseYear = 2026, OrgCaseNumber = 7,
+            StreetAddress1 = "1 Elm", City = "Nashville", State = "TN", ZipCode = "37201", Country = "US",
+            IsPrivateEngagement = true,
+            DateCreated = DateTime.UtcNow, CreatedByAppUserId = userId,
+        });
+
+        Guid? postId = null;
+        if (postStillExists)
+        {
+            postId = Guid.NewGuid();
+            db.OrgMessages.Add(new OrgMessage
+            {
+                Id = postId.Value, OrganizationId = orgId, AuthorAppUserId = userId,
+                ChannelType = OrgMessageChannel.PublicFeed, Body = "A render",
+                DateCreated = DateTime.UtcNow, CreatedByAppUserId = userId,
+            });
+        }
+
+        db.FeedPostConsents.Add(new FeedPostConsent
+        {
+            Id = Guid.NewGuid(),
+            OrgMessageId = postId,
+            CaseId = caseId,
+            AgreedByAppUserId = userId,
+            AgreedUtc = DateTime.UtcNow.AddDays(-3),
+            WordingVersion = 1,
+        });
+
+        await db.SaveChangesAsync();
+        return caseId;
+    }
+
+    private static async Task<IReadOnlyList<CaseFeedConsentRecord>> ConsentsAsync(
+        IDbContextFactory<BenDataContext> factory, Guid orgId, Guid caseId, Guid userId)
+    {
+        var result = await Build(factory, userId, isAdmin: true).GetFeedConsents(orgId, caseId, default);
+        return (IReadOnlyList<CaseFeedConsentRecord>)Assert.IsType<OkObjectResult>(result.Result).Value!;
+    }
+
+    [Fact]
+    public async Task GetFeedConsents_NamesWhoAgreedAndWhen()
+    {
+        var (factory, orgId, userId) = await SeedAsync();
+        var caseId = await SeedCaseWithConsentAsync(factory, orgId, userId, postStillExists: true);
+
+        var consent = Assert.Single(await ConsentsAsync(factory, orgId, caseId, userId));
+
+        Assert.Equal(userId, consent.AgreedByAppUserId);
+        Assert.Equal(1, consent.WordingVersion);
+        Assert.True(consent.PostExists);
+    }
+
+    /// <summary>
+    /// The consent outlives the post on purpose. "Somebody agreed and then took it down" and
+    /// "nobody ever agreed" are different facts, so the row is reported either way rather than
+    /// filtered out with its post.
+    /// </summary>
+    [Fact]
+    public async Task GetFeedConsents_KeepsTheRecordAfterThePostIsGone()
+    {
+        var (factory, orgId, userId) = await SeedAsync();
+        var caseId = await SeedCaseWithConsentAsync(factory, orgId, userId, postStillExists: false);
+
+        var consent = Assert.Single(await ConsentsAsync(factory, orgId, caseId, userId));
+
+        Assert.False(consent.PostExists);
+        Assert.Null(consent.OrgMessageId);
+    }
+
+    [Fact]
+    public async Task GetFeedConsents_ACaseNobodyPublished_AnswersEmpty()
+    {
+        var (factory, orgId, userId) = await SeedAsync();
+
+        await using (var db = await factory.CreateDbContextAsync())
+        {
+            db.Cases.Add(new Case
+            {
+                Id = Guid.NewGuid(), OrganizationId = orgId, Title = "Never published",
+                CaseYear = 2026, OrgCaseNumber = 8,
+                StreetAddress1 = "2 Elm", City = "Nashville", State = "TN", ZipCode = "37201", Country = "US",
+                DateCreated = DateTime.UtcNow, CreatedByAppUserId = userId,
+            });
+            await db.SaveChangesAsync();
+        }
+
+        await using var read = await factory.CreateDbContextAsync();
+        var plainCaseId = (await read.Cases.FirstAsync(c => c.Title == "Never published")).Id;
+
+        Assert.Empty(await ConsentsAsync(factory, orgId, plainCaseId, userId));
+    }
+
+    [Fact]
+    public async Task GetFeedConsents_NonMember_ReturnsForbid()
+    {
+        var (factory, orgId, userId) = await SeedAsync();
+        var caseId = await SeedCaseWithConsentAsync(factory, orgId, userId, postStillExists: true);
+
+        var result = await Build(factory, Guid.NewGuid()).GetFeedConsents(orgId, caseId, default);
+
+        Assert.IsType<ForbidResult>(result.Result);
+    }
+
+    /// <summary>
+    /// Matched on both ids: a caseId from another org must not resolve just because the caller
+    /// belongs to the org they named in the route.
+    /// </summary>
+    [Fact]
+    public async Task GetFeedConsents_ACaseFromAnotherOrg_IsNotFound()
+    {
+        var (factory, orgId, userId) = await SeedAsync();
+        var caseId = await SeedCaseWithConsentAsync(factory, orgId, userId, postStillExists: true);
+
+        var result = await Build(factory, userId, isAdmin: true)
+            .GetFeedConsents(Guid.NewGuid(), caseId, default);
+
+        // Another org this caller does not belong to is refused before the case is looked at.
+        Assert.IsType<ForbidResult>(result.Result);
     }
 }

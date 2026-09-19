@@ -81,6 +81,39 @@ public interface IBenCaseClient
     Task<CaseVoteSummary?> CastCaseVoteAsync(Guid caseId, Ben.Data.Common.Enums.EvidenceVoteType voteType, CancellationToken token = default);
     Task<bool> RemoveCaseVoteAsync(Guid caseId, CancellationToken token = default);
 
+    // ── What people said, and what to do about it (item 233, Ben 2026-09-11) ──
+
+    /// <summary>The comments on a published case, oldest first. Anonymous readers may ask.</summary>
+    Task<LoadResult<PublicCaseComment>> GetCaseCommentsAsync(Guid caseId, CancellationToken token = default);
+
+    /// <summary>Leaves a comment, or the refusal in the words the server wrote it.</summary>
+    Task<(PublicCaseComment? Saved, string? Error)> PostCaseCommentAsync(
+        Guid caseId, string body, CancellationToken token = default);
+
+    /// <summary>Takes back a comment of your own.</summary>
+    Task<bool> DeleteCaseCommentAsync(Guid caseId, Guid commentId, CancellationToken token = default);
+
+    /// <summary>Puts a link to the case on the feed, as a post by the person asking.</summary>
+    Task<(Guid? PostId, string? Error)> RepostCaseAsync(Guid caseId, CancellationToken token = default);
+
+    /// <summary>Reports a case to the moderators. The answer never varies; see the controller.</summary>
+    Task<bool> ReportCaseAsync(Guid caseId, string? reason, CancellationToken token = default);
+
+    /// <summary>Reports one comment on a case.</summary>
+    Task<bool> ReportCaseCommentAsync(Guid caseId, Guid commentId, string? reason, CancellationToken token = default);
+
+    /// <summary>
+    /// What a link in a message points at, when it points at something of ours. Null otherwise —
+    /// nothing fetches anybody else's page; see the controller for why.
+    /// </summary>
+    Task<LinkPreview?> GetLinkPreviewAsync(string url, CancellationToken token = default);
+
+    /// <summary>
+    /// Asks the server to make (or refresh) the card for another site's link, as a signed-in person about to post it
+    /// (2026-09-14). Null when the page could not be read or the address is not a web address.
+    /// </summary>
+    Task<LinkPreview?> CreateLinkPreviewAsync(string url, bool refresh = false, CancellationToken token = default);
+
     // ── Cases ─────────────────────────────────────────────────────────────────
 
     Task<LoadResult<CaseRecord>> GetOrgCasesAsync(Guid orgId, CancellationToken token = default);
@@ -92,6 +125,16 @@ public interface IBenCaseClient
     /// diverges from what the client actually wrote.
     /// </summary>
     Task<CaseClientRequestRecord?> GetOrgCaseClientRequestAsync(Guid orgId, Guid caseId, CancellationToken token = default);
+
+    /// <summary>
+    /// Who agreed to publish this case's footage to the feed, and when.
+    /// </summary>
+    /// <remarks>
+    /// The table behind this is append-only and was entirely write-only until the 2026-09-17
+    /// audit, so the question its own entity doc names — "who put this footage up" — had no
+    /// answer anywhere. Answered to the GROUP: a client asks their group and the group answers.
+    /// </remarks>
+    Task<WebApi.LoadResult<CaseFeedConsentRecord>> GetCaseFeedConsentsAsync(Guid orgId, Guid caseId, CancellationToken token = default);
 
     /// <summary>
     /// Advisory warnings when this title or pseudonym would carry the client's name or the street
@@ -110,7 +153,11 @@ public interface IBenCaseClient
     Task<(CaseRecord? Result, string? Error)> CreateOrgCaseAsync(Guid orgId, CreateCaseRequest request, CancellationToken token = default);
     Task<LoadResult<OrgPendingRequestRecord>> GetOrgPendingRequestsAsync(Guid orgId, CancellationToken token = default);
     Task<(CaseRecord? Result, string? Error)> AcceptClientRequestAsCaseAsync(Guid orgId, Guid clientRequestId, AcceptClientRequestAsCaseRequest request, CancellationToken token = default);
-    Task<bool> DeclineClientRequestAsync(Guid orgId, Guid clientRequestId, CancellationToken token = default);
+    /// <remarks>
+    /// Declined only when the server says so: the list used to take a request off the screen whatever the answer, so a member
+    /// without the grant "declined" a request that came back on the next visit (UI test pass 6.15, 2026-09-14).
+    /// </remarks>
+    Task<(bool Declined, string? Error)> DeclineClientRequestAsync(Guid orgId, Guid clientRequestId, CancellationToken token = default);
     /// <summary>Marks a pending request as Viewed or UnderReview without accepting or declining.</summary>
     Task<bool> UpdatePendingRequestStatusAsync(Guid orgId, Guid clientRequestId, Ben.Data.Common.Enums.ClientOrgRequestStatus status, CancellationToken token = default);
 
@@ -170,11 +217,15 @@ public interface IBenCaseClient
 
     // ── Case Research ─────────────────────────────────────────────────────────
 
-    Task<LoadResult<CaseResearchEntryDto>> GetCaseResearchAsync(Guid orgId, Guid caseId, CancellationToken token = default);
-    Task<CaseResearchEntryDto?> AddCaseResearchAsync(Guid orgId, Guid caseId, UpsertResearchRequest request, CancellationToken token = default);
-    Task<CaseResearchEntryDto?> UploadCaseResearchFileAsync(Guid orgId, Guid caseId, string title, string? description, Stream content, string fileName, string contentType, CancellationToken token = default);
-    Task<CaseResearchEntryDto?> UpdateCaseResearchAsync(Guid orgId, Guid caseId, Guid entryId, UpsertResearchRequest request, CancellationToken token = default);
-    Task<bool> DeleteCaseResearchAsync(Guid orgId, Guid caseId, Guid entryId, CancellationToken token = default);
+    /// <summary>
+    /// The case's canvas boards: every published one, plus the caller's own unpublished drafts (item 243).
+    /// </summary>
+    /// <remarks>
+    /// The whole of research, since 2026-09-16. The block-editor research pages that stood here until
+    /// then are gone: two ways to write up a case is one more than anybody needed, and the boards are
+    /// the one Ben kept.
+    /// </remarks>
+    Task<LoadResult<CanvasDocumentSummaryRecord>> GetCaseBoardsAsync(Guid caseId, CancellationToken token = default);
 
     // ── Case Files (Files/Evidence tab) ──────────────────────────────────────
 
@@ -253,10 +304,21 @@ public interface IBenCaseClient
     Task<ClientCaseDetail?> GetMyCaseAsync(Guid caseId, CancellationToken token = default);
 
     /// <summary>Logs a new occurrence (ClientReport timeline entry) on the client's case.</summary>
-    Task<CaseTimelineEntryRecord?> LogOccurrenceAsync(Guid caseId, LogOccurrenceRequest request, CancellationToken token = default);
+    /// <summary>
+    /// Records what the client says happened, or hands back why it could not be recorded.
+    /// </summary>
+    /// <remarks>
+    /// Returns the reason, not just a null. The transport maps every server refusal to null rather
+    /// than throwing, so the page's <c>catch</c> never saw a 404 or a 400 — and this is the
+    /// client's own account of what is happening in their house, typed once. The 2026-09-17 audit
+    /// found the result discarded entirely: the dialog closed, the list refreshed, and the text
+    /// was gone.
+    /// </remarks>
+    Task<(CaseTimelineEntryRecord? Result, string? Error)> LogOccurrenceAsync(Guid caseId, LogOccurrenceRequest request, CancellationToken token = default);
 
     /// <summary>Updates a previously logged occurrence.</summary>
-    Task<CaseTimelineEntryRecord?> UpdateOccurrenceAsync(Guid caseId, Guid entryId, LogOccurrenceRequest request, CancellationToken token = default);
+    /// <summary>Edits one, or hands back why it could not be edited. See above.</summary>
+    Task<(CaseTimelineEntryRecord? Result, string? Error)> UpdateOccurrenceAsync(Guid caseId, Guid entryId, LogOccurrenceRequest request, CancellationToken token = default);
 
     /// <summary>Deletes a previously logged occurrence.</summary>
     Task<bool> DeleteOccurrenceAsync(Guid caseId, Guid entryId, CancellationToken token = default);
@@ -304,7 +366,8 @@ public interface IBenCaseClient
     Task<LoadResult<CaseMessageRecord>> GetCaseMessagesAsync(Guid orgId, Guid caseId, CancellationToken token = default);
 
     /// <summary>Posts a message from the org to the client on this case.</summary>
-    Task<(CaseMessageRecord? Result, string? Error)> PostCaseMessageAsync(Guid orgId, Guid caseId, string body, CancellationToken token = default);
+    /// <summary>Posts the group's message, written in the formatting editor, as HTML; the API derives the plain Body.</summary>
+    Task<(CaseMessageRecord? Result, string? Error)> PostCaseMessageAsync(Guid orgId, Guid caseId, string bodyHtml, CancellationToken token = default);
 
     /// <summary>Returns the count of unread client messages the org hasn't seen yet.</summary>
     Task<int> GetCaseMessageUnreadCountAsync(Guid orgId, Guid caseId, CancellationToken token = default);

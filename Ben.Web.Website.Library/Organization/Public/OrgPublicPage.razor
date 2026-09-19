@@ -28,41 +28,32 @@ else if (_page is null)
 }
 else
 {
-    <div class="container-fluid px-3 py-3" style="max-width:900px; margin:0 auto;">
+    <div class="container-fluid px-3 py-3" style="max-width:960px; margin:0 auto;">
 
-        @* ── Org header ───────────────────────────────────────────────────── *@
-        <div class="d-flex align-items-center gap-3 mb-3">
-            @if (_page.Logos.Any())
-            {
-                <Ben.Web.Website.Library.Kit.BenImage
-                    Src="@AdminClient.GetFileThumbnailUrl(_page.Logos.First().UploadFileId)"
-                    Alt="@(_page.Logos.First().AltText ?? _page.OrgName)"
-                    Style="max-height:48px; max-width:96px; object-fit:contain;" />
-            }
-            <a href="/o/@_page.OrgUrlName" class="text-decoration-none">
-                <span class="fs-5 fw-semibold text-secondary">@_page.OrgName</span>
-            </a>
-        </div>
+        @* The same band and the same pills as the group's home page (OrgPublicBanner,
+           OrgPublicNav): a group whose front door and whose "About us" look like two different
+           sites has no front door. Here the group's name is the eyebrow and this page's title is
+           the heading, so a reader knows whose site they are on and which page they reached. *@
+        <OrgPublicBanner Name="@_page.OrgName" UrlName="@_page.OrgUrlName"
+                         PageTitle="@_page.Page.PageTitle"
+                         LogoUrl="@(_page.Logos.Any() ? AdminClient.GetFileThumbnailUrl(_page.Logos.First().UploadFileId) : null)"
+                         LogoAlt="@(_page.Logos.FirstOrDefault()?.AltText)"
+                         Class="mb-3" />
 
-        @* ── Sub-page navigation ──────────────────────────────────────────── *@
-        <nav class="mb-4 d-flex flex-wrap gap-2">
-            <a href="/o/@_page.OrgUrlName" class="btn btn-sm btn-outline-secondary">Home</a>
-            <a href="/o/@_page.OrgUrlName/cases" class="btn btn-sm btn-outline-secondary">Cases</a>
-            <a href="/o/@_page.OrgUrlName/events" class="btn btn-sm btn-outline-secondary">Events</a>
-            @foreach (var navPage in _page.NavPages.Where(p => p.ParentPageId is null).OrderBy(p => p.SortOrder))
-            {
-                var isActive = navPage.UrlName.Equals(PageSlug, StringComparison.OrdinalIgnoreCase);
-                <a href="/o/@_page.OrgUrlName/@navPage.UrlName"
-                   class="btn btn-sm @(isActive ? "btn-primary" : "btn-outline-secondary")">
-                    @navPage.PageTitle
-                </a>
-            }
-        </nav>
-
-        @* ── Page title ───────────────────────────────────────────────────── *@
-        <h1 class="mb-4">@_page.Page.PageTitle</h1>
+        <OrgPublicNav OrgUrlName="@_page.OrgUrlName" NavPages="@_page.NavPages"
+                      Active="@PageSlug" Class="mb-4" />
 
         @* ── Page sections ────────────────────────────────────────────────── *@
+        @if (_page.Page.Sections.Count == 0)
+        {
+            @* A page can be published with nothing on it, and the visitor then got a heading over
+               an empty screen — which reads as a page that failed to load rather than one nobody
+               has written yet. Say which it is. *@
+            <p class="text-secondary">
+                There is nothing on this page yet.
+                <a href="@($"/o/{_page.OrgUrlName}")">Back to @_page.OrgName</a>
+            </p>
+        }
         @foreach (var section in _page.Page.Sections.OrderBy(s => s.SortOrder))
         {
             <OrgPublicSection Section="section" FileBaseUrl="@AdminClient.GetFileDownloadUrl(Guid.Empty).Replace(Guid.Empty.ToString(), "")" PublicMediaBaseUrl="@AdminClient.GetPublicCaseMediaBaseUrl()" />

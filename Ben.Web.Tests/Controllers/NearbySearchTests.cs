@@ -298,4 +298,126 @@ public sealed class NearbySearchTests
               * Math.Sin(dLon / 2) * Math.Sin(dLon / 2);
         return R * 2 * Math.Atan2(Math.Sqrt(a), Math.Sqrt(1 - a));
     }
+
+    // ── Places, item #88's third toggle (built 2026-09-17) ───────────────────────────────────
+    //
+    // The place hub is described as the public front door for a location, and the audit found
+    // nothing let a stranger find one: no /places index, /find searches groups only, and the nav
+    // has no Places entry. Two rules hold this list honest — a residence never appears, and a
+    // place has to have published work at it, because a place row is created by the first group
+    // to work somewhere and listing all of them would be a directory of typed-in addresses.
+
+    private static async Task<IDbContextFactory<BenDataContext>> SeedPlaceAsync(
+        PlaceKind kind,
+        InvestigationVisibility? visibility = null,
+        bool publishedSession = false,
+        decimal lat = 36.1650m,
+        decimal lon = -86.7840m)
+    {
+        var factory = CreateFactory();
+        await using var db = await factory.CreateDbContextAsync();
+
+        var placeId = Guid.NewGuid();
+        db.Organizations.Add(new Organization
+        {
+            Id = OrgId, Name = "Ghost Squad", UrlName = "ghost-squad", DateCreated = DateTime.UtcNow,
+        });
+        db.Users.Add(new AppUser
+        {
+            Id = UserId, UserName = "a@t", Email = "a@t",
+            DisplayName = "Somebody", DateCreated = DateTime.UtcNow,
+        });
+        db.Places.Add(new Place
+        {
+            Id = placeId, Name = "The Old Mill", City = "Nashville", State = "TN",
+            Latitude = lat, Longitude = lon, Kind = kind,
+            DateCreated = DateTime.UtcNow, CreatedByAppUserId = UserId,
+        });
+
+        if (visibility is { } v)
+        {
+            db.Investigations.Add(new Investigation
+            {
+                Id = Guid.NewGuid(), OrganizationId = OrgId, PlaceId = placeId,
+                Title = "A night there", Visibility = v,
+                ScheduledDateTime = DateTime.UtcNow.AddDays(-30),
+                DateCreated = DateTime.UtcNow, CreatedByAppUserId = UserId,
+            });
+        }
+
+        if (publishedSession)
+        {
+            db.FieldSessionUploads.Add(new FieldSessionUpload
+            {
+                Id = Guid.NewGuid(), SubmittedByAppUserId = UserId, PlaceId = placeId,
+                DeviceModel = "iPhone 17 Pro", StartedAt = DateTime.UtcNow.AddDays(-2),
+                PublishedAtUtc = DateTime.UtcNow.AddDays(-1),
+                DateCreated = DateTime.UtcNow, CreatedByAppUserId = UserId,
+            });
+        }
+
+        await db.SaveChangesAsync();
+        return factory;
+    }
+
+    private static async Task<IReadOnlyList<NearbyPlaceResult>> PlacesAsync(
+        IDbContextFactory<BenDataContext> factory, double radius = 25)
+    {
+        var result = await new SearchController(factory).Nearby(CallerLat, CallerLon, radius);
+        var found = Assert.IsType<NearbyResults>(
+            Assert.IsType<Microsoft.AspNetCore.Mvc.OkObjectResult>(result.Result).Value);
+        return found.Places ?? [];
+    }
+
+    [Fact]
+    public async Task A_public_place_with_a_published_investigation_is_listed()
+    {
+        var factory = await SeedPlaceAsync(
+            PlaceKind.PublicLocation, InvestigationVisibility.Public);
+
+        var place = Assert.Single(await PlacesAsync(factory));
+
+        Assert.Equal("The Old Mill", place.Name);
+        Assert.Equal(1, place.InvestigationCount);
+        // Exact, like a searchable group's address and unlike an event's: a landmark has nobody's
+        // home to protect, and snapping a cave to a six-mile grid would break browsing.
+        Assert.Equal(36.1650m, place.Latitude);
+    }
+
+    [Fact]
+    public async Task A_public_place_with_only_a_published_session_is_listed()
+        => Assert.Equal(
+            1,
+            Assert.Single(await PlacesAsync(await SeedPlaceAsync(
+                PlaceKind.PublicLocation, publishedSession: true))).SessionCount);
+
+    /// <summary>
+    /// A private residence never appears, whatever is at it. The visibility filter already stops
+    /// a residence's investigation being public, so this is the belt beside that brace.
+    /// </summary>
+    [Theory]
+    [InlineData(InvestigationVisibility.Public)]
+    [InlineData(InvestigationVisibility.GroupOnly)]
+    public async Task A_private_residence_is_never_listed(InvestigationVisibility visibility)
+        => Assert.Empty(await PlacesAsync(await SeedPlaceAsync(PlaceKind.PrivateResidence, visibility)));
+
+    [Fact]
+    public async Task A_place_with_nothing_published_at_it_is_not_listed()
+    {
+        // A place row exists the moment the first group types an address, so an empty one is a
+        // form submission and not a destination.
+        var factory = await SeedPlaceAsync(PlaceKind.PublicLocation, InvestigationVisibility.GroupOnly);
+
+        Assert.Empty(await PlacesAsync(factory));
+    }
+
+    [Fact]
+    public async Task A_place_beyond_the_radius_is_not_listed()
+    {
+        var factory = await SeedPlaceAsync(
+            PlaceKind.PublicLocation, InvestigationVisibility.Public,
+            lat: 40.7128m, lon: -74.0060m);   // New York, from Nashville
+
+        Assert.Empty(await PlacesAsync(factory));
+    }
 }

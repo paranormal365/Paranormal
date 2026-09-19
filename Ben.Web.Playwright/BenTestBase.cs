@@ -134,6 +134,46 @@ public abstract class BenTestBase : PageTest
     private static readonly SemaphoreSlim _orgIdLock = new(1, 1);
 
     /// <summary>The seeded org's current id, looked up by its stable slug.</summary>
+    /// <summary>
+    /// A draft hosted event with this name in the group, for a capture that takes it through a story and archives it
+    /// afterwards: the archived one is restored when it is already there, and it is made the first time.
+    /// </summary>
+    /// <remarks>
+    /// Event names are unique within a group, so making a fresh draft each run fails on the second. Restoring brings an
+    /// archived event that never went live back as a draft; anything else is reported rather than photographed.
+    /// </remarks>
+    /// <param name="admin">An API context signed in as somebody who may see every hosted event and edit this group's.</param>
+    protected static async Task<string> DraftHostedEventAsync(
+        IAPIRequestContext admin, string orgId, string name, string placeId)
+    {
+        var list = await admin.GetAsync("/api/admin/hosted-events");
+        Assert.That(list.Ok, Is.True, await list.TextAsync());
+        var existing = (await list.JsonAsync())!.Value.GetProperty("events").EnumerateArray()
+            .FirstOrDefault(e => e.GetProperty("organizationId").GetString() == orgId && e.GetProperty("eventName").GetString() == name);
+
+        if (existing.ValueKind == System.Text.Json.JsonValueKind.Object)
+        {
+            var id = existing.GetProperty("id").GetString()!;
+            var restored = await admin.PostAsync($"/api/organizations/{orgId}/events/{id}/restore", new() { DataObject = new { } });
+            Assert.That(restored.Ok, Is.True, await restored.TextAsync());
+            Assert.That((await restored.JsonAsync())!.Value.GetProperty("lifecycleState").GetInt32(), Is.EqualTo(0),
+                $"{name} is not a draft after restoring it.");
+            return id;
+        }
+
+        var starts = DateTime.UtcNow.Date.AddDays(45);
+        var made = await admin.PostAsync($"/api/organizations/{orgId}/events", new()
+        {
+            DataObject = new
+            {
+                name, placeId, timeZoneId = "America/Chicago",
+                startsOn = starts.ToString("yyyy-MM-dd"), endsOn = starts.ToString("yyyy-MM-dd"), contactLine = "Call us.",
+            },
+        });
+        Assert.That(made.Ok, Is.True, await made.TextAsync());
+        return (await made.JsonAsync())!.Value.GetProperty("id").GetString()!;
+    }
+
     protected async Task<string> OrgIdBySlugAsync(string slug)
     {
         await _orgIdLock.WaitAsync();
@@ -293,6 +333,130 @@ public abstract class BenTestBase : PageTest
     protected static string ClientPassword     => RequiredSecret("BEN_CLIENT_PASSWORD");
 
     /// <summary>
+    /// Wren — an account in no group at all, and no group's client either.
+    /// </summary>
+    /// <remarks>
+    /// <para>The free lane's own seat (2026-09-17). <see cref="ClientEmail"/> is also group-less,
+    /// but a client has a case being worked and so passes the feed's "people who belong here"
+    /// rule — which makes him useless for testing the wider door a public place opens. Wren passes
+    /// nothing: no membership, no case, no client access. She is who the free lane exists for, and
+    /// what she may and may not do is the whole point of her.</para>
+    ///
+    /// <para>She has no personal organization either, because minting one is the behaviour under
+    /// test and a seat already through the door cannot test the door.</para>
+    /// </remarks>
+    protected static string SoloEmail          => Environment.GetEnvironmentVariable("BEN_SOLO_EMAIL")          ?? "wren.ashby@benco.dev";
+    protected static string SoloPassword       => RequiredSecret("BEN_SOLO_PASSWORD");
+
+    // ── The public feed's switch, for fixtures that need it on ───────────────
+
+    /// <summary>
+    /// Turns the public feed on and <b>waits until the service agrees</b>, returning what it was
+    /// before so the caller can put it back.
+    /// </summary>
+    /// <remarks>
+    /// <para><b>Why the waiting half exists.</b> Setting a site setting and starting to click is a
+    /// race, and it is a race that loses quietly: the feed reads as off, a composer does not render,
+    /// and three tests time out looking for an element whose absence is correct. That happened on
+    /// 2026-09-17 — the place-post fixtures passed whenever some earlier fixture had left the feed
+    /// on and failed whenever they were first, which is the worst possible failure pattern because
+    /// it looks like flakiness in the product.</para>
+    ///
+    /// <para>Confirmation is <c>GET /api/feed</c>: it 404s wholesale while the feed is off, so a
+    /// 200 is the service saying the switch has landed — and it is the same answer the pages under
+    /// test depend on, rather than a proxy for it.</para>
+    ///
+    /// <para>Returns null when the switch could not be set or never took. That is a <b>missing
+    /// precondition</b> and the caller should <c>Assert.Ignore</c>, never fail: a fixture that
+    /// cannot arrange its own world has not found a bug.</para>
+    /// </remarks>
+    protected static async Task<bool?> TurnTheFeedOnAsync()
+    {
+        var token = await SuperAdminTokenAsync();
+        if (token is null) return null;
+
+        bool wasOn;
+        using (var read = new HttpClient { BaseAddress = new Uri(ApiUrl), Timeout = TimeSpan.FromSeconds(30) })
+        {
+            read.DefaultRequestHeaders.Authorization =
+                new System.Net.Http.Headers.AuthenticationHeaderValue("Bearer", token);
+            try
+            {
+                var settings = await read.GetFromJsonAsync<System.Text.Json.JsonElement>("/api/admin/site-settings");
+                wasOn = settings.EnumerateArray().Any(setting =>
+                    setting.GetProperty("key").GetString() == FeedSwitchKey
+                    && setting.TryGetProperty("value", out var value)
+                    && string.Equals(value.GetString(), "true", StringComparison.OrdinalIgnoreCase));
+            }
+            catch (HttpRequestException) { return null; }
+        }
+
+        if (!await SetFeedSwitchAsync(token, on: true)) return null;
+
+        // Up to twenty seconds, because the answer has to travel through whatever the hosts cache.
+        using var probe = new HttpClient { BaseAddress = new Uri(ApiUrl), Timeout = TimeSpan.FromSeconds(10) };
+        for (var attempt = 0; attempt < 20; attempt++)
+        {
+            try
+            {
+                using var response = await probe.GetAsync("/api/feed");
+                if (response.IsSuccessStatusCode) return wasOn;
+            }
+            catch (HttpRequestException) { }
+            await Task.Delay(1000);
+        }
+
+        return null;
+    }
+
+    /// <summary>Puts the feed switch back where <see cref="TurnTheFeedOnAsync"/> found it.</summary>
+    protected static async Task PutTheFeedBackAsync(bool? wasOn)
+    {
+        if (wasOn is not { } previous) return;
+        if (await SuperAdminTokenAsync() is { } token) await SetFeedSwitchAsync(token, previous);
+    }
+
+    /// <summary>The site setting that switches the public feed on.</summary>
+    protected const string FeedSwitchKey = "features.public-feed";
+
+    private static async Task<bool> SetFeedSwitchAsync(string token, bool on)
+    {
+        using var http = new HttpClient { BaseAddress = new Uri(ApiUrl), Timeout = TimeSpan.FromSeconds(30) };
+        http.DefaultRequestHeaders.Authorization =
+            new System.Net.Http.Headers.AuthenticationHeaderValue("Bearer", token);
+        try
+        {
+            using var response = await http.PutAsJsonAsync(
+                $"/api/admin/site-settings/{FeedSwitchKey}", new { value = on ? "true" : "false" });
+            return response.IsSuccessStatusCode;
+        }
+        catch (HttpRequestException) { return false; }
+    }
+
+    /// <summary>
+    /// A SuperAdmin bearer token, or null when sign-in failed.
+    /// </summary>
+    /// <remarks>
+    /// A plain <c>HttpClient</c> rather than Playwright's request context: the Playwright instance
+    /// is created per test and does not exist during <c>[OneTimeSetUp]</c>, which is where this is
+    /// needed.
+    /// </remarks>
+    protected static async Task<string?> SuperAdminTokenAsync()
+    {
+        using var http = new HttpClient { BaseAddress = new Uri(ApiUrl), Timeout = TimeSpan.FromSeconds(30) };
+        try
+        {
+            using var response = await http.PostAsJsonAsync("/login",
+                new { email = SuperAdminEmail, password = SuperAdminPassword });
+            if (!response.IsSuccessStatusCode) return null;
+
+            var json = await response.Content.ReadFromJsonAsync<System.Text.Json.JsonElement>();
+            return json.GetProperty("accessToken").GetString();
+        }
+        catch (HttpRequestException) { return null; }
+    }
+
+    /// <summary>
     /// Logs in as the specified user via the /login page and waits for redirect.
     /// </summary>
     /// <param name="email">Email address to enter into the login form.</param>
@@ -443,7 +607,7 @@ public abstract class BenTestBase : PageTest
     /// from a component lifecycle method, so it cannot show up before the circuit is live. Outside
     /// Development there is nothing to wait for, hence best-effort with a short bound.</para>
     /// </remarks>
-    private async Task FillCredentialsAsync(string email, string password)
+    protected async Task FillCredentialsAsync(string email, string password)
     {
         var emailBox    = Page.Locator(EmailSelector).First;
         var passwordBox = Page.Locator("input[type='password']").First;
@@ -466,6 +630,33 @@ public abstract class BenTestBase : PageTest
              && await passwordBox.InputValueAsync() == password)
                 return;
         }
+    }
+
+    /// <summary>
+    /// Gives a hosted-event booking form the name, phone and (signed out) email the organizer needs
+    /// (item 235 slice 11d), filling only what the account did not already provide.
+    /// </summary>
+    /// <param name="prefix">The form's id prefix: <c>picker</c>, <c>ask</c> or <c>attend</c>.</param>
+    protected async Task FillBookingContactAsync(string prefix, string? email = null)
+    {
+        var summary = Page.Locator($"#{prefix}-contact-summary");
+        var phone = Page.Locator($"#{prefix}-phone");
+
+        // Either the account filled everything and the form folded to one line, or it is asking.
+        await Expect(summary.Or(phone)).ToBeVisibleAsync(new() { Timeout = 15_000 });
+        if (!await phone.IsVisibleAsync()) return;
+
+        async Task FillIfEmpty(string id, string value)
+        {
+            var field = Page.Locator($"#{prefix}-{id}");
+            if (await field.CountAsync() == 0) return;
+            if (string.IsNullOrWhiteSpace(await field.InputValueAsync())) await field.FillAsync(value);
+        }
+
+        await FillIfEmpty("first", "Test");
+        await FillIfEmpty("last", "Guest");
+        if (email is not null) await FillIfEmpty("email", email);
+        await FillIfEmpty("phone", "615-555-0100");
     }
 
     /// <summary>
@@ -711,18 +902,19 @@ public abstract class BenTestBase : PageTest
     }
 
     /// <summary>
-    /// A Telerik grid's row command button, by the text on it.
+    /// A Telerik grid's row command button, by the words of its tooltip (its <c>title</c>).
     /// </summary>
     /// <remarks>
-    /// <b>Not <c>GetByRole(Button, name)</c>.</b> Telerik's filter row renders one icon button per
-    /// column carrying <c>aria-label="Open"</c> — fifteen of them on the SuperAdmin cases grid —
-    /// so an accessible-name match finds a filter toggle long before it finds the row's command,
-    /// clicks it happily, and reports that the row would not navigate. That cost this suite one
-    /// standing failure for weeks. Command buttons live in <c>td.k-command-cell</c> and carry real
-    /// text; both facts are what make this selector safe.
+    /// <para><b>Not a page-wide <c>GetByRole(Button, name)</c>.</b> Telerik's filter row renders one icon
+    /// button per column carrying <c>aria-label="Open"</c> — fifteen of them on the SuperAdmin cases grid —
+    /// so an accessible-name match finds a filter toggle long before it finds the row's command, clicks it
+    /// happily, and reports that the row would not navigate. That cost this suite one standing failure for
+    /// weeks. Command buttons live in <c>td.k-command-cell</c>, which is what keeps this to the rows.</para>
+    /// <para>By title, not by text: since 2026-09-14 a grid's row actions are icons and their words are the
+    /// tooltip (Ben: no text in grid buttons). The match is a substring, so "Open" finds "Open the case".</para>
     /// </remarks>
     protected ILocator GridCommand(string text, ILocator? within = null)
-        => (within ?? Main).Locator("td.k-command-cell button", new() { HasTextString = text });
+        => (within ?? Main).Locator($"td.k-command-cell button[title*='{text}']");
 
     /// <summary>
     /// Skips a guided tour if one has opened over the page, and says whether it did.
@@ -838,6 +1030,22 @@ public abstract class BenTestBase : PageTest
     /// </para>
     /// </summary>
     protected ILocator Main => Page.Locator(".app-content, main, .content-wrapper").First;
+
+    /// <summary>Every spinner showing in the page's content — the site's loaders all draw Bootstrap's.</summary>
+    protected ILocator Spinners => Main.Locator(".spinner-border:visible");
+
+    /// <summary>Waits until the circuit has taken over the server-rendered page.</summary>
+    /// <remarks>
+    /// A page arrives prerendered and only starts loading its data once its circuit connects, so "no Loading
+    /// placeholder" is briefly true of a page that has not begun. The prerendered HTML marks each interactive component
+    /// with a <c>&lt;!--Blazor:…--&gt;</c> comment and the circuit consumes those comments as it attaches them — none
+    /// left means the components are live and any placeholder they show is already on the page.
+    /// </remarks>
+    protected Task WaitForTheCircuitAsync() => Page.WaitForFunctionAsync(@"() => {
+        const comments = document.createTreeWalker(document, NodeFilter.SHOW_COMMENT);
+        while (comments.nextNode()) if (comments.currentNode.data.startsWith('Blazor:')) return false;
+        return true;
+    }", null, new() { Timeout = 60_000 });
 
     /// <summary>
     /// The typing surface of the site's rich-text box — one place that knows its shape.

@@ -34,7 +34,8 @@ public sealed class FieldSessionArchiveTests
         // The shipping screener: approves nothing, routes everything to a person. These suites
         // are about publication, not media, and this is what production actually does.
         => new(db, new Ben.Data.WebApi.Services.Feed.ManualReviewScreener(),
-               NullLogger<FieldSessionPublishController>.Instance)
+               NullLogger<FieldSessionPublishController>.Instance,
+               TestBundles.Store(ArchiveTestStorage.Empty()), ArchiveTestStorage.Empty())
         {
             ControllerContext = new ControllerContext
             {
@@ -438,7 +439,8 @@ public sealed class ArchiveCandidateTests
     private static FieldSessionPublishController Controller(
         IDbContextFactory<BenDataContext> db, Guid userId)
         => new(db, new Ben.Data.WebApi.Services.Feed.ManualReviewScreener(),
-               NullLogger<FieldSessionPublishController>.Instance)
+               NullLogger<FieldSessionPublishController>.Instance,
+               TestBundles.Store(ArchiveTestStorage.Empty()), ArchiveTestStorage.Empty())
         {
             ControllerContext = new ControllerContext
             {
@@ -578,7 +580,8 @@ public sealed class ArchiveMediaTests
     private static FieldSessionPublishController Controller(
         IDbContextFactory<BenDataContext> db, Guid userId,
         Ben.Data.WebApi.Services.Feed.IFeedMediaScreener screener)
-        => new(db, screener, NullLogger<FieldSessionPublishController>.Instance)
+        => new(db, screener, NullLogger<FieldSessionPublishController>.Instance,
+               TestBundles.Store(ArchiveTestStorage.Empty()), ArchiveTestStorage.Empty())
         {
             ControllerContext = new ControllerContext
             {
@@ -913,6 +916,127 @@ public sealed class PlaceMergeTests
         Assert.Equal(keep, (await after.FieldSessionUploads.SingleAsync()).PlaceId);
     }
 
+    /// <summary>
+    /// A post about the place follows it into the surviving record.
+    /// </summary>
+    /// <remarks>
+    /// <para><c>OrgMessages.PlaceId</c> is a <b>SetNull</b> key (2026-09-17), which makes this the
+    /// quiet failure rather than the loud one: without the repoint the merge would still succeed
+    /// and the database would strip the place off every post about it. The posts would survive with
+    /// their text and lose the one thing that put them on a page — so nobody would see an error,
+    /// and a place's whole conversation would simply stop appearing.</para>
+    ///
+    /// <para>Written against the in-memory store like the sibling above, which is enough because
+    /// what is asserted is the repoint, not the key's behaviour.</para>
+    /// </remarks>
+    [Fact]
+    public async Task A_post_about_the_place_follows_it_into_the_surviving_record()
+    {
+        var factory = Db();
+        var userId = Guid.NewGuid();
+        var keep = Guid.NewGuid();
+        var drop = Guid.NewGuid();
+
+        await using (var db = await factory.CreateDbContextAsync())
+        {
+            db.AppUsers.Add(new AppUser
+            {
+                Id = userId, UserName = "b@t.com", NormalizedUserName = "B@T.COM",
+                Email = "b@t.com", NormalizedEmail = "B@T.COM", DateCreated = DateTime.UtcNow,
+            });
+            db.Places.Add(new Ben.Data.Source.Entities.Place
+            {
+                Id = keep, Name = "Cragfont", Kind = Ben.Data.Common.Enums.PlaceKind.PublicLocation,
+                DateCreated = DateTime.UtcNow, CreatedByAppUserId = userId,
+            });
+            db.Places.Add(new Ben.Data.Source.Entities.Place
+            {
+                Id = drop, Name = "Cragfont (dup)", Kind = Ben.Data.Common.Enums.PlaceKind.PublicLocation,
+                DateCreated = DateTime.UtcNow, CreatedByAppUserId = userId,
+            });
+            db.OrgMessages.Add(new Ben.Data.Source.Entities.OrgMessage
+            {
+                Id = Guid.NewGuid(), AuthorAppUserId = userId,
+                ChannelType = Ben.Data.Common.Enums.OrgMessageChannel.PublicFeed,
+                Body = "Cold spot on the stair", IsPublic = true, PlaceId = drop,
+                DateCreated = DateTime.UtcNow, CreatedByAppUserId = userId,
+            });
+            await db.SaveChangesAsync();
+        }
+
+        var result = await Controller(factory, userId).Merge(
+            drop, new Ben.Data.WebApi.Controllers.Admin.AdminPlaceMergeController.MergeRequest(keep), default);
+        var merged = (Ben.Data.WebApi.Controllers.Admin.AdminPlaceMergeController.MergeResult)
+            Assert.IsType<OkObjectResult>(result.Result).Value!;
+        Assert.Equal(1, merged.Posts);
+
+        await using var after = await factory.CreateDbContextAsync();
+        Assert.Equal(keep, (await after.OrgMessages.SingleAsync()).PlaceId);
+    }
+
+    /// <summary>
+    /// A hosted event follows its venue into the surviving record.
+    /// </summary>
+    /// <remarks>
+    /// <para><c>HostedEvents.PlaceId</c> is a NoAction key, so until the merge repointed it the
+    /// delete of any place that had ever hosted an event was refused by the database — and the
+    /// duplicate most worth folding is exactly the one with a weekend on it (item 235 phase 1).</para>
+    ///
+    /// <para>On SQLite rather than the in-memory store, deliberately: the in-memory store enforces
+    /// no keys, so without the repoint it would have deleted the place and left the event stranded,
+    /// which is a different failure from the one production had. Here the missing line is the
+    /// refusal it was.</para>
+    /// </remarks>
+    [Fact]
+    public async Task A_hosted_event_follows_its_venue_into_the_surviving_record()
+    {
+        await using var sqlite = await SqliteTestDb.CreateAsync();
+        var userId = Guid.NewGuid();
+        var orgId = Guid.NewGuid();
+        var keep = Guid.NewGuid();
+        var drop = Guid.NewGuid();
+        var eventId = Guid.NewGuid();
+
+        await using (var db = await sqlite.NewContextAsync())
+        {
+            db.AppUsers.Add(new AppUser
+            {
+                Id = userId, UserName = "a@t.com", NormalizedUserName = "A@T.COM",
+                Email = "a@t.com", DisplayName = "Admin", DateCreated = DateTime.UtcNow,
+            });
+            db.Organizations.Add(new Organization
+            {
+                Id = orgId, Name = "The Thomas House", UrlName = "thomas-house",
+                DateCreated = DateTime.UtcNow, CreatedByAppUserId = userId,
+            });
+            foreach (var (id, name) in new[] { (keep, "Thomas House Hotel"), (drop, "The Thomas House") })
+                db.Places.Add(new Place
+                {
+                    Id = id, Name = name, City = "Red Boiling Springs", State = "TN",
+                    Kind = PlaceKind.PublicLocation, Latitude = 36.5340m, Longitude = -85.8497m,
+                    DateCreated = DateTime.UtcNow, CreatedByAppUserId = userId,
+                });
+            db.HostedEvents.Add(new HostedEvent
+            {
+                Id = eventId, OrganizationId = orgId, PlaceId = drop,
+                Name = "Halloween Lock-In", UrlName = "halloween-lock-in",
+                StartsOn = new DateTime(2026, 10, 30), EndsOn = new DateTime(2026, 11, 1),
+                DateCreated = DateTime.UtcNow, CreatedByAppUserId = userId,
+            });
+            await db.SaveChangesAsync();
+        }
+
+        var result = await Controller(sqlite.Factory, userId).Merge(
+            drop, new Ben.Data.WebApi.Controllers.Admin.AdminPlaceMergeController.MergeRequest(keep), default);
+        var merged = (Ben.Data.WebApi.Controllers.Admin.AdminPlaceMergeController.MergeResult)
+            Assert.IsType<OkObjectResult>(result.Result).Value!;
+        Assert.Equal(1, merged.HostedEvents);
+
+        await using var after = await sqlite.NewContextAsync();
+        Assert.Null(await after.Places.FindAsync(drop));
+        Assert.Equal(keep, (await after.HostedEvents.SingleAsync(e => e.Id == eventId)).PlaceId);
+    }
+
     [Fact]
     public async Task A_place_cannot_be_merged_into_itself_or_into_nothing()
     {
@@ -1048,4 +1172,14 @@ public sealed class PlaceMergeTests
 
         Assert.Empty(await FindAsync(factory));
     }
+}
+
+/// <summary>
+/// Storage that holds nothing. Nothing in these fixtures publishes a session sent as one .ben, so the
+/// bundle store built over it is never asked for a member.
+/// </summary>
+file static class ArchiveTestStorage
+{
+    public static Ben.Data.Common.Interfaces.IFileStorageService Empty()
+        => new Moq.Mock<Ben.Data.Common.Interfaces.IFileStorageService>().Object;
 }

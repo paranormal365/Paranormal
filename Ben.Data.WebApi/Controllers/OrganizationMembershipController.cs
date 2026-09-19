@@ -143,11 +143,42 @@ public class OrganizationMembershipController : BenControllerBase
             }
         }
 
+        bool isViewer;
+        using (var viewerScope = HttpContext.RequestServices.CreateScope())
+        {
+            var viewerFactory = viewerScope.ServiceProvider
+                .GetRequiredService<Microsoft.EntityFrameworkCore.IDbContextFactory<Ben.Data.Source.Context.BenDataContext>>();
+            await using var viewerDb = await viewerFactory.CreateDbContextAsync(cancellationToken);
+            isViewer = !isSuperAdmin && await Ben.Data.WebApi.Services.Access.FileAudienceAccess.IsOrgViewerAsync(
+                viewerDb, organizationId, appUserId, cancellationToken);
+        }
+
+        bool publicByDefault;
+        using (var planScope = HttpContext.RequestServices.CreateScope())
+        {
+            var planFactory = planScope.ServiceProvider
+                .GetRequiredService<Microsoft.EntityFrameworkCore.IDbContextFactory<Ben.Data.Source.Context.BenDataContext>>();
+            await using var planDb = await planFactory.CreateDbContextAsync(cancellationToken);
+            publicByDefault = await Ben.Data.WebApi.Services.Billing.PaidPlan.PublicByDefaultAsync(
+                planDb, organizationId, cancellationToken);
+        }
+
+        string? readOnlyReason;
+        using (var lapseScope = HttpContext.RequestServices.CreateScope())
+        {
+            var limits = lapseScope.ServiceProvider
+                .GetRequiredService<Ben.Data.WebApi.Services.Billing.SubscriptionLimitGuard>();
+            readOnlyReason = await limits.WhyReadOnlyAsync(organizationId, cancellationToken);
+        }
+
         return Ok(new MyOrgPermissionsResponse(
             CanReadCases: areas[Ben.Data.Common.Enums.OrganizationPermissionArea.Cases].Read,
             CanReadInvestigations: areas[Ben.Data.Common.Enums.OrganizationPermissionArea.Investigations].Read,
             Areas: areas,
-            Capabilities: capabilities));
+            Capabilities: capabilities,
+            IsViewer: isViewer,
+            PublicByDefault: publicByDefault,
+            ReadOnlyReason: readOnlyReason));
 
         async Task<bool> MayAsync(
             Ben.Data.Common.Enums.OrganizationSecurityTable table,
@@ -286,6 +317,7 @@ public class OrganizationMembershipController : BenControllerBase
         (Ben.Data.Common.Enums.OrganizationPermissionArea.Files,               Ben.Data.Common.Enums.OrganizationSecurityTable.OrganizationFiles),
         (Ben.Data.Common.Enums.OrganizationPermissionArea.Clients,             Ben.Data.Common.Enums.OrganizationSecurityTable.ClientRequest),
         (Ben.Data.Common.Enums.OrganizationPermissionArea.Calendar,            Ben.Data.Common.Enums.OrganizationSecurityTable.OrgCalendar),
+        (Ben.Data.Common.Enums.OrganizationPermissionArea.Events,              Ben.Data.Common.Enums.OrganizationSecurityTable.HostedEvent),
     ];
 
     public sealed record OrgIncludedAreasResponse(
@@ -309,7 +341,27 @@ public class OrganizationMembershipController : BenControllerBase
         bool CanReadCases,
         bool CanReadInvestigations,
         IReadOnlyDictionary<Ben.Data.Common.Enums.OrganizationPermissionArea, AreaActions> Areas,
-        IReadOnlyDictionary<Ben.Data.Common.Enums.TierCapability, bool> Capabilities);
+        IReadOnlyDictionary<Ben.Data.Common.Enums.TierCapability, bool> Capabilities,
+        // A Viewer reads and changes nothing, including the member-open writes the areas above do not describe — the
+        // calendar, group messages (Ben, 2026-09-14). Additive.
+        bool IsViewer = false,
+        // Ben, 2026-09-17: an account that pays nothing is public by default at a public place. The
+        // browser needs this BEFORE it draws the publish box and the sharing dropdown — the same
+        // reasoning as Capabilities above, and the same failure if it is missing: a control that
+        // looks live, is clicked, and comes back a 400.
+        //
+        // Defaulted FALSE, which is the answer that leaves controls working. An older server that
+        // says nothing must not lock a paying group's boxes.
+        bool PublicByDefault = false,
+        // Why this group cannot write anything right now, in the server's own words, or null.
+        //
+        // 2026-09-17 audit: nothing reached the browser to say a group was read-only, so every
+        // control a lapsed group cannot use was offered live and failed on the click. The
+        // guard's sentence existed and only the client's own page ever rendered it — the group's
+        // own members were told nothing at all.
+        //
+        // Defaulted null, the answer that leaves controls working.
+        string? ReadOnlyReason = null);
 
     /// <summary>What one person may do in one area. Absent action means refused.</summary>
     public sealed record AreaActions(bool Create, bool Read, bool Update, bool Delete);
@@ -349,6 +401,25 @@ public class OrganizationMembershipController : BenControllerBase
         {
             return StatusCode(StatusCodes.Status403Forbidden,
                 "New groups are not being accepted at the moment. Please contact us if you would like to start one.");
+        }
+
+        // Item 233. A separate door with a separate switch: Ben asked to be able to stop new tour
+        // businesses signing up without stopping anybody else, and without touching the ones
+        // already running. SuperAdmins are exempt here too — they create groups on request, which
+        // is the whole point of being able to close the public door.
+        // Tours only, on Ben's word (2026-09-10): an events business is a different trade that
+        // happens to be on the same plan, and closing the door to walks must not close it to them.
+        // OrganizationKindDefaults.RunsPublicTours is the one definition of "this is a tour".
+        if (!User.IsInRole(RoleNames.SuperAdmin)
+            && Ben.Data.Common.Enums.OrganizationKindDefaults.RunsPublicTours(request.Kind)
+            && !await _siteSettings.GetBoolAsync(
+                    SiteSettingKeys.AllowTourBusinessSignUps, whenUnset: true, cancellationToken))
+        {
+            return StatusCode(StatusCodes.Status403Forbidden,
+                "We aren't taking on new ghost walking tours just now. You can still start an "
+                + "investigation group or a paranormal events business, and we would be glad to "
+                + "hear from you about a tour — get in touch and we will let you know when they "
+                + "reopen.");
         }
 
         var organization = await _organizationSecurityService.RegisterOrganizationAsync(

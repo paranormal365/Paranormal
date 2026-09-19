@@ -65,7 +65,7 @@
 
                     <div class="mb-3">
                         <label class="form-label" for="inviteaccept-your-name-a392">Your Name</label>
-                        <input id="inviteaccept-your-name-a392" type="text" class="form-control" placeholder="Jane Doe" @bind="@_model.DisplayName" @bind:event="oninput" />
+                        <input id="inviteaccept-your-name-a392" type="text" class="form-control" placeholder="e.g. Jane Doe" @bind="@_model.DisplayName" @bind:event="oninput" />
                         <ValidationMessage For="@(() => _model.DisplayName)" class="text-danger small" />
                     </div>
 

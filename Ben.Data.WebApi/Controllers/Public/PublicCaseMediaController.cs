@@ -85,11 +85,12 @@ public sealed class PublicCaseMediaController : ControllerBase
             // The row's ContentType already describes the SERVED copy — ingest records the
             // derivative's type, not the original's — so it is right for a cleaned JPEG, a
             // remuxed MP4 (item 181) and an unsanitized original alike.
-            return File(stream, file.ContentType, file.FileName);
+            // enableRangeProcessing: a player asks for the piece it needs; without it Safari will not start at all and nothing can seek (2026-09-17).
+            return File(stream, file.ContentType, file.FileName, enableRangeProcessing: true);
         }
 
         if (file.FileData is not null)
-            return File(file.FileData, file.ContentType, file.FileName);
+            return File(file.FileData, file.ContentType, file.FileName, enableRangeProcessing: true);
 
         return NotFound();
     }

@@ -1,0 +1,222 @@
+@page "/my-events/{EventId:guid}/pass"
+@namespace Ben.Web.Website.Library.Organization.Public
+
+@inject IBenAdminClient AdminClient
+@inject IBenUserState UserState
+
+@using Ben.Data.Common.Enums
+@using Ben.Service.Models.Entities
+@using Ben.Web.Services.WebApi
+@using Ben.Web.Website.Library.Kit
+@using Ben.Web.Website.Library.Manage.Icon
+
+@* The guest's own pass (item 235 phase 6).
+
+   ONE PASS ADMITS THE WHOLE PARTY. Not one each: three of the four people arriving together may
+   never have had an email address here, and four people at a door each hunting for their own code
+   is worse than one person holding one.
+
+   IT ALWAYS CARRIES WORDS. A code that will not scan — a cracked screen, a camera that will not
+   focus in the dark, a phone at four percent — must still leave a door something it can act on:
+   who this is, how many, which nights, and a short code somebody can read out. A pass only a
+   machine can read is a pass that fails on the one evening it exists for.
+
+   A WITHDRAWN PASS IS DRAWN, NOT HIDDEN. Faded, banded and carrying the venue's reason, because a
+   guest holding a dead code needs to know that it is dead and why — not to find a blank screen
+   and turn up anyway. *@
+
+<PageTitle>@(_pass?.EventName is { Length: > 0 } n ? $"Your pass — {n}" : "Your pass")</PageTitle>
+
+<div class="container py-3 pass-page" style="max-width:640px;">
+
+    <div class="text-secondary small d-print-none">
+        <a href="/my-events">What I'm going to</a>
+    </div>
+
+    @if (_note is { Length: > 0 })
+    {
+        <div class="alert alert-success py-2 d-print-none" id="pass-note">@_note</div>
+    }
+    @if (_error is { Length: > 0 })
+    {
+        <div class="alert alert-danger py-2 d-print-none" id="pass-error" role="alert">@_error</div>
+    }
+
+    <BenItemState TItem="MyHostedEventPassRecord" Result="_result" Loading="_loading"
+                  LoadingText="Fetching your pass…" OnRetry="LoadAsync">
+        <ChildContent Context="pass">
+            @{ var revoked = pass.Pass.RevokedUtc is not null; }
+
+            <div class="card pass @(revoked ? "pass--revoked" : null)" id="pass-card">
+                <div class="card-body text-center">
+
+                    <h1 class="h4 mb-0">@pass.EventName</h1>
+                    @if (pass.VenueName is { Length: > 0 } venue)
+                    {
+                        <div class="text-secondary">@venue</div>
+                    }
+
+                    <div class="my-3">
+                        @* The code is drawn from the token rather than fetched as a picture: a
+                           pass on a phone in a field with one bar should not depend on a second
+                           request going through. *@
+                        <BenQrPlate Value="@pass.Pass.Token" Size="240px" Class="pass__code">
+                            <div class="small text-secondary">
+                                If it won't scan, read this out:
+                                <strong id="pass-code">@ShortCode(pass.Pass.Token)</strong>
+                            </div>
+                        </BenQrPlate>
+                    </div>
+
+                    @if (revoked)
+                    {
+                        <div class="pass__band" id="pass-revoked">
+                            <strong>This pass has been withdrawn.</strong>
+                            @if (pass.Pass.RevokedReason is { Length: > 0 } why)
+                            {
+                                <div class="small">“@why”</div>
+                            }
+                            <div class="small mt-1">
+                                @(pass.Pass.ReplacedAnEarlierOne
+                                    ? "A newer pass has taken its place — open this page again."
+                                    : "Ask the venue before you travel.")
+                            </div>
+                        </div>
+                    }
+
+                    @if (pass.Band is { } band)
+                    {
+                        @* What to collect at the desk. On the guest's own pass as well as the
+                           door's screen, so the queue moves: somebody who already knows they are
+                           blue does not have to be told. *@
+                        <div class="mb-2" id="pass-band">
+                            <BenBandChip Band="band" WithMeaning="true" />
+                        </div>
+                    }
+
+                    <div class="fw-semibold" id="pass-admits">
+                        Admits @pass.PartySize @(pass.PartySize == 1 ? "person" : "people")
+                    </div>
+                    <div class="text-secondary">@pass.LeadName</div>
+
+                    <ul class="list-unstyled mt-3 mb-0" id="pass-nights">
+                        @if (pass.Kind == HostedEventBookingKind.DayPass && pass.Nights.Count == 0)
+                        {
+                            <li>For the day</li>
+                        }
+                        @foreach (var night in pass.Nights)
+                        {
+                            <li>
+                                <strong>@night.Date.ToString("ddd MM/dd/yyyy")</strong>
+                                @if (night.UnitName is { Length: > 0 } where)
+                                {
+                                    <text> · @where</text>
+                                }
+                            </li>
+                        }
+                    </ul>
+
+                    @if (pass.Seating is { Count: > 0 } seating)
+                    {
+                        @* Where they sit, once the venue has seated them (phase 13). *@
+                        <ul class="list-unstyled small mt-3 mb-0" id="pass-seating">
+                            @foreach (var line in seating)
+                            {
+                                <li>@line</li>
+                            }
+                        </ul>
+                    }
+
+                    @if (pass.Pass.CheckedInUtc is { } arrived)
+                    {
+                        @* CheckedInByName was filled by a dedicated Include on the server and
+                           rendered nowhere (2026-09-17 audit). On a disputed arrival it is the
+                           only record of who was on the door. *@
+                        <div class="small text-secondary mt-3" id="pass-arrived">
+                            Scanned in at @arrived.ToLocalTime().ToString("MM/dd/yyyy h:mm tt")@(
+                                string.IsNullOrWhiteSpace(pass.Pass.CheckedInByName)
+                                    ? "." : $" by {pass.Pass.CheckedInByName}.")
+                        </div>
+                    }
+                </div>
+            </div>
+
+            <div class="d-flex flex-wrap gap-2 mt-3 d-print-none">
+                <button type="button" class="btn btn-outline-secondary" id="pass-email"
+                        disabled="@_busy" @onclick="EmailItAsync">
+                    <BenIcon Name="mail" Class="me-1" />@(_busy ? "Sending…" : "Email it to me")
+                </button>
+                <a class="btn btn-outline-secondary" href="/my-events">
+                    Everything I'm going to
+                </a>
+            </div>
+
+            <p class="text-secondary small mt-2 d-print-none">
+                Nothing is paid through this site. Whatever the places cost, you settle it with the
+                venue.
+            </p>
+        </ChildContent>
+    </BenItemState>
+</div>
+
+@code {
+    [Parameter] public Guid EventId { get; set; }
+
+    private ItemResult<MyHostedEventPassRecord> _result;
+    private MyHostedEventPassRecord? _pass;
+    private bool _loading = true;
+    private bool _busy;
+    private string? _note;
+    private string? _error;
+
+    protected override async Task OnAfterRenderAsync(bool firstRender)
+    {
+        if (!firstRender) return;
+
+        // Auth resolves after the circuit attaches. Asking first asks as nobody, and a pass page
+        // that answered "you have no pass" to a signed-in guest would be the worst possible lie
+        // to tell somebody standing at a door.
+        if (!await UserState.WaitUntilAuthReadyAsync(RendererInfo.IsInteractive)) return;
+
+        await LoadAsync();
+        StateHasChanged();
+    }
+
+    private async Task LoadAsync()
+    {
+        _loading = true;
+        _result = await AdminClient.GetMyHostedEventPassAsync(EventId);
+        _pass = _result.Item;
+        _loading = false;
+    }
+
+    private async Task EmailItAsync()
+    {
+        _busy = true;
+        _error = null;
+        _note = null;
+
+        var (sent, error) = await AdminClient.EmailMyHostedEventPassAsync(EventId);
+
+        _busy = false;
+
+        if (sent is null) { _error = error ?? "That couldn't be sent just now."; return; }
+
+        _note = "Sent. It's on its way to the address on your account.";
+    }
+
+    /// <summary>
+    /// The last six characters of the token, which is what a door types in.
+    /// </summary>
+    /// <remarks>
+    /// <para><b>The end and not the beginning.</b> Tokens issued in the same batch share their
+    /// leading characters far more often than their trailing ones, and a code that collides is a
+    /// code a door has to give up on.</para>
+    ///
+    /// <para>Six is enough to find one booking among an evening's worth and short enough to read
+    /// aloud across a desk. It is not a secret: the door looks it up against this event only, and
+    /// the full token stays in the code.</para>
+    /// </remarks>
+    private static string ShortCode(string token)
+        => token.Length <= 6 ? token.ToUpperInvariant() : token[^6..].ToUpperInvariant();
+}

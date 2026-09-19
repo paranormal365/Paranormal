@@ -91,6 +91,11 @@ public actor FieldSessionEngine {
     private var latest = LiveSample(at: .distantPast)
     private var sequence = 0
     private var lastHeartbeat: Date?
+    /// When the tracking channels — fix, heading, altitude — first reported. They pay a heartbeat
+    /// only once one is overdue from here, so the first reading of the night is written by the
+    /// instruments, with everything that had arrived by then, rather than by whichever channel
+    /// happened to report first.
+    private var trackingSince: Date?
     private var lastMagneticEvent: Date?
     private var lastSoundEvent: Date?
     private var lastMovementEvent: Date?
@@ -101,6 +106,9 @@ public actor FieldSessionEngine {
     /// Resting acceleration, learned when arming — a phone propped against a wall is not at
     /// rest in the same way one flat on a table is.
     private var movementFloorG: Double = 0
+    /// The most a resting phone is taken to read of its own — a propped one is a few
+    /// hundredths; anything past this on a first sample is movement, not a place to start from.
+    private static let restingCeilingG = 0.05
     private var running = false
     /// Whether readings reach the log. Sensors run from `start()` so the gauge moves and a base
     /// level can be set; nothing is WRITTEN until `beginLogging()` — Start on the live screen
@@ -214,6 +222,8 @@ public actor FieldSessionEngine {
         lastSoundEvent = nil
         lastMovementEvent = nil
         lastSceneEvent = nil
+        // The resting level too: the phone has been picked up and put down somewhere else.
+        movementFloorG = 0
         if running { restartSensorTasks() }
     }
 
@@ -226,13 +236,32 @@ public actor FieldSessionEngine {
     public var sentryConfig: SentryConfig? { sentry }
 
     func ingest(movement sample: DeviceMovementSample) async {
-        // Learn the floor from the first quiet moments rather than assuming zero.
-        movementFloorG = max(movementFloorG * 0.995, min(movementFloorG, sample.magnitudeG))
+        // Learn the floor from the quiet moments rather than assuming zero. This used to be
+        // `max(floor * 0.995, min(floor, sample))`, which from a floor of zero is zero for ever —
+        // the floor never learned anything, and a phone propped against a wall, reading a steady
+        // 0.02 g of its own, sat above a 0.01 g threshold and marked "the device was moved" on
+        // every sample. A slow average follows the resting level and lets a knock stand out from it.
+        //
+        // Only quiet samples teach it. A knock is exactly what must NOT raise the floor, or a
+        // phone that is shaken twice learns that shaking is normal.
+        //
+        // The first sample IS the floor. Judged against zero it would be a knock on any phone
+        // that is not perfectly still, and a floor that only learns from quiet samples would then
+        // never learn at all — every sample a knock, the floor stuck at zero for the night.
+        //
+        // Capped, because a phone at rest does not read a fifth of a g of its own: a first sample
+        // that high is a knock before there was time to learn anything, and seeding the floor from
+        // it would swallow it. Above the cap the excess is judged as usual.
+        if movementFloorG == 0 { movementFloorG = min(sample.magnitudeG, Self.restingCeilingG) }
+        let excess = sample.magnitudeG - movementFloorG
+        let threshold = sentry?.watchDeviceMovement == true ? sentry?.deviceMovementThresholdG : nil
+        let isAKnock = threshold.map { excess >= $0 } ?? false
+        // A knock barely moves it; a level that stays raised — the phone picked up and carried —
+        // becomes the new floor over some seconds rather than being a knock for ever.
+        movementFloorG += (sample.magnitudeG - movementFloorG) * (isAKnock ? 0.005 : 0.02)
 
         guard let sentry, sentry.watchDeviceMovement else { return }
-        guard sample.magnitudeG - movementFloorG >= sentry.deviceMovementThresholdG,
-              passesDebounce(last: lastMovementEvent, at: sample.at)
-        else { return }
+        guard isAKnock, passesDebounce(last: lastMovementEvent, at: sample.at) else { return }
 
         lastMovementEvent = sample.at
         await record(kind: .deviceMoved, at: sample.at,
@@ -343,19 +372,27 @@ public actor FieldSessionEngine {
         await heartbeatIfDue(at: sample.at)
     }
 
+    // The heartbeat is owed from EVERY channel, not only the two with a report level. It used to
+    // be paid only from the magnetometer and the microphone, so a session with both switched off
+    // — which is exactly what somebody does at 2am to save the battery — wrote no readings at
+    // all, and the walk it was still tracking never reached the log.
+
     func ingest(position sample: PositionSample) async {
         latest.position = sample
         emit(.sample(latest))
+        await heartbeatIfDue(at: sample.at, owedBy: .tracking)
     }
 
     func ingest(heading sample: HeadingSample) async {
         latest.headingDegrees = sample.degrees
         emit(.sample(latest))
+        await heartbeatIfDue(at: sample.at, owedBy: .tracking)
     }
 
     func ingest(altitude sample: RelativeAltitudeSample) async {
         latest.relativeAltitudeMeters = sample.metersSinceStart
         emit(.sample(latest))
+        await heartbeatIfDue(at: sample.at, owedBy: .tracking)
     }
 
     private func passesDebounce(last: Date?, at moment: Date) -> Bool {
@@ -365,10 +402,21 @@ public actor FieldSessionEngine {
 
     // MARK: - Writing
 
-    private func heartbeatIfDue(at moment: Date) async {
-        if let lastHeartbeat, moment.timeIntervalSince(lastHeartbeat) < policy.heartbeatSeconds {
-            return
-        }
+    /// Who is offering to write the heartbeat.
+    private enum HeartbeatPayer {
+        /// The magnetometer and the microphone. The first heartbeat is theirs at once.
+        case instruments
+        /// Fix, heading, altitude. They write one only when it is overdue — measured from the
+        /// last heartbeat or, before there is one, from when they first reported — so a session
+        /// with the instruments off still gets its heartbeats, and one with them on still has
+        /// its first reading written by them with everything that had arrived.
+        case tracking
+    }
+
+    private func heartbeatIfDue(at moment: Date, owedBy payer: HeartbeatPayer = .instruments) async {
+        if payer == .tracking, trackingSince == nil { trackingSince = moment }
+        let since = lastHeartbeat ?? (payer == .tracking ? trackingSince : nil)
+        if let since, moment.timeIntervalSince(since) < policy.heartbeatSeconds { return }
         lastHeartbeat = moment
         await append(reading(at: moment, triggeredBy: .interval))
     }
@@ -417,7 +465,8 @@ public actor FieldSessionEngine {
                              accuracyMeters: fix.accuracyMeters)
         }
 
-        var motion = FieldReading.Motion(headingDegrees: latest.headingDegrees,
+        let motion = FieldReading.Motion(headingDegrees: latest.headingDegrees,
+                                         courseDegrees: latest.position?.courseDegrees,
                                          speedMps: latest.position?.speedMps)
 
         return FieldReading(

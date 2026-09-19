@@ -129,6 +129,14 @@ into an instrument, and it is the part a new developer should read first and mos
 <p>The home screen lists past sessions and starts a new one. A session is a recording in the
 fullest sense: not a single measurement, but <b>every reading from every enabled sensor, for as
 long as it runs</b>.</p>
+
+<p>Two more doors sit on this screen. <b>Open a .ben file</b> brings in a session somebody sent —
+a <code>.ben</code> is one sealed file holding the readings, the marks and the recordings — and it
+plays here exactly as it did for them; tapping such a file anywhere on the phone does the same.
+<b>On the server, not on this phone</b> lists this account's sessions that were sent from another
+device or cleared from this one, and Download brings a whole night back. An imported session is
+the same three things a local recording leaves behind (the readings log, the rows, the media), so
+nothing downstream knows the difference; only a Source line on the review says where it came from.</p>
 """),
 
     ("Naming a session", "41-name-the-session", """
@@ -244,7 +252,8 @@ moment.</p>
 <p>The sentry watches while nobody is looking at the phone and marks the timeline by itself. Four
 triggers, each switched on separately: magnetic field and sound, measured as a departure from the
 base level; the device being moved, which is what matters when a tripod is disturbed; and movement
-in the camera's view. It can also start a clip when something fires.</p>
+in the camera's view. What it does when one fires is mark the timeline — it takes no clip, and the
+camera is there to be watched through rather than recorded from (2026-09-17).</p>
 
 <p>Arming is refused, in words, when it would be pointless — a magnetic threshold with no base
 level to measure against is not a threshold, and scene motion needs the camera switched on.</p>
@@ -288,13 +297,77 @@ night's work into something a client, a colleague or a stranger can actually ass
 
     ("Ending a session", "53-session-review", """
 <p>Stopping opens the review: what was captured, how long it ran, what was marked. From here the
-session can be exported, attached to a case, or published to a public place's archive.</p>
+session can be sent to the server or exported — both as one sealed <code>.ben</code> file — attached
+to a case, or published to a public place's archive.</p>
 """),
 
     ("Events", "60-events", """
 <p>Public events — tours, open investigations, group meetings. Someone who attended can offer what
 they captured; a group member reviews it, and an accepted submission becomes part of that event's
 public record, credited to them.</p>
+"""),
+
+    ("Hosted events: what I'm going to", "61-my-events", """
+<p>Hosted events are weekends and evenings a group or venue runs with rooms or seats (item 235). A
+guest's bookings are listed under <b>What I'm going to</b> in Profile, one row per event: the live
+booking, or the most recent one. <b>Pass</b> and <b>The event</b> are buttons that push onto the
+router; two <code>NavigationLink</code>s in one <code>List</code> row both answer to the last one.</p>
+"""),
+
+    ("A pass that opens with no signal", "62-event-pass", """
+<p>The QR code is drawn on the phone from the pass token with <code>CIFilter.qrCodeGenerator()</code>
+and saved by <code>PassCache</code>. A cellar with no signal still opens it, and a withdrawn pass is
+shown as withdrawn, never as a blank. The six-character code under it is what the door types when a
+camera will not read the screen.</p>
+"""),
+
+    ("The event's own screen", "63-event-hub", """
+<p><code>EventHubView</code> gathers the pass, the programme, the menus, downloads, the room and the
+venue's access notes. A row appears only when there is something behind it: a 403 or 404 from its
+endpoint is read as "not for this guest" (<code>absentIsNil</code>), not as an error.</p>
+"""),
+
+    ("The programme", "64-event-programme", """
+<p>Sessions night by night on the venue's clock, with sign-up, a waiting list, and a calendar export.
+A change the guest has not seen yet is badged on the hub.</p>
+"""),
+
+    ("Menus", "65-event-menus", """
+<p>Each meal, course by course, with the venue's dietary labels, shown once the venue shares them
+with guests.</p>
+"""),
+
+    ("Running the door", "66-door", """
+<p><b>Doors I'm running</b> appears in Profile only for somebody who may run one:
+<code>GET api/me/hosted-event-duties</code> covers members, accepted helpers and venue staff.
+<code>DoorStore</code> keeps the night's list in <code>DoorCache</code>, so the list, the search and
+check-in keep working with no signal. Arrivals made offline are queued in <code>waiting.json</code>
+and sent in order with the time they happened; the server's <code>DoorClock</code> keeps the earlier
+of two arrivals.</p>
+"""),
+
+    ("A scanned pass", "67-door-scanned", """
+<p>The scanner screen is only the camera (<code>DataScannerViewController</code>). A read code is
+looked up and shown as the reservation, and nothing is checked in until the person on the door taps
+it. On a simulator, <code>-doorScanCode &lt;token&gt;</code> stands in for the camera.</p>
+"""),
+
+    ("Checking a party in", "68-door-reservation", """
+<p>The reservation shows who, how many and where on each night, and adjusts the head count before
+<b>Check in as arrived</b>.</p>
+"""),
+
+    ("Photos with no signal", "69-room-waiting", """
+<p>A post to the event's room made with no signal is kept in <code>RoomOutbox</code>, in the App Group
+container <code>group.com.ishaunted.ios</code>, and sent oldest first by
+<code>RoomOutboxSender</code> when the network returns or the app comes forward. A post the server
+refuses is kept, with the server's sentence, for the guest to remove.</p>
+"""),
+
+    ("Sharing from Photos", "69b-share-to-event", """
+<p>The <code>IsHauntedShare</code> extension offers the events the app last wrote to
+<code>ShareableEvents</code>. It has no sign-in of its own, so it only adds to the outbox, and the app
+sends.</p>
 """),
 
     ("Profile and account", "70-profile", """

@@ -44,6 +44,25 @@ public class AudioScrubModeTests : BenTestBase
         return true;
     }
 
+    /// <summary>
+    /// The card for the file this test just uploaded.
+    /// </summary>
+    /// <remarks>
+    /// <para><b>Scoped to OUR file, not to the first one on the page</b> (2026-09-17). Both helpers
+    /// below used <c>.First</c> — <c>[id^='ws-']</c> and <c>[id^='afp-']</c> — and this fixture
+    /// uploads a fresh copy of the MP3 on every run into a case that keeps its files, because the
+    /// e2e database persists between runs. With one player on the page <c>.First</c> is the right
+    /// one by luck; after a few runs it is somebody else's file, which may not have decoded, and
+    /// the right-click lands on something with no "Open Full View" on it.</para>
+    ///
+    /// <para>That is why this test passed on its own and failed in the full suite, in both
+    /// directions, on two branches — it was reading the wrong element, not reporting a defect. The
+    /// wrapper id is a fresh GUID per component instance, so the file's own card is the only
+    /// stable handle.</para>
+    /// </remarks>
+    private ILocator OurFileCard =>
+        Main.Locator(".card", new() { HasText = "test-audio" }).Last;
+
     /// <summary>Uploads the fixture MP3 and waits for its compact waveform preview to render.</summary>
     private async Task<bool> UploadTestAudioAsync()
     {
@@ -51,7 +70,10 @@ public class AudioScrubModeTests : BenTestBase
 
         // Upload (SignalR round-trip) + fetch-back + client-side decode for a ~7MB file
         // can take a while — generous timeout to avoid flaking on a slow CI runner.
-        var waveform = Page.Locator("[id^='ws-']").First;
+        //
+        // .Last of our own cards: the newest upload is the one at the bottom, and every earlier
+        // run left one behind.
+        var waveform = OurFileCard.Locator("[id^='ws-']").First;
         try { await Expect(waveform).ToBeVisibleAsync(new() { Timeout = 45_000 }); }
         catch { return false; }
         return true;
@@ -60,7 +82,9 @@ public class AudioScrubModeTests : BenTestBase
     /// <summary>Right-clicks the compact preview and opens the full-view modal.</summary>
     private async Task OpenFullViewAsync()
     {
-        var wrapper = Page.Locator("[id^='afp-']").First;
+        var wrapper = OurFileCard.Locator("[id^='afp-']").First;
+        await Expect(wrapper).ToBeVisibleAsync(new() { Timeout = 15_000 });
+
         await wrapper.ClickAsync(new() { Button = MouseButton.Right });
         await Page.GetByText("Open Full View", new() { Exact = false }).ClickAsync();
         await Page.WaitForTimeoutAsync(300); // modal open animation

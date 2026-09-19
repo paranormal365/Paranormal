@@ -41,7 +41,10 @@ public sealed class StripeFulfillmentService
         decimal Payable, decimal TaxRatePercent, decimal TaxAmount,
         Guid InitiatedByUserId, string? CouponCode,
         decimal ListPrice, decimal Discount,
-        DateTime? PeriodStartUtc = null)
+        DateTime? PeriodStartUtc = null,
+        // Item 233: the tours a business period is priced for. Zero for everyone the ladder
+        // prices, and for sessions created before the key existed.
+        int TourCount = 0)
     {
         public static class Keys
         {
@@ -60,6 +63,13 @@ public sealed class StripeFulfillmentService
             /// <summary>Present exactly when this payment buys an overflow SEAT, not the
             /// group's subscription — the two fulfill along entirely different paths.</summary>
             public const string Seat         = "ih_seat";
+            public const string Tours        = "ih_tours";
+
+            /// <summary>
+            /// Present exactly when this payment buys EVENT CREDITS (item 235) — a one-off
+            /// purchase, not a subscription, and fulfilled down its own path.
+            /// </summary>
+            public const string EventCredits = "ih_event_credits";
         }
 
         public Dictionary<string, string> ToMetadata() => new()
@@ -76,6 +86,7 @@ public sealed class StripeFulfillmentService
             [Keys.List]         = ListPrice.ToString(System.Globalization.CultureInfo.InvariantCulture),
             [Keys.Discount]     = Discount.ToString(System.Globalization.CultureInfo.InvariantCulture),
             [Keys.PeriodStart]  = PeriodStartUtc?.ToString("O") ?? string.Empty,
+            [Keys.Tours]        = TourCount.ToString(),
         };
 
         /// <summary>Null when the metadata is not ours or is torn — a session created by
@@ -106,10 +117,13 @@ public sealed class StripeFulfillmentService
                 && DateTime.TryParse(psRaw, inv, System.Globalization.DateTimeStyles.RoundtripKind, out var ps))
                 periodStart = ps;
 
+            var tours = 0;
+            if (m.TryGetValue(Keys.Tours, out var tr2)) int.TryParse(tr2, out tours);
+
             return new CheckoutFacts(orgId, tierId, (BillingInterval)ivInt, members,
                 payable, taxRate, taxAmount, userId,
                 string.IsNullOrWhiteSpace(coupon) ? null : coupon,
-                list, discount, periodStart);
+                list, discount, periodStart, tours);
         }
     }
 
@@ -122,6 +136,15 @@ public sealed class StripeFulfillmentService
             && Guid.TryParse(seatRaw, out var seatId))
         {
             await FulfillSeatAsync(seatId, checkout, ct);
+            return;
+        }
+
+        // Event credits are a one-off purchase with no period and no subscription to open, so they
+        // take their own path rather than being bent through the renewal machinery (item 235).
+        if (checkout.Metadata.TryGetValue(CheckoutFacts.Keys.EventCredits, out var creditsRaw)
+            && int.TryParse(creditsRaw, out var creditCount) && creditCount > 0)
+        {
+            await FulfillEventCreditsAsync(creditCount, checkout, ct);
             return;
         }
 
@@ -185,9 +208,23 @@ public sealed class StripeFulfillmentService
         // neither gifts a free day nor bills one twice.
         var periodStart = facts.PeriodStartUtc ?? now;
         var periodEnd   = periodStart.AddMonths((int)facts.Interval);
+        // A session created before the tour key existed carries no count, and opening its period
+        // at zero would tell the add-on service that NOTHING was paid for — so the next tour
+        // added is charged for every tour the business runs. When the tier is per-tour and the
+        // metadata is silent, count what is live instead of believing the zero.
+        var tourCount = facts.TourCount;
+        if (tourCount == 0 && tier is { IsBandedByMembers: false })
+        {
+            var kind = await db.Organizations.AsNoTracking()
+                .Where(o => o.Id == facts.OrganizationId).Select(o => o.Kind).FirstOrDefaultAsync(ct);
+            if (Ben.Data.Source.Services.SubscriptionTierResolver.IsBusinessKind(kind))
+                tourCount = Ben.Data.Source.Services.TourBilling.Units(
+                    kind, await BillableUnits.ActiveToursAsync(db, facts.OrganizationId, ct));
+        }
+
         var snapshot = PeriodOpener.Open(
             sub, tier, SubscriptionStatus.Active, facts.Interval,
-            periodStart, periodEnd, facts.MemberCount, facts.InitiatedByUserId);
+            periodStart, periodEnd, facts.MemberCount, facts.InitiatedByUserId, tourCount);
 
         // The person paid the quoted (possibly discounted) amount; the period records what was
         // actually charged, not the list price the opener read off the tier.
@@ -362,6 +399,146 @@ public sealed class StripeFulfillmentService
         _log.LogInformation(
             "Stripe fulfilled seat: {Member} in org {OrganizationId} for ${Price}, receipt R-{Receipt:00000}.",
             seat.AppUserId, seat.OrganizationId, seat.PriceAtStart, payment.ReceiptNumber);
+    }
+
+    /// <summary>
+    /// Hands over the event credits somebody just bought, and writes the receipt.
+    /// </summary>
+    /// <remarks>
+    /// <para><b>Idempotent on the payment.</b> Stripe delivers a webhook more than once as a matter
+    /// of course, and a second delivery must not hand somebody a second set of credits. The ledger's
+    /// payment reference is the lock, exactly as it is for a seat.</para>
+    ///
+    /// <para><b>Taxed like the digital service it is</b>, through the same resolver a subscription
+    /// uses. A credit is a sale, not a donation.</para>
+    ///
+    /// <para><b>No period.</b> A credit is not a subscription: it has no renewal, nothing to open
+    /// and nothing to close. It has a life — a year — and it is spent when an event is published.
+    /// </para>
+    /// </remarks>
+    private async Task FulfillEventCreditsAsync(
+        int count, StripeCompletedCheckout checkout, CancellationToken ct)
+    {
+        await using var db = await _dbFactory.CreateDbContextAsync(ct);
+
+        var reference = checkout.PaymentIntentRef ?? checkout.SessionId;
+        if (await db.BillingLedgerEntries.AnyAsync(e => e.PaymentReference == reference, ct))
+        {
+            _log.LogInformation(
+                "Event-credit payment {Reference} delivered again — already fulfilled.", reference);
+            return;
+        }
+
+        if (!checkout.Metadata.TryGetValue(CheckoutFacts.Keys.Organization, out var orgRaw)
+            || !Guid.TryParse(orgRaw, out var organizationId))
+        {
+            _log.LogError("Event-credit payment {Reference} names no organization.", reference);
+            return;
+        }
+
+        Guid buyerId = Guid.Empty;
+        if (checkout.Metadata.TryGetValue(CheckoutFacts.Keys.User, out var userRaw))
+            Guid.TryParse(userRaw, out buyerId);
+
+        var unit = Services.Events.EventCredits.DefaultPriceUsd;
+        if (checkout.Metadata.TryGetValue(CheckoutFacts.Keys.List, out var listRaw)
+            && decimal.TryParse(listRaw, System.Globalization.NumberStyles.Any,
+                                System.Globalization.CultureInfo.InvariantCulture, out var listed)
+            && count > 0)
+            unit = decimal.Round(listed / count, 2);
+
+        var now = DateTime.UtcNow;
+        var total = unit * count;
+
+        // The tax the buyer was CHARGED, read back from the metadata (2026-09-17 audit).
+        //
+        // The credit checkout resolves the rate, works out the tax, writes both into the metadata
+        // AND adds the tax to what Stripe collects. This then threw those away and resolved the
+        // rate again from the live rules, filing that second answer in the ledger. The two differ
+        // whenever anything moved in between — a TaxRateRule edited, the group's first address
+        // added or changed — and the window is however long the webhook takes, which on a retry is
+        // hours. The card statement then says one number and the receipt says another, and the
+        // receipt is the document we hand over.
+        //
+        // TaxResolver's own summary states the rule this restores: "the rate is resolved at write
+        // time and frozen onto whatever document asked — a later rule edit never rewrites a bill
+        // already sent." The subscription path beside this one has always done it through
+        // CheckoutFacts; only the credit path read live.
+        //
+        // The live resolve stays as the fallback, for a session created before this shipped whose
+        // webhook arrives after it. It is the old behaviour, so such a session is no worse off.
+        var inv = System.Globalization.CultureInfo.InvariantCulture;
+        decimal taxRate, tax;
+        if (checkout.Metadata.TryGetValue(CheckoutFacts.Keys.TaxRate, out var rateRaw)
+            && decimal.TryParse(rateRaw, System.Globalization.NumberStyles.Number, inv, out taxRate)
+            && checkout.Metadata.TryGetValue(CheckoutFacts.Keys.TaxAmount, out var taxRaw)
+            && decimal.TryParse(taxRaw, System.Globalization.NumberStyles.Number, inv, out tax))
+        {
+            // Nothing to do: both figures came from the session the buyer actually paid.
+        }
+        else
+        {
+            _log.LogWarning(
+                "Event-credit payment {Reference} carries no frozen tax; resolving it live.", reference);
+            (_, taxRate) = await TaxResolver.ForOrganizationAsync(db, organizationId, ct);
+            tax = TaxResolver.TaxOn(total, taxRate);
+        }
+
+        var description = count == 1 ? "1 event credit" : $"{count} event credits";
+
+        for (var i = 0; i < count; i++)
+        {
+            db.EventCredits.Add(new EventCredit
+            {
+                Id = Guid.NewGuid(),
+                OwnerOrganizationId = organizationId,
+                PriceAtPurchase = unit,
+                Currency = "USD",
+                PurchasedUtc = now,
+                ExpiresUtc = now.Add(Services.Events.EventCredits.Life),
+                ProviderCheckoutRef = checkout.SessionId,
+                ProviderPaymentRef = reference,
+                DateCreated = now,
+                CreatedByAppUserId = buyerId,
+            });
+        }
+
+        db.BillingLedgerEntries.Add(new BillingLedgerEntry
+        {
+            Id = Guid.NewGuid(), Kind = BillingLedgerKind.Charge,
+            OrganizationId = organizationId,
+            Amount = total, TaxRatePercent = taxRate, TaxAmount = tax,
+            Description = description, PaymentReference = reference,
+            DateCreated = now, CreatedByAppUserId = buyerId,
+        });
+
+        var payment = new BillingLedgerEntry
+        {
+            Id = Guid.NewGuid(), Kind = BillingLedgerKind.Payment,
+            OrganizationId = organizationId,
+            Amount = total, TaxRatePercent = taxRate, TaxAmount = tax,
+            Description = $"Card payment — {description}", PaymentReference = reference,
+            DateCreated = now, CreatedByAppUserId = buyerId,
+        };
+
+        for (var attempt = 0; ; attempt++)
+        {
+            payment.ReceiptNumber = 1 + await db.BillingLedgerEntries
+                .MaxAsync(e => (int?)e.ReceiptNumber, ct) ?? 1;
+            db.BillingLedgerEntries.Add(payment);
+            try { await db.SaveChangesAsync(ct); break; }
+            catch (DbUpdateException) when (attempt < 2) { db.BillingLedgerEntries.Remove(payment); }
+        }
+
+        // Stamped after the save so the number on the credit is the number on the receipt it was
+        // actually written with, retries included.
+        foreach (var credit in db.ChangeTracker.Entries<EventCredit>().Select(e => e.Entity))
+            credit.ReceiptNumber = $"R-{payment.ReceiptNumber:00000}";
+        await db.SaveChangesAsync(ct);
+
+        _log.LogInformation(
+            "Stripe fulfilled {Count} event credit(s) for org {OrganizationId}, receipt R-{Receipt:00000}.",
+            count, organizationId, payment.ReceiptNumber);
     }
 
     private static async Task RedeemCouponAsync(

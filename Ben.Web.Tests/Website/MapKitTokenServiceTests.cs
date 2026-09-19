@@ -99,6 +99,76 @@ public class MapKitTokenServiceTests
         Assert.Throws<InvalidOperationException>(() => service.Issue("https://ishaunted.com", Now));
     }
 
+    // ── Maps Web Snapshots (canvas plan R35) ─────────────────────────────────
+
+    private static byte[] FromBase64UrlBytes(string s) =>
+        Convert.FromBase64String(s.Replace('-', '+').Replace('_', '/').PadRight(s.Length + (4 - s.Length % 4) % 4, '='));
+
+    /// <summary>
+    /// Apple signs the path and query - teamId and keyId included, signature last - with ES256 in the raw r||s form,
+    /// base64url without padding.
+    /// </summary>
+    [Fact]
+    public void ASnapshotAddressIsSignedOverItsPathAndQueryWithTheSignatureLast()
+    {
+        var (options, publicKey) = Configured();
+        using var service = new MapKitTokenService(options);
+
+        var url = new Uri(service.SnapshotUrl(36.1612, -86.7717, 14, 360, 200, "dark", Now));
+
+        Assert.Equal("https://snapshot.apple-mapkit.com/api/v1/snapshot", url.GetLeftPart(UriPartial.Path));
+        var query = url.Query;
+        var at = query.IndexOf("&signature=", StringComparison.Ordinal);
+        Assert.True(at > 0, "signature must be the last parameter");
+        var signed = url.AbsolutePath + query[..at];
+        var signature = FromBase64UrlBytes(query[(at + "&signature=".Length)..]);
+
+        Assert.Equal(64, signature.Length);
+        Assert.True(publicKey.VerifyData(Encoding.UTF8.GetBytes(signed), signature, HashAlgorithmName.SHA256, DSASignatureFormat.IeeeP1363FixedFieldConcatenation));
+        Assert.Contains("teamId=5778H75249&keyId=623JTDWHAQ", signed);
+    }
+
+    [Fact]
+    public void ASnapshotAddressNamesThePlaceSizeSchemePinAndAThirtyMinuteExpiry()
+    {
+        var (options, _) = Configured();
+        using var service = new MapKitTokenService(options);
+        var previous = System.Globalization.CultureInfo.CurrentCulture;
+        System.Globalization.CultureInfo.CurrentCulture = new System.Globalization.CultureInfo("fr-FR");
+        try
+        {
+            var query = Uri.UnescapeDataString(new Uri(service.SnapshotUrl(36.1612, -86.7717, 14, 360, 200, "dark", Now)).Query);
+
+            Assert.Contains("center=36.161200,-86.771700", query);
+            Assert.Contains("z=14", query);
+            Assert.Contains("size=360x200", query);
+            Assert.Contains("scale=2", query);
+            Assert.Contains("colorScheme=dark", query);
+            Assert.Contains("\"point\":\"36.161200,-86.771700\"", query);
+            Assert.Contains($"expires={Now.AddMinutes(30).ToUnixTimeSeconds()}", query);
+        }
+        finally
+        {
+            System.Globalization.CultureInfo.CurrentCulture = previous;
+        }
+    }
+
+    [Theory]
+    [InlineData(91, 0, 14, 360, 200, "dark")]
+    [InlineData(0, 181, 14, 360, 200, "dark")]
+    [InlineData(10, 10, 2, 360, 200, "dark")]
+    [InlineData(10, 10, 21, 360, 200, "dark")]
+    [InlineData(10, 10, 14, 49, 200, "dark")]
+    [InlineData(10, 10, 14, 360, 641, "dark")]
+    [InlineData(10, 10, 14, 360, 200, "sepia")]
+    public void ASnapshotOutsideApplesLimitsIsRefused(double lat, double lng, int zoom, int width, int height, string scheme)
+    {
+        var (options, _) = Configured();
+        using var service = new MapKitTokenService(options);
+
+        Assert.Throws<ArgumentOutOfRangeException>(() => service.SnapshotUrl(lat, lng, zoom, width, height, scheme, Now));
+    }
+
     /// <summary>A wrong key is a deployment mistake, and says what it is at startup.</summary>
     [Fact]
     public void AKeyThatIsNotAnEcPrivateKeyIsRefusedAtConstruction()

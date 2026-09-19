@@ -50,11 +50,11 @@
                 </div>
                 <div class="col-sm-2">
                     <label class="form-label small mb-1">From</label>
-                    <TelerikDatePicker Format="@DateTimeViewerExtensions.DatePattern" @bind-Value="@_filterDateFrom" Width="100%" />
+                    <BenDateField Mode="DateEntryMode.Date" @bind-Value="@_filterDateFrom" Width="100%" />
                 </div>
                 <div class="col-sm-2">
                     <label class="form-label small mb-1">To</label>
-                    <TelerikDatePicker Format="@DateTimeViewerExtensions.DatePattern" @bind-Value="@_filterDateTo" Width="100%" />
+                    <BenDateField Mode="DateEntryMode.Date" @bind-Value="@_filterDateTo" Width="100%" />
                 </div>
             </div>
             <div class="row g-2 mt-1">
@@ -156,7 +156,7 @@
             <GridColumn Title="" Width="60px" Filterable="false" Sortable="false">
                 <Template>
                     @{ var r5 = (AuditLogRecord)context; }
-                    <button type="button" class="btn @(ThemeConstants.Button.FillMode.Flat == ThemeConstants.Button.FillMode.Solid ? "btn-secondary" : "btn-outline-secondary") btn-sm" @onclick="@(() => OpenMailDialog(r5))" title="Send as message"><BenIcon Name="mail" /></button>
+                    <BenGridAction Icon="mail" Label="Send as message" OnClick="@(() => OpenMailDialog(r5))" />
                 </Template>
             </GridColumn>
         </GridColumns>
@@ -296,7 +296,7 @@
     protected override async Task OnInitializedAsync()
     {
         if (!await UserState.WaitUntilAuthReadyAsync(RendererInfo.IsInteractive)) return;
-        if (!UserState.IsSuperAdmin || UserState.IsImpersonating) { NavManager.NavigateTo("/"); return; }
+        if (!UserState.IsSuperAdmin || UserState.IsImpersonating) { NavManager.NavigateTo(Ben.Web.Website.Library.Kit.SignInLink.ForRefusal(NavManager, UserState)); return; }
         // The grid loads itself through OnRead; only the filter-bar sources are fetched here.
         await Task.WhenAll(LoadEntityTypesAsync(), EnsureUsersLoadedAsync());
     }

@@ -124,6 +124,43 @@ public class MemberDefaultRoleTests
     }
 
     [Fact]
+    public async Task A_viewer_given_write_grants_still_changes_nothing_and_reads_what_a_member_reads()
+    {
+        // Ben, 2026-09-14: "make viewers read-only". The Viewer rank was documented as "cannot create, update, or delete"
+        // and never enforced: whatever a Viewer was granted, they could do. The same grant is given to a Member alongside,
+        // so the test fails if the grant itself stops working rather than passing by accident.
+        var factory = CreateFactory();
+        var (orgId, ownerId, viewerId) = await SeedAsync(factory);
+        var memberId = Guid.NewGuid();
+        var security = new OrganizationSecurityService(factory);
+        await using (var db = await factory.CreateDbContextAsync())
+        {
+            db.AppUsers.Add(new AppUser { Id = memberId, UserName = memberId.ToString(), Email = $"{memberId}@test.com", DisplayName = "Member" });
+            await db.SaveChangesAsync();
+        }
+        await security.UpsertMembershipAsync(orgId, viewerId, MemberRole.Viewer, true, ownerId);
+        await security.UpsertMembershipAsync(orgId, memberId, MemberRole.Member, true, ownerId);
+        await using (var db = await factory.CreateDbContextAsync())
+        {
+            foreach (var who in new[] { viewerId, memberId })
+                db.OrganizationAccessGrants.Add(new OrganizationAccessGrant
+                {
+                    Id = Guid.NewGuid(), OrganizationId = orgId, AppUserId = who, TableName = DataTable.Case,
+                    Actions = DataAction.Create | DataAction.Read | DataAction.Update | DataAction.Delete,
+                    DateCreated = DateTime.UtcNow, CreatedByAppUserId = ownerId,
+                });
+            await db.SaveChangesAsync();
+        }
+
+        foreach (var write in new[] { DataAction.Create, DataAction.Update, DataAction.Delete })
+        {
+            Assert.True(await new OrganizationSecurityService(factory).HasAccessAsync(memberId, orgId, DataTable.Case, write), $"the grant should let a member {write}");
+            Assert.False(await new OrganizationSecurityService(factory).HasAccessAsync(viewerId, orgId, DataTable.Case, write), $"a viewer may {write} cases");
+        }
+        Assert.True(await new OrganizationSecurityService(factory).HasAccessAsync(viewerId, orgId, DataTable.Case, DataAction.Read));
+    }
+
+    [Fact]
     public async Task A_group_that_chose_no_starting_role_is_left_exactly_as_it_was()
     {
         // Every group that existed before the setting did has none, and none of them should

@@ -77,15 +77,22 @@
 }
 
 /* ── Canvas background (shown when no clip is loaded) ───────────────────── */
+/* The empty stage, shown before anything has been rendered.
+
+   It covers the screen rather than sitting BESIDE the video, which is what it used to do: the screen
+   is a row flex and .bv-preview__video is width:100%, so this placeholder — a sibling flex item —
+   was squeezed into whatever was left. Measured on a fresh project: the video took 1015px and this
+   took 62, so the composition size sat in a sliver down the right-hand edge instead of on the stage.
+   Every other thing drawn on this screen (the still-image overlay, the live overlay, the selection
+   overlay) is already absolute and inset:0; this one was not. Found by looking, 2026-09-18. */
 .bv-preview__canvas {
     background: #000;
-    max-width: 100%;
-    max-height: 100%;
     border: 1px solid rgba(255, 255, 255, .08);
     display: flex;
     align-items: center;
     justify-content: center;
-    position: relative;
+    position: absolute;
+    inset: 0;
 }
 
 /* ── Still-image overlay (image-only timeline preview) ──────────────────── */

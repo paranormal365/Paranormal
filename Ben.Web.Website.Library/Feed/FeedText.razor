@@ -1,5 +1,6 @@
 @using Ben.Data.Common.Helpers
 @using Ben.Service.Models.Feed
+@using Ben.Web.Website.Library.Kit
 
 @*
     A feed post's body, with its @names and #tags turned into links.
@@ -31,13 +32,42 @@
             <a href="@($"/feed/tags/{Uri.EscapeDataString(segment.Value)}")" class="bv-feed-tag">@segment.Text</a>
             break;
 
+        @* A link stays in the sentence where it was typed AND gets a card under the body. The
+           sentence is what somebody said; the card is where it points. *@
+        case FeedSegmentKind.Url:
+            <a href="@segment.Value" target="_blank" rel="noopener noreferrer nofollow">@segment.Text</a>
+            break;
+
         default:
             @segment.Text
             break;
     }
 }
 
+@if (ShowPreview && FirstUrl is { } url)
+{
+    <BenLinkPreview Url="@url" />
+}
+
 @code {
+    /// <summary>
+    /// Whether to draw the card under the body for the first link in it.
+    /// </summary>
+    /// <remarks>
+    /// Off in a snippet or a teaser, where the point is one line. A card in a list of one-line
+    /// previews makes every row three lines tall and the list stops being a list.
+    /// </remarks>
+    [Parameter] public bool ShowPreview { get; set; } = true;
+
+    /// <summary>
+    /// The first address in the body, or null. Only the first: a message with four links gets one
+    /// card, because five cards under one sentence is not a preview, it is a directory.
+    /// </summary>
+    private string? FirstUrl => FeedTextSegmenter.Segment(Body)
+        .FirstOrDefault(s => s.Kind == FeedSegmentKind.Url).Value is { Length: > 0 } url
+        ? url
+        : null;
+
     /// <summary>The post's text, exactly as it was written.</summary>
     [Parameter, EditorRequired] public string Body { get; set; } = string.Empty;
 

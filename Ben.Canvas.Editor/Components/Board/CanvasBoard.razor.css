@@ -1,0 +1,105 @@
+/*
+ * The board ground, the world layer and the gesture previews.
+ * JS-owned custom properties: --bc-pan-x --bc-pan-y --bc-zoom on the board; --bc-dx --bc-dy on dragged
+ * blocks; --bc-rx --bc-ry --bc-rw --bc-rh on a resizing block; --bc-guide-pos on a guide;
+ * --bc-mq-x --bc-mq-y --bc-mq-w --bc-mq-h on the marquee.
+ * JS-owned classes: bc-board--gesture, bc-board--panning, bc-board--coarse, bc-board--space,
+ * bc-world--animate, bc-node--dragging, bc-node--resizing, bc-guide--on, bc-marquee--on.
+ */
+
+.bc-board {
+    position: absolute;
+    inset: 0;
+    overflow: hidden;
+    isolation: isolate;
+    touch-action: none;
+    overscroll-behavior: contain;
+    user-select: none;
+    -webkit-user-select: none;
+    -webkit-touch-callout: none;
+    outline: none;
+    contain: layout paint;
+    cursor: default;
+    background-color: var(--bc-surface-1);
+    background-image: radial-gradient(circle, var(--bc-grid-dot) 1px, transparent 1.5px);
+    background-size: calc(24px * var(--bc-zoom, 1)) calc(24px * var(--bc-zoom, 1));
+    background-position: var(--bc-pan-x, 0px) var(--bc-pan-y, 0px);
+}
+
+.bc-board:focus-visible {
+    box-shadow: inset 0 0 0 2px var(--bc-focus-ring);
+}
+
+/* Far out, a dot every 24 world pixels becomes a grey wash; every fourth dot stays readable. */
+.bc-board.bc-board--coarse {
+    background-size: calc(96px * var(--bc-zoom, 1)) calc(96px * var(--bc-zoom, 1));
+}
+
+.bc-board.bc-board--space { cursor: grab; }
+.bc-board.bc-board--panning { cursor: grabbing; }
+
+.bc-world {
+    position: absolute;
+    left: 0;
+    top: 0;
+    width: 0;
+    height: 0;
+    transform-origin: 0 0;
+    transform: translate(var(--bc-pan-x, 0px), var(--bc-pan-y, 0px)) scale(var(--bc-zoom, 1));
+}
+
+/* A layer is promoted only while it moves; a permanently promoted layer blurs text at rest. */
+.bc-board.bc-board--gesture .bc-world { will-change: transform; }
+
+.bc-world.bc-world--animate { transition: transform 150ms ease-out; }
+
+.bc-nodes {
+    position: absolute;
+    left: 0;
+    top: 0;
+    z-index: 2;
+}
+
+.bc-guide-x,
+.bc-guide-y {
+    display: none;
+    position: absolute;
+    z-index: 4;
+    pointer-events: none;
+}
+
+.bc-guide-x {
+    top: -100000px;
+    height: 200000px;
+    left: var(--bc-guide-pos, 0px);
+    border-left: calc(1px / var(--bc-zoom, 1)) dashed var(--bc-accent);
+}
+
+.bc-guide-y {
+    left: -100000px;
+    width: 200000px;
+    top: var(--bc-guide-pos, 0px);
+    border-top: calc(1px / var(--bc-zoom, 1)) dashed var(--bc-accent);
+}
+
+.bc-guide-x.bc-guide--on,
+.bc-guide-y.bc-guide--on { display: block; }
+
+.bc-marquee {
+    display: none;
+    position: absolute;
+    z-index: 4;
+    left: var(--bc-mq-x, 0px);
+    top: var(--bc-mq-y, 0px);
+    width: var(--bc-mq-w, 0px);
+    height: var(--bc-mq-h, 0px);
+    border: 1px dashed var(--bc-accent);
+    background: var(--bc-accent-muted);
+    pointer-events: none;
+}
+
+.bc-marquee.bc-marquee--on { display: block; }
+
+@media (prefers-reduced-motion: reduce) {
+    .bc-world.bc-world--animate { transition: none; }
+}

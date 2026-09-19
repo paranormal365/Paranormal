@@ -11,9 +11,24 @@ namespace Ben.Data.WebApi.Services;
 /// never built — an "unavailable" answer both leaks configuration and invites "when is it back?".
 /// </summary>
 /// <remarks>
-/// Controller-level on purpose: gating per action is how one endpoint eventually forgets. The
-/// flag defaults ON when unset, per the SiteSettingKeys rule — sections that already exist
-/// default on, so adding a gate never silently removes a working feature.
+/// <para>Controller-level on purpose: gating per action is how one endpoint eventually forgets.</para>
+///
+/// <para><b>An unset flag reads as its declared default</b>, from
+/// <see cref="SiteSettingKeys.DefaultFor"/> — the same list the admin page and the public features
+/// endpoint publish. Sections that already exist default on, so adding a gate to one never
+/// silently removes a working feature; unbuilt features default off, so gating one never silently
+/// switches it on.</para>
+///
+/// <para>This used to pass <c>whenUnset: true</c> for every key. That was indistinguishable from
+/// the rule while every gated flag defaulted on, and wrong the first time an unbuilt one was gated:
+/// <c>features.canvas-editor</c> had no row on a site where nobody had touched it, so the canvas
+/// API and its link-unfurl fetcher would have answered from the moment the API deployed while the
+/// admin page showed the switch as Off (canvas plan review R1, 2026-09-14). That flag has since gone
+/// — the canvas is not optional any more — but the rule it taught is the one this class follows.</para>
+///
+/// <para><c>[Authorize]</c> still answers an anonymous caller with 401 first — authorization
+/// filters run before action filters — so a deploy's anonymous smoke probe sees 401 either way and
+/// only a signed-in probe can tell whether the gate is closed.</para>
 /// </remarks>
 [AttributeUsage(AttributeTargets.Class)]
 public sealed class FeatureGatedAttribute : Attribute, IAsyncActionFilter
@@ -22,6 +37,9 @@ public sealed class FeatureGatedAttribute : Attribute, IAsyncActionFilter
 
     public FeatureGatedAttribute(string featureKey) => _featureKey = featureKey;
 
+    /// <summary>The <see cref="SiteSettingKeys"/> feature key this gate reads.</summary>
+    public string FeatureKey => _featureKey;
+
     public async Task OnActionExecutionAsync(ActionExecutingContext context, ActionExecutionDelegate next)
     {
         var dbFactory = context.HttpContext.RequestServices
@@ -29,7 +47,8 @@ public sealed class FeatureGatedAttribute : Attribute, IAsyncActionFilter
         await using var db = await dbFactory.CreateDbContextAsync(context.HttpContext.RequestAborted);
 
         if (!await SiteSettingsService.GetBoolAsync(
-                db, _featureKey, whenUnset: true, context.HttpContext.RequestAborted))
+                db, _featureKey, whenUnset: SiteSettingKeys.DefaultFor(_featureKey),
+                context.HttpContext.RequestAborted))
         {
             context.Result = new NotFoundResult();
             return;

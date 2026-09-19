@@ -850,6 +850,13 @@
         {
             await Keyboard.RegisterAsync(this);
 
+            // The sidecar stops itself once nothing has asked it for anything, so that it is not a
+            // service running all day for somebody who never opens the editor. While this editor is
+            // on screen, that is exactly what is asking. Started unconditionally: the heartbeat is
+            // a no-op until a sidecar has actually been discovered, and starting it here means it
+            // is already running whenever one turns up.
+            StartSidecarHeartbeat();
+
             // Before the project loads, so the editor paints once at the size it will keep rather
             // than snapping from the defaults after the first frame.
             await RestoreLayoutAsync();
@@ -1129,6 +1136,40 @@
             _fullQualityStalled = stalled;
             StateHasChanged();
         }), null, TimeSpan.FromSeconds(2), TimeSpan.FromSeconds(2));
+    }
+
+    /// <summary>Tells a connected sidecar the editor is still open.</summary>
+    private Timer? _sidecarHeartbeat;
+
+    /// <summary>
+    /// Often enough that a fifteen-minute idle timeout can never expire with the editor open, and
+    /// rare enough to be nothing: one loopback GET a minute.
+    /// </summary>
+    private static readonly TimeSpan SidecarHeartbeatEvery = TimeSpan.FromMinutes(1);
+
+    /// <summary>
+    /// Keeps the sidecar alive for exactly as long as this editor is on screen.
+    /// </summary>
+    /// <remarks>
+    /// The sidecar is started on demand by launchd and stops itself once nothing has asked it for
+    /// anything, so that it is not a service running all day for a person who never opens the
+    /// editor (Ben, 2026-09-19). Without a heartbeat it would measure "time since the last render"
+    /// rather than "time since the editor was closed", and stop underneath somebody who had been
+    /// editing locally for an hour — costing them every retained segment, since a new process gets
+    /// a new InstanceId and the remote-segment index is dropped with it.
+    /// </remarks>
+    private void StartSidecarHeartbeat()
+    {
+        StopSidecarHeartbeat();
+        _sidecarHeartbeat = new Timer(
+            _ => _ = NativeSidecar.HeartbeatAsync(),
+            null, SidecarHeartbeatEvery, SidecarHeartbeatEvery);
+    }
+
+    private void StopSidecarHeartbeat()
+    {
+        _sidecarHeartbeat?.Dispose();
+        _sidecarHeartbeat = null;
     }
 
     private void StopStallWatch()
@@ -1861,6 +1902,25 @@
 
     // ── Timeline handlers ─────────────────────────────────────────────────────
 
+    /// <summary>
+    /// Forgets every layer selection, so exactly one can then be set.
+    /// </summary>
+    /// <remarks>
+    /// The properties panel chooses its editor from these fields with an if/else-if chain, so any
+    /// one of them left standing outranks the selection actually made. Clearing them together is
+    /// what makes "one thing is selected" true rather than merely intended.
+    /// </remarks>
+    private void ClearLayerSelections()
+    {
+        _selectedClip        = null;
+        _selectedAudioClip   = null;
+        _selectedImageClip   = null;
+        _selectedTransition  = null;
+        _selectedTextOverlay = null;
+        _selectedCallout     = null;
+        _selectedClipArt     = null;
+    }
+
     private async Task OnTimelineItemSelected(TrackItem item)
     {
         // Auto-switch to Properties and make sure the panel is showing.
@@ -1880,69 +1940,51 @@
         // clip on its own is still what clicking a card in the Media tab does.
         Playback.SetTimelineTime(item.TimelinePosition);
 
+        // ONE thing is selected, so every other selection is cleared first.
+        //
+        // Each branch below used to clear its own idea of what else might be selected, and no two
+        // agreed: the TextOverlay branch left _selectedCallout standing, the Transition branch left
+        // the callout and the clip art, and the VideoClip branch left all four of them. The panel
+        // picks its editor with an if/else-if chain that tests _selectedCallout well before
+        // _selectedTextOverlay, so the stale one won — select a callout, then a title, and you were
+        // still looking at the callout's shape and colours with no way to reach the title's words.
+        // Measured on the running editor, 2026-09-18: the chip highlighted correctly every time
+        // while the panel never changed.
+        //
+        // Clearing the lot in one place makes that impossible rather than merely fixed, and a
+        // selection added later cannot reintroduce it by forgetting a line.
+        ClearLayerSelections();
+
         if (item is VideoClip clip)
         {
-            _selectedAudioClip  = null;
-            _selectedTransition = null;
             _selectedClip = clip;
-            StateHasChanged();
         }
         else if (item is AudioClip audio)
         {
-            _selectedClip       = null;
-            _selectedTransition = null;
-            _selectedAudioClip  = audio;
-            StateHasChanged();
+            _selectedAudioClip = audio;
         }
         else if (item is Transition transition)
         {
-            _selectedClip        = null;
-            _selectedAudioClip   = null;
-            _selectedTextOverlay = null;
-            _selectedTransition  = transition;
-            StateHasChanged();
+            _selectedTransition = transition;
         }
         else if (item is TextOverlay textOverlay)
         {
-            _selectedClip        = null;
-            _selectedAudioClip   = null;
-            _selectedImageClip   = null;
-            _selectedTransition  = null;
             _selectedTextOverlay = textOverlay;
-            StateHasChanged();
         }
         else if (item is ImageClip imageClip)
         {
-            _selectedClip        = null;
-            _selectedAudioClip   = null;
-            _selectedTransition  = null;
-            _selectedTextOverlay = null;
-            _selectedImageClip   = imageClip;
-            _selectedCallout     = null;
-            StateHasChanged();
+            _selectedImageClip = imageClip;
         }
         else if (item is CalloutClip callout)
         {
-            _selectedClip        = null;
-            _selectedAudioClip   = null;
-            _selectedTransition  = null;
-            _selectedTextOverlay = null;
-            _selectedImageClip   = null;
-            _selectedClipArt     = null;
-            _selectedCallout     = callout;
-            StateHasChanged();
+            _selectedCallout = callout;
         }
         else if (item is ClipArtClip clipArt)
         {
-            _selectedClip        = null;
-            _selectedAudioClip   = null;
-            _selectedTransition  = null;
-            _selectedTextOverlay = null;
-            _selectedImageClip   = null;
-            _selectedCallout     = null;
-            _selectedClipArt     = clipArt;
-            StateHasChanged();
+            _selectedClipArt = clipArt;
         }
+
+        StateHasChanged();
     }
 
     /// <summary>
@@ -3569,6 +3611,9 @@
         Ffmpeg.OnWorkerCrashed  -= OnFfmpegWorkerCrashed;
         PreviewQuality.OnChanged -= OnPreviewQualityChanged;
         StopStallWatch();
+        // Stop telling the sidecar the editor is open, because it is not. With nothing else
+        // asking, it now reaches its idle timeout and ends itself, which is the point of it.
+        StopSidecarHeartbeat();
         _unloadSelfRef?.Dispose();
         Ffmpeg.OnStateChanged   -= OnFfmpegStateChangedForBackgroundRender;
         RenderStatus.OnChanged  -= OnRenderStatusChangedForSharpen;

@@ -321,6 +321,9 @@
                     new NavItem("Moderation", "shield", children:
                     [
                         new NavItem("Media Review",   "image", "/moderation/media"),
+                        // The place archive's own queue. Its endpoints existed with no entrance,
+                        // so a flagged session or photograph stayed held forever (2026-09-17).
+                        new NavItem("Place Archive",  "archive", "/moderation/archive"),
                         new NavItem("Reported Posts", "flag",  "/admin/feed-reports"),
                     ]),
                 }));
@@ -362,6 +365,10 @@
         {
             new NavItem("All Cases",          "folder",   "/admin/cases"),
             new NavItem("All Investigations", "calendar", "/admin/investigations"),
+            // Beside the cases and investigations rather than down in Content: a list of
+            // everybody's recorded nights is the work the site exists for, not a taxonomy or a
+            // moderation queue. Ben, 2026-09-16.
+            new NavItem("Session Files",      "package",  "/admin/session-files"),
         }),
         new NavItem("Content", "layers", children: new[]
         {
@@ -375,9 +382,12 @@
             // hiding the only way to see them would strand them.
             new NavItem("Reported Posts",       "flag",   "/admin/feed-reports"),
             new NavItem("Media Review",         "image",  "/moderation/media"),
+            new NavItem("Place Archive",        "archive", "/moderation/archive"),
             new NavItem("Group Ads",            "star",   "/admin/org-ads"),
             new NavItem("Merge Groups",         "git-merge", "/admin/merge-groups"),
             new NavItem("Duplicate Places",     "map-pin", "/admin/place-duplicates"),
+            // Item 235 phase 9: who runs a place, when a code could not settle it.
+            new NavItem("Venue Claims",         "key",    "/admin/venue-claims"),
             // Sessions whose readings are not on this server — a Playwright run against a shared
             // database leaves the row here and the bytes on the machine that ran it.
             new NavItem("Orphaned Sessions",    "slash",  "/admin/orphaned-sessions"),
@@ -404,6 +414,11 @@
             new NavItem("Tax Rates",     "percent",     "/admin/tax-rates"),
             new NavItem("Referrals",     "users",       "/admin/referrals"),
             new NavItem("Member Seats",  "user-plus",   "/admin/member-seats"),
+            // Item 235. Beside the seats, because both are things a group bought that a person
+            // sometimes has to unpick by hand.
+            new NavItem("Event Credits", "gift",        "/admin/event-credits"),
+            // Phase 17b: every hosted event, removal and appeals.
+            new NavItem("Events",        "calendar",    "/admin/events"),
         }),
         new NavItem("System", "settings", children: new[]
         {
@@ -623,10 +638,18 @@
     });
     private void OnLocationChanged(object? sender, LocationChangedEventArgs args) => InvokeAsync(StateHasChanged);
 
+    /// <remarks>
+    /// The identity always comes back — the swap is local state. What can fail is the round trip
+    /// that re-reads the roles, and when it does the SuperAdmin returns without Administration
+    /// access until they sign out and in again. That used to be silent while this navigated
+    /// straight to /admin/users, a page which then refuses them (2026-09-17 audit). Sending them
+    /// home with the reason beats sending them to a refusal with none.
+    /// </remarks>
     private async Task ReturnToSuperAdmin()
     {
-        await AuthService.StopImpersonatingAsync();
-        NavManager.NavigateTo("/admin/users");
+        var restored = await AuthService.StopImpersonatingAsync();
+
+        NavManager.NavigateTo(restored ? "/admin/users" : "/?roles-unconfirmed=1");
         await InvokeAsync(StateHasChanged);
     }
 

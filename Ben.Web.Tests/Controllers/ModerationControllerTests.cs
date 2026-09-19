@@ -264,4 +264,197 @@ public sealed class ModerationControllerTests
         Assert.Equal(FeedMediaReviewState.Pending, verdict.State);
         Assert.False(screener.IsAutomatic);
     }
+
+    // ── The place archive's queue (2026-09-17 audit) ─────────────────────────────────────────
+    //
+    // The property these hold: Held is not terminal. Both flag paths — a reader flagging a
+    // published field session from the place page, a reader flagging event evidence — set Held,
+    // and the public archive serves only Approved. The release endpoints existed and had no
+    // caller anywhere, so one flag from one signed-in stranger permanently removed somebody's
+    // contribution with no queue, no reviewer and no appeal.
+
+    private static async Task<(Guid SessionId, Guid PlaceId)> SeedPublishedSessionAsync(
+        IDbContextFactory<BenDataContext> factory, FeedMediaReviewState state)
+    {
+        await using var db = await factory.CreateDbContextAsync();
+        var actor = Guid.NewGuid();
+        var placeId = Guid.NewGuid();
+        var sessionId = Guid.NewGuid();
+
+        db.Users.Add(new AppUser
+        {
+            Id = actor, UserName = "contrib@t", Email = "contrib@t",
+            DisplayName = "A Contributor", DateCreated = DateTime.UtcNow,
+        });
+        db.Places.Add(new Place
+        {
+            Id = placeId, Name = "Bell Witch Cave", City = "Adams", State = "TN",
+            Kind = PlaceKind.PublicLocation,
+            DateCreated = DateTime.UtcNow, CreatedByAppUserId = actor,
+        });
+        db.FieldSessionUploads.Add(new FieldSessionUpload
+        {
+            Id = sessionId, SubmittedByAppUserId = actor, PlaceId = placeId,
+            LocationLabel = "The back chamber", DeviceModel = "iPhone 17 Pro",
+            StartedAt = DateTime.UtcNow.AddDays(-2),
+            PublishedAtUtc = DateTime.UtcNow.AddDays(-1),
+            MediaReviewState = state,
+            MediaReviewNote = state == FeedMediaReviewState.Held ? "Flagged by a reader." : null,
+            DateCreated = DateTime.UtcNow, CreatedByAppUserId = actor,
+        });
+        db.FieldSessionUploadFiles.Add(new FieldSessionUploadFile
+        {
+            Id = Guid.NewGuid(), FieldSessionUploadId = sessionId,
+            UploadFileId = Guid.NewGuid(), RelativePath = "audio/track-1.wav",
+            DateCreated = DateTime.UtcNow, CreatedByAppUserId = actor,
+        });
+        await db.SaveChangesAsync();
+        return (sessionId, placeId);
+    }
+
+    [Fact]
+    public async Task A_held_session_is_listed_so_somebody_can_release_it()
+    {
+        var factory = CreateFactory();
+        await SeedPublishedSessionAsync(factory, FeedMediaReviewState.Held);
+
+        var rows = Assert.IsType<OkObjectResult>(
+            (await Build(factory, Guid.NewGuid()).GetArchiveMedia(includeHeld: true, default)).Result).Value
+            as IReadOnlyList<ArchiveMediaReviewRow>;
+
+        var row = Assert.Single(rows!);
+        Assert.Equal(FeedMediaReviewState.Held, row.State);
+        // The reason the flag wrote, which until this queue existed nothing ever read.
+        Assert.Equal("Flagged by a reader.", row.Note);
+        Assert.Equal("Bell Witch Cave", row.PlaceName);
+    }
+
+    [Fact]
+    public async Task Approving_a_held_session_puts_its_media_back_on_the_archive()
+    {
+        var factory = CreateFactory();
+        var (sessionId, _) = await SeedPublishedSessionAsync(factory, FeedMediaReviewState.Held);
+
+        await Build(factory, Guid.NewGuid())
+            .ReviewArchiveMedia(sessionId, new ReviewFeedMediaRequest(true, "Looked at it, it is fine."), default);
+
+        await using var db = await factory.CreateDbContextAsync();
+        var session = await db.FieldSessionUploads.FirstAsync(s => s.Id == sessionId);
+
+        // Approved is the ONLY state ArchiveMediaPublication serves, so this assertion is the
+        // whole fix: before it, nothing in the codebase could reach this line.
+        Assert.Equal(FeedMediaReviewState.Approved, session.MediaReviewState);
+        Assert.Equal("Looked at it, it is fine.", session.MediaReviewNote);
+    }
+
+    [Fact]
+    public async Task A_pending_session_is_waiting_even_when_held_is_not_shown()
+    {
+        var factory = CreateFactory();
+        await SeedPublishedSessionAsync(factory, FeedMediaReviewState.Pending);
+
+        var rows = Assert.IsType<OkObjectResult>(
+            (await Build(factory, Guid.NewGuid()).GetArchiveMedia(includeHeld: false, default)).Result).Value
+            as IReadOnlyList<ArchiveMediaReviewRow>;
+
+        Assert.Single(rows!);
+    }
+
+    private static async Task<Guid> SeedPublishedEvidenceAsync(
+        IDbContextFactory<BenDataContext> factory, FeedMediaReviewState state)
+    {
+        await using var db = await factory.CreateDbContextAsync();
+        var actor = Guid.NewGuid();
+        var orgId = Guid.NewGuid();
+        var placeId = Guid.NewGuid();
+        var eventId = Guid.NewGuid();
+        var submissionId = Guid.NewGuid();
+
+        db.Users.Add(new AppUser
+        {
+            Id = actor, UserName = "guest@t", Email = "guest@t",
+            DisplayName = "A Guest", DateCreated = DateTime.UtcNow,
+        });
+        db.Organizations.Add(new Organization
+        {
+            Id = orgId, Name = "Host Group", UrlName = "host-group",
+            DateCreated = DateTime.UtcNow, CreatedByAppUserId = actor,
+        });
+        db.Places.Add(new Place
+        {
+            Id = placeId, Name = "The Old Mill", City = "Franklin", State = "TN",
+            Kind = PlaceKind.PublicLocation,
+            DateCreated = DateTime.UtcNow, CreatedByAppUserId = actor,
+        });
+        db.OrgCalendarEvents.Add(new OrgCalendarEvent
+        {
+            Id = eventId, OrganizationId = orgId, PlaceId = placeId,
+            Title = "A night at the mill", UrlName = "night-at-the-mill",
+            DateCreated = DateTime.UtcNow, CreatedByAppUserId = actor,
+        });
+        db.EventEvidenceSubmissions.Add(new EventEvidenceSubmission
+        {
+            Id = submissionId, OrgCalendarEventId = eventId,
+            SubmittedByAppUserId = actor, UploadFileId = Guid.NewGuid(),
+            Note = "Something in the doorway",
+            PublishedToPlaceAtUtc = DateTime.UtcNow.AddDays(-1),
+            ArchiveReviewState = state,
+            ArchiveReviewNote = state == FeedMediaReviewState.Held ? "Flagged: that's my kid." : null,
+            DateCreated = DateTime.UtcNow, CreatedByAppUserId = actor,
+        });
+        await db.SaveChangesAsync();
+        return submissionId;
+    }
+
+    [Fact]
+    public async Task Held_event_evidence_is_listed_with_the_reason_it_was_held()
+    {
+        var factory = CreateFactory();
+        await SeedPublishedEvidenceAsync(factory, FeedMediaReviewState.Held);
+
+        var rows = Assert.IsType<OkObjectResult>(
+            (await Build(factory, Guid.NewGuid()).GetArchiveEvidence(includeHeld: true, default)).Result).Value
+            as IReadOnlyList<ArchiveEvidenceReviewRow>;
+
+        var row = Assert.Single(rows!);
+        Assert.Equal("Flagged: that's my kid.", row.Note);
+        Assert.Equal("A night at the mill", row.EventTitle);
+        Assert.Equal("The Old Mill", row.PlaceName);
+        // The photographer's own caption: the same picture reads differently without it.
+        Assert.Equal("Something in the doorway", row.Caption);
+    }
+
+    [Fact]
+    public async Task Approving_held_event_evidence_puts_it_back_on_the_place()
+    {
+        var factory = CreateFactory();
+        var submissionId = await SeedPublishedEvidenceAsync(factory, FeedMediaReviewState.Held);
+
+        await Build(factory, Guid.NewGuid())
+            .ReviewArchiveEvidence(submissionId, new ReviewFeedMediaRequest(true, null), default);
+
+        await using var db = await factory.CreateDbContextAsync();
+        Assert.Equal(
+            FeedMediaReviewState.Approved,
+            (await db.EventEvidenceSubmissions.FirstAsync(e => e.Id == submissionId)).ArchiveReviewState);
+    }
+
+    /// <summary>
+    /// Holding keeps the file and the note. The one thing this desk cannot do is destroy.
+    /// </summary>
+    [Fact]
+    public async Task Holding_an_approved_session_is_how_a_mistake_is_undone()
+    {
+        var factory = CreateFactory();
+        var (sessionId, _) = await SeedPublishedSessionAsync(factory, FeedMediaReviewState.Approved);
+
+        await Build(factory, Guid.NewGuid())
+            .ReviewArchiveMedia(sessionId, new ReviewFeedMediaRequest(false, "Second look: no."), default);
+
+        await using var db = await factory.CreateDbContextAsync();
+        var session = await db.FieldSessionUploads.FirstAsync(s => s.Id == sessionId);
+
+        Assert.Equal(FeedMediaReviewState.Held, session.MediaReviewState);
+        Assert.True(await db.FieldSessionUploadFiles.AnyAsync(f => f.FieldSessionUploadId == sessionId));
+    }
 }

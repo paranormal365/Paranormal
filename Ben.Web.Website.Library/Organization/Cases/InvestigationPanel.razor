@@ -12,7 +12,9 @@
 <div>
     @* ── Date negotiation with client ─────────────────────────────────────────── *@
     <details class="mb-3">
-        <summary class="fw-semibold small text-secondary" style="cursor:pointer;">
+        @* Drawn as a button: the template removes the disclosure triangle and the icon broke onto its own line, so the
+           summary read as a loose icon over a caption, not something to open (UI test pass, 2026-09-14). *@
+        <summary class="btn btn-sm btn-outline-secondary d-inline-flex align-items-center gap-1">
             <BenIcon Name="calendar" /> Date Proposals to Client
         </summary>
         <div class="mt-2">
@@ -57,8 +59,7 @@
                                 <strong>@i.Title</strong>
                             </div>
                             <div class="text-secondary small">
-                                @i.ScheduledDateTime.ToViewerLocalTime(UserState)
-                                  .ToDisplaySpan(i.EndDateTime?.ToViewerLocalTime(UserState))
+                                @(i.ScheduledDateTime.ToViewerLocalTime(UserState).ToDisplaySpan(i.EndDateTime?.ToViewerLocalTime(UserState)))
                                 @if (!string.IsNullOrEmpty(i.Location))
                                 { <span> · @i.Location</span> }
                             </div>
@@ -252,7 +253,7 @@
                                             </div>
                                             <div>
                                                 <label class="form-label mb-1" style="font-size:.8rem;" for="investigationpanel-role-optional-3abb">Role (optional)</label>
-                                                <input id="investigationpanel-role-optional-3abb" type="text" class="form-control" placeholder="Lead Investigator" style="max-width:160px;" @bind="@_newAttendeeRole" @bind:event="oninput" />
+                                                <input id="investigationpanel-role-optional-3abb" type="text" class="form-control" placeholder="e.g. Lead Investigator" style="max-width:160px;" @bind="@_newAttendeeRole" @bind:event="oninput" />
                                             </div>
                                             <button type="button" class="btn btn-primary btn-sm" @onclick="@(() => AddAttendee(i))" disabled="@(!(_newAttendeeUserId != Guid.Empty && !_attendeeBusy))"><BenIcon Name="plus" Class="me-1" />
                                                 Add
@@ -282,7 +283,7 @@
         <div class="row g-3">
             <div class="col-12">
                 <label class="form-label fw-semibold" for="investigationpanel-title-092d">Title <span class="text-danger">*</span></label>
-                <input id="investigationpanel-title-092d" type="text" class="form-control" placeholder="Night Investigation #1" @bind="@_form.Title" @bind:event="oninput" />
+                <input id="investigationpanel-title-092d" type="text" class="form-control" placeholder="e.g. Night Investigation #1" @bind="@_form.Title" @bind:event="oninput" />
             </div>            <div class="col-12">
                 <label class="form-label fw-semibold" for="investigationpanel-investigation-plan-description-32cb">Investigation Plan / Description</label>
                 <textarea id="investigationpanel-investigation-plan-description-32cb" class="form-control" rows="3" placeholder="What areas will be investigated? What equipment will be used?" @bind="@_form.Description"></textarea>
@@ -295,8 +296,8 @@
             <div class="col-md-6">
                 <label class="form-label fw-semibold" for="investigationpanel-start-date">Starts</label>
                 <div class="d-flex gap-2">
-                    <TelerikDatePicker Id="investigationpanel-start-date" Format="MM/dd/yyyy" @bind-Value="@_form.StartDate" Width="160px" />
-                    <TelerikTimePicker Format="hh:mm tt" @bind-Value="@_form.StartTime" Width="130px" />
+                    <BenDateField Mode="DateEntryMode.Date" Id="investigationpanel-start-date" @bind-Value="@_form.StartDate" Width="160px" />
+                    <BenDateField Mode="DateEntryMode.Time" @bind-Value="@_form.StartTime" Width="130px" />
                 </div>
             </div>
             @* One arrival and one departure is the ordinary shape, and it is allowed to cross
@@ -308,11 +309,11 @@
                 <label class="form-label fw-semibold">Ends (optional)</label>
                 @if (_form.MultiDay)
                 {
-                    <TelerikDateTimePicker Format="@DateTimeViewerExtensions.DateTimeNoSecondsPattern" @bind-Value="@_form.EndDateTime" Width="100%" />
+                    <BenDateField Mode="DateEntryMode.DateTime" @bind-Value="@_form.EndDateTime" Width="100%" />
                 }
                 else
                 {
-                    <TelerikTimePicker Format="hh:mm tt" @bind-Value="@_form.EndTime" Width="100%" />
+                    <BenDateField Mode="DateEntryMode.Time" @bind-Value="@_form.EndTime" Width="100%" />
                     <div class="form-text">A time at or before the start is the next morning.</div>
                 }
                 <div class="form-check mt-2">
@@ -339,7 +340,7 @@
                 </div>
                 <div class="col-md-6">
                     <label class="form-label fw-semibold">Evidence Due Date (optional)</label>
-                    <TelerikDateTimePicker Format="@DateTimeViewerExtensions.DateTimeNoSecondsPattern" @bind-Value="@_form.EvidenceDueDate" Width="100%" />
+                    <BenDateField Mode="DateEntryMode.DateTime" @bind-Value="@_form.EvidenceDueDate" Width="100%" />
                     <div class="form-text">After this date, no new evidence may be submitted for this investigation.</div>
                 </div>
             }
@@ -351,21 +352,39 @@
                 @* Plain select: a Telerik dropdown that drops its selection would silently leave
                    the previous sharing scope in place, and this is the one field where quietly
                    keeping the old value could publish something. *@
+                @* An account that pays nothing shares a public place's findings with everyone and
+                   may not narrow them (Ben, 2026-09-17). The narrower options are not offered at
+                   all rather than offered and refused — the same treatment Public already gets at a
+                   private home. A home is untouched by the plan rule, so this only bites where the
+                   place is a public one, and this panel cannot always know the place from here:
+                   the server has the final say either way and its sentence is rendered below. *@
                 <select id="investigationpanel-who-can-see-the-e9a5" class="form-select" style="max-width:420px;" value="@_form.Visibility"
                         @onchange="@(e => _form.Visibility = Enum.TryParse<InvestigationVisibility>(e.Value?.ToString(), out var v) ? v : _form.Visibility)">
-                    <option value="@InvestigationVisibility.GroupOnly"
-                            selected="@(_form.Visibility == InvestigationVisibility.GroupOnly)">
-                        Just this group
-                    </option>
-                    <option value="@InvestigationVisibility.PlaceInvestigators"
-                            selected="@(_form.Visibility == InvestigationVisibility.PlaceInvestigators)">
-                        Groups who have also investigated this place
-                    </option>
+                    @if (!_publicByDefault)
+                    {
+                        <option value="@InvestigationVisibility.GroupOnly"
+                                selected="@(_form.Visibility == InvestigationVisibility.GroupOnly)">
+                            Just this group
+                        </option>
+                        <option value="@InvestigationVisibility.PlaceInvestigators"
+                                selected="@(_form.Visibility == InvestigationVisibility.PlaceInvestigators)">
+                            Groups who have also investigated this place
+                        </option>
+                    }
                     <option value="@InvestigationVisibility.Public"
                             selected="@(_form.Visibility == InvestigationVisibility.Public)">
                         Anyone
                     </option>
                 </select>
+
+                @if (_publicByDefault)
+                {
+                    <div class="form-text" data-testid="investigation-scope-locked">
+                        On this account a visit to a public location is shared with everyone. What
+                        you find there joins the place's own page.
+                        <a href="/pricing">See what each plan includes.</a>
+                    </div>
+                }
 
                 @* The membership is dynamic, and that is not obvious from the wording alone. A
                    group that investigates this place next year gains access to what was shared
@@ -436,13 +455,14 @@
     private sealed record BinderTypeOption(string Label, CaseTimelineEntryType Value);
 
     // Named from the shared helper (W-A11) rather than typed here, so a fifth kind added to the
-    // enum cannot be listed under one name in this panel and another on the timeline.
+    // enum cannot be listed under one name in this panel and another on the timeline. Three kinds,
+    // not every kind: a binder row is what happened on the night. Research is a thing somebody read
+    // afterwards, and it goes on the timeline proper or on a board.
     private static readonly List<BinderTypeOption> _binderEntryTypes =
     [
         new(CaseTimelineEntryTypes.ShortName(CaseTimelineEntryType.InvestigatorNote),  CaseTimelineEntryType.InvestigatorNote),
         new(CaseTimelineEntryTypes.DisplayName(CaseTimelineEntryType.InstrumentReading), CaseTimelineEntryType.InstrumentReading),
         new(CaseTimelineEntryTypes.ShortName(CaseTimelineEntryType.Evidence),          CaseTimelineEntryType.Evidence),
-        new(CaseTimelineEntryTypes.ShortName(CaseTimelineEntryType.ResearchNote),      CaseTimelineEntryType.ResearchNote),
     ];
 
     private async Task ToggleBinderAsync(InvestigationRecord inv)
@@ -557,10 +577,11 @@
 
     /// <summary>What this viewer may do with investigations here — see CaseList for the pattern.</summary>
     private MyOrgPermissionsItem? _perms;
+    private bool _publicByDefault;
 
     private async Task LoadAsync()
     {
-        try { _perms = await AdminClient.GetMyOrgPermissionsAsync(OrgId); }
+        try { _perms = await AdminClient.GetMyOrgPermissionsAsync(OrgId); _publicByDefault = _perms?.PublicByDefault ?? false; }
         catch { _perms = null; }   // unknown means the button stays hidden, not hopeful
 
         try { _investigations = (await AdminClient.GetInvestigationsAsync(OrgId, CaseId)).Items.ToList(); }
@@ -783,7 +804,16 @@
         _isBusy = true;
         try
         {
-            await AdminClient.CancelInvestigationByOrgAsync(OrgId, CaseId, _editInv.Id);
+            // Checked, like DeleteInvestigation twelve lines below — whose comment records this
+            // exact bug being fixed for the delete and not for the cancel (2026-09-17 audit).
+            // A discarded false closed the dialog and reloaded as though the visit had been
+            // cancelled, while the client and every attendee still had it in their calendar.
+            if (!await AdminClient.CancelInvestigationByOrgAsync(OrgId, CaseId, _editInv.Id))
+            {
+                _dialogError = "This visit could not be cancelled, so it is still scheduled.";
+                return;
+            }
+
             _showDialog = false;
             await LoadAsync();
         }

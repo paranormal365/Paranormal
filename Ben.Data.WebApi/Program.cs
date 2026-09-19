@@ -191,6 +191,11 @@ builder.Services.AddSingleton<Ben.Data.WebApi.Services.FileMetadataExtractorServ
 builder.Services.AddSingleton<Ben.Data.WebApi.Services.IMediaSanitizationService, Ben.Data.WebApi.Services.MediaSanitizationService>();
 // The one place an uploaded media file is taken in — see IMediaIngestService.
 builder.Services.AddSingleton<Ben.Data.WebApi.Services.IMediaIngestService, Ben.Data.WebApi.Services.MediaIngestService>();
+
+// Reads .ben session bundles and serves what is inside them as byte ranges. Singleton because
+// the index it caches describes files that never change once written.
+builder.Services.AddSingleton<Ben.Data.WebApi.Services.FieldSessions.IBenBundleStore,
+                              Ben.Data.WebApi.Services.FieldSessions.BenBundleStore>();
 // Author-written page markup is cleaned at the point it is stored, so what is in the database is
 // what will be rendered — see ICmsMarkupSanitizer for why provenance alone is not enough.
 builder.Services.AddSingleton<Ben.Data.WebApi.Services.ICmsMarkupSanitizer, Ben.Data.WebApi.Services.CmsMarkupSanitizer>();
@@ -201,10 +206,30 @@ builder.Services.AddSingleton<Ben.Data.WebApi.Services.SupportFormGuard>();
 // Handoff codes are issued by one request and redeemed by another, so the store has to outlive
 // both — and it holds nothing worth persisting, since every code dies within a minute (phase 12).
 builder.Services.AddSingleton<Ben.Data.WebApi.Services.EditorHandoffCodeStore>();
+// ── Case canvas link previews (canvas plan M6-10) ────────────────────────────
+// The one HttpClient that fetches an address somebody pasted. Its primary handler dials only the
+// address SafeUrlFetcher vetted, follows no redirect, sends no cookie and uses no proxy — see
+// SafeUrlFetcher for why each of those matters. Named, so no other code picks this handler up by
+// accident and no other handler is used for these fetches.
+builder.Services.AddHttpClient(Ben.Data.WebApi.Services.LinkUnfurl.SafeUrlFetcher.ClientName)
+    .ConfigurePrimaryHttpMessageHandler(() => Ben.Data.WebApi.Services.LinkUnfurl.SafeUrlFetcher.CreateHandler());
+builder.Services.AddSingleton<Ben.Data.WebApi.Services.LinkUnfurl.ISafeUrlFetcher, Ben.Data.WebApi.Services.LinkUnfurl.SafeUrlFetcher>();
+builder.Services.AddScoped<Ben.Data.WebApi.Services.LinkUnfurl.LinkUnfurlService>();
+// One server-wide ceiling on picture fetches, shared by every request — so a singleton.
+builder.Services.AddSingleton<Ben.Data.WebApi.Services.LinkUnfurl.LinkUnfurlImageCeiling>();
+// The real clock, for services that take one so tests can move it (LinkUnfurlService).
+Microsoft.Extensions.DependencyInjection.Extensions.ServiceCollectionDescriptorExtensions.TryAddSingleton(builder.Services, TimeProvider.System);
 builder.Services.Configure<Ben.Data.WebApi.Services.SmtpOptions>(builder.Configuration.GetSection("Smtp"));
 // What the site is called, in one place — see SiteIdentity for why it is not a literal.
 builder.Services.Configure<Ben.Data.Common.SiteIdentity>(builder.Configuration.GetSection("SiteIdentity"));
-builder.Services.AddSingleton<Ben.Data.Common.Interfaces.IEmailService, Ben.Data.WebApi.Services.SmtpEmailService>();
+// Item 239, the mail outbox. SmtpEmailService is registered as ITSELF and is now reached by
+// exactly two things: the sender job, which posts what the outbox holds, and the mail diagnostics
+// screen, which must send immediately and show the raw failure — a diagnostic that queues is not a
+// diagnostic. Everything else asks for IEmailService and gets the outbox, so all twenty callers
+// were covered without one of them being edited.
+builder.Services.AddSingleton<Ben.Data.WebApi.Services.SmtpEmailService>();
+builder.Services.AddSingleton<Ben.Data.Common.Interfaces.IEmailService,
+                              Ben.Data.WebApi.Services.OutboxEmailService>();
 builder.Services.AddHostedService<Ben.Data.WebApi.Services.FileMigrationService>();
 
 // ── @names ───────────────────────────────────────────────────────────────────
@@ -212,6 +237,7 @@ builder.Services.AddHostedService<Ben.Data.WebApi.Services.FileMigrationService>
 // person. The backfill service gives one to any account that predates the column and then does
 // nothing on every subsequent start.
 builder.Services.AddScoped<Ben.Data.WebApi.Services.UserHandleService>();
+builder.Services.AddScoped<Ben.Data.WebApi.Services.EmailLinkAccounts>();
 // Every external door's decisions, once. Apple and Microsoft were two doors each hand-rolling the
 // same checks, and every defect found on one was then found on the other; a third provider would
 // have inherited none of the fixes. Controllers keep only token validation and HTTP.
@@ -238,9 +264,7 @@ builder.Services.AddSingleton(sp =>
 {
     var section = sp.GetRequiredService<IConfiguration>().GetSection("Apple");
     var path = section["PrivateKeyPath"];
-    var pem = string.IsNullOrWhiteSpace(path) ? string.Empty
-            : File.Exists(path) ? File.ReadAllText(path)
-            : throw new InvalidOperationException($"Apple:PrivateKeyPath names a file that does not exist: {path}");
+    var pem = PrivateKeyFile.ReadOrEmpty(path, "Apple:PrivateKeyPath");
     return new Ben.Data.WebApi.Services.Apple.AppleSigningOptions(
         section["TeamId"] ?? string.Empty, section["KeyId"] ?? string.Empty, pem);
 });
@@ -254,6 +278,15 @@ builder.Services.AddHostedService<Ben.Data.WebApi.Services.UserNameBackfillServi
 // first pass it finds nothing and writes nothing, so it stays registered rather than being a step
 // somebody has to remember on one deployment and never again.
 builder.Services.AddHostedService<Ben.Data.WebApi.Services.MessageBodySanitizeBackfillService>();
+// Case notes became formatted text on 2026-09-14: converts the plain-text notes written before then, once.
+builder.Services.AddHostedService<Ben.Data.WebApi.Services.CaseNoteBodyHtmlBackfillService>();
+
+// Link previews (beta feedback, 2026-09-14): the card under a pasted link. The fetcher's handler dials only addresses
+// OutboundUrlGuard approves and follows no redirects on its own — see OpenGraphFetcher.
+builder.Services.AddHttpClient<Ben.Data.WebApi.Services.LinkPreviews.OpenGraphFetcher>()
+    .ConfigurePrimaryHttpMessageHandler(Ben.Data.WebApi.Services.LinkPreviews.OpenGraphFetcher.CreateHandler);
+builder.Services.AddScoped<Ben.Data.WebApi.Services.LinkPreviews.ILinkPreviewService, Ben.Data.WebApi.Services.LinkPreviews.LinkPreviewService>();
+builder.Services.AddSingleton<Ben.Data.WebApi.Services.LinkPreviews.ILinkPreviewWarmer, Ben.Data.WebApi.Services.LinkPreviews.LinkPreviewWarmer>();
 
 // ── Scheduled background work ────────────────────────────────────────────────
 // Jobs are Scoped: the scheduler resolves them from a fresh scope on every pass, so they may take
@@ -275,6 +308,18 @@ builder.Services.AddScoped<Ben.Data.WebApi.Services.Scheduling.IScheduledJob,
 // the audit log, which item 191 settled is archived rather than deleted.
 builder.Services.AddScoped<Ben.Data.WebApi.Services.Scheduling.IScheduledJob,
                            Ben.Data.WebApi.Services.Scheduling.LogRetentionJob>();
+// Link previews (2026-09-14) are week-long snapshots of other sites; this forgets the stale ones.
+builder.Services.AddScoped<Ben.Data.WebApi.Services.Scheduling.IScheduledJob,
+                           Ben.Data.WebApi.Services.LinkPreviews.LinkPreviewRetentionJob>();
+// A request for help that nobody ever claimed is deleted rather than kept for ever. Its entity doc
+// said rows were "ignored after DateExpires" and nothing ever swept them, so an anonymous
+// visitor's account of somebody else's home stayed indefinitely (2026-09-17 audit).
+builder.Services.AddScoped<Ben.Data.WebApi.Services.Scheduling.IScheduledJob,
+                           Ben.Data.WebApi.Services.Scheduling.PendingClientRequestExpiryJob>();
+// Item 239: posts what the outbox holds, retries what did not go, and clears the words out of
+// letters that went a month ago. Nothing else sends mail any more.
+builder.Services.AddScoped<Ben.Data.WebApi.Services.Scheduling.IScheduledJob,
+                           Ben.Data.WebApi.Services.Scheduling.MailSenderJob>();
 builder.Services.AddScoped<Ben.Data.WebApi.Services.PlatformMessageService>();
 builder.Services.AddScoped<Ben.Data.WebApi.Services.RequestReviewNotifier>();
 // Item 206: mails a case's clients when the case changes state or a visit is scheduled.
@@ -300,11 +345,66 @@ builder.Services.AddSingleton<Ben.Data.WebApi.Services.Billing.StripeIntegration
                               Ben.Data.WebApi.Services.Billing.StripeIntegration.StripeGateway>();
 builder.Services.AddScoped<Ben.Data.WebApi.Services.Billing.StripeIntegration.StripeFulfillmentService>();
 builder.Services.AddScoped<Ben.Data.WebApi.Services.Billing.SubscriptionLimitGuard>();
+// Item 233: a tour added mid-period is charged for the days that are left.
+builder.Services.AddScoped<Ben.Data.WebApi.Services.Billing.TourAddOnService>();
+
+// Hosted events (item 235). The sync keeps each event's one umbrella calendar row saying what the
+// event says; the entitlement is the single place that answers "may this go live, and what does it
+// cost them".
+builder.Services.AddScoped<Ben.Data.WebApi.Services.Events.HostedEventCalendarSync>();
+builder.Services.AddScoped<Ben.Data.WebApi.Services.Events.HostedEventEntitlement>();
+// Item 235 phase 4: four jobs, four keys. Arranging an event is not deciding who comes, deciding
+// is not standing at the door, and none of the three is spending the group's money.
+// The db factory is passed so "any member may read an event" can actually mean it — see
+// HostedEventAccess.CanReadEventAsync (2026-09-17 audit).
+builder.Services.AddScoped<Ben.Data.WebApi.Services.Access.HostedEventAccess>(sp =>
+    new Ben.Data.WebApi.Services.Access.HostedEventAccess(
+        sp.GetRequiredService<Ben.Service.RepositoryService.GenericInterfaces.IOrganizationSecurityService>(),
+        sp.GetRequiredService<Microsoft.EntityFrameworkCore.IDbContextFactory<Ben.Data.Source.Context.BenDataContext>>()));
+// Item 235 phase 1B: warns a credit's holder thirty days before it lapses. It only speaks — an
+// unspent credit past its date is gone by the clock, so there is no state for a job to get wrong.
+builder.Services.AddScoped<Ben.Data.WebApi.Services.Scheduling.IScheduledJob,
+                           Ben.Data.WebApi.Services.Scheduling.EventCreditExpiryJob>();
+// Item 235 phase 3: moves an event from published to on-now to over to filed away, on the venue's
+// own clock, so no screen has to work it out from two dates and a time zone.
+builder.Services.AddScoped<Ben.Data.WebApi.Services.Scheduling.IScheduledJob,
+                           Ben.Data.WebApi.Services.Scheduling.HostedEventLifecycleJob>();
+// Item 235 phase 4: gives back the places nobody answered for in time. Without it a guest who
+// picked three seats and forgot would keep them out of everybody's reach for ever.
+builder.Services.AddScoped<Ben.Data.WebApi.Services.Scheduling.IScheduledJob,
+                           Ben.Data.WebApi.Services.Scheduling.HoldExpiryJob>();
+// Item 235 phase 12: the thank-you the morning after the last night, with the pictures and what is next.
+builder.Services.AddScoped<Ben.Data.WebApi.Services.Scheduling.IScheduledJob,
+                           Ben.Data.WebApi.Services.Scheduling.HostedEventThankYouJob>();
+// Item 235 phase 12: an event's files go 90 days after it ends, with warnings a month and a week before.
+builder.Services.AddScoped<Ben.Data.WebApi.Services.Scheduling.IScheduledJob,
+                           Ben.Data.WebApi.Services.Scheduling.HostedEventRetentionJob>();
+// Item 233: the mail a tour guest gets, with the walk attached as a calendar file.
+builder.Services.AddScoped<Ben.Data.WebApi.Services.Tours.TourGuestMailer>();
+builder.Services.AddScoped<Ben.Data.WebApi.Services.Events.EventGuestMailer>();
+// Item 235 phase 8: a request is answered because somebody was told. The first of a rush is written
+// about on the next pass and the rest collapse into one summary; the digest is the daily (or weekly)
+// letter for everybody who would rather not hear as it happens, and the safety net for those who do.
+builder.Services.AddScoped<Ben.Data.WebApi.Services.Events.EventOrganizerMailer>();
+builder.Services.AddScoped<Ben.Data.WebApi.Services.Scheduling.IScheduledJob,
+                           Ben.Data.WebApi.Services.Scheduling.EventBookingAlertJob>();
+builder.Services.AddScoped<Ben.Data.WebApi.Services.Scheduling.IScheduledJob,
+                           Ben.Data.WebApi.Services.Scheduling.EventBookingDigestJob>();
+// Item 235 phase 9: a proved claim to run a place takes effect once its week for objections passes.
+builder.Services.AddScoped<Ben.Data.WebApi.Services.Scheduling.IScheduledJob,
+                           Ben.Data.WebApi.Services.Scheduling.VenueClaimJob>();
+// Item 233: how long a file stays, for the plan it arrived under.
+builder.Services.AddScoped<Ben.Data.WebApi.Services.Media.MediaRetentionPolicy>();
+// Item 233: warns people what is about to go, then takes it.
+builder.Services.AddScoped<Ben.Data.WebApi.Services.Scheduling.IScheduledJob,
+                           Ben.Data.WebApi.Services.Scheduling.MediaRetentionJob>();
 // The most destructive operation in the product, and SuperAdmin-only at its controller.
 builder.Services.AddScoped<Ben.Data.WebApi.Services.Admin.OrganizationPurge>();
 builder.Services.AddScoped<Ben.Data.WebApi.Services.Admin.AppUserPurge>();
 builder.Services.AddScoped<Ben.Data.WebApi.Services.Admin.CasePurge>();
 builder.Services.AddScoped<Ben.Data.WebApi.Services.Billing.IncludedAreasResolver>();
+// What each job did on its last pass, for the SuperAdmin's Event health tab. One per process, like the scheduler.
+builder.Services.AddSingleton<Ben.Data.WebApi.Services.Scheduling.ScheduledJobLedger>();
 builder.Services.AddHostedService<Ben.Data.WebApi.Services.Scheduling.ScheduledWorkService>();
 
 builder.Services.AddAutoMapper(_ => { }, typeof(AppUserProfile).Assembly);
@@ -554,10 +654,9 @@ else
     var teamId = maps["TeamId"]; var keyId = maps["KeyId"];
     if (!string.IsNullOrWhiteSpace(keyPath) && !string.IsNullOrWhiteSpace(teamId) && !string.IsNullOrWhiteSpace(keyId))
     {
-        if (!File.Exists(keyPath))
-            throw new InvalidOperationException($"Maps:PrivateKeyPath names a file that does not exist: {keyPath}");
         Ben.Service.RepositoryService.Services.AddressGeocodingService.Configure(
-            new Ben.Service.RepositoryService.Services.AppleMapsGeocoder(teamId, keyId, File.ReadAllText(keyPath), maps["BaseUrl"]));
+            new Ben.Service.RepositoryService.Services.AppleMapsGeocoder(
+                teamId, keyId, PrivateKeyFile.ReadOrEmpty(keyPath, "Maps:PrivateKeyPath"), maps["BaseUrl"]));
         Log.Information("Geocoding: Apple Maps Server API, key {KeyId}", keyId);
     }
     else
@@ -678,6 +777,9 @@ if (app.Configuration.GetValue("SeedData:Enabled", true))
     await Ben.Data.WebApi.SeedData.DevelopmentRosterSeeder.SeedAsync(app.Services, app.Configuration);
     // Last: needs the tiers, the groups and the past public event all to exist already.
     await Ben.Data.WebApi.SeedData.BillingDemoSeeder.SeedAsync(app.Services, app.Configuration);
+    // Item 235's two plans. Needs the host group from the development seeders above, and makes
+    // its own venue — a hotel with described rooms is the one thing the site had no example of.
+    await Ben.Data.WebApi.SeedData.HostedEventDemoSeeder.SeedAsync(app.Services, app.Configuration);
 
     // ── The backfills run a SECOND time, and have to ─────────────────────────
     //

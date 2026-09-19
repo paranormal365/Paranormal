@@ -80,7 +80,7 @@ public sealed class SiteFeatureFlagTests
     }
 
     [Fact]
-    public void The_two_unbuilt_features_are_off_until_someone_turns_them_on()
+    public void The_unbuilt_features_are_off_until_someone_turns_them_on()
     {
         // The whole point of shipping these flags before the features: a half-built section must
         // not be reachable because a default was written optimistically.

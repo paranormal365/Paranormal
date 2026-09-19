@@ -16,8 +16,18 @@
     <div class="d-flex align-items-center justify-content-between mb-4">
         <h3 class="mb-0">Cases</h3>
         <div class="d-flex gap-2">
-            <button type="button" class="btn @(ThemeConstants.Button.FillMode.Outline == ThemeConstants.Button.FillMode.Solid ? "btn-secondary" : "btn-outline-secondary")" @onclick="@(() => NavManager.NavigateTo($"/organizations/{OrgId}/pending-requests"))"><BenIcon Name="inbox" Class="me-1" />
-                Pending Requests @(_pendingCount > 0 ? $"({_pendingCount})" : "")
+            @* Beta feedback, 2026-09-14: requests waiting for an answer have to be seen. The button goes
+               yellow when anything waits and carries the count as a badge; with nothing waiting it stays
+               a quiet outline so the colour keeps meaning something. *@
+            <button type="button" class="btn @(_pendingCount > 0 ? "btn-warning" : "btn-outline-secondary")"
+                    data-testid="pending-requests"
+                    aria-label="@(_pendingCount switch { 0 => "Pending requests, none waiting", 1 => "Pending requests, 1 waiting", var n => $"Pending requests, {n} waiting" })"
+                    @onclick="@(() => NavManager.NavigateTo($"/organizations/{OrgId}/pending-requests"))"><BenIcon Name="inbox" Class="me-1" />
+                Pending Requests
+                @if (_pendingCount > 0)
+                {
+                    <span class="badge bg-body-secondary text-body-emphasis ms-1" data-testid="pending-count">@_pendingCount</span>
+                }
             </button>
             @* IH-03 step 2: the button now answers to the same grant the server checks on
                POST — a Case Manager gets it, a member with no grant does not see an action that
@@ -103,14 +113,22 @@
     {
         @* ── Filters ─────────────────────────────────────────────────────── *@
         <div class="d-flex gap-2 flex-wrap mb-3">
+            @* A status with cases in it shows its count in the status's own colour — the same colour as
+               the badge on each case below — so Proposed and Active stand out at a glance and an empty
+               status stays grey (beta feedback, 2026-09-14). *@
             @foreach (var status in _filterOptions)
             {
                 var s = status;
-                <button type="button" class="btn @((_activeFilter == s ? ThemeConstants.Button.FillMode.Solid : ThemeConstants.Button.FillMode.Outline) == ThemeConstants.Button.FillMode.Solid ? "btn-secondary" : "btn-outline-secondary") btn-sm" @onclick="@(() => _activeFilter = s)">
-                    @(s is null ? "All" : s.Value.Label())
-                    <span class="badge bg-body-secondary text-body-emphasis border ms-1">
-                        @(s is null ? _cases.Count : _cases.Count(c => c.Status == s))
-                    </span>
+                var count = s is null ? _cases.Count : _cases.Count(c => c.Status == s);
+                var label = s is null ? "All" : s.Value.Label();
+                var countClass = s is not null && count > 0 ? s.Value.BadgeClass() : "bg-body-secondary text-body-emphasis border";
+                <button type="button" class="btn @(_activeFilter == s ? "btn-secondary" : "btn-outline-secondary") btn-sm"
+                        aria-pressed="@(_activeFilter == s ? "true" : "false")"
+                        aria-label="@($"{label}, {count} {(count == 1 ? "case" : "cases")}")"
+                        data-testid="@($"case-filter-{(s is null ? "all" : s.Value.ToString().ToLowerInvariant())}")"
+                        @onclick="@(() => _activeFilter = s)">
+                    @label
+                    <span class="badge @countClass ms-1" data-testid="case-filter-count">@count</span>
                 </button>
             }
         </div>

@@ -2,8 +2,10 @@
 @using Ben.Data.Common.Enums
 @using Ben.Service.Models.Entities
 @using Ben.Web.Services
+@using Ben.Web.Website.Library.Kit
 @inject IBenAdminClient AdminClient
 @inject IBenUserState UserState
+@inject NavigationManager NavManager
 
 @* Item 154: the address must die with the feature switch, not just the links to it. *@
 <FeatureGate Flag="@SiteFeatures.Events">
@@ -17,9 +19,25 @@
         </div>
     }
 
-    @if (_error is not null) { <div class="alert alert-danger mb-3">@_error</div> }
+    @* Sticky, as is the line a drag leaves: an event dropped far down a scrolled calendar was answered at the top of the
+       page, out of sight (UI test pass 6.3). *@
+    @if (_error is not null)
+    {
+        <div class="alert alert-danger mb-3 sticky-top shadow-sm" data-testid="calendar-error">
+            @_error
+            @if (_signedOut)
+            {
+                <a class="alert-link ms-1" href="@SignInLink.For(NavManager)">Sign in</a>
+            }
+        </div>
+    }
 
-    @if (_appointments is null)
+    @if (_appointments is null && _error is not null)
+    {
+        @* Nothing more is coming: a spinner under "you've been signed out" or "could not be loaded" said otherwise
+           (UI test pass 6.5). *@
+    }
+    else if (_appointments is null)
     {
         <BenLoaderOverlay Visible="true" Text="Loading calendar…" />
     }
@@ -29,11 +47,28 @@
            opens the editor. The editor is good; the door was invisible, which for the feature
            that carries public events and walking tours is most of the feature (2026-09-04 sweep).
            The button opens the same form the double-click does, on the next round hour. *@
+        @if (_moved is { } moved)
+        {
+            <div class="alert alert-info d-flex align-items-center flex-wrap gap-2 mb-2 sticky-top shadow-sm" role="status" data-testid="calendar-moved">
+                <span>Moved <strong>@moved.Title</strong> to @moved.NewStart.ToString("ddd M/d, h:mm tt").</span>
+                <button type="button" class="btn btn-sm btn-outline-primary" id="calendar-move-undo" disabled="@_isBusy"
+                        @onclick="UndoMoveAsync">Undo</button>
+            </div>
+        }
         <div class="d-flex justify-content-end mb-2">
-            <button type="button" class="btn btn-primary btn-sm" id="calendar-new-event"
-                    @onclick="NewEventAsync">
-                <BenIcon Name="plus" Class="me-1" />New event
-            </button>
+            @* A Viewer reads the calendar and changes nothing on it (Ben, 2026-09-14): no New event, and the scheduler's own
+               create, drag and ✕ are off for them too. *@
+            @if (_isViewer)
+            {
+                <span class="small text-secondary" id="calendar-viewer-note">You're a viewer in this group, so the calendar is read-only for you.</span>
+            }
+            else
+            {
+                <button type="button" class="btn btn-primary btn-sm" id="calendar-new-event"
+                        @onclick="NewEventAsync">
+                    <BenIcon Name="plus" Class="me-1" />New event
+                </button>
+            }
         </div>
 
         @* TelerikScheduler with built-in edit form intercepted for custom fields *@
@@ -41,10 +76,11 @@
                           @bind-Date="@_schedulerDate"
                           @bind-View="@_currentView"
                           Height="700px"
-                          AllowCreate="true"
-                          AllowUpdate="true"
-                          AllowDelete="true"
+                          AllowCreate="@(!_isViewer)"
+                          AllowUpdate="@(!_isViewer)"
+                          AllowDelete="@(!_isViewer)"
                           OnEdit="@OnSchedulerEdit"
+                          OnUpdate="@OnSchedulerMovedAsync"
                           OnDelete="@OnSchedulerDelete">
             @* Every appointment rendered identically was hiding real information. Event types have
                carried ColorClass and IconClass since they were built and only the type-manager
@@ -87,11 +123,11 @@
             </div>
             <div class="col-md-6">
                 <label class="form-label fw-semibold">Start</label>
-                <TelerikDateTimePicker Format="@DateTimeViewerExtensions.DateTimeNoSecondsPattern" @bind-Value="@_form.Start" Width="100%" />
+                <BenDateField Mode="DateEntryMode.DateTime" @bind-Value="@_form.Start" Width="100%" />
             </div>
             <div class="col-md-6">
                 <label class="form-label fw-semibold">End</label>
-                <TelerikDateTimePicker Format="@DateTimeViewerExtensions.DateTimeNoSecondsPattern" @bind-Value="@_form.End" Width="100%" />
+                <BenDateField Mode="DateEntryMode.DateTime" @bind-Value="@_form.End" Width="100%" />
             </div>
             <div class="col-md-6">
                 <label class="form-label fw-semibold">Event Type</label>
@@ -231,6 +267,83 @@
                 </div>
             </div>
 
+            @* Item 233. A tour business's public date belongs to a tour: the meeting point, the
+               length and the size all come from it, and the guest is told whose walk this is. *@
+            @if (_datesBelongToTours)
+            {
+                <div class="col-md-6">
+                    <label class="form-label fw-semibold" for="ev-tour">Which tour</label>
+                    <select id="ev-tour" class="form-select"
+                            @onchange="@(e => OnTourChanged(e.Value?.ToString()))">
+                        <option value="" selected="@(_form.TourId is null)">(None — a private date)</option>
+                        @foreach (var tour in _tours)
+                        {
+                            <option value="@tour.Id" selected="@(tour.Id == _form.TourId)">@tour.Name</option>
+                        }
+                    </select>
+                    @if (_tours.Count == 0)
+                    {
+                        <div class="form-text">
+                            You have no tours yet. <a href="@($"/organizations/{OrgId}/tours")">Set one up</a>
+                            before putting a public date on the calendar.
+                        </div>
+                    }
+                    else if (_form.IsPublic && _form.TourId is null)
+                    {
+                        <div class="form-text text-warning">
+                            A public date belongs to a tour — that is what tells a guest where to
+                            stand and who they are meeting.
+                        </div>
+                    }
+                </div>
+
+                @if (_form.TourId is not null && _members.Count > 0)
+                {
+                    <div class="col-md-6">
+                        <label class="form-label fw-semibold" for="ev-guides">Who is leading this one</label>
+                        <div id="ev-guides" class="border rounded p-2" style="max-height:9rem;overflow:auto;">
+                            @foreach (var member in _members)
+                            {
+                                <div class="form-check">
+                                    <input type="checkbox" class="form-check-input"
+                                           id="@($"ev-guide-{member.Id}")"
+                                           checked="@_form.GuideIds.Contains(member.Id)"
+                                           @onchange="@(e => ToggleGuide(member.Id, (bool?)e.Value == true))" />
+                                    <label class="form-check-label" for="@($"ev-guide-{member.Id}")">@member.DisplayName</label>
+                                </div>
+                            }
+                        </div>
+                        <div class="form-text">
+                            Leave it as it is to use the tour's usual guides. Their photograph goes
+                            to every guest who signs up.
+                        </div>
+                    </div>
+                }
+            }
+
+            @* Which clock the times above are on (Ben, 2026-09-10). A public listing shows an
+               event in the time of the place it happens; without this it could only say UTC,
+               which is nobody's evening. A tour date leaves this alone and takes its tour's. *@
+            @* The id is for the help capture, which wants the label, the box and the sentence
+               under it rather than the bare select. *@
+            <div class="col-md-6" id="ev-zone-field">
+                <label class="form-label fw-semibold" for="ev-zone">Which clock</label>
+                <select id="ev-zone" class="form-select"
+                        @onchange="@(e => _form.TimeZoneId = e.Value?.ToString() ?? "")">
+                    <option value="" selected="@(string.IsNullOrWhiteSpace(_form.TimeZoneId))">
+                        @(_form.TourId is null ? "(Not said — shown as UTC)" : "(The tour's)")
+                    </option>
+                    @foreach (var zone in TimeZoneChoices.All)
+                    {
+                        <option value="@zone.Id" selected="@(zone.Id == _form.TimeZoneId)">@zone.Label</option>
+                    }
+                </select>
+                <div class="form-text">
+                    The zone the event actually happens in. Anybody reading it publicly sees this
+                    clock, wherever they are.
+                </div>
+            </div>
+
             @* Only shown once the event is public: these four settings mean nothing otherwise, and
                a form that always showed them would make "public" look like a detail rather than the
                decision it is. *@
@@ -324,7 +437,7 @@
 
                             <div class="col-md-6">
                                 <label class="form-label fw-semibold">Sign-ups close (optional)</label>
-                                <TelerikDateTimePicker Format="@DateTimeViewerExtensions.DateTimeNoSecondsPattern" @bind-Value="@_form.RsvpClosesAt" Width="100%" />
+                                <BenDateField Mode="DateEntryMode.DateTime" @bind-Value="@_form.RsvpClosesAt" Width="100%" />
                                 <div class="form-text">Leave empty to allow sign-ups until it starts.</div>
                             </div>
                         </div>
@@ -351,6 +464,20 @@
     </ChildContent>
 </BenModal>
 
+@* Asked first (UI test pass 6.4): the ✕ on an event deleted it outright, public events and their sign-ups included,
+   one stray click away. *@
+<BenConfirmDialog @bind-Visible="@_showDeleteConfirm" Title="Delete event" Width="440px"
+                  Busy="@_isBusy" BusyText="Deleting…" OnConfirm="DeleteConfirmedAsync">
+    <p class="mb-0" data-testid="calendar-delete-message">
+        Delete <strong>@_deleteTarget?.Title</strong> on @_deleteTarget?.StartDateTime.ToViewerLocalTime(UserState).ToString("ddd M/d, h:mm tt")?
+        @if (_deleteTarget?.RecurrenceRule is { Length: > 0 })
+        {
+            <span>Every date it repeats on goes with it.</span>
+        }
+        This cannot be undone.
+    </p>
+</BenConfirmDialog>
+
 </FeatureGate>
 
 @code {
@@ -371,7 +498,15 @@
     private DateTime _dayEnd          = new DateTime(2000, 1, 1, 22, 0, 0);
 
     private string? _error;
+    private bool _signedOut;
+    private bool _isViewer;
     private bool _isBusy;
+    private bool _showDeleteConfirm;
+    private OrgCalendarEventRecord? _deleteTarget;
+
+    /// <summary>The last event moved by dragging, and where it was, so the move can be undone.</summary>
+    private MovedEvent? _moved;
+    private sealed record MovedEvent(Guid Id, string Title, DateTime OldStartUtc, DateTime OldEndUtc, DateTime NewStart);
     private bool _showEventDialog;
     private bool _isNewEvent;
     private OrgCalendarEventRecord? _editingEvent;
@@ -380,6 +515,12 @@
 
     private IReadOnlyList<OrganizationAddressRecord> _addresses = [];
     private IReadOnlyList<OrgUserDirectoryItem> _members = [];
+
+    /// <summary>This business's tours (item 233). Empty for a group that runs none.</summary>
+    private IReadOnlyList<Ben.Service.Models.Entities.TourRecord> _tours = [];
+
+    /// <summary>Whether a public date here has to name a tour — the server's rule, mirrored.</summary>
+    private bool _datesBelongToTours;
     private readonly List<string> _emailInvitees = [];
     private string _inviteEmail = "";
     private string? _inviteError;
@@ -572,10 +713,20 @@
     {
         if (!firstRender) return;
         if (!await UserState.WaitUntilAuthReadyAsync(RendererInfo.IsInteractive)) return;
+
+        // Arrived from a tour's "Schedule a date" button (item 233): the tour is already known,
+        // so a new date opens with it chosen rather than asking a question just answered.
+        var query = Microsoft.AspNetCore.WebUtilities.QueryHelpers.ParseQuery(
+            new Uri(NavManager.Uri).Query);
+        if (query.TryGetValue("tour", out var tourValue)
+            && Guid.TryParse(tourValue.ToString(), out var preselected))
+            _preselectedTourId = preselected;
+
         try
         {
             // Options for the type dropdown. A refusal narrows the choices; it does not
             // misreport the calendar, which reports its own state below.
+            _isViewer = !UserState.IsSuperAdmin && (await AdminClient.GetMyOrgPermissionsAsync(OrgId))?.IsViewer == true;
             _eventTypes = (await AdminClient.GetCalendarEventTypesAsync(OrgId)).Items.ToList();
             _eventTypeOptions = [new(null, "(No type)"),
                 .. _eventTypes.Select(t => new EventTypeOption(t.Id, t.Name))];
@@ -586,8 +737,17 @@
             // Only to decide what a NEW event's public checkbox starts as (2026-08-24). A
             // failed fetch leaves the pre-existing private default, which is the safe way
             // round to be wrong.
-            _orgKind = (await AdminClient.GetOrganizationAsync(OrgId))?.Kind
-                ?? Ben.Data.Common.Enums.OrganizationKind.InvestigationGroup;
+            var org = await AdminClient.GetOrganizationAsync(OrgId);
+            _orgKind = org?.Kind ?? Ben.Data.Common.Enums.OrganizationKind.InvestigationGroup;
+
+            // Item 233: a public date of a tour business belongs to a tour. The server refuses
+            // one that does not; this is so the form asks for it rather than letting somebody
+            // fill in a whole dialog and be told no at the end.
+            _datesBelongToTours = (org?.RunsPublicTours ?? false)
+                || _orgKind == Ben.Data.Common.Enums.OrganizationKind.GhostWalkingTour;
+            if (_datesBelongToTours)
+                _tours = [.. (await AdminClient.GetToursAsync(OrgId)).Items.Where(t => t.IsActive)];
+
             await LoadEventsAsync();
         }
         catch { _error = "Failed to load calendar."; }
@@ -603,14 +763,16 @@
 
         if (events.Failed)
         {
+            _signedOut = events.SessionExpired;
             _error = events.SessionExpired
-                ? "You've been signed out, so the calendar could not be loaded. Sign in again to see it."
+                ? "You've been signed out, so the calendar could not be loaded."
                 : "The calendar could not be loaded. This is a problem reaching the server — it does "
                 + "not mean the calendar is empty.";
             return;
         }
 
         _error        = null;
+        _signedOut    = false;
         _events       = events.Items.ToList();
         _appointments = _events.Select(ToAppointment).ToList();
     }
@@ -694,7 +856,17 @@
                 // (2026-08-24). A default either way — the checkbox is right there.
                 IsPublic = Ben.Data.Common.Enums.OrganizationKindDefaults
                     .EventsArePublicByDefault(_orgKind),
+                // Arrived from a tour's own page ("Schedule a date"), or there is only one tour
+                // it could be. Either way the answer is already known, so do not ask.
+                TourId = _preselectedTourId ?? (_tours.Count == 1 ? _tours[0].Id : null),
+                // The person scheduling is almost always in the zone the thing happens in, so
+                // their own is the right first guess — and it is a guess they can see and change,
+                // rather than a silent UTC nobody notices until a guest turns up an hour out.
+                TimeZoneId = TimeZoneChoices.All.Any(z => z.Id == UserState.BrowserTimeZone.Id)
+                    ? UserState.BrowserTimeZone.Id
+                    : "",
             };
+            ApplyTourDefaults();
         }
         else if (_editingEvent is not null)
         {
@@ -712,6 +884,9 @@
                 AttendeeCapacity  = _editingEvent.AttendeeCapacity,
                 RsvpClosesAt      = _editingEvent.RsvpClosesAt,
                 EventTypeId    = _editingEvent.EventTypeId,
+                TourId         = _editingEvent.TourId,
+                TimeZoneId     = _editingEvent.TimeZoneId ?? "",
+                GuideIds       = [.. _editingEvent.Guides.Select(g => g.AppUserId)],
                 OrganizationAddressId = _editingEvent.OrganizationAddressId,
                 MeetingUrl     = _editingEvent.MeetingUrl ?? "",
                 RecurrenceRule = _editingEvent.RecurrenceRule ?? "",
@@ -749,18 +924,109 @@
         _showEventDialog = true;
     }
 
-    /// <summary>OnDelete fires when the user clicks the ✕ on an appointment.</summary>
-    private async Task OnSchedulerDelete(SchedulerDeleteEventArgs args)
+    /// <summary>The ✕ on an appointment: asks first.</summary>
+    private Task OnSchedulerDelete(SchedulerDeleteEventArgs args)
     {
-        var appt = args.Item as OrgCalendarAppointment;
-        if (appt is null) return;
+        if (args.Item is OrgCalendarAppointment appt && _events.FirstOrDefault(e => e.Id == appt.Id) is { } record)
+        {
+            _deleteTarget = record;
+            _showDeleteConfirm = true;
+        }
+        return Task.CompletedTask;
+    }
+
+    private async Task DeleteConfirmedAsync()
+    {
+        if (_deleteTarget is not { } target) return;
+        _isBusy = true;
         try
         {
-            await AdminClient.DeleteCalendarEventAsync(OrgId, appt.Id);
+            var (deleted, error) = await AdminClient.DeleteCalendarEventAsync(OrgId, target.Id);
+            _showDeleteConfirm = false;
+            _deleteTarget = null;
+            _error = deleted ? null : error ?? "The event could not be deleted. Nothing was changed.";
+            if (_moved?.Id == target.Id) _moved = null;
             await LoadEventsAsync();
         }
-        catch { _error = "Delete failed."; }
+        finally { _isBusy = false; }
     }
+
+    /// <summary>
+    /// An event dragged to another time, or its end dragged: saved with every other detail as it was.
+    /// </summary>
+    /// <remarks>
+    /// UI test pass 6.3, 2026-09-14: the calendar let an event be picked up and dropped — updates were allowed — but nothing
+    /// handled the drop, so it sprang back and nothing was said. A repeating event is not moved this way: dragging one date
+    /// of a series would move them all, which is a decision for its editor. The move can be undone from the line it leaves.
+    /// </remarks>
+    private async Task OnSchedulerMovedAsync(SchedulerUpdateEventArgs args)
+    {
+        if (args.Item is not OrgCalendarAppointment moved || _events.FirstOrDefault(e => e.Id == moved.Id) is not { } record) return;
+
+        if (!string.IsNullOrWhiteSpace(record.RecurrenceRule))
+        {
+            _error = $"“{record.Title}” repeats, so it isn't moved by dragging. Open it to change when it starts.";
+            await LoadEventsAsync();
+            return;
+        }
+
+        _isBusy = true;
+        try
+        {
+            var startUtc = moved.Start.ToUtcFromViewerLocal(UserState);
+            var endUtc = moved.End.ToUtcFromViewerLocal(UserState);
+            var (saved, error) = await AdminClient.SaveCalendarEventAsync(OrgId, record.Id, RequestFor(record, startUtc, endUtc, moved.IsAllDay));
+            if (saved is null)
+            {
+                _error = error ?? "The event could not be moved. It is back where it was.";
+                _moved = null;
+            }
+            else
+            {
+                _error = null;
+                _moved = new MovedEvent(record.Id, record.Title, record.StartDateTime, record.EndDateTime, moved.Start);
+            }
+            await LoadEventsAsync();
+        }
+        finally { _isBusy = false; }
+    }
+
+    private async Task UndoMoveAsync()
+    {
+        if (_moved is not { } moved || _events.FirstOrDefault(e => e.Id == moved.Id) is not { } record) { _moved = null; return; }
+        _isBusy = true;
+        try
+        {
+            var (saved, error) = await AdminClient.SaveCalendarEventAsync(OrgId, record.Id,
+                RequestFor(record, moved.OldStartUtc, moved.OldEndUtc, record.IsAllDay));
+            _error = saved is null ? error ?? "The move could not be undone." : null;
+            if (saved is not null) _moved = null;
+            await LoadEventsAsync();
+        }
+        finally { _isBusy = false; }
+    }
+
+    /// <summary>An event as it is, at another time. Guides are left alone (null), as they are by anything not editing them.</summary>
+    private static UpsertCalendarEventRequest RequestFor(OrgCalendarEventRecord e, DateTime startUtc, DateTime endUtc, bool isAllDay) => new(
+        Title:                 e.Title,
+        Description:           e.Description,
+        Location:              e.Location,
+        StartDateTime:         startUtc,
+        EndDateTime:           endUtc,
+        IsAllDay:              isAllDay,
+        IsPublic:              e.IsPublic,
+        EventTypeId:           e.EventTypeId,
+        OrganizationAddressId: e.OrganizationAddressId,
+        MeetingUrl:            e.MeetingUrl,
+        CaseId:                e.CaseId,
+        RecurrenceRule:        e.RecurrenceRule,
+        PlaceId:               e.PlaceId,
+        HideExactLocation:     e.HideExactLocation,
+        AttendeeCapacity:      e.AttendeeCapacity,
+        RsvpClosesAt:          e.RsvpClosesAt,
+        TourId:                e.TourId,
+        GuideAppUserIds:       null,
+        TimeZoneId:            e.TimeZoneId);
 
     // ── Custom dialog save / delete ───────────────────────────────────────────
 
@@ -786,7 +1052,15 @@
                 PlaceId:           _form.PlaceId,
                 HideExactLocation: _form.HideExactLocation,
                 AttendeeCapacity:  _form.AttendeeCapacity,
-                RsvpClosesAt:      _form.RsvpClosesAt?.ToUtcFromViewerLocal(UserState));
+                RsvpClosesAt:      _form.RsvpClosesAt?.ToUtcFromViewerLocal(UserState),
+                TourId:            _form.TourId,
+                // An empty list is an instruction, not silence. Sending null when nobody was
+                // ticked meant the server left the old guides in place — so the last guide could
+                // never be taken off a date, and their name and face kept going out to guests.
+                // Null is reserved for a caller that is not editing guides at all.
+                GuideAppUserIds:   _datesBelongToTours && _form.TourId is not null
+                                       ? [.. _form.GuideIds] : null,
+                TimeZoneId:        string.IsNullOrWhiteSpace(_form.TimeZoneId) ? null : _form.TimeZoneId);
 
             // Saved through the variant that keeps the server's refusal, because the public-event
             // rules refuse with a sentence written to be read — "Save failed" would throw it away
@@ -816,18 +1090,13 @@
         finally { _isBusy = false; }
     }
 
-    private async Task DeleteFromDialog()
+    /// <summary>Delete from the editor: the editor closes and the same question is asked as for the ✕.</summary>
+    private void DeleteFromDialog()
     {
         if (_editingEvent is null) return;
-        _isBusy = true;
-        try
-        {
-            await AdminClient.DeleteCalendarEventAsync(OrgId, _editingEvent.Id);
-            _showEventDialog = false;
-            await LoadEventsAsync();
-        }
-        catch { _error = "Delete failed."; }
-        finally { _isBusy = false; }
+        _deleteTarget = _editingEvent;
+        _showEventDialog = false;
+        _showDeleteConfirm = true;
     }
 
     // ── Appointment DTO — uses the exact default field names from Telerik docs ──
@@ -856,6 +1125,40 @@
         public OrgCalendarAppointment() { Id = Guid.NewGuid(); }
     }
 
+    /// <summary>The tour a "Schedule a date" link arrived with, if any.</summary>
+    private Guid? _preselectedTourId;
+
+    private void OnTourChanged(string? value)
+    {
+        _form.TourId = Guid.TryParse(value, out var id) ? id : null;
+        ApplyTourDefaults();
+    }
+
+    private void ToggleGuide(Guid appUserId, bool on)
+    {
+        if (on) _form.GuideIds.Add(appUserId); else _form.GuideIds.Remove(appUserId);
+    }
+
+    /// <summary>
+    /// Fills the form in from the chosen tour, so an organiser does not retype what the tour
+    /// already knows.
+    /// </summary>
+    /// <remarks>
+    /// Only fills in what is empty; the server applies the same defaults, so a date created
+    /// without ever opening this dialog gets them too.
+    /// </remarks>
+    private void ApplyTourDefaults()
+    {
+        if (_tours.FirstOrDefault(t => t.Id == _form.TourId) is not { } tour) return;
+
+        _form.OrganizationAddressId ??= tour.StartOrganizationAddressId;
+        _form.AttendeeCapacity ??= tour.DefaultCapacity;
+        if (tour.DurationMinutes is { } minutes && _form.End <= _form.Start)
+            _form.End = _form.Start.AddMinutes(minutes);
+        if (_form.GuideIds.Count == 0)
+            _form.GuideIds = [.. tour.Guides.Select(g => g.AppUserId)];
+    }
+
     private class EventFormModel
     {
         public string   Title          { get; set; } = "";
@@ -870,6 +1173,11 @@
         public int?     AttendeeCapacity  { get; set; }
         public DateTime? RsvpClosesAt     { get; set; }
         public Guid?    EventTypeId    { get; set; }
+        public Guid?    TourId         { get; set; }
+
+        /// <summary>The clock the event runs on. Empty means "not said", or "the tour's".</summary>
+        public string   TimeZoneId     { get; set; } = "";
+        public HashSet<Guid> GuideIds  { get; set; } = [];
         public Guid?    OrganizationAddressId { get; set; }
         public string   MeetingUrl     { get; set; } = "";
         public HashSet<Guid> InviteeIds { get; set; } = new();

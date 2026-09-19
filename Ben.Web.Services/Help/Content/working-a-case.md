@@ -13,7 +13,10 @@ Every case belongs to a group, and the group's own page is where its cases are l
 
 ## Taking on a request — reviewing and voting
 
-Client requests arrive under **Pending Requests** on the group's Cases screen. Every request
+Client requests arrive under **Pending Requests** on the group's Cases screen. When any are
+waiting, the button turns yellow and shows how many. The status buttons above the list work the
+same way: a status with cases in it shows its count in that status's colour, so new proposals and
+active cases stand out. Every request
 shows **Review & vote**, which opens everything the client submitted — their description, the
 location, and any files they attached: photos, recordings, documents. Every group the client
 sent the request to sees the same materials while it decides.
@@ -57,11 +60,70 @@ field rather than here.
 **Overview** carries the original request exactly as the client submitted it, shown separately
 from the case description so the two never blur together as the case is edited.
 
-**Timeline** is the working record. Every entry has a visibility: internal to the group, shared
-with the client, or public. Choose deliberately — "internal" means not shared onward, not hidden
+**Edit Case**, at the top of the case, opens a page of its own. The description takes the wide
+column, with room for a line or several paragraphs and a short toolbar for bold, italics, lists
+and links. The status, the public pseudonym, **Make Public**, the private-engagement setting and
+the case manager sit beside it. On a phone they follow it, below. If you have made changes and try
+to leave another way, the page asks first; **Cancel** leaves without saving. **New Case** uses the
+same editor for its description.
+
+### Which place the case is about
+
+A case names the **place** it concerns, and that is what connects it to everybody else's work at
+the same location. As you type the address, any place already on file that looks like a match is
+suggested. Pick **Use this place** and the case joins it; carry on typing and a new place is created
+instead. The suggestion is only ever a suggestion — two flats at one address are two places, and
+only you know which this is.
+
+Then say **what kind of place** it is, which has no default because both answers matter:
+
+- **Public location** — a landmark, a business, anywhere that is not somebody's home. Its page
+  gathers every group's work there and anyone may add to it.
+- **Private residence** — somebody's home. Findings stay with your group, and this is
+  private-engagement work, which needs a plan that covers it.
+
+**Open Case** stays greyed out until you have answered. Once the case exists, a line at the top of
+it names the place, says how many other groups have investigated there, and links to its page.
+
+![Naming the place on a new case](/help/media/working-a-case/new-case-place.png)
+*The place already on file is offered as you type; **Use this place** joins it. The kind of place has
+no default.*
+
+Coming the other way works too: a public place's own page offers **Open a case here**, which brings
+you to this form with the place already settled.
+
+If your group has no plan, a case you open is **public from the start** and the **Make Public** box
+cannot be unticked: work at a public location is public on a free account, and the Edit Case page
+says so beside the box. A case at somebody's home is not affected, and neither is any case that was
+already private. See [Having a plan, and not having one](organization-administration#having-a-plan-and-not-having-one).
+
+A case you open yourself is **accepted** as you open it. That is usually what you want for a place
+your group picked itself: it was proposed to nobody, and you are the person who would have accepted
+it. If the decision really is the group's, tick **Let the group decide whether to take this on** and
+the case waits as **Proposed** until somebody accepts it. The box only appears if you may change a
+case's status; anyone else opens a case as a proposal, as before. A case a client asked for is
+untouched by this — it arrives as a request and is accepted or declined the usual way.
+
+![The Edit Case page](/help/media/working-a-case/edit-case.png)
+*Edit Case: the description in the wide column, status and publishing beside it.*
+
+**Timeline** is the working record. Entries are client reports, investigator notes, evidence,
+instrument readings and research. Every entry has a visibility: internal to the group,
+shared with the client, or public. Choose deliberately — "internal" means not shared onward, not hidden
 from its author.
 
 **Investigations** covers scheduled visits, attendees and RSVPs, and each visit's binder.
+
+**Notes** are the group's own working notes, never shown to the client. A note can be formatted — bold,
+italics, lists and links — and pinned to the top. Notes written before formatting arrived keep their
+line breaks.
+
+**Files** is the case's evidence. **Upload File** takes photographs, audio, video and documents, and
+you can choose several at once. Each file is named as soon as you pick it, with a bar that fills as
+it goes up, so a long recording is something you can watch rather than a page that sits still —
+which is the point, because a night's video takes a while on a home connection. If one is refused,
+the reason appears beside it. **Attach from Library** adds a file the group already holds without a
+second copy. Video and audio play where they sit, and you can drag through them.
 
 ## Binders
 
@@ -73,6 +135,258 @@ store. Filter the timeline by investigation to see just that visit.
 
 Readings recorded during a visit go in as **Instrument Reading** entries. Record the value, its
 unit, and what the ambient baseline was — a reading without its baseline cannot be judged later.
+
+## Research boards
+
+The case's **Research** tab lists its boards. A board is a space to think on: cards, notes, pictures,
+files, recordings, links and maps, laid out and joined up the way the thinking actually went. It is
+where you write up what a deed, an obituary, a newspaper archive or a walk round a cemetery told you.
+
+**New board** asks what to start from, then opens the board editor on this case, already signed in.
+**Open** returns to one.
+
+### Something to start from
+
+A blank board is the right start for some things and a cold start for others, so **New board** offers
+five:
+
+| | |
+|---|---|
+| **Blank board** | nothing on it. What New board always did. |
+| **Moodboard** | four coloured sections — feel, places, sound, references — and a cluster of themes joined to a middle one. For the atmosphere of a place before the facts of it. |
+| **Research plan** | what to ask, where to look, a four-square of what is worth doing, and a grid of four weeks. For deciding what to do next. |
+| **Family tree** | names in boxes joined at right angles, with a photo frame above every name and a legend saying what the lines mean. |
+| **Presentation deck** | four slide frames with room for a heading and points. Present it straight away; the frames are the slides. |
+
+**Everything on a template is yours.** Move it, rename it, recolour it, delete it. It is a head start,
+not a form, and nothing on it is treated differently from something you put there yourself.
+
+![Choosing what a new board starts from](/help/media/working-a-case/board-templates.png)
+*New board: five things to start from, and one line each on what you would get.*
+
+**The family tree's photo frames start empty**, and empty is finished. Paste or drop a photograph into
+one, or put any picture you like there instead, or leave them all blank and let the names do the work.
+The lines join the **names** rather than the frames, so going without a photograph moves nothing.
+
+![The family tree template, as it opens](/help/media/working-a-case/board-family-tree.png)
+*The family tree as it opens: names, right-angled lines, a small photo frame above each name, and a
+legend saying what the lines mean.*
+
+![A case's research boards](/help/media/working-a-case/research-boards.png)
+*The Research tab: the boards on this case, who wrote each one, and whether it has been published.*
+
+### Putting things on a board
+
+**Add** on the left offers a card, a note, a message, a map, a picture or a link. Double-click an
+empty part of the board to drop a note where you clicked.
+
+**Paste anywhere.** The board reads what you pasted and makes the right thing from it: a web address
+becomes a link card with the page's title and picture, a photo becomes a picture, a recording becomes
+something that plays where it sits, a document becomes a file, a street address becomes a map of that
+place, and anything else becomes a note. Whatever you paste lands on clear ground rather than on top
+of what is already there.
+
+**Drop files on the board** and the same happens — and they are added to the case's **Files** at the
+same time, so a photograph only ever exists once. A file that arrived this way is marked **Research**
+in the Files tab, so you can tell which of the case's files the boards are built from — useful when a
+camera or a scanner named them and you want to go back and give them names that say what they are.
+
+**The case files button** (the folder, on the left) reaches the other way. It opens **From the case**,
+which has two tabs:
+
+- **Files** — what the case already holds, so a photograph from last week's visit goes straight onto
+  the board without finding it on your computer and sending it a second time.
+- **What the client wrote** — every message the client has sent on this case. Pick one and their words
+  land on the board with their name and the day they wrote them, so the reason you are reading about a
+  house is on the board beside what you found. Only the client's side is offered; what the group wrote
+  back is the group's own thinking, and the board is where that is done.
+
+### Kinds of card
+
+Research is mostly not evidence, so a card can be any of six kinds, each asking for what that kind of
+thing needs:
+
+| Kind | What it is for |
+|---|---|
+| **Evidence** | something recorded — a description, the date, what kind it is, and whether it is verified. |
+| **Historical note** | what happened here before anybody was recording: what, when, where, and where you read it. |
+| **Article** | a piece of writing — news, a book, a journal, a website or a broadcast — with its author and what it says. |
+| **Experience** | what somebody felt, heard or saw with nothing recording: what, which sense, who, where in the place, and when. |
+| **Quote** | somebody's words, who said them, when, and where the quote comes from. |
+| **Person** | a witness, a client, a neighbour or an owner: their connection to the place and what they describe. |
+
+Pick the kind while editing a card, at the top of its form. Changing your mind keeps what you have
+already typed: a field the new kind does not ask for waits in the card, and comes back if you change
+back. **No card asks for a telephone number or an address for a person**, because a board can be
+published to the case — how to reach somebody belongs on the case itself.
+
+**When** is written rather than picked from a calendar on every kind but Evidence, so "the 1920s",
+"before the fire" and "1887" can all be said plainly.
+
+A card's heading shows its title. Until you give it one, the heading is the kind of card it is —
+*Quote*, *Person* — rather than the word "Card", which every card would share.
+
+### Grids and shapes
+
+Not everything worth putting on a board is a card.
+
+**A table** is for anything that reads across: a list of owners and the years they held a house, four
+weeks of who is doing what, a set of readings. It starts as a header row and one row beneath, two
+columns wide. Click a cell and type; **Tab** moves along and out of the last cell into a new row.
+While a table is selected, the buttons above it add and remove rows and columns, and the first row can
+be turned off when the grid has no headings.
+
+**A shape** is a box, a circle or a diamond with a word or two in it, for the things a card would
+overdress: a theme, a question, a step in a process, a label on a region of the board. Pick which
+shape while it is selected.
+
+### Colour, panels and fills
+
+Every block takes one of six colours, chosen while it is selected. Two switches change how that colour
+is used:
+
+| | |
+|---|---|
+| **Filled with its colour** | the whole block takes the colour rather than a stripe down its edge. Good for shapes and for the one card that matters most; harder to read for a card with a lot of words in it. |
+| **Draw as a panel** | on a group: the area is filled and titled rather than outlined, so it reads as a section of the board instead of a ring round some cards. |
+
+Both are kept when the board is published, so a reader sees the board you laid out.
+
+### One card after another
+
+Select a card and four small **+** handles appear, one on each side. That is how a train of thought
+gets laid down:
+
+| | |
+|---|---|
+| **Click a handle** | the next card appears on that side, already joined by an arrow, ready to type in. |
+| **Drag a handle onto empty board** | the same card, where you let go. |
+| **Drag a handle onto another card** | joins those two instead of making a new one. |
+| **Ctrl+Shift and an arrow key** | the same as clicking that side's handle. |
+
+The new card is the same kind, size and colour as the one it grew from, and one **Undo** takes back
+both the card and its arrow.
+
+![Growing the next card from a side handle](/help/media/working-a-case/board-grow.png)
+*A card's four handles, and the card one of them made — joined, and waiting for words.*
+
+![Growing a card, then presenting the board](/help/media/working-a-case/board-grow-and-present.gif)
+*A handle makes the next card, one Undo takes it back, and the board is presented a card at a time.*
+
+### What a line says
+
+Select a line and it can be told what it means:
+
+| | |
+|---|---|
+| **Route** | *Curve* is the default. *Straight* is the shortest way between two blocks. *Elbow* turns right angles, which is what a family tree or an org chart needs. |
+| **Ends** | an arrow, a diamond, a dot or nothing, chosen for each end separately. A diamond at both ends and no arrow reads as "these two are joined", with neither one first. |
+| **Line** | solid or dashed. Dashed is for a weaker claim: a maybe, a sibling, a link somebody has not confirmed. |
+| **Label** | a few words along the middle of the line. |
+| **Icon** | one or two characters in a small badge on the line, for marking several lines as the same kind of thing at a glance. |
+
+None of this means anything to the site — a dashed line is not a lesser record — so say what your
+lines mean somewhere on the board. The family tree template comes with a legend for exactly that
+reason.
+
+### Drafts and publishing
+
+**A new board is yours alone.** Nobody else on the case sees it, or knows it exists, until you
+publish it — research is thought about before it is evidence. The board saves itself on your own
+machine as you work, and **Save to case** puts it on the server.
+
+**Publish** shows it to everyone who can read the case, and adds a picture of the whole board to the
+case's files. Carry on afterwards and your changes are yours again until you publish once more; the
+group keeps reading the published version in the meantime, and the list says *published, and written
+on since*.
+
+### A card that opens another board
+
+One board fills up. The **book** button on the left puts down a card that opens another board on this
+case — a family tree on one, the newspaper articles on another, and a card on each that reaches the
+other. Pick the board, and optionally one card on it to arrive at.
+
+**The header shows the way you came.** Follow a link and the boards you came through appear before the
+title, oldest first: *Family tree / Newspapers / **Deeds***. Click any of them to go back to that one —
+not just the last. The path is only ever what you actually walked, so following a link back to where
+you started adds a stop rather than removing one, and going back clears everything after the stop you
+picked.
+
+**Only published boards can be linked to**, and the picker says so: a card pointing at somebody's
+draft would be a way to read it through a board they had published. This has two consequences worth
+knowing:
+
+- A board that has a link on it **cannot be published** until the board it points at is published.
+  You are told which one.
+- If the board you linked to is **deleted or unpublished**, the card stays where it is and says so
+  when it is clicked. Nothing on your board is silently rewritten by something happening on somebody
+  else's.
+
+**If the card you pointed at is gone** but the board is still there, the link opens that board without
+trying to find it, rather than refusing. The card you picked is a place to land, not a promise.
+
+### Presenting a board
+
+**Present** (the play button, top right) walks the board a card at a time, full screen, with
+everything else dimmed. It is for the meeting where the case gets talked through.
+
+There is nothing to prepare: **the cards are the slides**. The order comes from the board itself —
+
+1. if you have drawn **groups** round parts of the board, those are the slides, in the order they sit;
+2. otherwise **the arrows** decide: a chain of joined cards is walked from its start to its end;
+3. anything left over reads **down the page**, top to bottom.
+
+So growing one card out of another with the side handles builds the running order as you think.
+
+| | |
+|---|---|
+| **Right arrow**, space, Page Down | next card |
+| **Left arrow**, Page Up, backspace | previous card |
+| **Home** / **End** | first / last card |
+| **Escape** | stop presenting |
+
+Select a card before pressing Present and the walk starts there. Presenting changes nothing on the
+board, so somebody who can only read a case can still be the one driving the meeting.
+
+![Presenting a board](/help/media/working-a-case/board-presenting.png)
+*Presenting: one card, everything else dimmed, and where you are in the deck.*
+
+### Link cards
+
+A link card shows the page's title, description, site and picture. The picture is a small copy kept on
+our own storage, so reading a card never sends anybody to the other site. We fetch the page once, when
+somebody signed in adds the link, and never for somebody who is only reading. Some addresses cannot be
+fetched — a private network, a page that is not a web page, a site too slow to answer — and those
+cards show the address instead.
+
+The picture on a link card is **our own copy**, kept when the card was first made, so a board keeps
+its pictures after it is published and shows them to whoever reads it, and a card does not go blank
+because the other site moved its image. A board you are working on without signing in shows the
+address alone unless somebody has used that link before: reading a stranger's page is something the
+server only does for somebody signed in.
+
+The same cards appear under links in group messages, case messages and feed posts.
+
+### Map boxes
+
+A map box starts empty, and never takes the case's address: the place on it is the one you choose.
+Write the address in the box and press **Find** (or just press Enter) and the map goes there — a town,
+a street address, or a cemetery by name. What you wrote stays as the box's label whether or not the
+address is found, and you can always type coordinates instead. Pasting an address straight onto the
+board makes a map of it the same way; when nobody can find the place, you get your words as a note.
+A published board draws a map box as its address rather than as map tiles, because map imagery may not
+be kept.
+
+**Any block with an address in it can become a map.** Right-click a card, a note, a message or a
+picture's caption and, when there is an address written in it, the menu offers **Make a map**. The map
+appears next to the block, located and labelled with that address, and the block keeps what it says —
+a Person card is still wanted after the map exists. If nobody can find the address you are told, and
+nothing is added.
+
+### On a phone
+
+The board works on a phone: **Add** and **Paste** sit along the bottom, pinch to zoom, drag to pan,
+and press and hold a card for the rest of its actions.
 
 ## Showing your finding on your public page
 
@@ -283,6 +597,10 @@ contact** lists the members the client sees on their side of the case, and their
 what land in those members' notifications. Choose contacts with the button there — the case
 manager and group admins can save the choice.
 
+Messages with the client, on the case's **Messages** tab, can be formatted with bold, italics,
+lists and links. The client sees the formatting on the website; the iPhone app shows the same words
+as plain text.
+
 With no explicit contact chosen, the **case manager stands in** automatically, marked as such.
 Clearing everyone returns to that fallback; the client's view is never blank while the case has
 a manager.
@@ -489,6 +807,36 @@ rows show their sharing setting: how another group chose to share something is t
 
 Place pages work for visitors too. Somebody who is not signed in sees only investigations that have
 been published, and nothing else.
+
+![A place's page](/help/media/working-a-case/place-page.png)
+*One location, and every group's work at it: your visits, what others shared, the cases published
+here, the posts, and the field archive.*
+
+### Your groups' cases here
+
+Signed in, a place also shows **your groups' cases here** — every case one of your groups has at
+this location, whatever its status, published or not. That is the question worth asking on arrival:
+do we already have a case here? The published list below cannot answer it, because the answer is
+usually a case nobody published. Other groups' unpublished cases are not shown: having one is
+itself something they have not shared.
+
+### Cases written up here
+
+A place also lists the **cases** groups have published about it, with the year each was opened and
+whose case it was. Only published cases appear — a case has to be both marked public and have a
+status saying it is published — and a client's real name is never shown, exactly as on the case's
+own public page. Visitors see this list too.
+
+This is the other half of naming a place on a case: your case appears on the place's page when you
+publish it, and everybody else's is already there to read before you start.
+
+### Posts about this place
+
+A public location also carries **posts** — short notes and photographs from anybody signed in, not
+only from groups. They are feed posts that name the place, so they are screened, reportable and
+hideable exactly like anything else on the feed, and they appear on the feed as well with a link
+back here. See [Posting about a place](the-feed#posting-about-a-place). A private residence has no
+posts and offers no box.
 
 ### The field archive
 

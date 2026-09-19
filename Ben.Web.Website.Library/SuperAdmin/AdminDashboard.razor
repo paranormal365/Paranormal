@@ -26,13 +26,47 @@
 
 <div class="container-fluid px-3">
 
+    @* Two dashboards behind one tab strip (item 235 phase 17b, Ben 2026-09-13): the site as a whole, and hosted
+       events — venues, organizers and events overall. The range picker drives both. *@
+    <ul class="nav nav-tabs mb-3" role="tablist" id="dashboard-tabs">
+        <li class="nav-item" role="presentation">
+            <button type="button" role="tab" id="dashboard-tab-site" aria-selected="@SiteTab"
+                    class="nav-link @(SiteTab ? "active" : null)" @onclick="@(() => ShowTab(null))">The site</button>
+        </li>
+        <li class="nav-item" role="presentation">
+            <button type="button" role="tab" id="dashboard-tab-events" aria-selected="@EventsTab"
+                    class="nav-link @(EventsTab ? "active" : null)" @onclick="@(() => ShowTab("events"))">Events</button>
+        </li>
+        <li class="nav-item" role="presentation">
+            <button type="button" role="tab" id="dashboard-tab-event-health" aria-selected="@EventHealthTab"
+                    class="nav-link @(EventHealthTab ? "active" : null)" @onclick="@(() => ShowTab("event-health"))">Event health</button>
+        </li>
+    </ul>
+
     <div class="row mb-3 align-items-center">
         <div class="col">
+            @if (EventsTab)
+            {
+                <h3 class="mb-0">Events<HelpLink Slug="site-administration" Anchor="hosted-events" /></h3>
+                <p class="text-secondary small mb-0">
+                    Hosted events across every group: where they stand, who runs them, where, and how they are booking.
+                </p>
+            }
+            else if (EventHealthTab)
+            {
+                <h3 class="mb-0">Event health<HelpLink Slug="site-administration" Anchor="event-health" /></h3>
+                <p class="text-secondary small mb-0">
+                    Whether hosted events are working: holds, answers, letters, errors, limits and the jobs behind them.
+                </p>
+            }
+            else
+            {
             <h3 class="mb-0">Dashboard<HelpLink Slug="site-administration" Anchor="the-dashboard" /></h3>
             <p class="text-secondary small mb-0">
                 How the site is being used. Everything here counts accounts and their activity —
                 visitors who never sign in are not recorded anywhere.
             </p>
+            }
         </div>
         <div class="col-auto">
             <div class="btn-group btn-group-sm" role="group" aria-label="Time range">
@@ -49,6 +83,16 @@
         </div>
     </div>
 
+    @if (EventsTab)
+    {
+        <AdminEventsDashboard Days="@_days" />
+    }
+    else if (EventHealthTab)
+    {
+        <AdminEventHealthDashboard Days="@_days" />
+    }
+    else
+    {
     @if (_error is not null)
     {
         <div class="alert alert-danger">@_error</div>
@@ -373,10 +417,27 @@
             </div>
         </div>
     }
+    }
 
 </div>
 
 @code {
+    /// <summary>Which dashboard is showing; <c>?tab=events</c> links straight to the events one.</summary>
+    [SupplyParameterFromQuery(Name = "tab")] public string? Tab { get; set; }
+
+    private bool EventsTab => string.Equals(Tab, "events", StringComparison.OrdinalIgnoreCase);
+
+    /// <summary>The Event health tab, <c>?tab=event-health</c>: whether events are working, for development.</summary>
+    private bool EventHealthTab => string.Equals(Tab, "event-health", StringComparison.OrdinalIgnoreCase);
+
+    private bool SiteTab => !EventsTab && !EventHealthTab;
+
+    private void ShowTab(string? tab)
+    {
+        Tab = tab;
+        NavManager.NavigateTo(NavManager.GetUriWithQueryParameter("tab", tab), replace: true);
+    }
+
     private sealed record RangeOption(string Label, int Days);
 
     private static readonly RangeOption[] RangeOptions =
@@ -429,7 +490,7 @@
     protected override async Task OnInitializedAsync()
     {
         if (!await UserState.WaitUntilAuthReadyAsync(RendererInfo.IsInteractive)) return;
-        if (!UserState.IsSuperAdmin || UserState.IsImpersonating) { NavManager.NavigateTo("/"); return; }
+        if (!UserState.IsSuperAdmin || UserState.IsImpersonating) { NavManager.NavigateTo(Ben.Web.Website.Library.Kit.SignInLink.ForRefusal(NavManager, UserState)); return; }
 
         await LoadAsync();
     }

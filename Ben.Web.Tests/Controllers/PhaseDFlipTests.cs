@@ -98,7 +98,7 @@ public sealed class PhaseDFlipTests
         string[] converted =
         [
             "CaseFileController.cs", "CaseAudioMixController.cs", "CaseReportController.cs",
-            "CaseResearchController.cs", "ScheduleProposalController.cs", "CaseNoteController.cs",
+            "ScheduleProposalController.cs", "CaseNoteController.cs",
             "CaseTransferController.cs", "InvestigationController.cs", "OrgInvestigationsController.cs",
         ];
 

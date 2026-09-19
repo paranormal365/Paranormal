@@ -1,0 +1,40 @@
+/*
+    The board's rows: who on the left, what to do on the right (item 235 phase 5).
+
+    ON A PHONE THEY STACK, and the buttons go full width. A host answering a request from behind a
+    desk with somebody in front of them is the case this screen exists for, and a row of three
+    small buttons squeezed against the right edge of a 375-pixel screen is the version of it that
+    gets the wrong answer pressed.
+*/
+
+.board-row {
+    display: flex;
+    align-items: flex-start;
+    justify-content: space-between;
+    gap: 1rem;
+    flex-wrap: wrap;
+}
+
+.board-row__who {
+    flex: 1 1 16rem;
+    min-width: 0;
+}
+
+.board-row__acts {
+    display: flex;
+    gap: 0.4rem;
+    flex-wrap: wrap;
+}
+
+@media (max-width: 575.98px) {
+    .board-row__acts {
+        width: 100%;
+    }
+
+    /* Forty-four pixels is the smallest control a finger hits reliably, and these are the
+       controls that decide somebody's weekend. */
+    .board-row__acts .btn {
+        flex: 1 1 auto;
+        min-height: 2.75rem;
+    }
+}

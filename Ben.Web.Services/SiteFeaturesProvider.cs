@@ -59,6 +59,8 @@ public sealed class SiteFeaturesProvider
     private volatile IReadOnlyDictionary<string, bool> _snapshot = Defaults;
     private volatile string? _announcement;
     private volatile bool _allowOrgSelfRegistration = true;
+    private volatile bool _allowTourBusinessSignUps = true;
+    private volatile bool _planPurchasesEnabled = true;
     private long _nextRefreshTicks;
     private int _refreshing;
 
@@ -89,6 +91,30 @@ public sealed class SiteFeaturesProvider
     public bool AllowOrganizationSelfRegistration
     {
         get { EnsureFresh(); return _allowOrgSelfRegistration; }
+    }
+
+    /// <summary>
+    /// Whether somebody may start a new tour or events business (item 233).
+    /// </summary>
+    /// <remarks>
+    /// True until told otherwise, for the same reason as the switch above: an unreachable API must
+    /// leave the product working the way it always has, and the server refuses anyway.
+    /// </remarks>
+    public bool AllowTourBusinessSignUps
+    {
+        get { EnsureFresh(); return _allowTourBusinessSignUps; }
+    }
+
+    /// <summary>
+    /// Whether plans and member seats are on sale (2026-09-14).
+    /// </summary>
+    /// <remarks>
+    /// True until told otherwise: an unreachable API must not hide the buy buttons from a site that sells, and the
+    /// server refuses a checkout itself when the switch is off.
+    /// </remarks>
+    public bool PlanPurchasesEnabled
+    {
+        get { EnsureFresh(); return _planPurchasesEnabled; }
     }
 
     /// <summary>
@@ -132,6 +158,8 @@ public sealed class SiteFeaturesProvider
                 // set OR CLEAR the announcement, so a failed fetch cannot wipe a live notice.
                 _announcement = string.IsNullOrWhiteSpace(info.Announcement) ? null : info.Announcement;
                 _allowOrgSelfRegistration = info.AllowOrganizationSelfRegistration;
+                _allowTourBusinessSignUps = info.AllowTourBusinessSignUps;
+                _planPurchasesEnabled = info.PlanPurchasesEnabled;
             }
         }
         catch (Exception ex)

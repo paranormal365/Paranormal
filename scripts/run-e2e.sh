@@ -41,9 +41,49 @@ ROOT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 cd "$ROOT_DIR"
 
 DB_NAME="${BEN_E2E_DB:-IsHauntedDb_e2e}"
-SQL_SERVER="${BEN_E2E_SQL_SERVER:-192.168.1.71,1433}"
-SQL_USER="${BEN_E2E_SQL_USER:-IsHaunted}"
-SQL_PASSWORD="${BEN_E2E_SQL_PASSWORD:-ishaunted}"
+
+# THE SQL LOGIN IS NEVER WRITTEN DOWN HERE.
+#
+# It used to be: `SQL_PASSWORD="${BEN_E2E_SQL_PASSWORD:-ishaunted}"`, a working credential in a
+# public repository. The sweep of 2026-09-02 removed eighteen ACCOUNT passwords from sixteen files
+# and missed this one twice over — once because it is a database login rather than a site account,
+# and once because it is a shell default rather than a `Password=` literal, so the grep that found
+# the others could not see it. Removed 2026-09-12.
+#
+# A default is the same bug wearing a hat, so there is none: the server, user and password are read
+# from the same gitignored appsettings the rest of the harness reads, exactly as
+# scripts/seeded-passwords.sh reads the account passwords, and the script stops with a sentence if
+# they are not there. An environment variable still wins, for a machine pointed somewhere else.
+_E2E_SECRETS="$ROOT_DIR/Ben.Data.WebApi/appsettings.Development.json"
+_e2e_conn_part() {
+  # $1 = the connection-string key to lift out of the dev connection string
+  python3 - "$_E2E_SECRETS" "$1" <<'PYEOF' 2>/dev/null || true
+import json, sys
+try:
+    raw = json.load(open(sys.argv[1]))["ConnectionStrings"]["BenDbConnectionString"]
+except Exception:
+    sys.exit(0)
+wanted = sys.argv[2].lower()
+for part in raw.split(";"):
+    if "=" in part:
+        k, _, v = part.partition("=")
+        if k.strip().lower() == wanted:
+            print(v.strip())
+            break
+PYEOF
+}
+
+SQL_SERVER="${BEN_E2E_SQL_SERVER:-$(_e2e_conn_part 'Server')}"
+SQL_USER="${BEN_E2E_SQL_USER:-$(_e2e_conn_part 'User Id')}"
+SQL_PASSWORD="${BEN_E2E_SQL_PASSWORD:-$(_e2e_conn_part 'Password')}"
+
+if [ -z "$SQL_SERVER" ] || [ -z "$SQL_USER" ] || [ -z "$SQL_PASSWORD" ]; then
+  echo "The e2e database login could not be read from $_E2E_SECRETS."
+  echo "Either restore that file's ConnectionStrings:BenDbConnectionString, or export"
+  echo "BEN_E2E_SQL_SERVER, BEN_E2E_SQL_USER and BEN_E2E_SQL_PASSWORD before running this."
+  exit 1
+fi
+
 CONN="Server=${SQL_SERVER};Database=${DB_NAME};User Id=${SQL_USER};Password=${SQL_PASSWORD};Encrypt=True;TrustServerCertificate=True;"
 
 # Named AFTER the database, and that pairing is load-bearing. The database persists between runs,
@@ -77,10 +117,12 @@ UPLOADS_DIR="$ROOT_DIR/.uploads-${DB_NAME}"
 API_BIND="http://127.0.0.1:5252"
 WEB_BIND="http://127.0.0.1:5078"
 WASM_BIND="http://127.0.0.1:5180"
+CANVAS_BIND="http://127.0.0.1:5125"
 
 API_URL="http://localhost:5252"
 WEB_URL="http://localhost:5078"
 WASM_URL="http://localhost:5180"
+CANVAS_URL="http://localhost:5125"
 
 KEEP=0
 PASSTHROUGH=()
@@ -94,11 +136,16 @@ done
 STARTED_PIDS=()
 LOG_DIR="$(mktemp -d)"
 
+# A fixed path pointing at this run's throwaway directory, so scripts/e2e-progress.sh can answer
+# "where are we?" without being told where to look. Overwritten by each run; nothing depends on it
+# surviving (2026-09-19).
+echo "$LOG_DIR" > "${TMPDIR:-/tmp}/ben-e2e-current"
+
 cleanup() {
   if [[ $KEEP -eq 1 ]]; then
     echo ""
     echo "Hosts left running (--keep). Logs: $LOG_DIR"
-    echo "  api  $API_URL   web  $WEB_URL   wasm $WASM_URL"
+    echo "  api  $API_URL   web  $WEB_URL   wasm $WASM_URL   canvas $CANVAS_URL"
     echo "  database: $DB_NAME"
     return
   fi
@@ -110,18 +157,19 @@ cleanup() {
   pkill -f "Ben.Data.WebApi" 2>/dev/null || true
   pkill -f "Ben.Web.Website" 2>/dev/null || true
   pkill -f "Ben.Wasm.Video"  2>/dev/null || true
+  pkill -f "Ben.Wasm.Canvas" 2>/dev/null || true
 }
 trap cleanup EXIT
 
 port_busy() { curl -fsS -o /dev/null --max-time 2 "$1" 2>/dev/null; }
 
 echo "── Checking the ports are free ─────────────────────────────────────────"
-for url in "$API_URL/api/public/build" "$WEB_URL/" "$WASM_URL/"; do
+for url in "$API_URL/api/public/build" "$WEB_URL/" "$WASM_URL/" "$CANVAS_URL/"; do
   if port_busy "$url"; then
     echo "REFUSING: something is already serving ${url%%/api*}."
     echo "That host is pointed at whatever database it was started with — probably the shared one."
     echo "Running against it would defeat the isolation this script exists for. Stop it first:"
-    echo "    pkill -f 'Ben.Data.WebApi'; pkill -f 'Ben.Web.Website'; pkill -f 'Ben.Wasm.Video'"
+    echo "    pkill -f 'Ben.Data.WebApi'; pkill -f 'Ben.Web.Website'; pkill -f 'Ben.Wasm.Video'; pkill -f 'Ben.Wasm.Canvas'"
     exit 1
   fi
 done
@@ -169,6 +217,9 @@ start_host web  "$ROOT_DIR/Ben.Web.Website"  "$WEB_BIND"  "$WEB_URL/" ""
 # dotnet.js, not "/": the WASM host answers 200 on its root while serving a stale or half-built
 # framework, and eight video-editor tests then fail for reasons that look like product bugs.
 start_host wasm "$ROOT_DIR/Ben.Wasm.Video"   "$WASM_BIND" "$WASM_URL/_framework/dotnet.js" ""
+# The canvas is a fourth host, and research lives on it since 2026-09-16: without this the Research
+# tab's tests skip, which is the failure mode that hides a broken handover behind a green run.
+start_host canvas "$ROOT_DIR/Ben.Wasm.Canvas" "$CANVAS_BIND" "$CANVAS_URL/_framework/dotnet.js" ""
 
 if grep -q "DATABASE IS BEHIND" "$LOG_DIR/api.log" 2>/dev/null; then
   echo "WARNING: the API says the schema is behind — see $LOG_DIR/api.log"
@@ -226,19 +277,71 @@ echo "   database: $DB_NAME"
 echo "   uploads : $UPLOADS_DIR"
 echo ""
 
+# BEN_E2E_API_LOG: with no mail server, a link that would have been emailed (picking seats without
+# signing in) is written to the API's log instead, and the browser test that follows one reads it
+# from there. Nothing but a token for a throwaway address on this throwaway database is ever in it.
+#
 # -p:IsTestProject=true is NOT optional: the csproj sets it false to stay out of the solution's
 # test run, and without the override `dotnet test` finds zero tests and EXITS 0 — a silent pass
 # that has been reported as a real one before.
+# What this run intends to do, before it starts doing it — so progress can be reported as "N of M"
+# rather than "no failures yet", which reads the same at one minute and at thirty.
+{
+  echo "E2E_STARTED=$(date +%s)"
+  echo "E2E_DB=$DB_NAME"
+  echo "E2E_FILTER=${PASSTHROUGH[*]:-}"
+} > "$LOG_DIR/meta"
+
+# Built once, here, so neither pass below repeats it.
+echo "   building…"
+dotnet build Ben.Web.Playwright -p:IsTestProject=true -c Release --nologo -v q > "$LOG_DIR/build.log" 2>&1
+
+# --list-tests DOES NOT HONOUR --filter: it lists everything the assembly contains. Writing that as
+# "what will run" for a filtered slice made the progress script report 47 of 789 and call the other
+# 742 "not reached" (measured 2026-09-19, the first real use of this). So the planned list is only
+# written for a whole-suite run; with a filter there is no honest M, and e2e-progress.sh already
+# degrades to counts when the file is absent.
+if [[ ${#PASSTHROUGH[@]} -eq 0 ]]; then
+  echo "   listing what will run…"
+  set +e
+  dotnet test Ben.Web.Playwright -p:IsTestProject=true -c Release --nologo --no-build \
+    --list-tests 2>/dev/null \
+    | sed -n '/The following Tests are available/,$p' | tail -n +2 \
+    | sed 's/^[[:space:]]*//' | grep -v '^$' > "$LOG_DIR/planned.txt"
+  set -e
+  echo "   $(wc -l < "$LOG_DIR/planned.txt" | tr -d ' ') tests to run"
+else
+  echo "   filtered run — no planned list (--list-tests ignores --filter)"
+fi
+echo ""
+
+# verbosity=normal so the log carries one line per test as it finishes; the terminal keeps the
+# quiet view it has always had by filtering that stream down to what a person watching cares about.
+# scripts/e2e-progress.sh reads the log, not the terminal.
 set +e
-dotnet test Ben.Web.Playwright -p:IsTestProject=true -c Release --nologo \
-  -e BEN_BASE_URL="$WEB_URL" "${PASSTHROUGH[@]:-}" 2>&1 | tee "$LOG_DIR/e2e.log"
+dotnet test Ben.Web.Playwright -p:IsTestProject=true -c Release --nologo --no-build \
+  --logger "console;verbosity=normal" \
+  -e BEN_BASE_URL="$WEB_URL" -e BEN_E2E_API_LOG="$LOG_DIR/api.log" "${PASSTHROUGH[@]:-}" 2>&1 \
+  | tee "$LOG_DIR/e2e.log" \
+  | grep -E --line-buffered '^( *(Failed|Error) |Test Run |Total tests:|A total of)' || true
 STATUS=${PIPESTATUS[0]}
 set -e
+touch "$LOG_DIR/.finished"
 
 echo ""
 echo "── Result ──────────────────────────────────────────────────────────────"
-grep -E "Passed!|Failed!" "$LOG_DIR/e2e.log" | tail -1 || echo "no summary line — did anything run?"
-grep -E "^  Failed " "$LOG_DIR/e2e.log" | sed 's/\[.*//' | head -20 || true
+# At verbosity=normal the summary is a BLOCK ("Test Run Successful." then the totals), not the
+# one-line "Passed! - Failed: 0, ..." that minimal verbosity prints. Grepping for the old line
+# found nothing and reported "did anything run?" on a run of 47 green tests (2026-09-19).
+if grep -qE "^Test Run (Successful|Failed)\." "$LOG_DIR/e2e.log"; then
+  verdict=$(grep -E "^Test Run (Successful|Failed)\." "$LOG_DIR/e2e.log" | tail -1)
+  totals=$(grep -E "^ *(Total tests|Passed|Failed|Skipped): " "$LOG_DIR/e2e.log" \
+           | tail -5 | sed 's/^ *//' | paste -sd" · " -)
+  echo "$verdict  $totals"
+else
+  echo "no summary line — did anything run?"
+fi
+grep -E "^ *Failed " "$LOG_DIR/e2e.log" | sed 's/\[.*//' | head -20 || true
 echo ""
 echo "Logs: $LOG_DIR"
 exit "$STATUS"

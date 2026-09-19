@@ -1,3 +1,4 @@
+using System.Globalization;
 using Ben.Data.Common.Enums;
 using Ben.Service.Models.Feed;
 using Ben.Web.Services;
@@ -18,7 +19,8 @@ public sealed partial class BenAdminClientAdapter
 
     public Task<FeedPageRecord?> GetFeedAsync(
         string? mode = null, string? hashtag = null, string? cursor = null,
-        CancellationToken token = default, Guid? author = null, Guid? experienceType = null)
+        CancellationToken token = default, Guid? author = null, Guid? experienceType = null,
+        Guid? place = null)
     {
         var query = new List<string>();
         if (!string.IsNullOrWhiteSpace(mode))    query.Add($"mode={Uri.EscapeDataString(mode)}");
@@ -26,6 +28,7 @@ public sealed partial class BenAdminClientAdapter
         if (!string.IsNullOrWhiteSpace(cursor))  query.Add($"cursor={Uri.EscapeDataString(cursor)}");
         if (author is { } authorId)              query.Add($"author={authorId}");
         if (experienceType is { } typeId)        query.Add($"type={typeId}");
+        if (place is { } aboutPlaceId)           query.Add($"place={aboutPlaceId}");
 
         var url = "/api/feed" + (query.Count > 0 ? "?" + string.Join("&", query) : string.Empty);
         return _api.GetAsync<FeedPageRecord>(url, token);
@@ -53,6 +56,26 @@ public sealed partial class BenAdminClientAdapter
 
     public Task<FeedModerationSummary?> GetModerationSummaryAsync(CancellationToken token = default)
         => _api.GetAsync<FeedModerationSummary>("/api/moderation/summary", token);
+
+    public Task<LoadResult<ArchiveMediaReviewRow>> GetArchiveMediaReviewAsync(
+        bool includeHeld = false, CancellationToken token = default)
+        => _api.GetListAsync<ArchiveMediaReviewRow>(
+            $"/api/moderation/archive-media?includeHeld={(includeHeld ? "true" : "false")}", token);
+
+    public Task<bool> ReviewArchiveMediaAsync(
+        Guid sessionId, bool approve, string? note = null, CancellationToken token = default)
+        => _api.PostVoidAsync($"/api/moderation/archive-media/{sessionId}",
+                              new ReviewFeedMediaRequest(approve, note), token);
+
+    public Task<LoadResult<ArchiveEvidenceReviewRow>> GetArchiveEvidenceReviewAsync(
+        bool includeHeld = false, CancellationToken token = default)
+        => _api.GetListAsync<ArchiveEvidenceReviewRow>(
+            $"/api/moderation/archive-evidence?includeHeld={(includeHeld ? "true" : "false")}", token);
+
+    public Task<bool> ReviewArchiveEvidenceAsync(
+        Guid submissionId, bool approve, string? note = null, CancellationToken token = default)
+        => _api.PostVoidAsync($"/api/moderation/archive-evidence/{submissionId}",
+                              new ReviewFeedMediaRequest(approve, note), token);
 
     public string GetModerationMediaUrl(Guid postId)
         => $"{_webApiBaseUrl}/api/moderation/feed-media/{postId}/file";
@@ -91,7 +114,13 @@ public sealed partial class BenAdminClientAdapter
         string body, Guid? parentPostId = null, CancellationToken token = default,
         Stream? media = null, string? mediaFileName = null, string? mediaContentType = null,
         Guid? experienceTypeId = null,
-        Guid? sourceCaseId = null, bool consentToPublishPrivateEngagement = false)
+        Guid? sourceCaseId = null, bool consentToPublishPrivateEngagement = false,
+        NewPollRequest? poll = null,
+        DateTime? scheduledForUtc = null,
+        decimal? postedLatitude = null,
+        decimal? postedLongitude = null,
+        string? postedPlaceName = null,
+        Guid? aboutPlaceId = null)
     {
         using var form = new MultipartFormDataContent();
         form.Add(new StringContent(body), nameof(CreateFeedPostRequest.Body));
@@ -103,6 +132,43 @@ public sealed partial class BenAdminClientAdapter
             form.Add(new StringContent(caseId.ToString()), nameof(CreateFeedPostRequest.SourceCaseId));
         if (consentToPublishPrivateEngagement)
             form.Add(new StringContent("true"), nameof(CreateFeedPostRequest.ConsentToPublishPrivateEngagement));
+
+        // ── The composer's other tools (item 233) ────────────────────────────
+        // The endpoint takes a form, so the poll goes over as the nested keys the model binder
+        // reads — Poll.Question, Poll.Options[0] — rather than as a JSON blob the server would
+        // have to parse a second way. One shape, one validator.
+        if (poll is not null)
+        {
+            form.Add(new StringContent(poll.Question), "Poll.Question");
+            for (var i = 0; i < poll.Options.Count; i++)
+                form.Add(new StringContent(poll.Options[i]), $"Poll.Options[{i}]");
+            form.Add(new StringContent(poll.AllowMultiple ? "true" : "false"), "Poll.AllowMultiple");
+            if (poll.ClosesInHours is { } hours)
+                form.Add(new StringContent(hours.ToString(CultureInfo.InvariantCulture)), "Poll.ClosesInHours");
+        }
+
+        // Round-trip format, so the instant survives the wire without a zone being guessed at
+        // either end.
+        if (scheduledForUtc is { } when)
+            form.Add(new StringContent(when.ToString("O", CultureInfo.InvariantCulture)),
+                nameof(CreateFeedPostRequest.ScheduledForUtc));
+
+        // All three or none: a name with no point cannot be drawn, and a point with no name
+        // reads as a pair of numbers.
+        if (postedLatitude is { } lat && postedLongitude is { } lon)
+        {
+            form.Add(new StringContent(lat.ToString(CultureInfo.InvariantCulture)),
+                nameof(CreateFeedPostRequest.PostedLatitude));
+            form.Add(new StringContent(lon.ToString(CultureInfo.InvariantCulture)),
+                nameof(CreateFeedPostRequest.PostedLongitude));
+            if (!string.IsNullOrWhiteSpace(postedPlaceName))
+                form.Add(new StringContent(postedPlaceName), nameof(CreateFeedPostRequest.PostedPlaceName));
+        }
+
+        // The place the post is ABOUT — unrelated to the author's own position above, and sent on
+        // its own because a post about Cragfont is usually written at home.
+        if (aboutPlaceId is { } aboutPlace)
+            form.Add(new StringContent(aboutPlace.ToString()), nameof(CreateFeedPostRequest.PlaceId));
 
         StreamContent? mediaContent = null;
         if (media is not null && mediaFileName is not null)
@@ -155,6 +221,29 @@ public sealed partial class BenAdminClientAdapter
         => _api.DeleteAsync($"/api/feed/follow/{appUserId}", token);
 
     // ── Moderation ───────────────────────────────────────────────────────────
+
+    public Task<MessagePollRecord?> GetPollAsync(Guid pollId, CancellationToken token = default)
+        => _api.GetAsync<MessagePollRecord>($"/api/polls/{pollId}", token);
+
+    public Task<MessagePollRecord?> CastPollVoteAsync(
+        Guid pollId, IReadOnlyList<Guid> optionIds, CancellationToken token = default)
+        => _api.PostAsync<object, MessagePollRecord>(
+               $"/api/polls/{pollId}/votes", new { OptionIds = optionIds }, token);
+
+    public Task<LoadResult<GiphyItem>> SearchGifsAsync(string? term, CancellationToken token = default)
+        => _api.GetListAsync<GiphyItem>(
+               string.IsNullOrWhiteSpace(term)
+                   ? "/api/giphy/search"
+                   : $"/api/giphy/search?q={Uri.EscapeDataString(term.Trim())}",
+               token);
+
+    // ── A post still waiting for its hour (item 233) ─────────────────────────
+
+    public Task<FeedPostRecord?> PublishScheduledNowAsync(Guid postId, CancellationToken token = default)
+        => _api.PostAsync<object, FeedPostRecord>($"/api/feed/posts/{postId}/publish-now", new { }, token);
+
+    public Task<bool> CancelScheduledPostAsync(Guid postId, CancellationToken token = default)
+        => _api.DeleteAsync($"/api/feed/posts/{postId}/schedule", token);
 
     public Task<LoadResult<FeedReportRecord>> GetFeedReportsAsync(
         FeedReportOutcome? outcome = null, CancellationToken token = default)

@@ -1,0 +1,171 @@
+@page "/admin/venue-claims"
+@namespace Ben.Web.Website.Library.SuperAdmin
+@using Ben.Data.Common.Enums
+@using Ben.Service.Models.Entities
+@using Ben.Web.Services
+@using Ben.Web.Services.WebApi
+@using Ben.Web.Website.Library.Kit
+@inject IBenAdminClient AdminClient
+@inject IBenUserState UserState
+@inject NavigationManager NavManager
+
+@*
+    Who runs a place, when a code could not settle it (item 235 phase 9).
+
+    TO DECIDE comes first: claims with nothing to prove them by, and claims somebody objected to.
+    The whole address a code went to is shown unmasked here, because whether it looks like the
+    venue's own is half the decision. STANDING claims are inside their week for objections — shown
+    so a reviewer who knows something is wrong can step in early. CONFIRMED venues can be undone,
+    because the commonest false claim that gets through is the one discovered afterwards.
+*@
+
+<PageTitle>Venue claims — IsHaunted</PageTitle>
+
+<div class="container-fluid px-3 py-3" style="max-width:1100px;">
+    <h3 class="mb-1">Venue claims</h3>
+    <p class="text-secondary small mb-3">
+        Groups claiming to run a place. A confirmed venue makes other groups ask it before publishing events there.
+        Nothing here moves or cancels an event.
+    </p>
+
+    @if (_note is { Length: > 0 })
+    {
+        <div class="alert alert-success py-2" id="admin-claims-note">@_note</div>
+    }
+    @if (_error is { Length: > 0 })
+    {
+        <div class="alert alert-danger py-2" id="admin-claims-error" role="alert">@_error</div>
+    }
+
+    <BenItemState TItem="AdminVenueClaimListRecord" Result="_list" Loading="_loading" LoadingText="Loading claims…" OnRetry="LoadAsync">
+        <ChildContent Context="list">
+            <h6 class="text-secondary text-uppercase small mb-2">To decide</h6>
+            @if (list.ToDecide.Count == 0)
+            {
+                <div class="alert alert-light border">Nothing waiting on a decision.</div>
+            }
+            @foreach (var claim in list.ToDecide)
+            {
+                var c = claim;
+                <div class="card mb-3 admin-venue-claim" data-claim="@c.Id">
+                    <div class="card-body">
+                        <ClaimSummary Claim="c" />
+                        <label class="form-label small mt-2 mb-1" for="@($"claim-note-{c.Id:N}")">Note to the claimant</label>
+                        <input class="form-control mb-2" id="@($"claim-note-{c.Id:N}")" maxlength="2000"
+                               @bind="_notes[c.Id]" @bind:event="oninput" />
+                        <div class="d-flex flex-wrap gap-2">
+                            <button type="button" class="btn btn-primary btn-sm" disabled="@_busy" @onclick="() => ApproveAsync(c)">
+                                Confirm @c.OrganizationName as the venue
+                            </button>
+                            <button type="button" class="btn btn-outline-danger btn-sm" disabled="@_busy" @onclick="() => RefuseAsync(c)">
+                                Refuse
+                            </button>
+                        </div>
+                    </div>
+                </div>
+            }
+
+            <h6 class="text-secondary text-uppercase small mb-2 mt-4">Standing — proved or waiting for a code</h6>
+            @if (list.Standing.Count == 0)
+            {
+                <div class="alert alert-light border">None.</div>
+            }
+            @foreach (var claim in list.Standing)
+            {
+                var c = claim;
+                <div class="card mb-2">
+                    <div class="card-body py-2">
+                        <ClaimSummary Claim="c" />
+                        <button type="button" class="btn btn-link btn-sm p-0 text-danger" disabled="@_busy"
+                                @onclick="() => RefuseAsync(c)">Refuse</button>
+                    </div>
+                </div>
+            }
+
+            <h6 class="text-secondary text-uppercase small mb-2 mt-4">Confirmed venues</h6>
+            <div class="table-responsive">
+                <table class="table table-sm align-middle">
+                    <thead><tr><th>Place</th><th>Venue</th><th>Since</th><th></th></tr></thead>
+                    <tbody>
+                        @foreach (var v in list.Confirmed)
+                        {
+                            var venue = v;
+                            <tr>
+                                <td><a href="@($"/places/{venue.PlaceId}")">@venue.PlaceName</a></td>
+                                <td>@venue.OrganizationName</td>
+                                <td class="text-nowrap">@venue.VerifiedUtc.ToViewerLocalTime(UserState).ToDisplayDate()</td>
+                                <td class="text-end text-nowrap">
+                                    <input class="form-control form-control-sm d-inline-block me-1" style="width:14rem;"
+                                           aria-label="Why" placeholder="Why" @bind="_notes[venue.ProfileId]" @bind:event="oninput" />
+                                    <button type="button" class="btn btn-outline-danger btn-sm" disabled="@_busy"
+                                            @onclick="() => UnconfirmAsync(venue)">Undo</button>
+                                </td>
+                            </tr>
+                        }
+                    </tbody>
+                </table>
+            </div>
+
+            @if (list.Settled.Count > 0)
+            {
+                <h6 class="text-secondary text-uppercase small mb-2 mt-4">Recently settled</h6>
+                <ul class="small">
+                    @foreach (var c in list.Settled)
+                    {
+                        <li>@c.OrganizationName · @c.PlaceName · @(c.State == VenueClaimState.Approved ? "confirmed" : "refused")
+                            @if (c.DecisionNote is { Length: > 0 } n) { <text> — “@n”</text> }</li>
+                    }
+                </ul>
+            }
+        </ChildContent>
+    </BenItemState>
+</div>
+
+@code {
+    private ItemResult<AdminVenueClaimListRecord> _list;
+    private bool _loading = true;
+    private bool _busy;
+    private string? _note;
+    private string? _error;
+    private readonly DefaultDictionary _notes = new();
+
+    /// <summary>A note box per row that never throws on a row it has not seen.</summary>
+    private sealed class DefaultDictionary : Dictionary<Guid, string?>
+    {
+        public new string? this[Guid key]
+        {
+            get => TryGetValue(key, out var v) ? v : null;
+            set => base[key] = value;
+        }
+    }
+
+    protected override async Task OnInitializedAsync()
+    {
+        if (!await UserState.WaitUntilAuthReadyAsync(RendererInfo.IsInteractive)) return;
+        if (!UserState.IsSuperAdmin || UserState.IsImpersonating) { NavManager.NavigateTo(Ben.Web.Website.Library.Kit.SignInLink.ForRefusal(NavManager, UserState)); return; }
+        await LoadAsync();
+    }
+
+    private async Task LoadAsync()
+    {
+        _loading = true;
+        _list = await AdminClient.GetAdminVenueClaimsAsync();
+        _loading = false;
+    }
+
+    private Task ApproveAsync(VenueClaimRecord c) => SendAsync(() => AdminClient.ApproveVenueClaimAsync(c.Id, new DecideVenueClaimRequest(_notes[c.Id])));
+    private Task RefuseAsync(VenueClaimRecord c) => SendAsync(() => AdminClient.RefuseVenueClaimAsync(c.Id, new DecideVenueClaimRequest(_notes[c.Id])));
+    private Task UnconfirmAsync(ConfirmedVenueRecord v) => SendAsync(() => AdminClient.UnconfirmVenueAsync(v.ProfileId, new DecideVenueClaimRequest(_notes[v.ProfileId])));
+
+    private async Task SendAsync(Func<Task<(AdminVenueClaimListRecord? Result, string? Error)>> send)
+    {
+        _busy = true;
+        _error = null;
+        _note = null;
+        var (list, error) = await send();
+        _busy = false;
+        if (list is null) { _error = error ?? "That couldn't be saved just now."; return; }
+        _list = ItemResult<AdminVenueClaimListRecord>.Ok(list);
+        _note = list.Note;
+    }
+}

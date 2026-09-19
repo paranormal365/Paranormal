@@ -87,7 +87,43 @@ public struct ReplayFrame: Sendable, Equatable {
     public var soundDbfs: Double?
     public var position: FieldReading.Position?
     public var headingDegrees: Double?
+    /// Which way they were walking at this moment, from the fix rather than the compass.
+    public var courseDegrees: Double?
     public var relativeAltitudeMeters: Double?
+
+    /// Which way to point the arrow on the map, and what that direction actually means.
+    ///
+    /// Ben, 2026-09-16: "See if the map is tracked using an arrow to point the direction and how
+    /// the person walks." Two different facts answer that — the compass says where they were
+    /// looking, the fix says where they were going — and a night usually has only one of them,
+    /// because a compass is useless indoors and a course needs a moving fix. Whichever exists is
+    /// drawn, and the screen says which it is rather than letting one be read as the other.
+    public enum Facing: Sendable, Equatable {
+        case looking(Double)
+        case walking(Double)
+
+        public var degrees: Double {
+            switch self {
+            case .looking(let value), .walking(let value): value
+            }
+        }
+
+        /// What the arrow means, for the label beside it.
+        public var what: String {
+            switch self {
+            case .looking: "looking"
+            case .walking: "walking"
+            }
+        }
+    }
+
+    /// The compass first: where somebody was pointed is what they were investigating. The
+    /// direction of travel stands in when there is no compass reading, which is most of a night.
+    public var facing: Facing? {
+        if let headingDegrees { return .looking(headingDegrees) }
+        if let courseDegrees { return .walking(courseDegrees) }
+        return nil
+    }
     /// The clip covering this moment, and how far into it — nil when nothing was recorded here.
     public var activeMedia: (segment: MediaSegment, offset: TimeInterval)?
     /// A marker within a second or so of the playhead, for highlighting as it passes.
@@ -103,6 +139,7 @@ public struct ReplayFrame: Sendable, Equatable {
             && lhs.soundDbfs == rhs.soundDbfs
             && lhs.position == rhs.position
             && lhs.headingDegrees == rhs.headingDegrees
+            && lhs.courseDegrees == rhs.courseDegrees
             && lhs.activeMedia?.segment.id == rhs.activeMedia?.segment.id
             && lhs.nearestMarker?.id == rhs.nearestMarker?.id
             && lhs.room == rhs.room
@@ -127,6 +164,13 @@ public struct ReplayFrame: Sendable, Equatable {
 public final class SessionReplay {
 
     public private(set) var timeline: ReplayTimeline = .empty
+    /// The field line, thinned for drawing — see `FieldTrace`. Worked out once here rather than
+    /// by the chart on every tick.
+    public private(set) var fieldTrace: FieldTrace = .empty
+    /// Every fix in order, the path the map draws. The same once-only rule as the trace: a long
+    /// night is thousands of fixes, and the map used to walk every reading for them ten times a
+    /// second.
+    public private(set) var walkedPath: [FieldReading.Position] = []
     public private(set) var playhead: Date = .distantPast
     public private(set) var frame = ReplayFrame(at: .distantPast)
     public private(set) var isPlaying = false
@@ -144,11 +188,71 @@ public final class SessionReplay {
     public static let rateRange: ClosedRange<Double> = 0.5...64
 
     public func setRate(_ value: Double) {
+        // Anchored BEFORE the change, so the time already played keeps the speed it was played
+        // at. Anchoring after would re-scale it.
+        //
+        // From the MEASURED position, not the stored one. The stored playhead is as old as the
+        // last tick, and re-anchoring from it rewinds by that much — at 64x, a tenth of a second
+        // of ticking is over six seconds of the night, dropped silently on every speed change.
+        if isPlaying {
+            let here = measuredPlayhead
+            moveTo(here)
+            reanchor(at: here)
+        }
         rate = min(max(value, Self.rateRange.lowerBound), Self.rateRange.upperBound)
     }
 
     private var ticker: Task<Void, Never>?
     private let tickHz: Double = 10
+
+    // ── Where the playhead is measured FROM ──────────────────────────────────
+    //
+    // Playback used to advance the playhead by a fixed `step * rate` on every tick, which counts
+    // TICKS rather than measuring time. `Task.sleep` promises "at least", never "exactly", so on
+    // a busy device the ticks arrive late and the playhead falls behind — a replay labelled 8x
+    // silently runs slower than 8x, and the busier the phone the slower it goes. It is
+    // one-directional: playback can only ever lag, never race.
+    //
+    // Found by a test that starved for 400ms under a full parallel suite and saw the playhead
+    // not move at all. That was the extreme of the same fault, not a different one.
+    //
+    // So the playhead is computed from an anchor instead: where it was, when that was, and how
+    // fast we are going. However long a tick actually takes, the answer is the same.
+    private var anchorPlayhead: Date = .distantPast
+    private var anchorAt: ContinuousClock.Instant?
+
+    /// Where the playhead should be, given how much real time has passed since the anchor.
+    ///
+    /// Static and pure so the arithmetic can be checked without a scheduler — the scheduler is
+    /// exactly what cannot be relied on here.
+    static func playhead(
+        from anchor: Date, elapsed: Duration, rate: Double, endingAt end: Date
+    ) -> Date {
+        min(anchor.addingTimeInterval(elapsed.inSeconds * rate), end)
+    }
+
+    /// Where the playhead is *right now* — further along than the last tick left it, by however
+    /// much real time has passed since. Between ticks the stored `playhead` is stale by design;
+    /// this is what anything re-anchoring must measure from.
+    private var measuredPlayhead: Date {
+        guard isPlaying, let anchoredAt = anchorAt else { return playhead }
+        return Self.playhead(from: anchorPlayhead, elapsed: ContinuousClock.now - anchoredAt,
+                             rate: rate, endingAt: timeline.endedAt)
+    }
+
+    /// Starts measuring again from a given moment.
+    ///
+    /// Called whenever something makes the elapsed time since the last anchor meaningless: play,
+    /// a person seeking, or a change of speed. Without the last of those, changing to 8x would
+    /// retroactively re-scale every second already played.
+    ///
+    /// The moment is passed in rather than read from `playhead`, because the two callers want
+    /// different ones: a seek anchors where the person just dragged to, and a speed change
+    /// anchors where the measurement says we actually are.
+    private func reanchor(at moment: Date) {
+        anchorPlayhead = moment
+        anchorAt = ContinuousClock.now
+    }
 
     public init() {}
 
@@ -173,6 +277,9 @@ public final class SessionReplay {
                 markers: markers.sorted { $0.at < $1.at },
                 media: media.sorted { $0.startedAt < $1.startedAt },
                 baselines: baselines)
+            fieldTrace = FieldTrace(readings: timeline.readings,
+                                    baselineMicrotesla: baselines.magneticMicrotesla)
+            walkedPath = timeline.track.map(\.position)
             playhead = timeline.startedAt
             frame = makeFrame(at: playhead)
             isLoaded = true
@@ -190,18 +297,28 @@ public final class SessionReplay {
         if playhead >= timeline.endedAt { seek(to: timeline.startedAt) }
         isPlaying = true
 
+        reanchor(at: playhead)
+
         ticker = Task { [weak self] in
             let step = 1 / (self?.tickHz ?? 10)
             while !Task.isCancelled {
                 try? await Task.sleep(for: .seconds(step))
-                guard let self, self.isPlaying else { return }
-                let next = self.playhead.addingTimeInterval(step * self.rate)
+                guard let self, self.isPlaying, let anchoredAt = self.anchorAt else { return }
+
+                // Measured, not counted. A tick that arrives late moves the playhead further,
+                // which is what keeps a replay at the speed its label claims.
+                let next = Self.playhead(
+                    from: self.anchorPlayhead,
+                    elapsed: ContinuousClock.now - anchoredAt,
+                    rate: self.rate,
+                    endingAt: self.timeline.endedAt)
+
                 if next >= self.timeline.endedAt {
-                    self.seek(to: self.timeline.endedAt)
+                    self.moveTo(self.timeline.endedAt)
                     self.pause()
                     return
                 }
-                self.seek(to: next)
+                self.moveTo(next)
             }
         }
     }
@@ -210,11 +327,20 @@ public final class SessionReplay {
         isPlaying = false
         ticker?.cancel()
         ticker = nil
+        anchorAt = nil
     }
 
     public func togglePlaying() { isPlaying ? pause() : play() }
 
     public func seek(to moment: Date) {
+        moveTo(moment)
+        // A person dragging the scrubber mid-playback restarts the measurement; without this the
+        // next tick would drag the playhead straight back to where the anchor says it should be.
+        if isPlaying { reanchor(at: playhead) }
+    }
+
+    /// Moves the playhead without disturbing the anchor — what the ticker uses.
+    private func moveTo(_ moment: Date) {
         let clamped = min(max(moment, timeline.startedAt), timeline.endedAt)
         playhead = clamped
         frame = makeFrame(at: clamped)
@@ -259,6 +385,7 @@ public final class SessionReplay {
             result.soundDbfs = reading.measurements?["sound_level"]?.numberValue
             result.relativeAltitudeMeters = reading.measurements?["relative_altitude"]?.numberValue
             result.headingDegrees = reading.motion?.headingDegrees
+            result.courseDegrees = reading.motion?.courseDegrees
             // Read from THIS reading rather than held forever: readings carry the room for as
             // long as one is set, so its absence here means they stopped saying, not that the
             // label was lost.

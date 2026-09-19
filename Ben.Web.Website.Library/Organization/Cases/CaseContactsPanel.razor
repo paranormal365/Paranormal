@@ -2,13 +2,13 @@
 @using Ben.Web.Services.WebApi
 @using Ben.Web.Website.Library.Help
 @inject IBenAdminClient AdminClient
+@inject Ben.Web.Services.IBenUserState UserState
 
 @*
-    Who the client talks to (item 158). Reads for every member; saving follows this page's
-    convention — the server decides (case manager, org admin), and a refusal renders as its
-    sentence rather than the panel pretending nothing happened. With no explicit contact the
-    case manager stands in, so the client's side of this can never be empty while a manager
-    exists.
+    Who the client talks to (item 158). Reads for every member. Choosing is the case manager's or a group admin's — the
+    server's rule — and the button is offered only to them: a member was offered the picker, ticked names and was refused
+    at Save (member test pass M.1, 2026-09-14). A refusal still renders as its sentence. With no explicit contact the case
+    manager stands in, so the client's side of this can never be empty while a manager exists.
 *@
 
 <div class="card mt-3">
@@ -42,8 +42,17 @@
                     }
                 </ul>
             }
-            <button type="button" class="btn btn-outline-secondary btn-sm" id="case-contacts-edit"
-                    @onclick="BeginEditAsync">Choose contacts</button>
+            @if (_mayChoose)
+            {
+                <button type="button" class="btn btn-outline-secondary btn-sm" id="case-contacts-edit"
+                        @onclick="BeginEditAsync">Choose contacts</button>
+            }
+            else
+            {
+                <p class="text-secondary mb-0" style="font-size:.72rem;" id="case-contacts-who-chooses">
+                    The case manager or a group admin chooses the contacts.
+                </p>
+            }
         }
         else
         {
@@ -71,6 +80,11 @@
     [Parameter, EditorRequired] public Guid OrgId { get; set; }
     [Parameter, EditorRequired] public Guid CaseId { get; set; }
 
+    /// <summary>The case's manager, who may choose its contacts.</summary>
+    [Parameter] public Guid? CaseManagerAppUserId { get; set; }
+
+    private bool _mayChoose;
+
     private IReadOnlyList<CaseContactItem> _contacts = [];
     private IReadOnlyList<OrgMembershipItem> _members = [];
     private HashSet<Guid> _selected = [];
@@ -83,6 +97,9 @@
         if (CaseId == Guid.Empty || CaseId == _loadedForCase) return;
         _loadedForCase = CaseId;
         _contacts = (await AdminClient.GetCaseContactsAsync(OrgId, CaseId)).Items;
+        _mayChoose = UserState.IsSuperAdmin
+            || (UserState.UserId is { } me && me == CaseManagerAppUserId)
+            || (await AdminClient.GetOrganizationsAsync()).Items.Any(o => o.Id == OrgId && o.CanEdit);
     }
 
     private async Task BeginEditAsync()

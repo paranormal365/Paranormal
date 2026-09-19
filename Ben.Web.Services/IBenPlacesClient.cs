@@ -33,8 +33,17 @@ public interface IBenPlacesClient
     /// <summary>Edits a room.</summary>
     Task<PlaceRoomRecord?> UpdatePlaceRoomAsync(Guid orgId, Guid placeId, Guid roomId, SavePlaceRoomRequest request, CancellationToken token = default);
 
-    /// <summary>Removes a room.</summary>
-    Task<bool> DeletePlaceRoomAsync(Guid orgId, Guid placeId, Guid roomId, CancellationToken token = default);
+    /// <summary>
+    /// Removes a room, keeping the server's reason when it refuses.
+    /// </summary>
+    /// <remarks>
+    /// A bare bool used to be enough, and stopped being enough on 2026-09-12 when the server began
+    /// refusing a room that is on an event's plan by naming the event. A screen that threw that
+    /// sentence away had to guess at one, and a guess is how "an event may still be offering it"
+    /// gets shown to somebody whose room is not on any plan at all.
+    /// </remarks>
+    Task<(bool Deleted, string? Error)> DeletePlaceRoomAsync(
+        Guid orgId, Guid placeId, Guid roomId, CancellationToken token = default);
 
     /// <summary>One place, for the place page header and map.</summary>
     Task<PlaceRecord?> GetPlaceAsync(Guid placeId, CancellationToken token = default);
@@ -48,6 +57,25 @@ public interface IBenPlacesClient
 
     /// <summary>"N investigations by M groups since Y", counted over what this caller may see.</summary>
     Task<PlaceSummary?> GetPlaceSummaryAsync(Guid placeId, CancellationToken token = default);
+
+    /// <summary>
+    /// The caller's own groups' cases at this place, whatever their status (2026-09-17).
+    /// </summary>
+    /// <remarks>
+    /// Answers the question a member arrives at a place with — do we already have a case here? —
+    /// which the public list cannot, because the answer is usually a case nobody published.
+    /// </remarks>
+    Task<LoadResult<PlaceCaseRow>> GetMyPlaceCasesAsync(Guid placeId, CancellationToken token = default);
+
+    /// <summary>
+    /// A place's posts for a signed-in reader, and whether they may add one (2026-09-17).
+    /// </summary>
+    /// <remarks>
+    /// The anonymous place endpoint carries the posts too, but it is called without a token on
+    /// purpose and so always answers "no" to whether you may post. This is the same question asked
+    /// as somebody.
+    /// </remarks>
+    Task<PlacePostsRecord?> GetPlacePostsAsync(Guid placeId, CancellationToken token = default);
 
     /// <summary>
     /// Places that are probably the one being typed in — "did you mean this?" before a duplicate
@@ -176,9 +204,29 @@ public interface IBenPlacesClient
     Task<(OrgCalendarEventRecord? Result, string? Error)> SaveCalendarEventAsync(
         Guid orgId, Guid? eventId, UpsertCalendarEventRequest request, CancellationToken token = default);
     Task<OrgCalendarEventRecord?> UpdateCalendarEventAsync(Guid orgId, Guid eventId, UpsertCalendarEventRequest request, CancellationToken token = default);
-    Task<bool> DeleteCalendarEventAsync(Guid orgId, Guid eventId, CancellationToken token = default);
+    /// <remarks>
+    /// Keeps the server's refusal: an event run from its hosted-event pages is archived there, not deleted here, and a
+    /// calendar that read only true/false left the event in place with nothing said (UI test pass 6.4, 2026-09-14).
+    /// </remarks>
+    Task<(bool Deleted, string? Error)> DeleteCalendarEventAsync(Guid orgId, Guid eventId, CancellationToken token = default);
 
     Task<LoadResult<OrgCalendarEventAttendeeRecord>> GetCalendarEventAttendeesAsync(Guid orgId, Guid eventId, CancellationToken token = default);
+
+    // ── Seats on a tour date (item 234) ─────────────────────────────────────
+
+    /// <summary>
+    /// Approves a sign-up: the places are held, and the guest gets the tour's welcome.
+    /// </summary>
+    /// <remarks>
+    /// The reason-carrying shape, because "only 2 places left on this date, and this is a request
+    /// for 4" is a sentence a business acts on. A bare null would send them looking for a fault.
+    /// </remarks>
+    Task<(OrgCalendarEventAttendeeRecord? Seat, string? Error)> ApproveSeatAsync(
+        Guid orgId, Guid eventId, Guid attendeeId, CancellationToken token = default);
+
+    /// <summary>Turns a sign-up down. Recorded, so the guest can see they are not coming.</summary>
+    Task<(OrgCalendarEventAttendeeRecord? Seat, string? Error)> TurnDownSeatAsync(
+        Guid orgId, Guid eventId, Guid attendeeId, CancellationToken token = default);
     Task<OrgCalendarEventAttendeeRecord?> AddCalendarAttendeeAsync(Guid orgId, Guid eventId, AddAttendeeRequest request, CancellationToken token = default);
 
     /// <summary>
@@ -257,6 +305,15 @@ public interface IBenPlacesClient
     /// </summary>
     Task<ItemResult<FieldSessionMapPage>> GetMyFieldSessionMapAsync(
         MapBounds? bounds = null, CancellationToken token = default);
+
+    /// <summary>
+    /// Every session file on the server, newest first — what /admin/session-files lists.
+    /// </summary>
+    /// <remarks>
+    /// Read-only. Deleting a session is its owner's decision, or the orphan sweep for sessions
+    /// whose bytes are gone; neither belongs on a list whose job is to show what is there.
+    /// </remarks>
+    Task<LoadResult<SessionFileRecord>> GetSessionFilesAsync(CancellationToken token = default);
 
     /// <summary>Field sessions whose document cannot be read back. Changes nothing.</summary>
     Task<LoadResult<OrphanedFieldSessionRecord>> GetOrphanedFieldSessionsAsync(

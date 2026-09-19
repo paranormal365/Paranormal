@@ -157,7 +157,10 @@ public sealed class EventEvidenceTests
         return new EventEvidenceController(f, storage.Object, new PlatformMessageService(f), Ben.Web.Tests.TestMedia.Ingest(), Ben.Web.Tests.TestMedia.Stripper(), new Ben.Service.RepositoryService.Services.OrganizationSecurityService(f),
             // ManualReviewScreener is the no-automatic-classifier case: post-moderation,
             // which is what the archive settled on and what production runs today.
-            new Ben.Data.WebApi.Services.Feed.ManualReviewScreener())
+            new Ben.Data.WebApi.Services.Feed.ManualReviewScreener(),
+            // Retention reads the seeded plan, and these suites seed none: nothing expires.
+            new Ben.Data.WebApi.Services.Media.MediaRetentionPolicy(
+                new Ben.Data.WebApi.Services.Billing.SubscriptionLimitGuard(f)))
         {
             ControllerContext = new ControllerContext
             { HttpContext = new DefaultHttpContext { User = new ClaimsPrincipal(claims) } }

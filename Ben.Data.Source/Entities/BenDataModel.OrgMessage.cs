@@ -35,6 +35,16 @@ namespace Ben.Data.Source.Entities
         /// <summary>Scopes the message to a specific case team. Null = not case-scoped.</summary>
         public Guid? CaseId { get; set; }
 
+        /// <summary>
+        /// The event whose room this was posted in, for <c>ChannelType = EventRoom</c> (item 235 phase 11).
+        /// </summary>
+        /// <remarks>
+        /// <b>No <see cref="OrganizationId"/> on a room message.</b> A room belongs to an event, not to
+        /// the group's inbox, and giving it the group's id would put a guest's photo of the stairs in the
+        /// group's internal mail.
+        /// </remarks>
+        public Guid? HostedEventId { get; set; }
+
         /// <summary>Total view count — incremented each time a recipient opens the message.</summary>
         public int ViewCount { get; set; }
 
@@ -55,6 +65,60 @@ namespace Ben.Data.Source.Entities
         /// <summary>Which administrator hid it.</summary>
         public Guid? HiddenByAppUserId { get; set; }
 
+        /// <summary>
+        /// When this was written to appear, or null to appear at once (item 233, Ben 2026-09-11).
+        /// </summary>
+        /// <remarks>
+        /// <para>Read by every query that shows messages rather than released by a job: a post
+        /// whose time has not come is simply not selected. A job would be a second mechanism that
+        /// can fall behind, and the moment it did the post would be late by however long the job
+        /// was down.</para>
+        ///
+        /// <para>It does not hide anything from its author. Somebody who scheduled a post needs to
+        /// see that they did, which is the difference between scheduling and losing it.</para>
+        /// </remarks>
+        public DateTime? ScheduledForUtc { get; set; }
+
+        /// <summary>
+        /// Where this was written, when the author chose to say so.
+        /// </summary>
+        /// <remarks>
+        /// Ben, 2026-09-11: "Tag the current location where the message is being created — which
+        /// would mark it on a super small map alongside the message and add a 'said at {location}'."
+        /// Always the author's own choice and never taken silently: a location attached to a
+        /// message without being asked for is somebody's whereabouts published on their behalf.
+        /// </remarks>
+        public decimal? PostedLatitude { get; set; }
+        public decimal? PostedLongitude { get; set; }
+
+        /// <summary>What that place is called, as the geocoder named it. Shown; never derived from.</summary>
+        public string? PostedPlaceName { get; set; }
+
+        /// <summary>
+        /// The shared <see cref="Place"/> this post is ABOUT, for a post made on a place's page.
+        /// </summary>
+        /// <remarks>
+        /// <para>Ben, 2026-09-17: a public location should be "actually public for adding files,
+        /// messages etc". This is that, and it is one nullable column rather than a comment table
+        /// of its own — which means a post about a place inherits everything a feed post already
+        /// has: the media screener, the day-long upload pause after repeated refusals, reporting,
+        /// hiding, likes, replies, the moderator queues and the phone app's reader. A second table
+        /// would have been a second moderation story, and the second one is always the one nobody
+        /// finishes.</para>
+        ///
+        /// <para><b>Different from <see cref="PostedLatitude"/> and <see cref="PostedPlaceName"/>,
+        /// which are about the AUTHOR.</b> Those say where somebody was standing when they wrote
+        /// it — their whereabouts, volunteered. This says what the post is about, which is not the
+        /// same thing and is usually not the same place: somebody writes up Cragfont at home.</para>
+        ///
+        /// <para>Only ever a <c>PlaceKind.PublicLocation</c>. Posting about somebody's home is
+        /// theirs to agree to and there is no mechanism for asking, so the write door refuses a
+        /// residence outright.</para>
+        /// </remarks>
+        public Guid? PlaceId { get; set; }
+
+        public virtual Place? Place { get; set; }
+
         public DateTime DateCreated { get; set; }
         public DateTime? DateUpdated { get; set; }
         public Guid CreatedByAppUserId { get; set; }
@@ -64,6 +128,7 @@ namespace Ben.Data.Source.Entities
         public virtual AppUser AuthorAppUser { get; set; } = null!;
         public virtual OrgMessage? ParentMessage { get; set; }
         public virtual Case? Case { get; set; }
+        public virtual HostedEvent? HostedEvent { get; set; }
         public virtual AppUser CreatedByAppUser { get; set; } = null!;
         public virtual AppUser? UpdatedByAppUser { get; set; }
         public virtual AppUser? HiddenByAppUser { get; set; }

@@ -166,6 +166,10 @@ public sealed class FieldSessionDeleteTests
         var ctrl = new FieldSessionUploadController(
             sqlite.Factory, storage.Object,
             new Mock<Ben.Data.WebApi.Services.IMediaIngestService>().Object,
+            new Ben.Data.WebApi.Services.Media.MediaRetentionPolicy(
+                new Ben.Data.WebApi.Services.Billing.SubscriptionLimitGuard(sqlite.Factory)),
+            TestBundles.Store(storage.Object),
+
             NullLogger<FieldSessionUploadController>.Instance)
         {
             ControllerContext = new ControllerContext

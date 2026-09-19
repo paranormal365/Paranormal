@@ -30,9 +30,11 @@ public interface IBenFeedClient
     /// <param name="token">Cancellation.</param>
     /// <param name="author">One person's posts. Overrides <paramref name="mode"/>.</param>
     /// <param name="experienceType">One experience type's posts (item 186 F6). Combines like a tag.</param>
+    /// <param name="place">One place's posts (2026-09-17). Combines like a tag.</param>
     Task<FeedPageRecord?> GetFeedAsync(
         string? mode = null, string? hashtag = null, string? cursor = null,
-        CancellationToken token = default, Guid? author = null, Guid? experienceType = null);
+        CancellationToken token = default, Guid? author = null, Guid? experienceType = null,
+        Guid? place = null);
 
     // ── Moderation (item 186 F5) ─────────────────────────────────────────────
 
@@ -46,6 +48,29 @@ public interface IBenFeedClient
 
     /// <summary>How much is waiting, and whether screening is automatic.</summary>
     Task<FeedModerationSummary?> GetModerationSummaryAsync(CancellationToken token = default);
+
+    // ── The place archive's queue (2026-09-17 audit) ─────────────────────────
+    //
+    // These four endpoints existed and nothing called them, so a field session or a guest's
+    // photograph flagged by any reader went to Held and stayed there: only Approved is served,
+    // and the release route had no client. The flag's own design note says "the flag acts, then a
+    // person decides" — this is the half that lets a person decide.
+
+    /// <summary>Published sessions whose media is waiting on a decision, oldest first.</summary>
+    Task<LoadResult<ArchiveMediaReviewRow>> GetArchiveMediaReviewAsync(
+        bool includeHeld = false, CancellationToken token = default);
+
+    /// <summary>Approves or holds one published session's media.</summary>
+    Task<bool> ReviewArchiveMediaAsync(
+        Guid sessionId, bool approve, string? note = null, CancellationToken token = default);
+
+    /// <summary>Event evidence published to a place and waiting on a decision, oldest first.</summary>
+    Task<LoadResult<ArchiveEvidenceReviewRow>> GetArchiveEvidenceReviewAsync(
+        bool includeHeld = false, CancellationToken token = default);
+
+    /// <summary>Approves or holds one published piece of event evidence.</summary>
+    Task<bool> ReviewArchiveEvidenceAsync(
+        Guid submissionId, bool approve, string? note = null, CancellationToken token = default);
 
     /// <summary>Where a moderator's browser fetches a file under review, whatever its state.</summary>
     string GetModerationMediaUrl(Guid postId);
@@ -84,7 +109,15 @@ public interface IBenFeedClient
         string body, Guid? parentPostId = null, CancellationToken token = default,
         Stream? media = null, string? mediaFileName = null, string? mediaContentType = null,
         Guid? experienceTypeId = null,
-        Guid? sourceCaseId = null, bool consentToPublishPrivateEngagement = false);
+        Guid? sourceCaseId = null, bool consentToPublishPrivateEngagement = false,
+        // ── The composer's other tools (item 233) ────────────────────────────
+        NewPollRequest? poll = null,
+        DateTime? scheduledForUtc = null,
+        decimal? postedLatitude = null,
+        decimal? postedLongitude = null,
+        string? postedPlaceName = null,
+        /// <summary>The public location this post is about (2026-09-17).</summary>
+        Guid? aboutPlaceId = null);
 
     // ── Org attribution (item 186 F7) ────────────────────────────────────────
 
@@ -118,6 +151,29 @@ public interface IBenFeedClient
     Task<bool> UnfollowAsync(Guid appUserId, CancellationToken token = default);
 
     // ── Moderation (SuperAdmin) ──────────────────────────────────────────────
+
+    /// <summary>How a poll stands, with this reader's own answer when they have one.</summary>
+    Task<MessagePollRecord?> GetPollAsync(Guid pollId, CancellationToken token = default);
+
+    /// <summary>
+    /// Answers a poll, replacing whatever this person chose before. An empty list takes it back.
+    /// </summary>
+    Task<MessagePollRecord?> CastPollVoteAsync(
+        Guid pollId, IReadOnlyList<Guid> optionIds, CancellationToken token = default);
+
+    /// <summary>
+    /// GIFs from Giphy, through our own API so the key never reaches a browser.
+    /// </summary>
+    /// <remarks>An empty term brings back what is trending, which is what an opened picker shows.</remarks>
+    Task<LoadResult<GiphyItem>> SearchGifsAsync(string? term, CancellationToken token = default);
+
+    // ── A post still waiting for its hour (item 233) ─────────────────────────
+
+    /// <summary>Puts the author's scheduled post up now. Null when the server refused.</summary>
+    Task<FeedPostRecord?> PublishScheduledNowAsync(Guid postId, CancellationToken token = default);
+
+    /// <summary>Calls back a post that has not gone up yet. False when the server refused.</summary>
+    Task<bool> CancelScheduledPostAsync(Guid postId, CancellationToken token = default);
 
     /// <summary>The moderation queue, oldest first. Omit the outcome for what is still pending.</summary>
     Task<LoadResult<FeedReportRecord>> GetFeedReportsAsync(

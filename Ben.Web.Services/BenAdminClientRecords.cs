@@ -152,7 +152,11 @@ public sealed record OrgPublicFacts(
     int PublicCaseCount,
     OrgPublicNextEvent? NextPublicEvent);
 
-public sealed record OrgPublicNextEvent(Guid Id, string Title, string? UrlName, DateTime StartDateTime, bool IsAllDay, string? City, string? State, int? AttendeeCapacity, int AttendingCount);
+public sealed record OrgPublicNextEvent(
+    Guid Id, string Title, string? UrlName, DateTime StartDateTime, bool IsAllDay,
+    string? City, string? State, int? AttendeeCapacity, int AttendingCount,
+    /// <summary>The IANA zone the night happens in, when it is recorded. See EventClock.</summary>
+    string? TimeZoneId = null);
 
 
 public sealed record OrgPublicPageResponse(
@@ -375,7 +379,48 @@ public sealed record PublicPlaceResponse(
     IReadOnlyList<PublicPlaceInvestigationRow> Investigations,
     PlaceSummary Summary,
     IReadOnlyList<PublicPlaceSessionRow>? Sessions = null,
-    IReadOnlyList<PlaceEvidenceRow>? EventEvidence = null);
+    IReadOnlyList<PlaceEvidenceRow>? EventEvidence = null,
+    /// <summary>Cases any group has published at this place (2026-09-17).</summary>
+    IReadOnlyList<PublicPlaceCaseRow>? Cases = null,
+    /// <summary>The latest posts about this place, newest first.</summary>
+    IReadOnlyList<Ben.Service.Models.Feed.FeedPostRecord>? Posts = null,
+    /// <summary>Whether this reader may add one. False for a visitor and at a private residence.</summary>
+    bool CanPost = false);
+
+/// <summary>
+/// The personal organization behind one account's own investigating (2026-09-17).
+/// </summary>
+/// <remarks>
+/// Named for the person, because the only screens that ever show this name are their own. It is
+/// not a brand and nobody else reads it.
+/// </remarks>
+public sealed record SoloPlanItem(Guid OrganizationId, string Name);
+
+/// <summary>A place's posts for a signed-in reader, and whether they may add one (2026-09-17).</summary>
+public sealed record PlacePostsRecord(
+    IReadOnlyList<Ben.Service.Models.Feed.FeedPostRecord> Posts,
+    bool CanPost);
+
+/// <summary>One of the caller's own groups' cases at a place (2026-09-17).</summary>
+public sealed record PlaceCaseRow(
+    Guid Id,
+    Guid OrganizationId,
+    string OrganizationName,
+    string CaseReference,
+    string Title,
+    Ben.Data.Common.Enums.CaseStatus Status,
+    DateTime DateCaseOpened,
+    bool IsPublished);
+
+/// <summary>One published case at a place. The title is already redacted by the server.</summary>
+public sealed record PublicPlaceCaseRow(
+    string CaseReference,
+    string UrlName,
+    string Title,
+    Ben.Data.Common.Enums.CaseStatus Status,
+    int OpenedYear,
+    string OrganizationName,
+    string OrganizationUrlName);
 
 /// <summary>
 /// One piece of guest evidence photographed at a public event here and contributed by its owner.
@@ -546,7 +591,13 @@ public sealed record CreateOrgInvestigationRequest(
 
 public sealed record MyEmailRecord(
     Guid Id, Guid UserEmailTypeId, string EmailAddress, bool IsPrimary, bool IsPublic,
-    bool IsValidated, DateTime? DateValidated, DateTime? DateValidationSent, int SortOrder);
+    bool IsValidated, DateTime? DateValidated, DateTime? DateValidationSent, int SortOrder,
+    /// <summary>
+    /// Set only on the response to ADDING an address, which now issues a confirmation link
+    /// straight away. Null everywhere else — a live token has no business in a list response.
+    /// </summary>
+    string? ValidationLink = null,
+    bool ValidationEmailSent = false);
 
 public sealed record UpsertMyEmailRequest(
     Guid UserEmailTypeId, string? EmailAddress, bool IsPrimary, bool IsPublic, int SortOrder = 0);
@@ -631,8 +682,32 @@ public sealed record MyOrgPermissionsItem(
     bool CanReadCases,
     bool CanReadInvestigations,
     IReadOnlyDictionary<Ben.Data.Common.Enums.OrganizationPermissionArea, OrgAreaActions>? Areas = null,
-    IReadOnlyDictionary<Ben.Data.Common.Enums.TierCapability, bool>? Capabilities = null)
+    IReadOnlyDictionary<Ben.Data.Common.Enums.TierCapability, bool>? Capabilities = null,
+    bool IsViewer = false,
+    /// <summary>
+    /// True when this group pays nothing, so what it records at a public place is public and
+    /// cannot be narrowed (Ben, 2026-09-17).
+    /// </summary>
+    /// <remarks>
+    /// Read by the publish box and the sharing dropdown to render themselves locked WITH the
+    /// sentence, rather than live and then refused. False when an older server says nothing, which
+    /// leaves every control exactly as it was.
+    /// </remarks>
+    bool PublicByDefault = false,
+    /// <summary>
+    /// Why this group can write nothing at the moment, in the server's own words, or null.
+    /// </summary>
+    /// <remarks>
+    /// A lapsed subscription makes a group read-only, and until the 2026-09-17 audit no page on
+    /// the website said so: the sentence was rendered only on the CLIENT's own case page, so a
+    /// group's own members were offered every control and found out by clicking. Null when an
+    /// older server says nothing, which leaves every control exactly as it was.
+    /// </remarks>
+    string? ReadOnlyReason = null)
 {
+    /// <summary>True when the group is read-only, whatever the reason says.</summary>
+    public bool IsReadOnly => ReadOnlyReason is not null;
+
     /// <summary>Whether the group's PLAN includes a capability — a different question from
     /// whether this person may act.</summary>
     /// <remarks>
@@ -673,6 +748,17 @@ public sealed record OrgAreaActions(bool Create, bool Read, bool Update, bool De
 
 /// <summary>One of the caller's own groups, shaped for the sidebar (item 159).</summary>
 /// <summary>One named space inside a place — a hotel's Room 217, a cellar (item 197).</summary>
+/// <param name="Capacity">
+/// How many sleep here, when the venue has said. Null and zero differ: null is "we have not said"
+/// and cannot be over-filled, zero is "nobody sleeps in the chapel".
+/// </param>
+/// <param name="IsBookable">
+/// Whether an event may offer it. Separate from <paramref name="IsPublic"/>: a staff room can be
+/// named and kept off the public page and still never be somewhere a guest sleeps.
+/// </param>
+/// <param name="BedNote">
+/// What the beds are. A number cannot answer "will the two of us have to share a bed".
+/// </param>
 public sealed record PlaceRoomRecord(
     Guid     Id,
     Guid     PlaceId,
@@ -681,16 +767,28 @@ public sealed record PlaceRoomRecord(
     string?  Description,
     bool     IsPublic,
     int      SortOrder,
-    bool     IsActive);
+    bool     IsActive,
+    int?     Capacity = null,
+    bool     IsBookable = false,
+    string?  BedNote = null);
 
 /// <summary>Naming or editing a room. Sort order and active state are optional on an edit.</summary>
+/// <remarks>
+/// Every field added after the first release is optional and <b>null means "leave it alone"</b>,
+/// which is why clearing one takes an explicit flag. A screen that edits only what a booking needs
+/// would otherwise wipe the descriptions typed on another one.
+/// </remarks>
 public sealed record SavePlaceRoomRequest(
     string? Name,
     string? Floor,
     string? Description,
     bool    IsPublic,
     int?    SortOrder = null,
-    bool?   IsActive = null);
+    bool?   IsActive = null,
+    int?    Capacity = null,
+    bool?   IsBookable = null,
+    string? BedNote = null,
+    bool    ClearCapacity = false);
 
 public sealed record MyMembershipOrgItem(Guid OrganizationId, string Name);
 
@@ -885,7 +983,13 @@ public sealed record PublicCaseDetail(
     IReadOnlyList<PublicTimelineEntry> Timeline,
     string OrgName,
     string OrgUrlName,
-    PublicCaseReport? Report = null);
+    PublicCaseReport? Report = null,
+    /// <summary>
+    /// The place this case is about, when it is a public location. Null for a residence, so no
+    /// public page ever points at somebody's home (2026-09-17 audit).
+    /// </summary>
+    Guid? PlaceId = null,
+    string? PlaceName = null);
 
 /// <summary>
 /// What a case's investigation report says to the public — the group's own finding, as opposed to
@@ -962,7 +1066,10 @@ public sealed record PublicCaseDiscoveryItem(
     int      Score,
     decimal? ApproxLatitude,
     decimal? ApproxLongitude,
-    string?  ClientName);
+    string?  ClientName,
+    // False for a case shown only because this caller may already open it (their group's, or their own as a client), so
+    // the card can say it is not public — the section is headed "Public Investigations". Trailing and defaulted: additive.
+    bool     IsPublic = true);
 
 // ── Phase 5: Investigation + Evidence Voting request records ──────────────────
 public sealed record UpsertInvestigationRequest(
@@ -1017,7 +1124,15 @@ public sealed record UpsertCalendarEventRequest(
     Guid? PlaceId = null,
     bool HideExactLocation = false,
     int? AttendeeCapacity = null,
-    DateTime? RsvpClosesAt = null);
+    DateTime? RsvpClosesAt = null,
+    // Tours (item 233): a public date of a tour business belongs to a tour, and names its guides.
+    Guid? TourId = null,
+    IReadOnlyList<Guid>? GuideAppUserIds = null,
+    /// <summary>
+    /// The IANA zone this event happens in. Null on a tour date takes the tour's; null on
+    /// anything else leaves it unsaid, and a public listing then shows UTC and says so.
+    /// </summary>
+    string? TimeZoneId = null);
 
 public sealed record AddAttendeeRequest(Guid AppUserId, string? AssignedTask);
 
@@ -1041,7 +1156,19 @@ public sealed record CreateCaseRequest(
     string ZipCode,
     string? Country,
     decimal? Latitude,
-    decimal? Longitude);
+    decimal? Longitude,
+    // True when the person opening the case wants the group to decide whether to take it on.
+    // False — the default, and what every older caller sends — accepts it there and then, for
+    // anybody who may change a case's status (Ben, 2026-09-17).
+    bool PutToTheGroup = false,
+    /// <summary>A shared place already on file that this case is about.</summary>
+    Guid? PlaceId = null,
+    /// <summary>
+    /// A place to create with the case, when none on file is the right one. Its <c>Kind</c> is the
+    /// "public location or private residence" answer, which decides whether the case is private-lane
+    /// work and, on an unpaid account, whether it is public.
+    /// </summary>
+    NewPlaceRequest? NewPlace = null);
 
 public sealed record AcceptClientRequestAsCaseRequest(
     string? Title,
@@ -1114,7 +1241,8 @@ public sealed record ClientCaseListItem(
     Ben.Data.Common.Enums.CaseStatus Status,
     string?   CaseManagerDisplayName,
     DateTime  DateCaseOpened,
-    DateTime? NextInvestigationDate = null);
+    DateTime? NextInvestigationDate = null,
+    Guid?     ClientRequestId = null);
 
 public sealed record ClientCaseDetail(
     Guid      CaseId,
@@ -1331,7 +1459,10 @@ public sealed record CaseMessageRecord(
     Ben.Data.Common.Enums.CaseMessageSide SenderSide,
     bool                             IsReadByClient,
     bool                             IsReadByOrg,
-    DateTime                         DateCreated);
+    DateTime                         DateCreated,
+    // 2026-09-14: the formatted copy, when the message was written in the website's editor. Body always holds the
+    // same words as plain text — the iPhone app reads Body.
+    string?                          BodyHtml = null);
 
 // ── My Investigations response records ───────────────────────────────────────
 public sealed record MyInvestigationItem(
@@ -1354,26 +1485,6 @@ public sealed record MyInvestigationItem(
     Ben.Data.Common.Enums.RsvpStatus   Rsvp,
     bool?                              DidAttend,
     DateTime?                          EvidenceDueDate);
-
-// ── Case Research records ─────────────────────────────────────────────────────
-public sealed record UpsertResearchRequest(
-    Ben.Data.Common.Enums.CaseResearchType ResearchType,
-    string  Title,
-    string? Body,
-    string? Url);
-
-public sealed record CaseResearchEntryDto(
-    Guid                                   Id,
-    Guid                                   CaseId,
-    Ben.Data.Common.Enums.CaseResearchType ResearchType,
-    string                                 Title,
-    string?                                Body,
-    string?                                Url,
-    ResearchFileInfo?                      File,
-    int                                    SortOrder,
-    DateTime                               DateCreated);
-
-public sealed record ResearchFileInfo(Guid FileId, string FileName, string ContentType, long FileSize);
 
 // ── Investigation Scheduling records ─────────────────────────────────────────
 public sealed record CreateProposalRequest(string? Notes, IReadOnlyList<SlotInput> Slots);
@@ -1592,6 +1703,45 @@ public sealed record DuplicatePlaceGroup(IReadOnlyList<DuplicatePlaceRow> Places
 /// that holds its document belongs to whichever machine ran the suite. Nothing in the product can
 /// open one, which is what makes them safe to delete.
 /// </remarks>
+/// <summary>
+/// How much of this account's personal storage allowance is used, and the cap if there is one.
+/// </summary>
+/// <remarks>
+/// <c>CapBytes</c> is null when a group's paid plan covers this person, and the page says
+/// "uncapped" rather than inventing a number. The endpoint behind this existed with no caller at
+/// all until the 2026-09-17 audit, so nobody was warned before an upload was refused.
+/// </remarks>
+public sealed record AccountStorageItem(long UsedBytes, long? CapBytes);
+
+// ── The outbox (item 239; wired 2026-09-17) ─────────────────────────────────
+// Three routes existed with no caller, so the screen that "would have answered the 2026-08-31
+// question — I signed up and got nothing — in five seconds instead of not at all" still answered
+// it in zero, because no page read it.
+
+/// <summary>One letter in the outbox, without its words.</summary>
+/// <remarks>
+/// Bodies are never returned: a body carries somebody's name, what they booked and, for a hosted
+/// event, a working door code. <c>AcceptedBySmtpUtc</c> is when the mail server TOOK it, not when
+/// anybody received it — that is only knowable from bounce reports this site does not collect.
+/// </remarks>
+public sealed record OutboxLetterItem(
+    Guid Id,
+    string To,
+    string Subject,
+    string Kind,
+    DateTime CreatedUtc,
+    int Attempts,
+    DateTime NextAttemptUtc,
+    DateTime? AcceptedBySmtpUtc,
+    DateTime? FailedUtc,
+    string? LastError,
+    bool HasBody,
+    DateTime? BodyScrubbedUtc,
+    int AttachmentCount);
+
+/// <summary>What came of putting letters back in the queue.</summary>
+public sealed record OutboxRetryOutcome(int Requeued, int Skipped, string Message);
+
 public sealed record OrphanedFieldSessionRecord(
     Guid Id, string? LocationLabel, string DeviceModel, DateTime StartedAt, DateTime DateCreated,
     int ReadingCount, int MarkerCount, string? RecordedByName,
@@ -1670,3 +1820,33 @@ public sealed record MailSettingsRecord(
 /// call for completely different fixes, and a tidied-up "could not send" tells you neither.
 /// </param>
 public sealed record MailTestResultRecord(bool Sent, string Message, string? ServerSaid);
+
+/// <summary>
+/// One session file on the server, as listed on /admin/session-files.
+/// </summary>
+/// <remarks>
+/// <b>Two names, because they are two different facts.</b> A device can be handed to a colleague
+/// to upload, and a session recorded while signed out has nobody's name on it at all — so
+/// <paramref name="RecordedByName"/> being null is an ordinary answer and is shown as one, never
+/// filled in from the uploader.
+/// </remarks>
+/// <param name="IsBundle">
+/// Whether it arrived as one <c>.ben</c>. False for anything the approved 1.0.2 build sent, which
+/// uploads a document and a file per recording.
+/// </param>
+public sealed record SessionFileRecord(
+    Guid SessionId,
+    bool IsBundle,
+    string FileName,
+    long FileSize,
+    string? LocationLabel,
+    DateTime StartedAt,
+    DateTime? EndedAt,
+    int ReadingCount,
+    int MarkerCount,
+    int FileCount,
+    string? RecordedByName,
+    string? UploadedByName,
+    Guid? InvestigationId,
+    string? InvestigationTitle,
+    DateTime? PublishedAtUtc);

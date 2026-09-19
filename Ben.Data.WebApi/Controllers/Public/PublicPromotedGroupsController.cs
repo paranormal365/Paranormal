@@ -56,6 +56,13 @@ public sealed class PublicPromotedGroupsController : ControllerBase
             // rule, and this card is the most prominent placement on the site.
             .Where(Services.PersonalOrganizations.DiscoverableVia<Ben.Data.Source.Entities.OrganizationAd>(
                 a => a.Organization))
+            // An event ad is served only while its event is published and still to come (item 235
+            // phase 11): an advert for last month's weekend is worse than no advert.
+            .Where(a => a.TargetKind != "event"
+                     || (a.HostedEvent != null
+                         && (a.HostedEvent.LifecycleState == HostedEventLifecycleState.Published
+                          || a.HostedEvent.LifecycleState == HostedEventLifecycleState.Live)
+                         && a.HostedEvent.EndsOn >= DateTime.UtcNow.Date))
             .Select(a => new
             {
                 a.Id, a.Headline, a.Body,
@@ -64,6 +71,8 @@ public sealed class PublicPromotedGroupsController : ControllerBase
                 OrgUrlName = a.Organization.UrlName,
                 a.TargetKind,
                 HasImage = a.ImageUploadFileId != null,
+                EventName = a.HostedEvent != null ? a.HostedEvent.Name : null,
+                EventStartsOn = a.HostedEvent != null ? (DateTime?)a.HostedEvent.StartsOn : null,
             })
             .ToListAsync(ct);
         if (ads.Count == 0) return Ok(Array.Empty<PromotedGroupCard>());
@@ -111,7 +120,7 @@ public sealed class PublicPromotedGroupsController : ControllerBase
 
         return Ok(served.Select(s => new PromotedGroupCard(
             s.Ad.Id, s.Ad.Headline, s.Ad.Body, s.Ad.OrgName, s.Ad.OrgUrlName,
-            s.Ad.TargetKind, s.Ad.HasImage, s.Distance)).ToList());
+            s.Ad.TargetKind, s.Ad.HasImage, s.Distance, s.Ad.EventName, s.Ad.EventStartsOn)).ToList());
     }
 
     /// <summary>
@@ -127,12 +136,12 @@ public sealed class PublicPromotedGroupsController : ControllerBase
 
         var ad = await db.OrganizationAds.AsNoTracking()
             .Where(a => a.Id == adId && a.Status == OrganizationAdStatus.Approved)
-            .Select(a => new { a.TargetKind, a.Organization.UrlName })
+            .Select(a => new { a.TargetKind, a.Organization.UrlName, EventUrlName = a.HostedEvent != null ? a.HostedEvent.UrlName : null })
             .FirstOrDefaultAsync(ct);
         if (ad is null) return NotFound();
 
         await BumpCountersAsync(db, [adId], impressions: false, ct);
-        return Ok(new PromotedClickTarget(ad.TargetKind, ad.UrlName));
+        return Ok(new PromotedClickTarget(ad.TargetKind, ad.UrlName, ad.EventUrlName));
     }
 
     /// <summary>Batched counter bump. ExecuteUpdate where the provider supports it (SQL Server);

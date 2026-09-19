@@ -27,6 +27,14 @@ namespace Ben.Data.WebApi.Controllers.Entities;
 [Authorize]
 public sealed class OrgInvestigationsController : BenControllerBase
 {
+    /// <summary>A Viewer here reads and changes nothing — see <see cref="Ben.Data.WebApi.Services.Access.FileAudienceAccess.IsOrgViewerAsync"/>.</summary>
+    private async Task<bool> IsViewerAsync(Guid orgId, CancellationToken ct)
+    {
+        if (User.IsInRole(Ben.Data.Common.Constants.RoleNames.SuperAdmin)) return false;
+        await using var viewerDb = await _db.CreateDbContextAsync(ct);
+        return await Ben.Data.WebApi.Services.Access.FileAudienceAccess.IsOrgViewerAsync(viewerDb, orgId, GetCurrentUserId(), ct);
+    }
+
     private readonly IDbContextFactory<BenDataContext> _db;
     private readonly IMapper _mapper;
     private readonly IAuditLogService _auditLog;
@@ -242,9 +250,20 @@ public sealed class OrgInvestigationsController : BenControllerBase
         if (placement.Error is not null) return BadRequest(placement.Error);
 
         // A landmark defaults to sharing with others who have worked it; a home does not. Chosen
-        // from the place rather than left to whoever clicks fastest.
-        entity.Visibility = request.Visibility ?? InvestigationVisibilityFilter.DefaultFor(placement.Place);
-        if (InvestigationVisibilityFilter.Reject(entity.Visibility, placement.Place) is { } scopeError)
+        // from the place rather than left to whoever clicks fastest — and from the plan as well as
+        // the place since 2026-09-17: an account that pays nothing shares a landmark's findings
+        // with everyone, and may not narrow them.
+        //
+        // This door never asked the old solo question at all, which the case-nested one did. Both
+        // now call the same overload, so a visit cannot be judged differently by which screen
+        // booked it.
+        var publicByDefault = await Services.Billing.PaidPlan.PublicByDefaultAsync(db, orgId, ct);
+        var whyNotNarrower = await Services.Billing.PaidPlan.WhyCannotNarrowInvestigationAsync(db, orgId, ct);
+
+        entity.Visibility = request.Visibility
+            ?? InvestigationVisibilityFilter.DefaultFor(placement.Place, publicByDefault);
+        if (InvestigationVisibilityFilter.Reject(
+                entity.Visibility, placement.Place, publicByDefault, whyNotNarrower) is { } scopeError)
             return BadRequest(scopeError);
 
         // Same auto-calendar-event behaviour as the case-bound controller, so a visit booked this
@@ -318,6 +337,7 @@ public sealed class OrgInvestigationsController : BenControllerBase
         Guid orgId, Guid id, [FromBody] CheckInRequest request, CancellationToken ct)
     {
         if (!await IsMemberAsync(orgId, ct)) return Forbid();
+        if (await IsViewerAsync(orgId, ct)) return ViewerReadOnly();
 
         var userId = GetCurrentUserId();
         await using var db = await _db.CreateDbContextAsync(ct);
@@ -365,6 +385,7 @@ public sealed class OrgInvestigationsController : BenControllerBase
         Guid orgId, Guid id, Guid attendeeId, [FromBody] OverrideAttendanceRequest request, CancellationToken ct)
     {
         if (!await IsMemberAsync(orgId, ct)) return Forbid();
+        if (await IsViewerAsync(orgId, ct)) return ViewerReadOnly();
 
         var userId = GetCurrentUserId();
         await using var db = await _db.CreateDbContextAsync(ct);
@@ -413,6 +434,7 @@ public sealed class OrgInvestigationsController : BenControllerBase
         Guid orgId, Guid id, Guid attendeeId, [FromBody] SetLeadRequest request, CancellationToken ct)
     {
         if (!await IsMemberAsync(orgId, ct)) return Forbid();
+        if (await IsViewerAsync(orgId, ct)) return ViewerReadOnly();
 
         var userId = GetCurrentUserId();
         await using var db = await _db.CreateDbContextAsync(ct);
@@ -503,6 +525,7 @@ public sealed class OrgInvestigationsController : BenControllerBase
         [FromBody] AssignDutyRequest request, CancellationToken ct)
     {
         if (!await IsMemberAsync(orgId, ct)) return Forbid();
+        if (await IsViewerAsync(orgId, ct)) return ViewerReadOnly();
         var userId = GetCurrentUserId();
         await using var db = await _db.CreateDbContextAsync(ct);
 
@@ -601,6 +624,7 @@ public sealed class OrgInvestigationsController : BenControllerBase
         Guid orgId, Guid id, Guid attendeeId, Guid dutyId, CancellationToken ct)
     {
         if (!await IsMemberAsync(orgId, ct)) return Forbid();
+        if (await IsViewerAsync(orgId, ct)) return ViewerReadOnly();
         var userId = GetCurrentUserId();
         await using var db = await _db.CreateDbContextAsync(ct);
 
@@ -677,6 +701,7 @@ public sealed class OrgInvestigationsController : BenControllerBase
         Guid orgId, Guid id, [FromBody] UpsertFindingRequest request, CancellationToken ct)
     {
         if (!await IsMemberAsync(orgId, ct)) return Forbid();
+        if (await IsViewerAsync(orgId, ct)) return ViewerReadOnly();
 
         var narrative = request.Narrative?.Trim();
         if (string.IsNullOrWhiteSpace(narrative))
@@ -733,6 +758,7 @@ public sealed class OrgInvestigationsController : BenControllerBase
     public async Task<IActionResult> DeleteMyFinding(Guid orgId, Guid id, CancellationToken ct)
     {
         if (!await IsMemberAsync(orgId, ct)) return Forbid();
+        if (await IsViewerAsync(orgId, ct)) return ViewerReadOnly();
 
         var userId = GetCurrentUserId();
         await using var db = await _db.CreateDbContextAsync(ct);

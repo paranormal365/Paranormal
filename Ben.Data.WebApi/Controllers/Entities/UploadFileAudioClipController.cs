@@ -77,7 +77,8 @@ public sealed class UploadFileAudioClipController : BenControllerBase
             await using (sourceStream)
             {
                 var (bytes, contentType, _) = AudioClipper.Clip(sourceStream, source.ContentType, start, end);
-                return File(bytes, contentType);
+                // enableRangeProcessing: a player asks for the piece it needs; without it Safari will not start at all and nothing can seek (2026-09-17).
+                return File(bytes, contentType, enableRangeProcessing: true);
             }
         }
         catch (NotSupportedException ex)

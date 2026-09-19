@@ -5,6 +5,8 @@
 @using Ben.Web.Website.Library.Kit
 @using Ben.Web.Website.Library.Messaging
 @inject IBenUserState UserState
+@inject IJSRuntime JS
+@implements IAsyncDisposable
 
 @* ── Thread display ──────────────────────────────────────────────────────────── *@
 @if (_messages is null)
@@ -40,15 +42,18 @@ else
             <div class="d-flex @(isOwn ? "justify-content-end" : "justify-content-start")">
                 @* `bg-body-tertiary` rather than `bg-light`: the received bubble has to follow the
                    theme, and a fixed light fill turns into a white block in night mode. *@
-                <div class="rounded-3 px-3 py-2 @(isOwn ? "bg-primary text-white" : "bg-body-tertiary border")"
-                     style="max-width:80%; word-break:break-word;">
-                    @if (!isOwn)
+                <div class="rounded-3 px-3 py-2 case-bubble @(isOwn ? "case-bubble--own bg-primary text-white" : "bg-body-tertiary border")"
+                     style="max-width:80%; word-break:break-word;" data-testid="case-message-bubble">
+                    @* A name on everything this person did not write. The group's messages sit on the group's side, so a
+                       member read a colleague's reply to the client, unnamed, as their own (member test pass M.4). *@
+                    @if (!isOwn || msg.AuthorAppUserId != UserState.UserId)
                     {
-                        <div class="fw-semibold small mb-1">@msg.AuthorDisplayName</div>
+                        <div class="fw-semibold small mb-1 @(isOwn ? "text-white" : "")">@msg.AuthorDisplayName</div>
                     }
-                    @* Case messages are plain text, and were being rendered into a plain div — a
-                       message typed across several lines arrived as one run-on paragraph. *@
-                    <MessageBody Body="@msg.Body" />
+                    @* A message written in the editor (2026-09-14) carries a sanitized BodyHtml and is drawn
+                       formatted. Everything else — older messages, and whatever the iPhone app sends — is
+                       plain text in Body, drawn with its line breaks, as before. *@
+                    <MessageBody Body="@(msg.BodyHtml ?? msg.Body)" Html="@(msg.BodyHtml is not null)" />
                     <div class="@(isOwn ? "text-white-50" : "text-muted") mt-1" style="font-size:.7rem;">
                         @msg.DateCreated.ToViewerLocalTime(UserState).ToDisplayDateTime()
                         @if (isOwn && CurrentSide == CaseMessageSide.Client && !msg.IsReadByOrg)
@@ -67,19 +72,22 @@ else
 }
 
 @* ── Compose box ─────────────────────────────────────────────────────────────── *@
-<div class="d-flex gap-2 mt-2">
-    @* @oninput rather than @bind: Send is gated on this value, and binding on blur would leave
-       the button dead for anyone who types and clicks straight through. *@
-    <textarea class="form-control flex-grow-1" rows="2"
-              placeholder="@(CurrentSide == CaseMessageSide.Client ? "Message your investigation group…" : "Message the client…")"
-              aria-label="Message"
-              value="@_draft"
-              @oninput="@(e => _draft = e.Value?.ToString() ?? string.Empty)"></textarea>
-    <button type="button" class="btn btn-primary align-self-start"
-            disabled="@(_sending || string.IsNullOrWhiteSpace(_draft))"
-            @onclick="Send">
-        <BenIcon Name="mail" Class="me-1" />Send
-    </button>
+@* A small formatting editor (beta feedback, 2026-09-14), the same short toolbar as case notes. Send is not
+   disabled while the box looks empty: the editor's value reaches the server a round trip behind the keyboard,
+   so a disabled button would sit dead for someone who types and clicks straight through. Sending nothing says
+   so instead. *@
+<div class="mt-2" data-testid="case-thread-compose" @onfocusin="@(() => _composeLeft = false)" @onfocusout="@(() => _composeLeft = true)">
+    @* Keyed by the number of messages sent: after a send the box is a new editor, so a keystroke update still on
+       its way from the old one (Telerik reports typing on a debounce) cannot put the sent words back. *@
+    <BenEditor @key="_composeGeneration" @ref="_compose" @bind-Value="@_draft" Height="130px" Tools="@Ben.Web.Website.Library.Organization.Cases.CaseEditorTools.Prose" />
+    <BenComposerLinkCard Html="@_draft" LeftTheBox="@_composeLeft" />
+    <div class="d-flex justify-content-end mt-2">
+        <button type="button" class="btn btn-primary" id="case-thread-send"
+                disabled="@_sending"
+                @onclick="Send">
+            <BenIcon Name="mail" Class="me-1" />@(_sending ? "Sending…" : "Send")
+        </button>
+    </div>
 </div>
 @if (_error is not null)
 {
@@ -97,15 +105,51 @@ else
     /// </remarks>
     [Parameter, EditorRequired] public Func<Task<LoadResult<CaseMessageRecord>>> LoadMessages { get; set; } = null!;
 
-    /// <summary>Async function to post a new message and return the saved record.</summary>
+    /// <summary>Async function to post a new message (the editor's HTML) and return the saved record.</summary>
     [Parameter, EditorRequired] public Func<string, Task<CaseMessageRecord?>> PostMessage { get; set; } = null!;
 
     private List<CaseMessageRecord>? _messages;
     private LoadResult<CaseMessageRecord> _result;
     private string _draft = string.Empty;
+    private BenEditor? _compose;
+    private int _composeGeneration;
+    private bool _composeLeft;
     private bool _sending;
     private string? _error;
     private ElementReference _scrollRef;
+    private IJSObjectReference? _module;
+
+    /// <summary>Set after a load or a send: the next render brings the newest message into view.</summary>
+    /// <remarks>
+    /// A thread reads upward from its newest message, but this list opened at its oldest and never moved — after Send the
+    /// message you had just written was below the fold, and its link card grew it further once it loaded (UI test pass,
+    /// 2026-09-14). CaseMessageThread.razor.js keeps the list at its end while content arrives, unless the reader has
+    /// scrolled up to read something older.
+    /// </remarks>
+    private bool _toEndPending;
+
+    protected override async Task OnAfterRenderAsync(bool firstRender)
+    {
+        if (!_toEndPending || _messages is null) return;
+        _toEndPending = false;
+        try
+        {
+            _module ??= await JS.InvokeAsync<IJSObjectReference>("import", "/_content/Ben.Web.Website.Library/Shared/CaseMessageThread.razor.js");
+            await _module.InvokeVoidAsync("toEnd", _scrollRef);
+        }
+        catch (JSDisconnectedException) { }
+    }
+
+    public async ValueTask DisposeAsync()
+    {
+        if (_module is null) return;
+        try
+        {
+            await _module.InvokeVoidAsync("release", _scrollRef);
+            await _module.DisposeAsync();
+        }
+        catch (JSDisconnectedException) { }
+    }
 
     /// <summary>
     /// Bumped whenever the local list is changed by something other than the initial load. A load
@@ -126,6 +170,7 @@ else
             if (revision != _revision) return;   // superseded by a send
             _result   = loaded;
             _messages = loaded.Items.ToList();
+            _toEndPending = true;
         }
         catch
         {
@@ -138,11 +183,17 @@ else
 
     private async Task Send()
     {
-        if (_sending || string.IsNullOrWhiteSpace(_draft)) return;
+        if (_sending) return;
+        // What is in the box now, not the last debounced value — see BenEditor.GetCurrentHtmlAsync.
+        if (_compose is not null) _draft = await _compose.GetCurrentHtmlAsync() ?? _draft;
+        if (!Ben.Data.Common.Text.PlainTextHtml.HasText(_draft))
+        {
+            _error = "Type a message first.";
+            return;
+        }
         _sending = true;
         _error = null;
         var body = _draft.Trim();
-        _draft = string.Empty;
         try
         {
             var saved = await PostMessage(body);
@@ -150,11 +201,14 @@ else
             {
                 // Nothing came back, so there is nothing to show. Say so rather than appending a
                 // null, which the previous guard allowed through: it tested `saved` before
-                // creating the list but not before adding to it.
+                // creating the list but not before adding to it. The words stay in the box.
                 _error = "Failed to send message. Please try again.";
-                _draft = body;
                 return;
             }
+
+            // Sent: an empty box, and a new editor instance so nothing typed before the send can come back.
+            _draft = string.Empty;
+            _composeGeneration++;
 
             _messages ??= [];
             _messages.Add(saved);
@@ -162,11 +216,11 @@ else
             // panel up beside a message the person can see would be its own untruth.
             _result = LoadResult<CaseMessageRecord>.Ok(_messages);
             _revision++;   // any load still in flight is now stale
+            _toEndPending = true;
         }
         catch
         {
-            _error = "Failed to send message. Please try again.";
-            _draft = body;   // don't lose what they typed
+            _error = "Failed to send message. Please try again.";   // the words stay in the box
         }
         finally { _sending = false; }
     }

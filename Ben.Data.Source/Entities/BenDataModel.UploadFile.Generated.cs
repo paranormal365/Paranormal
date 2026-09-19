@@ -46,6 +46,25 @@ namespace Ben.Data.Source.Entities
         public Guid CreatedByAppUserId { get; set; }
         public Guid? UpdatedByAppUserId { get; set; }
 
+        // ── Retention (item 233) ─────────────────────────────────────────────
+        //
+        // Ben, 2026-09-10: a tour business's photographs last a month and its recordings a week,
+        // "unless they mark them to be saved". Three nullable columns, and NULL everywhere means
+        // exactly what it has always meant: this file has no clock on it. Every group that is not
+        // on a plan with retention limits keeps its files forever, as before.
+
+        /// <summary>When this file goes, or null when nothing is counting.</summary>
+        public DateTime? ExpiresAtUtc { get; set; }
+
+        /// <summary>When somebody decided to keep it. Set means the clock is off for good.</summary>
+        public DateTime? KeptAtUtc { get; set; }
+
+        /// <summary>Who kept it — the business, not the person who took the photograph.</summary>
+        public Guid? KeptByAppUserId { get; set; }
+
+        /// <summary>When the uploader was last warned it was going, so they are told once.</summary>
+        public DateTime? ExpiryNoticeSentAtUtc { get; set; }
+
         /// <summary>When this file was clipped from another file, the ID of the source file.</summary>
         public Guid? ParentFileId { get; set; }
 

@@ -80,6 +80,40 @@ public enum SubscriptionLimit
     /// </remarks>
     CasesPerPeriod = 9,
 
+    // ── Media retention (item 233) ───────────────────────────────────────────
+    //
+    // Ben, 2026-09-10: "Evidence collected - unless marked to save - only lasts a week for
+    // everything but photos. Photos stay a month." Written as limits rather than as constants
+    // because they belong to a PLAN: the tour plan sets them, every other plan leaves the rows
+    // out, and no row means no clock — which is how the site has always worked and must keep
+    // working for everybody who is not a tour business.
+
+    /// <summary>Days a photograph is kept before it goes, unless it is kept deliberately.</summary>
+    /// <remarks>
+    /// A month on the tour plan. Photographs outlive recordings because they are what a guest
+    /// actually wants afterwards and cost almost nothing to hold.
+    /// </remarks>
+    PhotoRetentionDays = 10,
+
+    /// <summary>Days a recording is kept before it goes, unless it is kept deliberately.</summary>
+    /// <remarks>A week on the tour plan. Video and audio are the expensive half of the storage.</remarks>
+    RecordingRetentionDays = 11,
+
+    /// <summary>The longest a single recording may be, in minutes.</summary>
+    /// <remarks>
+    /// Five on the tour plan, refused at the door rather than trimmed silently: the phone can
+    /// already trim before sending, so the honest answer is to say so and let somebody choose the
+    /// part that matters.
+    /// </remarks>
+    RecordingMinutes = 12,
+
+    /// <summary>Pictures one tour may keep on its page.</summary>
+    /// <remarks>
+    /// Fifty, Ben's number. Also the KEEP for a photograph: putting a guest's picture on the page
+    /// is what stops its clock, so this cap is what stops "keep everything" being a gallery.
+    /// </remarks>
+    TourGalleryImages = 13,
+
     /// <summary>Custom roles the group can define for itself.</summary>
     /// <remarks>
     /// In the enum because Ben raised it; probably best left unset on every band. Ben's own
@@ -89,4 +123,26 @@ public enum SubscriptionLimit
     /// A row nobody writes is exactly what the no-row-no-cap default is for.
     /// </remarks>
     CustomRoles = 8,
+
+
+    /// <summary>Hosted events a group may have on the go at once (item 235).</summary>
+    /// <remarks>
+    /// Read only for a group on the member ladder. A business kind pays per active event instead,
+    /// so no cap applies to it — the price is the cap.
+    /// </remarks>
+    ActiveHostedEvents = 14,
+
+    /// <summary>Sessions and classes one event's programme may hold.</summary>
+    EventSessions = 15,
+
+    /// <summary>People one event may have on its staff, members and helpers alike.</summary>
+    EventStaff = 16,
+
+    /// <summary>Megabytes of files one event may keep.</summary>
+    /// <remarks>
+    /// Beside the account-wide <see cref="StorageMegabytes"/>, not instead of it: a slide deck for
+    /// one weekend is a different thing from a group's whole archive, and a venue that runs twelve
+    /// events a year would otherwise spend its storage on last spring.
+    /// </remarks>
+    EventFilesMegabytes = 17,
 }

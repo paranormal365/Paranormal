@@ -80,6 +80,37 @@ struct FieldSessionStoreTests {
         #expect(store.activeSessionId == id)
     }
 
+    /// Ben, 2026-09-16: "I can set the base, but when I hit start, nothing happens." Start returned quietly for any
+    /// session that was not pending — one already finished, or one a crash had left behind — so the bar sat on
+    /// "not started" with nothing said anywhere. It refuses in words now.
+    @Test func startSaysWhyItCannotStartAFinishedSession() async throws {
+        let (store, root) = try makeStore()
+        defer { try? FileManager.default.removeItem(at: root) }
+
+        let id = try store.startSession(locationLabel: "Cellar")
+        try await store.beginRecording(id)
+        try await store.endSession(id)
+
+        do {
+            try await store.beginRecording(id)
+            Issue.record("a finished session was started again")
+        } catch let error as FieldSessionError {
+            #expect(error.errorDescription?.contains("already finished") == true)
+        }
+    }
+
+    @Test func startSaysWhyWhenTheSessionIsNotOnThisPhone() async throws {
+        let (store, root) = try makeStore()
+        defer { try? FileManager.default.removeItem(at: root) }
+
+        do {
+            try await store.beginRecording(UUID())
+            Issue.record("a session that is not on this phone was started")
+        } catch let error as FieldSessionError {
+            #expect(error.errorDescription?.contains("on this phone")  == true)
+        }
+    }
+
     @Test func aSessionWithNoLabelStillHasSomethingToCallItself() throws {
         let (store, root) = try makeStore()
         defer { try? FileManager.default.removeItem(at: root) }

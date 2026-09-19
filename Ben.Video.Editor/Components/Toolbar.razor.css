@@ -24,9 +24,24 @@
     flex-shrink: 0;
 }
 
-@container bv-toolbar-row (max-width: 1100px) {
+/* The bar's own content is a little over 1000px before anything collapses, and the ToolBar's
+   overflow menu cannot take the template items (project name, status, Sign in) — so with the
+   badges (300px) and the mark still in the row at 1280px, those items were drawn under them
+   (measured 2026-09-16: 1032px of items in a 912px bar). The badges are the first thing to go,
+   well before the row is tight; below that the mark goes and the project name gives up width. */
+@container bv-toolbar-row (max-width: 1400px) {
     .bv-toolbar__badges {
         display: none;
+    }
+}
+
+@container bv-toolbar-row (max-width: 1100px) {
+    .bv-toolbar__mark {
+        display: none;
+    }
+
+    .bv-toolbar__proj-name {
+        max-width: 110px;
     }
 }
 
@@ -100,7 +115,7 @@
     border-color: var(--bv-attention);
     animation: bv-status-pulse 1.4s ease-in-out infinite;
 }
-.bv-status--ready       { color: #4caf89; border-color: #4caf89; }
+.bv-status--ready       { color: var(--bv-ok, #4caf89); border-color: var(--bv-ok, #4caf89); }
 .bv-status--error       { color: #e06c75; border-color: #e06c75; }
 
 /* A stuck engine used to be visible only on the diagnostics chip, which most people never see, so
@@ -270,4 +285,12 @@
     font-weight: 700;
     line-height: 1;
     cursor: default;
+}
+
+/* A button that will do nothing has to look like it: the Success-coloured Export kept almost
+   its full green when disabled, and read as a working button (2026-09-16). */
+.bv-toolbar ::deep .k-toolbar .k-button.k-disabled,
+.bv-toolbar ::deep .k-toolbar .k-button:disabled {
+    opacity: .45;
+    filter: saturate(.6);
 }

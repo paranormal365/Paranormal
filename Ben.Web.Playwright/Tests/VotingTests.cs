@@ -28,17 +28,62 @@ public class VotingTests : BenTestBase
     private const string TghCaseRef  = "2026-001";
     private const string TghUrlName  = "paranormal365";
 
+    // ── The widget, as it is drawn since 2026-09-11 ───────────────────────────
+    //
+    // The vote is ONE button ("Vote") that opens the three choices; once cast it is labelled with
+    // the reader's own vote and pressing it again takes the vote back. The separate Remove button
+    // and the "Community Rating" heading these tests used to look for are gone.
+
+    /// <summary>The one vote button on a case's own page.</summary>
+    private ILocator VoteButton => Page.Locator(".vote-actions__vote > .vote-btn");
+
+    /// <summary>The three choices that hang under the vote button while it is open.</summary>
+    private ILocator Choices => Page.Locator(".vote-choices[role=menu]");
+
+    private ILocator Choice(string name) => Choices.GetByRole(AriaRole.Button, new() { Name = name });
+
+    private async Task OpenCaseAsync()
+    {
+        await Page.GotoAsync($"{BaseUrl}/o/{TghUrlName}/cases/{TghCaseRef}");
+        await WaitUntilLoadedAsync();
+        await Expect(VoteButton).ToBeVisibleAsync(new() { Timeout = 15_000 });
+    }
+
+    /// <summary>
+    /// Leaves the reader with no vote on the case. These tests write real votes, so a run can
+    /// inherit one from the last.
+    /// </summary>
+    private async Task StartWithNoVoteAsync()
+    {
+        // Signed in and drawn for that reader first: a widget that rendered before sign-in resolved
+        // reloads its summary, and reading the button before then reads a stranger's.
+        await Expect(Page.Locator(".vote-actions__signin")).ToHaveCountAsync(0, new() { Timeout = 15_000 });
+        if (await VoteButton.GetAttributeAsync("aria-pressed") == "true")
+            await TakeTheVoteBackAsync();
+    }
+
+    private async Task TakeTheVoteBackAsync()
+    {
+        await VoteButton.ClickAsync();
+        await Expect(VoteButton).ToHaveAttributeAsync("aria-pressed", "false", new() { Timeout = 8_000 });
+        await Expect(VoteButton).ToHaveAttributeAsync("aria-label", "Vote");
+    }
+
+    private async Task CastAsync(string choice)
+    {
+        await ClickUntilAsync(VoteButton, Choices);
+        await Choice(choice).ClickAsync();
+        await Expect(VoteButton).ToHaveAttributeAsync("aria-pressed", "true", new() { Timeout = 8_000 });
+    }
+
     // ── Case vote widget (anonymous) ──────────────────────────────────────────
 
     [Test]
-    public async Task CaseDetail_AnonymousUser_ShowsSignInPromptInRatingSection()
+    public async Task CaseDetail_AnonymousUser_ShowsSignInPromptUnderTheVoteButton()
     {
-        await Page.GotoAsync($"{BaseUrl}/o/{TghUrlName}/cases/{TghCaseRef}");
-        await Page.WaitForLoadStateAsync(LoadState.NetworkIdle);
-        await Expect(Page.GetByText("Community Rating", new() { Exact = false }))
-            .ToBeVisibleAsync(new() { Timeout = 10_000 });
-        await Expect(Page.GetByText("Sign in to vote", new() { Exact = false }))
-            .ToBeVisibleAsync(new() { Timeout = 5_000 });
+        await OpenCaseAsync();
+        await Expect(Page.Locator(".vote-actions__signin")).ToContainTextAsync("Sign in to vote");
+        await Expect(VoteButton).ToHaveAttributeAsync("aria-label", "Vote");
     }
 
     [Test]
@@ -54,31 +99,28 @@ public class VotingTests : BenTestBase
     // ── Case vote widget (authenticated) ─────────────────────────────────────
 
     [Test]
-    public async Task CaseDetail_AuthUser_AllThreeVoteButtonsVisible()
+    public async Task CaseDetail_AuthUser_TheVoteButtonOffersAllThreeChoices()
     {
         await LoginAsync(UserEmail, UserPassword);
-        await Page.GotoAsync($"{BaseUrl}/o/{TghUrlName}/cases/{TghCaseRef}");
-        await Page.WaitForLoadStateAsync(LoadState.NetworkIdle);
-        await Expect(Page.GetByRole(AriaRole.Button, new() { Name = "Confirms the findings" }))
-            .ToBeVisibleAsync(new() { Timeout = 10_000 });
-        await Expect(Page.GetByRole(AriaRole.Button, new() { Name = "Disputes the findings" }))
-            .ToBeVisibleAsync();
-        await Expect(Page.GetByRole(AriaRole.Button, new() { Name = "Inconclusive" }))
-            .ToBeVisibleAsync();
+        await OpenCaseAsync();
+        await StartWithNoVoteAsync();
+
+        await ClickUntilAsync(VoteButton, Choices);
+        await Expect(Choice("Confirms the findings")).ToBeVisibleAsync();
+        await Expect(Choice("Disputes the findings")).ToBeVisibleAsync();
+        await Expect(Choice("Inconclusive — can't say either way")).ToBeVisibleAsync();
     }
 
     /// <summary>
     /// Item #103's worst case, as a regression test. The home page's vote summaries used to be
     /// loaded behind a bare IsAuthenticated read during the initial load — and auth resolves
     /// asynchronously after the circuit connects, so on a HARD navigation (a fresh page load, not
-    /// a client-side nav) a signed-in user's vote widgets never appeared until they paged or
-    /// re-sorted. LoadVoteSummariesAsync now waits for auth to resolve before asking. This test
-    /// signs in, then does a full GotoAsync to the home page — the hard-nav case — and requires
-    /// the per-card vote buttons to appear.
+    /// a client-side nav) a signed-in user's vote widgets were drawn for a stranger until they
+    /// paged or re-sorted. This test signs in, then does a full GotoAsync to the home page — the
+    /// hard-nav case — and requires the cards' widgets to be drawn for a signed-in reader.
     ///
-    /// <para>Honesty note: run against the UN-fixed code on this machine, this test PASSES — the
-    /// race resolves in auth's favour locally, so this cannot prove the fix and is kept as a
-    /// smoke test of the flow. The enforcing regression barrier is
+    /// <para>Honesty note: the race resolves in auth's favour locally, so this cannot prove the fix
+    /// and is kept as a smoke test of the flow. The enforcing regression barrier is
     /// AuthReadyPrerenderGuardTests.Every_reader_of_auth_state_follows_its_resolution, a source
     /// scan that fails the moment the wait is removed, timing be damned.</para>
     /// </summary>
@@ -91,44 +133,41 @@ public class VotingTests : BenTestBase
         // sequence that raced the old code.
         await Page.GotoAsync(BaseUrl);
 
-        await Expect(Page.GetByRole(AriaRole.Button, new() { Name = "Confirms the findings" }).First)
+        var widgets = Page.Locator(".case-vote-widget");
+        await Expect(widgets.Locator(".vote-actions__vote > .vote-btn").First)
             .ToBeVisibleAsync(new() { Timeout = 15_000 });
+        await Expect(widgets.Locator(".vote-actions__signin")).ToHaveCountAsync(0, new() { Timeout = 15_000 });
     }
 
     [Test]
-    public async Task CaseDetail_CastVote_ShowsRemoveButton()
+    public async Task CaseDetail_CastVote_TheButtonSaysItAndTakesItBack()
     {
         await LoginAsync(UserEmail, UserPassword);
-        await Page.GotoAsync($"{BaseUrl}/o/{TghUrlName}/cases/{TghCaseRef}");
-        await Page.WaitForLoadStateAsync(LoadState.NetworkIdle);
-        await Page.GetByRole(AriaRole.Button, new() { Name = "Inconclusive" }).ClickAsync();
-        var remove = Page.GetByRole(AriaRole.Button, new() { Name = "Remove" }).First;
-        await Expect(remove).ToBeVisibleAsync(new() { Timeout = 5_000 });
-        // Clean up
-        await remove.ClickAsync();
-        await Expect(remove).ToBeHiddenAsync(new() { Timeout = 5_000 });
+        await OpenCaseAsync();
+        await StartWithNoVoteAsync();
+
+        await CastAsync("Inconclusive — can't say either way");
+        await Expect(VoteButton).ToHaveAttributeAsync("aria-label", "Your vote: can't say. Press to take it back.");
+
+        await TakeTheVoteBackAsync();
     }
 
     [Test]
-    public async Task CaseDetail_ChangeVote_UpdatesActiveButton()
+    public async Task CaseDetail_ChangeVote_UpdatesTheButton()
     {
         await LoginAsync(UserEmail, UserPassword);
-        await Page.GotoAsync($"{BaseUrl}/o/{TghUrlName}/cases/{TghCaseRef}");
-        await Page.WaitForLoadStateAsync(LoadState.NetworkIdle);
+        await OpenCaseAsync();
+        await StartWithNoVoteAsync();
 
-        var confirmsBtn = Page.GetByRole(AriaRole.Button, new() { Name = "Confirms the findings" });
-        await confirmsBtn.ClickAsync();
-        await Page.WaitForTimeoutAsync(500);
+        await CastAsync("Confirms the findings");
+        await Expect(VoteButton).ToHaveAttributeAsync("aria-label", "Your vote: confirms. Press to take it back.");
 
-        // Change to Disputes
-        var disputesBtn = Page.GetByRole(AriaRole.Button, new() { Name = "Disputes the findings" });
-        await disputesBtn.ClickAsync();
-        await Page.WaitForTimeoutAsync(500);
+        // Changing a vote is taking it back and choosing again.
+        await TakeTheVoteBackAsync();
+        await CastAsync("Disputes the findings");
+        await Expect(VoteButton).ToHaveAttributeAsync("aria-label", "Your vote: disputes. Press to take it back.");
 
-        // Remove to leave clean state
-        var remove = Page.GetByRole(AriaRole.Button, new() { Name = "Remove" }).First;
-        await Expect(remove).ToBeVisibleAsync(new() { Timeout = 5_000 });
-        await remove.ClickAsync();
+        await TakeTheVoteBackAsync();
     }
 
     // ── Home page list votes ──────────────────────────────────────────────────
@@ -152,32 +191,17 @@ public class VotingTests : BenTestBase
     public async Task VoteCounts_PersistAfterPageReload()
     {
         await LoginAsync(UserEmail, UserPassword);
-        await Page.GotoAsync($"{BaseUrl}/o/{TghUrlName}/cases/{TghCaseRef}");
-        await Page.WaitForLoadStateAsync(LoadState.NetworkIdle);
+        await OpenCaseAsync();
+        await StartWithNoVoteAsync();
 
-        // Start from "no vote". These tests write real votes, and the vote buttons toggle — so a
-        // run that inherited a vote from the previous one un-voted here instead of voting, leaving
-        // nothing to assert on. That is what made this fail intermittently rather than never.
-        var existing = Page.GetByRole(AriaRole.Button, new() { Name = "Remove" }).First;
-        if (await existing.CountAsync() > 0 && await existing.IsVisibleAsync())
-        {
-            await existing.ClickAsync();
-            await Expect(existing).ToBeHiddenAsync(new() { Timeout = 8_000 });
-        }
+        await CastAsync("Confirms the findings");
 
-        // Cast a vote
-        await Page.GetByRole(AriaRole.Button, new() { Name = "Confirms the findings" }).ClickAsync();
-        await Page.WaitForTimeoutAsync(600);
-
-        // Reload
         await Page.ReloadAsync();
-        await Page.WaitForLoadStateAsync(LoadState.NetworkIdle);
+        await WaitUntilLoadedAsync();
 
-        // The Confirms button should now appear as the active vote (Solid fill = selected)
-        var remove = Page.GetByRole(AriaRole.Button, new() { Name = "Remove" }).First;
-        await Expect(remove).ToBeVisibleAsync(new() { Timeout = 8_000 });
+        await Expect(VoteButton).ToHaveAttributeAsync("aria-label", "Your vote: confirms. Press to take it back.",
+            new() { Timeout = 15_000 });
 
-        // Clean up
-        await remove.ClickAsync();
+        await TakeTheVoteBackAsync();
     }
 }

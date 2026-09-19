@@ -225,6 +225,67 @@ public sealed class AppUserPurgeBehaviourTests
         Assert.DoesNotContain("Sam", user.DisplayName);
     }
 
+    /// <summary>
+    /// A person who made, saved and published a case board: the board is the group's and stays,
+    /// still naming the (now anonymised) account in all three places, and the row survives.
+    /// </summary>
+    /// <remarks>
+    /// <para>Canvas plan review R3, 2026-09-14, following the VideoProjects precedent: authorship
+    /// columns are NoAction references, the purge does not delete from the table, and the
+    /// model-driven census counts every one of them — so the promise "the row will survive" and
+    /// the database's refusal to delete it agree. Were the census to miss the three new foreign
+    /// keys, the row delete would be attempted after the anonymise had committed and the database
+    /// would refuse it; this test is where that would show.</para>
+    ///
+    /// <para>It passed on its first run, and that is the finding rather than a gap: nothing in
+    /// <c>AppUserPurge</c> names tables it leaves alone, so a new authored table is handled by
+    /// construction. The red half of R3 is <c>CasePurgeCoverageTests</c> and the case purge
+    /// behaviour test, which did fail.</para>
+    /// </remarks>
+    [Fact]
+    public async Task A_board_they_made_saved_and_published_stays_with_the_group_and_the_row_survives()
+    {
+        var h = await NewAsync();
+        await using var _ = h.Sqlite;
+
+        var caseId  = Guid.NewGuid();
+        var boardId = Guid.NewGuid();
+        await using (var db = await h.Sqlite.NewContextAsync())
+        {
+            db.Cases.Add(new Case
+            {
+                Id = caseId, OrganizationId = h.OrgId, Title = "A case", CaseYear = 2026, OrgCaseNumber = 2,
+                Status = CaseStatus.Active,
+                StreetAddress1 = "1 Elm", City = "Franklin", State = "TN", ZipCode = "37064",
+                DateCaseOpened = DateTime.UtcNow, DateCreated = DateTime.UtcNow, CreatedByAppUserId = h.AdminId,
+            });
+            db.CanvasDocuments.Add(new CanvasDocument
+            {
+                Id = boardId, CaseId = caseId, Name = "Board", DocumentJson = "{\"title\":\"Board\"}",
+                Revision = 4, PublishedAtUtc = DateTime.UtcNow, PublishedByAppUserId = h.TargetId,
+                DateCreated = DateTime.UtcNow, CreatedByAppUserId = h.TargetId,
+                DateUpdated = DateTime.UtcNow, UpdatedByAppUserId = h.TargetId,
+            });
+            await db.SaveChangesAsync();
+        }
+
+        var (purge, _s) = Build(h);
+        var preview = await purge.PreviewAsync(h.TargetId);
+        Assert.True(preview!.RowWillSurvive, "three columns of a case board name this account; the preview must say the row stays");
+
+        var (result, error) = await purge.PurgeAsync(h.TargetId, TargetName, h.AdminId);
+        Assert.Null(error);
+        Assert.False(result!.RowRemoved);
+
+        await using var verify = await h.Sqlite.NewContextAsync();
+        var board = await verify.CanvasDocuments.FindAsync(boardId);
+        Assert.NotNull(board);
+        Assert.Equal(h.TargetId, board!.CreatedByAppUserId);
+        Assert.Equal(h.TargetId, board.UpdatedByAppUserId);
+        Assert.Equal(h.TargetId, board.PublishedByAppUserId);
+        Assert.Equal(AccountClosure.FormerMemberName, (await verify.Users.FindAsync(h.TargetId))!.DisplayName);
+    }
+
     // ── what is destroyed, and what is not ───────────────────────────────────
 
     [Fact]

@@ -133,7 +133,8 @@ public sealed class VideoAssetController : BenControllerBase
         if (!string.IsNullOrEmpty(file.StoragePath))
         {
             var stream = await _fileStorage.OpenReadAsync(file.StoragePath, ct);
-            return File(stream, file.ContentType);
+            // enableRangeProcessing: a player asks for the piece it needs; without it Safari will not start at all and nothing can seek (2026-09-17).
+            return File(stream, file.ContentType, enableRangeProcessing: true);
         }
         return file.FileData is not null ? File(file.FileData, file.ContentType) : NotFound();
     }

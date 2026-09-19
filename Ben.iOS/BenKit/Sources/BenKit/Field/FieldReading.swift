@@ -133,16 +133,25 @@ public struct FieldReading: Codable, Sendable, Equatable {
     /// recorded while it sat still. Heading lives here, not in `measurements`.
     public struct Motion: Codable, Sendable, Equatable {
         public var headingDegrees: Double?
+        /// Which way the fix says the device was MOVING, clockwise from true north.
+        ///
+        /// Separate from `headingDegrees` on purpose: heading is which way the phone was pointed
+        /// (the compass), course is the direction it travelled between fixes. They disagree
+        /// whenever somebody walks backwards down a hall, and only one of them exists indoors —
+        /// a compass needs no fix, and a course needs no compass. The map draws whichever it has.
+        public var courseDegrees: Double?
         public var speedMps: Double?
         public var accelXMps2: Double?
         public var accelYMps2: Double?
         public var accelZMps2: Double?
         public var isStationary: Bool?
 
-        public init(headingDegrees: Double? = nil, speedMps: Double? = nil,
+        public init(headingDegrees: Double? = nil, courseDegrees: Double? = nil,
+                    speedMps: Double? = nil,
                     accelXMps2: Double? = nil, accelYMps2: Double? = nil,
                     accelZMps2: Double? = nil, isStationary: Bool? = nil) {
             self.headingDegrees = headingDegrees
+            self.courseDegrees = courseDegrees
             self.speedMps = speedMps
             self.accelXMps2 = accelXMps2
             self.accelYMps2 = accelYMps2
@@ -152,12 +161,13 @@ public struct FieldReading: Codable, Sendable, Equatable {
 
         /// Nothing worth saying — so the whole object is omitted rather than written empty.
         public var isEmpty: Bool {
-            headingDegrees == nil && speedMps == nil && accelXMps2 == nil
+            headingDegrees == nil && courseDegrees == nil && speedMps == nil && accelXMps2 == nil
                 && accelYMps2 == nil && accelZMps2 == nil && isStationary == nil
         }
 
         private enum CodingKeys: String, CodingKey {
             case headingDegrees = "heading_degrees"
+            case courseDegrees = "course_degrees"
             case speedMps = "speed_mps"
             case accelXMps2 = "accel_x_mps2"
             case accelYMps2 = "accel_y_mps2"

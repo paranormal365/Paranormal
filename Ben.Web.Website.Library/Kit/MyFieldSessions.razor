@@ -35,6 +35,59 @@
         uploading does, so this is the list of the ones you chose to send.
     </p>
 
+    @* What this account has used, and the cap if it has one (2026-09-17 audit).
+
+       The endpoint has always been able to answer this and nothing asked, so a solo investigator
+       got no figure and no warning — the first they knew of the cap was an upload being refused.
+       The phone is worse: it shows "2 GB" hardcoded from a comment, which is simply wrong for
+       anybody a group's plan covers.
+
+       "Uncapped" rather than a number for a covered member. A figure they are not measured
+       against would be a lie however carefully it were labelled — the same rule the endpoint
+       follows by sending a null cap. *@
+    @if (_storage is { } storage)
+    {
+        <div class="mb-3" data-testid="my-storage">
+            @if (storage.CapBytes is { } cap)
+            {
+                var used = storage.UsedBytes;
+                var pct = cap <= 0 ? 0 : (int)Math.Min(100, used * 100 / cap);
+                <div class="d-flex justify-content-between align-items-baseline small mb-1">
+                    <span class="text-secondary">
+                        Using @Describe(used) of @Describe(cap)
+                    </span>
+                    @if (pct >= 90)
+                    {
+                        <span class="badge text-bg-danger">Nearly full</span>
+                    }
+                    else if (pct >= 75)
+                    {
+                        <span class="badge text-bg-warning">@pct%</span>
+                    }
+                </div>
+                <div class="progress" style="height:.4rem;" role="progressbar"
+                     aria-label="Storage used" aria-valuenow="@pct" aria-valuemin="0" aria-valuemax="100">
+                    <div class="progress-bar @(pct >= 90 ? "bg-danger" : pct >= 75 ? "bg-warning" : "")"
+                         style="width:@pct%"></div>
+                </div>
+                @if (pct >= 90)
+                {
+                    <div class="form-text">
+                        Joining a group on a paid plan, or removing sessions you no longer need,
+                        makes room.
+                    </div>
+                }
+            }
+            else
+            {
+                <p class="text-secondary small mb-0">
+                    Using @Describe(storage.UsedBytes). Your group's plan covers your storage, so
+                    there is no personal cap.
+                </p>
+            }
+        </div>
+    }
+
     @if (_deleteError is not null)
     {
         @* The server's own sentence: "a case report cites this" and "retracting is part of a paid
@@ -71,7 +124,7 @@
             <div class="card mb-3">
                 <div class="card-header py-2">Where these were recorded</div>
                 <div class="card-body p-2">
-                    <InvestigationsMap Pins="@_pins" Height="320px"
+                    <InvestigationsMap Pins="@_pins" Height="320px" Noun="sessions"
                                        OnPinClicked="@OpenSession"
                                        OnViewportChanged="@OnViewportChanged" />
                 </div>
@@ -221,6 +274,16 @@
     private FieldSessionSummaryRecord? _pendingDelete;
     private string? _deleteError;
 
+    /// <summary>What this account has used, and its cap if it has one. Null when unavailable.</summary>
+    private AccountStorageItem? _storage;
+
+    /// <summary>Bytes in the units a person would say them in — the server's own wording.</summary>
+    private static string Describe(long bytes) => bytes >= 1024L * 1024L * 1024L
+        ? $"{bytes / (double)(1024L * 1024L * 1024L):0.#} GB"
+        : bytes >= 1024L * 1024L
+            ? $"{bytes / (double)(1024L * 1024L):0.#} MB"
+            : $"{Math.Max(0, bytes / 1024L)} KB";
+
     protected override async Task OnInitializedAsync()
     {
         // The page renders long before the circuit is live; asking who is signed in before that
@@ -239,6 +302,11 @@
             _rows = result.Items;
             await LoadMapAsync();
         }
+
+        // Best-effort, like the map: a figure that cannot be fetched is not a reason to withhold
+        // the list, and the section simply does not appear.
+        try { _storage = await AdminClient.GetMyStorageAsync(); }
+        catch { _storage = null; }
 
         _loading = false;
     }

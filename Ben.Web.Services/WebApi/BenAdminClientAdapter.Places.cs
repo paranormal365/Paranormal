@@ -39,9 +39,9 @@ public sealed partial class BenAdminClientAdapter
         Guid orgId, Guid placeId, Guid roomId, SavePlaceRoomRequest request, CancellationToken token = default)
         => _api.PutAsync<SavePlaceRoomRequest, PlaceRoomRecord>($"{Rooms(orgId, placeId)}/{roomId}", request, token);
 
-    public Task<bool> DeletePlaceRoomAsync(
+    public Task<(bool Deleted, string? Error)> DeletePlaceRoomAsync(
         Guid orgId, Guid placeId, Guid roomId, CancellationToken token = default)
-        => _api.DeleteAsync($"{Rooms(orgId, placeId)}/{roomId}", token);
+        => _api.DeleteExpectingReasonAsync($"{Rooms(orgId, placeId)}/{roomId}", token);
 
     public Task<LoadResult<PlaceInvestigationRow>> GetPlaceInvestigationsAsync(
         Guid placeId, CancellationToken token = default)
@@ -49,6 +49,13 @@ public sealed partial class BenAdminClientAdapter
 
     public Task<PlaceSummary?> GetPlaceSummaryAsync(Guid placeId, CancellationToken token = default)
         => _api.GetAsync<PlaceSummary>($"/api/places/{placeId}/summary", token);
+
+    public Task<LoadResult<PlaceCaseRow>> GetMyPlaceCasesAsync(
+        Guid placeId, CancellationToken token = default)
+        => _api.GetListAsync<PlaceCaseRow>($"/api/places/{placeId}/my-cases", token);
+
+    public Task<PlacePostsRecord?> GetPlacePostsAsync(Guid placeId, CancellationToken token = default)
+        => _api.GetAsync<PlacePostsRecord>($"/api/places/{placeId}/posts", token);
 
     public Task<LoadResult<PlaceCandidate>> FindPlaceCandidatesAsync(
         string? street, string? city, string? state, string? zip, string? name,
@@ -255,6 +262,11 @@ public sealed partial class BenAdminClientAdapter
               + $"&east={bounds.East.ToString(inv)}&west={bounds.West.ToString(inv)}";
         return _api.GetItemAsync<FieldSessionMapPage>(url, token);
     }
+
+    /// <inheritdoc />
+    public Task<LoadResult<SessionFileRecord>> GetSessionFilesAsync(
+        CancellationToken token = default)
+        => _api.GetListAsync<SessionFileRecord>("/api/admin/session-files", token);
 
     /// <inheritdoc />
     public Task<LoadResult<OrphanedFieldSessionRecord>> GetOrphanedFieldSessionsAsync(

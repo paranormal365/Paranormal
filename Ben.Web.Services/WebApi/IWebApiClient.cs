@@ -47,6 +47,12 @@ public interface IWebApiClient
     Task<bool> PostAnonymousVoidAsync<TRequest>(string relativeUrl, TRequest payload, CancellationToken token = default);
 
     /// <summary>
+    /// An anonymous POST with no answer body, keeping the refusal's sentence when there is one.
+    /// </summary>
+    Task<(bool Sent, string? Error)> PostAnonymousExpectingReasonAsync<TRequest>(
+        string relativeUrl, TRequest payload, CancellationToken token = default);
+
+    /// <summary>
     /// Anonymous POST that returns the body <b>whatever the status</b>.
     /// </summary>
     /// <remarks>
@@ -77,6 +83,18 @@ public interface IWebApiClient
         HttpMethod method, string relativeUrl, TRequest payload, CancellationToken token = default);
 
     /// <summary>
+    /// As <see cref="SendExpectingReasonAsync"/>, and also the HTTP status — for a caller that acts differently on a
+    /// conflict than on any other refusal.
+    /// </summary>
+    /// <remarks>
+    /// Added for research-page autosave (2026-09-14): a 409 means somebody else's work would be overwritten and the
+    /// editor must stop saving and say so, while a 400 is a sentence to show and a failure to retry. A null
+    /// <paramref name="payload"/> sends no body.
+    /// </remarks>
+    Task<(TResponse? Result, string? Error, int Status)> SendWithStatusAsync<TRequest, TResponse>(
+        HttpMethod method, string relativeUrl, TRequest? payload, CancellationToken token = default);
+
+    /// <summary>
     /// Posts, and returns either the result or <b>a typed 409 body</b> the caller can act on.
     /// </summary>
     /// <remarks>
@@ -87,6 +105,26 @@ public interface IWebApiClient
     /// </remarks>
     Task<(TResponse? Result, TConflict? Conflict)> PostExpectingConflictAsync<TRequest, TResponse, TConflict>(
         string relativeUrl, TRequest payload, CancellationToken token = default);
+
+    /// <summary>
+    /// Sends, and returns the result, <b>or</b> the server's refusal sentence, <b>or</b> a typed
+    /// 409 body — whichever the server actually answered with.
+    /// </summary>
+    /// <remarks>
+    /// <para>The two helpers above each keep one kind of failure and drop the other.
+    /// <see cref="SendExpectingReasonAsync"/> keeps prose and would show a 409's JSON to nobody;
+    /// <see cref="PostExpectingConflictAsync"/> keeps the structure and turns a 400 with a perfectly
+    /// good sentence into two nulls. The layout designer (item 235) needs both from one endpoint:
+    /// <c>PUT …/layout</c> answers a bad plan with a sentence and a plan that would strand a
+    /// confirmed party with <c>LayoutRefusalRecord</c> — the sentence AND the ids of the units to
+    /// ring, because a venue with four hundred seats cannot be left hunting for row C.</para>
+    ///
+    /// <para>Takes the verb, unlike its Post-only sibling, because the one caller that needs it is
+    /// a PUT. A 409 whose body is not the expected shape falls through to the prose test rather
+    /// than vanishing, so a proxy's 409 page is dropped and a hand-written 409 sentence is kept.</para>
+    /// </remarks>
+    Task<(TResponse? Result, string? Error, TConflict? Conflict)> SendExpectingConflictAsync<TRequest, TResponse, TConflict>(
+        HttpMethod method, string relativeUrl, TRequest payload, CancellationToken token = default);
     Task<bool> PutVoidAsync<TRequest>(string relativeUrl, TRequest payload, CancellationToken token = default);
     Task<bool> PostVoidAsync<TRequest>(string relativeUrl, TRequest payload, CancellationToken token = default);
     /// <summary>

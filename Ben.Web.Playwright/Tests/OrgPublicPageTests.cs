@@ -62,10 +62,19 @@ public class OrgPublicPageTests : BenTestBase
     {
         await Page.GotoAsync($"{BaseUrl}/o/{TghUrl}/cases");
         await Page.WaitForLoadStateAsync(LoadState.NetworkIdle);
-        var viewLink = Page.GetByRole(AriaRole.Link, new() { Name = "View" }).First;
-        await Expect(viewLink).ToBeVisibleAsync(new() { Timeout = 10_000 });
-        var href = await viewLink.GetAttributeAsync("href");
+
+        // The whole card is the link. This used to look for a "View Details" button in the card's
+        // footer, which made a reader aim at a small target for the only thing the card does; the
+        // test followed the button rather than the behaviour, and broke when the button went.
+        var card = Page.Locator("a.case-card").First;
+        await Expect(card).ToBeVisibleAsync(new() { Timeout = 10_000 });
+
+        var href = await card.GetAttributeAsync("href");
         Assert.That(href, Does.Contain($"/o/{TghUrl}/cases/"), "Expected case detail link");
+
+        // And it actually goes there, which the href alone does not prove.
+        await card.ClickAsync();
+        await Page.WaitForURLAsync($"**/o/{TghUrl}/cases/**", new() { Timeout = 15_000 });
     }
 
     [Test]

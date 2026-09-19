@@ -23,23 +23,50 @@ namespace Ben.Web.Playwright.Tests;
 public class PublicEventDescriptionTests : BenTestBase
 {
     /// <summary>Any public event whose description actually carries markup, or null.</summary>
+    /// <summary>
+    /// An event whose description carries markup, or null when this database has none.
+    /// </summary>
+    /// <remarks>
+    /// <para><b>This used to scan the wrong response.</b> It read <c>api/public/events</c> and
+    /// looked for a <c>description</c> on each row — but the list projection has never carried
+    /// one, so the property was always absent, the method always returned null, and both tests
+    /// below always ignored themselves. They reported as skipped on every run since they were
+    /// written, in a database that did have events with markup: the two rules they exist to hold
+    /// were never once checked.</para>
+    ///
+    /// <para>The description lives on the DETAIL response, so that is what is read now — the list
+    /// only says which events there are to ask about.</para>
+    /// </remarks>
     private async Task<(string org, string slug)?> FindEventWithMarkupAsync()
     {
-        var api = await Page.APIRequest.GetAsync("http://localhost:5252/api/public/events");
-        if (!api.Ok) return null;
+        var list = await Page.APIRequest.GetAsync("http://localhost:5252/api/public/events");
+        if (!list.Ok) return null;
 
-        foreach (var e in (await api.JsonAsync())!.Value.EnumerateArray())
+        foreach (var e in (await list.JsonAsync())!.Value.EnumerateArray())
         {
-            if (!e.TryGetProperty("description", out var d) || d.ValueKind != JsonValueKind.String)
+            var org  = e.TryGetProperty("organizationUrlName", out var o) ? o.GetString() : null;
+            var slug = e.TryGetProperty("urlName", out var u) ? u.GetString() : null;
+            if (org is null || slug is null) continue;
+
+            var one = await Page.APIRequest.GetAsync(DetailUrl(org, slug));
+            if (!one.Ok) continue;
+
+            var body = (await one.JsonAsync())!.Value;
+            if (!body.TryGetProperty("description", out var d) || d.ValueKind != JsonValueKind.String)
                 continue;
             if (d.GetString() is not { } text || !text.Contains('<')) continue;
 
-            var org  = e.TryGetProperty("organizationUrlName", out var o) ? o.GetString() : null;
-            var slug = e.TryGetProperty("urlName", out var u) ? u.GetString() : null;
-            if (org is not null && slug is not null) return (org, slug);
+            return (org, slug);
         }
         return null;
     }
+
+    /// <summary>
+    /// The public detail endpoint. Written once because the second test had it wrong — it asked
+    /// <c>api/public/events/{org}/{slug}</c>, which 404s, and then ignored itself over the 404.
+    /// </summary>
+    private static string DetailUrl(string org, string slug) =>
+        $"http://localhost:5252/api/public/organizations/{org}/events/{slug}";
 
     [Test]
     [Description("A visitor sees the formatted description, never its tags.")]
@@ -57,16 +84,31 @@ public class PublicEventDescriptionTests : BenTestBase
         var description = Page.Locator(".event-description");
         await Expect(description).ToBeVisibleAsync(new() { Timeout = 20_000 });
 
+        // Wait for the CONTENT, not just the box, and poll rather than read once. The prerendered
+        // page carries the description; the circuit then connects, renders the loader in its place
+        // and puts it back a moment later — so a single read here saw an emptied element and
+        // failed on a page that was entirely correct. It only showed up when a test that signs
+        // somebody in ran first, which is why this passed alone and failed in the suite.
+        //
+        // Polled by hand rather than with Expect so that a description that really did render as
+        // text fails with the sentence below rather than with a selector timeout.
+        var parsed = description.Locator("p, div, ul, ol, strong, em, br");
+        var deadline = DateTime.UtcNow.AddSeconds(20);
+        int count;
+        while ((count = await parsed.CountAsync()) == 0 && DateTime.UtcNow < deadline)
+            await Page.WaitForTimeoutAsync(250);
+
+        // It really is markup, not merely text that happens to lack angle brackets.
+        Assert.That(count, Is.GreaterThan(0),
+            "The description rendered no elements at all, so nothing was parsed. Saw:\n"
+          + await description.InnerTextAsync());
+
         // The bug, stated exactly: a tag readable as text. Checking the rendered TEXT rather than
         // the HTML is the whole point — innerHTML contains "<p>" when everything is correct.
         var shown = await description.InnerTextAsync();
         Assert.That(shown, Does.Not.Contain("<p>").And.Not.Contain("</p>"),
             "The description is being shown as its own source. It is authored as HTML and must be "
           + $"rendered as HTML. Saw:\n{shown}");
-
-        // And it really is markup, not merely text that happens to lack angle brackets.
-        Assert.That(await description.Locator("p, div, ul, ol, strong, em, br").CountAsync(),
-            Is.GreaterThan(0), "The description rendered no elements at all, so nothing was parsed.");
     }
 
     [Test]
@@ -79,9 +121,9 @@ public class PublicEventDescriptionTests : BenTestBase
         // Asked of the ANONYMOUS endpoint, because that is the string the page is handed. If a
         // <script> can reach this response it can reach a visitor's browser, whatever the page
         // then does with it.
-        var api = await Page.APIRequest.GetAsync(
-            $"http://localhost:5252/api/public/events/{found.Value.org}/{found.Value.slug}");
-        if (!api.Ok) Assert.Ignore("The public event endpoint did not answer for this slug.");
+        var api = await Page.APIRequest.GetAsync(DetailUrl(found.Value.org, found.Value.slug));
+        Assert.That(api.Ok, Is.True,
+            "The public event endpoint did not answer for a slug its own listing just gave us.");
 
         var served = (await api.TextAsync()).ToLowerInvariant();
         Assert.That(served, Does.Not.Contain("<script"),

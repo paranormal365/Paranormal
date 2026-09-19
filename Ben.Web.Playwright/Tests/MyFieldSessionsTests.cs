@@ -66,7 +66,9 @@ public class MyFieldSessionsTests : BenTestBase
         await Page.WaitForSelectorAsync("[data-testid='session-row'], [data-testid='no-sessions']",
                                         new() { Timeout = 30_000 });
 
-        var map = Page.Locator(".k-map").First;
+        // Apple Maps through Kit/Maps/BenMap since item 228; the container was Kendo's .k-map, and
+        // looking for that made this test skip itself on every run rather than fail.
+        var map = Page.Locator(".ben-map").First;
         if (await map.CountAsync() == 0)
             Assert.Ignore("this account has no session with a fix, so there is no map to pan");
 
@@ -79,28 +81,40 @@ public class MyFieldSessionsTests : BenTestBase
         // carrying the `hidden` attribute, and this one is hidden on purpose.
         const string readCounter =
             "() => document.querySelector(\"[data-testid='map-bounded-loads']\")?.textContent?.trim() ?? 'missing'";
+
+        // A drag before MapKit has drawn the map moves nothing. The module answers describe() only
+        // once the map exists; its own framing is not a gesture and is never counted.
+        var module = await Page.EvaluateHandleAsync("path => import(path)", "/_content/Ben.Web.Website.Library/Kit/Maps/BenMap.razor.js");
+        var mapId = (await map.GetAttributeAsync("id"))!;
+        await Page.WaitForFunctionAsync("([mod, id]) => !!mod.describe(id)", new object[] { module, mapId }, new() { Timeout = 30_000 });
         Assert.That(await Page.EvaluateAsync<string>(readCounter), Is.EqualTo("0"), "nothing bounded before any gesture");
 
+        await map.ScrollIntoViewIfNeededAsync();
         var box = (await map.BoundingBoxAsync())!;
         var cx = box.X + box.Width / 2;
         var cy = box.Y + box.Height / 2;
 
-        // Three quick drags: each is a gesture the map reports; only the last should be asked about.
+        // Three quick drags, back to back: each is a gesture the map reports; only the last should
+        // be asked about. No pause between them is needed — the point is that they arrive together.
         for (var i = 0; i < 3; i++)
         {
             await Page.Mouse.MoveAsync(cx, cy);
             await Page.Mouse.DownAsync();
             await Page.Mouse.MoveAsync(cx + 60, cy + 40, new() { Steps = 5 });
             await Page.Mouse.UpAsync();
-            await Page.WaitForTimeoutAsync(80);      // well inside the 350 ms debounce
         }
 
-        await Page.WaitForTimeoutAsync(1500);        // let the debounce fire and the request land
+        // The one request lands...
+        await Page.WaitForFunctionAsync($"() => ({readCounter})() !== '0'", null, new() { Timeout = 15_000 });
+
+        // ...and no second one follows. Proving an absence needs a window, so it is a stated one:
+        // longer than the map's 250 ms settle plus the page's 350 ms debounce together, several
+        // times over, after which a straggling gesture could not still be pending.
+        await Page.WaitForTimeoutAsync(2_000);
 
         // What the map actually reported, so a failure here says which corner was which.
         TestContext.Out.WriteLine("last bounds N,S,E,W = " + await Page.EvaluateAsync<string>(
             "() => document.querySelector(\"[data-testid='map-last-bounds']\")?.textContent?.trim() ?? 'missing'"));
-        TestContext.Out.WriteLine("pins after pan = " + await Page.Locator(".k-marker").CountAsync());
 
         Assert.That(await Page.EvaluateAsync<string>(readCounter), Is.EqualTo("1"),
             "three gestures inside the debounce window should produce exactly one bounded request");

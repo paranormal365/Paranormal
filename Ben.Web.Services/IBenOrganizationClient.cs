@@ -205,6 +205,27 @@ public interface IBenOrganizationClient
     Task<(OrganizationAdRecord? Result, string? Error)> WithdrawOrgAdAsync(Guid orgId, Guid adId, CancellationToken token = default);
     Task<bool> DeleteOrgAdAsync(Guid orgId, Guid adId, CancellationToken token = default);
     Task<MyOrgPermissionsItem?> GetMyOrgPermissionsAsync(Guid orgId, CancellationToken token = default);
+
+    // ── Investigating on your own (2026-09-17) ───────────────────────────────
+
+    /// <summary>
+    /// This account's personal organization, or null when it has none.
+    /// </summary>
+    Task<SoloPlanItem?> GetSoloPlanAsync(CancellationToken token = default);
+
+    /// <summary>
+    /// Creates this account's personal organization, or returns the one it already has.
+    /// </summary>
+    /// <remarks>
+    /// <para>Free, and idempotent — tapping twice gets the same organization rather than a second
+    /// one. It takes no payment: it produces the organization the rest of the site hangs work on,
+    /// and the ordinary billing flow does the rest if somebody later wants a plan.</para>
+    ///
+    /// <para>The endpoint has existed since the solo tier shipped and <b>had no caller anywhere</b>
+    /// until this: a person with no group could record field sessions from the phone and nothing
+    /// else, because every other feature is org-scoped and they had no org. This is the door.</para>
+    /// </remarks>
+    Task<(SoloPlanItem? Plan, string? Error)> StartSoloPlanAsync(CancellationToken token = default);
     Task<OrgIncludedAreasItem?> GetOrgIncludedAreasAsync(Guid orgId, CancellationToken token = default);
 
     // ── Member-title ladder (item 157) — seniority, never permission ─────────
@@ -342,6 +363,20 @@ public interface IBenOrganizationClient
     Task<PublicEventRecord?> RsvpToEventAsync(Guid eventId, CancellationToken token = default);
 
     /// <summary>
+    /// Asks for a number of places on a tour date (item 234).
+    /// </summary>
+    /// <remarks>
+    /// The same endpoint. A tour date records a REQUEST that holds nothing until the business
+    /// approves it; an ordinary event ignores the number and seats one person, as it always has.
+    /// </remarks>
+    Task<PublicEventRecord?> RsvpToEventAsync(Guid eventId, int seats, CancellationToken token = default);
+
+    /// <summary>
+    /// Says back that a reserved seat has been seen. Optional, always (Ben: "if they want").
+    /// </summary>
+    Task<PublicEventRecord?> AcknowledgeSeatAsync(Guid eventId, CancellationToken token = default);
+
+    /// <summary>
     /// Asks to attend by email, for somebody who is not signed in. Always succeeds from the
     /// caller's point of view — a different answer for a known address would let anyone test which
     /// emails have accounts here.
@@ -356,4 +391,214 @@ public interface IBenOrganizationClient
 
     /// <summary>Says they are no longer coming.</summary>
     Task<bool> CancelEventRsvpAsync(Guid eventId, CancellationToken token = default);
+
+    // ── Tours (item 233) ────────────────────────────────────────────────────
+    // A tour is the product a tour business pays for; a date on the calendar is that product
+    // happening. Reading is open to members, changing takes the settings key, because it can
+    // charge the card.
+
+    /// <summary>Every tour this business runs, active first.</summary>
+    Task<LoadResult<TourRecord>> GetToursAsync(Guid orgId, CancellationToken token = default);
+
+    // ── Hosted events (item 235) ────────────────────────────────────────────
+    //
+    // An event is the product an organization pays for, the way a tour is — and one calendar row,
+    // the umbrella, carries it into every part of the site that already understands a public
+    // event. Reading is open to members; changing takes the settings key, because publishing costs
+    // either a credit or a slot on the plan.
+
+    /// <summary>Every event this organization is putting on, live ones first.</summary>
+    Task<LoadResult<HostedEventRecord>> GetHostedEventsAsync(
+        Guid orgId, CancellationToken token = default);
+
+    /// <summary>One event, with its dates.</summary>
+    Task<HostedEventRecord?> GetHostedEventAsync(
+        Guid orgId, Guid eventId, CancellationToken token = default);
+
+    /// <summary>
+    /// What publishing will cost, read before the page offers the button.
+    /// </summary>
+    /// <remarks>
+    /// Ben's rule, 2026-09-11: "the person must understand and confirm they will be charged the
+    /// event credit before they can get too far in." This is what the page says beforehand.
+    /// </remarks>
+    Task<HostedEventPlanRecord?> GetHostedEventPlanAsync(
+        Guid orgId, CancellationToken token = default);
+
+    /// <summary>Creates or changes an event, keeping the server's refusal.</summary>
+    Task<(HostedEventRecord? Result, string? Error)> SaveHostedEventAsync(
+        Guid orgId, Guid? eventId, UpsertHostedEventRequest request,
+        CancellationToken token = default);
+
+    /// <summary>Changes one date — what it is called, when it runs, what to say about it.</summary>
+    Task<(HostedEventRecord? Result, string? Error)> SaveHostedEventNightAsync(
+        Guid orgId, Guid eventId, Guid nightId, UpsertHostedEventNightRequest request,
+        CancellationToken token = default);
+
+    /// <summary>
+    /// Publishes, un-publishes, archives, restores or un-cancels an event.
+    /// </summary>
+    /// <remarks>
+    /// Publishing is the one that can refuse and the one that can cost, which is why it is an
+    /// endpoint of its own rather than a field on the save.
+    /// </remarks>
+    Task<(HostedEventRecord? Result, string? Error)> SetHostedEventStateAsync(
+        Guid orgId, Guid eventId, string action, CancellationToken token = default);
+
+    /// <summary>Calls an event off, keeping the row so the people coming can see that it is off.</summary>
+    Task<(HostedEventRecord? Result, string? Error)> CancelHostedEventAsync(
+        Guid orgId, Guid eventId, string? reason, CancellationToken token = default);
+
+    /// <summary>
+    /// Everything standing between this event and going live.
+    /// </summary>
+    /// <remarks>
+    /// The same list the publish button refuses from, which is the point: a rule the server
+    /// enforces and the screen cannot see is met as a mysterious refusal after the button has been
+    /// pressed.
+    /// </remarks>
+    Task<LoadResult<HostedEventReadinessItem>> GetHostedEventReadinessAsync(
+        Guid orgId, Guid eventId, CancellationToken token = default);
+
+    /// <summary>
+    /// What calling this event off would do to its credit, without doing anything.
+    /// </summary>
+    /// <remarks>
+    /// So the confirmation can say which is about to happen before the button is pressed, in the
+    /// same words the cancel itself will answer with.
+    /// </remarks>
+    Task<HostedEventCancellationEffect?> GetHostedEventCancellationEffectAsync(
+        Guid orgId, Guid eventId, CancellationToken token = default);
+
+    /// <summary>Says whether an event that set a minimum number is going ahead.</summary>
+    /// <remarks>
+    /// A no routes through cancelling, so the people with places are told and the credit follows
+    /// the same forty-eight hour rule as any other cancellation.
+    /// </remarks>
+    Task<(HostedEventRecord? Result, string? Error)> DecideHostedEventAsync(
+        Guid orgId, Guid eventId, bool going, CancellationToken token = default);
+
+    /// <summary>
+    /// Changes how guests get a place: they pick one on the plan, or they ask and are placed.
+    /// </summary>
+    /// <remarks>
+    /// Refused once anybody is booked or waiting, because the switch would change what their
+    /// bookings mean. The refusal says how many and what to do about them.
+    /// </remarks>
+    Task<(HostedEventRecord? Result, string? Error)> SetHostedEventBookingModeAsync(
+        Guid orgId, Guid eventId, HostedEventBookingMode mode, CancellationToken token = default);
+
+    /// <summary>
+    /// A published event as a visitor sees it — its dates, its venue, whether it is a stay or a run.
+    /// </summary>
+    /// <remarks>
+    /// <para>Anonymous. The umbrella calendar row carries the sign-up and the reminder; this carries
+    /// what an umbrella cannot say, which is that there is more than one evening in it.</para>
+    ///
+    /// <para>An <see cref="ItemResult{T}"/> since the plan of record (2026-09-12): a visitor refused
+    /// the event's dates and a visitor looking at an event that has no such dates must not see the
+    /// same page, because one of them has a sentence worth reading and the other has nothing.</para>
+    /// </remarks>
+    Task<ItemResult<PublicHostedEventRecord>> GetPublicHostedEventAsync(
+        Guid hostedEventId, CancellationToken token = default);
+
+    /// <summary>One tour.</summary>
+    Task<TourRecord?> GetTourAsync(Guid orgId, Guid tourId, CancellationToken token = default);
+
+    /// <summary>What the plan says a tour costs right now, read before the business commits.</summary>
+    Task<TourPlanRecord?> GetTourPlanAsync(Guid orgId, CancellationToken token = default);
+
+    /// <summary>
+    /// Creates or changes a tour, keeping the server's refusal.
+    /// </summary>
+    /// <remarks>
+    /// The refusals here are sentences somebody has to act on — a name already used, an address
+    /// that is not theirs — so the variant that throws them away would leave a page able to say
+    /// only "Save failed".
+    /// </remarks>
+    Task<(TourRecord? Result, string? Error)> SaveTourAsync(
+        Guid orgId, Guid? tourId, UpsertTourRequest request, CancellationToken token = default);
+
+    /// <summary>Stops or restarts a tour. Retiring never refunds; restoring may charge.</summary>
+    Task<(TourRecord? Result, string? Error)> SetTourRetiredAsync(
+        Guid orgId, Guid tourId, bool retired, CancellationToken token = default);
+
+    /// <summary>Replaces who guides a tour. Everybody named must be an active member.</summary>
+    Task<(TourRecord? Result, string? Error)> SetTourGuidesAsync(
+        Guid orgId, Guid tourId, IReadOnlyList<Guid> appUserIds, CancellationToken token = default);
+
+    /// <summary>The tours a business advertises, as a visitor sees them.</summary>
+    Task<LoadResult<PublicTourListItem>> GetPublicToursAsync(string orgUrlName, CancellationToken token = default);
+
+    /// <summary>One tour's public page, with its next dates.</summary>
+    Task<PublicTourRecord?> GetPublicTourAsync(string orgUrlName, string tourSlug, CancellationToken token = default);
+
+    /// <summary>Every tour that can be drawn on a map.</summary>
+    Task<LoadResult<PublicTourMapPin>> GetTourMapPinsAsync(CancellationToken token = default);
+
+    /// <summary>
+    /// The guest mail as it would go out, from what is in the editor right now.
+    /// </summary>
+    /// <remarks>
+    /// The point of a preview is to see a change before saving it, so what is posted is the
+    /// editor's contents rather than what the tour last stored.
+    /// </remarks>
+    Task<TourMailPreviewRecord?> PreviewTourMailAsync(
+        Guid orgId, Guid tourId, string? subjectTemplate, string? bodyTemplate, CancellationToken token = default);
+
+    /// <summary>What people who walked this tour thought of it, and whether the reader may add.</summary>
+    Task<TourReviewsRecord?> GetTourReviewsAsync(Guid tourId, CancellationToken token = default);
+
+    /// <summary>Leaves or changes the caller's own review. Keeps the server's refusal.</summary>
+    Task<(TourReviewsRecord? Result, string? Error)> SaveMyTourReviewAsync(
+        Guid tourId, int stars, string? comment, CancellationToken token = default);
+
+    /// <summary>Takes the caller's own review down.</summary>
+    Task<bool> DeleteMyTourReviewAsync(Guid tourId, CancellationToken token = default);
+
+    /// <summary>Hides or restores a review on one of the business's own tours.</summary>
+    Task<bool> SetTourReviewHiddenAsync(Guid orgId, Guid tourId, Guid reviewId, bool hidden, CancellationToken token = default);
+
+    /// <summary>The pictures on a tour's page.</summary>
+    Task<LoadResult<TourImageRecord>> GetTourGalleryAsync(Guid orgId, Guid tourId, CancellationToken token = default);
+
+    /// <summary>Adds one of the business's own pictures. Refused at fifty, in words.</summary>
+    Task<(TourImageRecord? Result, string? Error)> AddTourImageAsync(
+        Guid orgId, Guid tourId, Stream content, string fileName, string contentType,
+        string? caption, CancellationToken token = default);
+
+    /// <summary>
+    /// Stops the clock on a file this business holds, or lets it run again (item 233).
+    /// </summary>
+    /// <remarks>
+    /// The keep for a RECORDING, and for a photograph the business wants to hold without
+    /// publishing. Putting a picture on a tour's page keeps it too, and is the better answer when
+    /// the picture is worth showing.
+    /// </remarks>
+    Task<bool> SetMediaKeptAsync(Guid orgId, Guid uploadFileId, bool kept, CancellationToken token = default);
+
+    /// <summary>Keeps a guest's photograph by copying it onto the tour's page.</summary>
+    Task<(TourImageRecord? Result, string? Error)> KeepSubmissionOnTourAsync(
+        Guid orgId, Guid tourId, Guid submissionId, string? caption, CancellationToken token = default);
+
+    /// <summary>Changes a picture's caption or where it sits.</summary>
+    Task<(IReadOnlyList<TourImageRecord>? Result, string? Error)> UpdateTourImageAsync(
+        Guid orgId, Guid tourId, Guid imageId, string? caption, int? sortOrder, CancellationToken token = default);
+
+    /// <summary>Takes a picture off the page and deletes the business's copy.</summary>
+    Task<bool> DeleteTourImageAsync(Guid orgId, Guid tourId, Guid imageId, CancellationToken token = default);
+
+    /// <summary>
+    /// What the signed-in caller sent in from one tour, whatever became of it.
+    /// </summary>
+    /// <remarks>
+    /// So somebody who walked a tour last month can find their own photographs from the tour's
+    /// page, rather than having to remember which night they went on.
+    /// </remarks>
+    Task<LoadResult<EventEvidenceRecord>> GetMyTourEvidenceAsync(Guid tourId, CancellationToken token = default);
+
+    /// <summary>Tours by name, by business, or near a point.</summary>
+    Task<LoadResult<PublicTourListItem>> SearchToursAsync(
+        string? query = null, double? latitude = null, double? longitude = null,
+        double radiusMiles = 25, CancellationToken token = default);
 }

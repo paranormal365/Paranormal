@@ -1,0 +1,132 @@
+/*
+    A card that is entirely a link needs to look like one without an underline, and a card with a
+    photograph needs the photograph to lead.
+
+    The lift and the slow zoom are the only motion here, and both stop for a reader whose system
+    asks for less of it.
+*/
+
+.ben-tourcard {
+    position: relative;
+    display: flex;
+    flex-direction: column;
+    height: 100%;
+    overflow: hidden;
+    border: 1px solid var(--bs-border-color);
+    border-radius: .5rem;
+    background: var(--bs-body-bg);
+    color: inherit;
+    text-decoration: none;
+    transition: transform .16s ease, box-shadow .16s ease, border-color .16s ease;
+}
+
+.ben-tourcard:hover,
+.ben-tourcard:focus-visible {
+    transform: translateY(-3px);
+    border-color: var(--bs-primary);
+    box-shadow: 0 .75rem 1.5rem rgba(0, 0, 0, .25);
+}
+
+.ben-tourcard__frame {
+    position: relative;
+    display: block;
+    aspect-ratio: 16 / 9;
+    background: var(--bs-tertiary-bg, #1b1b1b);
+    overflow: hidden;
+}
+
+/* The stand-in for a tour with no photograph yet: a low mist over a dark wash, in a hue taken from
+   the tour's own name, with its initials sitting quietly in the middle. Enough of a composition to
+   sit in a grid beside a real photograph, dim enough not to compete with one. */
+.ben-tourcard__frame--drawn {
+    background:
+        radial-gradient(ellipse 90% 55% at 50% 120%, hsl(var(--plate-hue) 55% 40% / .22), transparent 60%),
+        radial-gradient(circle at 80% 12%, hsl(var(--plate-hue) 60% 50% / .14), transparent 48%),
+        linear-gradient(150deg,
+            hsl(var(--plate-hue) 34% 10%) 0%,
+            hsl(calc(var(--plate-hue) + 34deg) 30% 6%) 100%);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+}
+
+.ben-tourcard__monogram {
+    font-size: 1.9rem;
+    font-weight: 700;
+    letter-spacing: .22em;
+    /* The tracking above adds a trailing gap after the last letter; this takes it back so the
+       initials sit on the centre line rather than a little left of it. */
+    text-indent: .22em;
+    line-height: 1;
+    color: #fff;
+    opacity: .34;
+}
+
+.ben-tourcard__image {
+    width: 100%;
+    height: 100%;
+    object-fit: cover;
+    transition: transform .5s ease;
+}
+
+.ben-tourcard:hover .ben-tourcard__image,
+.ben-tourcard:focus-visible .ben-tourcard__image {
+    transform: scale(1.04);
+}
+
+/* On a photograph, so it is drawn light on a dark plate rather than in the theme's colours. */
+.ben-tourcard__when {
+    position: absolute;
+    top: .5rem;
+    left: .5rem;
+    padding: .15rem .45rem;
+    border-radius: .3rem;
+    background: rgba(0, 0, 0, .68);
+    color: #fff;
+    font-size: .72rem;
+    font-weight: 600;
+}
+
+.ben-tourcard__body {
+    display: block;
+    padding: .65rem .75rem;
+    flex: 1 1 auto;
+}
+
+.ben-tourcard__title {
+    display: block;
+    font-weight: 600;
+    line-height: 1.25;
+}
+
+.ben-tourcard__meta,
+.ben-tourcard__by,
+.ben-tourcard__none {
+    color: var(--bs-secondary-color);
+}
+
+.ben-tourcard__meta,
+.ben-tourcard__by {
+    display: block;
+    font-size: .78rem;
+}
+
+.ben-tourcard__line {
+    display: block;
+    font-size: .85rem;
+    margin-top: .15rem;
+}
+
+@media (prefers-reduced-motion: reduce) {
+    .ben-tourcard,
+    .ben-tourcard__image {
+        transition: none;
+    }
+
+    .ben-tourcard:hover,
+    .ben-tourcard:focus-visible,
+    .ben-tourcard:hover .ben-tourcard__image,
+    .ben-tourcard:focus-visible .ben-tourcard__image {
+        transform: none;
+    }
+}

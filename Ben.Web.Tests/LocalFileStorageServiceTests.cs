@@ -152,4 +152,65 @@ public class LocalFileStorageServiceTests : IDisposable
         await stream.CopyToAsync(ms);
         Assert.Equal(data, ms.ToArray());
     }
+
+    // ── A write is all there or not there ─────────────────────────────────────
+
+    /// <summary>A stream that hands over some bytes and then fails, as a request cut off mid-upload does.</summary>
+    private sealed class FailsPartWay(byte[] first) : MemoryStream(first)
+    {
+        private bool _handedOver;
+
+        public override async ValueTask<int> ReadAsync(Memory<byte> buffer, CancellationToken ct = default)
+        {
+            if (_handedOver) throw new OperationCanceledException("the reader went away");
+            _handedOver = true;
+            return await base.ReadAsync(buffer, ct);
+        }
+    }
+
+    [Fact]
+    public async Task A_write_cut_short_leaves_the_old_file_whole_and_nothing_half_written()
+    {
+        var path = _svc.OrgFilePath(Guid.NewGuid(), "photo.jpg.thumb.jpg");
+        var whole = new byte[] { 1, 2, 3, 4, 5, 6, 7, 8 };
+        await _svc.WriteAsync(path, new MemoryStream(whole));
+
+        await Assert.ThrowsAnyAsync<OperationCanceledException>(
+            () => _svc.WriteAsync(path, new FailsPartWay(new byte[] { 9, 9, 9 })));
+
+        await using (var stream = await _svc.OpenReadAsync(path))
+        using (var read = new MemoryStream())
+        {
+            await stream.CopyToAsync(read);
+            Assert.Equal(whole, read.ToArray());
+        }
+
+        var directory = path[..path.LastIndexOf('/')];
+        Assert.Equal([path], _svc.ListFiles(directory));
+        Assert.Single(Directory.GetFiles(Path.Combine(_tempRoot, directory.Replace('/', Path.DirectorySeparatorChar))));
+    }
+
+    [Fact]
+    public async Task A_write_cut_short_on_a_new_path_leaves_no_file_at_all()
+    {
+        var path = _svc.OrgFilePath(Guid.NewGuid(), "new.jpg.thumb.jpg");
+
+        await Assert.ThrowsAnyAsync<OperationCanceledException>(
+            () => _svc.WriteAsync(path, new FailsPartWay(new byte[] { 9, 9, 9 })));
+
+        Assert.False(_svc.Exists(path));
+    }
+
+    [Fact]
+    public async Task A_file_open_for_reading_can_still_be_replaced()
+    {
+        var path = _svc.OrgFilePath(Guid.NewGuid(), "busy.jpg");
+        await _svc.WriteAsync(path, new MemoryStream(new byte[] { 1 }));
+
+        await using var reader = await _svc.OpenReadAsync(path);
+        await _svc.WriteAsync(path, new MemoryStream(new byte[] { 2, 2 }));
+
+        await using var fresh = await _svc.OpenReadAsync(path);
+        Assert.Equal(2, fresh.Length);
+    }
 }

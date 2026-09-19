@@ -86,13 +86,29 @@ public sealed class AdminBillingController : BenControllerBase
         await using var db = await _db.CreateDbContextAsync(ct);
         if (!await db.Organizations.AnyAsync(o => o.Id == orgId, ct)) return NotFound("Organization not found.");
 
+        // Rounded ONCE, here, away from zero, and everything downstream uses this figure
+        // (2026-09-17 audit). Two things were wrong and they compounded:
+        //
+        //   * the row stored decimal.Round(request.Amount, 2), and decimal.Round with no mode is
+        //     BANKER'S rounding. Every other money figure on the site rounds away from zero, and
+        //     TaxResolver.TaxOn says why in its own summary — "the rounding every register uses".
+        //     A charge of $10.005 was filed as $10.00 where the convention says $10.01.
+        //   * the tax was worked out on request.Amount, the UNROUNDED figure, while Amount stored
+        //     the rounded one. So the row did not reconcile against itself: its tax was a
+        //     percentage of a number that appears nowhere on it, and a reader recomputing the tax
+        //     from the amount in front of them got a different answer than the one filed.
+        //
+        // The ledger is append-only and receipts are printed from it, so a row that disagrees with
+        // itself is not a rounding curiosity — it is a document somebody is handed.
+        var amount = Math.Round(request.Amount, 2, MidpointRounding.AwayFromZero);
+
         // Charges tax what will be owed; a payment taxes nothing itself — its tax was on the
         // charge it settles. Recording it separately would count the same tax twice.
         decimal ratePercent = 0m, tax = 0m;
         if (kind == BillingLedgerKind.Charge)
         {
             (_, ratePercent) = await TaxResolver.ForOrganizationAsync(db, orgId, ct);
-            tax = TaxResolver.TaxOn(request.Amount, ratePercent);
+            tax = TaxResolver.TaxOn(amount, ratePercent);
         }
 
         var entry = new BillingLedgerEntry
@@ -100,7 +116,7 @@ public sealed class AdminBillingController : BenControllerBase
             Id                 = Guid.NewGuid(),
             Kind               = kind,
             OrganizationId     = orgId,
-            Amount             = decimal.Round(request.Amount, 2),
+            Amount             = amount,
             TaxRatePercent     = ratePercent,
             TaxAmount          = tax,
             Description        = request.Description.Trim(),
@@ -185,6 +201,202 @@ public sealed class AdminBillingController : BenControllerBase
                 e.Description, e.PaymentReference, e.ReceiptNumber,
                 e.PeriodStart, e.PeriodEnd, e.DateCreated,
                 e.CreatedByAppUser.DisplayName ?? e.CreatedByAppUser.Email ?? "?"))
+            .SingleAsync(ct);
+
+    // ── Event credits (item 235) ──────────────────────────────────────────────
+
+    /// <summary>
+    /// Every event credit ever sold, newest first.
+    /// </summary>
+    /// <remarks>
+    /// The SuperAdmin view exists because <c>RefundedUtc</c> would otherwise be a column only SQL
+    /// could write — a rule the code keeps and no screen can reach, which is the shape of a
+    /// half-built feature rather than a decision.
+    /// </remarks>
+    [HttpGet("event-credits")]
+    public async Task<ActionResult<IEnumerable<AdminEventCreditRecord>>> GetEventCredits(
+        [FromQuery] Guid? orgId, [FromQuery] int take = 200, CancellationToken ct = default)
+    {
+        await using var db = await _db.CreateDbContextAsync(ct);
+        var query = db.EventCredits.AsNoTracking();
+        if (orgId is { } o) query = query.Where(c => c.OwnerOrganizationId == o);
+
+        var rows = await query
+            .OrderByDescending(c => c.PurchasedUtc)
+            .Take(Math.Clamp(take, 1, 1000))
+            .Select(c => new AdminEventCreditRecord(
+                c.Id,
+                c.OwnerOrganizationId,
+                c.OwnerOrganization != null
+                    ? c.OwnerOrganization.Name
+                    : (c.OwnerAppUser != null ? (c.OwnerAppUser.DisplayName ?? c.OwnerAppUser.Email ?? "?") : "?"),
+                c.CreatedByAppUser.DisplayName ?? c.CreatedByAppUser.Email ?? "?",
+                c.PriceAtPurchase, c.Currency, c.PurchasedUtc, c.ExpiresUtc, c.ExpiryWarningSentUtc,
+                c.SpentUtc, c.SpentOnHostedEventId,
+                c.SpentOnHostedEvent != null ? c.SpentOnHostedEvent.Name : null,
+                c.RefundedUtc,
+                c.RefundedByAppUserId != null
+                    ? db.Users.Where(u => u.Id == c.RefundedByAppUserId)
+                        .Select(u => u.DisplayName ?? u.Email).FirstOrDefault()
+                    : null,
+                c.RefundedReason,
+                c.ReceiptNumber,
+                c.GrantedReason))
+            .ToListAsync(ct);
+
+        return Ok(rows);
+    }
+
+    /// <summary>
+    /// Hands a group credits nobody paid for.
+    /// </summary>
+    /// <remarks>
+    /// <para><b>Why this exists.</b> Until it did, the only way a credit could reach a group was a
+    /// live card payment. That left support with no remedy for the one case that actually turns
+    /// up — somebody paid and it did not land — and it left the refund beside this one impossible
+    /// to exercise on any deployment, because there was never a credit to refund.</para>
+    ///
+    /// <para><b>It is not a sale, and nothing reaches the ledger.</b> A $0 charge and payment pair
+    /// would put a sale that never happened into the money trail, and a receipt would say somebody
+    /// paid nothing. <c>PriceAtPurchase</c> is zero, there is no provider reference and no receipt
+    /// number; the reason and the granting admin are the record, which is why the reason is
+    /// required rather than optional.</para>
+    ///
+    /// <para><b>In every other respect it is an ordinary credit</b> — a year to use it, spent at
+    /// publish, oldest first, warned at thirty days, refundable while unspent. A granted credit
+    /// that behaved differently would be a second product wearing the first one's name.</para>
+    /// </remarks>
+    [HttpPost("organizations/{orgId:guid}/event-credits")]
+    public async Task<ActionResult<IEnumerable<AdminEventCreditRecord>>> GrantEventCredits(
+        Guid orgId, [FromBody] GrantEventCreditsRequest request, CancellationToken ct)
+    {
+        if (string.IsNullOrWhiteSpace(request.Reason))
+            return BadRequest("A granted credit needs a reason — it is the only thing separating "
+                            + "a support fix from a giveaway, and the only record that it happened.");
+
+        var count = Math.Clamp(request.Quantity <= 0 ? 1 : request.Quantity,
+                               1, Services.Events.EventCredits.MaximumPerPurchase);
+
+        await using var db = await _db.CreateDbContextAsync(ct);
+        if (!await db.Organizations.AnyAsync(o => o.Id == orgId, ct)) return NotFound("Organization not found.");
+
+        var now = DateTime.UtcNow;
+        var granted = new List<Guid>();
+        for (var i = 0; i < count; i++)
+        {
+            var credit = new EventCredit
+            {
+                Id                  = Guid.NewGuid(),
+                OwnerOrganizationId = orgId,
+                PriceAtPurchase     = 0m,
+                Currency            = "USD",
+                PurchasedUtc        = now,
+                ExpiresUtc          = now.Add(Services.Events.EventCredits.Life),
+                GrantedReason       = request.Reason.Trim(),
+                DateCreated         = now,
+                CreatedByAppUserId  = GetCurrentUserId(),
+            };
+            db.EventCredits.Add(credit);
+            granted.Add(credit.Id);
+        }
+
+        await db.SaveChangesAsync(ct);
+
+        var rows = new List<AdminEventCreditRecord>();
+        foreach (var id in granted) rows.Add(await ReadCreditBackAsync(db, id, ct));
+        return Ok(rows);
+    }
+
+    /// <summary>
+    /// Refunds one credit: it can never be spent again, and the ledger says why.
+    /// </summary>
+    /// <remarks>
+    /// <para><b>A spent credit is refused</b>, and the refusal names the event. Ben's rule is one
+    /// event, one credit, for the life of that event — a live event whose credit was handed back
+    /// would make its own payment record untrue, and re-publishing it would then never charge
+    /// again. When money genuinely has to go back on a live event, the honest instrument is a
+    /// credit adjustment on the group's ledger, which this screen already offers.</para>
+    ///
+    /// <para><b>An expired credit may still be refunded.</b> That is exactly the goodwill case —
+    /// somebody who paid and never got to use it — and marking the row keeps the decision beside
+    /// the money rather than in an email.</para>
+    ///
+    /// <para><b>The adjustment is written here by default</b>, because a refund nobody recorded is
+    /// a hole in the money trail. It can be turned off for a refund put through Stripe, whose own
+    /// row reaches the ledger by another route and would otherwise be counted twice.</para>
+    /// </remarks>
+    [HttpPost("event-credits/{creditId:guid}/refund")]
+    public async Task<ActionResult<AdminEventCreditRecord>> RefundEventCredit(
+        Guid creditId, [FromBody] RefundEventCreditRequest request, CancellationToken ct)
+    {
+        if (string.IsNullOrWhiteSpace(request.Reason))
+            return BadRequest("A refund needs a reason — a row that does not say why is one nobody can answer for later.");
+
+        await using var db = await _db.CreateDbContextAsync(ct);
+        var credit = await db.EventCredits
+            .Include(c => c.SpentOnHostedEvent)
+            .FirstOrDefaultAsync(c => c.Id == creditId, ct);
+        if (credit is null) return NotFound("That credit no longer exists.");
+
+        if (credit.RefundedUtc is not null)
+            return BadRequest($"That credit was already refunded on {credit.RefundedUtc:MM/dd/yyyy}.");
+
+        if (credit.SpentUtc is not null)
+            return BadRequest(
+                $"That credit was spent on \"{credit.SpentOnHostedEvent?.Name ?? "an event"}\" and cannot be "
+              + "handed back — one event, one credit, for the life of that event. To give the money "
+              + "back, record a credit adjustment on the group's ledger instead.");
+
+        var now = DateTime.UtcNow;
+        credit.RefundedUtc         = now;
+        credit.RefundedByAppUserId = GetCurrentUserId();
+        credit.RefundedReason      = request.Reason.Trim();
+        credit.DateUpdated         = now;
+        credit.UpdatedByAppUserId  = GetCurrentUserId();
+
+        // A granted credit cost nothing, so there is nothing to hand back and a $0 adjustment
+        // would only add a line saying so. Revoking one is what refunding it means.
+        if (request.RecordAdjustment && credit.PriceAtPurchase > 0m
+            && credit.OwnerOrganizationId is { } orgId)
+            db.BillingLedgerEntries.Add(new BillingLedgerEntry
+            {
+                Id                 = Guid.NewGuid(),
+                Kind               = BillingLedgerKind.Adjustment,
+                OrganizationId     = orgId,
+                Amount             = credit.PriceAtPurchase,
+                AdjustmentIsCredit = true,
+                Description        = $"Event credit refunded — {credit.RefundedReason}",
+                DateCreated        = now,
+                CreatedByAppUserId = GetCurrentUserId(),
+            });
+
+        await db.SaveChangesAsync(ct);
+
+        return Ok(await ReadCreditBackAsync(db, creditId, ct));
+    }
+
+    private static Task<AdminEventCreditRecord> ReadCreditBackAsync(
+        BenDataContext db, Guid creditId, CancellationToken ct)
+        => db.EventCredits.AsNoTracking()
+            .Where(c => c.Id == creditId)
+            .Select(c => new AdminEventCreditRecord(
+                c.Id,
+                c.OwnerOrganizationId,
+                c.OwnerOrganization != null
+                    ? c.OwnerOrganization.Name
+                    : (c.OwnerAppUser != null ? (c.OwnerAppUser.DisplayName ?? c.OwnerAppUser.Email ?? "?") : "?"),
+                c.CreatedByAppUser.DisplayName ?? c.CreatedByAppUser.Email ?? "?",
+                c.PriceAtPurchase, c.Currency, c.PurchasedUtc, c.ExpiresUtc, c.ExpiryWarningSentUtc,
+                c.SpentUtc, c.SpentOnHostedEventId,
+                c.SpentOnHostedEvent != null ? c.SpentOnHostedEvent.Name : null,
+                c.RefundedUtc,
+                c.RefundedByAppUserId != null
+                    ? db.Users.Where(u => u.Id == c.RefundedByAppUserId)
+                        .Select(u => u.DisplayName ?? u.Email).FirstOrDefault()
+                    : null,
+                c.RefundedReason,
+                c.ReceiptNumber,
+                c.GrantedReason))
             .SingleAsync(ct);
 
     // ── Tax rates ─────────────────────────────────────────────────────────────

@@ -112,6 +112,32 @@ public final class NotificationsStore {
                 destination: nil))
         }
 
+        // ── Tour seats (item 234) ───────────────────────────────────────────
+        // The business's queue first: somebody is standing at the other end of it waiting to be
+        // told whether they have a place. It has no app screen — deciding is done on the web —
+        // so the row is honest about what is waiting and does not claim to open it.
+        if let toDecide = summary.tourSeatsToDecide, toDecide.count > 0 {
+            rows.append(NotificationRow(
+                id: "tour-seats-to-decide",
+                title: "Sign-ups waiting on you",
+                detail: "People asking for places on your tours · oldest "
+                      + NotificationText.describeAge(toDecide.oldestUnreadUtc),
+                systemImage: "person.badge.clock",
+                bucket: toDecide,
+                destination: nil))
+        }
+
+        if let mine = summary.myTourSeats, mine.count > 0 {
+            rows.append(NotificationRow(
+                id: "my-tour-seats",
+                title: "A tour answered you",
+                detail: "Your seat has been decided · "
+                      + NotificationText.describeAge(mine.oldestUnreadUtc),
+                systemImage: "figure.walk",
+                bucket: mine,
+                destination: .events))
+        }
+
         if summary.feedMentions.count > 0 {
             rows.append(NotificationRow(
                 id: "feed-mentions",

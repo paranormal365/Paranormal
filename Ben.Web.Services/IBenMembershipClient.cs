@@ -39,7 +39,15 @@ public interface IBenMembershipClient
     Task<(OrganizationMembershipRequestRecord? Result, string? Error)> ApplyForMembershipAsync(Guid orgId, string? message, CancellationToken token = default);
 
     /// <summary>Accepts or denies a pending membership application (requires MembershipRequests-Update permission).</summary>
-    Task<OrganizationMembershipRequestRecord?> RespondToMembershipRequestAsync(Guid orgId, Guid requestId, OrganizationMembershipRequestStatus status, string? responseNote, bool? canReapply = null, string? denialReason = null, CancellationToken token = default);
+    /// <summary>
+    /// Accepts or denies an application, and hands back the server's own sentence when it refuses.
+    /// </summary>
+    /// <remarks>
+    /// Returned as a reason rather than a null because the most likely refusal is the 402 that
+    /// explains the price of a second member. Discarding it (until the 2026-09-17 audit) left the
+    /// page saying "Please try again" about the one thing trying again can never fix.
+    /// </remarks>
+    Task<(OrganizationMembershipRequestRecord? Result, string? Error)> RespondToMembershipRequestAsync(Guid orgId, Guid requestId, OrganizationMembershipRequestStatus status, string? responseNote, bool? canReapply = null, string? denialReason = null, CancellationToken token = default);
 
     /// <summary>Withdraws the applicant's own pending request.</summary>
     Task<bool> WithdrawMembershipRequestAsync(Guid orgId, Guid requestId, CancellationToken token = default);

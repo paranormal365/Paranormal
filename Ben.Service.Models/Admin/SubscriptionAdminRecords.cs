@@ -19,6 +19,25 @@ public record SubscriptionTierPriceAdminRecord(
     // Item 144: what one member past the band's cap pays, themselves. Null = band cannot be outgrown.
     decimal? PricePerExtraMember = null);
 
+/// <summary>What is wrong with the price list as it stands, or nothing.</summary>
+/// <param name="Problem">
+/// The sentence to show, or null when there is nothing to report.
+/// </param>
+/// <param name="IsBlocking">
+/// True when the list cannot price anybody and checkout is refused; false when it works and there
+/// is simply something worth knowing. Both used to arrive as one string, so the screen called a
+/// free band "unusable" and told the reader that checkout was refused, which it was not.
+/// </param>
+/// <remarks>
+/// A record and not a bare string, and that is the whole point of it. An endpoint that returns
+/// <c>Ok(someString)</c> is served as <c>text/plain</c> by MVC's string formatter, and every client
+/// in this solution reads an answer as JSON — so the Price Bands screen threw inside
+/// <c>OnInitializedAsync</c> and took its circuit down precisely when the ladder had a problem
+/// worth naming. It had already been broken once for the mirror-image reason, when a healthy
+/// ladder answered 204 with no body (2026-09-11, item 232).
+/// </remarks>
+public record TierValidationRecord(string? Problem, bool IsBlocking = false);
+
 /// <summary>One cap on a band. Null max is written-down-unlimited; zero is feature-off.</summary>
 public record SubscriptionTierLimitAdminRecord(SubscriptionLimit Limit, int? MaxValue);
 

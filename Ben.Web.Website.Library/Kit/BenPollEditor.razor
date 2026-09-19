@@ -1,0 +1,160 @@
+@namespace Ben.Web.Website.Library.Kit
+@using Ben.Service.Models.Feed
+
+@*
+    Writing a poll (item 233, Ben 2026-09-11).
+
+    Deliberately owns no saving. It edits a NewPollRequest and hands it back through Changed; what
+    the poll gets attached to is the caller's business, because a poll belongs to a MESSAGE and a
+    message is a feed post, a case comment or a group's own message depending on who is asking.
+    An editor that knew how to save would only know how to save one of them.
+
+    Removing the whole poll is part of the editor rather than the toolbar above it: the person who
+    opened it by mistake is looking at it, not at the button they pressed.
+*@
+
+<div class="poll-editor">
+    <div class="poll-editor__head">
+        <span class="poll-editor__label">Poll</span>
+        <button type="button" class="poll-editor__drop" title="Remove this poll"
+                aria-label="Remove this poll" @onclick="@(() => Changed.InvokeAsync(null))">
+            <BenIcon Name="x" />
+        </button>
+    </div>
+
+    <input class="form-control form-control-sm mb-2" maxlength="300"
+           placeholder="Ask something" value="@_question"
+           @oninput="@(e => Update(question: e.Value?.ToString()))" />
+
+    @for (var index = 0; index < _options.Count; index++)
+    {
+        var slot = index;
+        <div class="poll-editor__option">
+            <input class="form-control form-control-sm" maxlength="120"
+                   placeholder="@($"Answer {slot + 1}")" value="@_options[slot]"
+                   @oninput="@(e => SetOption(slot, e.Value?.ToString() ?? ""))" />
+            @* Removable only down to two: a poll with one answer is not a question, which is the
+               same floor the server holds. *@
+            @if (_options.Count > MinOptions)
+            {
+                <button type="button" class="poll-editor__drop" title="Remove this answer"
+                        aria-label="@($"Remove answer {slot + 1}")" @onclick="@(() => RemoveOption(slot))">
+                    <BenIcon Name="x" />
+                </button>
+            }
+        </div>
+    }
+
+    <div class="poll-editor__row">
+        @if (_options.Count < MaxOptions)
+        {
+            <button type="button" class="btn btn-link btn-sm p-0" @onclick="AddOption">Add an answer</button>
+        }
+
+        <label class="poll-editor__closes">
+            Closes
+            <select class="form-select form-select-sm" value="@(_closesInHours?.ToString() ?? "")"
+                    @onchange="@(e => Update(closes: e.Value?.ToString()))">
+                @foreach (var (hours, label) in Durations)
+                {
+                    <option value="@(hours?.ToString() ?? "")">@label</option>
+                }
+            </select>
+        </label>
+
+        <div class="form-check form-check-sm mb-0">
+            <input type="checkbox" class="form-check-input" id="poll-multiple"
+                   checked="@_allowMultiple" @onchange="@(e => Update(multiple: (bool?)e.Value))" />
+            <label class="form-check-label small" for="poll-multiple">Let people pick more than one</label>
+        </div>
+    </div>
+</div>
+
+@code {
+    private const int MinOptions = 2;
+
+    /// <summary>Six, the same ceiling the server holds: a seventh answer makes it a survey.</summary>
+    private const int MaxOptions = 6;
+
+    /// <summary>What is offered, and what each means. Null is a poll that stays open.</summary>
+    private static readonly (int? Hours, string Label)[] Durations =
+    [
+        (6, "in 6 hours"),
+        (24, "in a day"),
+        (72, "in 3 days"),
+        (168, "in a week"),
+        (null, "never"),
+    ];
+
+    /// <summary>
+    /// The poll as it stands, or null when the caller has none open yet.
+    /// </summary>
+    /// <remarks>
+    /// One-way: the editor keeps its own working copy and reports every change through
+    /// <see cref="Changed"/>. Binding two ways would have the caller's object rewritten under the
+    /// cursor every keystroke, which is how a text box loses what somebody is halfway through
+    /// typing.
+    /// </remarks>
+    [Parameter] public NewPollRequest? Value { get; set; }
+
+    /// <summary>The poll after every edit, or null when it has been removed.</summary>
+    [Parameter] public EventCallback<NewPollRequest?> Changed { get; set; }
+
+    private string _question = "";
+    private List<string> _options = ["", ""];
+    private bool _allowMultiple;
+    private int? _closesInHours = 24;
+
+    protected override void OnParametersSet()
+    {
+        if (Value is not { } poll) return;
+
+        _question = poll.Question;
+        _allowMultiple = poll.AllowMultiple;
+        _closesInHours = poll.ClosesInHours;
+
+        // Never fewer than two boxes on screen, whatever arrived.
+        _options = poll.Options.Count >= MinOptions
+            ? [.. poll.Options]
+            : [.. poll.Options, .. Enumerable.Repeat("", MinOptions - poll.Options.Count)];
+    }
+
+    private void AddOption()
+    {
+        if (_options.Count >= MaxOptions) return;
+        _options.Add("");
+        Emit();
+    }
+
+    private void RemoveOption(int index)
+    {
+        if (_options.Count <= MinOptions) return;
+        _options.RemoveAt(index);
+        Emit();
+    }
+
+    private void SetOption(int index, string text)
+    {
+        _options[index] = text;
+        Emit();
+    }
+
+    private void Update(string? question = null, string? closes = null, bool? multiple = null)
+    {
+        if (question is not null) _question = question;
+        if (closes is not null) _closesInHours = int.TryParse(closes, out var hours) ? hours : null;
+        if (multiple is not null) _allowMultiple = multiple.Value;
+        Emit();
+    }
+
+    /// <summary>
+    /// Hands the caller what has been typed so far.
+    /// </summary>
+    /// <remarks>
+    /// Blank answers are kept in the list the caller holds and dropped by the server, so a
+    /// composer with four boxes and two filled in posts a two-answer poll. Dropping them here
+    /// would make a box disappear the moment somebody cleared it to retype.
+    /// </remarks>
+    private void Emit() => Changed.InvokeAsync(
+        new NewPollRequest(_question, [.. _options], _allowMultiple, _closesInHours));
+}

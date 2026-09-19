@@ -53,6 +53,13 @@
             @RenderCaseMedia()
             break;
 
+        case CmsSectionType.EventProgramme:
+        case CmsSectionType.EventBooking:
+        case CmsSectionType.EventGallery:
+        case CmsSectionType.EventVenue:
+            @RenderEvent()
+            break;
+
         default:
             <div class="text-muted small">Unknown section type.</div>
             break;
@@ -300,4 +307,107 @@
             return @<span />;
         }
     }
+
+    // ── an event (item 235 phase 11) ─────────────────────────────────────────
+
+    private static readonly JsonSerializerOptions EventJson = new() { PropertyNameCaseInsensitive = true };
+
+    /// <summary>
+    /// One of the group's events, in whichever of the four shapes the section is: the dates with a way
+    /// to ask for a place, the programme, the pictures, or the venue. Resolved on the server when the page
+    /// is read, so it never shows a session that has since moved.
+    /// </summary>
+    private RenderFragment RenderEvent() => @<text>
+        @{
+            Ben.Service.Models.Entities.CmsEventSectionRecord? ev = null;
+            try { ev = JsonSerializer.Deserialize<Ben.Service.Models.Entities.CmsEventSectionRecord>(Section!.ContentJson!, EventJson); }
+            catch (JsonException) { }
+        }
+        @if (ev is null || ev.Missing)
+        {
+            <div class="text-muted small">This event isn't on the public site right now.</div>
+        }
+        else
+        {
+            <div class="cms-event-section">
+                <div class="d-flex flex-wrap align-items-baseline gap-2 mb-2">
+                    <a class="fs-5 fw-semibold" href="@ev.Url">@ev.Name</a>
+                    <span class="text-secondary">@ev.DateLine</span>
+                </div>
+                @if (Section!.SectionType == CmsSectionType.EventBooking)
+                {
+                    @if (ev.Tagline is { Length: > 0 } tagline) { <p class="mb-2">@tagline</p> }
+                    @if (ev.BookingSentence is { Length: > 0 } closed)
+                    {
+                        <p class="text-secondary mb-0">@closed</p>
+                    }
+                    else
+                    {
+                        <a class="btn btn-primary" href="@($"{ev.Url}#event-act")">Ask for a place</a>
+                        @if (ev.DayPassPrice is decimal price)
+                        {
+                            <span class="ms-2 text-secondary">@(price == 0 ? "Free for the day" : $"{price:C} for the day, settled with the host")</span>
+                        }
+                    }
+                }
+                else if (Section!.SectionType == CmsSectionType.EventProgramme)
+                {
+                    @if (ev.Programme is not { Count: > 0 } programme)
+                    {
+                        <p class="text-secondary mb-0">The programme hasn't been published yet.</p>
+                    }
+                    else
+                    {
+                        <div class="list-group">
+                            @foreach (var session in programme)
+                            {
+                                <div class="list-group-item d-flex flex-column flex-sm-row gap-2 @(session.IsCancelled ? "opacity-75" : "")">
+                                    <span class="text-nowrap fw-semibold" style="min-width:12rem;">@session.When</span>
+                                    <span class="flex-grow-1 @(session.IsCancelled ? "text-decoration-line-through" : "")">
+                                        @session.Title
+                                        <span class="d-block small text-secondary">@string.Join(" · ", new[] { session.Where, session.LedBy is { Length: > 0 } l ? $"with {l}" : null }.Where(x => !string.IsNullOrWhiteSpace(x)))</span>
+                                    </span>
+                                    <span class="small text-secondary text-nowrap">@(session.IsCancelled ? "Cancelled" : session.Places)</span>
+                                </div>
+                            }
+                        </div>
+                    }
+                }
+                else if (Section!.SectionType == CmsSectionType.EventGallery)
+                {
+                    @if (ev.Gallery is { Count: > 0 } gallery)
+                    {
+                        <div class="row g-2">
+                            @foreach (var image in gallery)
+                            {
+                                <div class="col-6 col-md-4">
+                                    <img class="rounded w-100" style="aspect-ratio:3/2;object-fit:cover;" loading="lazy"
+                                         src="@($"/media/event-photo/{image.UploadFileId}")" alt="@(image.Caption ?? ev.Name)" />
+                                </div>
+                            }
+                        </div>
+                    }
+                    else
+                    {
+                        <p class="text-secondary mb-0">No pictures yet.</p>
+                    }
+                }
+                else if (ev.Venue is { } venue)
+                {
+                    <p class="mb-1"><strong>@venue.PlaceName</strong>@(venue.Town is { Length: > 0 } town ? $", {town}" : "")</p>
+                    @if (venue.RunBy is { Length: > 0 } runBy)
+                    {
+                        <p class="small text-secondary mb-2">
+                            Run by @runBy
+                            @if (venue.VenuePageUrl is { Length: > 0 } venueUrl) { <text> · </text><a href="@venueUrl">Venue page</a> }
+                        </p>
+                    }
+                    @if (venue.History is { Length: > 0 } history)
+                    {
+                        <div style="white-space:pre-line;">@history</div>
+                    }
+                }
+            </div>
+        }
+    </text>;
 }

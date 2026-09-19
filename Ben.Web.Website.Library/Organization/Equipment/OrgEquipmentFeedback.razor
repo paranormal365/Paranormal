@@ -76,7 +76,7 @@
                 <GridColumn Title="" Width="110px">
                     <Template>
                         @{ var row = (ModeratedFeedbackRecord)context; }
-                        <button type="button" class="btn btn-secondary btn-sm" @onclick="@(() => AskRemoveAsync(row))" disabled="@(!(!_busy))">Remove</button>
+                        <BenGridAction Icon="trash-2" Label="Remove" Tone="GridActionTone.Danger" OnClick="@(() => AskRemoveAsync(row))" Disabled="@_busy" />
                     </Template>
                 </GridColumn>
             </GridColumns>

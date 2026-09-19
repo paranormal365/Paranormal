@@ -16,6 +16,14 @@ namespace Ben.Data.WebApi.Controllers.Entities;
 [Authorize]
 public sealed class OrgMessageController : BenControllerBase
 {
+    /// <summary>A Viewer here reads and changes nothing — see <see cref="Ben.Data.WebApi.Services.Access.FileAudienceAccess.IsOrgViewerAsync"/>.</summary>
+    private async Task<bool> IsViewerAsync(Guid orgId, CancellationToken ct)
+    {
+        if (User.IsInRole(Ben.Data.Common.Constants.RoleNames.SuperAdmin)) return false;
+        await using var viewerDb = await _db.CreateDbContextAsync(ct);
+        return await Ben.Data.WebApi.Services.Access.FileAudienceAccess.IsOrgViewerAsync(viewerDb, orgId, GetCurrentUserId(), ct);
+    }
+
     private readonly IDbContextFactory<BenDataContext> _db;
     private readonly IMapper _mapper;
     private readonly Ben.Service.RepositoryService.GenericInterfaces.IOrganizationSecurityService _security;
@@ -24,10 +32,14 @@ public sealed class OrgMessageController : BenControllerBase
     public OrgMessageController(
         IDbContextFactory<BenDataContext> db, IMapper mapper,
         Ben.Service.RepositoryService.GenericInterfaces.IOrganizationSecurityService security,
-        Ben.Data.WebApi.Services.ICmsMarkupSanitizer sanitizer)
+        Ben.Data.WebApi.Services.ICmsMarkupSanitizer sanitizer,
+        Ben.Data.WebApi.Services.LinkPreviews.ILinkPreviewWarmer previews)
     {
-        _db = db; _mapper = mapper; _security = security; _sanitizer = sanitizer;
+        _db = db; _mapper = mapper; _security = security; _sanitizer = sanitizer; _previews = previews;
     }
+
+    /// <summary>Makes the cards for links in a message once it is saved (2026-09-14).</summary>
+    private readonly Ben.Data.WebApi.Services.LinkPreviews.ILinkPreviewWarmer _previews;
 
     /// <summary>
     /// Whether the caller belongs to this organization at all.
@@ -174,6 +186,7 @@ public sealed class OrgMessageController : BenControllerBase
         Guid orgId, [FromBody] SendOrgMessageRequest request, CancellationToken ct)
     {
         if (!await IsMemberAsync(orgId, ct)) return Forbid();
+        if (await IsViewerAsync(orgId, ct)) return ViewerReadOnly();
         var userId = GetCurrentUserId();
         await using var db = await _db.CreateDbContextAsync(ct);
 
@@ -225,6 +238,7 @@ public sealed class OrgMessageController : BenControllerBase
         }
 
         await db.SaveChangesAsync(ct);
+        _previews.WarmFrom(text: null, html: message.Body, userId);
 
         var loaded = await db.OrgMessages.AsNoTracking()
             .Include(m => m.AuthorAppUser)

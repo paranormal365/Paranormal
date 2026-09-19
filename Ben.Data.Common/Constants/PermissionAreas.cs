@@ -93,6 +93,16 @@ public static class PermissionAreas
             [OrganizationSecurityTable.ClientRequest]                   = OrganizationPermissionArea.Clients,
             [OrganizationSecurityTable.OrgCalendar]                     = OrganizationPermissionArea.Calendar,
 
+            // ── Hosted events (item 235) ─────────────────────────────────────
+            // Their own area, not Calendar's. Somebody who runs the door needs the door, and
+            // handing them the calendar to get it would hand them every date the group has.
+            [OrganizationSecurityTable.HostedEvent]                     = OrganizationPermissionArea.Events,
+            [OrganizationSecurityTable.EventBooking]                    = OrganizationPermissionArea.Events,
+            [OrganizationSecurityTable.EventSession]                    = OrganizationPermissionArea.Events,
+            [OrganizationSecurityTable.EventFile]                       = OrganizationPermissionArea.Events,
+            [OrganizationSecurityTable.EventCheckIn]                    = OrganizationPermissionArea.Events,
+            [OrganizationSecurityTable.EventChecklist]                  = OrganizationPermissionArea.Events,
+
             // ── Equipment / Public pages / Files ─────────────────────────────
             [OrganizationSecurityTable.Equipment]                       = OrganizationPermissionArea.Equipment,
             [OrganizationSecurityTable.EquipmentCheckout]               = OrganizationPermissionArea.Equipment,

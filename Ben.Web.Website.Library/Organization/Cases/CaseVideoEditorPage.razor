@@ -126,14 +126,14 @@
                             <Template>
                                 @{ var row2 = (VideoProjectRecord)context; }
                                 <span class="d-flex gap-1 text-nowrap">
-                                <button type="button" class="btn btn-secondary btn-sm" @onclick="@(() => OpenProjectAsync(row2))">Open</button>
+                                <BenGridAction Icon="edit-2" Label="Open" OnClick="@(() => OpenProjectAsync(row2))" />
                                 @* Reading is shared, writing is not: the server refuses a publish
                                    or a delete on somebody else's project, and a button that can
                                    only be refused is worse than no button. *@
                                 @if (row2.CreatedByAppUserId == UserState.UserId)
                                 {
-                                    <button type="button" class="btn btn-success btn-sm" @onclick="@(() => TriggerPublishAsync(row2))" disabled="@(!(!_publishing))" title="Publish rendered video to case"><BenIcon Name="upload" /></button>
-                                    <button type="button" class="btn btn-danger btn-sm" @onclick="@(() => ConfirmDelete(row2))"><BenIcon Name="trash-2" /></button>
+                                    <BenGridAction Icon="upload" Label="Publish rendered video to case" Tone="GridActionTone.Success" OnClick="@(() => TriggerPublishAsync(row2))" Disabled="@_publishing" />
+                                    <BenGridAction Icon="trash-2" Label="Delete" Tone="GridActionTone.Danger" OnClick="@(() => ConfirmDelete(row2))" />
                                 }
                                 </span>
                             </Template>

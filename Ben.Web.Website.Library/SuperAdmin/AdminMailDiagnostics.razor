@@ -151,6 +151,155 @@
             </div>
         </div>
     }
+
+    @* ── The outbox (item 239; wired 2026-09-17) ─────────────────────────────
+       The controller's own note says this "would have answered the 2026-08-31 question — I signed
+       up and got nothing — in five seconds instead of not at all". It still answered it in zero,
+       because the three routes behind it had no caller anywhere.
+
+       No bodies. A body carries somebody's name, what they booked and, for a hosted event, a
+       working door code — so the list says whether the words are still held, which is the only
+       thing about a body anybody here needs to know. *@
+    <div class="row mt-4">
+        <div class="col">
+            <div class="card">
+                <div class="card-header d-flex justify-content-between align-items-center gap-2 flex-wrap">
+                    <span class="fw-semibold">Recent letters</span>
+                    <div class="d-flex gap-2 align-items-center flex-wrap">
+                        <div class="btn-group btn-group-sm" role="group" aria-label="Which letters to show">
+                            @foreach (var (value, label) in OutboxFilters)
+                            {
+                                <button type="button"
+                                        class="btn @(_outboxState == value ? "btn-primary" : "btn-outline-primary")"
+                                        disabled="@_outboxBusy"
+                                        @onclick="@(() => SwitchOutboxAsync(value))">
+                                    @label
+                                </button>
+                            }
+                        </div>
+                        @if (_failedCount > 0)
+                        {
+                            @* The button somebody presses after fixing the relay. *@
+                            <button type="button" class="btn btn-sm btn-warning"
+                                    id="outbox-retry-all" disabled="@_outboxBusy"
+                                    @onclick="RetryAllAsync">
+                                Put @_failedCount given-up
+                                @(_failedCount == 1 ? "letter" : "letters") back in the queue
+                            </button>
+                        }
+                    </div>
+                </div>
+
+                <div class="card-body">
+                    @if (_outboxMessage is not null)
+                    {
+                        <div class="alert alert-info py-2" data-testid="outbox-message">@_outboxMessage</div>
+                    }
+                    @if (_outboxError is not null)
+                    {
+                        <div class="alert alert-danger py-2" data-testid="outbox-error">@_outboxError</div>
+                    }
+
+                    @if (_outboxResult.Failed)
+                    {
+                        <BenListState TItem="OutboxLetterItem" Result="@_outboxResult"
+                                      OnRetry="@(() => LoadOutboxAsync())" />
+                    }
+                    else if (_outbox.Count == 0)
+                    {
+                        <p class="text-secondary mb-0" data-testid="outbox-empty">
+                            @(_outboxState == "failed"
+                                ? "Nothing has been given up on."
+                                : "No letters recorded.")
+                        </p>
+                    }
+                    else
+                    {
+                        <div class="table-responsive">
+                            <table class="table table-sm align-middle mb-0" data-testid="outbox-table">
+                                <thead>
+                                    <tr>
+                                        <th scope="col">To</th>
+                                        <th scope="col">Subject</th>
+                                        <th scope="col">Kind</th>
+                                        <th scope="col">Written</th>
+                                        <th scope="col">State</th>
+                                        <th scope="col"></th>
+                                    </tr>
+                                </thead>
+                                <tbody>
+                                    @foreach (var letter in _outbox)
+                                    {
+                                        <tr>
+                                            <td class="text-break">@letter.To</td>
+                                            <td class="text-break">
+                                                @letter.Subject
+                                                @if (letter.AttachmentCount > 0)
+                                                {
+                                                    <span class="text-secondary small">
+                                                        · @letter.AttachmentCount attachment@(letter.AttachmentCount == 1 ? "" : "s")
+                                                    </span>
+                                                }
+                                            </td>
+                                            <td class="text-secondary small">@letter.Kind</td>
+                                            <td class="text-secondary small">
+                                                @letter.CreatedUtc.ToViewerLocalTime(UserState).ToDisplayDateTime()
+                                            </td>
+                                            <td>
+                                                @if (letter.AcceptedBySmtpUtc is { } accepted)
+                                                {
+                                                    @* Taken by the mail server, which is NOT the
+                                                       same as received — bounce reports are not
+                                                       collected, so the word matters. *@
+                                                    <span class="badge text-bg-success">Accepted</span>
+                                                    <div class="text-secondary small">
+                                                        @accepted.ToViewerLocalTime(UserState).ToDisplayDateTime()
+                                                    </div>
+                                                }
+                                                else if (letter.FailedUtc is not null)
+                                                {
+                                                    <span class="badge text-bg-danger">Given up</span>
+                                                    @if (!string.IsNullOrWhiteSpace(letter.LastError))
+                                                    {
+                                                        <div class="text-secondary small text-break">@letter.LastError</div>
+                                                    }
+                                                }
+                                                else
+                                                {
+                                                    <span class="badge text-bg-secondary">Waiting</span>
+                                                    <div class="text-secondary small">
+                                                        attempt @letter.Attempts · next
+                                                        @letter.NextAttemptUtc.ToViewerLocalTime(UserState).ToDisplayDateTime()
+                                                    </div>
+                                                }
+                                            </td>
+                                            <td class="text-end">
+                                                @if (letter.FailedUtc is not null && letter.HasBody)
+                                                {
+                                                    <button type="button" class="btn btn-sm btn-outline-primary"
+                                                            disabled="@_outboxBusy"
+                                                            data-testid="outbox-retry"
+                                                            @onclick="@(() => RetryOneAsync(letter))">
+                                                        Send again
+                                                    </button>
+                                                }
+                                                else if (letter.BodyScrubbedUtc is not null)
+                                                {
+                                                    @* The trade the scrub makes, said rather than
+                                                       offered and then refused. *@
+                                                    <span class="text-secondary small">Words cleared</span>
+                                                }
+                                            </td>
+                                        </tr>
+                                    }
+                                </tbody>
+                            </table>
+                        </div>
+                    }
+                </div>
+            </div>
+        </div>
+    </div>
 </div>
 
 @code {
@@ -161,6 +310,108 @@
     private bool    _sending;
     private string? _error;
 
+    // ── The outbox (item 239; wired 2026-09-17) ──────────────────────────────
+
+    private static readonly (string? Value, string Label)[] OutboxFilters =
+    [
+        ("failed",   "Given up"),
+        ("waiting",  "Waiting"),
+        ("accepted", "Accepted"),
+        (null,       "Everything"),
+    ];
+
+    private readonly List<OutboxLetterItem> _outbox = [];
+    private LoadResult<OutboxLetterItem> _outboxResult;
+
+    /// <summary>
+    /// Opens on the given-up pile.
+    /// </summary>
+    /// <remarks>
+    /// That is the pile somebody came to this page about. "Accepted" is the reassuring list and
+    /// nobody opens a diagnostics screen for reassurance.
+    /// </remarks>
+    private string? _outboxState = "failed";
+
+    private bool _outboxBusy;
+    private string? _outboxError;
+    private string? _outboxMessage;
+
+    /// <summary>How many given-up letters could be requeued, for the bulk button's label.</summary>
+    private int _failedCount;
+
+    private async Task SwitchOutboxAsync(string? state)
+    {
+        if (_outboxState == state) return;
+        _outboxState = state;
+        await LoadOutboxAsync();
+    }
+
+    private async Task LoadOutboxAsync()
+    {
+        _outboxBusy = true;
+        _outboxError = null;
+        try
+        {
+            _outboxResult = await AdminClient.GetOutboxAsync(_outboxState);
+            _outbox.Clear();
+            _outbox.AddRange(_outboxResult.Items);
+
+            // Counted from the failed pile specifically, so the bulk button's number is the
+            // number it will actually requeue — scrubbed rows are skipped by the server and are
+            // not offered here either.
+            _failedCount = _outboxState == "failed"
+                ? _outbox.Count(l => l.FailedUtc is not null && l.HasBody)
+                : (await AdminClient.GetOutboxAsync("failed")).Items.Count(l => l.HasBody);
+        }
+        catch (Exception ex)
+        {
+            _outboxError = $"The outbox could not be read: {ex.Message}";
+        }
+        finally { _outboxBusy = false; }
+    }
+
+    private async Task RetryOneAsync(OutboxLetterItem letter)
+    {
+        _outboxBusy = true;
+        _outboxError = null;
+        _outboxMessage = null;
+        try
+        {
+            var (result, error) = await AdminClient.RetryOutboxLetterAsync(letter.Id);
+
+            // The server refuses a scrubbed or already-accepted letter in words, and those words
+            // are the whole value of the refusal — "sending it again would send a duplicate" is
+            // not something a page should paraphrase.
+            if (result is null) { _outboxError = error ?? "That letter could not be requeued."; return; }
+
+            _outboxMessage = result.Message;
+        }
+        finally
+        {
+            _outboxBusy = false;
+            await LoadOutboxAsync();
+        }
+    }
+
+    private async Task RetryAllAsync()
+    {
+        _outboxBusy = true;
+        _outboxError = null;
+        _outboxMessage = null;
+        try
+        {
+            var (result, error) = await AdminClient.RetryFailedOutboxAsync();
+            if (result is null) { _outboxError = error ?? "Nothing could be requeued."; return; }
+
+            _outboxMessage = result.Message;
+        }
+        finally
+        {
+            _outboxBusy = false;
+            await LoadOutboxAsync();
+        }
+    }
+
     protected override async Task OnAfterRenderAsync(bool firstRender)
     {
         if (!firstRender) return;
@@ -168,9 +419,10 @@
         // Auth is not ready during prerender; checking IsSuperAdmin before it is, is the race this
         // app has been caught by repeatedly.
         if (!await UserState.WaitUntilAuthReadyAsync(RendererInfo.IsInteractive)) return;
-        if (!UserState.IsSuperAdmin || UserState.IsImpersonating) { NavManager.NavigateTo("/"); return; }
+        if (!UserState.IsSuperAdmin || UserState.IsImpersonating) { NavManager.NavigateTo(Ben.Web.Website.Library.Kit.SignInLink.ForRefusal(NavManager, UserState)); return; }
 
         await LoadAsync();
+        await LoadOutboxAsync();
         StateHasChanged();
     }
 

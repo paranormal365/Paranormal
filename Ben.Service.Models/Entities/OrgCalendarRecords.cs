@@ -150,13 +150,52 @@ public record OrgCalendarEventRecord
     /// <summary>The readable slug this event is public at, or null while it is private.</summary>
     public string? UrlName { get; init; }
 
+    // ── Tours (item 233) ────────────────────────────────────────────────────
+
+    /// <summary>The tour this date runs, when it is a tour business's date.</summary>
+    public Guid? TourId { get; init; }
+
+    /// <summary>That tour's name, so a calendar row need not look it up.</summary>
+    public string? TourName { get; init; }
+
+    /// <summary>
+    /// Who is leading this date.
+    /// </summary>
+    /// <remarks>
+    /// Per date rather than per tour because a tour led by two people is not the same person each
+    /// night, and the guest mail names and pictures whoever will actually be there.
+    /// </remarks>
+    public IReadOnlyList<EventGuideRecord> Guides { get; init; } = [];
+
+    /// <summary>
+    /// The IANA zone this event happens in, when somebody has said. Null reads as UTC in public.
+    /// </summary>
+    public string? TimeZoneId { get; init; }
+
     public string? RecurrenceRule { get; init; }
+    /// <summary>
+    /// How many PLACES are held on this date (item 234), not how many rows there are.
+    /// </summary>
+    /// <remarks>
+    /// A sign-up may hold several places. Every row written before seats existed holds exactly
+    /// one, so this equals what it counted before.
+    /// </remarks>
     public int AttendeeCount { get; init; }
+
+    /// <summary>Sign-ups waiting on the business to decide. Zero on every non-tour date.</summary>
+    public int SeatsWaiting { get; init; }
     public DateTime DateCreated { get; init; }
     public DateTime? DateUpdated { get; init; }
     public Guid CreatedByAppUserId { get; init; }
     public Guid? UpdatedByAppUserId { get; init; }
 }
+
+/// <summary>One guide on one date (item 233).</summary>
+public sealed record EventGuideRecord(
+    Guid AppUserId,
+    string DisplayName,
+    string? Handle,
+    Guid? PhotoUploadFileId);
 
 public record OrgCalendarEventAttendeeRecord
 {
@@ -169,4 +208,24 @@ public record OrgCalendarEventAttendeeRecord
     public DateTime? DateRsvp { get; init; }
     public DateTime DateCreated { get; init; }
     public Guid CreatedByAppUserId { get; init; }
+
+    // ── A seat on a tour date (item 234) ────────────────────────────────────
+
+    /// <summary>Where the sign-up has got to. Null on every event that is not a tour date.</summary>
+    public TourSeatStatus? SeatStatus { get; init; }
+
+    /// <summary>How many places it holds. One unless somebody asked for more.</summary>
+    public int Seats { get; init; } = 1;
+
+    /// <summary>When the business approved or turned it down.</summary>
+    public DateTime? SeatDecidedUtc { get; init; }
+
+    /// <summary>Who decided, so "the business approved it" is a person with a name.</summary>
+    public Guid? SeatDecidedByAppUserId { get; init; }
+
+    /// <summary>When the guest said back that they know. Optional, always.</summary>
+    public DateTime? GuestAcknowledgedUtc { get; init; }
+
+    /// <summary>Their address, so a business can reach somebody it has just approved.</summary>
+    public string? Email { get; init; }
 }

@@ -102,7 +102,7 @@ public sealed class PhaseBAdditiveGrantTests
             new Ben.Data.WebApi.Services.Billing.SubscriptionLimitGuard(w.Factory),
             new OrganizationSecurityService(w.Factory),
             new Ben.Data.WebApi.Services.RequestReviewNotifier(w.Factory, new Ben.Data.WebApi.Services.PlatformMessageService(w.Factory)),
-            Ben.Web.Tests.TestMailer.Quiet()), userId);
+            Ben.Web.Tests.TestMailer.Quiet(), new Ben.Data.WebApi.Services.CmsMarkupSanitizer()), userId);
     }
 
     private static OrgCalendarEventTypeController EventTypes(World w, Guid userId)
@@ -125,6 +125,34 @@ public sealed class PhaseBAdditiveGrantTests
 
         await using var db = await w.Factory.CreateDbContextAsync();
         Assert.Equal(1, await db.Cases.CountAsync());
+    }
+
+    /// <summary>
+    /// The other half of Ben's 2026-09-17 rule: a case opens accepted only for somebody who could
+    /// have accepted it anyway. A member granted Create and nothing else may open one, and it waits
+    /// for the group — which is what Proposed has always meant.
+    /// </summary>
+    [Fact]
+    public async Task A_member_who_may_open_a_case_but_not_change_one_still_proposes_it()
+    {
+        var w = await SeedAsync();
+        await GrantAsync(w, DataTable.Case, DataAction.Create);
+
+        Assert.IsNotType<ForbidResult>((await Cases(w, w.MemberId).Create(w.OrgId, NewCase(), default)).Result);
+
+        await using var db = await w.Factory.CreateDbContextAsync();
+        var only = await db.Cases.SingleAsync();
+        Assert.Equal(Ben.Data.Common.Enums.CaseStatus.Proposed, only.Status);
+
+        // And with Update as well, the same person's next case is accepted as they write it.
+        await GrantAsync(w, DataTable.Case, DataAction.Update);
+        Assert.IsNotType<ForbidResult>((await Cases(w, w.MemberId).Create(w.OrgId, NewCase(), default)).Result);
+
+        await using var after = await w.Factory.CreateDbContextAsync();
+        // By case number, not by DateCreated: both rows are written in the same test and can carry
+        // the same instant, and the wrong row would make this pass for the wrong reason.
+        var second = await after.Cases.OrderByDescending(c => c.OrgCaseNumber).FirstAsync();
+        Assert.Equal(Ben.Data.Common.Enums.CaseStatus.Accepted, second.Status);
     }
 
     [Fact]

@@ -23,14 +23,14 @@
     {
         <meta property="og:url" content="@_absoluteUrl" />
     }
-    @if (!string.IsNullOrWhiteSpace(ImageUrl))
+    @if (!string.IsNullOrWhiteSpace(_absoluteImage))
     {
-        <meta property="og:image" content="@ImageUrl" />
+        <meta property="og:image" content="@_absoluteImage" />
     }
 
     @* Twitter reads its own names and falls back to the og: ones inconsistently, so the two that
        matter are stated outright rather than hoped for. *@
-    <meta name="twitter:card" content="@(string.IsNullOrWhiteSpace(ImageUrl) ? "summary" : "summary_large_image")" />
+    <meta name="twitter:card" content="@(string.IsNullOrWhiteSpace(_absoluteImage) ? "summary" : "summary_large_image")" />
     <meta name="twitter:title" content="@Title" />
     <meta name="twitter:description" content="@Summary" />
 
@@ -48,7 +48,7 @@
     /// </summary>
     [Parameter] public string? Description { get; set; }
 
-    /// <summary>Absolute URL of an image, or null for a text-only card.</summary>
+    /// <summary>An image for the card: absolute, or a site path ("/media/…") made absolute here. Null for text only.</summary>
     [Parameter] public string? ImageUrl { get; set; }
 
     /// <summary>Path of this page, used to build the canonical URL on the card.</summary>
@@ -63,6 +63,10 @@
 
     // Absolute, because the crawler rendering the card is not on our domain and cannot resolve a
     // relative path. Omitted rather than guessed when no origin is configured yet.
+    private string? _absoluteImage => string.IsNullOrWhiteSpace(ImageUrl)
+        ? null
+        : ImageUrl!.StartsWith('/') ? Site.AbsoluteUrl(ImageUrl!) : ImageUrl;
+
     private string? _absoluteUrl => string.IsNullOrWhiteSpace(RelativeUrl)
         ? null
         : Site.AbsoluteUrl(RelativeUrl!);

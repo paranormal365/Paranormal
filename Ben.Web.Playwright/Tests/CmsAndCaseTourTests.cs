@@ -62,8 +62,9 @@ public class CmsAndCaseTourTests : BenTestBase
 
         await ClickUntilAsync(Page.Locator("#case-tour-launch"), Page.Locator(".ben-tour-card"));
 
+        // One step for Edit Case since it became a page (2026-09-14): the pseudonym is no longer on the case page
+        // for a step of its own to point at, so the first step says both moves and the name rule together.
         await Expect(Page.Locator(".ben-tour-card")).ToContainTextAsync("Publishing starts in Edit");
-        await Page.Locator(".ben-tour-card").GetByRole(AriaRole.Button, new() { Name = "Next" }).ClickAsync();
         await Expect(Page.Locator(".ben-tour-card")).ToContainTextAsync("real name");
         await Page.Locator(".ben-tour-card").GetByRole(AriaRole.Button, new() { Name = "Next" }).ClickAsync();
         await Expect(Page.Locator(".ben-tour-card")).ToContainTextAsync("media");

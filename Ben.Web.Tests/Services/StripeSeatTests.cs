@@ -154,6 +154,37 @@ public sealed class StripeSeatTests
         Assert.Equal(end.AddMonths(1), seat.CurrentPeriodEnd);
     }
 
+    /// <summary>
+    /// A seat's idempotency key names the PERIOD it pays for, not the day the job happened to run.
+    /// </summary>
+    /// <remarks>
+    /// <para><b>2026-09-17 audit.</b> The organization path had already dropped the run date from
+    /// its key for this reason; the seat path kept <c>-{now:yyyyMMdd}</c>. Stripe expires an
+    /// idempotency key after 24 hours, so the key's job is to make two attempts at the SAME period
+    /// collide. Keyed on the run date they never collide across a date boundary: the job retrying
+    /// after midnight — a restart, a deploy, a transient failure at 23:59 — presents a brand new
+    /// key for a period already paid for, and the member is charged twice for one month.</para>
+    ///
+    /// <para>The period end is set to midnight tonight so the date under test is tomorrow's and
+    /// can never coincide with the run date, whatever hour the suite runs at.</para>
+    /// </remarks>
+    [Fact]
+    public async Task A_seat_charge_is_keyed_on_its_period_not_on_the_day_the_job_ran()
+    {
+        var factory = Db();
+        var end = DateTime.UtcNow.Date.AddDays(1);          // inside the one-day window, never today
+        await SeedSeatAsync(factory, SubscriptionStatus.Active, periodEnd: end);
+
+        var gateway = new FakeGateway();
+        await new StripeRenewalJob(factory, gateway, Fulfillment(factory),
+            NullLogger<StripeRenewalJob>.Instance).RunAsync(default);
+
+        var charge = Assert.Single(gateway.Charges);
+
+        Assert.Contains($"{end:yyyyMMdd}", charge.IdempotencyKey);
+        Assert.DoesNotContain($"{DateTime.UtcNow:yyyyMMdd}", charge.IdempotencyKey);
+    }
+
     [Fact]
     public async Task A_member_who_left_is_never_charged_for_the_seat_they_no_longer_occupy()
     {
@@ -167,4 +198,90 @@ public sealed class StripeSeatTests
 
         Assert.Empty(gateway.Charges);   // the seat simply runs out
     }
+    // ── a seat the group's own plan now covers (2026-09-17 audit) ────────────
+
+    /// <summary>Puts the group on a band with room for <paramref name="bandMax"/> members.</summary>
+    private static async Task BandAsync(IDbContextFactory<BenDataContext> factory, Guid orgId, int? bandMax)
+    {
+        await using var db = await factory.CreateDbContextAsync();
+        var tierId = Guid.NewGuid();
+        var owner = await db.AppUsers.Select(u => u.Id).FirstAsync();
+        db.SubscriptionTiers.Add(new SubscriptionTier
+        {
+            Id = tierId, Name = bandMax is null ? "Unlimited" : $"Up to {bandMax}",
+            MinMembers = 1, MaxMembers = bandMax, IsBandedByMembers = true, IsActive = true,
+            SortOrder = 1, DateCreated = DateTime.UtcNow, CreatedByAppUserId = owner,
+        });
+        db.OrganizationSubscriptions.Add(new OrganizationSubscription
+        {
+            Id = Guid.NewGuid(), OrganizationId = orgId, Status = SubscriptionStatus.Active,
+            SubscriptionTierId = tierId, Interval = BillingInterval.Monthly,
+            CurrentPeriodStart = DateTime.UtcNow.AddDays(-5),
+            CurrentPeriodEnd = DateTime.UtcNow.AddDays(25),
+            PriceAtPeriodStart = 50m, MemberCountAtPeriodStart = 1,
+            DateCreated = DateTime.UtcNow.AddDays(-5), CreatedByAppUserId = owner,
+        });
+        await db.SaveChangesAsync();
+    }
+
+    /// <summary>
+    /// A seat stops being charged once the group upgrades to a band that covers everybody.
+    /// </summary>
+    /// <remarks>
+    /// A seat exists because the group had outgrown its band when the member joined, and nothing
+    /// ever revisited that. The group upgrades, its new band covers the member, and the member
+    /// goes on paying their own $5 a month for a place the group has already bought — both
+    /// charges real, both recurring, and neither billing page mentioning the other.
+    /// </remarks>
+    [Fact]
+    public async Task A_seat_is_not_renewed_once_the_groups_band_covers_everybody()
+    {
+        var factory = Db();
+        var end = DateTime.UtcNow.Date.AddDays(1);
+        var seed = await SeedSeatAsync(factory, SubscriptionStatus.Active, periodEnd: end);
+        await BandAsync(factory, seed.OrgId, bandMax: 25);      // one member, room for 25
+
+        var gateway = new FakeGateway();
+        await new StripeRenewalJob(factory, gateway, Fulfillment(factory),
+            NullLogger<StripeRenewalJob>.Instance).RunAsync(default);
+
+        Assert.Empty(gateway.Charges);
+    }
+
+    /// <summary>An unbounded band covers everybody by definition.</summary>
+    [Fact]
+    public async Task An_unbounded_band_also_stops_the_seat()
+    {
+        var factory = Db();
+        var end = DateTime.UtcNow.Date.AddDays(1);
+        var seed = await SeedSeatAsync(factory, SubscriptionStatus.Active, periodEnd: end);
+        await BandAsync(factory, seed.OrgId, bandMax: null);
+
+        var gateway = new FakeGateway();
+        await new StripeRenewalJob(factory, gateway, Fulfillment(factory),
+            NullLogger<StripeRenewalJob>.Instance).RunAsync(default);
+
+        Assert.Empty(gateway.Charges);
+    }
+
+    /// <summary>
+    /// A seat that is still genuinely overflow keeps being charged — the guard must refuse a
+    /// duplicate bill, not quietly cancel a debt.
+    /// </summary>
+    [Fact]
+    public async Task A_seat_still_past_the_band_is_charged_as_before()
+    {
+        var factory = Db();
+        var end = DateTime.UtcNow.Date.AddDays(1);
+        var seed = await SeedSeatAsync(factory, SubscriptionStatus.Active, periodEnd: end);
+        await BandAsync(factory, seed.OrgId, bandMax: 0);       // one member, room for none
+
+        var gateway = new FakeGateway();
+        await new StripeRenewalJob(factory, gateway, Fulfillment(factory),
+            NullLogger<StripeRenewalJob>.Instance).RunAsync(default);
+
+        var charge = Assert.Single(gateway.Charges);
+        Assert.Equal(5m, charge.Total);
+    }
+
 }

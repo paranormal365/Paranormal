@@ -31,6 +31,53 @@
 	</array>
 	<key>CFBundleVersion</key>
 	<string>1</string>
+	<!-- A .ben is a sealed field session. Declared here so a bundle AirDropped from another
+	     phone, or tapped in Files or Mail, opens in this app rather than in nothing — the
+	     other half of the format, without which the phone could make one and never take one. -->
+	<key>CFBundleDocumentTypes</key>
+	<array>
+		<dict>
+			<key>CFBundleTypeName</key>
+			<string>IsHaunted field session</string>
+			<key>CFBundleTypeRole</key>
+			<string>Viewer</string>
+			<key>LSHandlerRank</key>
+			<string>Owner</string>
+			<key>LSItemContentTypes</key>
+			<array>
+				<string>com.ishaunted.field-session</string>
+			</array>
+		</dict>
+	</array>
+	<key>LSSupportsOpeningDocumentsInPlace</key>
+	<false/>
+	<key>UTExportedTypeDeclarations</key>
+	<array>
+		<dict>
+			<key>UTTypeIdentifier</key>
+			<string>com.ishaunted.field-session</string>
+			<key>UTTypeDescription</key>
+			<string>IsHaunted field session</string>
+			<!-- public.data rather than public.zip-archive on purpose: a .ben is a ZIP underneath,
+			     but calling it one invites Files to unpack it into the pile of loose data.json and
+			     media files the format exists to replace. -->
+			<key>UTTypeConformsTo</key>
+			<array>
+				<string>public.data</string>
+			</array>
+			<key>UTTypeTagSpecification</key>
+			<dict>
+				<key>public.filename-extension</key>
+				<array>
+					<string>ben</string>
+				</array>
+				<key>public.mime-type</key>
+				<array>
+					<string>application/vnd.ishaunted.field-session</string>
+				</array>
+			</dict>
+		</dict>
+	</array>
 	<!-- HTTPS and the system Keychain only: no non-exempt encryption. Without this key
 	     App Store Connect asks the export-compliance question on every single upload. -->
 	<key>ITSAppUsesNonExemptEncryption</key>
@@ -47,7 +94,7 @@
 	<key>NSCameraUsageDescription</key>
 	<string>Capture photos and video during a field session, and for feed posts and case occurrences.</string>
 	<key>NSLocationWhenInUseUsageDescription</key>
-	<string>Stamps where you were standing on every reading, photo and recording in a field session, so a spike in the cellar isn't confused with one in the hall. It stays on this device unless you choose to upload the session to your group.</string>
+	<string>Finds ghost walks near you, and stamps where you were standing on every reading, photo and recording in a field session, so a spike in the cellar isn't confused with one in the hall. Looking for tours uses your position once, for that search. A session's readings stay on this device unless you choose to upload them to your group.</string>
 	<key>NSMicrophoneUsageDescription</key>
 	<string>Measures sound level and records audio during field sessions and EVP recordings, and captures sound with video for feed posts and case evidence.</string>
 	<key>NSMotionUsageDescription</key>

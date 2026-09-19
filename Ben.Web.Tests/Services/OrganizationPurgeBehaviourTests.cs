@@ -146,6 +146,47 @@ public sealed class OrganizationPurgeBehaviourTests
         Assert.Equal(2, await db.Users.CountAsync());
     }
 
+    /// <summary>
+    /// The group's case boards go with its cases; a member's personal board does not.
+    /// </summary>
+    /// <remarks>
+    /// Same rule and same reason as the case purge (canvas plan review R3): the board's key to its
+    /// case is SetNull, so leaving it to the database would turn every case board of a deleted
+    /// group into a personal board of whichever member made it.
+    /// </remarks>
+    [Fact]
+    public async Task The_groups_case_boards_are_deleted_and_a_members_personal_board_is_not()
+    {
+        await using var sqlite = await SqliteTestDb.CreateAsync();
+        await SeedAsync(sqlite);
+        var personal = Guid.NewGuid();
+        await using (var seed = await sqlite.NewContextAsync())
+        {
+            var caseId = await seed.Cases.Select(c => c.Id).SingleAsync();
+            seed.CanvasDocuments.Add(new CanvasDocument
+            {
+                Id = Guid.NewGuid(), CaseId = caseId, Name = "Case board", DocumentJson = "{}", Revision = 1,
+                DateCreated = DateTime.UtcNow, CreatedByAppUserId = MemberId,
+            });
+            seed.CanvasDocuments.Add(new CanvasDocument
+            {
+                Id = personal, CaseId = null, Name = "Personal board", DocumentJson = "{}", Revision = 1,
+                DateCreated = DateTime.UtcNow, CreatedByAppUserId = MemberId,
+            });
+            await seed.SaveChangesAsync();
+        }
+        var storage = new Mock<Ben.Data.Common.Interfaces.IFileStorageService>();
+        var purge = new OrganizationPurge(sqlite.Factory, storage.Object, NullLogger<OrganizationPurge>.Instance);
+
+        var (_, error) = await purge.PurgeAsync(OrgId, OrgName, AdminId, default);
+        Assert.Null(error);
+
+        await using var db = await sqlite.NewContextAsync();
+        var left = await db.CanvasDocuments.Select(d => d.Id).ToListAsync();
+        Assert.True(left.SequenceEqual([personal]),
+            $"expected only the personal board to survive the group purge; {left.Count} board(s) left");
+    }
+
     [Fact]
     public async Task A_mistyped_name_deletes_nothing()
     {

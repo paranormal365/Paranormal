@@ -5,6 +5,15 @@
 @inject IBenUserState UserState
 @using Ben.Web.Services.WebApi
 @using Ben.Web.Website.Library.Kit
+@* The feed's own composer and card, reused rather than forked (2026-09-17). Without this using,
+   Razor does not recognise <FeedComposer> as a component and emits it as a literal HTML element —
+   no error, no warning, just an empty <feedcomposer> tag in the page. Which is exactly what
+   happened, and what cost an hour of looking at the server. *@
+@using Ben.Web.Website.Library.Feed
+@* And the scheduling window, for the same reason and after making the same mistake twice in one
+   afternoon: without this, <NewInvestigationWindow> emitted an empty <newinvestigationwindow>
+   element and the button that opens it did nothing at all. *@
+@using Ben.Web.Website.Library.Organization
 
 @*
    A place, and the history of what has happened there.
@@ -67,9 +76,137 @@
                             <span class="text-secondary">· @org.Name</span>
                         }
                     </a>
+                    @* Item 235 phase 9: where a group notices "this place is ours". *@
+                    <a class="btn btn-sm btn-outline-secondary me-1 mb-1 place-our-venue"
+                       href="@($"/organizations/{org.OrganizationId}/venue?place={PlaceId}")">
+                        <BenIcon Name="map-pin" Class="me-1" />Our venue
+                        @if (_myOrgs.Count > 1)
+                        {
+                            <span class="text-secondary">· @org.Name</span>
+                        }
+                    </a>
+                    @* Ben, 2026-09-17: "if someone wants to create a case at a public case, they
+                       are given the option to link to the existing case and create their own
+                       investigation." This is the case half — the place is carried in the query, so
+                       the form arrives with it settled rather than asking for an address somebody
+                       is already looking at. Offered at a public location only: a case at
+                       somebody's home starts from the client, not from a page anyone can read. *@
+                    @if (_place.Kind == Ben.Data.Common.Enums.PlaceKind.PublicLocation
+                         && _mayOpenCaseIn.Contains(org.OrganizationId))
+                    {
+                        <a class="btn btn-sm btn-outline-secondary me-1 mb-1 place-open-case"
+                           href="@($"/organizations/{org.OrganizationId}/cases/new?place={PlaceId}")">
+                            <BenIcon Name="folder-plus" Class="me-1" />Open a case here
+                            @if (_myOrgs.Count > 1)
+                            {
+                                <span class="text-secondary">· @org.Name</span>
+                            }
+                        </a>
+                    }
+
+                    @if (_place.Kind == Ben.Data.Common.Enums.PlaceKind.PublicLocation
+                         && _mayInvestigateIn.Contains(org.OrganizationId))
+                    {
+                        <button type="button" class="btn btn-sm btn-outline-secondary me-1 mb-1 place-investigate"
+                                @onclick="@(() => InvestigateWith(org.OrganizationId))">
+                            <BenIcon Name="calendar" Class="me-1" />Investigate here
+                            @if (_myOrgs.Count > 1)
+                            {
+                                <span class="text-secondary">· @org.Name</span>
+                            }
+                        </button>
+                    }
                 }
             </p>
         }
+
+        @* ── The door for somebody in no group at all (2026-09-17) ────────────
+           Ben: everything a solo person submits is public by default. Until now a person with no
+           group could record from the phone and nothing else — every other feature is org-scoped
+           and they had no org, and the endpoint that mints one had no caller anywhere on the site.
+           This is it. Offered only at a public location: a visit to somebody's home starts with
+           the client, not from a page anyone can read. *@
+        @if (UserState.IsAuthenticated && _myOrgs.Count == 0
+             && _place.Kind == Ben.Data.Common.Enums.PlaceKind.PublicLocation)
+        {
+            <p class="mb-2">
+                <button type="button" class="btn btn-sm btn-primary place-investigate-solo"
+                        disabled="@_startingSolo" @onclick="@(() => _offeringSolo = true)">
+                    <BenIcon Name="calendar" Class="me-1" />Start investigating on your own
+                </button>
+            </p>
+        }
+
+        @* The sentence before the act, not after it: minting a space and publishing by default are
+           both things somebody should agree to knowingly. BenModal, never TelerikDialog. *@
+        <BenModal @bind-Visible="@_offeringSolo" Title="Investigating on your own" Size="sm">
+            <ChildContent>
+                <p>
+                    This creates a private space of your own to keep investigations in. It is free,
+                    and it is yours — nobody else joins it and it never appears in any list of groups.
+                </p>
+                <p class="mb-0">
+                    On a free account, what you record at a public location like
+                    <strong>@Title</strong> is <strong>public</strong>: it joins this place's page
+                    where anybody can read it. That is the bargain, and it is what makes a place's
+                    record worth reading. A plan is what makes your work yours instead.
+                </p>
+                @if (_soloError is not null)
+                {
+                    <div class="alert alert-danger py-2 small mt-3 mb-0" data-testid="solo-error">@_soloError</div>
+                }
+            </ChildContent>
+            <FooterContent>
+                <button type="button" class="btn btn-outline-secondary"
+                        disabled="@_startingSolo" @onclick="@(() => _offeringSolo = false)">Cancel</button>
+                <button type="button" class="btn btn-primary" data-testid="solo-confirm"
+                        disabled="@_startingSolo" @onclick="StartInvestigatingAloneAsync">
+                    @(_startingSolo ? "Setting it up…" : "Create it and carry on")
+                </button>
+            </FooterContent>
+        </BenModal>
+
+        @* The scheduling window, for whichever organization was chosen above — one of the reader's
+           groups, or the personal one just minted. *@
+        @if (_investigatingWith is { } investigatingOrgId)
+        {
+            <NewInvestigationWindow OrgId="@investigatingOrgId"
+                                    PrechosenPlaceId="@PlaceId"
+                                    OnCreated="@OnInvestigationScheduledAsync"
+                                    OnClosed="@(() => _investigatingWith = null)" />
+        }
+
+        @* Who runs this place as its venue, when somebody has been confirmed as it (item 235 phase 9).
+           For everybody: which hotel this is, and where its own page is, is not a members' secret. *@
+        @if (_venue is { } venue)
+        {
+            <p class="mb-3" id="place-venue-line">
+                Run as a venue by <strong>@venue.OrganizationName</strong>
+                @if (venue.VenuePageUrl is { Length: > 0 } url)
+                {
+                    <text> · </text><a href="@url">Venue page</a>
+                }
+            </p>
+        }
+
+        @* How to reach the place, and — for a signed-in member of a group, when nobody runs it as a
+           venue yet — the question that starts a claim (item 235 phase 9). Asked here because this
+           is where somebody notices "this is ours". *@
+        @if (_venue is null && _myOrgs.Count > 0)
+        {
+            <p class="small mb-2" id="place-claim-line">
+                Is this your venue?
+                @foreach (var org in _myOrgs)
+                {
+                    <a class="ms-1 place-claim-link" href="@($"/organizations/{org.OrganizationId}/venue/claim?place={PlaceId}")">
+                        Claim it for @org.Name
+                    </a>
+                }
+            </p>
+        }
+        <Ben.Web.Website.Library.Manage.Venue.PlaceContactsCard PlaceId="PlaceId"
+                                                               SignedIn="UserState.IsAuthenticated"
+                                                               MyOrgs="_myOrgs" />
 
         @* The line that turns a list into a history. Counted over what this viewer may see, so it
            never advertises how much is being withheld. *@
@@ -123,6 +260,118 @@
             {
                 @SignedInTable(shared, showVisibility: false)
             }
+        }
+
+        @* ── Your own groups' cases here ──────────────────────────────────── *@
+        @* The question a member actually arrives with: do we already have a case here? The public
+           list below cannot answer it, because the answer is usually a case nobody published and
+           never will. Scoped to the reader's own groups — another group's unpublished case is
+           their business, and having one is itself something they have not shared. *@
+        @if (_myCases is { Count: > 0 })
+        {
+            <h6 class="fw-semibold mt-4">Your groups' cases here</h6>
+            <div class="table-responsive">
+                <table class="table table-sm align-middle mb-0" data-testid="place-my-cases">
+                    <thead><tr><th>Opened</th><th>Case</th><th>Group</th><th>Status</th></tr></thead>
+                    <tbody>
+                        @foreach (var row in _myCases)
+                        {
+                            <tr>
+                                <td class="text-nowrap">@row.DateCaseOpened.ToDisplayDate()</td>
+                                <td>
+                                    <a href="@($"/organizations/{row.OrganizationId}/cases/{row.Id}")">
+                                        @row.CaseReference — @row.Title
+                                    </a>
+                                </td>
+                                <td>@row.OrganizationName</td>
+                                <td class="text-nowrap">
+                                    <span class="badge @row.Status.BadgeClass()">@row.Status.Label()</span>
+                                    @if (row.IsPublished)
+                                    {
+                                        <span class="badge text-bg-info ms-1 fw-normal">Published</span>
+                                    }
+                                </td>
+                            </tr>
+                        }
+                    </tbody>
+                </table>
+            </div>
+        }
+
+        @* ── Posts about this place ───────────────────────────────────────── *@
+        @* Ben, 2026-09-17: a public location should be "actually public for adding files,
+           messages etc". These are ordinary feed posts carrying this place, which is what gives
+           them the screener, the upload pause after repeated refusals, reporting, hiding and the
+           moderator queues — and the phone app reads them already. The composer is offered to
+           anybody signed in, wider than the feed's front page on purpose: this record is the free
+           lane's whole point and somebody with no group is exactly who fills it. *@
+        @if (_canPost || _posts is { Count: > 0 })
+        {
+            <h6 class="fw-semibold mt-4">Posts about this place</h6>
+
+            @if (_canPost)
+            {
+                <div class="mb-3" data-testid="place-composer">
+                    <FeedComposer AboutPlaceId="@PlaceId"
+                                  Placeholder="@($"What did you find at {Title}?")"
+                                  OnPosted="OnPlacePosted" />
+                </div>
+            }
+
+            @if (_posts is { Count: > 0 })
+            {
+                <div class="d-flex flex-column gap-3" data-testid="place-posts">
+                    @foreach (var post in _posts)
+                    {
+                        <FeedPostCard Post="@post" />
+                    }
+                </div>
+
+                @* Only when there may be more than the page shows, so the link never promises a
+                   page identical to the one already being read. *@
+                @if (_posts.Count >= PlacePostsShown)
+                {
+                    <p class="mt-2 mb-0">
+                        <a href="@($"/feed/places/{PlaceId}")">See all posts about this place</a>
+                    </p>
+                }
+            }
+            else if (_canPost)
+            {
+                <p class="text-secondary small fst-italic" data-testid="place-posts-empty">
+                    Nothing posted about this place yet. Yours would be the first.
+                </p>
+            }
+        }
+
+        @* ── Cases written up here ────────────────────────────────────────── *@
+        @* Rendered for visitor and member alike from the anonymous endpoint, because published is
+           published. A case reaches this list only when its group published it AND its status says
+           so; a client's real name is replaced by the server before it ever arrives here. *@
+        @if (_cases is { Count: > 0 })
+        {
+            <h6 class="fw-semibold mt-4">Cases written up here</h6>
+            <div class="table-responsive">
+                <table class="table table-sm align-middle mb-0" data-testid="place-cases">
+                    <thead><tr><th>Opened</th><th>Case</th><th>Group</th></tr></thead>
+                    <tbody>
+                        @foreach (var row in _cases)
+                        {
+                            <tr>
+                                <td class="text-nowrap">@row.OpenedYear</td>
+                                <td>
+                                    <a href="@($"/o/{row.OrganizationUrlName}/cases/{row.UrlName}")">@row.Title</a>
+                                    @if (row.Status == Ben.Data.Common.Enums.CaseStatus.Haunted)
+                                    {
+                                        <span class="badge text-bg-danger ms-1 fw-normal">Haunted</span>
+                                    }
+                                </td>
+                                <td><a href="@($"/o/{row.OrganizationUrlName}")">@row.OrganizationName</a></td>
+                            </tr>
+                        }
+                    </tbody>
+                </table>
+            </div>
         }
 
         @* ── The field archive ────────────────────────────────────────────── *@
@@ -358,6 +607,94 @@
     private List<PlaceInvestigationRow>? _rows;
     private LoadResult<PlaceInvestigationRow> _rowsResult;
     private List<PublicPlaceInvestigationRow>? _publicRows;
+    private List<Ben.Web.Services.PublicPlaceCaseRow>? _cases;
+    private List<Ben.Web.Services.PlaceCaseRow>? _myCases;
+
+    // ── Investigating here (2026-09-17) ──────────────────────────────────────
+    private Guid? _investigatingWith;
+    private bool _offeringSolo;
+    private bool _startingSolo;
+    private string? _soloError;
+
+    /// <summary>Opens the scheduling window for one of the reader's groups.</summary>
+    private void InvestigateWith(Guid organizationId) => _investigatingWith = organizationId;
+
+    /// <summary>
+    /// Mints the personal organization and goes straight on to scheduling.
+    /// </summary>
+    /// <remarks>
+    /// <para>Idempotent at the server, so somebody who tapped twice, or who did this on another
+    /// place last week, gets the space they already have rather than a second one.</para>
+    ///
+    /// <para>Straight on to the window rather than back to the page: the person pressed a button
+    /// that said "start investigating", and stopping at "you now have a space" would leave them to
+    /// work out where investigations live. The visibility is fixed to public by the plan rule
+    /// either way, which the sentence they just agreed to said.</para>
+    /// </remarks>
+    private async Task StartInvestigatingAloneAsync()
+    {
+        _startingSolo = true;
+        _soloError = null;
+        try
+        {
+            var (plan, error) = await AdminClient.StartSoloPlanAsync();
+            if (plan is null)
+            {
+                // The server's own sentence where it gave one; it knows why better than this does.
+                _soloError = error ?? "That could not be set up just now. Try again in a moment.";
+                return;
+            }
+
+            _offeringSolo = false;
+            _investigatingWith = plan.OrganizationId;
+
+            // The reader now belongs somewhere, so the per-group buttons and the signed-in
+            // sections have something to draw. Re-read rather than guessed at.
+            try
+            {
+                _myOrgs = (await AdminClient.GetMyMembershipOrganizationsAsync()).Items;
+                await LoadWhatMyGroupsMayDoAsync();
+            }
+            catch { /* the window is open either way, which is what they asked for */ }
+        }
+        catch (Exception ex)
+        {
+            _soloError = ex.Message;
+        }
+        finally
+        {
+            _startingSolo = false;
+        }
+    }
+
+    /// <summary>Closes the window and re-reads what the page shows about this place.</summary>
+    private async Task OnInvestigationScheduledAsync()
+    {
+        _investigatingWith = null;
+        if (UserState.IsAuthenticated) await LoadSignedInAsync();
+        else await LoadVisitorAsync();
+        StateHasChanged();
+    }
+    private List<Ben.Service.Models.Feed.FeedPostRecord>? _posts;
+    private bool _canPost;
+
+    /// <summary>Matches the server's own page size, so "See all" appears only when it might add.</summary>
+    private const int PlacePostsShown = 20;
+
+    /// <summary>
+    /// A new post goes straight to the top of the list rather than through a reload.
+    /// </summary>
+    /// <remarks>
+    /// The server would answer with it anyway, but a reload throws away everything else on the
+    /// page — the archive, the tables — to redraw one card, and on a slow connection the post
+    /// somebody just wrote appears to have vanished while that happens.
+    /// </remarks>
+    private void OnPlacePosted(Ben.Service.Models.Feed.FeedPostRecord post)
+    {
+        _posts ??= [];
+        _posts.Insert(0, post);
+        StateHasChanged();
+    }
     private List<InvestigationMapPin> _pins = [];
     private bool _loading = true;
 
@@ -370,6 +707,47 @@
     /// </remarks>
     private IReadOnlyList<MyMembershipOrgItem> _myOrgs = [];
 
+    /// <summary>
+    /// The groups of mine that may open a case, and the ones that may schedule a visit.
+    /// </summary>
+    /// <remarks>
+    /// <para>Membership is not permission. Both buttons were drawn once per membership and the
+    /// servers behind them require grants — <c>Cases.Create</c> and <c>Investigations.Create</c> —
+    /// so an ordinary member with no role clicked, filled the whole form, pressed the button and
+    /// was refused (2026-09-17 audit). The plan for this page said "members holding Cases.Create"
+    /// and the check was dropped in the build.</para>
+    ///
+    /// <para>One request per group of mine, which is one or two for almost everybody. A failure
+    /// leaves that group out of the sets and the button undrawn: refusing to offer something is
+    /// the safe direction, and the page still shows everything it is about.</para>
+    /// </remarks>
+    private readonly HashSet<Guid> _mayOpenCaseIn = [];
+    private readonly HashSet<Guid> _mayInvestigateIn = [];
+
+    private async Task LoadWhatMyGroupsMayDoAsync()
+    {
+        _mayOpenCaseIn.Clear();
+        _mayInvestigateIn.Clear();
+
+        foreach (var org in _myOrgs)
+        {
+            try
+            {
+                var perms = await AdminClient.GetMyOrgPermissionsAsync(org.OrganizationId);
+                if (perms is null) continue;
+
+                if (perms.May(Ben.Data.Common.Enums.OrganizationPermissionArea.Cases,
+                              Ben.Data.Common.Enums.OrganizationSecurityAction.Create))
+                    _mayOpenCaseIn.Add(org.OrganizationId);
+
+                if (perms.May(Ben.Data.Common.Enums.OrganizationPermissionArea.Investigations,
+                              Ben.Data.Common.Enums.OrganizationSecurityAction.Create))
+                    _mayInvestigateIn.Add(org.OrganizationId);
+            }
+            catch { /* left out of both sets, so neither button is offered for this group */ }
+        }
+    }
+
     /// <summary>The session whose Report button is mid-flight, so it can disable just that one.</summary>
     private Guid? _flagging;
 
@@ -378,6 +756,9 @@
 
     /// <summary>Guest evidence published to this place from public events held here.</summary>
     private List<PlaceEvidenceRow>? _evidence;
+
+    /// <summary>The verified venue here, when there is one.</summary>
+    private PlaceVenueRecord? _venue;
 
     private string Title => string.IsNullOrWhiteSpace(_place?.Name)
         ? (string.IsNullOrWhiteSpace(_place?.StreetAddress1) ? "Place" : _place!.StreetAddress1!)
@@ -397,6 +778,9 @@
         if (UserState.IsAuthenticated) await LoadSignedInAsync();
         else await LoadVisitorAsync();
 
+        // A failure here costs one line, not the page.
+        _venue = (await AdminClient.GetPlaceVenueAsync(PlaceId)).Item;
+
         _loading = false;
         StateHasChanged();
     }
@@ -413,6 +797,27 @@
         // For the rooms link. A failure here costs a link, not the page, so it is not reported —
         // the rest of this view is about the place itself and stands without it.
         _myOrgs = (await AdminClient.GetMyMembershipOrganizationsAsync()).Items;
+        await LoadWhatMyGroupsMayDoAsync();
+
+        // Quiet on failure: the section simply does not appear, which is the same as having no
+        // case here — and is a great deal better than losing the rest of the page over it.
+        try { _myCases = (await AdminClient.GetMyPlaceCasesAsync(PlaceId)).Items.ToList(); }
+        catch { _myCases = null; }
+
+        // Asked AS SOMEBODY, unlike the archive below. The anonymous place endpoint carries the
+        // posts as well, and the website calls it without a token on purpose — so it can only ever
+        // answer "no" to whether this reader may post. Both endpoints read the posts through the
+        // feed's own method, so the two lists cannot disagree about what is visible.
+        try
+        {
+            if (await AdminClient.GetPlacePostsAsync(PlaceId) is { } mine)
+            {
+                _posts = mine.Posts.ToList();
+                _canPost = mine.CanPost;
+            }
+        }
+        catch { /* the section falls back to what the anonymous read gave it */ }
+
         await LoadArchiveAsync();
         BuildPins(_rows.Select(r => (r.Id, r.Title)));
     }
@@ -427,6 +832,9 @@
         _summary = response.Summary;
         _sessions = response.Sessions?.ToList();
         _evidence = response.EventEvidence?.ToList();
+        _cases = response.Cases?.ToList();
+        _posts = response.Posts?.ToList();
+        _canPost = response.CanPost;
         BuildPins(_publicRows.Select(r => (r.Id, r.Title)));
     }
 
@@ -443,6 +851,13 @@
         var response = await AdminClient.GetPublicPlaceAsync(PlaceId);
         _sessions = response?.Sessions?.ToList();
         _evidence = response?.EventEvidence?.ToList();
+        _cases = response?.Cases?.ToList();
+
+        // NOT the posts, and not CanPost. This call is anonymous on purpose, so its answer to
+        // "may you post" is always no — and a signed-in reader has already asked that properly
+        // through GetPlacePostsAsync. Taking them from here as well would overwrite the real
+        // answer with the anonymous one, which is precisely what it did on the first run: the
+        // composer never appeared for anybody.
     }
 
     /// <summary>
@@ -499,6 +914,16 @@
                 r.Id, r.Title, _place.Latitude, _place.Longitude, IsPast: true,
                 IsPublicPlace: _place.Kind == Ben.Data.Common.Enums.PlaceKind.PublicLocation))
             .ToList();
+
+        // A place whose only record is its archive — field sessions, no investigations — used to
+        // draw an empty map of the whole continent. The place itself is the pin then, so the map
+        // fits to it (seen on the walk, 2026-09-16).
+        if (_pins.Count == 0)
+        {
+            _pins.Add(new InvestigationMapPin(
+                _place.Id, _place.Name, _place.Latitude, _place.Longitude, IsPast: true,
+                IsPublicPlace: _place.Kind == Ben.Data.Common.Enums.PlaceKind.PublicLocation));
+        }
     }
 
     private RenderFragment SignedInTable(List<PlaceInvestigationRow> rows, bool showVisibility) =>@<div class="table-responsive">

@@ -6,6 +6,7 @@
 @inject IBenAdminClient  AdminClient
 @inject IBenUserState    UserState
 @inject IJSRuntime       JS
+@inject NavigationManager NavManager
 @using Ben.Web.Services
 @inject SiteFeaturesProvider Features
 
@@ -13,6 +14,18 @@
 @* Item 154: the discovery switch — off means this renders nothing at all. *@
 @if (Features.IsOn(SiteFeatures.Discovery))
 {
+    @* The loader stands in for the section only on the FIRST load, when there is nothing to keep.
+
+       It used to stand in for EVERY load, and that was the jump Ben reported on 2026-09-18: moving
+       the map re-asks for the cases in the new view, which set _loading, which took the whole
+       section — the 420px map with it — out of the page and put a small spinner in its place. The
+       page lost the best part of a thousand pixels, the browser clamped the scroll position because
+       there was no longer that much document, and when the answer arrived a moment later the section
+       came back underneath a reader who had been moved. Recorded: the page scrolled from the map up
+       to the feed, about a second after a zoom.
+
+       So a RELOAD leaves everything where it is and says so quietly instead (_refreshing below). It
+       also stops MapKit being destroyed and rebuilt on every pan, which it was. *@
     @if (_loading)
     {
         <div class="d-flex justify-content-center py-5">
@@ -25,7 +38,17 @@
         <div class="container-fluid px-3 mt-5" style="max-width:1000px;">
             <div class="d-flex align-items-baseline justify-content-between mb-2">
                 <h4 class="mb-0">Public Investigations</h4>
-                <span class="text-muted small">@_totalCount case@(_totalCount == 1 ? "" : "s") worldwide</span>
+                <span class="text-muted small">
+                    @if (_refreshing)
+                    {
+                        <span class="spinner-border spinner-border-sm me-1" role="status" aria-hidden="true"></span>
+                        <span>Updating…</span>
+                    }
+                    else
+                    {
+                        @($"{_totalCount} case{(_totalCount == 1 ? "" : "s")} worldwide")
+                    }
+                </span>
             </div>
             <p class="text-secondary small mb-3">
                 Click a marker or case below to view details.
@@ -38,6 +61,13 @@
 
         @* ── Map ──────────────────────────────────────────────────────────────── *@
         <div class="container-fluid px-3 mb-4" style="max-width:1000px;">
+            @* The fixed height and the clipping belong to the MAP, not to the note under it.
+
+               They used to wrap both: a 420-pixel box with overflow:hidden holding a 420-pixel map
+               AND the sentence below it, so the sentence began at 427 pixels and was cut off in its
+               entirety. Nobody had ever read it — and it is the line that explains the pins are an
+               approximate area rather than somebody's address, which is a privacy promise the product
+               makes deliberately. Found by crawling the site for visual faults, 2026-09-18. *@
             <div style="height:420px; border-radius:.5rem; overflow:hidden;">
                 @* A pan or a zoom re-asks for the cases inside the new view, and the list below
                    follows the same answer. Map and list must never disagree: a reader has no way
@@ -47,14 +77,14 @@
                 <BenMap Pins="@_mapPins" Height="420px" FitToPins="false"
                         CenterLatitude="@_mapLat" CenterLongitude="@_mapLon" Zoom="@_mapZoom"
                         OnPinClicked="@OnMarkerClicked" OnViewportChanged="@OnMapViewportChanged" />
-
-                @* Said plainly, because a pin on a map reads as an address whether or not it is one.
-                   These are cell centres several miles across; the property is somewhere nearby. *@
-                <p class="text-secondary small mt-2 mb-0">
-                    Pins show an approximate area, not an address. Case locations are deliberately
-                    published to within a few miles.
-                </p>
             </div>
+
+            @* Said plainly, because a pin on a map reads as an address whether or not it is one.
+               These are cell centres several miles across; the property is somewhere nearby. *@
+            <p class="text-secondary small mt-2 mb-0">
+                Pins show an approximate area, not an address. Case locations are deliberately
+                published to within a few miles.
+            </p>
         </div>
 
         @* ── Case popup ───────────────────────────────────────────────────────── *@
@@ -105,8 +135,11 @@
                         <p class="text-muted small mb-2">Client: @_selectedCase.ClientName</p>
                     }
 
-                    @* Community votes *@
-                    <CaseVoteWidget CaseId="@_selectedCase.CaseId" />
+                    @* Community votes — only on a case the public can see (P.3). *@
+                    @if (_selectedCase.IsPublic)
+                    {
+                        <CaseVoteWidget CaseId="@_selectedCase.CaseId" />
+                    }
 
                     <div class="d-flex gap-2 mt-3 flex-wrap">
                         <a href="/o/@_selectedCase.OrgUrlName/cases/@_selectedCase.CaseReference.TrimStart('#')"
@@ -157,7 +190,15 @@
                                 <div class="card-body pb-1">
                                     <div class="d-flex justify-content-between align-items-start mb-1">
                                         <span class="font-monospace text-muted" style="font-size:.75rem;">@item.CaseReference</span>
-                                        @if (item.IsHaunted)
+                                        @* Signed in, the list adds cases this person may already open. Under "Public Investigations"
+                                           a member's private case looked published (UI test pass, 2026-09-14). *@
+                                        @if (!item.IsPublic)
+                                        {
+                                            <span class="badge text-bg-secondary" title="Shown to you because you can open it. Visitors don't see it.">
+                                                <BenIcon Name="eye-off" Class="me-1" />Not public
+                                            </span>
+                                        }
+                                        else if (item.IsHaunted)
                                         { <span class="badge bg-warning text-dark">👻 Haunted</span> }
                                     </div>
                                     <h6 class="card-title mb-1">@item.Title</h6>
@@ -169,7 +210,13 @@
                                        they were reading different tables they disagreed, which is
                                        how the card came to say "No votes yet" over "3 votes".
                                        Whoever cannot see the widget still gets the bar. *@
-                                    @if (UserState.IsAuthenticated && Features.IsOn(SiteFeatures.Voting))
+                                    @* A case shown only because this person can open it is not up for the public's vote:
+                                       its card offered the thumbs anyway (client test pass P.3, 2026-09-14). *@
+                                    @if (!item.IsPublic)
+                                    {
+                                        <p class="small text-secondary mb-0">Only the group and its client can see this case.</p>
+                                    }
+                                    else if (UserState.IsAuthenticated && Features.IsOn(SiteFeatures.Voting))
                                     {
                                         <CaseVoteWidget CaseId="@item.CaseId"
                                                         PreloadedSummary="@(_voteSummaries.GetValueOrDefault(item.CaseId))" />
@@ -221,7 +268,14 @@
     private double _mapZoom = 4;
 
     // ── Data ─────────────────────────────────────────────────────────────────
+    /// <summary>The first load, which has nothing on screen worth keeping.</summary>
     private bool   _loading    = true;
+
+    /// <summary>
+    /// A later load, for a view the person just moved to. Never unmounts anything: see the remark on
+    /// the loader above for what happened when it did.
+    /// </summary>
+    private bool   _refreshing;
     private int    _totalCount = 0;
     private int    _page       = 1;
     private int    _pageSize   = 18;
@@ -233,6 +287,16 @@
 
     // Per-marker cluster data (index = marker.Index)
     private List<List<PublicCaseDiscoveryItem>> _clusters = [];
+
+    /// <summary>
+    /// Tour pins, drawn after the case pins (item 233).
+    /// </summary>
+    /// <remarks>
+    /// Ben, 2026-09-10: "Tours are public so, they show up on the map and are searchable." They
+    /// sit on the same map as the cases rather than a map of their own, because somebody looking
+    /// at haunted places near them wants to know they can walk one on Saturday.
+    /// </remarks>
+    private IReadOnlyList<Ben.Service.Models.Entities.PublicTourMapPin> _tourPins = [];
 
     // ── Popup state ──────────────────────────────────────────────────────────
     private bool   _popupVisible  = false;
@@ -297,7 +361,8 @@
 
     private async Task LoadAsync(CancellationToken token = default)
     {
-        _loading = true;
+        // The first load may take the section over; every later one has to leave the page alone.
+        if (_loadedOnce) _refreshing = true; else _loading = true;
         StateHasChanged();
 
         // The map and the list are built from ONE answer, so they can never disagree. Bounded once
@@ -306,7 +371,7 @@
             page: 1, pageSize: 500, sort: _sort, bounds: _inView, token: token);
         if (response is null)
         {
-            _loading = false;
+            _loading = _refreshing = false;
             StateHasChanged();
             return;
         }
@@ -314,13 +379,21 @@
         _totalCount  = response.TotalCount;
         var allItems = response.Items.ToList();
 
+        // Fetched once, alongside the cases, so the map is drawn from one pass rather than
+        // repainting when a second answer arrives.
+        _tourPins = (await AdminClient.GetTourMapPinsAsync(token)).Items;
+
         BuildMarkers(allItems);
+        FrameFirstView();
         SlicePage(allItems);
         await LoadVoteSummariesAsync();
 
-        _loading = false;
+        _loadedOnce = true;
+        _loading = _refreshing = false;
         StateHasChanged();
     }
+
+    private bool _loadedOnce;
 
     private void BuildMarkers(List<PublicCaseDiscoveryItem> all)
     {
@@ -355,6 +428,23 @@
                 Color: haunted ? "#d4a017" : null,
                 Cluster: "cases"));
         }
+
+        // Tours after the cases, so a tour pin's index is its position in _tourPins offset by the
+        // case clusters — which is what the click handler undoes. Their own cluster and colour,
+        // because a walk you can book is a different offer from a case you can read about, and a
+        // pin here is a real meeting point rather than a blurred cell.
+        _tourPinOffset = pins.Count;
+        foreach (var tour in _tourPins)
+            pins.Add(new BenMapPin(
+                (double)tour.Latitude, (double)tour.Longitude,
+                Title: tour.Name,
+                Subtitle: tour.NextDateStartUtc is { } next
+                    ? $"{tour.OrganizationName} · next {next.ToViewerLocalTime(UserState):MM/dd/yyyy}"
+                    : tour.OrganizationName,
+                Glyph: "🚶",
+                Color: "#5b8def",
+                Cluster: "tours"));
+
         _mapPins = pins;
     }
 
@@ -366,11 +456,39 @@
             .ToList();
     }
 
+    /// <summary>True once the view has been placed — by the person's own location, or by the pins on the first answer.</summary>
+    private bool _viewPlaced;
+
+    /// <summary>
+    /// Centres the first view on the published cases rather than on the middle of the United States.
+    /// </summary>
+    /// <remarks>
+    /// UI test pass, 2026-09-14: on a phone the fixed centre over Kansas left every pin — all in Tennessee — at the right
+    /// edge of a 375px map. The zoom is kept, so the view still reads as a country and the list below still shows every
+    /// case; only the centre moves, to the middle of the pins. Pins spread over more than a continent keep the default
+    /// centre, where the middle of them would be an ocean. The person's own location, when the browser gives one, wins.
+    /// </remarks>
+    private void FrameFirstView()
+    {
+        if (_viewPlaced || _inView is not null || _mapPins.Count == 0) return;
+        _viewPlaced = true;
+
+        var south = _mapPins.Min(p => p.Latitude);
+        var north = _mapPins.Max(p => p.Latitude);
+        var west = _mapPins.Min(p => p.Longitude);
+        var east = _mapPins.Max(p => p.Longitude);
+        if (north - south > 30 || east - west > 60) return;
+
+        _mapLat = (north + south) / 2;
+        _mapLon = (east + west) / 2;
+    }
+
     [JSInvokable]
     public async Task SetUserLocation(double? lat, double? lon)
     {
         if (lat.HasValue && lon.HasValue)
         {
+            _viewPlaced = true;
             // BenMap follows these on its next render: the map is the caller's to drive here.
             _mapLat  = lat.Value;
             _mapLon  = lon.Value;
@@ -379,8 +497,20 @@
         }
     }
 
+    /// <summary>Where the tour pins start in the pin list the map was given.</summary>
+    private int _tourPinOffset;
+
     private void OnMarkerClicked(int index)
     {
+        // A tour pin is a link, not a popup: the tour's own page answers everything the popup
+        // would have to summarise, and it is the page somebody would want to share anyway.
+        if (index >= _tourPinOffset && index - _tourPinOffset < _tourPins.Count)
+        {
+            var tour = _tourPins[index - _tourPinOffset];
+            NavManager.NavigateTo($"/o/{tour.OrganizationUrlName}/tours/{tour.UrlName}");
+            return;
+        }
+
         if (index < 0 || index >= _clusters.Count) return;
 
         _clusterCases = _clusters[index];

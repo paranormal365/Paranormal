@@ -125,6 +125,25 @@ export async function create(containerId, dotnetRef, options) {
     })
     entry.observer.observe(container)
 
+    // A wheel over the map zooms the map, and never scrolls the page behind it.
+    //
+    // Ben, 2026-09-16: "When zooming in on a map, it zooms but then the page scrolls and the zoom
+    // stops." MapKit zooms on the wheel, but it does not stop the event, so the same gesture also
+    // reached the scrolling ancestor — main.app-body on this site. The page slid, the map went out
+    // from under the pointer, and the zoom ended mid-gesture. Measured before the fix: one wheel
+    // gesture over the map moved that ancestor 476 → 776.
+    //
+    // preventDefault in the bubble phase: MapKit's own handlers have already run and zoomed by the
+    // time this sees the event, so the zoom is untouched and only the browser's scrolling is stopped.
+    // passive:false because a listener that intends to preventDefault has to say so — Chrome treats
+    // wheel listeners as passive by default and would ignore it.
+    //
+    // overscroll-behavior below is the touch half of the same thing: it stops a pinch or drag that
+    // reaches the map's own limits from chaining out to the page.
+    entry.onWheel = e => e.preventDefault()
+    container.addEventListener('wheel', entry.onWheel, { passive: false })
+    container.style.overscrollBehavior = 'contain'
+
     // Only a person's own gesture reports a viewport: MapKit fires region-change-end for the
     // programmatic framing too, so the flag around setPins/fit keeps those quiet.
     //
@@ -191,8 +210,25 @@ export function setPins(containerId, pins) {
     const apply = () => {
         const map = entry.map
         if (!map) return
+
+        // A playhead moving over a session sends a new pin four times a second, and rebuilding
+        // the annotation each time is what made the marker jump from fix to fix — Ben, 2026-09-16:
+        // "the green circle looks like it is bouncing. It should just follow the data instead of
+        // bounce." When the set is the same shape as the one already drawn, the existing
+        // annotations are MOVED instead, and a moved annotation glides.
+        if (canMoveInPlace(entry, pins)) {
+            pins.forEach((p, index) => moveAnnotation(entry.annotations[index], p))
+            return
+        }
+
         if (entry.annotations.length) map.removeAnnotations(entry.annotations)
         entry.annotations = (pins ?? []).map((p, index) => {
+            // A pin that carries a bearing is a direction, not a place: a flat arrow centred on
+            // the coordinate rather than a teardrop with something spinning inside it.
+            if (p.rotationDegrees !== null && p.rotationDegrees !== undefined) {
+                return arrowAnnotation(p, index)
+            }
+
             const a = new mapkit.MarkerAnnotation(new mapkit.Coordinate(p.latitude, p.longitude), {
                 title: p.title ?? '',
                 subtitle: p.subtitle ?? '',
@@ -228,6 +264,99 @@ function glyphImageFor(svgPath) {
     const svg = size => 'data:image/svg+xml;utf8,' + encodeURIComponent(
         `<svg xmlns="http://www.w3.org/2000/svg" width="${size}" height="${size}" viewBox="0 0 512 512"><path fill="#fff" d="${svgPath}"/></svg>`)
     return { 1: svg(20), 2: svg(40), 3: svg(60) }
+}
+
+// ── Where somebody is, and which way they are facing ─────────────────────────
+
+/** How long a step takes to glide. One playback tick, so the arrow arrives as the next one is sent. */
+const ARROW_GLIDE_MS = 260
+
+/**
+ * An arrow centred on the coordinate, rotated to a bearing.
+ *
+ * Built from an element rather than an image so the rotation can be a CSS transform: a transform
+ * is what the browser can interpolate, and interpolating it is the difference between an arrow
+ * that turns and one that flicks between headings. Ben, 2026-09-16: "if the person turns, it
+ * should just turn smoothly and if the next reading the person is walking, it should follow the
+ * path smoothly. Not bouncing."
+ */
+function arrowAnnotation(p, index) {
+    const annotation = new mapkit.Annotation(
+        new mapkit.Coordinate(p.latitude, p.longitude),
+        () => {
+            // Two elements on purpose. MapKit positions the element it is handed, using its own
+            // transform — so the rotation goes on an inner one it never touches. Sharing a
+            // transform with the map is how a marker ends up jumping to the corner of the tile.
+            const wrap = document.createElement('div')
+            wrap.style.width = '28px'
+            wrap.style.height = '28px'
+            wrap.style.marginLeft = '-14px'
+            wrap.style.marginTop = '-14px'
+
+            const turner = document.createElement('div')
+            turner.className = 'ben-map-arrow'
+            turner.style.width = '28px'
+            turner.style.height = '28px'
+            turner.style.willChange = 'transform'
+            turner.style.transition = `transform ${ARROW_GLIDE_MS}ms linear`
+            turner.style.transform = `rotate(${p.rotationDegrees}deg)`
+            turner.innerHTML =
+                `<svg viewBox="0 0 24 24" width="28" height="28" aria-hidden="true">
+                   <path d="M12 2 L20 21 L12 16.5 L4 21 Z"
+                         fill="${p.color ?? '#28c76f'}"
+                         stroke="rgba(0,0,0,.55)" stroke-width="1" stroke-linejoin="round"/>
+                 </svg>`
+            wrap.appendChild(turner)
+            return wrap
+        },
+        { title: p.title ?? '', subtitle: p.subtitle ?? '', data: { index } })
+
+    // Kept on the annotation so the next update can turn by the SHORTEST way round rather than
+    // unwinding 350 degrees to get from 355 to 5.
+    annotation.__benBearing = p.rotationDegrees
+    annotation.__benIsArrow = true
+    return annotation
+}
+
+/**
+ * Whether the incoming set can be moved onto the annotations already drawn.
+ *
+ * Same count, and each one the same KIND as the annotation holding its place. A set that differs
+ * in either is a different map and is rebuilt — moving a pin onto an arrow's annotation would
+ * change what the marker means while pretending to be an update.
+ */
+function canMoveInPlace(entry, pins) {
+    const incoming = pins ?? []
+    if (!entry.annotations.length || entry.annotations.length !== incoming.length) return false
+    return incoming.every((p, index) => {
+        const isArrow = p.rotationDegrees !== null && p.rotationDegrees !== undefined
+        return Boolean(entry.annotations[index]?.__benIsArrow) === isArrow
+    })
+}
+
+/** Moves one annotation to where its pin now is, turning the shortest way if it is an arrow. */
+function moveAnnotation(annotation, p) {
+    if (!annotation) return
+    // MapKit animates a coordinate change on an annotation that is already on the map, which is
+    // the whole reason this path exists: the same object moving reads as somebody walking.
+    annotation.coordinate = new mapkit.Coordinate(p.latitude, p.longitude)
+
+    if (!annotation.__benIsArrow) return
+    if (p.rotationDegrees === null || p.rotationDegrees === undefined) return
+
+    // Unwound rather than clamped to 0–360: CSS interpolates the NUMBER, so going from 350 to 10
+    // written plainly spins the arrow almost the whole way round the wrong way. Carrying the
+    // accumulated angle and adding the shortest difference turns it 20 degrees, which is what a
+    // person walking round a corner actually did.
+    const previous = annotation.__benBearing ?? p.rotationDegrees
+    let delta = (p.rotationDegrees - previous) % 360
+    if (delta > 180) delta -= 360
+    if (delta < -180) delta += 360
+
+    const unwound = previous + delta
+    annotation.__benBearing = unwound
+    const element = annotation.element?.querySelector?.('.ben-map-arrow') ?? annotation.element
+    if (element?.style) element.style.transform = `rotate(${unwound}deg)`
 }
 
 /** Draws, replaces or removes the one region circle a map may carry. */
@@ -306,10 +435,85 @@ export function route(containerId, req) {
 
 export function clearRoute(containerId) {
     const entry = _maps.get(containerId)
-    if (!entry?.map || !entry.route) return
-    entry.map.removeOverlay(entry.route.polyline)
-    entry.map.removeAnnotations(entry.route.pins)
-    entry.route = null
+    if (!entry?.map) return
+    if (entry.route) {
+        entry.map.removeOverlay(entry.route.polyline)
+        entry.map.removeAnnotations(entry.route.pins)
+        entry.route = null
+    }
+    if (entry.legs?.length) {
+        entry.map.removeOverlays(entry.legs)
+        entry.legs = []
+    }
+}
+
+// ── Routes through several stops (map blocks, 2026-09-14) ───────────────────
+// Only lines: the stops themselves are the map's ordinary pins. The route colour follows the theme through a CSS custom
+// property on the container, so it reads on light and dark maps alike.
+
+function routeStyle(entry, dashed) {
+    const color = getComputedStyle(entry.container).getPropertyValue('--ben-map-route').trim()
+        || getComputedStyle(document.documentElement).getPropertyValue('--bs-primary').trim()
+        || '#1a73e8'
+    return new mapkit.Style({ strokeColor: color, strokeOpacity: .9, lineWidth: 4, lineDash: dashed ? [6, 6] : [] })
+}
+
+function frameLegs(entry) {
+    if (!entry.legs?.length) return
+    entry.framing = true
+    entry.map.showItems([...entry.legs, ...entry.annotations], { animate: true, padding: new mapkit.Padding(40, 40, 40, 40) })
+    setTimeout(() => { entry.framing = false }, 800)
+}
+
+/** Straight lines from stop to stop. */
+export function routeStraight(containerId, stops) {
+    const entry = _maps.get(containerId)
+    if (!entry?.map) return
+    clearRoute(containerId)
+    const line = new mapkit.PolylineOverlay(stops.map(s => new mapkit.Coordinate(s.latitude, s.longitude)),
+        { style: routeStyle(entry, false) })
+    entry.map.addOverlay(line)
+    entry.legs = [line]
+    frameLegs(entry)
+}
+
+/**
+ * Walking or driving directions leg by leg, asked for one after another. A leg the provider cannot route is drawn as a
+ * dashed straight line and reported as not routed. Resolves to one { routed, distanceMeters, durationSeconds } per leg;
+ * never rejects.
+ */
+export async function routeThrough(containerId, stops, transport) {
+    const entry = _maps.get(containerId)
+    if (!entry?.map) return []
+    clearRoute(containerId)
+    _directions ??= new mapkit.Directions()
+    const type = transport === 'walking' ? mapkit.Directions.Transport.Walking : mapkit.Directions.Transport.Automobile
+    const results = []
+    entry.legs = []
+
+    for (let i = 0; i + 1 < stops.length; i++) {
+        const from = new mapkit.Coordinate(stops[i].latitude, stops[i].longitude)
+        const to = new mapkit.Coordinate(stops[i + 1].latitude, stops[i + 1].longitude)
+        const best = await new Promise(resolve =>
+            _directions.route({ origin: from, destination: to, transportType: type },
+                (err, data) => resolve(err || !data?.routes?.length ? null : data.routes[0])))
+        if (!_maps.has(containerId)) return results   // the map went away while we waited
+
+        if (best) {
+            best.polyline.style = routeStyle(entry, false)
+            entry.map.addOverlay(best.polyline)
+            entry.legs.push(best.polyline)
+            results.push({ routed: true, distanceMeters: best.distance, durationSeconds: best.expectedTravelTime })
+        } else {
+            const line = new mapkit.PolylineOverlay([from, to], { style: routeStyle(entry, true) })
+            entry.map.addOverlay(line)
+            entry.legs.push(line)
+            results.push({ routed: false, distanceMeters: 0, durationSeconds: null })
+        }
+    }
+
+    frameLegs(entry)
+    return results
 }
 
 export function fit(containerId) {
@@ -386,6 +590,7 @@ export function dispose(containerId) {
     const entry = _maps.get(containerId)
     if (!entry) return
     entry.observer?.disconnect()
+    if (entry.onWheel) entry.container?.removeEventListener('wheel', entry.onWheel)
     try { entry.map?.destroy() } catch { /* already gone with its container */ }
     _maps.delete(containerId)
 }

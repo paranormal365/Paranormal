@@ -5,6 +5,7 @@
 @inject NavigationManager NavManager
 @inject Ben.Web.Services.SiteFeaturesProvider Features
 @using Ben.Data.Common.Enums
+@using Ben.Service.Models
 @using Ben.Web.Website.Library.Help
 @using Ben.Web.Website.Library.Kit
 @using System.Text.Json
@@ -47,6 +48,26 @@
                     @switch (_wizard.CurrentIndex)
                     {
                         case 0:
+                            @if (_chosenTier is { } plan)
+                            {
+                                @* Arrived from a plan's button on the pricing page (2026-09-14). The group has to
+                                   exist before it can pay, so the plan is confirmed on its billing page next. *@
+                                <div class="alert alert-info py-2 small mb-3" id="newgroup-plan-chosen">
+                                    Plan: <strong>@plan.Name</strong>.
+                                    @if (ChosenTierIsPaid)
+                                    {
+                                        <text>Once the group exists you'll go to its billing page to confirm the plan and pay — the price follows the group's size.</text>
+                                    }
+                                    else
+                                    {
+                                        <text>Nothing to pay.</text>
+                                    }
+                                    @if (!plan.IsBandedByMembers)
+                                    {
+                                        <text> This plan is for tour and events businesses, so choose one of those below.</text>
+                                    }
+                                </div>
+                            }
                             @* The first question, because it decides the defaults every later
                                step starts from (2026-08-24). Not a permanent classification —
                                the hub can change it — but getting it right here means a tour
@@ -60,12 +81,15 @@
                                     <label class="btn btn-outline-primary w-100 text-start" for="newgroup-kind-investigation">
                                         <BenIcon Name="search" Class="me-1" />Investigation group
                                     </label></div>
+                                    @if (!_toursClosed)
+                                    {
                                     <div class="col-6"><input type="radio" class="btn-check" name="newgroup-kind" id="newgroup-kind-tour"
                                            checked="@(_kind == OrganizationKind.GhostWalkingTour)"
                                            @onchange="@(() => SetKind(OrganizationKind.GhostWalkingTour))" />
                                     <label class="btn btn-outline-primary w-100 text-start" for="newgroup-kind-tour">
                                         <BenIcon Name="map" Class="me-1" />Ghost walking tour
                                     </label></div>
+                                    }
                                     <div class="col-6"><input type="radio" class="btn-check" name="newgroup-kind" id="newgroup-kind-events"
                                            checked="@(_kind == OrganizationKind.PublicEventProvider)"
                                            @onchange="@(() => SetKind(OrganizationKind.PublicEventProvider))" />
@@ -79,6 +103,16 @@
                                         <BenIcon Name="home" Class="me-1" />Haunted property
                                     </label></div>
                                 </div>
+                                @if (_toursClosed)
+                                {
+                                    <div class="form-text" id="newgroup-tours-closed">
+                                        We aren't taking on new ghost walking tours just now. Every
+                                        other kind is open — or
+                                        <a href="/contact">get in touch</a> and we will let you know
+                                        when tours reopen.
+                                    </div>
+                                }
+
                                 <div class="form-text">
                                     @* One sentence per kind, saying what it STARTS as. None of it is a
                                        gate — every kind can do everything, and all of this is editable
@@ -193,7 +227,7 @@
                                     <label class="form-label" for="newgroup-area">Where you work</label>
                                     <div class="input-group" style="max-width:420px;">
                                         <input id="newgroup-area" type="text" class="form-control" maxlength="120"
-                                               placeholder="Nashville, TN" @bind="_serviceArea" />
+                                               placeholder="e.g. Nashville, TN" @bind="_serviceArea" />
                                         <span class="input-group-text">within</span>
                                         <input id="newgroup-radius" type="number" class="form-control" style="max-width:6rem;"
                                                min="1" max="500" @bind="_radiusMiles" />
@@ -228,6 +262,11 @@
 
                         case 3:
                             <dl class="row g-1 small mb-0" id="newgroup-review">
+                                @if (_chosenTier is { } reviewPlan)
+                                {
+                                    <dt class="col-sm-4 text-secondary">Plan</dt>
+                                    <dd class="col-sm-8">@reviewPlan.Name@(ChosenTierIsPaid ? " — confirmed and paid on the billing page next" : "")</dd>
+                                }
                                 <dt class="col-sm-4 text-secondary">Name</dt>
                                 <dd class="col-sm-8 fw-semibold">@_name</dd>
                                 <dt class="col-sm-4 text-secondary">Web address</dt>
@@ -297,7 +336,15 @@
     private string? _error;
     private bool _closed;
 
+    /// <summary>Whether the ghost-walking-tour choice is hidden (item 233).</summary>
+    private bool _toursClosed;
+
     private bool HasAddress => !string.IsNullOrWhiteSpace(_city);
+
+    /// <summary>The plan chosen on the pricing page (<c>?tier=</c>), when the founder came from one.</summary>
+    private PublicSubscriptionTier? _chosenTier;
+
+    private bool ChosenTierIsPaid => _chosenTier is { } t && t.Prices.Any(p => p.Price > 0);
 
     public StartGroupPage()
     {
@@ -315,11 +362,30 @@
         if (!await UserState.WaitUntilAuthReadyAsync(RendererInfo.IsInteractive)) return;
         if (!UserState.IsAuthenticated)
         {
-            NavManager.NavigateTo($"/login?returnUrl={Uri.EscapeDataString("/organizations/new")}");
+            // The whole address, query included: a visitor who pressed a plan's button on the pricing page must
+            // come back to the wizard with that plan still chosen.
+            var here = "/" + NavManager.ToBaseRelativePath(NavManager.Uri);
+            NavManager.NavigateTo($"/login?returnUrl={Uri.EscapeDataString(here)}");
             return;
         }
 
+        var query = Microsoft.AspNetCore.WebUtilities.QueryHelpers.ParseQuery(new Uri(NavManager.Uri).Query);
+        if (query.TryGetValue("tier", out var tierValue) && Guid.TryParse(tierValue, out var tierId))
+        {
+            // Named from the live price list rather than trusted from the address; an unknown id shows nothing.
+            var pricing = await AdminClient.GetPublicPricingAsync();
+            _chosenTier = pricing.Items.FirstOrDefault(t => t.Id == tierId);
+        }
+
         _closed = !Features.AllowOrganizationSelfRegistration && !UserState.IsSuperAdmin;
+
+        // Item 233: the site can be closed to NEW ghost walking tours while staying open to every
+        // other kind, events businesses included. Asked before the choices are drawn, because the
+        // alternative is somebody picking "ghost walking tour", filling in four steps and being
+        // refused at the end.
+        _toursClosed = !Features.AllowTourBusinessSignUps && !UserState.IsSuperAdmin;
+        if (_toursClosed && _kind == OrganizationKind.GhostWalkingTour)
+            SetKind(OrganizationKind.InvestigationGroup);
     }
 
     // ── Step gates: null allows Next, a sentence refuses (WizardModel contract) ──
@@ -515,7 +581,13 @@
             catch { /* hub-editable extras; the group is already theirs */ }
 
             if (_wizardRef is not null) await _wizardRef.ClearDraftAsync();
-            NavManager.NavigateTo($"/organizations/{created.OrganizationId}?welcome=1");
+
+            // A founder who chose a paid plan on the pricing page goes on to pay for it; everyone else to the hub and
+            // its tour, as before. The billing page offers the hub from its welcome banner.
+            if (ChosenTierIsPaid && Features.PlanPurchasesEnabled)
+                NavManager.NavigateTo($"/organizations/{created.OrganizationId}/billing?from=new&tier={_chosenTier!.Id}");
+            else
+                NavManager.NavigateTo($"/organizations/{created.OrganizationId}?welcome=1");
         }
         finally { _busy = false; }
     }

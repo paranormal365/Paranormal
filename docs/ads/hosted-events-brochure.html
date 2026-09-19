@@ -1,0 +1,181 @@
+<!doctype html><html lang="en"><head><meta charset="utf-8"><title>IsHaunted Hosted Events</title><style>
+@page { size: 8.5in 11in; margin: 0; }
+* { box-sizing: border-box; -webkit-print-color-adjust: exact; print-color-adjust: exact; }
+html, body { margin: 0; background: #444; }
+body { font-family: "Avenir Next", Avenir, "Helvetica Neue", sans-serif; color: #fff;
+       --base: #150B22; --base2: #2E1745; --accent: #F7B84B; --accent2: #FFDD9A; --muted: rgba(255,255,255,.74);
+       --card: rgba(255,255,255,.055); --line: rgba(255,255,255,.1); }
+.page { width: 8.5in; height: 11in; position: relative; overflow: hidden; page-break-after: always; break-after: page;
+        background: radial-gradient(110% 55% at 100% 0%, var(--base2) 0%, var(--base) 62%); }
+.page:last-child { page-break-after: auto; break-after: auto; }
+@media screen { .page { margin: 0 auto 24px; } }
+body.one .page { display: none; margin: 0; }
+body.one .page.show { display: block; }
+.pad { position: absolute; inset: .6in .6in .55in; }
+.kicker { font-size: 8.5pt; font-weight: 700; letter-spacing: .24em; text-transform: uppercase; color: var(--accent); }
+h1, h2 { font-family: Futura, "Avenir Next", sans-serif; font-weight: 800; margin: 0; letter-spacing: -.01em; }
+h1 em, h2 em { font-style: normal; color: var(--accent); }
+h2 { font-size: 27pt; line-height: 1.04; margin: .06in 0 .1in; }
+.lede { font-size: 11.5pt; line-height: 1.45; color: var(--muted); max-width: 6.2in; margin: 0; }
+.folio { position: absolute; bottom: .28in; left: .6in; right: .6in; display: flex; justify-content: space-between;
+         font-size: 7.5pt; letter-spacing: .14em; text-transform: uppercase; color: rgba(255,255,255,.42); }
+.shot { border-radius: .1in; overflow: hidden; background: #0d0d10; box-shadow: 0 16px 36px rgba(0,0,0,.5), 0 0 0 1px rgba(255,255,255,.1); }
+.shot img { display: block; width: 100%; height: auto; }
+.laptop { border-radius: .12in; overflow: hidden; background: #0d0d10; box-shadow: 0 22px 50px rgba(0,0,0,.55), 0 0 0 1px rgba(255,255,255,.12); position: relative; }
+.laptop::before { content: "●  ●  ●"; display: block; height: .19in; line-height: .19in; padding-left: .1in; font-size: 6pt; color: #6b6b73; background: #26262c; }
+.laptop img { display: block; width: 100%; height: auto; }
+.phone { border-radius: .3in; background: #040404; padding: .065in; box-shadow: 0 24px 50px rgba(0,0,0,.6), 0 0 0 1.4px rgba(255,255,255,.14), 0 0 50px rgba(247,184,75,.18); }
+.phone img { display: block; width: 100%; height: auto; border-radius: .24in; }
+.cap { display: grid; grid-template-columns: .3in 1fr; gap: .08in; align-items: start; }
+.cap b { width: .3in; height: .3in; border-radius: 50%; display: grid; place-items: center; font-size: 10pt; color: var(--base);
+         background: linear-gradient(135deg, var(--accent), var(--accent2)); font-family: Futura, sans-serif; }
+.cap h4 { margin: .02in 0 .02in; font-size: 10.5pt; }
+.cap p { margin: 0; font-size: 8.6pt; line-height: 1.4; color: var(--muted); }
+.abs { position: absolute; }
+.note { border-left: 3px solid var(--accent); background: var(--card); padding: .1in .14in; border-radius: 0 .08in .08in 0; font-size: 9pt; line-height: 1.42; color: var(--muted); }
+.note strong { color: #fff; }
+.person { background: var(--card); border: 1px solid var(--line); border-radius: .16in; overflow: hidden; display: grid; grid-template-columns: 1.55in 1fr; }
+.person .ph { background-size: cover; background-position: center; min-height: 1.28in; position: relative; }
+.person .ph::after { content: ""; position: absolute; inset: 0; background: linear-gradient(90deg, rgba(0,0,0,0) 55%, var(--base) 100%); opacity: .55; }
+.person .tx { padding: .14in .18in; }
+.person h3 { margin: .03in 0 .04in; font-size: 13pt; }
+.person p { margin: 0; font-size: 8.8pt; line-height: 1.42; color: var(--muted); }
+.person .role { font-size: 7.5pt; font-weight: 700; letter-spacing: .18em; text-transform: uppercase; color: var(--accent); }
+.mail { border-radius: .08in; overflow: hidden; background: #fff; box-shadow: 0 12px 30px rgba(0,0,0,.45); }
+.mail img { display: block; width: 100%; height: auto; }
+.mails { display: grid; grid-template-columns: repeat(3, 1fr); gap: .22in .2in; margin: .14in 0 .3in; align-items: start; }
+.mails .mail { height: 2.3in; position: relative; }
+.mails .mail img { height: 100%; object-fit: cover; object-position: top left; }
+.mails .mail::after { content: ""; position: absolute; left: 0; right: 0; bottom: 0; height: .45in; background: linear-gradient(180deg, rgba(255,255,255,0), #fff); }
+.pad { display: flex; flex-direction: column; gap: .17in; }
+.pad > h2 { margin-bottom: 0; }
+.row { display: grid; gap: .22in; align-items: start; }
+.stack { display: flex; flex-direction: column; gap: .14in; }
+.mailcap { font-size: 7.8pt; color: var(--muted); margin-top: .05in; line-height: 1.3; }
+.mailcap strong { color: #fff; display: block; font-size: 8.4pt; }
+.price { margin-top: auto; border-radius: .18in; overflow: hidden; display: grid; grid-template-columns: 1.4fr 1fr; background: var(--base2); box-shadow: 0 0 0 1.5px var(--accent), 0 18px 40px rgba(0,0,0,.45); }
+.price > div:first-child { padding: .2in .26in; }
+.price .big { font-family: Futura, sans-serif; font-weight: 800; font-size: 30pt; line-height: 1; }
+.price .big em { font-style: normal; color: var(--accent); }
+.price ul { margin: .1in 0 0; padding-left: 1.1em; font-size: 9pt; line-height: 1.5; color: var(--muted); }
+.price .go { display: flex; flex-direction: column; justify-content: center; align-items: center; text-align: center; color: var(--base);
+             background: linear-gradient(135deg, var(--accent), var(--accent2)); padding: .2in; }
+.price .go b { font-family: Futura, sans-serif; font-size: 20pt; font-weight: 800; }
+.price .go span { font-size: 8.5pt; font-weight: 700; letter-spacing: .12em; text-transform: uppercase; margin-top: .04in; }
+.price .go .soon { opacity: .75; margin-top: .12in; }
+/* cover */
+.cover-hero { position: absolute; inset: 0 0 auto 0; height: 7.3in; background-size: cover; background-position: center 35%; }
+.cover-hero::after { content: ""; position: absolute; inset: 0; background: linear-gradient(180deg, rgba(0,0,0,.5) 0%, rgba(0,0,0,.05) 25%, rgba(21,11,34,.35) 50%, rgba(21,11,34,.85) 78%, var(--base) 100%); }
+.brand { position: absolute; top: .45in; left: .6in; display: flex; gap: .12in; align-items: center; font-weight: 700; font-size: 14pt; z-index: 2; }
+.brand img { width: .44in; height: .44in; }
+.brand small { display: block; font-size: 7.5pt; letter-spacing: .22em; text-transform: uppercase; font-weight: 600; opacity: .8; }
+.cover-title { position: absolute; left: .6in; right: .6in; top: 2.35in; z-index: 2; }
+.cover-title h1 { font-size: 44pt; line-height: 1; margin: .1in 0 .16in; text-shadow: 0 4px 20px rgba(0,0,0,.5); }
+.cover-devices { position: absolute; left: 1.2in; right: .55in; top: 5.55in; height: 3.6in; z-index: 3; }
+.cover-title p { font-size: 13.5pt; line-height: 1.4; color: rgba(255,255,255,.9); max-width: 4.9in; margin: 0; }
+.facts { position: absolute; left: .6in; right: .6in; bottom: .5in; z-index: 4; display: grid; grid-template-columns: repeat(3, 1fr); gap: .16in; }
+.fact { background: rgba(21,11,34,.82); backdrop-filter: blur(4px); border: 1px solid var(--line); border-radius: .14in; padding: .14in .16in; }
+.fact b { display: block; font-family: Futura, sans-serif; font-size: 14pt; color: var(--accent); margin-bottom: .03in; }
+.fact span { font-size: 8.6pt; color: var(--muted); line-height: 1.35; }
+</style>
+<script>document.addEventListener('DOMContentLoaded',()=>{const m=location.hash.match(/^#p(\d+)$/);if(m){document.body.classList.add('one');document.querySelectorAll('.page')[+m[1]-1]?.classList.add('show');}});</script>
+</head><body><section class="page cover">
+  <div class="cover-hero" style="background-image:url(../media/stock/s3-candle-chandelier.jpg)"></div>
+  <div class="brand"><img src="../assets/is-haunted-logo.svg" alt=""><div>IsHaunted.com<small>Web &amp; iPhone</small></div></div>
+  <div class="cover-title"><div class="kicker">Hosted Events</div>
+    <h1>Haunted weekends,<br><em>sold out</em> and run<br>from your phone.</h1>
+    <p>Rooms or seats, confirmations with passes, a door that works with no signal, and every letter written for you.</p></div>
+  <div class="cover-devices">
+    <div class="laptop" style="width:4.7in;position:absolute;left:0;top:.55in;transform:rotate(-2deg)"><img src="../media/hosted-events/walk/45-public-event.png" alt=""></div>
+    <div class="phone" style="width:1.62in;position:absolute;right:.05in;top:0;transform:rotate(4deg)"><img src="../media/hosted-events/walk/16-guest-pass-phone.png" alt=""></div>
+  </div>
+  <div class="facts">
+    <div class="fact"><b>Rooms or seats</b><span>Guests ask for a room or pick their seats on your plan.</span></div>
+    <div class="fact"><b>No signal, no problem</b><span>Passes and the door keep working in the cellar.</span></div>
+    <div class="fact"><b>$99 an event</b><span>However many nights. Guests pay you directly.</span></div>
+  </div>
+</section><section class="page"><div class="pad">
+  <div class="kicker">How it works</div><h2>Five people.<br>One <em>unforgettable</em> weekend.</h2><p class="lede">Every hosted event has the same cast. IsHaunted gives each of them exactly the screen they need, and nothing they don&#x27;t.</p>
+  <div class="stack" style="margin-top:.12in;gap:.12in"><div class="person"><div class="ph" style="background-image:url(../media/stock/d1-candlelit-dinner.jpg)"></div><div class="tx"><div class="role">Finds it, asks, gets a pass</div><h3>The guest</h3><p>Browses the event with its photographs and access notes, asks for a room or picks seats, and keeps a QR pass on the web and the iPhone.</p></div></div><div class="person"><div class="ph" style="background-image:url(../media/stock/v3-hotel-lobby.jpg)"></div><div class="tx"><div class="role">Runs the weekend</div><h3>The organizer</h3><p>Confirms parties into rooms, writes to everybody at once, invites helpers, and sees the numbers at a glance.</p></div></div><div class="person"><div class="ph" style="background-image:url(../media/stock/i1-flashlight-silhouette.jpg)"></div><div class="tx"><div class="role">Lets people in</div><h3>The helper on the door</h3><p>Accepts an invitation that grants the door and nothing else, then checks parties in by scan or by name.</p></div></div><div class="person"><div class="ph" style="background-image:url(../media/stock/v1-venue-exterior.jpg)"></div><div class="tx"><div class="role">Says who hosts there</div><h3>The venue</h3><p>Shows the building&#x27;s history and photographs, and approves the organizers who want to run nights under its roof.</p></div></div><div class="person"><div class="ph" style="background-image:url(../media/stock/p1-phone-camera.jpg)"></div><div class="tx"><div class="role">Keeps it trustworthy</div><h3>IsHaunted</h3><p>Watches every event on one dashboard, removes what breaks the rules, returns the credit, and hears appeals.</p></div></div></div>
+</div><div class="folio"><span>IsHaunted.com · Hosted Events</span><span>2</span></div></section><section class="page"><div class="pad">
+  <div class="kicker">The guest</div><h2>From “that looks amazing”<br>to <em>a pass in their pocket</em>.</h2>
+  <div class="row" style="grid-template-columns:4.1in 1fr">
+    <div class="laptop" style=""><img src="../media/hosted-events/walk/02-guest-event-page.png" alt=""></div>
+    <div class="stack"><div class="cap"><b>1</b><div><h4>The event page</h4><p>Photographs from the venue, the nights, and what&#x27;s left.</p></div></div>
+      <div class="cap"><b>2</b><div><h4>Getting in and around</h4><p>Stairs, parking and low light, said before anybody books.</p></div></div></div>
+  </div>
+  <div class="shot" style=""><img src="../media/hosted-events/walk/03-guest-getting-in.png" alt=""></div>
+  <div class="row" style="grid-template-columns:3.55in 1fr">
+    <div class="shot" style=""><img src="../media/hosted-events/walk/04-guest-asking-for-a-room.png" alt=""></div>
+    <div class="stack"><div class="shot" style=""><img src="../media/hosted-events/walk/05-guest-asked.png" alt=""></div>
+      <div class="cap"><b>3</b><div><h4>Ask for a room</h4><p>Nights, party size and a note. Nothing is held or paid here.</p></div></div>
+      <div class="cap"><b>4</b><div><h4>Told straight away</h4><p>The booking card says it is with the venue, and so does the letter.</p></div></div>
+      <div class="note"><strong>Guests pay you, not us.</strong> Prices are shown so nobody is surprised; money is settled between the guest and the venue.</div></div>
+  </div>
+  <div class="row" style="grid-template-columns:1.55in 1fr;align-items:center">
+    <div class="shot" style=""><img src="../media/hosted-events/walk/15-guest-pass.png" alt=""></div>
+    <div class="cap"><b>5</b><div><h4>A pass for the door</h4><p>The QR pass arrives with the confirmation, waits under What I&#x27;m going to, and opens on the iPhone with no signal.</p></div></div>
+  </div>
+</div><div class="folio"><span>IsHaunted.com · Hosted Events</span><span>3</span></div></section><section class="page"><div class="pad">
+  <div class="kicker">The organizer</div><h2>The whole weekend<br>on <em>one board</em>.</h2>
+  <div class="shot" style=""><img src="../media/hosted-events/walk/06-organizer-event-at-a-glance.png" alt=""></div>
+  <div class="cap"><b>1</b><div><h4>At a glance</h4><p>People coming, parties waiting, places left night by night, arrivals and reviews.</p></div></div>
+  <div class="row" style="grid-template-columns:4.2in 1fr">
+    <div class="laptop" style=""><img src="../media/hosted-events/walk/08-organizer-confirming-a-party.png" alt=""></div>
+    <div class="stack"><div class="cap"><b>2</b><div><h4>Put them where it suits</h4><p>Confirm a party into the Blue Room with a line they will read. The pass goes with it.</p></div></div>
+      <div class="cap"><b>3</b><div><h4>Waiting on you first</h4><p>Requests and holds sit at the top, soonest deadline first.</p></div></div>
+      <div class="cap"><b>4</b><div><h4>Helpers, not admins</h4><p>Invite somebody to run the door without handing over the guest list.</p></div></div></div>
+  </div>
+  <div class="row" style="grid-template-columns:3.6in 1fr">
+    <div class="shot" style=""><img src="../media/hosted-events/walk/10-organizer-writing-to-guests.png" alt=""></div>
+    <div class="stack"><div class="cap"><b>5</b><div><h4>Write to everybody</h4><p>Parking moved? Doors at eight? One letter by email and in their messages, with the count shown before you send.</p></div></div>
+      <div class="mail" style=""><img src="../media/hosted-events/emails/thomas-house-s-ance-weekend-parking-for-friday-night.png" alt=""></div></div>
+  </div>
+</div><div class="folio"><span>IsHaunted.com · Hosted Events</span><span>4</span></div></section><section class="page"><div class="pad">
+  <div class="kicker">The night itself</div><h2>A door that opens<br><em>with no signal</em>.</h2><p class="lede">Old buildings eat phone signal. The pass, the door list and check-in keep working in the cellar, and catch up when the bars come back.</p>
+  <div class="row" style="grid-template-columns:repeat(3,1fr);justify-items:center;margin-top:.1in">
+    <div class="stack"><div class="phone" style="width:1.95in;"><img src="../media/hosted-events/walk/18-door-on-a-phone.png" alt=""></div><div class="cap"><b>1</b><div><h4>The list for tonight</h4><p>Who is expected, who is in, and walk-ups added on the spot.</p></div></div></div>
+    <div class="stack"><div class="phone" style="width:1.95in;"><img src="../media/hosted-events/walk/19-door-finding-a-party.png" alt=""></div><div class="cap"><b>2</b><div><h4>Find them by name</h4><p>No pass to hand? Type part of a name and check the party in.</p></div></div></div>
+    <div class="stack"><div class="phone" style="width:1.95in;"><img src="../../Ben.Web.Website/wwwroot/help/media/the-mobile-apps/iphone-door-scanned.png" alt=""></div><div class="cap"><b>3</b><div><h4>Or scan on the iPhone</h4><p>The camera reads the pass; tap the reservation to check them in.</p></div></div></div>
+  </div>
+  <div class="row" style="grid-template-columns:3.9in 1fr;align-items:center">
+    <div class="shot" style=""><img src="../media/hosted-events/walk/13-organizer-kitchen.png" alt=""></div>
+    <div class="stack"><div class="cap"><b>4</b><div><h4>What the kitchen needs</h4><p>Dietary notes tallied for each night and printed a page per night, so the kitchen never scrolls a phone.</p></div></div>
+      <div class="note"><strong>Offline on the iPhone.</strong> Arrivals recorded with no signal keep the time they happened and send when the phone reconnects.</div></div>
+  </div>
+</div><div class="folio"><span>IsHaunted.com · Hosted Events</span><span>5</span></div></section><section class="page"><div class="pad">
+  <div class="kicker">Seats and strangers</div><h2>Two hundred seats.<br><em>No account</em> needed.</h2><p class="lede">For an evening in the ballroom, guests pick their own seats on your plan. Somebody without an account picks too, and we email them a link to hold the seats.</p>
+  <div class="row" style="grid-template-columns:4.6in 1fr">
+    <div class="shot" style=""><img src="../media/hosted-events/walk/21-stranger-picking-seats.png" alt=""></div>
+    <div class="stack"><div class="phone" style="width:1.7in;"><img src="../media/hosted-events/walk/48-public-evening-phone.png" alt=""></div></div>
+  </div>
+  <div class="row" style="grid-template-columns:1fr 1fr">
+    <div class="cap"><b>1</b><div><h4>Pick on the plan</h4><p>Sections and prices in a legend; taken and held seats cannot be picked.</p></div></div>
+    <div class="cap"><b>2</b><div><h4>On a phone, too</h4><p>The plan scrolls in its own frame with a summary that stays in view.</p></div></div>
+  </div>
+  <div class="row" style="grid-template-columns:2.6in 1fr;align-items:center">
+    <div class="mail" style=""><img src="../media/hosted-events/emails/hold-your-places-at-an-evening-of-evidence-within-15-minutes.png" alt=""></div>
+    <div class="cap"><b>3</b><div><h4>A hold that lapses by itself</h4><p>Picked seats are held for the venue&#x27;s chosen time, shown to everybody else as pending, and let go if nobody confirms.</p></div></div>
+  </div>
+</div><div class="folio"><span>IsHaunted.com · Hosted Events</span><span>6</span></div></section><section class="page"><div class="pad">
+  <div class="kicker">Venues, and the people who run IsHaunted</div><h2>The building says yes.<br>We keep it <em>honest</em>.</h2>
+  <div class="row" style="grid-template-columns:5.2in 1fr">
+    <div class="laptop" style=""><img src="../media/hosted-events/walk/43-public-venue.png" alt=""></div>
+    <div class="stack"><div class="cap"><b>1</b><div><h4>A venue page worth sharing</h4><p>History, house rules, a photo library and what&#x27;s on next.</p></div></div>
+      <div class="cap"><b>2</b><div><h4>Nobody hosts without the venue</h4><p>Organizers ask first; the venue approves the nights and what it lends.</p></div></div></div>
+  </div>
+  <div class="shot" style=""><img src="../media/hosted-events/walk/25-superadmin-events-dashboard.png" alt=""></div>
+  <div class="row" style="grid-template-columns:1fr 1fr">
+    <div class="shot" style=""><img src="../media/hosted-events/walk/29-organizer-appealing.png" alt=""></div>
+    <div class="stack"><div class="cap"><b>3</b><div><h4>Removed, fairly</h4><p>If an event breaks the rules it comes off the site, guests are told, and the credit goes back.</p></div></div>
+      <div class="cap"><b>4</b><div><h4>And a person reads the appeal</h4><p>Upheld appeals bring the event back as a draft, ready to publish again.</p></div></div></div>
+  </div>
+</div><div class="folio"><span>IsHaunted.com · Hosted Events</span><span>7</span></div></section><section class="page"><div class="pad">
+  <div class="kicker">Every letter, written for you</div><h2>Nobody is left <em>wondering</em>.</h2>
+  <div class="mails"><div><div class="mail"><img src="../media/hosted-events/emails/we-ve-passed-your-request-for-thomas-house-s-ance-weekend-on.png" alt=""></div><div class="mailcap"><strong>Your request is with them</strong>Sent the moment a guest asks.</div></div><div><div class="mail"><img src="../media/hosted-events/emails/your-place-at-thomas-house-s-ance-weekend-is-confirmed.png" alt=""></div><div class="mailcap"><strong>You&#x27;re confirmed</strong>With the rooms, access notes and the QR pass.</div></div><div><div class="mail"><img src="../media/hosted-events/emails/hold-your-places-at-an-evening-of-evidence-within-15-minutes.png" alt=""></div><div class="mailcap"><strong>Hold your seats</strong>The link for somebody without an account.</div></div><div><div class="mail"><img src="../media/hosted-events/emails/thomas-house-s-ance-weekend-parking-for-friday-night.png" alt=""></div><div class="mailcap"><strong>A note to every guest</strong>Written once on the booking board.</div></div><div><div class="mail"><img src="../media/hosted-events/emails/can-you-help-at-thomas-house-s-ance-weekend.png" alt=""></div><div class="mailcap"><strong>Can you help?</strong>A helper&#x27;s invitation to run the door.</div></div><div><div class="mail"><img src="../media/hosted-events/emails/a-party-of-2-asked-for-a-place-at-thomas-house-s-ance-weeken.png" alt=""></div><div class="mailcap"><strong>Somebody asked</strong>The organizer hears about every request.</div></div></div>
+  <div class="price"><div>
+    <div class="big"><em>$99</em> an event</div>
+    <ul><li>However many nights: one credit, good for a year</li><li>The credit comes back if you call it off 48+ hours ahead</li>
+    <li>Business plans host as many events as they like</li><li>Guests pay you directly, with no ticket fees</li></ul></div>
+    <div class="go"><b>ishaunted.com</b><span>Host your first event</span><span class="soon">iPhone app coming soon</span></div></div>
+</div><div class="folio"><span>IsHaunted.com · Hosted Events</span><span>8</span></div></section></body></html>

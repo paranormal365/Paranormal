@@ -240,4 +240,77 @@ public sealed class StripeFulfillmentTests
         static Facts FactsForTorn() => new(Guid.NewGuid(), Guid.NewGuid(),
             BillingInterval.Monthly, 1, 29m, 0m, 0m, Guid.NewGuid(), null, 29m, 0m);
     }
+    // ── event credits: the tax the buyer was charged (2026-09-17 audit) ──────
+
+    /// <summary>
+    /// A credit purchase files the tax frozen into the session, not a rate resolved afresh.
+    /// </summary>
+    /// <remarks>
+    /// The credit checkout resolves the rate, works out the tax, writes both into the metadata and
+    /// adds the tax to what Stripe collects. Fulfilment threw those away and resolved the rate
+    /// again, filing the second answer. The two differ whenever anything moved in between — a tax
+    /// rule edited, the group's first address added — over a window as long as a webhook retry.
+    /// The card statement then says one number and the receipt another, and the receipt is the
+    /// document we hand over.
+    ///
+    /// Here the seeded group is in a state where a live resolve gives 0% (no address, no rules)
+    /// while the session was sold at 9.75%, so the two answers are unmistakable.
+    /// </remarks>
+    [Fact]
+    public async Task An_event_credit_purchase_files_the_tax_that_was_charged()
+    {
+        var factory = Db();
+        var seed = await SeedAsync(factory);
+
+        var inv = System.Globalization.CultureInfo.InvariantCulture;
+        await Service(factory).FulfillAsync(new StripeCompletedCheckout(
+            "cs_credits", "pi_credits", "cus_x", "pm_x",
+            new Dictionary<string, string>
+            {
+                [Facts.Keys.Organization]  = seed.OrgId.ToString(),
+                [Facts.Keys.User]          = seed.UserId.ToString(),
+                [Facts.Keys.EventCredits]  = "2",
+                [Facts.Keys.List]          = (198m).ToString(inv),
+                [Facts.Keys.TaxRate]       = (9.75m).ToString(inv),
+                [Facts.Keys.TaxAmount]     = (19.31m).ToString(inv),
+            }), default);
+
+        await using var db = await factory.CreateDbContextAsync();
+        var payment = await db.BillingLedgerEntries
+            .SingleAsync(e => e.Kind == BillingLedgerKind.Payment);
+
+        Assert.Equal(198m, payment.Amount);
+        Assert.Equal(9.75m, payment.TaxRatePercent);
+        Assert.Equal(19.31m, payment.TaxAmount);
+        Assert.Equal(2, await db.EventCredits.CountAsync());
+    }
+
+    /// <summary>
+    /// A session created before the tax was frozen still fulfils, by the old live resolve.
+    /// </summary>
+    /// <remarks>
+    /// The fallback exists for exactly one case: a checkout opened before this shipped whose
+    /// webhook lands after it. Refusing those would strand a real payment, so it resolves live and
+    /// logs — the old behaviour, so such a buyer is no worse off than before.
+    /// </remarks>
+    [Fact]
+    public async Task A_credit_session_with_no_frozen_tax_still_fulfils()
+    {
+        var factory = Db();
+        var seed = await SeedAsync(factory);
+
+        await Service(factory).FulfillAsync(new StripeCompletedCheckout(
+            "cs_old", "pi_old", "cus_x", "pm_x",
+            new Dictionary<string, string>
+            {
+                [Facts.Keys.Organization] = seed.OrgId.ToString(),
+                [Facts.Keys.User]         = seed.UserId.ToString(),
+                [Facts.Keys.EventCredits] = "1",
+                [Facts.Keys.List]         = (99m).ToString(System.Globalization.CultureInfo.InvariantCulture),
+            }), default);
+
+        await using var db = await factory.CreateDbContextAsync();
+        Assert.Equal(1, await db.EventCredits.CountAsync());
+    }
+
 }

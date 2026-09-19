@@ -26,7 +26,7 @@ public actor APIClient {
         }
         do {
             let (data, response) = try await transport.send(request)
-            if response.statusCode == 401 { await tokens.handleUnauthorized() }
+            await noteRefusal(response, to: request)
             return ResponseMapping.decode(
                 T.self, statusCode: response.statusCode,
                 data: data, headers: response.allHeaderFields)
@@ -45,7 +45,7 @@ public actor APIClient {
         }
         do {
             let (data, response) = try await transport.send(request)
-            if response.statusCode == 401 { await tokens.handleUnauthorized() }
+            await noteRefusal(response, to: request)
             guard (200..<300).contains(response.statusCode) else {
                 return ResponseMapping.failure(
                     statusCode: response.statusCode, data: data,
@@ -66,7 +66,7 @@ public actor APIClient {
         guard let request = await buildRequest(endpoint) else { return nil }
         do {
             let (data, response) = try await transport.send(request)
-            if response.statusCode == 401 { await tokens.handleUnauthorized() }
+            await noteRefusal(response, to: request)
             return (data, response.statusCode)
         } catch {
             return nil
@@ -87,7 +87,7 @@ public actor APIClient {
         }
         do {
             let (tempURL, response) = try await transport.download(request)
-            if response.statusCode == 401 { await tokens.handleUnauthorized() }
+            await noteRefusal(response, to: request)
             guard (200..<300).contains(response.statusCode) else {
                 let data = (try? Data(contentsOf: tempURL, options: .mappedIfSafe)) ?? Data()
                 try? FileManager.default.removeItem(at: tempURL)
@@ -123,7 +123,7 @@ public actor APIClient {
         do {
             try multipart.write(to: scratch)
             let (data, response) = try await transport.upload(request, fromFile: scratch)
-            if response.statusCode == 401 { await tokens.handleUnauthorized() }
+            await noteRefusal(response, to: request)
             return ResponseMapping.decode(
                 T.self, statusCode: response.statusCode,
                 data: data, headers: response.allHeaderFields)
@@ -136,6 +136,17 @@ public actor APIClient {
     /// routes straight to AVPlayer/image loaders.
     public nonisolated func absoluteURL(for endpoint: Endpoint, in environment: APIEnvironment) -> URL? {
         environment.url(for: endpoint)
+    }
+
+    /// A 401 on a request that carried a token means the session is gone. One that went out without a token —
+    /// because a refresh could not reach the server just then — proves nothing about the session, and ending it
+    /// would sign somebody out for having no signal.
+    private func noteRefusal(_ response: HTTPURLResponse, to request: URLRequest) async {
+        guard response.statusCode == 401,
+              let header = request.value(forHTTPHeaderField: "Authorization") else { return }
+        // Which token was refused matters: one replaced since this request went out proves nothing.
+        let bearer = header.hasPrefix("Bearer ") ? String(header.dropFirst("Bearer ".count)) : header
+        await tokens.handleUnauthorized(bearer: bearer)
     }
 
     private func buildRequest(_ endpoint: Endpoint, omitBody: Bool = false) async -> URLRequest? {

@@ -106,6 +106,17 @@ public interface IBenInvestigationClient
     // ── Field sessions recorded on a phone ────────────────────────────────────
 
     /// <summary>Sessions uploaded for one investigation.</summary>
+    /// <summary>
+    /// How much of this account's personal storage allowance is used, or null when it could not be
+    /// asked.
+    /// </summary>
+    /// <remarks>
+    /// The endpoint existed with no caller (2026-09-17 audit), so a solo investigator got no usage
+    /// figure and no warning before the cap refused an upload — while the phone showed a hardcoded
+    /// "2 GB" that is wrong for anybody a group's plan covers.
+    /// </remarks>
+    Task<AccountStorageItem?> GetMyStorageAsync(CancellationToken token = default);
+
     Task<LoadResult<FieldSessionSummaryRecord>> GetFieldSessionsAsync(
         Guid investigationId, CancellationToken token = default);
 

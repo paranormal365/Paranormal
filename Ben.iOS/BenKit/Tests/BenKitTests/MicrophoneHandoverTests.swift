@@ -1,0 +1,237 @@
+import Foundation
+import Testing
+@testable import BenKit
+
+/// Sound carries on after something takes the microphone.
+///
+/// Ben, 2026-09-16, testing the approved build: "When running the field kit, if you switch to video then go back to
+/// the app, audio is no longer being displayed or recorded. It is like it doesn't know to continue recording audio
+/// whether it is recording video or not." The camera takes the audio session; what was recorded up to that point is
+/// a real clip and is kept, and a new clip starts when the microphone comes back.
+@MainActor
+struct MicrophoneHandoverTests {
+
+    /// A recorder that writes a real file and can be told the microphone was taken and handed back.
+    private final class InterruptibleRecorder: AudioRecording, @unchecked Sendable {
+        private(set) var files: [URL] = []
+        /// How many times the microphone was handed over and taken back on purpose.
+        private(set) var released = 0
+        private(set) var reclaimed = 0
+        private let feed: AsyncStream<AudioRecordingEvent>
+        private let sink: AsyncStream<AudioRecordingEvent>.Continuation
+
+        init() {
+            (feed, sink) = AsyncStream.makeStream(of: AudioRecordingEvent.self)
+        }
+
+        func releaseMicrophone() async { released += 1 }
+        func reclaimMicrophone() async { reclaimed += 1 }
+
+        var events: AsyncStream<AudioRecordingEvent> { feed }
+        var isRecording: Bool { get async { !files.isEmpty } }
+
+        func beginRecording(to url: URL) async throws {
+            try Data(count: 8_192).write(to: url)
+            files.append(url)
+        }
+
+        @discardableResult
+        func endRecording() async -> TimeInterval { 9 }
+
+        func microphoneTaken() { sink.yield(.interrupted) }
+        func microphoneReturned() { sink.yield(.resumed) }
+    }
+
+    private func makeSession(_ recorder: AudioRecording)
+        -> (ActiveFieldSession, UUID, URL) {
+        let root = FileManager.default.temporaryDirectory
+            .appendingPathComponent("mic-\(UUID().uuidString)", isDirectory: true)
+        let files = SessionFileStore(root: root)
+        let id = UUID()
+        try? files.createDirectories(for: id)
+
+        let channels: CaptureChannels = [.magnetic, .audio]
+        let sensors = SensorSuite(recorder: recorder)
+        let log = ReadingLog(fileURL: files.readingLogURL(for: id))
+        let engine = FieldSessionEngine(sessionId: id, log: log, sensors: sensors, channels: channels)
+        let session = ActiveFieldSession(sessionId: id, startedAt: Date(), engine: engine,
+                                         sensors: sensors, files: files,
+                                         policy: .default, channels: channels)
+        return (session, id, root)
+    }
+
+    /// Waits for the session to notice, since the microphone's events arrive on their own task.
+    private func settle() async {
+        for _ in 0..<40 {
+            await Task.yield()
+            try? await Task.sleep(nanoseconds: 5_000_000)
+        }
+    }
+
+    @Test func theClipIsKeptWhenTheCameraTakesTheMicrophone() async throws {
+        let recorder = InterruptibleRecorder()
+        let (session, _, root) = makeSession(recorder)
+        defer { try? FileManager.default.removeItem(at: root) }
+
+        await session.begin()
+        await session.startSession(at: Date())
+        #expect(session.recording != nil)
+
+        recorder.microphoneTaken()
+        await settle()
+
+        // Nothing is running, the clip that was running is listed, and the screen has words for why.
+        #expect(session.recording == nil)
+        #expect(session.captures.contains { $0.kind == .audio })
+        #expect(session.audioNote?.contains("camera") == true)
+        #expect(session.recordingProblem == nil, "an interruption is a note, not a warning")
+    }
+
+    @Test func soundCarriesOnAsANewClipWhenTheMicrophoneComesBack() async throws {
+        let recorder = InterruptibleRecorder()
+        let (session, _, root) = makeSession(recorder)
+        defer { try? FileManager.default.removeItem(at: root) }
+
+        await session.begin()
+        await session.startSession(at: Date())
+        recorder.microphoneTaken()
+        await settle()
+        recorder.microphoneReturned()
+        await settle()
+
+        #expect(session.recording != nil, "the session did not start recording again")
+        #expect(recorder.files.count == 2, "the second clip went to a file of its own")
+        #expect(recorder.files[0] != recorder.files[1])
+    }
+
+    /// A session that has ended is finished, whatever the microphone does afterwards.
+    @Test func nothingStartsAfterTheSessionHasEnded() async throws {
+        let recorder = InterruptibleRecorder()
+        let (session, _, root) = makeSession(recorder)
+        defer { try? FileManager.default.removeItem(at: root) }
+
+        await session.begin()
+        await session.startSession(at: Date())
+        recorder.microphoneTaken()
+        await settle()
+
+        await session.end()
+        let clipsAtEnd = recorder.files.count
+
+        recorder.microphoneReturned()
+        await settle()
+
+        #expect(session.recording == nil)
+        #expect(recorder.files.count == clipsAtEnd, "a clip was started on a session nobody is in")
+    }
+
+    // MARK: - Lending the microphone to a video clip
+
+    /// Ben, 2026-09-16: "if we switch to recording video, the audio is just taken from the video file until stopped
+    /// and then back to audio — so there is no gap in audio recording, just video added to a part."
+    @Test func theSoundClipIsClosedAndKeptWhenAVideoBorrowsTheMicrophone() async throws {
+        let recorder = InterruptibleRecorder()
+        let (session, _, root) = makeSession(recorder)
+        defer { try? FileManager.default.removeItem(at: root) }
+
+        await session.begin()
+        await session.startSession(at: Date())
+        #expect(session.recording != nil)
+
+        await session.lendMicrophoneToTheClip()
+
+        #expect(session.recording == nil, "the session was still holding the microphone")
+        #expect(recorder.released == 1, "the engine was never put away, so the camera cannot have it")
+        #expect(session.captures.contains { $0.kind == .audio }, "what was recorded is kept")
+        #expect(session.recordingProblem == nil, "lending is not a failure")
+        #expect(session.audioNote?.contains("video") == true)
+    }
+
+    @Test func soundStartsAgainAsANewClipTheMomentTheVideoStops() async throws {
+        let recorder = InterruptibleRecorder()
+        let (session, _, root) = makeSession(recorder)
+        defer { try? FileManager.default.removeItem(at: root) }
+
+        await session.begin()
+        await session.startSession(at: Date())
+        await session.lendMicrophoneToTheClip()
+        await session.takeMicrophoneBackFromTheClip()
+
+        #expect(session.recording != nil, "the session's own sound did not carry on after the clip")
+        #expect(recorder.reclaimed == 1)
+        #expect(recorder.files.count == 2, "the sound after the clip went to a file of its own")
+        #expect(recorder.files[0] != recorder.files[1])
+    }
+
+    /// The microphone is lent once. A second lend while a clip already holds it would close the
+    /// recording that is not running and resume one that is.
+    @Test func lendingTwiceDoesNothingTheSecondTime() async throws {
+        let recorder = InterruptibleRecorder()
+        let (session, _, root) = makeSession(recorder)
+        defer { try? FileManager.default.removeItem(at: root) }
+
+        await session.begin()
+        await session.startSession(at: Date())
+        await session.lendMicrophoneToTheClip()
+        await session.lendMicrophoneToTheClip()
+
+        #expect(recorder.released == 1)
+
+        await session.takeMicrophoneBackFromTheClip()
+        #expect(recorder.files.count == 2, "the microphone came back to exactly one new clip")
+    }
+
+    /// Switching the Audio channel back on while a clip holds the microphone must not start a
+    /// recording: two things holding one microphone is the whole bug this was built to end.
+    @Test func turningSoundOnWhileTheClipHasTheMicrophoneStartsNothing() async throws {
+        let recorder = InterruptibleRecorder()
+        let (session, _, root) = makeSession(recorder)
+        defer { try? FileManager.default.removeItem(at: root) }
+
+        await session.begin()
+        await session.startSession(at: Date())
+        await session.lendMicrophoneToTheClip()
+
+        await session.setChannels([.magnetic])
+        await session.setChannels([.magnetic, .audio])
+
+        #expect(session.recording == nil, "a recording started while the clip still had the microphone")
+        #expect(recorder.files.count == 1)
+
+        // And it still carries on properly once the clip gives the microphone back.
+        await session.takeMicrophoneBackFromTheClip()
+        #expect(session.recording != nil)
+        #expect(recorder.files.count == 2)
+    }
+
+    @Test func aSessionThatEndedWhileTheClipRanDoesNotStartRecordingAgain() async throws {
+        let recorder = InterruptibleRecorder()
+        let (session, _, root) = makeSession(recorder)
+        defer { try? FileManager.default.removeItem(at: root) }
+
+        await session.begin()
+        await session.startSession(at: Date())
+        await session.lendMicrophoneToTheClip()
+        await session.end()
+
+        let clipsAtEnd = recorder.files.count
+        await session.takeMicrophoneBackFromTheClip()
+
+        #expect(session.recording == nil)
+        #expect(recorder.files.count == clipsAtEnd, "a clip was started on a session nobody is in")
+    }
+
+    @Test func nothingResumesWhenTheSessionWasNotRecording() async throws {
+        let recorder = InterruptibleRecorder()
+        let (session, _, root) = makeSession(recorder)
+        defer { try? FileManager.default.removeItem(at: root) }
+
+        await session.begin()          // pending: Start has not been pressed
+        recorder.microphoneTaken()
+        recorder.microphoneReturned()
+        await settle()
+
+        #expect(session.recording == nil)
+        #expect(recorder.files.isEmpty)
+    }
+}

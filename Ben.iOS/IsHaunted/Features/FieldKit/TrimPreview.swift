@@ -36,7 +36,8 @@ struct TrimPreview: View {
             }
 
             if replay.timeline.readings.count > 1 {
-                ReadingsChart(timeline: replay.timeline, playhead: replay.playhead) { moment in
+                ReadingsChart(timeline: replay.timeline, trace: replay.fieldTrace,
+                              playhead: replay.playhead) { moment in
                     // Scrubbing the chart is allowed anywhere; PLAYING stays inside the window.
                     replay.pause()
                     replay.seek(to: moment)

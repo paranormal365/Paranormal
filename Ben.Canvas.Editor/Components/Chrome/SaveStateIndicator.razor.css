@@ -1,0 +1,32 @@
+.bc-savestate {
+    display: inline-flex;
+    align-items: center;
+    gap: .375rem;
+    color: var(--bc-text-muted);
+    font-size: .8125rem;
+    white-space: nowrap;
+}
+
+.bc-savestate--button { color: var(--bc-danger-text); text-decoration: none; }
+
+.bc-savestate__dot {
+    width: .5rem;
+    height: .5rem;
+    border-radius: 50%;
+    background: var(--bc-text-muted);
+}
+
+.bc-savestate__dot--success { background: var(--bc-type-message); }
+.bc-savestate__dot--attention { background: var(--bc-attention); }
+.bc-savestate__dot--danger { background: var(--bc-danger-text); }
+
+@media (max-width: 575.98px) {
+    .bc-savestate__text {
+        position: absolute;
+        width: 1px;
+        height: 1px;
+        overflow: hidden;
+        clip: rect(0 0 0 0);
+        white-space: nowrap;
+    }
+}

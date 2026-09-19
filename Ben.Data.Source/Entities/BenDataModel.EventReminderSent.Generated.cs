@@ -32,6 +32,17 @@ namespace Ben.Data.Source.Entities
         /// <summary>When the reminder went out.</summary>
         public DateTime SentUtc { get; set; }
 
+        /// <summary>
+        /// The start time this reminder was about (item 233).
+        /// </summary>
+        /// <remarks>
+        /// The dedupe used to be one row per person per event with no reference to when the event
+        /// was — so a date moved from Saturday to Sunday never sent a second reminder, and every
+        /// guest's last word on it was the old time. Null on rows written before this existed,
+        /// which counts as a different start and re-arms once.
+        /// </remarks>
+        public DateTime? ForStartUtc { get; set; }
+
         public virtual OrgCalendarEvent OrgCalendarEvent { get; set; } = null!;
         public virtual AppUser AppUser { get; set; } = null!;
     }

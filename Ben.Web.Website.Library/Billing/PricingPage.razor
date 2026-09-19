@@ -44,6 +44,15 @@
             investigations, equipment@(Features.IsOn(SiteFeatures.VideoEditor) ? ", the video editor" : "").
         </p>
 
+        @if (!Features.PlanPurchasesEnabled)
+        {
+            @* Taken off sale by a SuperAdmin (2026-09-14): the prices stay, the buy buttons go, and this
+               says why there is nothing to press. *@
+            <p class="alert alert-secondary d-inline-block py-2 px-3" id="pricing-not-on-sale">
+                Plans aren't on sale at the moment. Groups that already have a plan keep it.
+            </p>
+        }
+
         @if (_intervals.Count > 1)
         {
             <div class="btn-group" role="group" aria-label="Billing cadence">
@@ -66,108 +75,128 @@
 
     <BenListState TItem="PublicSubscriptionTier" Result="@_tiersResult" Loading="@_loading"
                   EmptyText="Pricing is being updated — check back shortly" OnRetry="@LoadAsync">
-        <div class="row g-3 justify-content-center">
-            @foreach (var tier in _tiersResult.Items)
+        <div class="row g-4 justify-content-center pricing-bands">
+            @foreach (var (tier, index) in _tiersResult.Items.Select((t, i) => (t, i)))
             {
                 var price = tier.Prices.FirstOrDefault(p => p.Interval == _selectedInterval);
-                <div class="col-md-4 col-lg-3">
-                    <div class="card h-100 text-center">
-                        <div class="card-body d-flex flex-column">
-                            <h5>@tier.Name</h5>
-                            @* Free is a choice, not a size (Ben, 2026-08-27): "a free version
-                               doesn't care about the number of people, it only cares about
-                               privacy". Member bands price the PAID plans; showing a headcount
-                               range on the free one said the opposite — that a group outgrows
-                               being free, which is not what it means. *@
-                            <p class="text-secondary small mb-3">
-                                @(!tier.IsBandedByMembers
-                                    ? "Tour and event businesses"
-                                    : IsFree(tier)
-                                        ? "Any size group"
-                                        : tier.MaxMembers is { } max
-                                            ? $"{tier.MinMembers}–{max} active members"
-                                            : $"{tier.MinMembers}+ active members")
-                            </p>
+                var featured = tier.Id == FeaturedTierId;
+                <div class="col-12 col-md-6 col-lg-3 d-flex">
+                    @* Beta feedback, 2026-09-14: "the price bands need to be spiced up to be less blah". Each band
+                       wears its own colour, in a fixed order so the ladder reads as a ladder, with a header in the
+                       same radial-over-linear wash the event pages use, an icon for who it is for, the price as the
+                       thing the eye lands on, and the limits as a checklist. *@
+                    <article class="pricing-band flex-fill @(featured ? "pricing-band--featured" : "")"
+                             style="--band-hue:@(BandHue(index))deg;" data-testid="pricing-band"
+                             aria-label="@tier.Name">
+                        @if (featured)
+                        {
+                            <div class="pricing-band__flag" data-testid="pricing-band-featured">
+                                <BenIcon Name="star" Class="me-1" />Most groups start here
+                            </div>
+                        }
+                        <header class="pricing-band__head">
+                            <span class="pricing-band__icon" aria-hidden="true"><BenIcon Name="@BandIcon(tier)" /></span>
+                            <div class="pricing-band__title">
+                                <h3 class="pricing-band__name">@tier.Name</h3>
+                                @* Free is a choice, not a size (Ben, 2026-08-27): "a free version doesn't care about the
+                                   number of people, it only cares about privacy". Member bands price the PAID plans;
+                                   showing a headcount range on the free one said the opposite. *@
+                                <p class="pricing-band__who">
+                                    @(!tier.IsBandedByMembers
+                                        ? "Tour and event businesses"
+                                        : IsFree(tier)
+                                            ? "Any size group"
+                                            : tier.MaxMembers is { } max
+                                                ? $"{tier.MinMembers}–{max} active members"
+                                                : $"{tier.MinMembers}+ active members")
+                                </p>
+                            </div>
+                        </header>
 
-                            @if (IsFree(tier))
-                            {
-                                <div class="display-6 mb-1">Free</div>
-                                <div class="text-secondary small mb-3">forever</div>
-                            }
-                            else if (price is not null)
-                            {
-                                @* C0 is honest again only because the bands are now priced in
-                                   whole dollars. It briefly showed $20 for a $19.99 plan, which
-                                   moved the price in the one direction a display may not — so if
-                                   a band is ever given cents, this has to become C2 with it. *@
-                                <div class="display-6 mb-1">@($"{price.Price:C0}")</div>
-                                <div class="text-secondary small mb-3">
-                                    per @CadenceNoun(_selectedInterval)
+                        <div class="pricing-band__body">
+                            <div class="pricing-band__price">
+                                @if (IsFree(tier))
+                                {
+                                    <span class="pricing-band__amount">Free</span>
+                                    <span class="pricing-band__per">forever</span>
+                                }
+                                else if (price is not null)
+                                {
+                                    @* C0 is honest only because the bands are priced in whole dollars. If a band is ever
+                                       given cents, this has to become C2 with it. *@
+                                    <span class="pricing-band__amount">@($"{price.Price:C0}")</span>
+                                    <span class="pricing-band__per">per @CadenceNoun(_selectedInterval)</span>
                                     @if (price.SavingPercentAgainstMonthly is { } save)
                                     {
-                                        <span class="badge bg-success ms-1">save @save%</span>
+                                        <span class="pricing-band__saving">save @save%</span>
                                     }
-                                    @* Sales tax is resolved from the GROUP's own address at
-                                       checkout (many states do not tax this at all), so no
-                                       single number can be shown here — but the total at
-                                       checkout must not be the first time tax is mentioned. *@
-                                    <div>plus sales tax where your state requires it</div>
-                                </div>
-                            }
-                            else
-                            {
-                                @* This band is not sold at the selected cadence — a real state,
-                                   said plainly rather than rendered as $0. *@
-                                <div class="text-secondary my-3">
-                                    Not offered @CadenceTitle(_selectedInterval).ToLowerInvariant() —
-                                    available @string.Join(", ", tier.Prices.Select(p => CadenceTitle(p.Interval).ToLowerInvariant()))
-                                </div>
-                            }
-
-                            @* Item 156 Phase E: what upgrading buys in role terms. Only shown
-                               when a plan EXCLUDES something — an all-inclusive checklist would
-                               render as a wall of everything, which says nothing. *@
-                            @* IH-10: these two notes are optional, so a card without them started
-                               its feature list higher than its neighbours and the first row sat
-                               at three different heights. The slot is reserved whether or not
-                               there is anything to put in it, and the list below is top-aligned
-                               to it. *@
-                            <div class="pricing-notes">
-                            @if ((tier.IncludedAreas?.Count ?? 9) < 9)
-                            {
-                                <p class="small mb-1 fw-semibold">Custom-role areas included:</p>
-                                <p class="small text-secondary mb-2">
-                                    @string.Join(", ", (tier.IncludedAreas ?? []).Select(AreaLabel))
-                                </p>
-                            }
-                            @* Item 167: a capability the plan lacks is said plainly. Shown only
-                               when the plan excludes something, same as the role areas. *@
-                            @if (MissingCapabilities(tier) is { Count: > 0 } missing)
-                            {
-                                <p class="small text-secondary mb-2">
-                                    Not included: @string.Join(", ", missing.Select(CapabilityLabel))
-                                </p>
-                            }
+                                    @* Sales tax is resolved from the GROUP's own address at checkout, so no single number
+                                       can be shown here — but the total at checkout must not be the first mention of tax. *@
+                                    <span class="pricing-band__tax">plus sales tax where your state requires it</span>
+                                }
+                                else
+                                {
+                                    @* Not sold at the selected cadence — said plainly rather than rendered as $0. *@
+                                    <span class="pricing-band__unavailable">
+                                        Not offered @CadenceTitle(_selectedInterval).ToLowerInvariant() —
+                                        available @string.Join(", ", tier.Prices.Select(p => CadenceTitle(p.Interval).ToLowerInvariant()))
+                                    </span>
+                                }
                             </div>
-                            @if (tier.Limits.Count > 0)
-                            {
-                                <ul class="list-unstyled text-start small mb-0">
+
+                            @* Item 156 Phase E / 167: what the plan leaves out, only when it leaves something out. IH-10:
+                               the slot is reserved either way so the checklists start on the same line across the row. *@
+                            <div class="pricing-notes">
+                                @if ((tier.IncludedAreas?.Count ?? 9) < 9)
+                                {
+                                    <p class="small mb-1 fw-semibold">Custom-role areas included:</p>
+                                    <p class="small text-secondary mb-2">
+                                        @string.Join(", ", (tier.IncludedAreas ?? []).Select(AreaLabel))
+                                    </p>
+                                }
+                                @if (MissingCapabilities(tier) is { Count: > 0 } missing)
+                                {
+                                    <p class="small text-secondary mb-2">
+                                        Not included: @string.Join(", ", missing.Select(CapabilityLabel))
+                                    </p>
+                                }
+                            </div>
+
+                            <ul class="pricing-band__limits">
+                                @if (tier.Limits.Count > 0)
+                                {
                                     @foreach (var limit in tier.Limits)
                                     {
-                                        <li class="mb-1">@LimitSentence(limit)</li>
+                                        <li><BenIcon Name="check-circle" /><span>@LimitSentence(limit)</span></li>
                                     }
-                                </ul>
-                            }
-                            else
-                            {
-                                <p class="text-secondary small mt-auto mb-0">No limits</p>
-                            }
+                                }
+                                else
+                                {
+                                    <li><BenIcon Name="check-circle" /><span>No limits</span></li>
+                                }
+                            </ul>
+
+                            <div class="pricing-band__cta" data-testid="pricing-cta">
+                                @CallToAction(tier, price)
+                            </div>
                         </div>
-                    </div>
+                    </article>
                 </div>
             }
         </div>
     </BenListState>
+
+    @* Several groups this person manages: which one is the plan for? (2026-09-14) *@
+    <BenModal @bind-Visible="@_choosingGroup" Title="Which group is this plan for?" Size="sm">
+        <ChildContent>
+            <div class="list-group" id="pricing-group-chooser">
+                @foreach (var (org, _) in _myGroups)
+                {
+                    <a class="list-group-item list-group-item-action py-3" href="@BillingHref(org.Id, _choosingTierId)">@org.Name</a>
+                }
+            </div>
+        </ChildContent>
+    </BenModal>
 
     @* ── Item 144: your own paid seat, if you hold one ────────────────────── *@
     @if (_seatLoadFailed)
@@ -374,6 +403,75 @@
         Ben.Data.Common.Enums.OrganizationPermissionArea.Calendar            => "Calendar",
         _ => area.ToString(),
     };
+
+    // ── What a band's button does (2026-09-14) ─────────────────────────────────────────────────────────
+    // Ben: a visitor with no group is sent to start one on that plan; somebody who runs a group goes straight to that
+    // group's billing page, with a chooser when they run several. When plans are off sale, paid bands have no button.
+
+    private bool _choosingGroup;
+    private Guid? _choosingTierId;
+
+    private string StartHref(PublicSubscriptionTier tier) => $"/organizations/new?tier={tier.Id}";
+
+    private string BillingHref(Guid orgId, Guid? tierId) =>
+        $"/organizations/{orgId}/billing?interval={(int)_selectedInterval}" + (tierId is { } t ? $"&tier={t}" : "");
+
+    private RenderFragment CallToAction(PublicSubscriptionTier tier, PublicTierPrice? price) => __builder =>
+    {
+        if (IsFree(tier))
+        {
+            if (_myGroups.Count == 0)
+            {
+                <a class="btn btn-band w-100" href="@StartHref(tier)">Start a free group</a>
+            }
+            return;
+        }
+
+        if (!Features.PlanPurchasesEnabled || price is null) return;
+
+        switch (_myGroups.Count)
+        {
+            case 0:
+                <a class="btn btn-band w-100" href="@StartHref(tier)">Start a group on this plan</a>
+                break;
+            case 1:
+                <a class="btn btn-band w-100" href="@BillingHref(_myGroups[0].Org.Id, tier.Id)">Choose this plan</a>
+                <div class="pricing-band__for">for @_myGroups[0].Org.Name</div>
+                break;
+            default:
+                <button type="button" class="btn btn-band w-100"
+                        @onclick="@(() => { _choosingTierId = tier.Id; _choosingGroup = true; })">
+                    Choose this plan
+                </button>
+                <div class="pricing-band__for">for one of your @_myGroups.Count groups</div>
+                break;
+        }
+    };
+
+    /// <summary>
+    /// The band flagged "Most groups start here": the lower middle of the paid member bands, in the order they are
+    /// shown — Standard of four, Small of two. Worked out rather than stored until somebody wants to hand-pick it.
+    /// </summary>
+    private Guid? FeaturedTierId
+    {
+        get
+        {
+            var paid = _tiersResult.Items.Where(t => t.IsBandedByMembers && !IsFree(t)).ToList();
+            return paid.Count < 2 ? null : paid[(paid.Count - 1) / 2].Id;
+        }
+    }
+
+    /// <summary>Each band's colour, by its place in the ladder: violet, blue, teal, ember, rose, green.</summary>
+    private static int BandHue(int index) => new[] { 262, 222, 184, 28, 332, 142 }[index % 6];
+
+    private string BandIcon(PublicSubscriptionTier tier)
+    {
+        if (IsFree(tier)) return "user";
+        if (!tier.IsBandedByMembers) return "map";
+        if (tier.MaxMembers is null) return "award";
+        var firstPaid = _tiersResult.Items.FirstOrDefault(t => t.IsBandedByMembers && !IsFree(t));
+        return firstPaid?.Id == tier.Id ? "users" : "star";
+    }
 
     private bool _loading = true;
     private LoadResult<PublicSubscriptionTier> _tiersResult;

@@ -1,0 +1,36 @@
+@*
+    A sticky note of plain text. At rest, web addresses in it are links and everything else is text - never
+    markup. While editing it is a textarea: Blazor's diff fights a contenteditable, and the keyboard script
+    already leaves textareas alone.
+*@
+@inherits BlockRendererBase
+
+@if (Editing)
+{
+    <textarea @ref="FirstField" class="bc-text__input" aria-label="Note text" maxlength="@Options.Value.MaxTextChars"
+              @bind="Note.Text" @bind:event="oninput"></textarea>
+}
+else if (string.IsNullOrWhiteSpace(Note.Text))
+{
+    <p class="bc-text bc-text--empty">Double-click to write a note.</p>
+}
+else
+{
+    <p class="bc-text">
+        @foreach (var segment in UrlDetector.Linkify(Note.Text))
+        {
+            if (segment.IsUrl && SafeHttpUrl.Normalize(segment.Value) is { } href)
+            {
+                <a href="@href" target="_blank" rel="noopener noreferrer nofollow">@segment.Value</a>
+            }
+            else
+            {
+                @segment.Value
+            }
+        }
+    </p>
+}
+
+@code {
+    private TextData Note => Data as TextData ?? new TextData();
+}

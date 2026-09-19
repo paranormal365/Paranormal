@@ -65,7 +65,36 @@ public sealed record FeedPostRecord(
     bool GroupVerified = false,
     /// <summary>A person with the Moderator role cleared this post's media — distinct from the
     /// automatic screener's approval.</summary>
-    bool ModeratorReviewed = false);
+    bool ModeratorReviewed = false,
+    // ── The composer's other tools (item 233, Ben 2026-09-11) ────────────────
+    /// <summary>The poll on this post, counted, with this reader's own answer. Null for most posts.</summary>
+    MessagePollRecord? Poll = null,
+    /// <summary>
+    /// Where the author said they wrote it, and what that place is called. All three or none.
+    /// </summary>
+    decimal? PostedLatitude = null,
+    decimal? PostedLongitude = null,
+    string? PostedPlaceName = null,
+    // ── The place this post is ABOUT (2026-09-17) ───────────────────────────
+    /// <summary>
+    /// The shared place the post is about, for one made on a place's page. Distinct from
+    /// <paramref name="PostedPlaceName"/>, which is where the author was standing.
+    /// </summary>
+    Guid? PlaceId = null,
+    /// <summary>
+    /// What that place is called, resolved at read so a rename shows everywhere at once. Falls
+    /// back to its address when the place has no name.
+    /// </summary>
+    string? AboutPlaceName = null,
+    /// <summary>
+    /// When it was set to appear, for a post that has not appeared yet.
+    /// </summary>
+    /// <remarks>
+    /// Only ever populated for the author, who is the only reader who sees an unreleased post at
+    /// all — and who needs to see that they scheduled it, which is the difference between
+    /// scheduling something and losing it.
+    /// </remarks>
+    DateTime? ScheduledForUtc = null);
 
 /// <summary>What kind of media a post carries.</summary>
 public enum FeedMediaKind
@@ -125,7 +154,22 @@ public sealed record FeedProfileRecord(
 /// tick it refuses the post.</param>
 public sealed record CreateFeedPostRequest(
     string Body, Guid? ParentMessageId = null, Guid? ExperienceTypeId = null,
-    Guid? SourceCaseId = null, bool ConsentToPublishPrivateEngagement = false);
+    Guid? SourceCaseId = null, bool ConsentToPublishPrivateEngagement = false,
+    // ── The composer's other tools (item 233, Ben 2026-09-11) ────────────────
+    // Appended with defaults, so every existing caller is unaffected.
+    /// <summary>A poll to attach, or null for an ordinary post.</summary>
+    NewPollRequest? Poll = null,
+    /// <summary>When to let it appear, or null for now.</summary>
+    DateTime? ScheduledForUtc = null,
+    /// <summary>Where it was written, when the author chose to say. All three or none.</summary>
+    decimal? PostedLatitude = null,
+    decimal? PostedLongitude = null,
+    string? PostedPlaceName = null,
+    /// <summary>
+    /// The public location this post is about (2026-09-17). Must exist and must not be somebody's
+    /// home. A reply ignores it and takes its parent's place instead.
+    /// </summary>
+    Guid? PlaceId = null);
 
 // ── Org attribution (item 186 F7) ────────────────────────────────────────────
 
@@ -156,7 +200,15 @@ public sealed record ReportFeedPostRequest(string? Reason);
 /// <summary>One report in the moderation queue.</summary>
 public sealed record FeedReportRecord(
     Guid Id,
-    Guid OrgMessageId,
+    /// <summary>
+    /// The reported post, when a post is what was reported.
+    /// </summary>
+    /// <remarks>
+    /// Nullable since 2026-09-11: a report can be about a published case instead, and the queue
+    /// shows both rather than making a moderator watch two screens. Exactly one of this and
+    /// <see cref="CaseId"/> is set.
+    /// </remarks>
+    Guid? OrgMessageId,
     string PostBody,
     Guid PostAuthorAppUserId,
     string PostAuthorDisplayName,
@@ -169,8 +221,17 @@ public sealed record FeedReportRecord(
     DateTime DateCreated,
     DateTime? ResolvedUtc,
     string? ResolvedByDisplayName,
-    /// <summary>How many people have reported this same post. Context an administrator wants.</summary>
-    int ReportsAgainstThisPost);
+    /// <summary>How many people have reported this same thing. Context an administrator wants.</summary>
+    int ReportsAgainstThisPost,
+    /// <summary>The reported case, when a case is what was reported.</summary>
+    Guid? CaseId = null,
+    /// <summary>
+    /// What was reported, in two or three words — "Feed post", "Case #2026-001", "Comment".
+    /// Written by the server so the queue does not have to work it out from which id is null.
+    /// </summary>
+    string TargetLabel = "Feed post",
+    /// <summary>Where to go and look at it, when there is a public address for it.</summary>
+    string? TargetUrl = null);
 
 /// <summary>An administrator's decision on a report.</summary>
 /// <param name="Outcome">
@@ -234,3 +295,100 @@ public sealed record FeedModerationSummary(
     /// <summary>How many feed posts exist, visible or not. Content accumulating while the
     /// feature is dark is the reminder's reason to exist.</summary>
     int FeedPostCount = 0);
+
+
+/// <summary>One published field session waiting on a reviewer's decision about its media.</summary>
+/// <remarks>
+/// <para>Carries the place and the contributor because that is what the decision turns on: a night
+/// at a public landmark and a night somewhere a reviewer does not recognise are different
+/// questions, and the readings are already public either way.</para>
+///
+/// <para>Moved here from the controller file on 2026-09-17. It had lived in the API project, which
+/// the website cannot reference — so the queue could not be rendered even in principle, and the
+/// two endpoints behind it sat uncalled while flagged sessions stayed held forever.</para>
+/// </remarks>
+public sealed record ArchiveMediaReviewRow(
+    Guid SessionId,
+    string ContributorName,
+    string? PlaceName,
+    Guid PlaceId,
+    string? LocationLabel,
+    DateTime StartedAt,
+    DateTime PublishedAtUtc,
+    int FileCount,
+    FeedMediaReviewState State,
+    string? Note);
+
+/// <summary>
+/// One piece of event evidence, published to a place's archive and waiting on a decision.
+/// </summary>
+/// <remarks>
+/// The same question as <see cref="ArchiveMediaReviewRow"/> — should a stranger see this at this
+/// place — about the other thing that reaches a place archive. Its flag path set Held and wrote a
+/// reason for "the moderator queue" that did not exist (2026-09-17 audit), so one flag from one
+/// reader removed a guest's photograph permanently.
+/// </remarks>
+public sealed record ArchiveEvidenceReviewRow(
+    Guid SubmissionId,
+    Guid EventId,
+    string EventTitle,
+    string ContributorName,
+    string? PlaceName,
+    Guid? PlaceId,
+    string? Caption,
+    DateTime PublishedAtUtc,
+    FeedMediaReviewState State,
+    string? Note);
+
+
+/// <summary>
+/// One GIF from Giphy, trimmed to what a picker shows and what a post carries (item 233).
+/// </summary>
+/// <param name="PreviewUrl">The small rendition, for the grid.</param>
+/// <param name="Url">The full one, which is what gets posted.</param>
+/// <param name="Alt">Giphy's own title, used as alt text — a GIF with no description is a GIF
+/// nobody using a screen reader can choose.</param>
+public sealed record GiphyItem(string Id, string PreviewUrl, string Url, string Alt);
+
+/// <summary>The Giphy SDK key the phone's own picker needs.</summary>
+/// <remarks>
+/// An object and not a bare string: MVC serves a string result as <c>text/plain</c>, and a key is
+/// not valid JSON, so a client reading it the way it reads everything else would throw. The same
+/// shape cost the Price Bands screen its whole page (item 232).
+/// </remarks>
+public sealed record GiphySdkKeyRecord(string Key);
+
+
+// ── Polls on a message (item 233, Ben 2026-09-11) ────────────────────────────
+
+/// <summary>
+/// A poll as a reader sees it, with the counts and their own answer.
+/// </summary>
+/// <param name="TotalVotes">How many people, not how many rows — a multiple-answer poll has
+/// more rows than voters, and a percentage over rows would not add up to anything.</param>
+/// <param name="MyOptionIds">What this reader chose. Empty when they have not, or are not signed in.</param>
+/// <param name="IsClosed">Whether voting has stopped, decided by the server against its own clock.</param>
+public sealed record MessagePollRecord(
+    Guid Id,
+    string Question,
+    IReadOnlyList<MessagePollOptionRecord> Options,
+    int TotalVotes,
+    IReadOnlyList<Guid> MyOptionIds,
+    bool AllowMultiple,
+    DateTime? ClosesAtUtc,
+    bool IsClosed);
+
+/// <summary>One answer, and how many chose it.</summary>
+public sealed record MessagePollOptionRecord(Guid Id, string Text, int Votes);
+
+/// <summary>A poll being written, as the composer sends it.</summary>
+/// <param name="Options">Between two and six. One answer is not a question and six is a survey.</param>
+/// <param name="ClosesInHours">Null for a poll that stays open.</param>
+public sealed record NewPollRequest(
+    string Question,
+    IReadOnlyList<string> Options,
+    bool AllowMultiple = false,
+    int? ClosesInHours = null);
+
+/// <summary>Which answers somebody is choosing. More than one only on a multiple-answer poll.</summary>
+public sealed record CastPollVoteRequest(IReadOnlyList<Guid> OptionIds);

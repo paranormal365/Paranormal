@@ -115,6 +115,19 @@ public class InvestigationDutyAndContactTests : BenTestBase
         }
     }
 
+    [Test]
+    public async Task A_member_who_is_not_the_case_manager_is_told_who_chooses_the_contacts()
+    {
+        // James is neither the case manager nor an admin: the server refuses his Save, so he is not offered the picker
+        // (member test pass M.1, 2026-09-14).
+        await LoginAsync(MemberEmail, MemberPassword);
+        Assert.That(await OpenOrgCaseAsync("Paranormal365", "Belmont"), Is.True, "The seeded Belmont case should be reachable.");
+
+        var panel = Main.Locator(".card", new() { HasText = "Points of contact" });
+        await Expect(panel.Locator("#case-contacts-who-chooses")).ToBeVisibleAsync(new() { Timeout = 20_000 });
+        await Expect(panel.Locator("#case-contacts-edit")).ToHaveCountAsync(0);
+    }
+
     /// <summary>
     /// Item 160: the title-by-duty matrix on the group's settings, under the ladder and the duty
     /// list. Read-only here — this suite runs against a shared database and saving a row would

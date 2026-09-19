@@ -56,15 +56,26 @@ public struct NotificationSummary: Sendable, Codable, Equatable {
     public var orgMessagesByOrg: [OrgScopedBucket]?
     public var caseMessagesAsOrgMemberByCase: [CaseScopedBucket]?
 
+    // ── Tour seats (item 234) ───────────────────────────────────────────────
+    // Two directions, two buckets: a business has people waiting on a decision, and a guest has a
+    // decision waiting to be read. Optional, so a payload from a server without item 234 on it
+    // decodes rather than failing the whole bell.
+    /// Sign-ups waiting on a business this person can decide for.
+    public var tourSeatsToDecide: NotificationBucket?
+    /// This person's own seats, decided and not yet acknowledged.
+    public var myTourSeats: NotificationBucket?
+
     public static let empty = NotificationSummary(
         orgMessages: .empty, caseMessagesAsOrgMember: .empty, caseMessagesAsClient: .empty,
         systemMessages: .empty, pendingPermissionRequests: .empty, investigationInvites: .empty,
         equipmentCheckouts: .empty, feedMentions: .empty,
-        orgMessagesByOrg: nil, caseMessagesAsOrgMemberByCase: nil)
+        orgMessagesByOrg: nil, caseMessagesAsOrgMemberByCase: nil,
+        tourSeatsToDecide: nil, myTourSeats: nil)
 
     public var allBuckets: [NotificationBucket] {
         [orgMessages, caseMessagesAsOrgMember, caseMessagesAsClient, systemMessages,
-         pendingPermissionRequests, investigationInvites, equipmentCheckouts, feedMentions]
+         pendingPermissionRequests, investigationInvites, equipmentCheckouts, feedMentions,
+         tourSeatsToDecide ?? .empty, myTourSeats ?? .empty]
     }
 
     /// The number on the tab badge.

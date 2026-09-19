@@ -482,4 +482,70 @@ public class PublicCaseControllerTests
         Assert.NotNull(detail.Report);
         Assert.DoesNotContain("Evaluator", detail.Report!.Summary);
     }
+
+    // ── A case points back at its place, one way only (2026-09-17 audit) ─────────────────────
+    //
+    // Phase 2 put the place on the case and the internal page shows it; the PUBLIC page had no
+    // link at all, so the traversal a stranger would naturally make — read the case, then see
+    // every group's work at that location — was missing in the one direction that serves them.
+    // A residence is never linked: a case at somebody's home starts from the client, not from a
+    // page anyone can read.
+
+    private static async Task<Guid> AttachPlaceAsync(
+        IDbContextFactory<BenDataContext> factory, Guid caseId, PlaceKind kind, string name)
+    {
+        await using var db = await factory.CreateDbContextAsync();
+        var placeId = Guid.NewGuid();
+        db.Places.Add(new Place
+        {
+            Id = placeId, Name = name, City = "Springfield", State = "IL", Kind = kind,
+            DateCreated = DateTime.UtcNow, CreatedByAppUserId = Guid.NewGuid(),
+        });
+        var @case = await db.Cases.FirstAsync(c => c.Id == caseId);
+        @case.PlaceId = placeId;
+        await db.SaveChangesAsync();
+        return placeId;
+    }
+
+    private static async Task<PublicCaseDetail> DetailAsync(IDbContextFactory<BenDataContext> factory)
+    {
+        var result = await Build(factory).GetPublicCase("test-org", "2026-001", CancellationToken.None);
+        return Assert.IsType<PublicCaseDetail>(Assert.IsType<OkObjectResult>(result.Result).Value);
+    }
+
+    [Fact]
+    public async Task A_public_location_is_linked_from_the_public_case()
+    {
+        var factory = TestDbFactory.Create();
+        var (_, c) = await SeedPublicCaseAsync(factory);
+        var placeId = await AttachPlaceAsync(factory, c.Id, PlaceKind.PublicLocation, "Bell Witch Cave");
+
+        var detail = await DetailAsync(factory);
+
+        Assert.Equal(placeId, detail.PlaceId);
+        Assert.Equal("Bell Witch Cave", detail.PlaceName);
+    }
+
+    [Fact]
+    public async Task A_private_residence_is_never_linked_from_the_public_case()
+    {
+        var factory = TestDbFactory.Create();
+        var (_, c) = await SeedPublicCaseAsync(factory);
+        await AttachPlaceAsync(factory, c.Id, PlaceKind.PrivateResidence, "The Vexley Residence");
+
+        var detail = await DetailAsync(factory);
+
+        Assert.Null(detail.PlaceId);
+        // And not the name either, which would be the family's on a residence.
+        Assert.Null(detail.PlaceName);
+    }
+
+    [Fact]
+    public async Task A_case_with_no_place_links_nowhere()
+    {
+        var factory = TestDbFactory.Create();
+        await SeedPublicCaseAsync(factory);
+
+        Assert.Null((await DetailAsync(factory)).PlaceId);
+    }
 }

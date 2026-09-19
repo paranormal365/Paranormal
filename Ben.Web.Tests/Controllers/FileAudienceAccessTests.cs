@@ -289,4 +289,13 @@ public class FileAudienceAccessTests
         await using var readDb = await factory.CreateDbContextAsync();
         Assert.True(await FileAudienceAccess.CanViewFileAsync(readDb, file.Id, targetUserId, default));
     }
+    // ── Research (2026-09-16) ──────────────────────────────────────────────────
+    //
+    // The research-page clauses that stood here went with the block editor. A canvas board's picture
+    // is not a special case any more: dropping a file on a board uploads it to the case's Files, so
+    // the first clause above — CaseFiles — is what lets the group see it. Worth knowing that this
+    // changed: a picture on an UNPUBLISHED research page used to be its author's alone, whereas a
+    // file dropped on an unpublished board is in the case's Files tab from the moment the board is
+    // saved to the case. The board's own contents stay private until it is published; the file does
+    // not, because Ben asked for dropped files to go to the case files (2026-09-16).
 }

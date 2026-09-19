@@ -169,7 +169,10 @@ public class AdminAppUserControllerTests
         var result = await c.CreateUser(
             new AdminCreateUserRequest("fail@test.com", "weak", "Fail User", null, false, false), default);
 
-        Assert.IsType<BadRequestObjectResult>(result.Result);
+        // A sentence, not a JSON list: the New User page shows the server's reason as prose and drops anything that
+        // looks like JSON, which is how every refusal used to read "the server rejected the request".
+        var bad = Assert.IsType<BadRequestObjectResult>(result.Result);
+        Assert.Equal("Too weak.", Assert.IsType<string>(bad.Value));
     }
 
     [Fact]
@@ -328,7 +331,10 @@ public class AdminAppUserControllerTests
 
         var result = await rig.Ctrl.SetRoles(user.Id, new AdminSetUserRolesRequest(["Wizard"]), default);
 
-        Assert.IsType<BadRequestObjectResult>(result.Result);
+        // A sentence naming the role, which the Site Roles tab shows as it stands. It used to show the site's two
+        // SuperAdmin rules for every refusal, whatever had actually gone wrong (Ben, 2026-09-15).
+        var bad = Assert.IsType<BadRequestObjectResult>(result.Result);
+        Assert.Contains("Wizard", Assert.IsType<string>(bad.Value));
         rig.UserMgr.Verify(x => x.AddToRolesAsync(It.IsAny<AppUser>(), It.IsAny<IEnumerable<string>>()), Times.Never);
     }
 
@@ -350,6 +356,24 @@ public class AdminAppUserControllerTests
         rig.UserMgr.Verify(x => x.UpdateSecurityStampAsync(user), Times.Once);
         rig.Audit.Verify(x => x.LogUpdateAsync("AppUserRoles", user.Id, It.IsAny<object>(), It.IsAny<object>(),
             It.IsAny<Guid>(), It.IsAny<string>()), Times.Once);
+    }
+
+    /// <summary>
+    /// Identity throws rather than failing when a role row's lookup name does not match its name, or when a membership
+    /// is already there. That reached the Site Roles page as a 500 with no body, which the page could only report as
+    /// "the server did not say why" (Ben, 2026-09-15).
+    /// </summary>
+    [Fact]
+    public async Task SetRoles_SaysWhatTheAccountSystemThrew_RatherThanFailingWithNothing()
+    {
+        var (rig, user) = await BuildForRolesAsync([], callerId: Guid.NewGuid());
+        rig.UserMgr.Setup(x => x.AddToRolesAsync(It.IsAny<AppUser>(), It.IsAny<IEnumerable<string>>()))
+                   .ThrowsAsync(new InvalidOperationException("Role SuperAdmin does not exist."));
+
+        var result = await rig.Ctrl.SetRoles(user.Id, new AdminSetUserRolesRequest(["SuperAdmin"]), default);
+
+        var bad = Assert.IsType<BadRequestObjectResult>(result.Result);
+        Assert.Contains("Role SuperAdmin does not exist.", Assert.IsType<string>(bad.Value));
     }
 
     [Fact]

@@ -107,6 +107,41 @@ public sealed partial class BenAdminClientAdapter
     public Task<bool> RemoveCaseVoteAsync(Guid caseId, CancellationToken token = default)
         => _api.DeleteAsync($"/api/public/cases/{caseId}/votes", token);
 
+    // ── What people said, and what to do about it (item 233, Ben 2026-09-11) ──
+
+    public Task<LoadResult<PublicCaseComment>> GetCaseCommentsAsync(Guid caseId, CancellationToken token = default)
+        => _api.GetListAsync<PublicCaseComment>($"/api/public/cases/{caseId}/comments", token);
+
+    // The reason-keeping shape: a refused comment says why in words written to be read, and
+    // "Save failed" would throw that away.
+    public Task<(PublicCaseComment? Saved, string? Error)> PostCaseCommentAsync(
+        Guid caseId, string body, CancellationToken token = default)
+        => _api.SendExpectingReasonAsync<object, PublicCaseComment>(
+               HttpMethod.Post, $"/api/public/cases/{caseId}/comments", new { Body = body }, token);
+
+    public Task<bool> DeleteCaseCommentAsync(Guid caseId, Guid commentId, CancellationToken token = default)
+        => _api.DeleteAsync($"/api/public/cases/{caseId}/comments/{commentId}", token);
+
+    public async Task<(Guid? PostId, string? Error)> RepostCaseAsync(Guid caseId, CancellationToken token = default)
+    {
+        var (id, error) = await _api.SendExpectingReasonAsync<object, Guid>(
+            HttpMethod.Post, $"/api/public/cases/{caseId}/repost", new { }, token);
+        return (id == Guid.Empty ? null : id, error);
+    }
+
+    public Task<bool> ReportCaseAsync(Guid caseId, string? reason, CancellationToken token = default)
+        => _api.PostVoidAsync($"/api/public/cases/{caseId}/report", new { Reason = reason }, token);
+
+    public Task<LinkPreview?> GetLinkPreviewAsync(string url, CancellationToken token = default)
+        => _api.GetAsync<LinkPreview>($"/api/public/link-preview?url={Uri.EscapeDataString(url)}", token);
+
+    public Task<LinkPreview?> CreateLinkPreviewAsync(string url, bool refresh = false, CancellationToken token = default)
+        => _api.PostAsync<object, LinkPreview>("/api/link-previews", new { Url = url, Refresh = refresh }, token);
+
+    public Task<bool> ReportCaseCommentAsync(Guid caseId, Guid commentId, string? reason, CancellationToken token = default)
+        => _api.PostVoidAsync(
+               $"/api/public/cases/{caseId}/comments/{commentId}/report", new { Reason = reason }, token);
+
     // ── Cases ─────────────────────────────────────────────────────────────────
 
     public Task<LoadResult<CaseRecord>> GetOrgCasesAsync(Guid orgId, CancellationToken token = default)
@@ -117,6 +152,10 @@ public sealed partial class BenAdminClientAdapter
 
     public Task<CaseClientRequestRecord?> GetOrgCaseClientRequestAsync(Guid orgId, Guid caseId, CancellationToken token = default)
         => _api.GetAsync<CaseClientRequestRecord>($"/api/organizations/{orgId}/cases/{caseId}/client-request", token);
+
+    public Task<LoadResult<CaseFeedConsentRecord>> GetCaseFeedConsentsAsync(Guid orgId, Guid caseId, CancellationToken token = default)
+        => _api.GetListAsync<CaseFeedConsentRecord>(
+               $"/api/organizations/{orgId}/cases/{caseId}/feed-consents", token);
 
     public Task<(CasePrivacyRetrofitResult? Result, string? Error)> ApplyCasePrivacyAsync(
         Guid orgId, Guid caseId, CancellationToken token = default)
@@ -139,9 +178,12 @@ public sealed partial class BenAdminClientAdapter
         => _api.SendExpectingReasonAsync<AcceptClientRequestAsCaseRequest, CaseRecord>(
                HttpMethod.Post, $"/api/organizations/{orgId}/cases/accept-client-request/{clientRequestId}", request, token);
 
-    public Task<bool> DeclineClientRequestAsync(Guid orgId, Guid clientRequestId, CancellationToken token = default)
-        => _api.PostVoidAsync(
-               $"/api/organizations/{orgId}/cases/decline-request/{clientRequestId}", new { }, token);
+    public async Task<(bool Declined, string? Error)> DeclineClientRequestAsync(Guid orgId, Guid clientRequestId, CancellationToken token = default)
+    {
+        var (_, error, status) = await _api.SendWithStatusAsync<object, object>(
+            HttpMethod.Post, $"/api/organizations/{orgId}/cases/decline-request/{clientRequestId}", new { }, token);
+        return status is >= 200 and < 300 ? (true, null) : (false, error);
+    }
 
     public Task<bool> UpdatePendingRequestStatusAsync(Guid orgId, Guid clientRequestId, Ben.Data.Common.Enums.ClientOrgRequestStatus status, CancellationToken token = default)
         => _api.PutVoidAsync(
@@ -254,28 +296,8 @@ public sealed partial class BenAdminClientAdapter
 
     // ── Case Research ─────────────────────────────────────────────────────────
 
-    public Task<LoadResult<CaseResearchEntryDto>> GetCaseResearchAsync(Guid orgId, Guid caseId, CancellationToken token = default)
-        => _api.GetListAsync<CaseResearchEntryDto>($"/api/orgs/{orgId}/cases/{caseId}/research", token);
-
-    public Task<CaseResearchEntryDto?> AddCaseResearchAsync(Guid orgId, Guid caseId, UpsertResearchRequest request, CancellationToken token = default)
-        => _api.PostAsync<UpsertResearchRequest, CaseResearchEntryDto>($"/api/orgs/{orgId}/cases/{caseId}/research", request, token);
-
-    public async Task<CaseResearchEntryDto?> UploadCaseResearchFileAsync(Guid orgId, Guid caseId, string title, string? description, Stream content, string fileName, string contentType, CancellationToken token = default)
-    {
-        using var form = new MultipartFormDataContent();
-        form.Add(new StringContent(title), "title");
-        if (description is not null) form.Add(new StringContent(description), "description");
-        using var sc = new StreamContent(content);
-        sc.Headers.ContentType = new System.Net.Http.Headers.MediaTypeHeaderValue(contentType);
-        form.Add(sc, "file", fileName);
-        return await _api.PostMultipartAsync<CaseResearchEntryDto>($"/api/orgs/{orgId}/cases/{caseId}/research/files", form, token);
-    }
-
-    public Task<CaseResearchEntryDto?> UpdateCaseResearchAsync(Guid orgId, Guid caseId, Guid entryId, UpsertResearchRequest request, CancellationToken token = default)
-        => _api.PutAsync<UpsertResearchRequest, CaseResearchEntryDto>($"/api/orgs/{orgId}/cases/{caseId}/research/{entryId}", request, token);
-
-    public Task<bool> DeleteCaseResearchAsync(Guid orgId, Guid caseId, Guid entryId, CancellationToken token = default)
-        => _api.DeleteAsync($"/api/orgs/{orgId}/cases/{caseId}/research/{entryId}", token);
+    public Task<LoadResult<CanvasDocumentSummaryRecord>> GetCaseBoardsAsync(Guid caseId, CancellationToken token = default)
+        => _api.GetListAsync<CanvasDocumentSummaryRecord>($"/api/canvas-documents?caseId={caseId}", token);
 
     // ── Case Files (Files/Evidence tab) ──────────────────────────────────────
 
@@ -402,11 +424,13 @@ public sealed partial class BenAdminClientAdapter
     public Task<ClientCaseDetail?> GetMyCaseAsync(Guid caseId, CancellationToken token = default)
         => _api.GetAsync<ClientCaseDetail>($"/api/my-cases/{caseId}", token);
 
-    public Task<CaseTimelineEntryRecord?> LogOccurrenceAsync(Guid caseId, LogOccurrenceRequest request, CancellationToken token = default)
-        => _api.PostAsync<LogOccurrenceRequest, CaseTimelineEntryRecord>($"/api/my-cases/{caseId}/occurrences", request, token);
+    public Task<(CaseTimelineEntryRecord? Result, string? Error)> LogOccurrenceAsync(Guid caseId, LogOccurrenceRequest request, CancellationToken token = default)
+        => _api.SendExpectingReasonAsync<LogOccurrenceRequest, CaseTimelineEntryRecord>(
+               HttpMethod.Post, $"/api/my-cases/{caseId}/occurrences", request, token);
 
-    public Task<CaseTimelineEntryRecord?> UpdateOccurrenceAsync(Guid caseId, Guid entryId, LogOccurrenceRequest request, CancellationToken token = default)
-        => _api.PutAsync<LogOccurrenceRequest, CaseTimelineEntryRecord>($"/api/my-cases/{caseId}/occurrences/{entryId}", request, token);
+    public Task<(CaseTimelineEntryRecord? Result, string? Error)> UpdateOccurrenceAsync(Guid caseId, Guid entryId, LogOccurrenceRequest request, CancellationToken token = default)
+        => _api.SendExpectingReasonAsync<LogOccurrenceRequest, CaseTimelineEntryRecord>(
+               HttpMethod.Put, $"/api/my-cases/{caseId}/occurrences/{entryId}", request, token);
 
     public Task<bool> DeleteOccurrenceAsync(Guid caseId, Guid entryId, CancellationToken token = default)
         => _api.DeleteAsync($"/api/my-cases/{caseId}/occurrences/{entryId}", token);
@@ -428,8 +452,8 @@ public sealed partial class BenAdminClientAdapter
     public Task<LoadResult<CaseMessageRecord>> GetMyCaseMessagesAsync(Guid caseId, CancellationToken token = default)
         => _api.GetListAsync<CaseMessageRecord>($"/api/my-cases/{caseId}/messages", token);
 
-    public Task<CaseMessageRecord?> PostMyCaseMessageAsync(Guid caseId, string body, CancellationToken token = default)
-        => _api.PostAsync<object, CaseMessageRecord>($"/api/my-cases/{caseId}/messages", new { Body = body }, token);
+    public Task<CaseMessageRecord?> PostMyCaseMessageAsync(Guid caseId, string bodyHtml, CancellationToken token = default)
+        => _api.PostAsync<object, CaseMessageRecord>($"/api/my-cases/{caseId}/messages", new { BodyHtml = bodyHtml }, token);
 
     // ── Co-client access management ───────────────────────────────────────────
 
@@ -516,9 +540,9 @@ public sealed partial class BenAdminClientAdapter
     public Task<LoadResult<CaseMessageRecord>> GetCaseMessagesAsync(Guid orgId, Guid caseId, CancellationToken token = default)
         => _api.GetListAsync<CaseMessageRecord>($"/api/orgs/{orgId}/cases/{caseId}/messages", token);
 
-    public Task<(CaseMessageRecord? Result, string? Error)> PostCaseMessageAsync(Guid orgId, Guid caseId, string body, CancellationToken token = default)
+    public Task<(CaseMessageRecord? Result, string? Error)> PostCaseMessageAsync(Guid orgId, Guid caseId, string bodyHtml, CancellationToken token = default)
         => _api.SendExpectingReasonAsync<object, CaseMessageRecord>(
-            HttpMethod.Post, $"/api/orgs/{orgId}/cases/{caseId}/messages", new { Body = body }, token);
+            HttpMethod.Post, $"/api/orgs/{orgId}/cases/{caseId}/messages", new { BodyHtml = bodyHtml }, token);
 
     public async Task<int> GetCaseMessageUnreadCountAsync(Guid orgId, Guid caseId, CancellationToken token = default)
     {

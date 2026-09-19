@@ -1,0 +1,97 @@
+@namespace Ben.Web.Website.Library.Organization.Public
+
+@* The three things every booking on the web carries, and the sentence that says why
+   (item 235 slice 11d).
+
+   Ben, 2026-09-13: "First Last Name, E-mail Address, Phone Number required so the event organizer can
+   contact them to make arrangements for collecting fees. We can let them know during sign up that we
+   only collect their information for the event organization."
+
+   FOLDED WHEN THE ACCOUNT ALREADY HAS THEM. A signed-in guest whose profile says who they are sees one
+   line naming what will be passed on, and a Change button — not a form re-asking what the site knows.
+
+   THE DISCLOSURE IS ALWAYS SHOWN, folded or not, because it is the promise and it has to be read at the
+   moment the thing is given. *@
+
+<div class="booking-contact" id="@($"{IdPrefix}-contact-fields")">
+    @if (_folded && Draft.IsEnough(AskEmail))
+    {
+        <div class="d-flex flex-wrap align-items-center gap-2 small">
+            <span class="text-secondary">For @(OrganizationName ?? "the organizer"):</span>
+            <span class="fw-semibold" id="@($"{IdPrefix}-contact-summary")">@Draft.FirstName @Draft.LastName · @Draft.Phone</span>
+            <button type="button" class="btn btn-link btn-sm p-0" id="@($"{IdPrefix}-contact-change")"
+                    @onclick="() => _folded = false">Change</button>
+        </div>
+    }
+    else
+    {
+        <div class="row g-2">
+            <div class="col-12 col-md-6">
+                <label class="form-label small mb-1" for="@($"{IdPrefix}-first")">First name</label>
+                <input id="@($"{IdPrefix}-first")" class="form-control" maxlength="100" autocomplete="given-name"
+                       value="@Draft.FirstName" @oninput="e => Set(() => Draft.FirstName = Text(e))" />
+            </div>
+            <div class="col-12 col-md-6">
+                <label class="form-label small mb-1" for="@($"{IdPrefix}-last")">Last name</label>
+                <input id="@($"{IdPrefix}-last")" class="form-control" maxlength="100" autocomplete="family-name"
+                       value="@Draft.LastName" @oninput="e => Set(() => Draft.LastName = Text(e))" />
+            </div>
+            @if (AskEmail)
+            {
+                <div class="col-12 col-md-6">
+                    <label class="form-label small mb-1" for="@($"{IdPrefix}-email")">Email address</label>
+                    <input id="@($"{IdPrefix}-email")" class="form-control" type="email" maxlength="320"
+                           autocomplete="email" placeholder="you@example.com"
+                           value="@Draft.Email" @oninput="e => Set(() => Draft.Email = Text(e))" />
+                </div>
+            }
+            <div class="col-12 col-md-6">
+                <label class="form-label small mb-1" for="@($"{IdPrefix}-phone")">Phone number</label>
+                <input id="@($"{IdPrefix}-phone")" class="form-control" type="tel" maxlength="40"
+                       autocomplete="tel" placeholder="(615) 555-0100"
+                       value="@Draft.Phone" @oninput="e => Set(() => Draft.Phone = Text(e))" />
+            </div>
+        </div>
+    }
+
+    <p class="text-secondary small mt-2 mb-0" id="@($"{IdPrefix}-disclosure")">
+        Your name, email address and phone number go to @(OrganizationName ?? "the organizer") for this
+        event only, so they can reach you about your booking. We don't use them for anything else.
+    </p>
+</div>
+
+@code {
+    [Parameter, EditorRequired] public BookingContactDraft Draft { get; set; } = null!;
+
+    /// <summary>Prefixes every id, so two forms on one page never share a label.</summary>
+    [Parameter, EditorRequired] public string IdPrefix { get; set; } = "";
+
+    /// <summary>Whether to ask for the address too — only for somebody who is not signed in.</summary>
+    [Parameter] public bool AskEmail { get; set; }
+
+    [Parameter] public string? OrganizationName { get; set; }
+
+    /// <summary>Told on every keystroke, so the form's own button can wake up.</summary>
+    [Parameter] public EventCallback Changed { get; set; }
+
+    private bool _folded = true;
+    private bool _foldDecided;
+
+    protected override void OnParametersSet()
+    {
+        // Folded only when the account filled every field; somebody who has started typing keeps the
+        // fields they are typing into.
+        if (_foldDecided) return;
+        if (Draft.CameFromTheAccount) { _folded = true; _foldDecided = true; }
+        else _folded = false;
+    }
+
+    private static string Text(ChangeEventArgs e) => e.Value?.ToString() ?? "";
+
+    private async Task Set(Action write)
+    {
+        write();
+        _foldDecided = true;
+        await Changed.InvokeAsync();
+    }
+}

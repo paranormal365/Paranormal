@@ -55,8 +55,53 @@ public sealed class MediaUrlBuilder : IMediaUrlBuilder
         return url;
     }
 
+    public string VenuePhoto(Guid uploadFileId) => $"/media/venue-photo/{uploadFileId}";
+
+    public string EventKeepZip(Guid orgId, Guid eventId, IReadOnlyCollection<Guid> uploadFileIds)
+    {
+        var token = _tokens.AccessToken;
+        var ticket = string.IsNullOrWhiteSpace(token) ? "" : _tickets.Protect(eventId, token);
+        var ids = string.Join(",", uploadFileIds.Select(i => i.ToString("N")));
+        return $"/media/event-keep/{orgId}/{eventId}?ids={ids}&t={Uri.EscapeDataString(ticket)}";
+    }
+
+    public string EventFile(Guid eventId, Guid fileId)
+    {
+        var cacheKey = $"event-file:{eventId}:{fileId}";
+        if (_urls.TryGetValue(cacheKey, out var cached)) return cached;
+
+        var token = _tokens.AccessToken;
+        var ticket = string.IsNullOrWhiteSpace(token) ? null : _tickets.Protect(fileId, token);
+        var url = ticket is null
+            ? $"/media/event-files/{eventId}/{fileId}"
+            : $"/media/event-files/{eventId}/{fileId}?t={Uri.EscapeDataString(ticket)}";
+
+        _urls[cacheKey] = url;
+        return url;
+    }
+
+    public string EventRoomMedia(Guid eventId, Guid messageId)
+    {
+        var cacheKey = $"event-room:{eventId}:{messageId}";
+        if (_urls.TryGetValue(cacheKey, out var cached)) return cached;
+
+        // The room is only for signed-in members, so without a token there is nothing to fetch.
+        var token = _tokens.AccessToken;
+        var ticket = string.IsNullOrWhiteSpace(token) ? "" : _tickets.Protect(messageId, token);
+        var url = $"/media/event-room/{eventId}/{messageId}?t={Uri.EscapeDataString(ticket)}";
+
+        _urls[cacheKey] = url;
+        return url;
+    }
+
     public string SharedFieldSessionFile(string shareToken, Guid fileId) =>
         $"/media/shared/{Uri.EscapeDataString(shareToken)}/files/{fileId}";
+
+    public string GuidePhoto(Guid uploadFileId) => $"/media/guide-photo/{uploadFileId}";
+
+    public string TourPhoto(Guid uploadFileId) => $"/media/tour-photo/{uploadFileId}";
+
+    public string EventPhoto(Guid uploadFileId) => $"/media/event-photo/{uploadFileId}";
 
     private string Build(Guid fileId, string kind)
     {

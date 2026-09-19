@@ -125,6 +125,59 @@ public final class EventsStore {
         }
     }
 
+    // ── One night, and a seat on it (item 234) ───────────────────────────────
+
+    /// The event the detail screen is showing, with this reader's own seat on it.
+    public private(set) var showing: PublicEventRecord?
+
+    /// Reads one event. Anonymous by design — a walk is something to look at before signing in.
+    public func loadOne(_ eventId: UUID, signedIn: Bool) async -> PublicEventRecord? {
+        let endpoint = Endpoint(
+            .get, "api/public/events/\(eventId.uuidString.lowercased())", requiresAuth: signedIn)
+        if case .ok(let record) = await api.load(endpoint, as: PublicEventRecord.self) {
+            showing = record
+            applyAttendingCount(eventId, record.attendingCount)
+            return record
+        }
+        return nil
+    }
+
+    /// Asks for a number of places on a tour date.
+    ///
+    /// Ben: *"the seat or seats have been reserved for the tour."* On a tour date this is a
+    /// REQUEST — the business approves it — and on anything else the number is ignored and the
+    /// sign-up is simply a sign-up.
+    public func askForSeats(_ eventId: UUID, seats: Int) async -> Result<PublicEventRecord, FeedActionError> {
+        let endpoint = Endpoint(
+            .post, "api/public/events/\(eventId.uuidString.lowercased())/rsvp?seats=\(seats)")
+        switch await api.load(endpoint, as: PublicEventRecord.self) {
+        case .ok(let updated):
+            showing = updated
+            applyAttendingCount(eventId, updated.attendingCount)
+            // Only an approved seat is attendance. A request holds nothing, and marking it here
+            // would put "you're going" on the list row for a walk nobody has agreed to.
+            if updated.mySeat?.status == .reserved || updated.mySeat == nil { attending.insert(eventId) }
+            return .success(updated)
+        case .failed(let reason, _):
+            return .failure(.failed(reason: reason))
+        case .sessionEnded:
+            return .failure(.sessionEnded)
+        case .rateLimited(let retryAfter):
+            return .failure(.rateLimited(retryAfter: retryAfter))
+        }
+    }
+
+    /// Says back that a reserved seat has been seen. Optional, always (Ben: "if they want").
+    public func acknowledgeSeat(_ eventId: UUID) async -> PublicEventRecord? {
+        let endpoint = Endpoint(
+            .post, "api/public/events/\(eventId.uuidString.lowercased())/my-seat/acknowledge")
+        if case .ok(let updated) = await api.load(endpoint, as: PublicEventRecord.self) {
+            showing = updated
+            return updated
+        }
+        return nil
+    }
+
     /// Reserves a place. The server refuses with a SENTENCE — closed, already started, full —
     /// and those are exactly what a person needs to read, so they are carried back verbatim.
     public func rsvp(_ eventId: UUID) async -> Result<Void, FeedActionError> {

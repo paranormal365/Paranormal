@@ -48,6 +48,24 @@ public interface IBenPlatformClient
     /// <summary>How this machine is configured to send mail. No secrets.</summary>
     Task<MailSettingsRecord?> GetMailSettingsAsync(CancellationToken token = default);
 
+    // ── The outbox (item 239; wired 2026-09-17) ──────────────────────────────
+    //
+    // Three routes existed with no caller, so the screen that "would have answered the 2026-08-31
+    // question — I signed up and got nothing — in five seconds instead of not at all" answered it
+    // in zero, because no page read it.
+
+    /// <summary>Every letter the site has meant to send lately, and what became of it.</summary>
+    /// <param name="state">"failed", "waiting", "accepted", or null for all.</param>
+    Task<LoadResult<OutboxLetterItem>> GetOutboxAsync(
+        string? state = null, string? kind = null, int take = 100, CancellationToken token = default);
+
+    /// <summary>Puts one given-up letter back in the queue.</summary>
+    Task<(OutboxRetryOutcome? Result, string? Error)> RetryOutboxLetterAsync(
+        Guid id, CancellationToken token = default);
+
+    /// <summary>Puts every given-up letter back in the queue — the button after fixing the relay.</summary>
+    Task<(OutboxRetryOutcome? Result, string? Error)> RetryFailedOutboxAsync(CancellationToken token = default);
+
     /// <summary>Sends one real test message and reports what the server said.</summary>
     Task<MailTestResultRecord?> SendTestEmailAsync(string to, CancellationToken token = default);
 
@@ -274,7 +292,8 @@ public interface IBenPlatformClient
     Task<LoadResult<CaseMessageRecord>> GetMyCaseMessagesAsync(Guid caseId, CancellationToken token = default);
 
     /// <summary>Posts a message from the client to the org on this case.</summary>
-    Task<CaseMessageRecord?> PostMyCaseMessageAsync(Guid caseId, string body, CancellationToken token = default);
+    /// <summary>Posts the client's message, written in the formatting editor, as HTML; the API derives the plain Body.</summary>
+    Task<CaseMessageRecord?> PostMyCaseMessageAsync(Guid caseId, string bodyHtml, CancellationToken token = default);
 
     /// <summary>Client cancels a scheduled investigation (422 if outside cancellation window).</summary>
     Task<bool> CancelMyInvestigationAsync(Guid caseId, Guid investigationId, CancellationToken token = default);
@@ -296,7 +315,19 @@ public interface IBenPlatformClient
     Task<ExperienceCategoryRecord?> ApproveExperienceCategoryAsync(Guid id, CancellationToken token = default);
 
     Task<ExperienceTypeRecord?> CreateExperienceTypeAsync(Guid categoryId, UpsertExperienceTypeRequest request, CancellationToken token = default);
-    Task<ExperienceTypeRecord?> UpdateExperienceTypeAsync(Guid categoryId, Guid id, UpsertExperienceTypeRequest request, CancellationToken token = default);
+    /// <summary>
+    /// Renames a type, or comes back with the merge it would take to use that name.
+    /// </summary>
+    /// <remarks>
+    /// The server answers a name clash with a 409 carrying a <see cref="TaxonomyMergeOffer"/> —
+    /// "that name already exists; merging moves everything across and cannot be undone". The
+    /// adapter discarded it and the page said "Save failed", so the offer was written, sent, and
+    /// never seen; the endpoint that ACCEPTS it had no caller at all (2026-09-17 audit).
+    /// </remarks>
+    Task<(ExperienceTypeRecord? Result, string? Error, TaxonomyMergeOffer? Offer)> UpdateExperienceTypeAsync(Guid categoryId, Guid id, UpsertExperienceTypeRequest request, CancellationToken token = default);
+
+    /// <summary>Folds one experience type into another in the same category. Not undoable.</summary>
+    Task<(bool Ok, string? Error)> MergeExperienceTypeAsync(Guid categoryId, Guid id, Guid targetId, CancellationToken token = default);
     Task<bool> DeleteExperienceTypeAsync(Guid categoryId, Guid id, CancellationToken token = default);
     Task<ExperienceTypeRecord?> ApproveExperienceTypeAsync(Guid categoryId, Guid id, CancellationToken token = default);
 

@@ -1,3 +1,4 @@
+using System.Text.RegularExpressions;
 using Xunit;
 
 namespace Ben.Web.Tests.Website;
@@ -31,19 +32,54 @@ public sealed class SecurityHardeningTests
     }
 
     [Fact]
-    public void Nothing_in_the_site_frames_itself()
+    public void Nothing_in_the_site_loads_a_page_of_its_own_into_a_frame()
     {
-        // The precondition for DENY. The day something needs a frame, this test is the place that
-        // says so, and the header moves to SAMEORIGIN / 'self' deliberately rather than by surprise.
+        // The precondition for DENY. The day something needs to frame a PAGE, this test is the
+        // place that says so, and the header moves to SAMEORIGIN / 'self' deliberately rather
+        // than by surprise.
+        //
+        // A srcdoc frame is a different thing and is allowed (item 233, the tour mail preview):
+        // it loads no document from this server, so no response header applies to it, and it
+        // carries a sandbox attribute that puts the markup in an opaque origin with no scripts.
+        // That is the point of using one — a business's own mail body rendered straight into the
+        // page would be running inside the reader's session.
         var dir = new DirectoryInfo(AppContext.BaseDirectory);
         while (dir is not null && !File.Exists(Path.Combine(dir.FullName, "Ben.slnx"))) dir = dir.Parent;
-        var offenders = new[] { "Ben.Web.Website", "Ben.Web.Website.Library" }
+
+        var offenders = new List<string>();
+        foreach (var file in new[] { "Ben.Web.Website", "Ben.Web.Website.Library" }
             .SelectMany(p => Directory.EnumerateFiles(Path.Combine(dir!.FullName, p), "*.razor", SearchOption.AllDirectories))
-            .Where(f => !f.Contains($"{Path.DirectorySeparatorChar}bin{Path.DirectorySeparatorChar}") && !f.Contains($"{Path.DirectorySeparatorChar}obj{Path.DirectorySeparatorChar}"))
-            .Where(f => File.ReadAllText(f).Contains("<iframe", StringComparison.OrdinalIgnoreCase))
-            .ToList();
+            .Where(f => !f.Contains($"{Path.DirectorySeparatorChar}bin{Path.DirectorySeparatorChar}")
+                     && !f.Contains($"{Path.DirectorySeparatorChar}obj{Path.DirectorySeparatorChar}")))
+        {
+            var text = File.ReadAllText(file);
+            foreach (Match frame in Regex.Matches(text, "<iframe[^>]*>", RegexOptions.IgnoreCase | RegexOptions.Singleline))
+            {
+                var tag = frame.Value;
+                var isSandboxedSrcdoc = tag.Contains("srcdoc", StringComparison.OrdinalIgnoreCase)
+                                     && tag.Contains("sandbox", StringComparison.OrdinalIgnoreCase);
+                if (!isSandboxedSrcdoc) offenders.Add(file);
+            }
+        }
+
         Assert.True(offenders.Count == 0,
-            "These pages use an <iframe>; X-Frame-Options: DENY will break them:\n  " + string.Join("\n  ", offenders));
+            "These pages load a document into an <iframe>; X-Frame-Options: DENY will break them:\n  "
+            + string.Join("\n  ", offenders.Distinct()));
+    }
+
+    [Fact]
+    public void The_mail_preview_frame_grants_nothing_to_what_it_renders()
+    {
+        // A business writes this markup and every other member of that business reads it. An
+        // empty sandbox is what makes it inert: no scripts, no forms, and an opaque origin, so it
+        // cannot reach the session of the person previewing it.
+        var page = RepoFile("Ben.Web.Website.Library/Manage/Tours/OrgTourPage.razor");
+        var frame = Regex.Match(page, "<iframe[^>]*>", RegexOptions.IgnoreCase | RegexOptions.Singleline).Value;
+
+        Assert.Contains("sandbox=\"\"", frame);
+        Assert.Contains("srcdoc", frame);
+        Assert.DoesNotContain("allow-scripts", frame);
+        Assert.DoesNotContain("allow-same-origin", frame);
     }
 
     [Fact]

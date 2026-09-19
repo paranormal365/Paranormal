@@ -15,9 +15,20 @@ namespace Ben.Data.WebApi.Services.Billing;
 /// record, not a turnstile: the member is in from the moment they are accepted, holding a
 /// <see cref="SubscriptionStatus.PendingPayment"/> seat, and a SuperAdmin activates it when the
 /// payment is recorded — the same manual flow as group subscriptions.</para>
-/// <para><b>The band that counts is the FROZEN one.</b> The group's current period was sold at
-/// <c>MemberCountAtPeriodStart</c> on a specific tier; whether this join goes past the band is
-/// judged against that tier's cap, not against whatever the live price list says today.</para>
+/// <para><b>The band that counts is the one the group was SOLD</b> — <c>sub.SubscriptionTierId</c>,
+/// frozen on the subscription, not whichever band the group's headcount would land in on today's
+/// price list. Growing past a band therefore offers a seat; it never silently re-bands the group
+/// mid-period.</para>
+///
+/// <para><b>What is NOT frozen, stated plainly</b> (2026-09-17 audit corrected an overstatement
+/// here): the tier's <c>MaxMembers</c> is read from the live tier row, because no contract field
+/// records it — <see cref="Ben.Data.Source.Entities.SubscriptionContractTerms"/> freezes the
+/// price, the tier name and the <c>SubscriptionLimit</c> caps, and a band's member ceiling is
+/// none of those. So a SuperAdmin editing a band's ceiling changes, for periods already sold,
+/// whether the NEXT person to join is offered a seat. It never re-bills anybody already in the
+/// group, because this runs only on a join. Freezing the ceiling too would need a migration and
+/// a decision about which existing periods it applies to, which is Ben's call rather than an
+/// implementation detail.</para>
 /// <para>The price is frozen on the seat at offer time, the same rule as every money figure.</para>
 /// </remarks>
 public static class OverflowSeats

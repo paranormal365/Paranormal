@@ -4,9 +4,9 @@
 @using Ben.Web.Services.WebApi
 @using Ben.Web.Website.Library.Kit
 @using Ben.Web.Website.Library.User
-@using Microsoft.AspNetCore.Components.Forms
 @inject IBenAdminClient AdminClient
 @inject IBenUserState UserState
+@inject ICaseFileUploads Uploads
 
 @if (_loading) { <BenLoaderOverlay Visible="true" Text="Loading files…" /> }
 else
@@ -15,15 +15,40 @@ else
     <div class="d-flex align-items-center gap-2 flex-wrap mb-3">
         @if (May(Ben.Data.Common.Enums.OrganizationSecurityAction.Create))
         {
-            <InputFile OnChange="OnFileSelected" accept="*" style="display:none;" id="case-file-upload" />
-            <label for="case-file-upload" class="k-button k-button-sm k-button-outline k-button-outline-base" style="cursor:pointer;">
-                <BenIcon Name="upload" /> Upload File
-            </label>
+            @* The browser posts each file straight to the site's own relay, so it can say how far
+               it has got and be stopped half way. Reading it through the circuit instead gave no
+               progress at all, and a big recording was a silence that read as a failure — which is
+               how an 8 MB video that had uploaded perfectly well looked like a broken feature
+               (Ben, 2026-09-17). SaveField is "file" because that is what the API's own parameter
+               is called; the default, "files", would bind to nothing and be refused. *@
+            @if (_saveUrl is not null)
+            {
+                <div class="case-files__upload" data-testid="case-file-upload-zone">
+                    <TelerikUpload Id="case-file-upload"
+                                   SaveUrl="@_saveUrl"
+                                   SaveField="file"
+                                   WithCredentials="true"
+                                   Multiple="true"
+                                   OnSuccess="OnUploadSucceeded"
+                                   OnError="OnUploadFailed">
+                        @* The component's own wording is "Select files…"; this tab has said
+                           "Upload File" since it was written, and the button is the same button. *@
+                        <SelectFilesButtonTemplate>
+                            <BenIcon Name="upload" Class="me-1" /> Upload File
+                        </SelectFilesButtonTemplate>
+                    </TelerikUpload>
+                </div>
+            }
+            else
+            {
+                <span class="text-secondary small" data-testid="case-file-upload-signed-out">
+                    Sign in again to add a file.
+                </span>
+            }
             <button type="button" class="btn btn-outline-secondary btn-sm" @onclick="@(() => _showLibraryPicker = true)"><BenIcon Name="image" Class="me-1" />
                 Attach from Library
             </button>
         }
-        @if (_uploading) { <span class="spinner-border spinner-border-sm" role="status" aria-label="Loading"></span> }
     </div>
 
     @if (_error is not null) { <div class="alert alert-danger py-2 small mb-3">@_error</div> }
@@ -33,7 +58,7 @@ else
        upload. This is the tab from item 119: a 403 read as "this case has no evidence". *@
     @if (_filesResult.Failed)
     {
-        <BenListState TItem="CaseFileRecord" Result="@_filesResult" OnRetry="@LoadAsync" />
+        <BenListState TItem="CaseFileRecord" Result="@_filesResult" OnRetry="@(() => LoadAsync())" />
     }
     else if (_files.Count == 0)
     {
@@ -51,7 +76,16 @@ else
                 <div class="card-body">
                     <div class="d-flex align-items-start justify-content-between gap-2">
                         <div class="flex-grow-1">
-                            <div class="fw-semibold small mb-1">@f.FileName</div>
+                            <div class="fw-semibold small mb-1">
+                                @f.FileName
+                                @* Which files a research board is built from, so the ones a camera named
+                                   can be found and renamed (Ben, 2026-09-17). Ordinary case evidence is
+                                   the common case and wears no badge — a label on everything labels nothing. *@
+                                @if (ShowsType(f.TypeName))
+                                {
+                                    <span class="badge text-bg-secondary ms-1 fw-normal" data-testid="case-file-type">@f.TypeName</span>
+                                }
+                            </div>
                             <UserMediaPreview FileId="@f.UploadFileId" FileName="@f.FileName" ContentType="@f.ContentType" FileSize="@f.FileSize" />
                             @if (!string.IsNullOrWhiteSpace(f.Description))
                             {
@@ -106,6 +140,15 @@ else
 </BenModal>
 
 @code {
+    /// <summary>
+    /// Whether a file's kind is worth saying. Everything uploaded here is case evidence unless it came
+    /// from somewhere else — a research board, a published board's picture — and saying "Case Evidence"
+    /// on every row would bury the two that are not.
+    /// </summary>
+    private static bool ShowsType(string? typeName) =>
+        !string.IsNullOrWhiteSpace(typeName)
+        && !string.Equals(typeName, "Case Evidence", StringComparison.OrdinalIgnoreCase);
+
     [Parameter, EditorRequired] public Guid OrgId  { get; set; }
     [Parameter, EditorRequired] public Guid CaseId { get; set; }
     /// <summary>
@@ -133,8 +176,8 @@ else
     private List<CaseFileRecord> _files = [];
     private LoadResult<CaseFileRecord> _filesResult;
     private bool _loading = true;
-    private bool _uploading;
     private string? _error;
+    private string? _saveUrl;
     private bool _showLibraryPicker;
     private Guid? _expandedCommentsId;
     private Guid? _showCommentSettingsId;
@@ -144,9 +187,47 @@ else
         await LoadAsync();
     }
 
-    private async Task LoadAsync()
+    /// <summary>
+    /// The upload URL is minted after the first render, not in OnInitialized: the token store is
+    /// still resolving auth during prerender, and a URL minted then would be null for somebody who
+    /// is perfectly well signed in (see IBenUserState.AuthReady).
+    /// </summary>
+    protected override async Task OnAfterRenderAsync(bool firstRender)
     {
-        _loading = true;
+        if (!firstRender) return;
+        await UserState.AuthReady;
+        _saveUrl = Uploads.SaveUrlFor(OrgId, CaseId);
+        StateHasChanged();
+    }
+
+    /// <summary>The API's answer to one finished upload: the file, as the list shows it.</summary>
+    private async Task OnUploadSucceeded(UploadSuccessEventArgs e)
+    {
+        // The component reports each file as it lands, so the list is rebuilt rather than guessed
+        // at from the response — which also picks up anything somebody else added meanwhile.
+        _error = null;
+        await LoadAsync(quiet: true);
+        StateHasChanged();
+    }
+
+    private void OnUploadFailed(UploadErrorEventArgs e)
+    {
+        // The server's own sentence when it sent one; its status otherwise. Never a bare "failed":
+        // the refusals here are things a person can act on — too large, wrong kind, out of room.
+        var said = e.Request?.ResponseText;
+        _error = string.IsNullOrWhiteSpace(said)
+            ? "That file could not be added to the case."
+            : said!.Trim('"');
+        StateHasChanged();
+    }
+
+    private async Task LoadAsync(bool quiet = false)
+    {
+        // Quiet, after an upload: the loader replaces the whole list, so every audio and video
+        // preview already on the tab is torn down and rebuilt — a player half way through decoding
+        // a recording loses it, and the person watching sees the tab blink. The first load has
+        // nothing to lose and shows the loader.
+        if (!quiet) _loading = true;
         try
         {
             _filesResult = await AdminClient.GetCaseFilesAsync(OrgId, CaseId);
@@ -154,26 +235,6 @@ else
         }
         catch { _filesResult = LoadResult<CaseFileRecord>.Failure(); }
         _loading = false;
-    }
-
-    private async Task OnFileSelected(InputFileChangeEventArgs e)
-    {
-        _uploading = true; _error = null;
-        StateHasChanged();
-        try
-        {
-            foreach (var f in e.GetMultipleFiles(5))
-            {
-                // No practical upload size limit for now — a future limit belongs at app-settings /
-                // per-person / per-org / per-case / per-investigation scope, not a blanket cap here.
-                using var stream = f.OpenReadStream(maxAllowedSize: long.MaxValue);
-                var result = await AdminClient.UploadCaseFileAsync(OrgId, CaseId, null, stream, f.Name, f.ContentType);
-                if (result is not null) _files.Insert(0, result);
-                else _error = AdminClient.LastCaseFileUploadError ?? "Failed to upload file.";
-            }
-        }
-        catch { _error = "Failed to upload file."; }
-        finally { _uploading = false; StateHasChanged(); }
     }
 
     private async Task OnLibraryFilesSelected(IReadOnlyList<UploadFileRecord> selected)
@@ -197,9 +258,21 @@ else
         _showCommentSettingsId = null;
     }
 
+    /// <remarks>
+    /// Checked, and the row stays when the server refuses (2026-09-17 audit). The local
+    /// <c>RemoveAll</c> was unconditional with no reload behind it, so a refused delete removed
+    /// the evidence from the list and left it attached to the case — a lie that persisted until
+    /// somebody navigated away.
+    /// </remarks>
     private async Task DeleteFile(Guid caseFileId)
     {
-        await AdminClient.DeleteCaseFileAsync(OrgId, CaseId, caseFileId);
+        if (!await AdminClient.DeleteCaseFileAsync(OrgId, CaseId, caseFileId))
+        {
+            _error = "That file could not be removed, so it is still attached to this case.";
+            StateHasChanged();
+            return;
+        }
+
         _files.RemoveAll(f => f.Id == caseFileId);
         StateHasChanged();
     }

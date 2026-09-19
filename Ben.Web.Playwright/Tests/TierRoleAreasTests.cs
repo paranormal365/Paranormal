@@ -22,9 +22,55 @@ public class TierRoleAreasTests : BenTestBase
     /// group is on", which is the first row carrying area toggles. Renaming the ladder again will
     /// not break this.
     /// </remarks>
+    /// <summary>
+    /// The lowest band's row, found by its Includes button.
+    /// </summary>
+    /// <remarks>
+    /// The checklists used to sit inline in every grid row, thirteen checkboxes wide, and the grid
+    /// was wider than any screen for it. They now open on the band (2026-09-11), so a test opens
+    /// them the way a person does.
+    /// </remarks>
     private ILocator LowestBandRow => Main.Locator("tr")
-        .Filter(new() { Has = Page.Locator("input[type=checkbox][id^='area-']") })
+        .Filter(new() { Has = Page.Locator("button[id^='includes-']") })
         .First;
+
+    /// <summary>How many areas the lowest band's Includes button says it holds — the saved count.</summary>
+    private async Task<int> SavedAreaCountAsync()
+    {
+        var text = await LowestBandRow.Locator("button[id^='includes-']").First.InnerTextAsync();
+        return int.Parse(text.Trim().Split(' ')[0]);
+    }
+
+    /// <summary>
+    /// Ticks or unticks an area and waits until the change is SAVED, not merely drawn.
+    /// </summary>
+    /// <remarks>
+    /// A checkbox flips in the browser the moment it is clicked; the save happens afterwards, on the server, and
+    /// only then does the page reload the bands. Reloading straight after the click raced that save, and the test
+    /// failed whenever the reload won (seen 2026-09-14). The Includes button's "n of m areas" is computed from the
+    /// reloaded bands, so its count changing is the signal that the save finished.
+    /// </remarks>
+    private async Task SetAreaAndWaitForSaveAsync(ILocator box, bool on)
+    {
+        if (await box.IsCheckedAsync() == on) return;
+        var before = await SavedAreaCountAsync();
+        if (on) await box.CheckAsync(); else await box.UncheckAsync();
+        var expected = on ? before + 1 : before - 1;
+        await Expect(LowestBandRow.Locator("button[id^='includes-']").First)
+            .ToContainTextAsync($"{expected} of", new() { Timeout = 45_000 });
+    }
+
+    /// <summary>Opens the lowest band's checklists and returns the area checkbox asked for.</summary>
+    private async Task<ILocator> OpenLowestBandAreaAsync(int area)
+    {
+        var box = Page.Locator($"input[type=checkbox][id^='area-'][id$='-{area}']");
+        // Already open — a finally block reaching for the box after the try left the dialog up
+        // must not click the button behind it, which the dialog intercepts.
+        if (!await box.IsVisibleAsync())
+            await LowestBandRow.Locator("button[id^='includes-']").First.ClickAsync();
+        await Expect(box).ToBeVisibleAsync(new() { Timeout = 45_000 });
+        return box;
+    }
 
     [Test]
     public async Task Unchecking_an_area_persists_and_rechecking_restores_it()
@@ -33,39 +79,32 @@ public class TierRoleAreasTests : BenTestBase
         await Page.GotoAsync($"{BaseUrl}/admin/subscription-tiers");
         await WaitUntilLoadedAsync();
 
-        var freeRow = LowestBandRow;
-        var calendar = freeRow.Locator("input[type=checkbox][id^='area-'][id$='-9']");   // Calendar = 9
-        await Expect(calendar).ToBeVisibleAsync(new() { Timeout = 45_000 });
+        var calendar = await OpenLowestBandAreaAsync(9);   // Calendar = 9
 
         // ENSURE the starting state rather than asserting it: a previous run that died between
         // uncheck and restore leaves residue in the shared database, and an asserted
         // precondition turns one bad run into a permanently red test. Self-healing beats blame.
         if (!await calendar.IsCheckedAsync())
         {
-            await calendar.CheckAsync();
-            await Expect(calendar).ToBeCheckedAsync(new() { Timeout = 45_000 });
+            await SetAreaAndWaitForSaveAsync(calendar, on: true);
             await Page.ReloadAsync();
             await WaitUntilLoadedAsync();
-            freeRow = LowestBandRow;
-            calendar = freeRow.Locator("input[type=checkbox][id^='area-'][id$='-9']");
+            calendar = await OpenLowestBandAreaAsync(9);
         }
 
         try
         {
-            await calendar.UncheckAsync();
+            await SetAreaAndWaitForSaveAsync(calendar, on: false);
             await Page.ReloadAsync();
             await WaitUntilLoadedAsync();
 
-            freeRow = LowestBandRow;
-            calendar = freeRow.Locator("input[type=checkbox][id^='area-'][id$='-9']");
+            calendar = await OpenLowestBandAreaAsync(9);
             await Expect(calendar).Not.ToBeCheckedAsync(new() { Timeout = 45_000 });
         }
         finally
         {
-            freeRow = LowestBandRow;
-            calendar = freeRow.Locator("input[type=checkbox][id^='area-'][id$='-9']");
-            if (!await calendar.IsCheckedAsync())
-                await calendar.CheckAsync();
+            calendar = await OpenLowestBandAreaAsync(9);
+            await SetAreaAndWaitForSaveAsync(calendar, on: true);
             await Expect(calendar).ToBeCheckedAsync(new() { Timeout = 45_000 });
         }
     }
@@ -88,25 +127,19 @@ public class TierRoleAreasTests : BenTestBase
         await Page.GotoAsync($"{BaseUrl}/admin/subscription-tiers");
         await WaitUntilLoadedAsync();
 
-        var freeRow  = LowestBandRow;
-        var calendar = freeRow.Locator("input[type=checkbox][id^='area-'][id$='-9']");   // Calendar = 9
-        await Expect(calendar).ToBeVisibleAsync(new() { Timeout = 45_000 });
+        var calendar = await OpenLowestBandAreaAsync(9);   // Calendar = 9
 
-        if (!await calendar.IsCheckedAsync())   // self-heal residue from a dead run
-        {
-            await calendar.CheckAsync();
-            await Expect(calendar).ToBeCheckedAsync(new() { Timeout = 45_000 });
-        }
+        await SetAreaAndWaitForSaveAsync(calendar, on: true);   // self-heal residue from a dead run
 
         try
         {
-            await calendar.UncheckAsync();
-            await Expect(calendar).Not.ToBeCheckedAsync(new() { Timeout = 45_000 });
+            await SetAreaAndWaitForSaveAsync(calendar, on: false);
 
             await Page.GotoAsync($"{BaseUrl}/organizations/{orgId}?tab=roles");
             await WaitUntilLoadedAsync();
 
-            var edit = Main.Locator("table button", new() { HasTextString = "Edit" }).First;
+            // Row actions are icons now; the verb is the accessible name (2026-09-14).
+            var edit = Main.Locator("table").GetByRole(AriaRole.Button, new() { Name = "Edit", Exact = true }).First;
             await Expect(edit).ToBeVisibleAsync(new() { Timeout = 45_000 });
             await ClickUntilAsync(edit, Main.Locator("#role-edit-card"));
 
@@ -132,11 +165,8 @@ public class TierRoleAreasTests : BenTestBase
         {
             await Page.GotoAsync($"{BaseUrl}/admin/subscription-tiers");
             await WaitUntilLoadedAsync();
-            freeRow  = LowestBandRow;
-            calendar = freeRow.Locator("input[type=checkbox][id^='area-'][id$='-9']");
-            await Expect(calendar).ToBeVisibleAsync(new() { Timeout = 45_000 });
-            if (!await calendar.IsCheckedAsync())
-                await calendar.CheckAsync();
+            calendar = await OpenLowestBandAreaAsync(9);
+            await SetAreaAndWaitForSaveAsync(calendar, on: true);
             await Expect(calendar).ToBeCheckedAsync(new() { Timeout = 45_000 });
         }
     }

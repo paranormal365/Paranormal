@@ -34,7 +34,7 @@ namespace Ben.Data.WebApi.Controllers;
 [ApiController]
 [Route("api/field-sessions")]
 [Authorize]
-public sealed class FieldSessionUploadController : BenControllerBase
+public sealed partial class FieldSessionUploadController : BenControllerBase
 {
     /// The "Case Evidence" type, shared with the other evidence doors.
     private static readonly Guid EvidenceFileTypeId = new("20000000-0000-0000-0000-000000000001");
@@ -43,18 +43,25 @@ public sealed class FieldSessionUploadController : BenControllerBase
     private readonly IFileStorageService _fileStorage;
     private readonly IMediaIngestService _mediaIngest;
     private readonly ILogger<FieldSessionUploadController> _log;
+    private readonly Services.FieldSessions.IBenBundleStore _bundles;
 
     public FieldSessionUploadController(
         IDbContextFactory<BenDataContext> db,
         IFileStorageService fileStorage,
         IMediaIngestService mediaIngest,
+        Services.Media.MediaRetentionPolicy retention,
+        Services.FieldSessions.IBenBundleStore bundles,
         ILogger<FieldSessionUploadController> log)
     {
         _db = db;
         _fileStorage = fileStorage;
         _mediaIngest = mediaIngest;
+        _retention = retention;
+        _bundles = bundles;
         _log = log;
     }
+
+    private readonly Services.Media.MediaRetentionPolicy _retention;
 
     // ── Reading ───────────────────────────────────────────────────────────────
 
@@ -178,7 +185,10 @@ public sealed class FieldSessionUploadController : BenControllerBase
         // of, and bytes nobody can name again are the one part of this nobody can clean up later.
         var fileIds = await db.FieldSessionUploadFiles.AsNoTracking()
             .Where(f => f.FieldSessionUploadId == sessionId)
-            .Select(f => f.UploadFileId)
+            // A bundle member has no file of its own. Its bytes go when the session's single
+            // .ben does, which is the document file added on the next line.
+            .Where(f => f.UploadFileId != null)
+            .Select(f => f.UploadFileId!.Value)
             .ToListAsync(ct);
         fileIds.Add(session.DocumentUploadFileId);
         fileIds = fileIds.Distinct().ToList();
@@ -375,12 +385,6 @@ public sealed class FieldSessionUploadController : BenControllerBase
             CapBytes: covered ? null : await AccountStorageGuard.CapBytesAsync(db, ct)));
     }
 
-    /// <param name="CapBytes">
-    /// Null when nothing caps this account — a member of a group on a paid plan, whose personal
-    /// sessions ride along with what the group already pays for.
-    /// </param>
-    public sealed record AccountStorageRecord(long UsedBytes, long? CapBytes);
-
     /// <summary>Everything anyone has sent up for one investigation.</summary>
     [HttpGet("for-investigation/{investigationId:guid}")]
     public async Task<ActionResult<IEnumerable<FieldSessionRecord>>> GetForInvestigation(
@@ -436,8 +440,12 @@ public sealed class FieldSessionUploadController : BenControllerBase
             return NotFound("This session's readings are no longer on the server.");
 
         string document;
-        await using (var stream = await _fileStorage.OpenReadAsync(
-                         session.DocumentUploadFile.StoragePath, ct))
+        // For a bundle the document is a member of the session's one file rather than a file of
+        // its own, so it is read out of it the same way a recording is.
+        await using (var stream = session.IsBundle
+                         ? await _bundles.OpenEntryAsync(
+                               documentPath, Services.FieldSessions.BenBundle.DocumentEntryPath, ct)
+                         : await _fileStorage.OpenReadAsync(documentPath, ct))
         {
             if (stream is null)
                 return NotFound("This session's readings are no longer on the server.");
@@ -473,9 +481,30 @@ public sealed class FieldSessionUploadController : BenControllerBase
             .FirstOrDefaultAsync(f => f.Id == fileId && f.FieldSessionUploadId == sessionId, ct);
         if (file is null) return NotFound();
 
+        // A recording inside the session's .ben: served as a byte range of that one file, which
+        // is what lets a session BE a single file without storing everything twice. The window is
+        // seekable, so a player dragging its scrubber into the middle of an hour costs one seek.
+        if (file.BundleEntryPath is { Length: > 0 } entryPath)
+        {
+            var bundlePath = await db.UploadFiles.AsNoTracking()
+                .Where(f => f.Id == session.DocumentUploadFileId)
+                .Select(f => f.StoragePath)
+                .FirstOrDefaultAsync(ct);
+            if (bundlePath is not { Length: > 0 } || !_fileStorage.Exists(bundlePath))
+                return NotFound("That recording is no longer on the server.");
+
+            var member = await _bundles.OpenEntryAsync(bundlePath, entryPath, ct);
+            if (member is null)
+                return NotFound("That recording isn't in this session's file.");
+
+            return File(member,
+                        file.ContentType ?? FieldSessionFileGuard.ContentTypeFor(file.RelativePath),
+                        Path.GetFileName(file.RelativePath), enableRangeProcessing: true);
+        }
+
         // Same nullable StoragePath as the document above: no path means no file on disk, which
         // is the 404 this line already intends rather than the NullReferenceException it threw.
-        if (file.UploadFile.StoragePath is not { } recordingPath
+        if (file.UploadFile?.StoragePath is not { } recordingPath
             || !_fileStorage.Exists(recordingPath))
             return NotFound("That recording is no longer on the server.");
 
@@ -601,9 +630,49 @@ public sealed class FieldSessionUploadController : BenControllerBase
             session.UpdatedByAppUserId = userId;
         }
 
-        // Who RECORDED it, which is not always who is sending it — a device can be handed over,
-        // and a session recorded while signed out has nobody's name on it at all. It is never
-        // silently attributed to the uploader.
+        await ApplyRecordedByAsync(db, session, userId, recordedByAppUserId, recordedByName, ct);
+
+        // Set on every submission, so choosing an investigation later is simply re-sending.
+        session.InvestigationId = investigationId;
+        session.DocumentUploadFileId = uploadFile.Id;
+        session.DeviceModel = summary.DeviceModel;
+        session.LocationLabel = summary.LocationLabel;
+        session.StartedAt = summary.StartedAt;
+        session.EndedAt = summary.EndedAt;
+        session.ReadingCount = summary.ReadingCount;
+        // The first fix, copied onto the row so a map never has to open this document again.
+        // PositionResolved is set either way: "looked and found nothing" must be remembered, or
+        // every indoor session would be re-read on every map request for ever.
+        var fix = FirstFix(documentText);
+        session.Latitude  = fix?.Latitude;
+        session.Longitude = fix?.Longitude;
+        session.PositionResolved = true;
+        session.MarkerCount = summary.MarkerCount;
+
+        await db.SaveChangesAsync(ct);
+        await db.Entry(session).Collection(s => s.Files).LoadAsync(ct);
+
+        _log.LogInformation(
+            "Field session {DeviceSessionId} uploaded to investigation {InvestigationId} "
+            + "({Readings} readings, {Markers} marked).",
+            deviceSessionId, investigationId, summary.ReadingCount, summary.MarkerCount);
+
+        return Ok(ToRecord(session));
+    }
+
+    /// <summary>
+    /// Records who RECORDED a session, which is not always who is sending it.
+    /// </summary>
+    /// <remarks>
+    /// A device can be handed over, and a session recorded while signed out has nobody's name on
+    /// it at all. It is never silently attributed to the uploader. Shared by both upload doors so
+    /// a bundle and a document cannot drift apart on the one question anybody will later argue
+    /// about.
+    /// </remarks>
+    private static async Task ApplyRecordedByAsync(
+        BenDataContext db, FieldSessionUpload session, Guid userId,
+        Guid? recordedByAppUserId, string? recordedByName, CancellationToken ct)
+    {
         if (recordedByAppUserId is Guid recorded && recorded != Guid.Empty)
         {
             var account = await db.Users.AsNoTracking()
@@ -637,33 +706,6 @@ public sealed class FieldSessionUploadController : BenControllerBase
             session.RecordedByAppUserId = null;
             session.RecordedByName = null;
         }
-
-        // Set on every submission, so choosing an investigation later is simply re-sending.
-        session.InvestigationId = investigationId;
-        session.DocumentUploadFileId = uploadFile.Id;
-        session.DeviceModel = summary.DeviceModel;
-        session.LocationLabel = summary.LocationLabel;
-        session.StartedAt = summary.StartedAt;
-        session.EndedAt = summary.EndedAt;
-        session.ReadingCount = summary.ReadingCount;
-        // The first fix, copied onto the row so a map never has to open this document again.
-        // PositionResolved is set either way: "looked and found nothing" must be remembered, or
-        // every indoor session would be re-read on every map request for ever.
-        var fix = FirstFix(documentText);
-        session.Latitude  = fix?.Latitude;
-        session.Longitude = fix?.Longitude;
-        session.PositionResolved = true;
-        session.MarkerCount = summary.MarkerCount;
-
-        await db.SaveChangesAsync(ct);
-        await db.Entry(session).Collection(s => s.Files).LoadAsync(ct);
-
-        _log.LogInformation(
-            "Field session {DeviceSessionId} uploaded to investigation {InvestigationId} "
-            + "({Readings} readings, {Markers} marked).",
-            deviceSessionId, investigationId, summary.ReadingCount, summary.MarkerCount);
-
-        return Ok(ToRecord(session));
     }
 
     // ── The recordings ────────────────────────────────────────────────────────
@@ -764,14 +806,27 @@ public sealed class FieldSessionUploadController : BenControllerBase
             }
         }
 
+        // ── how long it may be, and how long it stays (item 233) ─────────────
+        // Ben: "FieldKit submissions fall under the same limits." A personal session belongs to
+        // nobody's plan and is untouched; one attached to an investigation takes that group's.
+        var rules = await _retention.RulesForAsync(session.Investigation?.OrganizationId, ct);
+        if (Services.Media.MediaRetentionPolicy.WhyTooLong(
+                rules, ingested.ServedContentType, ingested.Metadata.DurationSeconds) is { } tooLong)
+        {
+            await _mediaIngest.DeleteAllAsync(storagePath, ct);
+            return BadRequest(tooLong);
+        }
+
+        var now = DateTime.UtcNow;
         var uploadFile = new UploadFile
         {
             Id = uploadFileId, UploadFileTypeId = EvidenceFileTypeId, AppUserId = userId,
             FileName = Path.GetFileName(relativePath), StoredFileName = storedName,
             ContentType = ingested.ServedContentType, FileSize = ingested.ServedFileSize,
             StoragePath = storagePath, IsPublic = false,
-            DateCreated = DateTime.UtcNow, CreatedByAppUserId = userId,
+            DateCreated = now, CreatedByAppUserId = userId,
         };
+        Services.Media.MediaRetentionPolicy.Stamp(uploadFile, rules, now);
         db.UploadFiles.Add(uploadFile);
         db.UploadFileMetadata.Add(ingested.Metadata);
 
@@ -834,6 +889,14 @@ public sealed class FieldSessionUploadController : BenControllerBase
     ///
     /// <para>A public case does NOT make a private residence's investigation public: the case's
     /// own flag is what is read, and case privacy is decided elsewhere and deliberately.</para>
+    ///
+    /// <para><b>"Public case" here means PUBLISHED</b> — the flag <i>and</i> a status of Public or
+    /// Haunted, which is what the phrase means in every other query on the site (see
+    /// <c>PublicCaseController</c>'s own summary). This asked for the flag alone until 2026-09-17,
+    /// and the flag alone is set long before anybody publishes anything: it is a stated intention,
+    /// not a publication. That made the widest of the three doors open on a case somebody had
+    /// merely ticked a box on, which was never the bargain. Found while making an unpaid account's
+    /// cases public by default, where it would have thrown this door open on every new case.</para>
     /// </remarks>
     private static async Task<bool> MayContributeAsync(
         BenDataContext db, Guid investigationId, Guid userId, CancellationToken ct)
@@ -849,7 +912,10 @@ public sealed class FieldSessionUploadController : BenControllerBase
                 i.OrganizationId,
                 i.Visibility,
                 CaseIsPublic = i.CaseId != null
-                    && db.Cases.Any(c => c.Id == i.CaseId && c.IsPublic),
+                    && db.Cases.Any(c => c.Id == i.CaseId
+                                      && c.IsPublic
+                                      && (c.Status == Ben.Data.Common.Enums.CaseStatus.Public
+                                       || c.Status == Ben.Data.Common.Enums.CaseStatus.Haunted)),
             })
             .FirstOrDefaultAsync(ct);
         if (investigation is null) return false;
@@ -875,7 +941,8 @@ public sealed class FieldSessionUploadController : BenControllerBase
                 .Select(f => new FieldSessionFileRecord(
                     f.Id, f.RelativePath, f.UploadFile?.FileSize ?? 0,
                     f.Sha256, f.DigestMatched, f.DateCreated))
-                .ToList());
+                .ToList(),
+            session.IsBundle);
 }
 
 /// <summary>The few facts read out of a session document so sessions can be listed without
@@ -937,6 +1004,21 @@ public sealed record DeviceDataSummary(
     }
 }
 
+/// <summary>
+/// How much of a personal account's storage allowance is used.
+/// </summary>
+/// <remarks>
+/// <para><b>CapBytes is null when nothing caps this account</b> — a member of a group on a paid
+/// plan, whose personal sessions ride along with what the group already pays for. A figure they
+/// are not measured against would be a lie however carefully it were labelled.</para>
+///
+/// <para>File-scoped rather than nested in the controller so the website can name it. It was
+/// nested, which is one of the reasons nothing read it: the 2026-09-17 audit found this endpoint
+/// had no caller anywhere, while the phone hardcoded "2 GB" from a comment in
+/// <c>SessionTrim.swift</c> — so a covered member was told a cap that does not apply to them.</para>
+/// </remarks>
+public sealed record AccountStorageRecord(long UsedBytes, long? CapBytes);
+
 public sealed record FieldSessionRecord(
     Guid Id, Guid? InvestigationId, Guid DeviceSessionId, string DeviceModel, string? LocationLabel,
     DateTime StartedAt, DateTime? EndedAt, int ReadingCount, int MarkerCount,
@@ -946,7 +1028,12 @@ public sealed record FieldSessionRecord(
     // because a person must be able to see the answer for their OWN session — a publication
     // nobody can see the state of is one nobody can knowingly retract.
     Guid? PlaceId, DateTime? PublishedAtUtc,
-    IReadOnlyList<FieldSessionFileRecord> Files);
+    IReadOnlyList<FieldSessionFileRecord> Files,
+    // Whether the server holds this session as one .ben — the only shape GET {id}/bundle can hand
+    // back. Said here so a phone listing what it could pull down offers Download only where it
+    // would be answered; a 1.0.2 session (a document and loose recordings) is listed without one.
+    // Trailing and defaulted: additive for the app that is in review.
+    bool IsBundle = false);
 
 /// <summary>A session and its document, for playing back.</summary>
 public sealed record FieldSessionDetail(FieldSessionRecord Session, string Document);

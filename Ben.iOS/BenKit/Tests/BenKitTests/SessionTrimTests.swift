@@ -193,6 +193,206 @@ struct SessionTrimTests {
         #expect(plan.readingCount == 2)
         #expect(plan.markerCount == 1)
     }
+
+    // MARK: - What one upload may carry (2026-09-12)
+
+    /// The phone is not limited: it records for as long as the night needs, at whatever the
+    /// camera gives. These are about the UPLOAD, where video is the only thing heavy enough to
+    /// need rationing by the clock and everything else is rationed by weight.
+
+    @Test func videoIsCountedAtItsCutLengthNotItsWholeLength() {
+        // The whole point of the window: a twenty-minute clip trimmed to four minutes sends four
+        // minutes. Counting the original would refuse an upload that is well inside the rule.
+        let clip = TrimmableMedia(relativePath: "media/v1.mov", kind: .video,
+                                  startedAt: at(20), duration: 20 * 60)
+        let plan = SessionTrimPlan.plan(
+            window: window(21, 25), startedAt: start, endedAt: at(60),
+            readingTimes: [], markerTimes: [], media: [clip])
+
+        #expect(plan.videoSecondsSent == 4 * 60)
+        #expect(!plan.exceedsVideoAllowance)
+    }
+
+    @Test func moreThanFiveMinutesOfVideoIsRefusedAndSaysByHowMuch() {
+        let clip = TrimmableMedia(relativePath: "media/v1.mov", kind: .video,
+                                  startedAt: at(10), duration: 8 * 60)
+        let plan = SessionTrimPlan.plan(
+            window: window(0, 60), startedAt: start, endedAt: at(60),
+            readingTimes: [], markerTimes: [], media: [clip])
+
+        #expect(plan.videoSecondsSent == 8 * 60)
+        #expect(plan.exceedsVideoAllowance)
+        // The number the screen tells somebody to drag off, so it has to be the real shortfall.
+        #expect(plan.videoSecondsOverAllowance == 3 * 60)
+    }
+
+    @Test func severalClipsAreAddedUpRatherThanJudgedOneByOne() {
+        // Three four-minute clips are each inside the rule and together are twelve minutes. The
+        // allowance is about what the upload carries, not about the largest thing in it.
+        let clips = (0..<3).map {
+            TrimmableMedia(relativePath: "media/v\($0).mov", kind: .video,
+                           startedAt: at(Double($0) * 10), duration: 4 * 60)
+        }
+        let plan = SessionTrimPlan.plan(
+            window: window(0, 60), startedAt: start, endedAt: at(60),
+            readingTimes: [], markerTimes: [], media: clips)
+
+        #expect(plan.videoSecondsSent == 12 * 60)
+        #expect(plan.exceedsVideoAllowance)
+    }
+
+    @Test func aClipLeftOutOfTheWindowCostsNothing() {
+        let inside  = TrimmableMedia(relativePath: "media/v1.mov", kind: .video,
+                                     startedAt: at(21), duration: 60)
+        let outside = TrimmableMedia(relativePath: "media/v2.mov", kind: .video,
+                                     startedAt: at(45), duration: 30 * 60)
+        let plan = SessionTrimPlan.plan(
+            window: window(20, 30), startedAt: start, endedAt: at(60),
+            readingTimes: [], markerTimes: [], media: [inside, outside])
+
+        #expect(plan.videoSecondsSent == 60)
+        #expect(!plan.exceedsVideoAllowance)
+    }
+
+    @Test func audioAndPhotographsAreNotRationedByTheClock() {
+        // A whole night of sound is a fraction of one minute of video. Rationing it by time would
+        // punish the cheap channels for video's sins.
+        let audio = TrimmableMedia(relativePath: "media/a.m4a", kind: .audio,
+                                   startedAt: at(0), duration: 5 * 60 * 60,
+                                   byteCount: 300 * 1024 * 1024)
+        let plan = SessionTrimPlan.plan(
+            window: window(0, 5 * 60), startedAt: start, endedAt: at(5 * 60),
+            readingTimes: [], markerTimes: [], media: [audio])
+
+        #expect(plan.videoSecondsSent == 0)
+        #expect(!plan.exceedsVideoAllowance)
+        #expect(!plan.exceedsSizeAllowance)   // five hours of audio still goes in one send
+    }
+
+    @Test func aCutFileIsWeighedAtTheFractionActuallySent() {
+        // Bitrate is near enough constant inside one recording, so half the length is half the
+        // bytes. Weighing the original would refuse an upload most of which is never sent.
+        let audio = TrimmableMedia(relativePath: "media/a.m4a", kind: .audio,
+                                   startedAt: at(0), duration: 60 * 60,
+                                   byteCount: 600 * 1024 * 1024)
+        let plan = SessionTrimPlan.plan(
+            window: window(0, 30), startedAt: start, endedAt: at(60),
+            readingTimes: [], markerTimes: [], media: [audio])
+
+        #expect(plan.approximateBytesSent == 300 * 1024 * 1024)
+        #expect(!plan.exceedsSizeAllowance)
+    }
+
+    @Test func tooHeavyIsRefusedEvenWithNoVideoInIt() {
+        let photos = (0..<200).map {
+            TrimmableMedia(relativePath: "media/p\($0).jpg", kind: .photo,
+                           startedAt: at(Double($0) / 10), duration: nil,
+                           byteCount: 4 * 1024 * 1024)
+        }
+        let plan = SessionTrimPlan.plan(
+            window: window(0, 60), startedAt: start, endedAt: at(60),
+            readingTimes: [], markerTimes: [], media: photos)
+
+        #expect(plan.videoSecondsSent == 0)
+        #expect(!plan.exceedsVideoAllowance)
+        #expect(plan.exceedsSizeAllowance)     // 800 MB of photographs is still too much at once
+        #expect(plan.exceedsAnAllowance)
+    }
+
+    @Test func aFileNothingWeighedCountsAsNothingRatherThanBlockingTheUpload() {
+        // Refusing an upload over a number we do not have would strand somebody over a file that
+        // may be four seconds long. Erring towards letting it go matches every other unknown here.
+        let unmeasured = TrimmableMedia(relativePath: "media/v1.mov", kind: .video,
+                                        startedAt: at(10), duration: nil, byteCount: nil)
+        let plan = SessionTrimPlan.plan(
+            window: window(0, 60), startedAt: start, endedAt: at(60),
+            readingTimes: [], markerTimes: [], media: [unmeasured])
+
+        #expect(plan.media[0].outcome == .sentWhole)
+        #expect(plan.videoSecondsSent == 0)
+        #expect(!plan.exceedsAnAllowance)
+    }
+
+
+    // MARK: - Sending the video smaller instead of sending less of it
+
+    private func clip(_ minutes: Double, height: Int = 2160, fps: Double = 60,
+                      bytesPerSecond: Int64 = 3_000_000) -> TrimmableMedia {
+        TrimmableMedia(relativePath: "media/v.mov", kind: .video, startedAt: at(0),
+                       duration: minutes * 60,
+                       byteCount: Int64(minutes * 60) * bytesPerSecond,
+                       videoHeight: height, videoFrameRate: fps)
+    }
+
+    @Test func halvingTheLinesQuartersTheBytes() {
+        // Area, not height. Treating 4K to 1080p as a half would promise a saving twice as small
+        // as the real one and send somebody to a harsher setting than they needed.
+        let quality = VideoQuality(resolution: .hd1080, frameRate: .asRecorded)
+        #expect(quality.approximateBytes(from: 4000, sourceHeight: 2160, sourceFrameRate: 60) == 1000)
+    }
+
+    @Test func droppingTheFrameRateScalesWithIt() {
+        let quality = VideoQuality(resolution: .asRecorded, frameRate: .fps24)
+        #expect(quality.approximateBytes(from: 6000, sourceHeight: 1080, sourceFrameRate: 60) == 2400)
+    }
+
+    @Test func nothingIsEverEstimatedLargerThanItStarted() {
+        // A 720p original "sent at 1080p" is the same picture with more pixels of nothing. An
+        // estimate that grew would offer an upscale as a way to fit under a ceiling.
+        let quality = VideoQuality(resolution: .hd1080, frameRate: .fps60)
+        #expect(quality.approximateBytes(from: 1000, sourceHeight: 720, sourceFrameRate: 24) == 1000)
+    }
+
+    @Test func aWindowTooHeavyAtFullQualityCanFitAtASmallerOne() {
+        // Four minutes of 4K60: inside the video allowance, far outside the byte one. This is the
+        // case the quality offer exists for — the footage is worth keeping, all of it.
+        let plan = SessionTrimPlan.plan(
+            window: window(0, 10), startedAt: start, endedAt: at(10),
+            readingTimes: [], markerTimes: [], media: [clip(4)])
+
+        #expect(!plan.exceedsVideoAllowance)
+        #expect(plan.exceedsSizeAllowance)
+
+        let smaller = plan.smallestQualityThatFits()
+        #expect(smaller != nil)
+        #expect(smaller?.changesAnything == true)
+        #expect(plan.fits(atVideoQuality: smaller!))
+    }
+
+    @Test func tooLongIsNotSomethingQualityCanSolve() {
+        // Eight minutes is over the video allowance however small the picture is. The answer is
+        // clips, and the screen must not offer a re-encode that would still be refused.
+        let plan = SessionTrimPlan.plan(
+            window: window(0, 20), startedAt: start, endedAt: at(20),
+            readingTimes: [], markerTimes: [], media: [clip(8, height: 720, fps: 24,
+                                                           bytesPerSecond: 100_000)])
+
+        #expect(plan.exceedsVideoAllowance)
+        #expect(!plan.exceedsSizeAllowance)
+        // Small enough to send; still too long, so quality changes nothing about the refusal.
+        #expect(plan.fits(atVideoQuality: VideoQuality(resolution: .hd720, frameRate: .fps24)))
+    }
+
+    @Test func qualityLeavesPhotographsAndSoundAlone() {
+        let photo = TrimmableMedia(relativePath: "media/p.jpg", kind: .photo, startedAt: at(1),
+                                   duration: nil, byteCount: 4 * 1024 * 1024)
+        let audio = TrimmableMedia(relativePath: "media/a.m4a", kind: .audio, startedAt: at(0),
+                                   duration: 600, byteCount: 8 * 1024 * 1024)
+        let plan = SessionTrimPlan.plan(
+            window: window(0, 20), startedAt: start, endedAt: at(20),
+            readingTimes: [], markerTimes: [], media: [photo, audio])
+
+        let at720 = plan.approximateBytesSent(atVideoQuality: VideoQuality(resolution: .hd720,
+                                                                          frameRate: .fps24))
+        #expect(at720 == plan.approximateBytesSent)
+    }
+
+    @Test func theFirstOfferedQualityChangesNothing() {
+        // The list has to open with "as recorded": a screen whose first row silently degrades
+        // evidence is a screen that degrades evidence.
+        #expect(VideoQuality.offered.first?.changesAnything == false)
+    }
+
 }
 
 /// What the exported document actually contains when a window is chosen (item 210).

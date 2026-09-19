@@ -1,5 +1,6 @@
 using Ben.Data.Common.Enums;
 using Ben.Data.Source.Context;
+using Ben.Data.Source.Services;
 using Ben.Data.WebApi.Services.Billing;
 using Microsoft.EntityFrameworkCore;
 
@@ -55,9 +56,98 @@ public sealed class SubscriptionLapseJob : IScheduledJob
     {
         var now = DateTime.UtcNow;
 
-        await SendApproachWarningsAsync(now, ct);
-        await LapseExpiredAsync(now, ct);
-        await OfferReassignmentToStrandedClientsAsync(now, ct);
+        // Each section in its own try (2026-09-17 audit). They are three unrelated duties that
+        // happened to share a job, and before this a single throw in the warnings — one
+        // over-length subject, one transient deadlock — stopped every lapse on the platform:
+        // no case paused, no client offered another group, for as long as it kept throwing.
+        // HoldExpiryJob already does it this way.
+        await SectionAsync("approach warnings", () => SendApproachWarningsAsync(now, ct), ct);
+        await SectionAsync("lapsing expired subscriptions", () => LapseExpiredAsync(now, ct), ct);
+        await SectionAsync("offers to stranded clients",
+                           () => OfferReassignmentToStrandedClientsAsync(now, ct), ct);
+        await SectionAsync("lapsing expired member seats", () => LapseExpiredSeatsAsync(now, ct), ct);
+    }
+
+    /// <summary>
+    /// An overflow seat whose period ended without being paid for stops being billed.
+    /// </summary>
+    /// <remarks>
+    /// <para><b>Nothing lapsed a seat before this</b> (2026-09-17 audit), and the consequence was
+    /// not merely an unpaid seat left Active. <c>StripeRenewalJob</c> selects seats on
+    /// <c>Status == Active &amp;&amp; CurrentPeriodEnd &lt;= now + RenewalWindow</c>, so a seat whose card
+    /// declined matched that window <b>forever</b> — retried every pass, indefinitely.</para>
+    ///
+    /// <para><b>And it back-charged.</b> Fulfilment dates the new period from the metadata's
+    /// period start, which is the stale end — so when the card finally worked, the seat advanced
+    /// one month, was still in the past, and was charged again the next day. Six missed months
+    /// became six charges in six days for one month of service. The organization path never had
+    /// this because THIS job removes it from <c>Status == Active</c>; seats were simply never
+    /// added here.</para>
+    ///
+    /// <para>The same rule the organizations use one method up: the period ended, so it lapsed.
+    /// The holder is told, because a seat going quiet is something they would otherwise discover
+    /// from a bank statement.</para>
+    /// </remarks>
+    private async Task LapseExpiredSeatsAsync(DateTime now, CancellationToken ct)
+    {
+        await using var db = await _dbFactory.CreateDbContextAsync(ct);
+
+        var expired = await db.MemberSeatSubscriptions
+            .Include(s => s.Organization)
+            .Where(s => s.Status == SubscriptionStatus.Active
+                     && s.CurrentPeriodEnd != null
+                     && s.CurrentPeriodEnd <= now)
+            .ToListAsync(ct);
+
+        foreach (var seat in expired)
+        {
+            seat.Status      = SubscriptionStatus.Lapsed;
+            seat.DateUpdated = now;
+
+            // Per seat, for the same reason every other notice in this job is: the letter commits
+            // on its own, so a marker saved after the loop would be discarded by the next throw
+            // and the same person written to again.
+            await db.SaveChangesAsync(ct);
+
+            try
+            {
+                await _messages.SendAsync(
+                    $"Your place in {seat.Organization.Name} was not renewed",
+                    // Says WHAT happened, not why. A seat reaches here from a declined card and
+                    // also from the group upgrading to a band that covers everybody — in the
+                    // second case there is nothing wrong and nothing to pay, and a letter
+                    // announcing a failed payment would send somebody to their bank over good
+                    // news. The billing page is where the reason lives.
+                    $"Your own paid place in {seat.Organization.Name} has ended, so it is no "
+                  + "longer being charged.\n\n"
+                  + "Nothing you have recorded is affected, and you are still a member of the "
+                  + "group. Your billing page shows whether anything is owed, and a place can be "
+                  + "paid for again from there if you need one.",
+                    [seat.AppUserId], seat.AppUserId, ct);
+            }
+            catch (Exception ex) when (ex is not OperationCanceledException)
+            {
+                // The seat has already stopped billing, which is the part that costs money. A
+                // letter that would not send must not undo that or stop the next seat.
+                _logger.LogWarning(ex,
+                    "Seat {SeatId} lapsed but its holder could not be told.", seat.Id);
+            }
+        }
+
+        if (expired.Count > 0)
+            _logger.LogInformation("{Count} member seats lapsed and will not be charged again.",
+                                   expired.Count);
+    }
+
+    /// <summary>Runs one duty, and lets the other two happen if it fails.</summary>
+    private async Task SectionAsync(string what, Func<Task> section, CancellationToken ct)
+    {
+        try { await section(); }
+        catch (Exception ex) when (ex is not OperationCanceledException)
+        {
+            // Logged at Error, not Warning: a section that stopped is work nobody did.
+            _logger.LogError(ex, "The subscription-lapse job could not finish {What}.", what);
+        }
     }
 
 
@@ -170,7 +260,13 @@ public sealed class SubscriptionLapseJob : IScheduledJob
                 await _messages.SendAsync(subject, body + unpublishWarning,
                     recipients, sub.CreatedByAppUserId, ct);
 
+                // Saved immediately, not after the loop (2026-09-17 audit). The mail commits in
+                // its own context, so a later organization throwing used to discard this marker
+                // while the letter had already gone — and the same group was written to again
+                // every five minutes, indefinitely. TierChangeNoticeJob saves per item for
+                // exactly this reason.
                 sub.TwoWeekNoticeSentForPeriodEnd = end;
+                await db.SaveChangesAsync(ct);
             }
 
             if (end <= now.AddDays(7) && sub.OneWeekNoticeSentForPeriodEnd != end)
@@ -200,10 +296,9 @@ public sealed class SubscriptionLapseJob : IScheduledJob
                     recipients, sub.CreatedByAppUserId, ct);
 
                 sub.OneWeekNoticeSentForPeriodEnd = end;
+                await db.SaveChangesAsync(ct);
             }
         }
-
-        await db.SaveChangesAsync(ct);
     }
 
     /// <summary>
@@ -231,9 +326,46 @@ public sealed class SubscriptionLapseJob : IScheduledJob
 
         if (price is not { } amount) return "what your plan lists";
 
-        var per = sub.Interval == BillingInterval.Yearly ? "year" : "month";
-        return $"{amount:C} per {per}";
+        // The WHOLE period's price, for a business billed per tour (2026-09-17 audit).
+        //
+        // A tier's price is a UNIT price for an unbanded business tier — "$29 per month is for a
+        // single tour no matter how many times scheduled" — so quoting it raw told a business with
+        // three tours $29.00 when the invoice is $87.00. This is the same defect the admin coupon
+        // path already carries a fix and a comment for; it was simply never carried across to the
+        // letter. The letter is the worse place for it: its entire purpose is that the first
+        // invoice is not a surprise.
+        var banded = await db.SubscriptionTiers.AsNoTracking()
+            .Where(t => t.Id == tierId).Select(t => t.IsBandedByMembers).FirstOrDefaultAsync(ct);
+
+        if (!banded && SubscriptionTierResolver.IsBusinessKind(sub.Organization.Kind))
+        {
+            // The LIVE count, because that is what the renewal will actually be billed for.
+            var tours = TourBilling.Units(
+                sub.Organization.Kind,
+                await BillableUnits.ActiveToursAsync(db, sub.OrganizationId, ct));
+            amount = TourBilling.ListPrice(amount, tours);
+        }
+
+        return $"{amount:C} {PerPeriod(sub.Interval)}";
     }
+
+    /// <summary>The cadence as a person would say it, for a sentence rather than a label.</summary>
+    /// <remarks>
+    /// This was <c>Interval == Yearly ? "year" : "month"</c>, so every cadence that is neither told
+    /// the reader "per month" (2026-09-17 audit). A group on quarterly billing was quoted its
+    /// QUARTERLY price per month — the figure and the cadence both wrong, in the direction that
+    /// understates what is about to be taken by three, in the one letter whose job is to make sure
+    /// the charge is expected. CouponMath.Describe and StripeFulfillmentService.Cadence already
+    /// spell all four out; this is the third such list, and the first one that was wrong.
+    /// </remarks>
+    private static string PerPeriod(BillingInterval interval) => interval switch
+    {
+        BillingInterval.Monthly    => "per month",
+        BillingInterval.Quarterly  => "per quarter",
+        BillingInterval.HalfYearly => "every six months",
+        BillingInterval.Yearly     => "per year",
+        _                          => "per period",
+    };
 
     // ── the lapse ─────────────────────────────────────────────────────────────
 
@@ -364,9 +496,10 @@ public sealed class SubscriptionLapseJob : IScheduledJob
                     clients, sub.CreatedByAppUserId, ct);
             }
 
+            // Per subscription, for the same reason as the two notices above — and it matters
+            // more here, because these letters go to CLIENTS rather than to staff.
             sub.StrandedClientNoticeSentAtUtc = now;
+            await db.SaveChangesAsync(ct);
         }
-
-        await db.SaveChangesAsync(ct);
     }
 }

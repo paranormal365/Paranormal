@@ -34,6 +34,24 @@ namespace Ben.Data.Source.Entities
         /// <summary>What they would like to be called. Optional — an email is enough to come along.</summary>
         public string? DisplayName { get; set; }
 
+        /// <summary>
+        /// The name and number an organizer needs to reach somebody asking for a hosted event by
+        /// email (slice 11d). Null on every other kind of event, which never asked for them.
+        /// </summary>
+        public string? FirstName { get; set; }
+        public string? LastName { get; set; }
+        public string? Phone { get; set; }
+
+        /// <summary>
+        /// How many places they asked for, on a tour date (item 234). Null on every other event.
+        /// </summary>
+        /// <remarks>
+        /// Carried on the invitation rather than asked again at the link, because the number was
+        /// part of what they asked for — and the person clicking the link in their email is not
+        /// looking at the form they typed it into.
+        /// </remarks>
+        public int? Seats { get; set; }
+
         /// <summary>Single-use. Cleared on confirmation so a forwarded email cannot be replayed.</summary>
         public string? Token { get; set; }
 

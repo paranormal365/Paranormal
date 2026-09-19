@@ -120,7 +120,22 @@ python3 docs/build-ios-documentation.py iphone
 
 The export writes files named by UUID plus a `manifest.json` that maps each one to its
 `suggestedHumanReadableName`; rename them to the leading `NN-slug.png` before they land in
-`docs/ios-media/<device>/`, because the builder matches sections by that numeric prefix.
+`docs/ios-media/<device>/`, because the builder matches sections by that numeric prefix. A run
+covers 21 of the guide's frames — the hosted-event and door ones come from `HelpMediaCaptureTests`
+and are left alone, so copy the renamed frames over rather than emptying the folder first.
+
+**The store-set script does this renaming itself** (`Ben.iOS/scripts/capture-app-store-media.sh`),
+into a directory of its own before copying the finished frames across. It used to export straight
+into the set, where the iPhone's resize loop then globbed the FINISHED frames and re-encoded them
+in place while that run's real captures sat beside them unrenamed: the set looked refreshed and was
+the old pictures, re-compressed (2026-09-17). If you write a capture step of your own, export
+somewhere else and copy in at the end.
+
+**The iPhone guide is also on the website**, as the App Store listing's Marketing URL:
+`Ben.Web.Website/wwwroot/guides/IsHaunted-iOS-iPhone.pdf`, served at
+`https://ishaunted.com/guides/IsHaunted-iOS-iPhone.pdf`. It is a copy, not a link, so after
+rebuilding `IsHaunted-iOS-iPhone.pdf` copy it over the site's one too, or the listing keeps
+pointing at the old guide.
 
 **`BEN_API_BASE_URL` is not optional.** Without it the app uses its shipped address and the capture
 signs in to the LIVE SITE — which would put real accounts and real cases into a document whose
@@ -167,6 +182,53 @@ drift apart. Its feed shot needs the feed switched on, and the help capture rest
 whatever it found — so run `Capture_TheFeed` first, or turn the flag on by hand, or that one test
 skips itself and says so.
 
+
+## Hosted Events brochure and the advertisements
+
+- **`docs/IsHaunted-Hosted-Events.pdf`** — an eight-page brochure for hosted events and the iPhone app.
+- **`docs/ads/IsHaunted-Ad-*.pdf`** — one-sheet, front-and-back advertisements for the whole product,
+  enthusiasts, investigation groups, ghost walk tours, venues and event hosts.
+
+Both are built by one script from the repository root:
+
+```bash
+python3 docs/ads/build-ads.py --png
+```
+
+`--png` also renders every page to `docs/ads/preview/` (ignored by git) for checking. Check them before
+calling a document done; a PDF cannot be read here.
+
+**The design.** Each ad takes its palette from its lead photograph: a deep base colour from the shadows
+and a complementary accent from the light — indigo with candle amber, night blue with lamplight, oxblood
+with champagne. Every frame is sized from its image's own proportions, so no screenshot is ever cropped
+mid-sentence.
+
+**Where the pictures come from:**
+
+- **Photographs** — `docs/media/stock/`, from Unsplash, credited in
+  `ProjectNotes/FeatureHistory/README-hosted-events-235-media.md`.
+- **Website screens** — `docs/media/hosted-events/walk/`, from `HostedEventPersonaWalk`.
+- **Letters** — `docs/media/hosted-events/emails/`.
+- **iPhone screens** — the help captures in `Ben.Web.Website/wwwroot/help/media/the-mobile-apps/`.
+
+**Re-walking.** The walk runs against the local hosts on `IsHauntedDb_player`, with the API's mail pointed
+at a local catcher so nothing leaves the machine:
+
+- Start the API with `Smtp__Host=127.0.0.1 Smtp__Port=2525 Smtp__UseSsl=false Smtp__User=`.
+- Run a catcher that writes each letter as `.html` to a folder, then:
+
+```bash
+BEN_CAPTURE_WALK=1 BEN_MAIL_CATCHER_DIR=<catcher folder> dotnet test Ben.Web.Playwright -p:IsTestProject=true --filter FullyQualifiedName~HostedEventPersonaWalk
+```
+
+Photograph the letters with headless Chrome at 720 px wide.
+
+**Then reissue the demo guest's pass.** Every pictured QR code must be a withdrawn one, because this
+repository is public.
+
+**iPhone help captures** need `TEST_RUNNER_BEN_API_BASE_URL`: `HelpMediaCaptureTests` refuses to run
+without it. Reset the simulator's keychain first (`xcrun simctl keychain <udid> reset`), so a leftover
+session can't photograph the wrong person.
 
 ## What it deliberately leaves out
 

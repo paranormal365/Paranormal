@@ -117,6 +117,11 @@ Notes on what it does, because each one was a bug first:
 - **Recordings never film the sign-in page.** Sign-in happens on a non-recorded context, and the
   recorded one resumes that session — the Development login form arrives pre-filled.
 - **A shot of an empty screen fails the capture.** Each one names text it must contain.
+- **One shot photographs a web address** — the link-preview card in `the-feed`. A reader is not at
+  this machine, so the post is written with the public host and the API has to agree that host is
+  ours or the card falls back to a stranger's. Start the API for a capture run with
+  `AppBaseUrl=https://ishaunted.com`, or set `BEN_PUBLIC_SITE_URL` to whatever host it is running
+  as. The capture asserts the card rather than shipping the wrong one.
 
 Afterwards, rebuild the PDF so the manual matches (see `docs/README.md`).
 

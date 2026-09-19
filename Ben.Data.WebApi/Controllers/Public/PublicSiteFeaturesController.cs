@@ -62,6 +62,19 @@ public sealed class PublicSiteFeaturesController : ControllerBase
             || !bool.TryParse(rawAllow, out var parsedAllow)
             || parsedAllow;
 
-        return Ok(new SiteFeaturesInfo(features, announcement, allowSelfRegistration));
+        // Item 233: the same shape again. The wizard has to know before it draws its choices,
+        // or somebody picks "ghost walking tour" and is refused after filling the form in.
+        var allowTourSignUps =
+            !stored.TryGetValue(SiteSettingKeys.AllowTourBusinessSignUps, out var rawTours)
+            || !bool.TryParse(rawTours, out var parsedTours)
+            || parsedTours;
+
+        // 2026-09-14: the pricing and billing pages have to know before they draw a buy button.
+        var planPurchases =
+            !stored.TryGetValue(SiteSettingKeys.PlanPurchasesEnabled, out var rawPurchases)
+            || !bool.TryParse(rawPurchases, out var parsedPurchases)
+            || parsedPurchases;
+
+        return Ok(new SiteFeaturesInfo(features, announcement, allowSelfRegistration, allowTourSignUps, planPurchases));
     }
 }

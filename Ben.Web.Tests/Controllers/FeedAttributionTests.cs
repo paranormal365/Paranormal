@@ -90,7 +90,7 @@ public sealed class FeedAttributionTests
                new ManualReviewScreener(),
                new FeedLearningService(TestMedia.StorageOnDisk(MediaRoot),
                    NullLogger<FeedLearningService>.Instance),
-               NullLogger<FeedController>.Instance)
+               NullLogger<FeedController>.Instance, Ben.Data.WebApi.Services.LinkPreviews.LinkPreviewWarmer.None)
         {
             ControllerContext = new ControllerContext
             {

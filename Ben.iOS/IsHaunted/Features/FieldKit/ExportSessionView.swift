@@ -78,7 +78,7 @@ struct ExportSessionView: View {
                     } header: {
                         Text("Ready")
                     } footer: {
-                        Text("A .zip holding data.json and the files you chose, in the IsHaunted device data format.")
+                        Text("One .ben file: the readings, the marks and the recordings you chose, sealed together. Hand it to another phone with IsHaunted on it and it opens there as a session, exactly as it plays here.")
                     }
                 }
 
@@ -123,7 +123,8 @@ struct ExportSessionView: View {
         errorMessage = nil
         defer { busy = false }
         do {
-            result = try await store.export(sessionId, includedMedia: Array(chosen))
+            result = try await store.export(sessionId, includedMedia: Array(chosen),
+                                            recordedByAccountId: dependencies.session.me?.userId)
         } catch {
             errorMessage = error.localizedDescription
         }

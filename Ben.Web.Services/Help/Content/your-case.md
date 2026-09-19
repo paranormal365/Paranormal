@@ -13,7 +13,9 @@ order: 30
 
 **My Cases** lists every case you are part of, whether you opened it or were invited onto it by
 someone else. Opening one shows the calendar, everything logged so far, files, and your message
-thread with the investigators.
+thread with the investigators. Messages can be formatted with bold, italics, lists and links, using the
+small toolbar above the box, and the investigators' messages arrive the same way. In the iPhone
+app, messages show as plain text.
 
 ## Logging an occurrence
 

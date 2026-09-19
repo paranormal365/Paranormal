@@ -1,0 +1,11 @@
+{
+  "admitted": false,
+  "refusal": "We don\u0027t recognise that code. Ask them to check the email, or look them up by name.",
+  "hostedEventBookingId": null,
+  "leadName": null,
+  "partySize": null,
+  "kind": null,
+  "nights": null,
+  "guestNames": null,
+  "alreadyCheckedInUtc": null
+}

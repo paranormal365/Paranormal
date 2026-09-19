@@ -331,17 +331,18 @@
                                             { <BenIcon Name="check" /> }
                                         </Template>
                                     </GridColumn>
-                                    <GridCommandColumn Width="130px">
+                                    <GridCommandColumn Width="100px">
                                         <GridCommandButton Command="Edit"
-                                                           Icon="@SvgIcon.Pencil"
-                                                           OnClick="@((GridCommandEventArgs e) => OpenEditPermissionDialog((PermissionRow)e.Items.First()))">
-                                            Edit
-                                        </GridCommandButton>
+                                                           OnClick="@((GridCommandEventArgs e) => OpenEditPermissionDialog((PermissionRow)e.Items.First()))"
+                                                           Title="Edit"
+                                                           Class="ben-grid-action"
+                                                           FillMode="@ThemeConstants.Button.FillMode.Outline"><BenIcon Name="edit-2" /></GridCommandButton>
                                         <GridCommandButton Command="Delete"
-                                                           Icon="@SvgIcon.Trash"
                                                            ThemeColor="@ThemeConstants.Button.ThemeColor.Error"
-                                                           OnClick="@((GridCommandEventArgs e) => DeletePermissionAsync((PermissionRow)e.Items.First()))">
-                                        </GridCommandButton>
+                                                           OnClick="@((GridCommandEventArgs e) => DeletePermissionAsync((PermissionRow)e.Items.First()))"
+                                                           Title="Delete"
+                                                           Class="ben-grid-action"
+                                                           FillMode="@ThemeConstants.Button.FillMode.Outline"><BenIcon Name="trash-2" /></GridCommandButton>
                                     </GridCommandColumn>
                                 </GridColumns>
                             </TelerikGrid>
@@ -539,6 +540,10 @@
         CmsSectionType.EmbeddedInvestigations => "Our investigations",
         CmsSectionType.EmbeddedCases          => "Our cases",
         CmsSectionType.CaseMedia              => "Photos from a case",
+        CmsSectionType.EventBooking           => "An event: dates and ask for a place",
+        CmsSectionType.EventProgramme         => "An event's programme",
+        CmsSectionType.EventGallery           => "An event's pictures",
+        CmsSectionType.EventVenue             => "An event's venue",
         _                                     => type.ToString(),
     };
 

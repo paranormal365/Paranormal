@@ -43,7 +43,7 @@ public sealed class PublicEventControllerTests
     private static PublicEventController Build(IDbContextFactory<BenDataContext> f, Guid? userId)
         // The real sanitizer, not a stub: the public read path cleans descriptions on the way out,
         // and a stub here would let a change to that stop being tested.
-        => new(f, new Ben.Data.WebApi.Services.CmsMarkupSanitizer())
+        => new(f, new Ben.Data.WebApi.Services.CmsMarkupSanitizer(), Support.SilentTourMail.Instance)
         {
             ControllerContext = new ControllerContext
             {

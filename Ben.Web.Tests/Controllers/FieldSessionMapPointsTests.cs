@@ -106,7 +106,9 @@ public class FieldSessionMapPointsTests
         // mediaIngest is only used by the upload paths; the map endpoint never touches it.
         var controller = new FieldSessionUploadController(
             factory, new DictionaryStorage(storage),
-            mediaIngest: null!, NullLogger<FieldSessionUploadController>.Instance);
+            mediaIngest: null!, new Ben.Data.WebApi.Services.Media.MediaRetentionPolicy(
+                new Ben.Data.WebApi.Services.Billing.SubscriptionLimitGuard(factory)), TestBundles.Store(new DictionaryStorage(storage)),
+            NullLogger<FieldSessionUploadController>.Instance);
 
         controller.ControllerContext = new ControllerContext
         {

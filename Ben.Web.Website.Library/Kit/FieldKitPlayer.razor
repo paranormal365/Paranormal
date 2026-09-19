@@ -1,6 +1,7 @@
 @namespace Ben.Web.Website.Library.Kit
 @using Microsoft.JSInterop
 @using System.Text.Json
+@using System.Diagnostics
 @using Ben.Web.Website.Library.Manage.Maps
 @using Ben.Web.Services
 @inject IBenAdminClient AdminClient
@@ -306,6 +307,15 @@
                                                    A handful, evenly spaced, is what a time axis is
                                                    for; the readings themselves are all still drawn. *@
                                                 <ChartCategoryAxisLabels Step="@LabelStep(_chartPoints.Count)" />
+                                                @if (AwayBands(_chartPoints) is { Count: > 0 } bands)
+                                                {
+                                                    <ChartCategoryAxisPlotBands>
+                                                        @foreach (var band in bands)
+                                                        {
+                                                            <ChartCategoryAxisPlotBand From="@band.From" To="@band.To" Color="#6c757d" Opacity="0.18" />
+                                                        }
+                                                    </ChartCategoryAxisPlotBands>
+                                                }
                                             </ChartCategoryAxis>
                                         </ChartCategoryAxes>
                                         <ChartValueAxes>
@@ -342,6 +352,15 @@
                                                    A handful, evenly spaced, is what a time axis is
                                                    for; the readings themselves are all still drawn. *@
                                                 <ChartCategoryAxisLabels Step="@LabelStep(_soundPoints.Count)" />
+                                                @if (AwayBands(_soundPoints) is { Count: > 0 } bands)
+                                                {
+                                                    <ChartCategoryAxisPlotBands>
+                                                        @foreach (var band in bands)
+                                                        {
+                                                            <ChartCategoryAxisPlotBand From="@band.From" To="@band.To" Color="#6c757d" Opacity="0.18" />
+                                                        }
+                                                    </ChartCategoryAxisPlotBands>
+                                                }
                                             </ChartCategoryAxis>
                                         </ChartCategoryAxes>
                                         <ChartValueAxes>
@@ -351,6 +370,12 @@
                                         </ChartValueAxes>
                                         <ChartLegend Visible="false" />
                                     </TelerikChart>
+                                }
+                                @if (_awayStretches.Count > 0)
+                                {
+                                    <div class="text-muted small pt-2" data-testid="away-stretch">
+                                        <strong>Shaded:</strong> @AwaySentence()
+                                    </div>
                                 }
                             </div>
                         </div>
@@ -406,6 +431,9 @@
                                                       Longitude="@(MapPoint?.Longitude ?? _track[0].Longitude)"
                                                       Title="@PositionTitle"
                                                       Config="@_mapConfig"
+                                                      MarkerBearing="@CurrentBearing"
+                                                      MarkerLatitude="@CurrentPoint?.Latitude"
+                                                      MarkerLongitude="@CurrentPoint?.Longitude"
                                                       ReadOnly="true"
                                                       Height="240px" />
                                 }
@@ -494,6 +522,13 @@
                                         @Elapsed(marker.At)
                                     </button>
                                     <span>@marker.Kind</span>
+                                    @* The reading that caused it, beside what it was. A list of
+                                       the moments the field moved that does not say HOW FAR is a
+                                       list somebody has to jump into one row at a time to read. *@
+                                    @if (MarkerFieldText(marker) is { } reading)
+                                    {
+                                        <span class="font-monospace small" data-testid="marker-field">@reading</span>
+                                    }
                                     @if (!string.IsNullOrWhiteSpace(marker.Room))
                                     {
                                         <span class="badge text-bg-secondary" data-testid="marker-room">@marker.Room</span>
@@ -586,6 +621,18 @@
     private List<GeoPoint> _track = new();
     private List<GeoPoint> _markerPoints = new();
     private List<MarkerRow> _markers = new();
+    /// <summary>
+    /// The stretches the app was in the background, from the phone's own marks (2026-09-17).
+    /// </summary>
+    /// <remarks>
+    /// The phone keeps recording sound and readings while it is put away — the app declares the
+    /// background-audio mode for it — and only the camera stops. The review on the phone brackets
+    /// the stretch with two marks and a sentence; this page shades the same stretch on the trace
+    /// and repeats the sentence, so nobody reading a night later mistakes a dark camera for a
+    /// dead one. A stretch that was never closed — the session ended while the app was away —
+    /// runs to the last reading.
+    /// </remarks>
+    private List<AwayStretch> _awayStretches = new();
     /// The base level the session was measured against, read from the document.
     private double? _baseline;
     /// <summary>
@@ -794,6 +841,10 @@
                     && motion.ValueKind == JsonValueKind.Object)
                 {
                     reading.HeadingDegrees = Number(motion, "heading_degrees");
+                    // Which way they were MOVING, which is not which way they were pointed. Only
+                    // sessions recorded by 1.0.3 and later carry it; older ones fall back to the
+                    // bearing between their own fixes. See CurrentBearing.
+                    reading.CourseDegrees  = Number(motion, "course_degrees");
                 }
 
                 reading.Note = element.TryGetProperty("note", out var note)
@@ -846,8 +897,10 @@
 
         _markers = _readings
             .Where(r => r.Marker is not null)
-            .Select(r => new MarkerRow(r.At, Humanise(r.Marker!), r.Note, r.Room))
+            .Select(r => new MarkerRow(r.At, Humanise(r.Marker!), r.Note, r.Room, r.Microtesla))
             .ToList();
+
+        _awayStretches = AwayStretches(_readings);
 
         _markerPoints = _readings
             .Where(r => r.Marker is not null && r.Latitude is not null && r.Longitude is not null)
@@ -869,7 +922,8 @@
             .Where(r => r.Microtesla is not null)
             .Select(r => new TracePoint(
                 r.At.ToViewerLocalTime(UserState).ToString("HH:mm:ss"),
-                baseline is double b ? (r.Microtesla!.Value - b) * 10 : r.Microtesla!.Value * 10))
+                baseline is double b ? (r.Microtesla!.Value - b) * 10 : r.Microtesla!.Value * 10,
+                r.At))
             .ToList();
 
         return Thin(points);
@@ -921,7 +975,7 @@
     {
         var points = readings
             .Where(r => r.SoundDbfs is not null)
-            .Select(r => new TracePoint(r.At.ToViewerLocalTime(UserState).ToString("HH:mm:ss"), r.SoundDbfs!.Value))
+            .Select(r => new TracePoint(r.At.ToViewerLocalTime(UserState).ToString("HH:mm:ss"), r.SoundDbfs!.Value, r.At))
             .ToList();
 
         return Thin(points);
@@ -931,12 +985,71 @@
         => element.TryGetProperty(name, out var value) && value.ValueKind == JsonValueKind.Number
             ? value.GetDouble() : null;
 
+    /// <summary>One stretch the app was put away for, and the sentence the phone wrote about it.</summary>
+    public sealed record AwayStretch(DateTime From, DateTime To, string? Note);
+
+    /// <summary>Pairs each "put away" mark with the "back" that follows it; an unclosed one runs to the end.</summary>
+    private static List<AwayStretch> AwayStretches(List<Reading> readings)
+    {
+        var stretches = new List<AwayStretch>();
+        Reading? open = null;
+        foreach (var reading in readings.OrderBy(r => r.At))
+        {
+            switch (reading.Marker)
+            {
+                case "app_backgrounded" when open is null:
+                    open = reading;
+                    break;
+                case "app_returned" when open is not null:
+                    stretches.Add(new AwayStretch(open.At, reading.At, open.Note));
+                    open = null;
+                    break;
+            }
+        }
+        if (open is not null && readings.Count > 0)
+            stretches.Add(new AwayStretch(open.At, readings.Max(r => r.At), open.Note));
+        return stretches;
+    }
+
+    /// <summary>
+    /// Where each stretch falls among a chart's points, as the category indexes a plot band takes.
+    /// Empty when no charted point falls inside it — a band with nothing under it would be drawn
+    /// as nothing anyway.
+    /// </summary>
+    private List<(double From, double To)> AwayBands(List<TracePoint> points)
+    {
+        var bands = new List<(double, double)>();
+        foreach (var stretch in _awayStretches)
+        {
+            var first = points.FindIndex(p => p.At >= stretch.From && p.At <= stretch.To);
+            if (first < 0) continue;
+            var last = points.FindLastIndex(p => p.At <= stretch.To);
+            bands.Add((first, Math.Max(first + 1, last + 1)));
+        }
+        return bands;
+    }
+
+    /// <summary>The phone's own sentence, with how long, for one stretch or several.</summary>
+    private string AwaySentence()
+    {
+        var total = TimeSpan.FromSeconds(_awayStretches.Sum(s => (s.To - s.From).TotalSeconds));
+        var howLong = total.TotalHours >= 1 ? $"{(int)total.TotalHours} hr {total.Minutes} min"
+                    : total.TotalMinutes >= 1 ? $"{(int)total.TotalMinutes} min {total.Seconds} sec"
+                    : $"{total.Seconds} sec";
+        var note = _awayStretches.Select(s => s.Note).FirstOrDefault(n => !string.IsNullOrWhiteSpace(n))
+                   ?? "The app was put away here.";
+        var times = _awayStretches.Count == 1 ? "" : $" ({_awayStretches.Count} times)";
+        return $"{note} Away for {howLong}{times}.";
+    }
+
     private static string Humanise(string marker) => marker switch
     {
         "sentry_emf" => "Magnetic spike",
         "sentry_sound" => "Sound",
         "device_moved" => "Device moved",
         "scene_motion" => "Movement seen",
+        "app_backgrounded" => "App put away",
+        "app_returned" => "Back in the app",
         "evp_question" => "Question asked",
         "evp_wait_end" => "Stopped waiting",
         "manual_marker" => "Marked",
@@ -981,12 +1094,26 @@
         // or there is no recording here — does the page keep time itself.
         if (RecordingCovering(_playhead) is { } key && MediaStartOf(key) is { } startsAt)
         {
-            await SeekMediaAsync(key, (_playhead - startsAt).TotalSeconds);
-            if (await PlayMediaAsync(key)) return;   // OnMediaPlay sets the state
+            // Seek and play in ONE call, so the wait for the element to be ready happens where it
+            // can actually be waited for. Two calls left a gap in which an element still loading
+            // dropped the seek and started from zero — which is what reported the beginning back
+            // as the playhead.
+            if (await PlayMediaFromAsync(key, (_playhead - startsAt).TotalSeconds)) return;
+        }
+        else if (NextRecordingAfter(_playhead) is { } next && MediaStartOf(next) is { } nextStart)
+        {
+            // Nothing is playing HERE, but something plays soon: the playhead moves up to the
+            // recording that starts next and that recording is the clock from its beginning. This
+            // is the half of the old "first recording" fallback that was right — a playhead before
+            // every clip has nowhere to go but forward. The half that was wrong, a playhead inside
+            // or past a clip being dragged back to its start, stays gone (Ben, 2026-09-16).
+            _playhead = nextStart;
+            if (await PlayMediaFromAsync(next, 0)) return;
         }
 
         _clockKey = null;
         _playing = true;
+        Reanchor(_playhead);
         _ticker = new CancellationTokenSource();
         _ = Tick(_ticker.Token);
     }
@@ -996,6 +1123,7 @@
         _playing = false;
         _ticker?.Cancel();
         _ticker = null;
+        _anchorAt = null;
     }
 
     private async Task PauseAsync()
@@ -1026,18 +1154,75 @@
     private DateTime? MediaStartOf(Guid fileId)
         => _session?.Files.FirstOrDefault(f => f.Id == fileId) is { } file ? MediaStart(file) : null;
 
-    /// <summary>The audio or video whose span contains the moment — the latest to have begun.</summary>
+    /// <summary>
+    /// The audio or video whose span contains the moment — the latest to have begun, and only if
+    /// it has not already finished.
+    /// </summary>
+    /// <remarks>
+    /// <para>
+    /// Ben, 2026-09-16: "If I scroll the playhead in the player then hit play, it starts over from
+    /// the beginning." This was why. A recording was treated as covering everything from its start
+    /// onwards, because nothing here knew how long one ran — so a two-minute clip at the top of a
+    /// twelve-minute session claimed every moment of it. Pressing play at minute six handed the
+    /// clock to that clip, which was seeked past its own end, started from the beginning instead,
+    /// and reported second zero back as the playhead.
+    /// </para>
+    /// <para>
+    /// The end comes from the browser now (<see cref="OnMediaDuration"/>). A recording whose
+    /// length is not known yet still counts as covering, because refusing it would mean the first
+    /// press of Play never used the recording at all — but the moment its metadata lands, its real
+    /// span is what decides.
+    /// </para>
+    /// <para>
+    /// This never hands back a recording that does not cover the moment. The old "first
+    /// recording" fallback did, and a playhead inside a later clip was then seeked to a negative
+    /// offset — clamped to zero, and the beginning again. A playhead BEFORE every recording is a
+    /// different case with a different answer, <see cref="NextRecordingAfter"/>: the page moves it
+    /// forward to the recording that starts next, because that is what pressing Play at 0:00 on
+    /// a session whose sound begins at 0:04 means.
+    /// </para>
+    /// </remarks>
     private Guid? RecordingCovering(DateTime moment)
         => _session?.Files
             .Where(f => (IsAudio(f.RelativePath) || IsVideo(f.RelativePath)) && !_undecodable.Contains(f.Id))
             .Select(f => (f.Id, StartsAt: MediaStart(f)))
-            .Where(x => x.StartsAt is not null && x.StartsAt <= moment)
+            .Where(x => x.StartsAt is not null && x.StartsAt <= moment && !HasFinishedBy(x.Id, x.StartsAt!.Value, moment))
             .OrderByDescending(x => x.StartsAt)
             .Select(x => (Guid?)x.Id)
-            .FirstOrDefault()
-         ?? _session?.Files
+            .FirstOrDefault();
+
+    /// <summary>The recording that begins soonest after this moment, when one does.</summary>
+    /// <remarks>
+    /// Only ever consulted when nothing covers the moment. With the playhead at 0:00 and the first
+    /// recording at 0:04, Play jumps to 0:04 and the recording drives from its start — the
+    /// behaviour <c>FieldSessionMediaClockTests</c> pins, and the one the first fix of the
+    /// fallback took away by mistake.
+    /// </remarks>
+    private Guid? NextRecordingAfter(DateTime moment)
+        => _session?.Files
             .Where(f => (IsAudio(f.RelativePath) || IsVideo(f.RelativePath)) && !_undecodable.Contains(f.Id))
-            .Select(f => (Guid?)f.Id).FirstOrDefault();
+            .Select(f => (f.Id, StartsAt: MediaStart(f)))
+            .Where(x => x.StartsAt is not null && x.StartsAt > moment)
+            .OrderBy(x => x.StartsAt)
+            .Select(x => (Guid?)x.Id)
+            .FirstOrDefault();
+
+    /// <summary>Whether a recording had already run out before this moment.</summary>
+    private bool HasFinishedBy(Guid fileId, DateTime startsAt, DateTime moment)
+        => _mediaDurations.TryGetValue(fileId, out var seconds)
+        && seconds > 0
+        && moment >= startsAt.AddSeconds(seconds);
+
+    /// <summary>How long each recording runs, as the browser reported it.</summary>
+    private readonly Dictionary<Guid, double> _mediaDurations = [];
+
+    /// <summary>The browser has read a recording's metadata and knows how long it is.</summary>
+    [JSInvokable]
+    public void OnMediaDuration(Guid key, double seconds)
+    {
+        if (double.IsNaN(seconds) || double.IsInfinity(seconds) || seconds <= 0) return;
+        _mediaDurations[key] = seconds;
+    }
 
     /// <summary>Files the browser reported it cannot decode; never chosen as the clock.</summary>
     private readonly HashSet<Guid> _undecodable = [];
@@ -1069,22 +1254,23 @@
         }
     }
 
-    private async Task<bool> PlayMediaAsync(Guid key)
+    private async Task PauseMediaAsync(Guid key)
+    {
+        if (_media is null || !_mediaRefs.TryGetValue(key, out var el)) return;
+        try { await _media.InvokeVoidAsync("pause", el); } catch (JSException) { }
+    }
+
+    /// <summary>Sends a recording to a moment and plays it from there, in one call.</summary>
+    private async Task<bool> PlayMediaFromAsync(Guid key, double seconds)
     {
         if (_media is null || !_mediaRefs.TryGetValue(key, out var el)) return false;
         try
         {
             await _media.InvokeVoidAsync("rate", el, (double)_rate);
-            var refusal = await _media.InvokeAsync<string?>("play", el);
+            var refusal = await _media.InvokeAsync<string?>("playFrom", el, seconds);
             return refusal is null;
         }
         catch (JSException) { return false; }
-    }
-
-    private async Task PauseMediaAsync(Guid key)
-    {
-        if (_media is null || !_mediaRefs.TryGetValue(key, out var el)) return;
-        try { await _media.InvokeVoidAsync("pause", el); } catch (JSException) { }
     }
 
     private async Task SeekMediaAsync(Guid key, double seconds)
@@ -1095,6 +1281,15 @@
 
     private async Task SetRateAsync(int rate)
     {
+        // Anchored BEFORE the change, so the time already played keeps the speed it was played
+        // at; anchoring after would re-scale it. When a recording is the clock the browser owns
+        // the rate and there is no anchor to keep.
+        if (_playing && _clockKey is null)
+        {
+            _playhead = Measured;
+            Reanchor(_playhead);
+        }
+
         _rate = rate;
         if (_clockKey is { } key && _media is not null && _mediaRefs.TryGetValue(key, out var el))
         {
@@ -1151,14 +1346,47 @@
         }
     }
 
+    // ── Where the playhead is measured FROM ──────────────────────────────────
+    //
+    // Not counted. See ReplayClock: a tick is a delay plus a map update plus a render pushed down
+    // the circuit, so it always takes longer than it asked for, and adding a fixed slice per tick
+    // made a 16x replay run slower than 16x with nothing on the page saying so.
+    private DateTime _anchorPlayhead;
+    private long? _anchorAt;          // A Stopwatch timestamp: monotonic, unlike UtcNow.
+
+    private const int TickEveryMs = 250;
+
+    /// <summary>Where the playhead is right NOW, which between ticks is past where it shows.</summary>
+    private DateTime Measured => _anchorAt is { } at
+        ? ReplayClock.Playhead(_anchorPlayhead, Stopwatch.GetElapsedTime(at), _rate, _end)
+        : _playhead;
+
+    /// <summary>Starts measuring again from a given moment.</summary>
+    /// <remarks>
+    /// Wanted whenever the elapsed time since the last anchor stops meaning anything: pressing
+    /// play, or changing speed. Changing speed anchors where the measurement says we are, not
+    /// where the last tick left the display — anchoring on the stale value would throw away up to
+    /// a quarter-second, which at 16x is four seconds of the night per change. Seeking and
+    /// jumping to a mark both pause first, so they need no anchor of their own.
+    /// </remarks>
+    private void Reanchor(DateTime moment)
+    {
+        _anchorPlayhead = moment;
+        _anchorAt = Stopwatch.GetTimestamp();
+    }
+
     private async Task Tick(CancellationToken token)
     {
         while (!token.IsCancellationRequested && _playing)
         {
-            await Task.Delay(250, CancellationToken.None);
+            await Task.Delay(TickEveryMs, CancellationToken.None);
             if (token.IsCancellationRequested) break;
+            if (_anchorAt is not { } anchoredAt) break;
 
-            _playhead = _playhead.AddSeconds(0.25 * _rate);
+            // Measured, not counted: a tick that arrives late moves the playhead further.
+            _playhead = ReplayClock.Playhead(
+                _anchorPlayhead, Stopwatch.GetElapsedTime(anchoredAt), _rate, _end);
+
             if (_playhead >= _end)
             {
                 _playhead = _end;
@@ -1229,16 +1457,111 @@
 
     private Reading? Current => _readings.LastOrDefault(r => r.At <= _playhead);
 
+    /// <summary>
+    /// Where they were at the playhead — between two fixes, not at the last one.
+    /// </summary>
+    /// <remarks>
+    /// <para>
+    /// Ben, 2026-09-16, watching a session play back: "the green circle looks like it is bouncing.
+    /// It should just follow the data instead of bounce." It was answering with the last reading
+    /// at or before the playhead, so the marker sat still for a second and then jumped to the next
+    /// fix — a step every time, which reads as bouncing.
+    /// </para>
+    /// <para>
+    /// Position is the one channel that SHOULD be interpolated, and the app's own replay has said
+    /// so since it was written: instruments hold their last value, because smoothing a field trace
+    /// between samples would draw a reading nobody took — but somebody walking between two fixes
+    /// really was somewhere in between. Drawing them at the older fix is the invented answer here.
+    /// </para>
+    /// </remarks>
     private GeoPoint? CurrentPoint
     {
         get
         {
-            var reading = _readings.LastOrDefault(
+            var before = _readings.LastOrDefault(
                 r => r.At <= _playhead && r.Latitude is not null && r.Longitude is not null);
-            return reading is null
-                ? null
-                : new GeoPoint(reading.Latitude!.Value, reading.Longitude!.Value, reading.At);
+            if (before is null) return null;
+
+            var after = _readings.FirstOrDefault(
+                r => r.At > _playhead && r.Latitude is not null && r.Longitude is not null);
+
+            // Nothing ahead: the last fix is the honest answer, and holding there is right — the
+            // session ended, or they stopped moving and the phone stopped saying otherwise.
+            if (after is null)
+                return new GeoPoint(before.Latitude!.Value, before.Longitude!.Value, before.At);
+
+            var span = (after.At - before.At).TotalSeconds;
+            // A gap of minutes is not a walk, it is a phone that lost its fix. Sliding across it
+            // would draw somebody strolling through a wall at a constant speed for three minutes.
+            if (span <= 0 || span > MaxGlideSeconds)
+                return new GeoPoint(before.Latitude!.Value, before.Longitude!.Value, before.At);
+
+            var progress = Math.Clamp((_playhead - before.At).TotalSeconds / span, 0, 1);
+            return new GeoPoint(
+                before.Latitude!.Value + (after.Latitude!.Value - before.Latitude!.Value) * progress,
+                before.Longitude!.Value + (after.Longitude!.Value - before.Longitude!.Value) * progress,
+                _playhead);
         }
+    }
+
+    /// <summary>Longer than this between fixes and the marker holds rather than slides.</summary>
+    private const double MaxGlideSeconds = 30;
+
+    /// <summary>
+    /// Which way to point the arrow: where they were looking if the compass said, otherwise where
+    /// they were going.
+    /// </summary>
+    /// <remarks>
+    /// Three answers in order of what they are worth. The compass is what somebody was POINTED at,
+    /// which is what they were investigating. The fix's own course is where they were travelling,
+    /// which needs no compass and is what a phone has indoors. Failing both, the bearing between
+    /// the fixes either side of the playhead says the same thing from the track itself — and that
+    /// is the one that works for every session already recorded, which carry no course at all.
+    /// </remarks>
+    private double? CurrentBearing
+    {
+        get
+        {
+            var reading = _readings.LastOrDefault(
+                r => r.At <= _playhead && (r.HeadingDegrees is not null || r.CourseDegrees is not null));
+            if (reading?.HeadingDegrees is { } heading) return heading;
+            if (reading?.CourseDegrees is { } course) return course;
+
+            var before = _readings.LastOrDefault(
+                r => r.At <= _playhead && r.Latitude is not null && r.Longitude is not null);
+            var after = _readings.FirstOrDefault(
+                r => r.At > _playhead && r.Latitude is not null && r.Longitude is not null);
+            if (before is null || after is null) return _lastBearing;
+
+            var bearing = BearingBetween(
+                before.Latitude!.Value, before.Longitude!.Value,
+                after.Latitude!.Value, after.Longitude!.Value);
+
+            // Two fixes a metre apart are GPS noise, not a turn. Holding the last bearing stops
+            // the arrow spinning on the spot while somebody stands still.
+            var moved = MetresBetween(
+                new GeoPoint(before.Latitude!.Value, before.Longitude!.Value, before.At),
+                new GeoPoint(after.Latitude!.Value, after.Longitude!.Value, after.At));
+            if (moved < 2.0) return _lastBearing;
+
+            _lastBearing = bearing;
+            return bearing;
+        }
+    }
+
+    /// <summary>The last bearing worth drawing, held while somebody stands still.</summary>
+    private double? _lastBearing;
+
+    /// <summary>Initial bearing from one point to another, clockwise from north.</summary>
+    private static double BearingBetween(double fromLat, double fromLon, double toLat, double toLon)
+    {
+        var φ1 = fromLat * Math.PI / 180;
+        var φ2 = toLat * Math.PI / 180;
+        var Δλ = (toLon - fromLon) * Math.PI / 180;
+
+        var y = Math.Sin(Δλ) * Math.Cos(φ2);
+        var x = Math.Cos(φ1) * Math.Sin(φ2) - Math.Sin(φ1) * Math.Cos(φ2) * Math.Cos(Δλ);
+        return (Math.Atan2(y, x) * 180 / Math.PI + 360) % 360;
     }
 
     /// <summary>
@@ -1261,6 +1584,24 @@
     }
 
     private string SoundText => Current?.SoundDbfs is double sound ? $"{sound:0} dB" : "—";
+
+    /// <summary>
+    /// The field reading on a marked row, said the same way the playhead says it.
+    /// </summary>
+    /// <remarks>
+    /// Deviation when the session had a base, absolute when it did not — and it says which, for
+    /// the reason <see cref="FieldText"/> already does: "+50" and "480 abs" are not two readings
+    /// of the same thing, and putting them in one column without saying so invites somebody to
+    /// compare them. Null for a mark that carries no field reading at all, such as a photo or a
+    /// question, where a dash would imply an instrument that failed.
+    /// </remarks>
+    private string? MarkerFieldText(MarkerRow marker)
+    {
+        if (marker.Microtesla is not double value) return null;
+        return _baseline is double reference
+            ? $"{(value - reference) * 10:+0;-0;0} mG"
+            : $"{value * 10:0} mG abs";
+    }
 
     /// <summary>
     /// The heading as a compass point and a bearing.
@@ -1366,15 +1707,28 @@
         public double? Longitude { get; set; }
         public double? AccuracyMeters { get; set; }
         public double? HeadingDegrees { get; set; }
+        public double? CourseDegrees { get; set; }
         public string? Marker { get; set; }
         public string? Note { get; set; }
         /// <summary>The room the operator said they were in. See <c>CurrentRoom</c>.</summary>
         public string? Room { get; set; }
     }
 
-    public sealed record TracePoint(string Label, double Milligauss);
+    /// <param name="At">When the reading was, kept so a stretch of time — the app being put away —
+    /// can be found among the points after thinning, when their index no longer says.</param>
+    public sealed record TracePoint(string Label, double Milligauss, DateTime At = default);
     public sealed record GeoPoint(double Latitude, double Longitude, DateTime At);
-    private sealed record MarkerRow(DateTime At, string Kind, string? Note, string? Room);
+    /// <param name="Microtesla">
+    /// The magnetic reading on the record that triggered this, when there was one.
+    /// </param>
+    /// <remarks>
+    /// The number is on the row because "Magnetic spike at 00:04:12" does not say whether it was
+    /// worth crossing the room for. Ben, 2026-09-16, asking where a reported magnetometer reading
+    /// appears: it was on the chart and in the playhead readout, and the list of the very moments
+    /// it mattered said only that something happened.
+    /// </remarks>
+    private sealed record MarkerRow(
+        DateTime At, string Kind, string? Note, string? Room, double? Microtesla);
 
     /// <summary>
     /// The room at the playhead, when the operator named one.

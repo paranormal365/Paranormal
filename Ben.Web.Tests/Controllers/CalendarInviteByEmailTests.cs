@@ -54,7 +54,8 @@ public class CalendarInviteByEmailTests
         => new(f, Mapper(), new Ben.Service.RepositoryService.Services.OrganizationSecurityService(f), UnconfiguredEmail(),
             Microsoft.Extensions.Options.Options.Create(new Ben.Data.Common.SiteIdentity { BaseUrl = "https://example.test" }),
             Microsoft.Extensions.Logging.Abstractions.NullLogger<OrgCalendarEventController>.Instance,
-            new Ben.Data.WebApi.Services.CmsMarkupSanitizer())
+            new Ben.Data.WebApi.Services.CmsMarkupSanitizer(),
+            Support.SilentTourMail.Instance)
         {
             ControllerContext = new ControllerContext
             {
@@ -204,7 +205,8 @@ public class CalendarInviteByEmailTests
         var ctrl = new OrgCalendarEventController(factory, Mapper(), new Ben.Service.RepositoryService.Services.OrganizationSecurityService(factory), UnconfiguredEmail(),
             Microsoft.Extensions.Options.Options.Create(new Ben.Data.Common.SiteIdentity { BaseUrl = "https://example.test" }),
             Microsoft.Extensions.Logging.Abstractions.NullLogger<OrgCalendarEventController>.Instance,
-            new Ben.Data.WebApi.Services.CmsMarkupSanitizer())
+            new Ben.Data.WebApi.Services.CmsMarkupSanitizer(),
+            Support.SilentTourMail.Instance)
         {
             ControllerContext = new ControllerContext
             {
@@ -266,7 +268,8 @@ public class CalendarInviteByEmailTests
             UnconfiguredEmail(),
             Microsoft.Extensions.Options.Options.Create(new Ben.Data.Common.SiteIdentity { BaseUrl = "https://example.test" }),
             Microsoft.Extensions.Logging.Abstractions.NullLogger<OrgCalendarEventController>.Instance,
-            new Ben.Data.WebApi.Services.CmsMarkupSanitizer())
+            new Ben.Data.WebApi.Services.CmsMarkupSanitizer(),
+            Support.SilentTourMail.Instance)
         {
             ControllerContext = new ControllerContext
             {
@@ -371,14 +374,34 @@ public class CalendarInviteByEmailTests
             }
         };
 
-        // 1. Add the address. It starts private and unvalidated, so an invite must not find it yet.
+        // Adding an address now issues its own confirmation link, so this needs a mail service and a
+    // base URL. Unconfigured on purpose: this test is about the invite path, not about sending.
+    static IEmailService UnconfiguredMail()
+    {
+        var m = new Mock<IEmailService>();
+        m.SetupGet(x => x.IsConfigured).Returns(false);
+        return m.Object;
+    }
+    static IConfiguration NoBaseUrl() => new ConfigurationBuilder().Build();
+
+    // 1. Add the address. It starts private and unvalidated, so an invite must not find it yet.
         var created = Assert.IsType<MyEmailRecord>(Assert.IsType<OkObjectResult>(
-            (await contact.CreateEmail(new UpsertMyEmailRequest(emailTypeId, "self@example.com", false, false), default)).Result).Value);
+            (await contact.CreateEmail(
+                new UpsertMyEmailRequest(emailTypeId, "self@example.com", false, false),
+                UnconfiguredMail(), NoBaseUrl(), default)).Result).Value);
 
         Assert.IsType<NotFoundObjectResult>((await Build(factory)
             .AddAttendeeByEmail(OrgId, EventId, new AddAttendeeByEmailRequest("self@example.com"), default)).Result);
 
-        // 2. Issue a link.
+        // 2. Issue a link. Adding the address already sent one, so step outside the resend
+        //    cooldown — this test is about the invite path, not about the throttle.
+        await using (var db = await factory.CreateDbContextAsync())
+        {
+            var row = await db.UserEmails.FirstAsync(e => e.Id == created.Id);
+            row.DateValidationSent = DateTime.UtcNow.AddHours(-1);
+            await db.SaveChangesAsync();
+        }
+
         var mail = new Mock<IEmailService>();
         mail.SetupGet(x => x.IsConfigured).Returns(false);
         var config = new ConfigurationBuilder().Build();

@@ -106,6 +106,10 @@ identity — which is where the refusals below come from.</p>
             "16-help": "The in-app help, readable without an account.",
             "17-refused-my-cases": "A page that needs an account. Note it explains rather than "
                                    "showing an empty list — this is the refusal rule in action.",
+            "18-a-hosted-event": "A hosted event's public page (item 235): the venue's photographs, the nights, "
+                                 "what is left, and how to get in and around.",
+            "19-picking-seats-without-an-account": "Seats picked with no account: the visitor is emailed a link "
+                                                   "to hold them, and nothing is held until they open it.",
         },
     },
     "client": {
@@ -128,6 +132,11 @@ every render rather than depending on somebody having remembered to set a flag.<
             "24-pricing": "What the paid plans cover, if they want their own account.",
             "25-profile": "Their account and contact details.",
             "26-refused-admin": "Administration, refused. The site names the refusal.",
+            "27-asking-for-a-room": "As a guest at somebody's hosted event: asking for a room. Nothing is held or "
+                                    "paid here.",
+            "28-what-im-going-to": "Every hosted event this person has a place at, with the pass and the event's "
+                                   "own screen.",
+            "29-event-pass": "The QR pass for the door. The one pictured has since been withdrawn.",
         },
     },
     "member": {
@@ -152,6 +161,10 @@ account for exactly this reason.</p>
             "36-feed": "The feed, where a member can post as themselves or as the group.",
             "37-profile": "Account, security and privacy.",
             "38-refused-admin": "Site administration, refused.",
+            "39-asked-to-help-at-an-event": "An invitation to help at a hosted event. It grants only what it "
+                                            "names — here, the door — whatever the member's seat in the group.",
+            "3a-the-door-on-a-phone": "The door for tonight on a phone: who is expected, search by name or pass "
+                                      "code, and walk-ups.",
         },
     },
     "viewer": {
@@ -195,6 +208,14 @@ documents for what the same page looks like without those grants.</p>
             "55-events": "Events the group runs, public and private.",
             "56-org-subscriptions": "The subscription: what the plan covers and what it costs.",
             "57-profile": "Their own account.",
+            "58-tours": "Tours, for a business that runs walks — the product the tour plan is "
+                        "priced on, and the door to each tour's guides, guest email and gallery.",
+            "59-event-at-a-glance": "A hosted event's numbers: people coming, parties waiting, places left "
+                                    "night by night, arrivals and reviews.",
+            "5a-confirming-a-booking": "Confirming a party into the rooms the organizer chooses, with a line "
+                                       "the guest reads. The pass goes with the confirmation.",
+            "5b-writing-to-guests": "One letter to everybody with a place, with the count shown before it is sent.",
+            "5c-venue-profile": "The group's venue: its history, house rules and photo library.",
         },
     },
     "superadmin": {
@@ -223,6 +244,11 @@ rather than requiring somebody to read the database.</p>
             "67-billing-ledger": "The money trail, append-only.",
             "68-referrals": "Referral standings and what they earn.",
             "69-support-tickets": "The support queue.",
+            "6a-events-dashboard": "Hosted events across every group: where they stand, credits, venues and "
+                                   "appeals waiting.",
+            "6b-every-event": "Every hosted event, with view and remove.",
+            "6c-removing-an-event": "Removal says what it will do before it is done: off the site, guests told, "
+                                    "credit returned, the organizer offered an appeal.",
         },
     },
 }

@@ -43,7 +43,9 @@ public sealed class EventReminderJobTests
     }
 
     private static EventReminderJob Build(IDbContextFactory<BenDataContext> factory, IEmailService email)
-        => new(factory, email,
+        // The tour mailer is silent here: these tests are about the ordinary event reminder, and
+        // a tour's own wording has its own suite.
+        => new(factory, email, Support.SilentTourMail.Instance,
                Options.Create(new SiteIdentity { Name = "IsHaunted.com", BaseUrl = "https://ishaunted.com" }),
                NullLogger<EventReminderJob>.Instance);
 
@@ -142,24 +144,36 @@ public sealed class EventReminderJobTests
     }
 
     [Fact]
-    public void The_marker_table_is_unique_on_event_and_user()
+    public void The_marker_table_is_unique_on_event_user_and_start()
     {
         // Asserted against the model rather than by inserting twice, because the in-memory provider
         // these tests use does not enforce unique indexes. This index is what stops two instances
         // of the scheduler both sending; losing it would leave no error, only duplicate mail.
+        //
+        // The START is part of the key since item 233. The narrower key made a reminder already
+        // sent for last week's 7pm silence the one for the 8pm the walk was moved to — so a
+        // rescheduled date's last word to every guest was the old time. Widening it re-arms on a
+        // reschedule while still refusing a second reminder for the same start.
         using var db = TestDbFactory.Create().CreateDbContext();
+
+        var expected = new[]
+        {
+            nameof(EventReminderSent.AppUserId),
+            nameof(EventReminderSent.OrgCalendarEventId),
+            nameof(EventReminderSent.ForStartUtc),
+        }.OrderBy(n => n, StringComparer.Ordinal);
 
         var index = db.Model.FindEntityType(typeof(EventReminderSent))!
             .GetIndexes()
             .SingleOrDefault(i => i.IsUnique
                 && i.Properties.Select(p => p.Name).OrderBy(n => n, StringComparer.Ordinal)
-                    .SequenceEqual(new[] { nameof(EventReminderSent.AppUserId), nameof(EventReminderSent.OrgCalendarEventId) }
-                        .OrderBy(n => n, StringComparer.Ordinal)));
+                    .SequenceEqual(expected));
 
         Assert.True(index is not null,
-            "EventReminderSent has no unique index across (OrgCalendarEventId, AppUserId). That index "
-            + "is the idempotency mechanism, not a tidiness constraint — without it, two schedulers "
-            + "running at once send the same person the same reminder twice.");
+            "EventReminderSent has no unique index across (OrgCalendarEventId, AppUserId, ForStartUtc). "
+            + "That index is the idempotency mechanism, not a tidiness constraint — without it, two "
+            + "schedulers running at once send the same person the same reminder twice, and without "
+            + "the start in it a rescheduled date never corrects the one already sent.");
     }
 
     // ── Who gets one ──────────────────────────────────────────────────────────

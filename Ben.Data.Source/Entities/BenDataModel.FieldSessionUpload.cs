@@ -67,8 +67,32 @@ namespace Ben.Data.Source.Entities
         /// </summary>
         public Guid DeviceSessionId { get; set; }
 
-        /// <summary>The stored <c>data.json</c>, exactly as the device wrote it.</summary>
+        /// <summary>
+        /// The session's file: a <c>.ben</c> bundle when <see cref="IsBundle"/>, and the stored
+        /// <c>data.json</c> on its own when not.
+        /// </summary>
         public Guid DocumentUploadFileId { get; set; }
+
+        /// <summary>
+        /// Whether this session arrived as one <c>.ben</c> file rather than a document plus an
+        /// upload per recording.
+        /// </summary>
+        /// <remarks>
+        /// <para>
+        /// Ben, 2026-09-16: "I specifically asked that we zip the whole session and unzip it after
+        /// upload, but want to reference it as a single file and not a bunch of data.json files and
+        /// separate audio and video files." A bundle session has exactly ONE
+        /// <see cref="UploadFile"/> — the bundle — and its recordings are rows that point at
+        /// entries inside it, served as byte ranges.
+        /// </para>
+        /// <para>
+        /// False for everything uploaded before 1.0.3 and for anything the approved 1.0.2 build
+        /// sends afterwards, which is why both shapes have to keep working rather than one being
+        /// migrated into the other. A phone in somebody's pocket is not a thing that can be
+        /// redeployed.
+        /// </para>
+        /// </remarks>
+        public bool IsBundle { get; set; }
 
         /// <summary>Hardware identifier — "iPhone17,1". A reading cannot be assessed for known
         /// quirks without knowing what took it.</summary>
@@ -202,10 +226,42 @@ namespace Ben.Data.Source.Entities
     {
         public Guid Id { get; set; }
         public Guid FieldSessionUploadId { get; set; }
-        public Guid UploadFileId { get; set; }
+
+        /// <summary>
+        /// The recording's own stored file, when it has one. Null for a session that arrived as a
+        /// <c>.ben</c> bundle: its bytes are inside the session's single file, at
+        /// <see cref="BundleEntryPath"/>.
+        /// </summary>
+        public Guid? UploadFileId { get; set; }
+
+        /// <summary>
+        /// Where this recording lives inside the session's <c>.ben</c>, or null when it has a
+        /// stored file of its own.
+        /// </summary>
+        /// <remarks>
+        /// Exactly one of this and <see cref="UploadFileId"/> is set. The bundle stores its
+        /// members uncompressed, so this path resolves to an offset and a length and the recording
+        /// is served as a byte range of the one file — which is what lets a session BE a single
+        /// file without storing everything twice.
+        /// </remarks>
+        public string? BundleEntryPath { get; set; }
 
         /// <summary>The path the document names this file by. Relative, always.</summary>
         public string RelativePath { get; set; } = null!;
+
+        /// <summary>
+        /// What this recording is, and how big — carried on the row itself for a bundle member,
+        /// which has no <see cref="UploadFile"/> to ask.
+        /// </summary>
+        /// <remarks>
+        /// Null and zero on every row written before bundles existed: those read both from their
+        /// own stored file, and nothing backfills them, because a row with a file of its own has
+        /// a better answer than a copy would be.
+        /// </remarks>
+        public string? ContentType { get; set; }
+
+        /// <inheritdoc cref="ContentType"/>
+        public long FileSize { get; set; }
 
         /// <summary>Lowercase hex, 64 characters, as computed on the device.</summary>
         public string? Sha256 { get; set; }
@@ -220,7 +276,8 @@ namespace Ben.Data.Source.Entities
         public Guid? UpdatedByAppUserId { get; set; }
 
         public virtual FieldSessionUpload FieldSessionUpload { get; set; } = null!;
-        public virtual UploadFile UploadFile { get; set; } = null!;
+        /// <summary>Null for a bundle member: its bytes live inside the session's own file.</summary>
+        public virtual UploadFile? UploadFile { get; set; }
         public virtual AppUser CreatedByAppUser { get; set; } = null!;
         public virtual AppUser? UpdatedByAppUser { get; set; }
     }

@@ -25,11 +25,25 @@ namespace Ben.Data.WebApi.Services.Billing.StripeIntegration;
 /// idempotency key, and if nothing lands before the period ends, <c>SubscriptionLapseJob</c>
 /// winds the group down exactly as if no card existed. One consequence engine, not two.</para>
 ///
-/// <para><b>Double-charge safety is layered:</b> the Stripe idempotency key caps each
-/// subscription at one charge attempt per period per day; the synchronous fulfillment after a
-/// success advances <c>CurrentPeriodEnd</c>, which removes the subscription from tomorrow's
-/// eligibility; and fulfillment itself is idempotent by payment reference, so the webhook's
-/// later delivery of the same success is a no-op.</para>
+/// <para><b>Double-charge safety is layered:</b> the Stripe idempotency key is stable for the
+/// period being renewed, so any retry inside Stripe's 24-hour idempotency window replays the
+/// original charge rather than making a second one; the synchronous fulfillment after a success
+/// advances <c>CurrentPeriodEnd</c>, which removes the subscription from tomorrow's eligibility;
+/// and fulfillment itself is idempotent by payment reference, so the webhook's later delivery of
+/// the same success is a no-op.</para>
+///
+/// <para><b>The key used to carry today's date, and that was the hole</b> (2026-09-17 audit). It
+/// was written to allow "one charge attempt per period per day", but the only thing it actually
+/// changed was what happened when a charge SUCCEEDED and fulfillment then failed: the row stays
+/// eligible because <c>CurrentPeriodEnd</c> never advanced, and at midnight UTC the key changed,
+/// so the next pass made a second, genuinely distinct charge for the same period. Fulfillment
+/// being idempotent by payment reference does not help — it is a different reference.</para>
+///
+/// <para>Dropping the date costs nothing, because <b>Stripe expires idempotency keys after 24
+/// hours</b>. A decline can still be retried the following day: by then the key has aged out of
+/// Stripe's cache and the request is treated as new. The date was duplicating an expiry Stripe
+/// already performs, while defeating the deduplication exactly at the boundary where it was the
+/// only thing standing between a failed fulfillment and a double charge.</para>
 /// </remarks>
 public sealed class StripeRenewalJob : IScheduledJob
 {
@@ -136,8 +150,32 @@ public sealed class StripeRenewalJob : IScheduledJob
             return;
         }
 
-        // The frozen price, forever: the offer said what the ride costs, and unlike the group's
-        // banded subscription there is no live world to re-read — a seat has no band.
+        // Nor for a seat the group's plan now covers (2026-09-17 audit).
+        //
+        // A seat exists for one reason: the group had outgrown its band when this person joined.
+        // Nothing revisited that. A group on Small (five) whose sixth member took a $5 seat, then
+        // upgraded to Standard (twenty-five), went on paying Standard's price — which covers that
+        // member — while the member went on paying $5 a month of their own money for a place the
+        // group had already bought. Both charges are real, both recur, and nothing on either
+        // billing page says the other exists. It is the group's own upgrade that starts it, so the
+        // better the group does the longer it runs.
+        //
+        // Only the unambiguous case is decided here: when the band covers EVERYBODY, nobody is in
+        // overflow and every seat stops. A band that covers some but not all of the members
+        // holding seats needs a rule about WHICH seats survive — oldest absorbed first, or newest
+        // — and that is a pricing decision rather than a defect, so it is left as it is and
+        // recorded for Ben rather than invented here.
+        var bandCoversEveryone = await BandCoversEveryoneAsync(db, seat.OrganizationId, ct);
+        if (bandCoversEveryone)
+        {
+            _log.LogInformation(
+                "Seat {SeatId} not renewed — {OrganizationName}'s plan now covers every member.",
+                seat.Id, seat.Organization.Name);
+            return;
+        }
+
+        // The frozen price, forever: the offer said what the ride costs, and the seat's own price
+        // is never re-read from the live world — what varies is only whether it is owed at all.
         var (_, taxRate) = await TaxResolver.ForOrganizationAsync(db, seat.OrganizationId, ct);
         var tax = TaxResolver.TaxOn(seat.PriceAtStart, taxRate);
         var periodStart = seat.CurrentPeriodEnd!.Value;
@@ -151,7 +189,12 @@ public sealed class StripeRenewalJob : IScheduledJob
                 [StripeFulfillmentService.CheckoutFacts.Keys.Seat] = seat.Id.ToString(),
                 [StripeFulfillmentService.CheckoutFacts.Keys.PeriodStart] = periodStart.ToString("O"),
             },
-            IdempotencyKey: $"seat-{seat.Id:N}-{periodStart:yyyyMMdd}-{now:yyyyMMdd}"), ct);
+            // Stable for this seat and this period, exactly as the organization path above
+            // (2026-09-17 audit). This one kept the current date after that fix, so the hole the
+            // class remarks describe was still open here: a charge that succeeds while fulfilment
+            // fails leaves CurrentPeriodEnd unadvanced, the seat stays eligible, and at midnight
+            // UTC the key changes and Stripe takes a second, genuinely distinct payment.
+            IdempotencyKey: $"seat-{seat.Id:N}-{periodStart:yyyyMMdd}"), ct);
 
         if (!outcome.Succeeded)
         {
@@ -171,6 +214,38 @@ public sealed class StripeRenewalJob : IScheduledJob
             }), ct);
     }
 
+    /// <summary>
+    /// Whether the group's standing band now has room for every active member, so no one is in
+    /// overflow and no seat is owed.
+    /// </summary>
+    /// <remarks>
+    /// Mirrors the question <see cref="OverflowSeats.MaybeOfferSeatAsync"/> asks when it offers a
+    /// seat, so the two cannot disagree about what "past the band" means. Answers false whenever
+    /// it cannot tell — no standing subscription, no tier, a tier row that has gone — because a
+    /// seat that stops billing on a missing row would quietly cancel a debt the group still owes.
+    /// </remarks>
+    private static async Task<bool> BandCoversEveryoneAsync(
+        BenDataContext db, Guid organizationId, CancellationToken ct)
+    {
+        var sub = await db.OrganizationSubscriptions.AsNoTracking()
+            .FirstOrDefaultAsync(s => s.OrganizationId == organizationId, ct);
+        if (sub is null || sub.Status != SubscriptionStatus.Active
+            || sub.SubscriptionTierId is not { } tierId) return false;
+
+        var bandMax = await db.SubscriptionTiers.AsNoTracking()
+            .Where(t => t.Id == tierId)
+            .Select(t => t.MaxMembers)
+            .FirstOrDefaultAsync(ct);
+
+        // An unbounded band covers everybody by definition; that is what unbounded means.
+        if (bandMax is not { } max) return true;
+
+        var members = await db.OrganizationUserMemberships.AsNoTracking()
+            .CountAsync(m => m.OrganizationId == organizationId && m.IsActive, ct);
+
+        return members <= max;
+    }
+
     private async Task RenewOneAsync(
         BenDataContext db, Ben.Data.Source.Entities.OrganizationSubscription sub,
         DateTime now, CancellationToken ct)
@@ -184,21 +259,24 @@ public sealed class StripeRenewalJob : IScheduledJob
             return;
         }
 
-        var members = await db.OrganizationUserMemberships
-            .CountAsync(m => m.OrganizationId == sub.OrganizationId && m.IsActive, ct);
         var kind = await db.Organizations.AsNoTracking()
             .Where(o => o.Id == sub.OrganizationId).Select(o => o.Kind).FirstOrDefaultAsync(ct);
-        var tier = SubscriptionTierResolver.Resolve(tiers, members, kind);
-
-        if (SubscriptionPricing.PriceFor(tier, sub.Interval) is not { } listPrice)
+        // Re-counted from the live world: members for a group, tours for a business (item 233).
+        // A tour retired since last period drops out here; one added mid-period was already
+        // paid for its remainder and is simply counted again.
+        var priced = await BillableUnits.PriceAsync(db, tiers, sub.OrganizationId, kind, sub.Interval, ct);
+        if (priced is null)
         {
             // The tier stopped selling this cadence since last period. Charging a different
             // cadence than agreed is not an option; the lapse machinery will speak for us.
             _log.LogWarning(
-                "Organization {OrganizationId} renews {Interval} but \"{Tier}\" no longer sells it — skipped.",
-                sub.OrganizationId, sub.Interval, tier.Name);
+                "Organization {OrganizationId} renews {Interval} but its plan no longer sells it — skipped.",
+                sub.OrganizationId, sub.Interval);
             return;
         }
+        var tier = priced.Tier;
+        var members = priced.Members;
+        var listPrice = priced.ListPrice;
 
         // ── the coupon's continuing promise ──────────────────────────────────
         var payable = listPrice;
@@ -230,7 +308,8 @@ public sealed class StripeRenewalJob : IScheduledJob
             // Renewal has no person at a keyboard; the row is attributed to whoever set the
             // subscription up, which is also who the pre-renewal notices were addressed to.
             sub.UpdatedByAppUserId ?? sub.CreatedByAppUserId,
-            couponCode, listPrice, discount, periodStart);
+            couponCode, listPrice, discount, periodStart,
+            TourCount: tier.IsBandedByMembers ? 0 : priced.Units);
 
         // ── a free continuing period skips the card entirely ─────────────────
         if (payable == 0m)
@@ -260,9 +339,11 @@ public sealed class StripeRenewalJob : IScheduledJob
         var outcome = await _stripe.ChargeSavedCardAsync(new StripeRenewalCharge(
             sub.ProviderCustomerRef, sub.ProviderPaymentMethodRef,
             payable + tax,
-            $"IsHaunted renewal — {tier.Name}, {members} members",
+            $"IsHaunted renewal — {tier.Name}, {BillableUnits.Describe(priced)}",
             facts.ToMetadata(),
-            IdempotencyKey: $"renew-{sub.Id:N}-{periodStart:yyyyMMdd}-{now:yyyyMMdd}"), ct);
+            // Stable for this subscription and this period — see the class remarks. Adding the
+            // current date here is what allowed a second charge across a midnight boundary.
+            IdempotencyKey: $"renew-{sub.Id:N}-{periodStart:yyyyMMdd}"), ct);
 
         if (!outcome.Succeeded)
         {

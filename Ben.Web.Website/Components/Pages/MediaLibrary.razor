@@ -28,6 +28,6 @@
     protected override async Task OnInitializedAsync()
     {
         if (!await UserState.WaitUntilAuthReadyAsync(RendererInfo.IsInteractive)) return;
-        if (!UserState.IsAuthenticated) NavManager.NavigateTo("/login");
+        if (!UserState.IsAuthenticated) NavManager.NavigateTo(Ben.Web.Website.Library.Kit.SignInLink.For(NavManager));
     }
 }

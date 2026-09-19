@@ -244,9 +244,214 @@ public sealed partial class BenAdminClientAdapter
     public Task<PublicEventRecord?> RsvpToEventAsync(Guid eventId, CancellationToken token = default)
         => _api.PostAsync<object, PublicEventRecord>($"/api/public/events/{eventId}/rsvp", new object(), token);
 
+    public Task<PublicEventRecord?> RsvpToEventAsync(Guid eventId, int seats, CancellationToken token = default)
+        => _api.PostAsync<object, PublicEventRecord>(
+               $"/api/public/events/{eventId}/rsvp?seats={seats}", new object(), token);
+
+    public Task<PublicEventRecord?> AcknowledgeSeatAsync(Guid eventId, CancellationToken token = default)
+        => _api.PostAsync<object, PublicEventRecord>(
+               $"/api/public/events/{eventId}/my-seat/acknowledge", new object(), token);
+
     public Task<bool> RequestEventAttendanceAsync(Guid eventId, string email, string? displayName, CancellationToken token = default)
         => _api.PostAnonymousVoidAsync($"/api/public/event-attendance/{eventId}/request",
                new RequestEventAttendanceRequest(email, displayName), token);
+
+    // ── Tours (item 233) ────────────────────────────────────────────────────
+
+    public Task<LoadResult<TourRecord>> GetToursAsync(Guid orgId, CancellationToken token = default)
+        => _api.GetListAsync<TourRecord>($"/api/organizations/{orgId}/tours", token);
+
+    // ── Hosted events (item 235) ────────────────────────────────────────────
+
+    public Task<LoadResult<HostedEventRecord>> GetHostedEventsAsync(
+        Guid orgId, CancellationToken token = default)
+        => _api.GetListAsync<HostedEventRecord>($"/api/organizations/{orgId}/events", token);
+
+    public Task<HostedEventRecord?> GetHostedEventAsync(
+        Guid orgId, Guid eventId, CancellationToken token = default)
+        => _api.GetAsync<HostedEventRecord>($"/api/organizations/{orgId}/events/{eventId}", token);
+
+    public Task<HostedEventPlanRecord?> GetHostedEventPlanAsync(
+        Guid orgId, CancellationToken token = default)
+        => _api.GetAsync<HostedEventPlanRecord>($"/api/organizations/{orgId}/events/plan", token);
+
+    public Task<(HostedEventRecord? Result, string? Error)> SaveHostedEventAsync(
+        Guid orgId, Guid? eventId, UpsertHostedEventRequest request,
+        CancellationToken token = default)
+        => _api.SendExpectingReasonAsync<UpsertHostedEventRequest, HostedEventRecord>(
+               eventId is null ? HttpMethod.Post : HttpMethod.Put,
+               eventId is null
+                   ? $"/api/organizations/{orgId}/events"
+                   : $"/api/organizations/{orgId}/events/{eventId}",
+               request, token);
+
+    public Task<(HostedEventRecord? Result, string? Error)> SaveHostedEventNightAsync(
+        Guid orgId, Guid eventId, Guid nightId, UpsertHostedEventNightRequest request,
+        CancellationToken token = default)
+        => _api.SendExpectingReasonAsync<UpsertHostedEventNightRequest, HostedEventRecord>(
+               HttpMethod.Put,
+               $"/api/organizations/{orgId}/events/{eventId}/nights/{nightId}", request, token);
+
+    public Task<(HostedEventRecord? Result, string? Error)> SetHostedEventStateAsync(
+        Guid orgId, Guid eventId, string action, CancellationToken token = default)
+        => _api.SendExpectingReasonAsync<object, HostedEventRecord>(
+               HttpMethod.Post, $"/api/organizations/{orgId}/events/{eventId}/{action}",
+               new { }, token);
+
+    public Task<(HostedEventRecord? Result, string? Error)> CancelHostedEventAsync(
+        Guid orgId, Guid eventId, string? reason, CancellationToken token = default)
+        => _api.SendExpectingReasonAsync<CancelHostedEventRequest, HostedEventRecord>(
+               HttpMethod.Post, $"/api/organizations/{orgId}/events/{eventId}/cancel",
+               new CancelHostedEventRequest(reason), token);
+
+    public Task<LoadResult<HostedEventReadinessItem>> GetHostedEventReadinessAsync(
+        Guid orgId, Guid eventId, CancellationToken token = default)
+        => _api.GetListAsync<HostedEventReadinessItem>(
+               $"/api/organizations/{orgId}/events/{eventId}/readiness", token);
+
+    public Task<HostedEventCancellationEffect?> GetHostedEventCancellationEffectAsync(
+        Guid orgId, Guid eventId, CancellationToken token = default)
+        => _api.GetAsync<HostedEventCancellationEffect>(
+               $"/api/organizations/{orgId}/events/{eventId}/cancellation-effect", token);
+
+    public Task<(HostedEventRecord? Result, string? Error)> DecideHostedEventAsync(
+        Guid orgId, Guid eventId, bool going, CancellationToken token = default)
+        => _api.SendExpectingReasonAsync<object, HostedEventRecord>(
+               HttpMethod.Post,
+               $"/api/organizations/{orgId}/events/{eventId}/{(going ? "go" : "no-go")}",
+               new { }, token);
+
+    public Task<(HostedEventRecord? Result, string? Error)> SetHostedEventBookingModeAsync(
+        Guid orgId, Guid eventId, HostedEventBookingMode mode, CancellationToken token = default)
+        => _api.SendExpectingReasonAsync<SetHostedEventBookingModeRequest, HostedEventRecord>(
+               HttpMethod.Post, $"/api/organizations/{orgId}/events/{eventId}/booking-mode",
+               new SetHostedEventBookingModeRequest(mode), token);
+
+    public Task<ItemResult<PublicHostedEventRecord>> GetPublicHostedEventAsync(
+        Guid hostedEventId, CancellationToken token = default)
+        => _api.GetItemAsync<PublicHostedEventRecord>(
+               $"/api/public/hosted-events/{hostedEventId}", token);
+
+    public Task<TourRecord?> GetTourAsync(Guid orgId, Guid tourId, CancellationToken token = default)
+        => _api.GetAsync<TourRecord>($"/api/organizations/{orgId}/tours/{tourId}", token);
+
+    public Task<TourPlanRecord?> GetTourPlanAsync(Guid orgId, CancellationToken token = default)
+        => _api.GetAsync<TourPlanRecord>($"/api/organizations/{orgId}/tours/plan", token);
+
+    public Task<(TourRecord? Result, string? Error)> SaveTourAsync(
+        Guid orgId, Guid? tourId, UpsertTourRequest request, CancellationToken token = default)
+        => _api.SendExpectingReasonAsync<UpsertTourRequest, TourRecord>(
+               tourId is null ? HttpMethod.Post : HttpMethod.Put,
+               tourId is null
+                   ? $"/api/organizations/{orgId}/tours"
+                   : $"/api/organizations/{orgId}/tours/{tourId}",
+               request, token);
+
+    public Task<(TourRecord? Result, string? Error)> SetTourRetiredAsync(
+        Guid orgId, Guid tourId, bool retired, CancellationToken token = default)
+        => _api.SendExpectingReasonAsync<object, TourRecord>(
+               HttpMethod.Post,
+               $"/api/organizations/{orgId}/tours/{tourId}/{(retired ? "retire" : "restore")}",
+               new { }, token);
+
+    public Task<(TourRecord? Result, string? Error)> SetTourGuidesAsync(
+        Guid orgId, Guid tourId, IReadOnlyList<Guid> appUserIds, CancellationToken token = default)
+        => _api.SendExpectingReasonAsync<SetTourGuidesRequest, TourRecord>(
+               HttpMethod.Put, $"/api/organizations/{orgId}/tours/{tourId}/guides",
+               new SetTourGuidesRequest(appUserIds), token);
+
+    public Task<TourMailPreviewRecord?> PreviewTourMailAsync(
+        Guid orgId, Guid tourId, string? subjectTemplate, string? bodyTemplate, CancellationToken token = default)
+        => _api.PostAsync<TourMailPreviewRequest, TourMailPreviewRecord>(
+               $"/api/organizations/{orgId}/tours/{tourId}/mail-preview",
+               new TourMailPreviewRequest(subjectTemplate, bodyTemplate), token);
+
+    public Task<TourReviewsRecord?> GetTourReviewsAsync(Guid tourId, CancellationToken token = default)
+        => _api.GetAsync<TourReviewsRecord>($"/api/public/tours/{tourId}/reviews", token);
+
+    public Task<(TourReviewsRecord? Result, string? Error)> SaveMyTourReviewAsync(
+        Guid tourId, int stars, string? comment, CancellationToken token = default)
+        => _api.SendExpectingReasonAsync<UpsertTourReviewRequest, TourReviewsRecord>(
+               HttpMethod.Put, $"/api/public/tours/{tourId}/my-review",
+               new UpsertTourReviewRequest(stars, comment), token);
+
+    public Task<bool> DeleteMyTourReviewAsync(Guid tourId, CancellationToken token = default)
+        => _api.DeleteAsync($"/api/public/tours/{tourId}/my-review", token);
+
+    public Task<bool> SetTourReviewHiddenAsync(
+        Guid orgId, Guid tourId, Guid reviewId, bool hidden, CancellationToken token = default)
+        => _api.PostVoidAsync(
+               $"/api/organizations/{orgId}/tours/{tourId}/reviews/{reviewId}/{(hidden ? "hide" : "show")}",
+               new { }, token);
+
+    public Task<LoadResult<TourImageRecord>> GetTourGalleryAsync(Guid orgId, Guid tourId, CancellationToken token = default)
+        => _api.GetListAsync<TourImageRecord>($"/api/organizations/{orgId}/tours/{tourId}/gallery", token);
+
+    public async Task<(TourImageRecord? Result, string? Error)> AddTourImageAsync(
+        Guid orgId, Guid tourId, Stream content, string fileName, string contentType,
+        string? caption, CancellationToken token = default)
+    {
+        using var form = new MultipartFormDataContent();
+        if (!string.IsNullOrWhiteSpace(caption)) form.Add(new StringContent(caption), "caption");
+        using var sc = new StreamContent(content);
+        sc.Headers.ContentType = new System.Net.Http.Headers.MediaTypeHeaderValue(contentType);
+        form.Add(sc, "file", fileName);
+
+        return await _api.PostMultipartExpectingReasonAsync<TourImageRecord>(
+            $"/api/organizations/{orgId}/tours/{tourId}/gallery", form, token);
+    }
+
+    public Task<bool> SetMediaKeptAsync(Guid orgId, Guid uploadFileId, bool kept, CancellationToken token = default)
+        => kept
+            ? _api.PostVoidAsync($"/api/organizations/{orgId}/kept-media/{uploadFileId}", new { }, token)
+            : _api.DeleteAsync($"/api/organizations/{orgId}/kept-media/{uploadFileId}", token);
+
+    public Task<(TourImageRecord? Result, string? Error)> KeepSubmissionOnTourAsync(
+        Guid orgId, Guid tourId, Guid submissionId, string? caption, CancellationToken token = default)
+        => _api.SendExpectingReasonAsync<object, TourImageRecord>(
+               HttpMethod.Post,
+               $"/api/organizations/{orgId}/tours/{tourId}/gallery/from-submission/{submissionId}"
+               + (string.IsNullOrWhiteSpace(caption) ? "" : $"?caption={Uri.EscapeDataString(caption)}"),
+               new { }, token);
+
+    public async Task<(IReadOnlyList<TourImageRecord>? Result, string? Error)> UpdateTourImageAsync(
+        Guid orgId, Guid tourId, Guid imageId, string? caption, int? sortOrder, CancellationToken token = default)
+    {
+        var (result, error) = await _api.SendExpectingReasonAsync<UpdateTourImageRequest, List<TourImageRecord>>(
+            HttpMethod.Put, $"/api/organizations/{orgId}/tours/{tourId}/gallery/{imageId}",
+            new UpdateTourImageRequest(caption, sortOrder), token);
+        return (result, error);
+    }
+
+    public Task<bool> DeleteTourImageAsync(Guid orgId, Guid tourId, Guid imageId, CancellationToken token = default)
+        => _api.DeleteAsync($"/api/organizations/{orgId}/tours/{tourId}/gallery/{imageId}", token);
+
+    public Task<LoadResult<PublicTourListItem>> GetPublicToursAsync(string orgUrlName, CancellationToken token = default)
+        => _api.GetAnonymousListAsync<PublicTourListItem>(
+               $"/api/public/organizations/{Uri.EscapeDataString(orgUrlName)}/tours", token);
+
+    public Task<PublicTourRecord?> GetPublicTourAsync(string orgUrlName, string tourSlug, CancellationToken token = default)
+        => _api.GetAsync<PublicTourRecord>(
+               $"/api/public/organizations/{Uri.EscapeDataString(orgUrlName)}/tours/{Uri.EscapeDataString(tourSlug)}", token);
+
+    public Task<LoadResult<EventEvidenceRecord>> GetMyTourEvidenceAsync(Guid tourId, CancellationToken token = default)
+        => _api.GetListAsync<EventEvidenceRecord>($"/api/public/tours/{tourId}/my-evidence", token);
+
+    public Task<LoadResult<PublicTourMapPin>> GetTourMapPinsAsync(CancellationToken token = default)
+        => _api.GetAnonymousListAsync<PublicTourMapPin>("/api/public/tours/map", token);
+
+    public Task<LoadResult<PublicTourListItem>> SearchToursAsync(
+        string? query = null, double? latitude = null, double? longitude = null,
+        double radiusMiles = 25, CancellationToken token = default)
+    {
+        var url = "/api/public/tours?";
+        if (!string.IsNullOrWhiteSpace(query)) url += $"query={Uri.EscapeDataString(query)}&";
+        if (latitude is { } la && longitude is { } lo)
+            url += $"lat={la.ToString(System.Globalization.CultureInfo.InvariantCulture)}"
+                 + $"&lon={lo.ToString(System.Globalization.CultureInfo.InvariantCulture)}"
+                 + $"&radiusMiles={radiusMiles.ToString(System.Globalization.CultureInfo.InvariantCulture)}";
+        return _api.GetAnonymousListAsync<PublicTourListItem>(url.TrimEnd('&', '?'), token);
+    }
 
     public Task<EventAttendanceInviteInfo?> GetEventAttendanceInviteAsync(string token, CancellationToken cancellationToken = default)
         => _api.GetAnonymousAsync<EventAttendanceInviteInfo>(
@@ -319,6 +524,16 @@ public sealed partial class BenAdminClientAdapter
     /// e.g. signed out — reads as nothing-visible; the tabs simply do not render.</summary>
     public Task<MyOrgPermissionsItem?> GetMyOrgPermissionsAsync(Guid orgId, CancellationToken token = default)
         => _api.GetAsync<MyOrgPermissionsItem>($"/api/security/organizations/{orgId}/my-permissions", token);
+
+    public Task<SoloPlanItem?> GetSoloPlanAsync(CancellationToken token = default)
+        => _api.GetAsync<SoloPlanItem>("/api/solo-plan", token);
+
+    public Task<(SoloPlanItem? Plan, string? Error)> StartSoloPlanAsync(CancellationToken token = default)
+        // No body: the endpoint takes the caller's identity and nothing else. An empty object
+        // rather than null because the helper posts a request shape, and "{}" is what a POST with
+        // no arguments looks like on the wire.
+        => _api.SendExpectingReasonAsync<object, SoloPlanItem>(
+               HttpMethod.Post, "/api/solo-plan", new { }, token);
 
     /// <summary>The caller's own groups, membership rows only — the sidebar's list (item 159).
     /// Never the SuperAdmin sees-all expansion; the token decides, which keeps impersonation

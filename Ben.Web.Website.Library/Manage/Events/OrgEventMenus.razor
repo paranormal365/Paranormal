@@ -1,0 +1,370 @@
+@page "/organizations/{OrgId:guid}/events/{EventId:guid}/menus"
+@namespace Ben.Web.Website.Library.Manage.Events
+
+@inject IBenAdminClient AdminClient
+@inject IBenUserState UserState
+
+@using Ben.Service.Models.Entities
+@using Ben.Web.Services.WebApi
+@using Ben.Web.Website.Library.Kit
+@using Ben.Web.Website.Library.Manage.Icon
+
+@* What is served, and when (item 235 phase 5).
+
+   A NIGHT HAS AS MANY SITTINGS AS THE VENUE SERVES. Ben, 2026-09-12: "Dont forget they may have a
+   breakfast and lunch and dinner and snacks I guess. Maybe we just make it part of the 'Menu'
+   overall." So a night is a heading and the sittings live under it, added one at a time.
+
+   THE ORDER IS THE HOST'S AND NEVER THE CLOCK'S. A night runs from the evening through the next
+   morning, so sorting sittings by the time they are served prints an eight o'clock breakfast
+   before the seven o'clock dinner it followed. The arrows move a sitting; where it sits in the
+   list is where it is served. *@
+
+<PageTitle>@(_event?.Name is { Length: > 0 } n ? $"Menus — {n}" : "Menus")</PageTitle>
+
+<div class="container-fluid py-3">
+
+    <div class="text-secondary small">
+        <a href="@($"/organizations/{OrgId}/events")">Events</a>
+        @if (_event is { } crumb)
+        {
+            <text> · </text><a href="@($"/organizations/{OrgId}/events/{EventId}")">@crumb.Name</a>
+        }
+    </div>
+
+    <h1 class="h3 mb-1">
+        Menus
+        <HelpLink Slug="organization-administration" Anchor="hosted-events" />
+    </h1>
+    <p class="text-secondary small mb-3">
+        Every sitting you are serving, under the night it belongs to. Guests read this, and the
+        kitchen's sheet lists what they cannot eat.
+    </p>
+
+    @if (_note is { Length: > 0 })
+    {
+        <div class="alert alert-success py-2" id="menus-note">@_note</div>
+    }
+    @if (_error is { Length: > 0 })
+    {
+        <div class="alert alert-danger py-2" id="menus-error" role="alert">@_error</div>
+    }
+
+    <BenItemState TItem="HostedEventMenusRecord" Result="_menus" Loading="_loading"
+                  LoadingText="Loading the menus…" OnRetry="LoadAsync">
+        <ChildContent Context="loaded">
+            @if (_event is { } ev)
+            {
+                @foreach (var night in ev.Nights)
+                {
+                    var thisNight = night;
+                    <div class="card mb-3" id="@($"menus-night-{thisNight.Id}")">
+                        <div class="card-header d-flex justify-content-between align-items-center gap-2 flex-wrap">
+                            <span class="fw-semibold">
+                                @thisNight.Date.ToString("dddd MM/dd/yyyy")
+                                @if (thisNight.Title is { Length: > 0 } title)
+                                {
+                                    <span class="text-secondary fw-normal">· @title</span>
+                                }
+                            </span>
+                            @* Wrapping, because four buttons and a night's date do not fit a
+                                phone on one line and a group that cannot wrap slides the page
+                                sideways instead. *@
+                            <div class="btn-group btn-group-sm flex-wrap" role="group"
+                                 aria-label="Add a sitting to this night">
+                                @foreach (var preset in Presets)
+                                {
+                                    var named = preset;
+                                    <button type="button" class="btn btn-outline-primary"
+                                            id="@($"add-{named.ToLowerInvariant()}-{thisNight.Id}")"
+                                            disabled="@_busy"
+                                            @onclick="() => Add(thisNight.Id, named)">
+                                        + @named
+                                    </button>
+                                }
+                            </div>
+                        </div>
+
+                        <div class="card-body">
+                            @{ var sittings = Sittings(thisNight.Id); }
+
+                            @if (sittings.Count == 0)
+                            {
+                                <p class="text-secondary mb-0">
+                                    Nothing served this @ev.DateNoun yet. The buttons above add a
+                                    sitting; you can rename it to whatever you actually call it.
+                                </p>
+                            }
+
+                            @for (var i = 0; i < sittings.Count; i++)
+                            {
+                                var sitting = sittings[i];
+                                var at = i;
+
+                                <div class="menu-sitting">
+                                    <div class="row g-2 align-items-end">
+                                        <div class="col-12 col-md-4">
+                                            <label class="form-label small mb-1"
+                                                   for="@($"sitting-title-{sitting.Key}")">Sitting</label>
+                                            <input id="@($"sitting-title-{sitting.Key}")"
+                                                   class="form-control" maxlength="120"
+                                                   @bind="sitting.Title" @bind:event="oninput" />
+                                        </div>
+                                        <div class="col-6 col-md-3">
+                                            <label class="form-label small mb-1"
+                                                   for="@($"sitting-time-{sitting.Key}")">Served at</label>
+                                            <input id="@($"sitting-time-{sitting.Key}")" type="time"
+                                                   class="form-control"
+                                                   @bind="sitting.ServedAt" @bind:event="oninput" />
+                                        </div>
+                                        <div class="col-6 col-md-3">
+                                            <label class="form-label small mb-1"
+                                                   for="@($"sitting-note-{sitting.Key}")">Note</label>
+                                            <input id="@($"sitting-note-{sitting.Key}")"
+                                                   class="form-control" maxlength="500"
+                                                   placeholder="optional"
+                                                   @bind="sitting.Notes" @bind:event="oninput" />
+                                        </div>
+                                        <div class="col-12 col-md-2 d-flex gap-1 justify-content-md-end">
+                                            <button type="button" class="btn btn-outline-secondary btn-sm"
+                                                    id="@($"sitting-up-{sitting.Key}")"
+                                                    disabled="@(_busy || at == 0)"
+                                                    title="Serve this earlier"
+                                                    @onclick="() => Move(thisNight.Id, at, -1)">
+                                                <BenIcon Name="arrow-up" Title="Serve this earlier" />
+                                            </button>
+                                            <button type="button" class="btn btn-outline-secondary btn-sm"
+                                                    id="@($"sitting-down-{sitting.Key}")"
+                                                    disabled="@(_busy || at == sittings.Count - 1)"
+                                                    title="Serve this later"
+                                                    @onclick="() => Move(thisNight.Id, at, 1)">
+                                                <BenIcon Name="arrow-down" Title="Serve this later" />
+                                            </button>
+                                            <button type="button" class="btn btn-outline-danger btn-sm"
+                                                    id="@($"sitting-remove-{sitting.Key}")"
+                                                    disabled="@_busy" title="Remove this sitting"
+                                                    @onclick="() => Remove(sitting)">
+                                                <BenIcon Name="trash-2" Title="Remove this sitting" />
+                                            </button>
+                                        </div>
+                                    </div>
+
+                                    <label class="form-label small mt-2 mb-1"
+                                           for="@($"sitting-dishes-{sitting.Key}")">
+                                        What is on it
+                                    </label>
+                                    @* Five rows, because four dishes and a scrollbar reads as a
+                                       menu with the pudding missing. *@
+                                    <textarea id="@($"sitting-dishes-{sitting.Key}")" rows="5"
+                                              class="form-control"
+                                              placeholder="One dish a line. Put the course first if you use them — Starter: Soup"
+                                              @bind="sitting.Dishes" @bind:event="oninput"></textarea>
+                                </div>
+                            }
+                        </div>
+                    </div>
+                }
+
+                <div class="d-flex justify-content-end gap-2">
+                    @if (_dirty)
+                    {
+                        <span class="align-self-center text-secondary small" id="menus-unsaved">
+                            Not saved yet.
+                        </span>
+                    }
+                    <button type="button" class="btn btn-primary" id="menus-save"
+                            disabled="@_busy" @onclick="SaveAsync">
+                        @(_busy ? "Saving…" : "Save the menus")
+                    </button>
+                </div>
+            }
+        </ChildContent>
+    </BenItemState>
+</div>
+
+@code {
+    [Parameter] public Guid OrgId { get; set; }
+    [Parameter] public Guid EventId { get; set; }
+
+    /// <summary>
+    /// The sittings a venue is most likely to want, as one-press buttons.
+    /// </summary>
+    /// <remarks>
+    /// Ben named these four. They are a starting point and not a list to choose from: the title is
+    /// an ordinary box afterwards, because somebody serving a midnight vigil supper should not have
+    /// to call it "Snacks".
+    /// </remarks>
+    private static readonly string[] Presets = ["Breakfast", "Lunch", "Dinner", "Snacks"];
+
+    private HostedEventRecord? _event;
+    private ItemResult<HostedEventMenusRecord> _menus;
+    private readonly List<SittingForm> _sittings = [];
+    private bool _loading = true;
+    private bool _busy;
+    private bool _dirty;
+    private string? _note;
+    private string? _error;
+
+    /// <summary>One sitting while it is being edited.</summary>
+    /// <remarks>
+    /// A class of its own rather than the record, because the dishes are edited as a block of text
+    /// and the record holds them as a list. Typing a menu is typing lines; making somebody press
+    /// Add for every course would be a form standing between them and a thing they can already
+    /// write out in ten seconds.
+    /// </remarks>
+    private sealed class SittingForm
+    {
+        public Guid Key { get; init; } = Guid.NewGuid();
+
+        /// <summary>The saved sitting this is, so its seating plan survives an edit (phase 13).</summary>
+        public Guid? Id { get; init; }
+        public Guid NightId { get; init; }
+        public string Title { get; set; } = "";
+        public TimeOnly? ServedAt { get; set; }
+        public string? Notes { get; set; }
+        public string Dishes { get; set; } = "";
+    }
+
+    protected override async Task OnAfterRenderAsync(bool firstRender)
+    {
+        if (!firstRender) return;
+
+        if (!await UserState.WaitUntilAuthReadyAsync(RendererInfo.IsInteractive)) return;
+
+        await LoadAsync();
+        StateHasChanged();
+    }
+
+    private async Task LoadAsync()
+    {
+        _loading = true;
+        _event ??= await AdminClient.GetHostedEventAsync(OrgId, EventId);
+        _menus = await AdminClient.GetEventMenusAsync(OrgId, EventId);
+
+        if (_menus.Item is { } loaded) Fill(loaded);
+
+        _dirty = false;
+        _loading = false;
+    }
+
+    private void Fill(HostedEventMenusRecord loaded)
+    {
+        _sittings.Clear();
+
+        foreach (var menu in loaded.Menus.OrderBy(m => m.NightDate).ThenBy(m => m.SortOrder))
+        {
+            _sittings.Add(new SittingForm
+            {
+                Id = menu.Id,
+                NightId = menu.HostedEventNightId,
+                Title = menu.Title,
+                ServedAt = menu.ServedAtLocal is { } at ? TimeOnly.FromTimeSpan(at) : null,
+                Notes = menu.Notes,
+                Dishes = string.Join("\n", menu.Items
+                    .OrderBy(i => i.SortOrder)
+                    .Select(i => i.Course is { Length: > 0 } course ? $"{course}: {i.Name}" : i.Name)),
+            });
+        }
+    }
+
+    private List<SittingForm> Sittings(Guid nightId)
+        => [.. _sittings.Where(s => s.NightId == nightId)];
+
+    // ── changing them ────────────────────────────────────────────────────────
+
+    private void Add(Guid nightId, string title)
+    {
+        _sittings.Add(new SittingForm { NightId = nightId, Title = title });
+        _dirty = true;
+    }
+
+    private void Remove(SittingForm sitting)
+    {
+        _sittings.Remove(sitting);
+        _dirty = true;
+    }
+
+    /// <summary>
+    /// Moves a sitting within its own night.
+    /// </summary>
+    /// <remarks>
+    /// Within the night and never across one: dragging Saturday's breakfast into Friday would be a
+    /// different meal on a different day, and an arrow is not how anybody means to say that.
+    /// </remarks>
+    private void Move(Guid nightId, int index, int by)
+    {
+        var within = Sittings(nightId);
+        var to = index + by;
+        if (to < 0 || to >= within.Count) return;
+
+        var moving = within[index];
+        var displaced = within[to];
+
+        var a = _sittings.IndexOf(moving);
+        var b = _sittings.IndexOf(displaced);
+        (_sittings[a], _sittings[b]) = (_sittings[b], _sittings[a]);
+
+        _dirty = true;
+    }
+
+    private async Task SaveAsync()
+    {
+        _busy = true;
+        _error = null;
+        _note = null;
+
+        var menus = _sittings
+            .Where(s => !string.IsNullOrWhiteSpace(s.Title))
+            .Select(s => new HostedEventMenuInput(
+                s.NightId,
+                s.Title.Trim(),
+                s.ServedAt is { } at ? at.ToTimeSpan() : null,
+                Trimmed(s.Notes),
+                Dishes(s.Dishes),
+                s.Id))
+            .ToList();
+
+        var (saved, error) = await AdminClient.SetEventMenusAsync(
+            OrgId, EventId, new SetHostedEventMenusRequest(menus));
+
+        _busy = false;
+
+        if (saved is null) { _error = error ?? "The menus couldn't be saved just now."; return; }
+
+        Fill(saved);
+        _dirty = false;
+        _note = menus.Count == 0
+            ? "Saved. Nothing is being served."
+            : $"Saved. {menus.Count} {(menus.Count == 1 ? "sitting" : "sittings")} across the event.";
+    }
+
+    /// <summary>
+    /// Reads a block of typed lines as dishes, with an optional course before a colon.
+    /// </summary>
+    /// <remarks>
+    /// A colon is how people already write a menu — "Starter: Soup" — so it is what the box
+    /// accepts, and a line without one is simply a dish. Nothing is required and nothing is
+    /// rejected: a menu is prose a kitchen wrote, not a form.
+    /// </remarks>
+    private static List<HostedEventMenuItemInput> Dishes(string? typed)
+    {
+        if (string.IsNullOrWhiteSpace(typed)) return [];
+
+        return
+        [
+            .. typed
+                .Split('\n', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries)
+                .Select(line =>
+                {
+                    var colon = line.IndexOf(':');
+                    return colon > 0 && colon < line.Length - 1
+                        ? new HostedEventMenuItemInput(
+                            line[(colon + 1)..].Trim(), Course: line[..colon].Trim())
+                        : new HostedEventMenuItemInput(line);
+                })
+        ];
+    }
+
+    private static string? Trimmed(string? value)
+        => value?.Trim() is { Length: > 0 } v ? v : null;
+}

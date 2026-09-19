@@ -1,0 +1,84 @@
+@*
+    A video that plays on the board.
+
+    Ben, 2026-09-16: "This is a visual board not just a board for notes." A clip listed as a file chip
+    is a clip you have to take somewhere else to watch, which on an evidence board is the wrong way
+    round — what was filmed is the point.
+
+    Card sized, never the film's own size. A phone films 1080×1920; a block opened at that would bury
+    the board under one clip, so it arrives at the registry's modest box and is resized by whoever
+    wants it bigger — Ben: "maybe can resize the card to fit the size the end user wants."
+*@
+@inherits BlockRendererBase
+@implements IDisposable
+@inject CanvasAssetStore Assets
+@inject ICanvasMediaStore Media
+
+<figure class="bc-video-wrap">
+    @if (Shown is not null)
+    {
+        @* preload="metadata" so the box knows its length without fetching a whole clip for every
+           block on the board; controls because this is a player, not a decoration. *@
+        <video class="bc-video" src="@Shown" controls preload="metadata" playsinline
+               aria-label="@Label"></video>
+    }
+    else
+    {
+        <div class="bc-video__placeholder">
+            <BcIcon Name="video" />
+            <span>@(Video.FileName is { Length: > 0 } name ? name : "No video yet.")</span>
+        </div>
+    }
+
+    @if (Editing)
+    {
+        <div class="bc-video__edit">
+            <label class="bc-field" for="@($"bc-vcap-{Node.Id:N}")"><span class="bc-field__label">Caption</span>
+                <input @ref="FirstField" id="@($"bc-vcap-{Node.Id:N}")" class="form-control form-control-sm"
+                       @bind="Video.Caption" @bind:event="oninput" />
+            </label>
+        </div>
+    }
+    else if (!string.IsNullOrWhiteSpace(Video.Caption))
+    {
+        <figcaption class="bc-video__caption">@Video.Caption</figcaption>
+    }
+</figure>
+
+@code {
+    /// <summary>The clip's display address, when a store has one.</summary>
+    [Parameter] public string? Src { get; set; }
+
+    private VideoData Video => Data as VideoData ?? new VideoData();
+
+    private string? _stored;
+
+    private string? Shown => Src ?? _stored;
+
+    private string Label => string.IsNullOrWhiteSpace(Video.Caption)
+        ? (string.IsNullOrWhiteSpace(Video.FileName) ? "Video on the board" : Video.FileName)
+        : Video.Caption!;
+
+    protected override void OnInitialized() => Assets.Ready += OnAssetsReady;
+
+    protected override async Task OnParametersSetAsync() => _stored = await LookUpAsync();
+
+    /// <summary>
+    /// The copy on this device first — no network, and it is there the moment it is dropped —
+    /// otherwise the case's copy. Never a thumbnail: a still cannot be played.
+    /// </summary>
+    private async Task<string?> LookUpAsync()
+    {
+        var local = Video.AssetId is { } id ? await Assets.GetUrlAsync(id, Video.OpfsExt) : null;
+        if (local is not null || Video.UploadFileId is not { } uploaded) return local;
+        return await Media.GetDisplayUrlAsync(uploaded, thumbnail: false);
+    }
+
+    private void OnAssetsReady() => _ = InvokeAsync(async () =>
+    {
+        _stored = await LookUpAsync();
+        StateHasChanged();
+    });
+
+    public void Dispose() => Assets.Ready -= OnAssetsReady;
+}

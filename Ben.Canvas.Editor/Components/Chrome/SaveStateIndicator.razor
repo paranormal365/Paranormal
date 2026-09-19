@@ -1,0 +1,45 @@
+@*
+    Where the board's changes are, as a dot and a short phrase. Problems become buttons: a failed save
+    retries, a conflict reopens the choice.
+*@
+
+@if (State.Kind is SaveStateKind.ServerFailed or SaveStateKind.ServerConflict)
+{
+    <button type="button" class="bc-savestate bc-savestate--button btn btn-link btn-sm" role="status" aria-live="polite"
+            @onclick="@(() => State.Kind == SaveStateKind.ServerFailed ? OnRetry.InvokeAsync() : OnResolveConflict.InvokeAsync())">
+        <BcIcon Name="alert-triangle" Class="bc-savestate__icon" />
+        <span class="bc-savestate__text">@Sentence</span>
+    </button>
+}
+else
+{
+    <span class="bc-savestate" role="status" aria-live="polite" aria-label="@Sentence">
+        <span class="bc-savestate__dot bc-savestate__dot--@Tone" aria-hidden="true"></span>
+        <span class="bc-savestate__text">@Sentence</span>
+    </span>
+}
+
+@code {
+    [Parameter] public SaveState State { get; set; } = SaveState.Clean;
+    [Parameter] public bool AutosavePending { get; set; }
+    [Parameter] public EventCallback OnRetry { get; set; }
+    [Parameter] public EventCallback OnResolveConflict { get; set; }
+
+    /// <summary>"Now" for relative times; a parameter so a test can hold it still.</summary>
+    [Parameter] public DateTime? NowUtc { get; set; }
+
+    private string Sentence => State.Kind switch
+    {
+        SaveStateKind.Clean => "No changes yet",
+        SaveStateKind.Editing => AutosavePending ? CanvasCopy.Status.Saving : "Not saved yet",
+        _ => State.Text(NowUtc ?? DateTime.UtcNow),
+    };
+
+    private string Tone => State.Kind switch
+    {
+        SaveStateKind.SavedLocal or SaveStateKind.SavedServer => "success",
+        SaveStateKind.Editing or SaveStateKind.Offline => "attention",
+        SaveStateKind.ServerFailed or SaveStateKind.ServerConflict => "danger",
+        _ => "muted",
+    };
+}

@@ -159,7 +159,16 @@ public sealed class AdminOrganizationSubscriptionController : BenControllerBase
             if (CouponMath.WhyNotRedeemable(code.Coupon, code, ctx) is { } refusal)
                 return BadRequest(refusal);
 
-            var listPrice = tier is null ? 0m : SubscriptionPricing.PriceFor(tier, request.Interval) ?? 0m;
+            // The whole period, not one unit. A tour business is billed per tour, so pricing a
+            // coupon against the unit price wrote a 3-tour business onto $14.50 where the period
+            // was $87 — and recorded the redemption's list price as $29, which is what any
+            // later reimbursement reads back (item 233).
+            var unitPrice = tier is null ? 0m : SubscriptionPricing.PriceFor(tier, request.Interval) ?? 0m;
+            var couponTours = tier is { IsBandedByMembers: false }
+                              && SubscriptionTierResolver.IsBusinessKind(org.Kind)
+                ? TourBilling.Units(org.Kind, await BillableUnits.ActiveToursAsync(db, organizationId, ct))
+                : 1;
+            var listPrice = TourBilling.ListPrice(unitPrice, couponTours);
             discounted = CouponMath.PriceFor(listPrice, code.Coupon);
         }
         var isNew = sub is null;
@@ -189,10 +198,26 @@ public sealed class AdminOrganizationSubscriptionController : BenControllerBase
         // first-paid exactly once. The provider webhook will call the same method; two copies of
         // this list would disagree within a month.
         sub.CancelAtPeriodEnd = request.CancelAtPeriodEnd;
+        // A business period is priced per tour (item 233); a hand-set one counts them the same way.
+        var tours = tier is { IsBandedByMembers: false } && SubscriptionTierResolver.IsBusinessKind(org.Kind)
+            ? TourBilling.Units(org.Kind, await BillableUnits.ActiveToursAsync(db, organizationId, ct))
+            : 0;
         var snapshot = PeriodOpener.Open(
             sub, tier, request.Status, request.Interval,
-            request.CurrentPeriodStart, request.CurrentPeriodEnd, members, userId);
-        sub.ProviderName = "Manual";
+            request.CurrentPeriodStart, request.CurrentPeriodEnd, members, userId, tours);
+        // ONLY when nothing else is managing this subscription (2026-09-17 audit).
+        //
+        // This used to be unconditional, and the renewal job selects ProviderName == "Stripe" —
+        // so a SuperAdmin nudging a Stripe customer's period end by one day, which is exactly the
+        // "cases every provider produces" this endpoint exists for, silently stopped that card
+        // ever being charged again. ProviderCustomerRef and ProviderPaymentMethodRef were left in
+        // place, so nothing looked wrong on any screen; the group simply kept working until the
+        // period ended and then lapsed as if they had cancelled.
+        //
+        // Stopping the billing is what CancelAtPeriodEnd is for, and it is on this same request.
+        // Editing a period is not a statement about who collects the money.
+        if (string.IsNullOrWhiteSpace(sub.ProviderName))
+            sub.ProviderName = "Manual";
 
         if (snapshot is not null)
         {

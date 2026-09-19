@@ -13,18 +13,24 @@ public enum MarkerKind: String, Codable, Sendable, CaseIterable {
     case deviceMoved = "device_moved"
     /// Something in the camera's view moved.
     case sceneMotion = "scene_motion"
+    /// The app was put away — the home screen, another app, the phone locked — while the session
+    /// ran. Sound and readings carry on (the app declares the background-audio mode for exactly
+    /// this); the camera cannot, because iOS takes it from any app that is not on screen.
+    case appBackgrounded = "app_backgrounded"
+    /// The app came back after being put away.
+    case appReturned = "app_returned"
 
     /// Which of the spec's three legal `triggered_by` values this kind reports as.
     public var trigger: FieldReading.Trigger {
         switch self {
-        case .sentryEmf, .sentrySound, .deviceMoved, .sceneMotion: .event
+        case .sentryEmf, .sentrySound, .deviceMoved, .sceneMotion, .appBackgrounded, .appReturned: .event
         case .manual, .evpQuestion, .evpWaitEnd: .manual
         }
     }
 
     public var isAutomatic: Bool {
         switch self {
-        case .sentryEmf, .sentrySound, .deviceMoved, .sceneMotion: true
+        case .sentryEmf, .sentrySound, .deviceMoved, .sceneMotion, .appBackgrounded, .appReturned: true
         case .manual, .evpQuestion, .evpWaitEnd: false
         }
     }
@@ -38,6 +44,8 @@ public enum MarkerKind: String, Codable, Sendable, CaseIterable {
         case .evpWaitEnd: "Stopped waiting"
         case .deviceMoved: "Device moved"
         case .sceneMotion: "Movement seen"
+        case .appBackgrounded: "App put away"
+        case .appReturned: "Back in the app"
         }
     }
 }
@@ -92,11 +100,35 @@ public final class FieldSession {
     public var batteryPercentAtStart: Double?
     public var deviceModel: String
 
+    /// What this session was set up to record, chosen before it opened and adjustable on the live
+    /// screen. Stored so a session that outlives the app's process comes back recording the same
+    /// things — and so the video button is where it was left, rather than gone.
+    ///
+    /// OPTIONAL on purpose: an added optional attribute is the one shape SwiftData will migrate
+    /// without being asked, and every session recorded before this existed ran the defaults.
+    public var channelsRaw: Int?
+
     /// Set once the session's document has reached the server. The device keeps everything
     /// regardless — this says what is safe to delete, never what has been deleted.
     public var serverSessionId: UUID?
     public var uploadedAt: Date?
     public var timezoneIdentifier: String
+
+    /// When this session arrived on this device as a `.ben`, rather than being recorded here.
+    ///
+    /// Ben, 2026-09-16: "someone else can share their .ben file with another person on the
+    /// iphone and the other person can view it like they had recorded it themselves." It plays
+    /// exactly as if they had; this is only the record that they did not. Optional, like every
+    /// attribute added after the first release — the one shape SwiftData migrates unasked.
+    public var importedAt: Date?
+
+    /// The device that recorded it, as its seal said — `identifierForVendor` of the phone the
+    /// session was made on. Nil for a session recorded here. Compared with this device's own id,
+    /// it is how the list tells "shared with you" from "yours, pulled back from the server".
+    public var sourceDeviceId: String?
+
+    /// The account the seal named as having recorded it, when the bundle said.
+    public var recordedByAccountId: UUID?
 
     @Relationship(deleteRule: .cascade, inverse: \FieldMarker.session)
     public var markers: [FieldMarker]
@@ -110,6 +142,7 @@ public final class FieldSession {
                 investigationTitle: String? = nil,
                 batteryPercentAtStart: Double? = nil,
                 deviceModel: String,
+                channels: CaptureChannels = .default,
                 timezoneIdentifier: String = TimeZone.current.identifier) {
         self.id = id
         self.startedAt = startedAt
@@ -123,6 +156,7 @@ public final class FieldSession {
         self.captureCount = 0
         self.batteryPercentAtStart = batteryPercentAtStart
         self.deviceModel = deviceModel
+        self.channelsRaw = channels.rawValue
         self.timezoneIdentifier = timezoneIdentifier
         self.markers = []
         self.captures = []
@@ -131,6 +165,13 @@ public final class FieldSession {
     public var outcome: FieldSessionOutcome {
         get { FieldSessionOutcome(rawValue: outcomeRaw) ?? .interrupted }
         set { outcomeRaw = newValue.rawValue }
+    }
+
+    /// A session recorded before channels were remembered ran the defaults, and says so rather
+    /// than coming back recording nothing.
+    public var channels: CaptureChannels {
+        get { channelsRaw.map(CaptureChannels.init(rawValue:)) ?? .default }
+        set { channelsRaw = newValue.rawValue }
     }
 
     /// How long it ran. An interrupted session has no honest end, so it reports what was

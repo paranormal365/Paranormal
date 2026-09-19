@@ -113,6 +113,66 @@ public class AdminTests : BenTestBase
             .ToBeVisibleAsync(new() { Timeout = 8_000 });
     }
 
+    /// <summary>
+    /// Ben, 2026-09-15: making his nephew a SuperAdmin was refused with no reason. This walks the same path on a
+    /// seeded account — tick SuperAdmin, save, then put it back — so a refusal shows up here with the server's words.
+    /// </summary>
+    [Test]
+    public async Task AdminUserDetail_GrantingSuperAdmin_SavesAndCanBeTakenBack()
+    {
+        await Page.GotoAsync($"{BaseUrl}/admin/users");
+        await WaitForTheCircuitAsync();
+
+        // Somebody other than the signed-in SuperAdmin: their own box is locked, by design.
+        // The grid shows names rather than addresses (the email column was dropped at Ben's request), and it arrives
+        // after the page does — so the seeded member is searched for, then waited for.
+        var search = Page.GetByPlaceholder("Search by name or email");
+        await Expect(search).ToBeVisibleAsync(new() { Timeout = 15_000 });
+        await search.FillAsync("Thornton");
+        await Page.GetByRole(AriaRole.Button, new() { Name = "Search" }).ClickAsync();
+
+        var row = Page.Locator("tr", new() { HasTextString = "Thornton" }).First;
+        try
+        {
+            await Expect(row).ToBeVisibleAsync(new() { Timeout = 15_000 });
+        }
+        catch (PlaywrightException)
+        {
+            Assert.Ignore("Seeded member not on this database.");
+        }
+        await ClickUntilUrlAsync(row.GetByRole(AriaRole.Button, new() { Name = "View" })
+                                    .Or(row.GetByRole(AriaRole.Link, new() { Name = "View" })).First,
+                                @"/admin/users/[0-9a-f-]+");
+
+        await Page.GetByRole(AriaRole.Tab, new() { Name = "Site Roles", Exact = true })
+                  .Or(Page.Locator(".nav-tabs .nav-link", new() { HasTextString = "Site Roles" })).First.ClickAsync();
+
+        var box  = Page.Locator("[data-testid='site-roles-panel'] #site-role-superadmin");
+        var save = Page.GetByRole(AriaRole.Button, new() { Name = "Save Roles" });
+        await Expect(box).ToBeVisibleAsync(new() { Timeout = 15_000 });
+        var held = await box.IsCheckedAsync();
+
+        try
+        {
+            await box.SetCheckedAsync(!held);
+            await save.ClickAsync();
+
+            // Either it saved, or the page names the reason — never a refusal with nothing in it.
+            var failure = Page.Locator(".alert-danger");
+            await Expect(box.Or(failure).First).ToBeVisibleAsync(new() { Timeout = 20_000 });
+            if (await failure.CountAsync() > 0)
+                Assert.Fail("Saving site roles was refused: " + (await failure.First.InnerTextAsync()).Trim());
+
+            await Expect(box).ToBeCheckedAsync(new() { Checked = !held, Timeout = 20_000 });
+        }
+        finally
+        {
+            await box.SetCheckedAsync(held);
+            await save.ClickAsync();
+            await Expect(box).ToBeCheckedAsync(new() { Checked = held, Timeout = 20_000 });
+        }
+    }
+
     // ── Create user ───────────────────────────────────────────────────────────
 
     [Test]
@@ -122,6 +182,37 @@ public class AdminTests : BenTestBase
         await Page.WaitForLoadStateAsync(LoadState.NetworkIdle);
         await Expect(Page.Locator("input[type='email'], input[type='text']").First)
             .ToBeVisibleAsync(new() { Timeout = 8_000 });
+    }
+
+    /// <summary>
+    /// A refused New User says why, in the server's words (2026-09-15).
+    /// </summary>
+    /// <remarks>
+    /// Ben tried to add his nephew and was told only that "the server rejected the request", with a guess about the email
+    /// and the password. A username with a space is refused by Identity and was one of the things that sentence never
+    /// mentioned. The refusal creates nothing, so this leaves no account behind.
+    /// </remarks>
+    [Test]
+    public async Task AdminUserCreate_ARefusal_NamesTheReason()
+    {
+        await Page.GotoAsync($"{BaseUrl}/admin/users/create");
+        await WaitForTheCircuitAsync();
+
+        var email = Page.Locator("#adminusercreate-email-0463");
+        await Expect(email).ToBeVisibleAsync(new() { Timeout = 15_000 });
+        await Page.Locator("#adminusercreate-display-name-4286").FillAsync("Refused Person");
+        await Page.Locator("#adminusercreate-username-defaults-to-email-0b90").FillAsync("has a space");
+        await email.FillAsync($"refused-{Guid.NewGuid():N}@example.com");
+        await Page.Locator("#adminusercreate-password-2989").FillAsync("Refused1Pass");
+        await Page.Locator("#adminusercreate-confirm-password-f173").FillAsync("Refused1Pass");
+        await Page.Locator("#adminusercreate-confirm-password-f173").BlurAsync();
+
+        await Page.GetByRole(AriaRole.Button, new() { Name = "Create User" }).ClickAsync();
+
+        var alert = Page.Locator(".alert-danger");
+        await Expect(alert).ToContainTextAsync("has a space", new() { Timeout = 15_000 });
+        await Expect(alert).Not.ToContainTextAsync("rejected the request");
+        await Expect(Page).ToHaveURLAsync(new System.Text.RegularExpressions.Regex(@"/admin/users/create$"));
     }
 
     // ── File types ────────────────────────────────────────────────────────────

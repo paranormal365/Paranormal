@@ -9,6 +9,7 @@ struct RootShell: View {
     @Environment(\.horizontalSizeClass) private var sizeClass
     @Environment(Router.self) private var router
     @Environment(AppDependencies.self) private var dependencies
+    @Environment(\.scenePhase) private var scenePhase
     @State private var showSignInFromBanner = false
 
     var body: some View {
@@ -25,6 +26,23 @@ struct RootShell: View {
         .onChange(of: sizeClass) { _, _ in router.availableSections = shownSections }
         // Cold start: tokens in the Keychain mean quiet optimistic sign-in.
         .task { await dependencies.session.restore() }
+        // A cold start with no signal keeps the saved tokens and stays signed out for the moment; coming back
+        // to the app tries again, so the person is signed in once there is a signal, without typing anything.
+        .onChange(of: scenePhase) { _, phase in
+            if phase == .active {
+                Task {
+                    await dependencies.session.restore()
+                    // Photos kept for a signal, including any shared to an event from Photos while the app was away.
+                    await dependencies.roomOutbox.send()
+                    await dependencies.roomOutbox.refreshShareableEvents()
+                }
+            }
+        }
+        .task(id: dependencies.session.me?.userId) {
+            dependencies.roomOutbox.start()
+            await dependencies.roomOutbox.send()
+            await dependencies.roomOutbox.refreshShareableEvents()
+        }
         // A session left recording when the app went away is closed as interrupted, its log
         // recovered, before anything can show a stale "recording" row.
         .task { await dependencies.fieldKit.recoverInterruptedSessions() }
@@ -111,8 +129,13 @@ struct RootShell: View {
     /// investigator carries no My Cases tab and no Investigations tab, because neither can ever
     /// hold anything for them.
     private var shownSections: [AppSection] {
-        let all = sizeClass == .regular ? AppSection.allCases : AppSection.compactTabs
-        return all.filter { $0.applies(to: dependencies.surfaces.surfaces) }
+        let surfaces = dependencies.surfaces.surfaces
+        // The compact bar is built to five FROM what applies (item 234), rather than filtered
+        // down from a fixed five — adding Haunted Tours left no sixth slot, so the bar has to
+        // choose. AppSection.compactTabs(for:) is where that choice lives.
+        return sizeClass == .regular
+            ? AppSection.allCases.filter { $0.applies(to: surfaces) }
+            : AppSection.compactTabs(for: surfaces)
     }
 
     private var tabView: some View {
@@ -169,6 +192,7 @@ struct RootShell: View {
         case .investigations: InvestigationsView()
         case .fieldKit: FieldKitHomeView()
         case .events: EventsView()
+        case .tours: ToursView()
         case .profile: SettingsHomeView()
         }
     }
@@ -180,6 +204,31 @@ struct RootShell: View {
             FieldKitHomeView()
         case .eventsList:
             EventsView()
+        // Item 234. Declared and deep-linked to since the routes were written, and until now it
+        // fell through to the placeholder — which is where "confirm your seat on the app" had
+        // nowhere to happen.
+        case .eventDetail(let id):
+            EventDetailView(eventId: id)
+        case .tourDetail(let org, let slug):
+            TourDetailView(organizationUrlName: org, tourSlug: slug)
+        case .myEvents:
+            MyEventsView()
+        case .eventPass(let id):
+            EventPassView(hostedEventId: id)
+        case .eventHub(let id):
+            EventHubView(hostedEventId: id)
+        case .eventProgramme(let id):
+            ProgrammeView(hostedEventId: id)
+        case .eventMenus(let id):
+            MenusView(hostedEventId: id)
+        case .eventDownloads(let id):
+            DownloadsView(hostedEventId: id)
+        case .eventRoom(let id, let addPhotos):
+            EventRoomView(hostedEventId: id, startWithComposer: addPhotos)
+        case .doorDuties:
+            DoorDutiesView()
+        case .door(let organizationId, let hostedEventId):
+            DoorView(organizationId: organizationId, hostedEventId: hostedEventId)
         case .myEvidence:
             MyEvidenceView()
         case .developerSettings:

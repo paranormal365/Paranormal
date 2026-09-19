@@ -28,8 +28,9 @@
                          Ben.Data.Common.Enums.OrganizationSecurityAction.Create) == true)
         {
             <button type="button" class="btn btn-primary" @onclick="@(() => _creating = true)"><BenIcon Name="plus" Class="me-1" />Schedule an investigation</button>
+            @* Beside the button it explains; without the button it was a lone "?" at the edge (member test pass M.8). *@
+            <HelpLink Slug="working-a-case" Anchor="scheduling-a-visit-with-no-case" />
         }
-        <HelpLink Slug="working-a-case" Anchor="scheduling-a-visit-with-no-case" />
     </div>
 </div>
 

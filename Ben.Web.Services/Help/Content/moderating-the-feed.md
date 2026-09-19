@@ -39,6 +39,12 @@ Both resolve **every** waiting report against that post together. Five people re
 one decision, and leaving the rest waiting would put it back in front of a colleague with no sign
 it had already been dealt with.
 
+### Reports about a published case
+
+The same queue also carries reports about **published cases** and about **comments on them**, so a
+moderator has one screen rather than three. A case report names the case and links to it; the
+decision is the same one, made by a person, and hiding still hides nothing by itself.
+
 ## Photos and videos waiting for a look
 
 **Administration → Content → Feed Media** is the other queue: photos and videos that have not been
@@ -81,6 +87,50 @@ lowers the post's ranking.
 Those judgments are worth the click even when nothing is wrong: every one becomes a labelled
 example the site's classifier learns from, and the classifier is only ever as good as the record
 of what people who looked actually decided.
+
+## Posts about a place
+
+A post written on a public location's page is an ordinary feed post that also names that place, so
+everything on this page applies to it unchanged: it appears in the same queues, its photo goes
+through the same check, reports reach you the same way, and hiding it removes it from the place's
+page as well as from the feed. There is no separate place-moderation screen, and there is
+deliberately nothing to learn.
+
+One thing worth knowing: **anybody signed in may post about a public location**, which is wider than
+the feed's front page. That is the free lane working as intended — a shared record of somewhere
+anyone can visit is filled by visitors — but it does mean a place's page is the likeliest first stop
+for somebody with no group and no history. Private residences take no posts at all.
+
+## The place archive
+
+**Moderation → Place Archive** is a second queue, and it is not about posts. Two other things reach
+a public location's page: a **field session** somebody published from the app, and a piece of
+**event evidence** a guest published from an event held there.
+
+Both work the other way round from the feed. They go public the moment their owner publishes them,
+and a queue entry appears only when something has been questioned — either a screener could not
+clear the media, or **any signed-in reader flagged it**.
+
+**A flag hides it straight away, and then you decide.** That order is deliberate: waiting for a
+moderator before hiding leaves the thing somebody objected to up for however long that takes, which
+is the failure a report exists to prevent. Hiding first costs a contributor some visibility for a
+while; not hiding costs somebody whatever the picture was.
+
+Which means **one flag from one person is enough to hide somebody's work**, and it stays hidden
+until you look. That is the whole reason this screen exists, and it is why it opens showing what is
+already held rather than only what is new. A held session is invisible to the public and invisible
+to its owner's audience, and nothing releases it except somebody here.
+
+- **Approve** puts it back on the place's page.
+- **Hold** takes it down again — that is how an approval is undone.
+- The reason the flag was given is shown on the row, which is usually the whole story.
+
+**The readings stay either way.** A flag is about what a photograph shows; magnetic-field numbers
+cannot be objectionable, and pulling a whole session would let one flag erase a contribution to the
+archive rather than hide a picture.
+
+If a place is later corrected to a **private residence**, its media comes down with it
+automatically. You do not need to work through it here.
 
 ## Hidden, not deleted
 

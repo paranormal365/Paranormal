@@ -451,6 +451,18 @@ public class PublicCaseDiscoveryControllerTests
     }
 
     [Fact]
+    public async Task A_case_shown_only_because_you_can_open_it_says_it_is_not_public()
+    {
+        // The list is headed "Public Investigations"; a member's private case must not read as published there.
+        var seeded = await SeedAPrivateCaseAsync();
+
+        var page = await AsAsync(seeded.Factory, seeded.MemberId);
+
+        Assert.False(page.Items.Single(i => i.CaseId == seeded.PrivateCaseId).IsPublic);
+        Assert.True(page.Items.Single(i => i.Title == "Public one").IsPublic);
+    }
+
+    [Fact]
     public async Task Somebody_elses_account_gains_nothing()
     {
         var seeded = await SeedAPrivateCaseAsync();
@@ -548,5 +560,81 @@ public class PublicCaseDiscoveryControllerTests
         }
 
         Assert.Empty((await AsAsync(factory, memberId)).Items);
+    }
+
+    // ── An unpublished case's tally goes dark with the case (2026-09-17 audit) ───────────────
+    //
+    // Every other action on this controller and on PublicCaseVoteController asks the
+    // published-case question; vote-summaries took arbitrary case ids and answered. Votes can only
+    // be CAST on a published case, so the reachable disclosure was the tally of a case that WAS
+    // public and has since been unpublished or retracted.
+
+    [Theory]
+    [InlineData(false, CaseStatus.Public)]    // flag cleared, status still public
+    [InlineData(true,  CaseStatus.Proposed)]  // flagged, but not a published status
+    [InlineData(true,  CaseStatus.Paused)]
+    public async Task A_case_that_is_not_published_reports_no_votes(bool isPublic, CaseStatus status)
+    {
+        var factory = CreateFactory();
+        var org     = MakeOrg();
+        var c       = MakeCase(org.Id, "Withdrawn", isPublic: isPublic, status: status);
+
+        await using (var db = await factory.CreateDbContextAsync())
+        {
+            db.Organizations.Add(org);
+            db.Cases.Add(c);
+            db.CaseVotes.Add(new CaseVote
+            {
+                Id = Guid.NewGuid(), CaseId = c.Id, VoterAppUserId = Guid.NewGuid(),
+                VoteType = EvidenceVoteType.Confirms, DateVoted = DateTime.UtcNow,
+            });
+            await db.SaveChangesAsync();
+        }
+
+        var ctrl = Build(factory);
+        ctrl.ControllerContext = new ControllerContext
+        {
+            HttpContext = new Microsoft.AspNetCore.Http.DefaultHttpContext(),
+        };
+
+        var summaries = (IReadOnlyList<Ben.Service.Models.Entities.CaseVoteSummary>)
+            Assert.IsType<OkObjectResult>((await ctrl.GetVoteSummaries([c.Id], default)).Result).Value!;
+
+        // A zero row, not an absent one — the same answer an id with no votes gives, so this is
+        // not an existence oracle for cases either.
+        var summary = Assert.Single(summaries);
+        Assert.Equal(0, summary.TotalVotes);
+        Assert.Equal(0, summary.ConfirmsCount);
+    }
+
+    [Fact]
+    public async Task A_published_case_still_reports_its_votes()
+    {
+        var factory = CreateFactory();
+        var org     = MakeOrg();
+        var c       = MakeCase(org.Id, "Still public");
+
+        await using (var db = await factory.CreateDbContextAsync())
+        {
+            db.Organizations.Add(org);
+            db.Cases.Add(c);
+            db.CaseVotes.Add(new CaseVote
+            {
+                Id = Guid.NewGuid(), CaseId = c.Id, VoterAppUserId = Guid.NewGuid(),
+                VoteType = EvidenceVoteType.Confirms, DateVoted = DateTime.UtcNow,
+            });
+            await db.SaveChangesAsync();
+        }
+
+        var ctrl = Build(factory);
+        ctrl.ControllerContext = new ControllerContext
+        {
+            HttpContext = new Microsoft.AspNetCore.Http.DefaultHttpContext(),
+        };
+
+        var summaries = (IReadOnlyList<Ben.Service.Models.Entities.CaseVoteSummary>)
+            Assert.IsType<OkObjectResult>((await ctrl.GetVoteSummaries([c.Id], default)).Result).Value!;
+
+        Assert.Equal(1, Assert.Single(summaries).TotalVotes);
     }
 }

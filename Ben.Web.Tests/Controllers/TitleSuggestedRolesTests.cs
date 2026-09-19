@@ -284,16 +284,12 @@ public class TitleSuggestedRolesTests
     [Fact]
     public void Both_halves_are_reachable_from_a_screen()
     {
-        var dir = new DirectoryInfo(AppContext.BaseDirectory);
-        while (dir is not null && !File.Exists(Path.Combine(dir.FullName, "Ben.slnx")))
-            dir = dir.Parent;
-        Assert.NotNull(dir);
-
-        var razor = Directory
-            .EnumerateFiles(dir!.FullName, "*.razor", SearchOption.AllDirectories)
-            .Where(f => !f.Contains("/obj/") && !f.Contains("/bin/") && !f.Contains("/worktrees/"))
-            .Select(File.ReadAllText)
-            .ToList();
+        // Through RepoFiles, which excludes worktrees NESTED IN THIS ROOT rather than any path
+        // containing the word. The substring version inverted when the suite itself ran from a
+        // worktree: every file was excluded, nothing was scanned, and this guard reported the
+        // feature inert because it could not see a single screen (2026-09-12).
+        var razor = Support.RepoFiles.Contents("*.razor");
+        Assert.NotEmpty(razor);
 
         string[] mustBeCalled =
         [
@@ -323,10 +319,7 @@ public class TitleSuggestedRolesTests
     [Fact]
     public void The_suggestion_table_is_read_only_where_titles_are_assigned()
     {
-        var dir = new DirectoryInfo(AppContext.BaseDirectory);
-        while (dir is not null && !File.Exists(Path.Combine(dir.FullName, "Ben.slnx")))
-            dir = dir.Parent;
-        Assert.NotNull(dir);
+        var root = Support.RepoFiles.Root();
 
         string[] allowed =
         [
@@ -339,8 +332,13 @@ public class TitleSuggestedRolesTests
             "OrganizationPurge.cs",
         ];
 
+        var files = Support.RepoFiles.Paths("*.cs");
+        // A negative scan that sees nothing passes for the wrong reason, which is how the
+        // worktree bug would have hidden here rather than shouting.
+        Assert.NotEmpty(files);
+
         var offenders = new List<string>();
-        foreach (var file in Directory.EnumerateFiles(dir!.FullName, "*.cs", SearchOption.AllDirectories))
+        foreach (var file in files)
         {
             // Normalized before matching: EnumerateFiles returns BACKSLASH paths on Windows, so
             // "/obj/" matched nothing there and the scan swept generated and migration files,
@@ -348,15 +346,15 @@ public class TitleSuggestedRolesTests
             // is the same trap the source-scan guards keep falling into — the exclusion list was
             // right, the separator was not. Found by a Windows run, not by this machine.
             var slashed = file.Replace('\\', '/');
-            if (slashed.Contains("/obj/") || slashed.Contains("/bin/") || slashed.Contains("/worktrees/")
-                || slashed.Contains("/Migrations/") || slashed.Contains("/Entities/"))
+            // Build output and nested worktrees are already gone; these two are this guard's own.
+            if (slashed.Contains("/Migrations/") || slashed.Contains("/Entities/"))
                 continue;
             if (allowed.Contains(Path.GetFileName(file))) continue;
 
             // Comments stripped: a remark explaining the rule must not trip the rule.
             var text = string.Join('\n', File.ReadLines(file).Select(l => l.Split("//")[0]));
             if (text.Contains("OrganizationMemberLevelRoles"))
-                offenders.Add(Path.GetRelativePath(dir.FullName, file));
+                offenders.Add(Path.GetRelativePath(root.FullName, file));
         }
 
         Assert.True(offenders.Count == 0,

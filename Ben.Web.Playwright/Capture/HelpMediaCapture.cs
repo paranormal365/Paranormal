@@ -44,7 +44,7 @@ public sealed class HelpMediaCapture : BenTestBase
     /// </summary>
     public override BrowserNewContextOptions ContextOptions() => new()
     {
-        ViewportSize      = new ViewportSize { Width = 1440, Height = 900 },
+        ViewportSize      = new ViewportSize { Width = DesktopWidth, Height = DesktopHeight },
         DeviceScaleFactor = 2,
         ColorScheme       = ColorScheme.Dark,
     };
@@ -133,8 +133,55 @@ public sealed class HelpMediaCapture : BenTestBase
     /// When given, the shot is cropped to that element — nearly always the better picture, since
     /// a full-page shot of a data-heavy screen reduces the part being explained to a few pixels.
     /// </param>
+    /// <summary>
+    /// How much of the page around a selector to include, in CSS pixels.
+    /// </summary>
+    /// <param name="Width">
+    /// The whole region's width. Given when the element runs the width of its column and the
+    /// subject is one corner of it.
+    /// </param>
+    private sealed record Around(float Left = 0, float Top = 0, float Right = 0, float Bottom = 0, float? Width = null);
+
+    /// <param name="width">
+    /// Narrows the viewport for this one shot and restores it afterwards. A compact screen has to
+    /// be photographed compact: the help for "the plan on a phone" illustrated with a 1440-wide
+    /// desktop picture teaches the reader the opposite of what it says.
+    /// </param>
     private async Task ShootAsync(
-        string slug, string name, bool gated = false, string? selector = null, string? proves = null)
+        string slug, string name, bool gated = false, string? selector = null, string? proves = null,
+        Around? around = null, int? width = null)
+    {
+        if (width is { } narrow)
+        {
+            await Page.SetViewportSizeAsync(narrow, PhoneHeight);
+            // The layout reflows and Blazor re-renders what depends on it; a shot taken in the
+            // same frame catches the desktop arrangement at phone width, which is worse than
+            // either.
+            await Page.WaitForTimeoutAsync(500);
+        }
+
+        try
+        {
+            await ShootAtCurrentSizeAsync(slug, name, gated, selector, proves, around);
+        }
+        finally
+        {
+            if (width is not null)
+            {
+                await Page.SetViewportSizeAsync(DesktopWidth, DesktopHeight);
+                await Page.WaitForTimeoutAsync(300);
+            }
+        }
+    }
+
+    private const int DesktopWidth = 1440;
+    private const int DesktopHeight = 900;
+
+    /// <summary>An iPhone's height, so a narrow shot is a phone and not a letterbox.</summary>
+    private const int PhoneHeight = 812;
+
+    private async Task ShootAtCurrentSizeAsync(
+        string slug, string name, bool gated, string? selector, string? proves, Around? around)
     {
         // A screenshot of an empty state teaches nobody anything, and it is the failure mode this
         // fixture is most likely to hit silently: the page loads, renders "You aren't borrowing
@@ -174,7 +221,32 @@ public sealed class HelpMediaCapture : BenTestBase
             await Expect(target).ToBeVisibleAsync(new() { Timeout = 10_000 });
             await target.ScrollIntoViewIfNeededAsync();
             await Page.WaitForTimeoutAsync(200);
-            await target.ScreenshotAsync(new() { Path = path });
+
+            if (around is { } margin)
+            {
+                // An element screenshot is clipped to the element's own box, so anything drawn
+                // OUTSIDE it — an open dropdown, which is positioned over the page — is simply
+                // not in the picture. A region around the element catches it, and narrowing the
+                // width keeps a full-width strip from photographing as a letterbox.
+                var box = await target.BoundingBoxAsync()
+                    ?? throw new InvalidOperationException($"{selector} has no box to photograph.");
+
+                await Page.ScreenshotAsync(new()
+                {
+                    Path = path,
+                    Clip = new()
+                    {
+                        X = Math.Max(0, box.X - margin.Left),
+                        Y = Math.Max(0, box.Y - margin.Top),
+                        Width = margin.Width ?? box.Width + margin.Left + margin.Right,
+                        Height = box.Height + margin.Top + margin.Bottom,
+                    },
+                });
+            }
+            else
+            {
+                await target.ScreenshotAsync(new() { Path = path });
+            }
         }
         else
         {
@@ -316,6 +388,105 @@ public sealed class HelpMediaCapture : BenTestBase
     }
 
     /// <summary>
+    /// The place hub: a public location's page, the case that names one, and investigating alone.
+    /// </summary>
+    /// <remarks>
+    /// <para>Four screens the 2026-09-17 arc added, and every one of them is a screen the help now
+    /// describes in words. The place page is the load-bearing shot: it is the only page on the site
+    /// that gathers several groups' work at one location, and a paragraph explaining that is no
+    /// substitute for seeing the sections stacked up.</para>
+    ///
+    /// <para>The feed flag is turned on for the duration and put back afterwards, because place
+    /// posts are feed posts and the composer does not exist without it.</para>
+    /// </remarks>
+    [Test]
+    [Description("working-a-case, the-feed and getting-started: places, and investigating alone.")]
+    public async Task Capture_Places()
+    {
+        var wasOn = await FeedFlagAsync();
+        await SetFeedFlagAsync(true);
+
+        try
+        {
+            await LoginAsync(UserEmail, UserPassword);
+
+            // ── New Case, at the place already on file ───────────────────────
+            if (await OpenOrganizationAsync("Paranormal365"))
+            {
+                await OpenTabAsync("Cases", Main.GetByTestId("new-case"));
+                await ClickUntilUrlAsync(Main.GetByTestId("new-case").First, @"/cases/new");
+                await WaitUntilLoadedAsync();
+
+                await Main.Locator("#casecreatepage-case-title-b1b1").FillAsync("Another look at the cave");
+                await Main.Locator("#casecreatepage-street-address-5b76").FillAsync("430 Keysburg Rd");
+                await Main.Locator("#casecreatepage-city-4662").FillAsync("Adams");
+                await Main.Locator("#casecreatepage-state-7b45").FillAsync("TN");
+                await Main.Locator("#casecreatepage-zip-code-ba79").FillAsync("37010");
+                await Main.Locator("#case-place-name").FillAsync("Bell Witch Cave");
+
+                // The offer is debounced and then a round trip, so it is waited for rather than
+                // hoped for — a picture of the moment before it arrives teaches the wrong thing.
+                var offer = Main.GetByTestId("place-candidates");
+                try { await Expect(offer).ToBeVisibleAsync(new() { Timeout = 20_000 }); }
+                catch (AssertionException) { /* shot below still shows the kind choice */ }
+
+                // The whole form, not a crop around the radio: anchoring on the input itself gave
+                // a 40-pixel sliver of sidebar, because "around" grows from the element's own box
+                // and a radio button's box is a radio button.
+                await ShootAsync("working-a-case", "new-case-place.png",
+                                 proves: "What kind of place is this?");
+            }
+
+            // ── A place's own page, signed in ────────────────────────────────
+            await GoAsync("/places/40000001-0000-0000-0000-000000000001");
+            await WaitUntilLoadedAsync();
+            await Expect(Main.GetByText("Shared by other groups", new() { Exact = false }))
+                .ToBeVisibleAsync(new() { Timeout = 30_000 });
+            await ShootAsync("working-a-case", "place-page.png", proves: "Shared by other groups");
+
+            // ── Posting about a place ────────────────────────────────────────
+            var composer = Main.GetByTestId("place-composer");
+            if (await composer.CountAsync() > 0)
+            {
+                await composer.Locator("textarea").First.FillAsync(
+                    "Two of us felt the cold spot on the lower stair, about 20 minutes apart. "
+                    + "Readings going up with the session.");
+                await composer.GetByTestId("feed-composer-post").ClickAsync();
+                await Expect(Main.GetByTestId("place-posts")).ToBeVisibleAsync(new() { Timeout = 20_000 });
+                await ShootAsync("the-feed", "place-posts.png",
+                                 selector: "[data-testid='place-composer']",
+                                 around: new Around(Top: 60, Bottom: 320));
+            }
+
+            // ── The door for somebody in no group ────────────────────────────
+            // Wren belongs to nothing, which is what makes the offer appear at all. If an earlier
+            // run gave her a space the offer is gone and there is nothing to photograph; the shot
+            // is skipped rather than faked with a different button.
+            await LogoutAsync();
+            await LoginAsync(SoloEmail, SoloPassword);
+            await GoAsync("/places/40000001-0000-0000-0000-000000000001");
+            await WaitUntilLoadedAsync();
+
+            var solo = Main.Locator(".place-investigate-solo");
+            if (await solo.CountAsync() > 0)
+            {
+                await solo.First.ClickAsync();
+                var dialog = Page.Locator(".modal, [role='dialog']").Filter(
+                    new() { HasTextString = "Investigating on your own" }).First;
+                await Expect(dialog).ToBeVisibleAsync(new() { Timeout = 15_000 });
+                // Proved on the button rather than on the word "public": that word appears in
+                // several places on the page behind the dialog, and the first match wins.
+                await ShootAsync("getting-started", "investigate-alone.png",
+                                 proves: "Create it and carry on");
+            }
+        }
+        finally
+        {
+            await SetFeedFlagAsync(wasOn);
+        }
+    }
+
+    /// <summary>
     /// Signing up, two-step sign-in, and the notifications page.
     /// </summary>
     /// <remarks>
@@ -341,6 +512,303 @@ public sealed class HelpMediaCapture : BenTestBase
 
         await GoAsync("/notifications");
         await ShootAsync("getting-started", "notifications.png", proves: "Waiting on you");
+    }
+
+    /// <summary>
+    /// The composer's row of tools, a poll as it is answered, and a link showing where it goes.
+    /// </summary>
+    /// <remarks>
+    /// Three shots from one post, because they are three parts of the same composer and taking
+    /// them separately would mean clearing and refilling the feed three times. The poll is
+    /// photographed AFTER somebody has answered it: an unanswered poll is a picture of two empty
+    /// bars, which shows nothing about what a poll does.
+    /// </remarks>
+    [Test]
+    [Description("the-feed: the composer's tools, a poll, and a link preview.")]
+    public async Task Capture_ComposerTools()
+    {
+        var wasOn = await FeedFlagAsync();
+        await SetFeedFlagAsync(true);
+
+        try
+        {
+            await ClearFeedForCaptureAsync();
+
+            // One seat throughout, and Sarah answers her own poll below. The Follow and Report
+            // controls are photographed in feed.png, where a second person's post is the point;
+            // here the subject is the composer and the poll, and a second sign-in only adds a
+            // way for the capture to fail.
+            await LoginAsync(UserEmail, UserPassword);
+            await GoToFeedForCaptureAsync();
+
+            // The tool row with the poll open — the shot for "Writing a poll".
+            var box = Page.Locator("#feed-composer");
+            await box.FillAsync("Planning next week's session — settle it for me.");
+            await Page.GetByRole(AriaRole.Button, new() { Name = "Add a poll" }).ClickAsync();
+            await Expect(Page.Locator(".poll-editor")).ToBeVisibleAsync(new() { Timeout = 15_000 });
+
+            var answers = Page.Locator(".poll-editor__option input");
+            await answers.Nth(0).FillAsync("The upstairs hall");
+            await answers.Nth(1).FillAsync("The cellar stairs");
+            await Page.Locator(".poll-editor input[placeholder='Ask something']")
+                .FillAsync("Where should we take the recorder next week?");
+            await ShootAsync("the-feed", "composer-tools.png", selector: ".card:has(#feed-composer)");
+
+            var post = Page.GetByRole(AriaRole.Button, new() { Name = "Post", Exact = true });
+            await Expect(post).ToBeEnabledAsync(new() { Timeout = 15_000 });
+            await post.ClickAsync();
+            await Expect(Page.Locator(".poll").First).ToBeVisibleAsync(new() { Timeout = 15_000 });
+
+            // A second post carrying a link to one of our own pages, for the preview card.
+            //
+            // The address is written as the SITE's, not as this machine's: a help screenshot
+            // showing "http://localhost:5078/..." teaches a reader an address that is not theirs.
+            // The card under it is resolved by the API against its own AppBaseUrl, so the capture
+            // run wants that pointed at the public host — see the README for the one-line
+            // override. When it is not, the card falls back to the plain host card, and the
+            // assertion below fails rather than shipping the wrong picture.
+            await ComposeForCaptureAsync(
+                $"Last month's write-up, if you missed it: {PublicSiteUrl}/o/{PublicGroupSlug}");
+
+            await GoToFeedForCaptureAsync();
+
+            // Not link-card--away: the point of the picture is one of OUR addresses, described
+            // out of our own records.
+            await Expect(Page.Locator(".link-card:not(.link-card--away)").First)
+                .ToBeVisibleAsync(new() { Timeout = 15_000 });
+            await ShootAsync("the-feed", "link-preview.png",
+                selector: ".bv-feed-post:has(.link-card)", proves: "Last month's write-up");
+
+            // Answer the poll, so the picture shows a poll with something in it.
+            var choice = Page.Locator(".poll__option").First;
+            await Expect(choice).ToBeVisibleAsync(new() { Timeout = 15_000 });
+            await choice.ClickAsync();
+            await Expect(Page.Locator(".poll__option--mine").First)
+                .ToBeVisibleAsync(new() { Timeout = 15_000 });
+
+            await ShootAsync("the-feed", "poll.png", selector: ".bv-feed-post:has(.poll)");
+        }
+        finally
+        {
+            await SetFeedFlagAsync(wasOn);
+        }
+    }
+
+    /// <summary>
+    /// The vote button with its three choices open, and the row of actions beside it.
+    /// </summary>
+    /// <remarks>
+    /// Signed in, because the row is what a reader who can act on a case sees — signed out it is
+    /// the counts and an invitation, which the paragraph above the picture already describes. The
+    /// choices are opened deliberately: the whole point of the redesign is that three buttons
+    /// became one, and a closed button photographs as a single icon that explains nothing.
+    /// </remarks>
+    /// <summary>
+    /// A seat on a walk, from both ends (item 234).
+    /// </summary>
+    /// <remarks>
+    /// <para>Builds its own tour business and takes it away again, because both pictures need a
+    /// date with a sign-up on it in a known state — one waiting, one reserved — and a seeded walk
+    /// is whatever the last run left it as.</para>
+    ///
+    /// <para><b>Both shots exist because the two ends disagree about what a sign-up IS.</b> The
+    /// business sees a queue to work; the guest sees an answer to read. A help page that showed
+    /// only one of them would teach half the feature.</para>
+    /// </remarks>
+    [Test]
+    [Description("organization-administration and getting-started: a tour seat, from both ends.")]
+    public async Task Capture_TourSeats()
+    {
+        var api = await Playwright.APIRequest.NewContextAsync(new() { BaseURL = ApiUrl });
+        string? orgId = null;
+
+        try
+        {
+            var login = await api.PostAsync("/login", new()
+            { DataObject = new { email = UserEmail, password = UserPassword } });
+            if (!login.Ok) Assert.Ignore("The seeded owner seat cannot sign in here.");
+            var token = (await login.JsonAsync())!.Value.GetProperty("accessToken").GetString();
+            var authed = new Dictionary<string, string> { ["Authorization"] = $"Bearer {token}" };
+
+            var slug = $"shot-seats-{Guid.NewGuid():N}"[..20];
+            var register = await api.PostAsync("/api/security/organizations/register", new()
+            {
+                Headers = authed,
+                DataObject = new { name = "Printers Alley Walks", urlName = slug, kind = 1 },
+            });
+            Assert.That(register.Ok, Is.True, await register.TextAsync());
+            orgId = (await register.JsonAsync())!.Value.GetProperty("organizationId").GetString();
+
+            var types = await api.GetAsync("/api/organization-address-types", new() { Headers = authed });
+            var typeId = (await types.JsonAsync())!.Value.EnumerateArray().First()
+                .GetProperty("id").GetString();
+
+            var address = await api.PostAsync($"/api/organizations/{orgId}/addresses", new()
+            {
+                Headers = authed,
+                DataObject = new
+                {
+                    organizationAddressTypeId = typeId, streetAddress1 = "1 Printers Alley",
+                    city = "Nashville", state = "TN", zipCode = "37201", country = "US",
+                    isPrimary = true,
+                },
+            });
+            var addressId = (await address.JsonAsync())!.Value.GetProperty("id").GetString();
+
+            var tour = await api.PostAsync($"/api/organizations/{orgId}/tours", new()
+            {
+                Headers = authed,
+                DataObject = new
+                {
+                    name = "Printers Alley Ghost Walk",
+                    description = "<p>An hour and a half through the oldest alley in Nashville.</p>",
+                    startOrganizationAddressId = addressId, durationMinutes = 90,
+                    defaultCapacity = 12, timeZoneId = "America/Chicago",
+                },
+            });
+            var tourId = (await tour.JsonAsync())!.Value.GetProperty("id").GetString();
+
+            var start = DateTime.UtcNow.AddDays(9);
+            var date = await api.PostAsync($"/api/organizations/{orgId}/calendar", new()
+            {
+                Headers = authed,
+                DataObject = new
+                {
+                    title = "Saturday walk", startDateTime = start,
+                    endDateTime = start.AddMinutes(90), isAllDay = false, isPublic = true,
+                    tourId, attendeeCapacity = 12,
+                },
+            });
+            var created = (await date.JsonAsync())!.Value;
+            var eventId = created.GetProperty("id").GetString();
+            var eventSlug = created.GetProperty("urlName").GetString();
+
+            // Two guests: one whose party is approved before the shot, one left waiting so the
+            // business's page has something on it to decide.
+            var guestToken = await TokenForCaptureAsync(MemberEmail, MemberPassword);
+            var clientToken = await TokenForCaptureAsync(ClientEmail, ClientPassword);
+            if (guestToken is null || clientToken is null)
+                Assert.Ignore("The seeded guest seats cannot sign in here.");
+
+            foreach (var (guest, seats) in new[] { (guestToken, 2), (clientToken, 3) })
+            {
+                await api.PostAsync($"/api/public/events/{eventId}/rsvp?seats={seats}", new()
+                {
+                    Headers = new Dictionary<string, string> { ["Authorization"] = $"Bearer {guest}" },
+                    DataObject = new { },
+                });
+            }
+
+            // Approve the first, leave the second waiting.
+            var attendees = await api.GetAsync(
+                $"/api/organizations/{orgId}/calendar/{eventId}/attendees", new() { Headers = authed });
+            var firstSeat = (await attendees.JsonAsync())!.Value.EnumerateArray().First()
+                .GetProperty("id").GetString();
+            await api.PostAsync(
+                $"/api/organizations/{orgId}/calendar/{eventId}/attendees/{firstSeat}/approve",
+                new() { Headers = authed, DataObject = new { } });
+
+            // ── The business's end ───────────────────────────────────────────
+            await LoginAsync(UserEmail, UserPassword);
+            await GoAsync($"/organizations/{orgId}/tours/{tourId}/dates/{eventId}");
+            await ShootAsync("organization-administration", "tour-seats.png",
+                gated: true, proves: "Waiting on you");
+
+            // ── The guest's end ──────────────────────────────────────────────
+            await LogoutAsync();
+            await LoginAsync(MemberEmail, MemberPassword);
+            await GoAsync($"/o/{slug}/events/{eventSlug}");
+            await ShootAsync("getting-started", "tour-seat.png",
+                selector: ".event-act", proves: "reserved");
+        }
+        finally
+        {
+            if (orgId is not null)
+            {
+                var admin = await api.PostAsync("/login", new()
+                { DataObject = new { email = SuperAdminEmail, password = SuperAdminPassword } });
+                if (admin.Ok)
+                {
+                    var adminToken = (await admin.JsonAsync())!.Value.GetProperty("accessToken").GetString();
+                    var headers = new Dictionary<string, string> { ["Authorization"] = $"Bearer {adminToken}" };
+                    // Purge, not delete: a business with a tour and sign-ups on it is refused by
+                    // the ordinary delete, in words.
+                    await api.DeleteAsync($"/api/admin/organizations/{orgId}/purge", new()
+                    { Headers = headers, DataObject = new { confirmName = "Printers Alley Walks" } });
+                }
+            }
+            await api.DisposeAsync();
+        }
+    }
+
+    [Test]
+    [Description("getting-started: the vote button and the actions beside it on a published case.")]
+    public async Task Capture_CaseActions()
+    {
+        await LoginAsync(UserEmail, UserPassword);
+
+        var found = await FirstPublicCaseAsync();
+        if (found is not { } theCase) { Assert.Ignore("No published case to photograph."); return; }
+
+        // Pressed with a vote already cast, the button TAKES THE VOTE BACK rather than offering
+        // the choices — which is the design, and which made the first version of this capture a
+        // picture of a closed button. Sarah has voted on the seeded cases, so the vote goes
+        // before the page loads and one press then opens the panel every time.
+        await ClearMyCaseVoteAsync(theCase.Id);
+
+        await GoAsync(theCase.Path);
+
+        var vote = Page.Locator(".vote-actions__vote > .vote-btn").First;
+        await Expect(vote).ToBeVisibleAsync(new() { Timeout = 30_000 });
+        await vote.ScrollIntoViewIfNeededAsync();
+        await vote.ClickAsync();
+        await Expect(Page.Locator(".vote-choices")).ToBeVisibleAsync(new() { Timeout = 10_000 });
+
+        // The widget is as wide as the column it sits in, and a shot of the whole width is a
+        // letterbox with a strip of icons in one corner. The row and its open panel are the
+        // subject.
+        await ShootAsync("getting-started", "case-actions.png", selector: ".vote-actions",
+            around: new Around(Left: 12, Top: 44, Right: 12, Bottom: 150, Width: 400));
+    }
+
+    /// <summary>A published case's id and public path, or null when there is none.</summary>
+    private async Task<(Guid Id, string Path)?> FirstPublicCaseAsync()
+    {
+        using var http = new HttpClient { BaseAddress = new Uri(ApiUrl) };
+        var page = await http.GetFromJsonAsync<System.Text.Json.JsonElement>(
+            $"/api/public/organizations/{PublicGroupSlug}/cases");
+
+        var items = page.ValueKind == System.Text.Json.JsonValueKind.Array
+            ? page
+            : page.TryGetProperty("items", out var inner) ? inner : default;
+        if (items.ValueKind != System.Text.Json.JsonValueKind.Array) return null;
+
+        // The list carries the slug; the id is on the case itself. Asked for rather than
+        // guessed, because the vote endpoints address a case by id.
+        foreach (var item in items.EnumerateArray())
+        {
+            if (!item.TryGetProperty("urlName", out var url)
+             || url.GetString() is not { Length: > 0 } name) continue;
+
+            var detail = await http.GetFromJsonAsync<System.Text.Json.JsonElement>(
+                $"/api/public/organizations/{PublicGroupSlug}/cases/{name}");
+            if (detail.TryGetProperty("caseId", out var id) && id.TryGetGuid(out var caseId))
+                return (caseId, $"/o/{PublicGroupSlug}/cases/{name}");
+        }
+
+        return null;
+    }
+
+    /// <summary>Takes back the capturing seat's vote on a case, so the picker opens on one press.</summary>
+    private async Task ClearMyCaseVoteAsync(Guid caseId)
+    {
+        var token = await TokenForCaptureAsync(UserEmail, UserPassword);
+        if (token is null) return;
+
+        using var http = new HttpClient { BaseAddress = new Uri(ApiUrl) };
+        http.DefaultRequestHeaders.Authorization =
+            new System.Net.Http.Headers.AuthenticationHeaderValue("Bearer", token);
+        using var _ = await http.DeleteAsync($"/api/public/cases/{caseId}/votes");
     }
 
     // ── Feed capture helpers ─────────────────────────────────────────────────
@@ -1089,6 +1557,81 @@ public sealed class HelpMediaCapture : BenTestBase
 
     // ── Group members ─────────────────────────────────────────────────────────
 
+    /// <summary>
+    /// working-a-case: the Edit Case page, the case's boards, and a board being grown and presented.
+    /// </summary>
+    /// <remarks>
+    /// The board is the seeded one on the Belmont case — four cards joined in a chain and a note beside them — so the
+    /// shots change nothing. Opened as Sarah, who manages the case, so it shows as its author sees it. The growing
+    /// shot selects a card to bring its side handles up; the presenting shot starts the walk and steps once, so the
+    /// picture shows a card being talked about rather than the first one.
+    /// </remarks>
+    [Test]
+    [Description("working-a-case: the Edit Case page, research boards, growing a card and presenting.")]
+    public async Task Capture_EditCaseAndResearchBoards()
+    {
+        await LoginAsync(UserEmail, UserPassword);
+        if (!await OpenOrgCaseAsync("Paranormal365", "Belmont"))
+            Assert.Ignore("The seeded Belmont case is not in this database.");
+
+        var caseUrl = Page.Url;
+        await ClickUntilUrlAsync(Page.Locator("#case-edit"), @"/cases/[0-9a-f\-]+/edit$");
+        await Expect(Page.Locator("#case-edit-description .k-editor")).ToBeVisibleAsync(new() { Timeout = 15_000 });
+        await ShootAsync("working-a-case", "edit-case.png", proves: "Status and publishing");
+
+        await Page.GoBackAsync();
+        var boards = Main.Locator("[data-testid=case-research-boards]");
+        await OpenTabAsync("Research", boards);
+        await SkipAnyTourAsync();
+        await ShootAsync("working-a-case", "research-boards.png", proves: "Previous owners and where they are buried");
+
+        // The choice New board opens (M9-12). The help section that describes the five templates is
+        // the one place a reader has to recognise this dialog, and a table of names is not a picture
+        // of it.
+        await Page.Locator("#research-new-board").ClickAsync();
+        await Expect(Page.Locator("[data-testid=board-template-list]")).ToBeVisibleAsync(new() { Timeout = 15_000 });
+        await ShootAsync("working-a-case", "board-templates.png", proves: "Presentation deck");
+
+        // And what one of them actually opens. The family tree, because it is the template whose
+        // shape is least guessable from its name and the one carrying Ben's photo frames.
+        await Page.Locator("#board-template-family-tree").ClickAsync();
+        await Page.WaitForURLAsync(new System.Text.RegularExpressions.Regex(@"localhost:5125"), new() { Timeout = 30_000 });
+        await Expect(Page.Locator("[data-bc-ready=true]")).ToBeVisibleAsync(new() { Timeout = 60_000 });
+        await Page.WaitForTimeoutAsync(2_000);   // the board's first framing animation
+
+        // The storage warning is a toast, not part of the board: a help picture of the family tree
+        // should not carry one, and it appears on a first load in a fresh browser every time.
+        var toasts = Page.Locator(".bc-toasts .toast .btn-close");
+        for (var open = await toasts.CountAsync(); open > 0; open--)
+            await toasts.First.ClickAsync();
+        await Page.WaitForTimeoutAsync(400);
+
+        await ShootAsync("working-a-case", "board-family-tree.png", proves: "No picture yet");
+
+        await Page.GotoAsync(caseUrl, new() { Timeout = 30_000 });
+        await OpenTabAsync("Research", boards);
+        await SkipAnyTourAsync();
+
+        // Into the canvas itself. A separate application on its own host, so the wait is for the editor's own
+        // ready flag rather than for anything the site renders.
+        await boards.GetByText("Previous owners and where they are buried").ClickAsync();
+        await Page.WaitForURLAsync(new System.Text.RegularExpressions.Regex(@"localhost:5125"), new() { Timeout = 30_000 });
+        await Expect(Page.Locator("[data-bc-ready=true]")).ToBeVisibleAsync(new() { Timeout = 60_000 });
+        await Page.WaitForTimeoutAsync(2_000);   // the board's first framing animation
+
+        // A selected card wears the four side handles; that is the picture the help text describes.
+        await Page.Locator(".bc-node").First.ClickAsync();
+        await Expect(Page.Locator(".bc-port").First).ToBeVisibleAsync(new() { Timeout = 15_000 });
+        await ShootAsync("working-a-case", "board-grow.png", proves: "Built 1924");
+
+        await Page.Locator("[data-bc-action=present]").ClickAsync();
+        await Expect(Page.Locator(".bc-present")).ToBeVisibleAsync(new() { Timeout = 15_000 });
+        await Page.Keyboard.PressAsync("ArrowRight");
+        await Page.WaitForTimeoutAsync(1_500);   // the walk's move to the next card
+        await ShootAsync("working-a-case", "board-presenting.png", proves: "Sold 1951");
+        await Page.Keyboard.PressAsync("Escape");
+    }
+
     [Test]
     [Description("working-a-case: the group's case list, and a case with its tabs.")]
     public async Task Capture_WorkingACase()
@@ -1116,6 +1659,110 @@ public sealed class HelpMediaCapture : BenTestBase
         await ShootAsync("working-a-case", "case-detail.png");
     }
 
+    /// <summary>
+    /// The visitor-facing surfaces the 2026-09-10 look pass rewrote: what's near you, what's on,
+    /// a group's own page, its cases, and one event.
+    /// </summary>
+    /// <remarks>
+    /// <para>All signed out, because that is the seat every one of these pages is designed for and
+    /// the seat the pass was judged in. A signed-in shot would carry somebody's sidebar and their
+    /// notification banners into a document about the public site.</para>
+    ///
+    /// <para>Each shot names the text it is supposed to contain. These pages all have plausible
+    /// empty states — "Nothing coming up", "No public cases" — and a screenshot of one teaches
+    /// nobody anything while looking perfectly fine in review.</para>
+    /// </remarks>
+    [Test]
+    [Description("getting-started: the public pages, as the look pass left them.")]
+    public async Task Capture_PublicSurfaces()
+    {
+        await LogoutAsync();
+
+        // What's near you. Geolocation is never granted to this context, so the panel offers its
+        // place-name box — which is the state most readers meet it in anyway.
+        await GoAsync("/");
+        var place = Page.Locator("#nearby-location");
+        await Expect(place).ToBeVisibleAsync(new() { Timeout = 30_000 });
+        await place.FillAsync("Nashville, TN");
+        await Page.ClickAsync("button:has-text(\"Show what's near there\")");
+
+        // The tab strip is the thing being photographed; without waiting for it the shot is of a
+        // spinner. Any of the three will do — which ones appear depends on what is seeded.
+        var tabs = Page.Locator("#tab-tours").Or(Page.Locator("#tab-events")).Or(Page.Locator("#tab-groups"));
+        await Expect(tabs.First).ToBeVisibleAsync(new() { Timeout = 30_000 });
+        await Page.WaitForTimeoutAsync(1_200);
+
+        // The panel is taller than the window once a search has found things, and an element shot
+        // of something that runs past the fold comes back with the overflow as black. Give the
+        // window the height for one capture and put it back.
+        var window = Page.ViewportSize!;
+        await Page.SetViewportSizeAsync(window.Width, 2_000);
+        await Page.WaitForTimeoutAsync(600);
+        await ShootAsync("getting-started", "whats-near-you.png", selector: "#nearby");
+        await Page.SetViewportSizeAsync(window.Width, window.Height);
+
+        // What's on, grouped by the night it happens.
+        await GoAsync("/events");
+        await ShootAsync("getting-started", "whats-on.png", proves: "What's on");
+
+        // A group's front door, and its cases.
+        await GoAsync($"/o/{PublicGroupSlug}");
+        await ShootAsync("getting-started", "group-page.png", proves: "Investigation group");
+
+        await GoAsync($"/o/{PublicGroupSlug}/cases");
+        await ShootAsync("getting-started", "group-cases.png", proves: "Investigations");
+
+        // One public event, which is where a tour date and an open evening both land.
+        var slug = await FirstPublicEventSlugAsync();
+        if (slug is null) Assert.Ignore("No public event is scheduled, so there is nothing to photograph.");
+
+        await GoAsync(slug);
+        await ShootAsync("getting-started", "event-page.png", proves: "Where");
+    }
+
+    /// <summary>The seeded investigation group whose public pages the documents show.</summary>
+    private const string PublicGroupSlug = "paranormal365";
+
+    /// <summary>
+    /// The address the site has in a reader's world, for the one shot that photographs a URL.
+    /// </summary>
+    /// <remarks>
+    /// A screenshot is read by somebody who is not at this machine, so a body reading
+    /// <c>http://localhost:5078</c> is a wrong answer printed in the documentation. The API has to
+    /// agree that this host is ours for the card to resolve — run the capture with
+    /// <c>AppBaseUrl=https://ishaunted.com</c> — and the capture asserts the card rather than
+    /// accepting the stranger's version.
+    /// </remarks>
+    private static string PublicSiteUrl =>
+        (Environment.GetEnvironmentVariable("BEN_PUBLIC_SITE_URL") ?? "https://ishaunted.com").TrimEnd('/');
+
+    /// <summary>
+    /// The path of some public event, or null when none is scheduled.
+    /// </summary>
+    /// <remarks>
+    /// Read from the API rather than by clicking through the listing: the listing is one of the
+    /// things being photographed, and a capture that depends on the page it is capturing fails in
+    /// a way that reads as a missing event.
+    /// </remarks>
+    private async Task<string?> FirstPublicEventSlugAsync()
+    {
+        var api = await Playwright.APIRequest.NewContextAsync(new() { BaseURL = ApiUrl });
+        try
+        {
+            var response = await api.GetAsync("/api/public/events");
+            if (!response.Ok) return null;
+
+            foreach (var e in (await response.JsonAsync())!.Value.EnumerateArray())
+            {
+                var org = e.TryGetProperty("organizationUrlName", out var o) ? o.GetString() : null;
+                var ev = e.TryGetProperty("urlName", out var u) ? u.GetString() : null;
+                if (org is not null && ev is not null) return $"/o/{org}/events/{ev}";
+            }
+            return null;
+        }
+        finally { await api.DisposeAsync(); }
+    }
+
     // ── Group administrators (gated) ──────────────────────────────────────────
 
     [Test]
@@ -1137,6 +1784,152 @@ public sealed class HelpMediaCapture : BenTestBase
 
         await GoAsync(new Uri(orgUrl).AbsolutePath + "/cms");
         await ShootAsync("organization-administration", "cms.png", gated: true);
+    }
+
+    /// <summary>
+    /// The tour screens a business runs its walks from (item 233).
+    /// </summary>
+    /// <remarks>
+    /// <para>Registers a throwaway ghost walk of its own rather than borrowing a seeded group:
+    /// the help pictures have to show a business with a tour, a meeting point and a date on the
+    /// calendar, and no seed carries one. Everything it makes is deleted afterwards whatever
+    /// happened.</para>
+    ///
+    /// <para>Each shot names text it must contain. A screenshot of an empty tours page teaches
+    /// nobody anything and is exactly the failure this fixture hits silently.</para>
+    /// </remarks>
+    [Test]
+    [Description("organization-administration: tours, the guest email, and a tour's public page.")]
+    public async Task Capture_Tours()
+    {
+        var api = await Playwright.APIRequest.NewContextAsync(new() { BaseURL = ApiUrl });
+        var login = await api.PostAsync("/login", new() { DataObject = new { email = UserEmail, password = UserPassword } });
+        Assert.That(login.Ok, Is.True, "the seeded member should be able to sign in");
+        var token = (await login.JsonAsync())!.Value.GetProperty("accessToken").GetString();
+        var authed = new APIRequestContextOptions
+        {
+            Headers = new Dictionary<string, string> { ["Authorization"] = $"Bearer {token}" },
+        };
+
+        var slug = $"help-tour-{Guid.NewGuid():N}"[..18];
+        var register = await api.PostAsync("/api/security/organizations/register", new()
+        {
+            Headers = authed.Headers,
+            DataObject = new { name = "Printers Alley Walks", urlName = slug, kind = 1 },
+        });
+        if (!register.Ok) Assert.Ignore("New tour businesses are not being accepted on this deployment.");
+        var orgId = (await register.JsonAsync())!.Value.GetProperty("organizationId").GetString();
+
+        try
+        {
+            var types = await api.GetAsync("/api/organization-address-types", authed);
+            var typeId = (await types.JsonAsync())!.Value.EnumerateArray().First().GetProperty("id").GetString();
+
+            var address = await api.PostAsync($"/api/organizations/{orgId}/addresses", new()
+            {
+                Headers = authed.Headers,
+                DataObject = new
+                {
+                    organizationAddressTypeId = typeId, streetAddress1 = "1 Printers Alley",
+                    city = "Nashville", state = "TN", zipCode = "37201", country = "US",
+                    sortOrder = 0, visibility = 2, publicDisplayMode = 2, isSearchable = true,
+                },
+            });
+            var addressId = (await address.JsonAsync())!.Value.GetProperty("id").GetString();
+
+            var tour = await api.PostAsync($"/api/organizations/{orgId}/tours", new()
+            {
+                Headers = authed.Headers,
+                DataObject = new
+                {
+                    name = "Printers Alley Ghost Walk",
+                    description = "<p>An hour and a half through the oldest alley in Nashville, "
+                                + "with the stories the daylight version leaves out.</p>",
+                    startOrganizationAddressId = addressId,
+                    durationMinutes = 90, defaultCapacity = 20, timeZoneId = "America/Chicago",
+                    contactLine = "Cash on the night, or call 555-0100.",
+                },
+            });
+            var tourId = (await tour.JsonAsync())!.Value.GetProperty("id").GetString();
+
+            var start = DateTime.UtcNow.AddDays(6).Date.AddHours(1);
+            await api.PostAsync($"/api/organizations/{orgId}/calendar", new()
+            {
+                Headers = authed.Headers,
+                DataObject = new
+                {
+                    title = "Saturday walk", description = (string?)null, location = (string?)null,
+                    startDateTime = start, endDateTime = start, isAllDay = false, isPublic = true,
+                    eventTypeId = (Guid?)null, caseId = (Guid?)null, recurrenceRule = (string?)null,
+                    tourId,
+                },
+            });
+
+            await LoginAsync(UserEmail, UserPassword);
+
+            await GoAsync($"/organizations/{orgId}/tours");
+            await ShootAsync("organization-administration", "tours.png",
+                gated: true, proves: "Printers Alley Ghost Walk");
+
+            await GoAsync($"/organizations/{orgId}/tours/{tourId}");
+            await ShootAsync("organization-administration", "tour-details.png",
+                gated: true, proves: "Where it starts");
+
+            await Page.Locator("#tour-mail").ScrollIntoViewIfNeededAsync();
+            await ShootAsync("organization-administration", "tour-guest-email.png",
+                gated: true, selector: "#tour-mail", proves: "The email your guests get");
+
+            // Where else the walk can be found (Ben, 2026-09-10). Filled in first: a grid of nine
+            // empty boxes photographs as a form nobody has used, which is not what the paragraph
+            // beside it is describing.
+            await Page.Locator("#tour-link-Website").FillAsync("https://printersalleywalks.com");
+            await Page.Locator("#tour-link-Instagram").FillAsync("https://instagram.com/printersalleywalks");
+            await Page.Locator("#tour-link-YouTube").FillAsync("https://youtube.com/@printersalley");
+            await Page.Locator("#tour-links").ScrollIntoViewIfNeededAsync();
+            await ShootAsync("organization-administration", "tour-links.png",
+                gated: true, selector: "#tour-links");
+
+            // And the clock a date runs on, on the scheduler.
+            await GoAsync($"/organizations/{orgId}/calendar");
+            var newEvent = Page.Locator("#calendar-new-event");
+            if (await newEvent.CountAsync() > 0)
+            {
+                await newEvent.ClickAsync();
+                var zone = Page.Locator("#ev-zone");
+                await Expect(zone).ToBeVisibleAsync(new() { Timeout = 15_000 });
+                await zone.ScrollIntoViewIfNeededAsync();
+                await ShootAsync("organization-administration", "event-clock.png",
+                    gated: true, selector: "#ev-zone-field");
+            }
+
+            // The public page as a VISITOR sees it, which is the rule for a public-facing
+            // feature. Clearing the cookies is not enough on its own: the Blazor circuit is
+            // already up and keeps rendering the signed-in shell until the page is reloaded from
+            // scratch, so the first version of this shot came out with somebody's sidebar,
+            // their groups and their notification banners in it.
+            // Signed out through the site's own door. Clearing cookies is not enough — the
+            // session is a bearer token the browser holds, so the first two versions of this
+            // shot came out with somebody's sidebar, their groups and their banners in it.
+            await LogoutAsync();
+            await GoAsync($"/o/{slug}/tours/printers-alley-ghost-walk");
+            await ShootAsync("getting-started", "tour-page.png", proves: "Where you meet");
+        }
+        finally
+        {
+            var admin = await api.PostAsync("/login", new()
+            {
+                DataObject = new { email = SuperAdminEmail, password = SuperAdminPassword },
+            });
+            if (admin.Ok)
+            {
+                var adminToken = (await admin.JsonAsync())!.Value.GetProperty("accessToken").GetString();
+                await api.DeleteAsync($"/api/organizations/{orgId}", new()
+                {
+                    Headers = new Dictionary<string, string> { ["Authorization"] = $"Bearer {adminToken}" },
+                });
+            }
+            await api.DisposeAsync();
+        }
     }
 
     // ── Site administrators (gated) ───────────────────────────────────────────
@@ -1299,6 +2092,1028 @@ public sealed class HelpMediaCapture : BenTestBase
             await SetFlagAsync(PublicationsFlag, wasOn);
         }
     }
+
+    /// <summary>
+    /// The layout designer, on all three of the screens Ben named (item 235 phase 2).
+    /// </summary>
+    /// <remarks>
+    /// <para>Three pictures because there are three answers. A hotel's floor plan is six squares
+    /// and reads anywhere; a 260-seat house is the case that decides whether the grid is any use;
+    /// and the same house at 375 pixels is the promise that a phone is read-mostly but not
+    /// useless. A help page that showed only the first would be describing the easy half.</para>
+    ///
+    /// <para>Both events come from <c>HostedEventDemoSeeder</c> with stable ids, which is what
+    /// lets this navigate straight to them rather than clicking through a list whose contents
+    /// depend on what else the run has done.</para>
+    /// </remarks>
+    [Test]
+    [Description("organization-administration: the plan, as rooms, as a theatre, and on a phone.")]
+    public async Task Capture_HostedEventPlan()
+    {
+        await LoginAsync(SuperAdminEmail, SuperAdminPassword);
+
+        var orgId = await OrgIdBySlugAsync("paranormal365");
+
+        await GoAsync($"/organizations/{orgId}/events/{SeededRoomsEventId}/layout");
+        await ShootAsync("organization-administration", "event-plan-rooms.png",
+            gated: true, proves: "The Blue Room");
+
+        await GoAsync($"/organizations/{orgId}/events/{SeededSeatsEventId}/layout");
+        // Two hundred and sixty squares take a moment to reach the page over a circuit, and the
+        // default wait inside ShootAsync is not enough for the largest screen on the site.
+        await Expect(Page.Locator(".plan__unit").Nth(259))
+            .ToBeAttachedAsync(new() { Timeout = 60_000 });
+        // The section names are asserted against the legend directly. ShootAsync's `proves` picks
+        // the FIRST element containing the text, and "Stalls" is also the caption in the row
+        // gutter, which is clipped to a 44-pixel column and therefore not "visible" — a true fact
+        // about the gutter and a useless one about this picture.
+        await Expect(Page.GetByTestId("plan-legend")).ToContainTextAsync("Stalls");
+        await Expect(Page.GetByTestId("plan-legend")).ToContainTextAsync("Balcony");
+        await ShootAsync("organization-administration", "event-plan-seats.png",
+            gated: true, proves: "An Evening of Evidence");
+
+        // The same 260 seats at iPhone width: squares a finger can hit, the grid taking the
+        // sideways scrolling, and the line that says arranging a house is a bigger screen's job.
+        await ShootAsync("organization-administration", "event-plan-phone.png",
+            gated: true, proves: "easier on a computer or an iPad", width: 375);
+    }
+
+    /// <summary>
+    /// What is served, and what the kitchen has to cook around (item 235 phase 5).
+    /// </summary>
+    /// <remarks>
+    /// <para>Two pictures because they are the two halves of one afternoon's work: the menus page
+    /// is what the venue is cooking and the kitchen's sheet is who cannot eat it. Both come from
+    /// <c>HostedEventDemoSeeder</c>, whose weekend deliberately serves breakfast under the night
+    /// before it — the picture is the argument for the ordering rule.</para>
+    ///
+    /// <para>Each names something it must be able to see, so a capture of an empty page fails here
+    /// rather than reaching the help as a screenshot of nothing.</para>
+    /// </remarks>
+    [Test]
+    [Description("organization-administration: the menus, and the sheet the kitchen cooks from.")]
+    public async Task Capture_HostedEventMenusAndKitchen()
+    {
+        await LoginAsync(SuperAdminEmail, SuperAdminPassword);
+
+        var orgId = await OrgIdBySlugAsync("paranormal365");
+
+        await GoAsync($"/organizations/{orgId}/events/{SeededRoomsEventId}/menus");
+        // A sitting's name is an INPUT's value, so it is not page text and ShootAsync's `proves`
+        // cannot see it — the same trap the publications shot hit. Assert the value directly;
+        // either way the point is that this is not a picture of an empty weekend.
+        await Expect(Page.Locator("input[id^='sitting-title-']").Nth(1))
+            .ToHaveValueAsync("Late supper", new() { Timeout = 20_000 });
+        await ShootAsync("organization-administration", "event-menus.png",
+            gated: true, proves: "Friday");
+
+        // And at iPhone width, because every hosted screen has a declared behaviour at three
+        // widths and a picture is the only place a reader can check it.
+        await ShootAsync("organization-administration", "event-menus-phone.png",
+            gated: true, proves: "Friday", width: 375);
+
+        await GoAsync($"/organizations/{orgId}/events/{SeededRoomsEventId}/dietary");
+        await ShootAsync("organization-administration", "event-dietary.png",
+            gated: true, proves: "How many of each");
+
+        // The same sheet at iPhone width: a host standing in the kitchen with it is the case, and
+        // a help page illustrating that with a 1440-wide picture teaches the opposite.
+        await ShootAsync("organization-administration", "event-dietary-phone.png",
+            gated: true, proves: "people expected", width: 375);
+    }
+
+    /// <summary>
+    /// The guest's end: the house, the picker and what the venue has said (item 235 phase 6).
+    /// </summary>
+    /// <remarks>
+    /// <para>Three pictures, and the first two are the same screen to two different people. A
+    /// stranger sees the plan and cannot touch it, which is the case the public endpoint is
+    /// anonymous for; a signed-in guest sees the same squares answer. The third is the phone,
+    /// where the summary bar is fixed to the window and is the whole reason a guest can choose
+    /// seats in a pub.</para>
+    ///
+    /// <para>It signs in as the seeded guest with no group of his own — the person this feature is
+    /// for — and lets go of whatever the run before left him holding, so the picture is of an
+    /// empty house rather than of his own booking.</para>
+    /// </remarks>
+    [Test]
+    [Description("going-to-an-event: the house, choosing your own seats, and on a phone.")]
+    public async Task Capture_HostedEventGuest()
+    {
+        var orgId = await OrgIdBySlugAsync("paranormal365");
+        var slug = await SeatsEventSlugAsync(orgId);
+        var url = $"/o/paranormal365/events/{slug}";
+
+        // Signed out first, while nobody is signed in: the plan a stranger reads.
+        await GoAsync(url);
+        // Cropped to the card: a help picture of a seating plan should be mostly seating plan,
+        // and a full-page shot reduces the part being explained to a strip along the bottom.
+        await ShootAsync("going-to-an-event", "the-house.png",
+            gated: false, selector: "#hosted-places", proves: "no account needed");
+
+        // Slice 11d: a stranger chooses too, and is asked the organizer's three questions.
+        var anyone = Page.Locator(".plan__unit[data-state='free']");
+        await Expect(anyone.First).ToBeVisibleAsync(new() { Timeout = 20_000 });
+        await anyone.Last.ClickAsync();
+        await Expect(Page.Locator("#picker-contact")).ToBeVisibleAsync(new() { Timeout = 10_000 });
+        var stranger = $"capture-{Guid.NewGuid():N}@example.test";
+        await Page.Locator("#picker-first").FillAsync("Ada");
+        await Page.Locator("#picker-last").FillAsync("Lovelace");
+        await Page.Locator("#picker-email").FillAsync(stranger);
+        await Page.Locator("#picker-phone").FillAsync("(615) 555-0100");
+        await ShootAsync("going-to-an-event", "choosing-without-an-account.png",
+            gated: false, selector: "#picker-contact", proves: "for this event only");
+
+        await Page.Locator("#picker-hold").ClickAsync();
+        await Expect(Page.Locator("#picker-emailed")).ToBeVisibleAsync(new() { Timeout = 15_000 });
+        if (PickTokenFromTheApiLog(stranger) is { } pickToken)
+        {
+            await GoAsync($"/event-picks/{pickToken}");
+            await Expect(Page.Locator("#pick-confirm")).ToBeVisibleAsync(new() { Timeout = 20_000 });
+            await ShootAsync("going-to-an-event", "hold-your-places-link.png",
+                gated: false, selector: "#pick-card", proves: "Hold my places");
+            // Let it go, so the seat is back for the pictures that follow.
+            await Page.Locator("#pick-let-go").ClickAsync();
+            await Expect(Page.Locator("#pick-let-go-done")).ToBeVisibleAsync(new() { Timeout = 15_000 });
+        }
+
+        await LoginAsync(ClientEmail, ClientPassword);
+        await LetGoOfEverythingAsync();
+
+        await GoAsync(url);
+        await Expect(Page.Locator("#picker-bar")).ToBeVisibleAsync(new() { Timeout = 30_000 });
+
+        // Three seats chosen, so the summary says what it adds up to before anything is held.
+        var free = Page.Locator(".plan__unit[data-state='free']");
+        await Expect(free.First).ToBeVisibleAsync(new() { Timeout = 20_000 });
+        for (var i = 0; i < 3; i++) await free.Nth(i).ClickAsync();
+
+        await ShootAsync("going-to-an-event", "choosing-seats.png",
+            gated: false, selector: "#hosted-places", proves: "a party of 3");
+
+        await ShootAsync("going-to-an-event", "choosing-seats-phone.png",
+            gated: false, proves: "Hold these places", width: 375);
+    }
+
+    /// <summary>Copying an event (item 235 phase 12).</summary>
+    [Test]
+    [Description("organization-administration: starting the next event from this one.")]
+    public async Task Capture_EventCopy()
+    {
+        var orgId = await OrgIdBySlugAsync("paranormal365");
+        await LoginAsync(SuperAdminEmail, SuperAdminPassword);
+        await GoAsync($"/organizations/{orgId}/events/{SeededRoomsEventId}/copy");
+        await Expect(Page.Locator("#copy-parts")).ToBeVisibleAsync(new() { Timeout = 30_000 });
+        await ShootAsync("organization-administration", "event-copy.png", gated: true,
+            selector: ".container-fluid", proves: "What to bring");
+    }
+
+    /// <summary>After the event: the thank-you and the reviews (item 235 phase 12).</summary>
+    [Test]
+    [Description("organization-administration: after the event.")]
+    public async Task Capture_EventAfter()
+    {
+        var orgId = await OrgIdBySlugAsync("paranormal365");
+        await LoginAsync(SuperAdminEmail, SuperAdminPassword);
+        await GoAsync($"/organizations/{orgId}/events/{SeededRoomsEventId}/after");
+        await Expect(Page.Locator("#after-thank-you")).ToBeVisibleAsync(new() { Timeout = 30_000 });
+        // Typed, not saved: the picture shows the kind of note that belongs there.
+        if (await Page.Locator("#after-thank-you-note").CountAsync() > 0)
+            await Page.Locator("#after-thank-you-note").FillAsync(
+                "Thank you for spending the weekend with us at the Thomas House. We'll be back in March.");
+        await ShootAsync("organization-administration", "event-after.png", gated: true,
+            selector: ".container-fluid", proves: "Thank-you email");
+    }
+
+    /// <summary>Keeping an event's files before they are removed (item 235 phase 12).</summary>
+    [Test]
+    [Description("organization-administration: pick and zip.")]
+    public async Task Capture_EventKeep()
+    {
+        var orgId = await OrgIdBySlugAsync("paranormal365");
+        const string name = "Guest pack — Séance Weekend.pdf";
+        var api = await SignedInApiAsync(SuperAdminEmail, SuperAdminPassword);
+        try
+        {
+            await LoginAsync(SuperAdminEmail, SuperAdminPassword);
+            await GoAsync($"/organizations/{orgId}/events/{SeededRoomsEventId}/files");
+            await Page.Locator("#file-input").SetInputFilesAsync(new Microsoft.Playwright.FilePayload
+            {
+                Name = name, MimeType = "application/pdf", Buffer = "%PDF-1.4 guest pack"u8.ToArray(),
+            });
+            await Page.Locator("#file-upload").ClickAsync();
+            await Expect(Page.Locator("#files-note")).ToBeVisibleAsync(new() { Timeout = 30_000 });
+
+            await GoAsync($"/organizations/{orgId}/events/{SeededRoomsEventId}/keep");
+            await Expect(Page.Locator("#keep-files")).ToBeVisibleAsync(new() { Timeout = 30_000 });
+            await Page.Locator("#keep-files-all").CheckAsync();
+            await ShootAsync("organization-administration", "event-keep.png", gated: true,
+                selector: ".container-fluid", proves: "Download as a zip");
+        }
+        finally
+        {
+            var list = await api.GetAsync($"/api/organizations/{orgId}/events/{SeededRoomsEventId}/files");
+            if (list.Ok)
+                foreach (var file in (await list.JsonAsync())!.Value.EnumerateArray())
+                    if (file.GetProperty("fileName").GetString() == name)
+                        await api.DeleteAsync($"/api/organizations/{orgId}/events/{SeededRoomsEventId}/files/{file.GetProperty("id").GetString()}");
+            await api.DisposeAsync();
+        }
+    }
+
+    /// <summary>A venue's photo library (item 235 phase 12).</summary>
+    [Test]
+    [Description("organization-administration: photos of the venue.")]
+    public async Task Capture_VenuePhotos()
+    {
+        var orgId = await OrgIdBySlugAsync("paranormal365");
+        const string caption = "The ballroom set for dinner";
+        var api = await SignedInApiAsync(SuperAdminEmail, SuperAdminPassword);
+        try
+        {
+            await LoginAsync(SuperAdminEmail, SuperAdminPassword);
+            await GoAsync($"/organizations/{orgId}/events/{SeededRoomsEventId}/gallery");
+            await Page.Locator("#gallery-input").SetInputFilesAsync(Path.Combine(AppContext.BaseDirectory, "Fixtures", "room-photo-1.jpg"));
+            await Page.Locator("#gallery-caption").FillAsync(caption);
+            await Page.Locator("#gallery-add").ClickAsync();
+            await Expect(Page.Locator("#gallery-note")).ToContainTextAsync("Added", new() { Timeout = 30_000 });
+            await Page.Locator(".gallery-image").Last.GetByRole(Microsoft.Playwright.AriaRole.Button, new() { Name = "Offer to venue" }).ClickAsync();
+            await Expect(Page.Locator(".gallery-image").Last.GetByText("Offered to")).ToBeVisibleAsync(new() { Timeout = 15_000 });
+
+            await GoAsync($"/organizations/{orgId}/venue");
+            var library = Page.Locator(".venue-photos").First;
+            await Expect(library.Locator(".venue-photo").First).ToBeVisibleAsync(new() { Timeout = 30_000 });
+            await library.ScrollIntoViewIfNeededAsync();
+            await ShootAsync("organization-administration", "venue-photos.png", gated: true,
+                selector: ".venue-photos", proves: "Photos of the venue");
+        }
+        finally
+        {
+            var profiles = await api.GetAsync($"/api/organizations/{orgId}/venue-profiles");
+            if (profiles.Ok)
+                foreach (var profile in (await profiles.JsonAsync())!.Value.EnumerateArray())
+                {
+                    var profileId = profile.GetProperty("id").GetString();
+                    var photos = await api.GetAsync($"/api/organizations/{orgId}/venue-profiles/{profileId}/photos");
+                    if (!photos.Ok) continue;
+                    foreach (var photo in (await photos.JsonAsync())!.Value.EnumerateArray())
+                        if (photo.TryGetProperty("caption", out var c) && c.GetString() == caption)
+                            await api.DeleteAsync($"/api/organizations/{orgId}/venue-profiles/{profileId}/photos/{photo.GetProperty("id").GetString()}");
+                }
+            var list = await api.GetAsync($"/api/organizations/{orgId}/events/{SeededRoomsEventId}/gallery");
+            if (list.Ok)
+                foreach (var image in (await list.JsonAsync())!.Value.EnumerateArray())
+                    if (image.TryGetProperty("caption", out var c) && c.GetString() == caption)
+                        await api.DeleteAsync($"/api/organizations/{orgId}/events/{SeededRoomsEventId}/gallery/{image.GetProperty("id").GetString()}");
+            await api.DisposeAsync();
+        }
+    }
+
+    /// <summary>Dining tables (item 235 phase 13).</summary>
+    [Test]
+    [Description("organization-administration: seating parties at tables.")]
+    public async Task Capture_EventDining()
+    {
+        var orgId = await OrgIdBySlugAsync("paranormal365");
+        var api = await SignedInApiAsync(SuperAdminEmail, SuperAdminPassword);
+        var tables = $"/api/organizations/{orgId}/events/{SeededRoomsEventId}/dining/tables";
+        string? madeBookingId = null;
+        try
+        {
+            // A confirmed party to seat, when the guest has none.
+            var guest = await SignedInApiAsync(ClientEmail, ClientPassword);
+            var mine = await guest.GetAsync($"/api/public/hosted-events/{SeededRoomsEventId}/my-booking");
+            var confirmed = mine.Ok && (await mine.TextAsync()).Length > 2 && (await mine.JsonAsync())!.Value.GetProperty("status").GetInt32() == 1;
+            if (!confirmed)
+            {
+                if (mine.Ok && (await mine.TextAsync()).Length > 2)
+                    await guest.DeleteAsync($"/api/public/hosted-events/{SeededRoomsEventId}/my-booking");
+                var me = (await (await guest.GetAsync("/api/me")).JsonAsync())!.Value;
+                var guestId = me.TryGetProperty("userId", out var uid) ? uid.GetString() : me.GetProperty("id").GetString();
+                var made = await api.PostAsync($"/api/organizations/{orgId}/events/{SeededRoomsEventId}/bookings/on-behalf",
+                    new() { DataObject = new { leadAppUserId = guestId, kind = 1, partySize = 4, confirmImmediately = true } });
+                if (made.Ok) madeBookingId = (await made.JsonAsync())!.Value.GetProperty("id").GetString();
+            }
+            await guest.DisposeAsync();
+
+            await api.PutAsync(tables, new() { DataObject = new { tables = new[]
+            {
+                new { name = "The window table", seats = 8 }, new { name = "Table 2", seats = 8 }, new { name = "Table 3", seats = 6 },
+            } } });
+
+            await LoginAsync(SuperAdminEmail, SuperAdminPassword);
+            await GoAsync($"/organizations/{orgId}/events/{SeededRoomsEventId}/dining");
+            if (await Page.Locator("#dining-no-sittings").CountAsync() > 0) Assert.Ignore("No menus on this database.");
+            await Expect(Page.Locator("#dining-tables")).ToBeVisibleAsync(new() { Timeout = 30_000 });
+
+            var party = Page.Locator(".dining-party:not([disabled])").First;
+            if (await party.CountAsync() > 0)
+            {
+                await party.ClickAsync();
+                await Page.Locator(".dining-table .card-header").First.ClickAsync();
+                await Expect(Page.Locator("#dining-note")).ToBeVisibleAsync(new() { Timeout = 15_000 });
+            }
+
+            await ShootAsync("organization-administration", "event-dining.png", gated: true,
+                selector: ".dining", proves: "Dining tables");
+        }
+        finally
+        {
+            await api.PutAsync(tables, new() { DataObject = new { tables = Array.Empty<object>() } });
+            if (madeBookingId is not null)
+                await api.PostAsync($"/api/organizations/{orgId}/events/{SeededRoomsEventId}/bookings/{madeBookingId}/cancel",
+                    new() { DataObject = new { decisionNote = "Clearing up after the pictures." } });
+            await api.DisposeAsync();
+        }
+    }
+
+    /// <summary>The emailed link's token, as the API logs it when no mail server is set up.</summary>
+    private static string? PickTokenFromTheApiLog(string email)
+    {
+        var log = Environment.GetEnvironmentVariable("BEN_E2E_API_LOG");
+        if (string.IsNullOrWhiteSpace(log) || !File.Exists(log)) return null;
+
+        for (var attempt = 0; attempt < 20; attempt++)
+        {
+            using var stream = new FileStream(log, FileMode.Open, FileAccess.Read, FileShare.ReadWrite);
+            using var reader = new StreamReader(stream);
+            var match = System.Text.RegularExpressions.Regex.Matches(reader.ReadToEnd(),
+                    $@"pick link for ""?{System.Text.RegularExpressions.Regex.Escape(email)}""? was not sent\. Pick token: ""?([A-Za-z0-9_\-]+)")
+                .LastOrDefault();
+            if (match is not null) return match.Groups[1].Value;
+            Thread.Sleep(500);
+        }
+
+        return null;
+    }
+
+    /// <summary>
+    /// What a guest holds up at the door, and the list it hangs off (item 235 phase 6).
+    /// </summary>
+    /// <remarks>
+    /// It confirms a party through the venue's own door first, because a pass exists only once
+    /// somebody has been told yes — photographing the "no pass yet" state would be photographing
+    /// the wrong half. The house is put back afterwards.
+    /// </remarks>
+    [Test]
+    [Description("going-to-an-event: your pass, and everything you are going to.")]
+    public async Task Capture_HostedEventPass()
+    {
+        var orgId = await OrgIdBySlugAsync("paranormal365");
+        var bookingId = await ConfirmAPartyAsync(orgId);
+
+        await LoginAsync(ClientEmail, ClientPassword);
+
+        await GoAsync("/my-events");
+        // The viewport rather than the list: a test database has years of asking in it, and a
+        // photograph of a hundred rows teaches nothing about a page whose point is the top of it.
+        await ShootAsync("going-to-an-event", "my-events.png",
+            gated: false, proves: "You're coming");
+
+        await GoAsync($"/my-events/{SeededSeatsEventId}/pass");
+        await ShootAsync("going-to-an-event", "your-pass.png",
+            gated: false, selector: "#pass-card", proves: "Admits");
+
+        await ReleaseAsync(orgId, bookingId);
+    }
+
+    /// <summary>Puts a party in a seat and confirms it, which is what issues a pass.</summary>
+    private async Task<string> ConfirmAPartyAsync(string orgId)
+    {
+        var admin = await SignedInApiAsync(SuperAdminEmail, SuperAdminPassword);
+        var guest = await SignedInApiAsync(ClientEmail, ClientPassword);
+
+        await ReleaseEverythingAsync(admin, orgId);
+        await LetGoOfEverythingAsync();
+
+        await admin.PostAsync($"/api/organizations/{orgId}/events/{SeededSeatsEventId}/booking-mode",
+            new() { DataObject = new { mode = 1 } });
+        await admin.PostAsync($"/api/organizations/{orgId}/events/{SeededSeatsEventId}/publish",
+            new() { DataObject = new { } });
+
+        var layout = await admin.GetAsync(
+            $"/api/organizations/{orgId}/events/{SeededSeatsEventId}/layout");
+        var seat = (await layout.JsonAsync())!.Value.GetProperty("units").EnumerateArray()
+            .First().GetProperty("id").GetString();
+
+        var ev = await admin.GetAsync($"/api/organizations/{orgId}/events/{SeededSeatsEventId}");
+        var night = (await ev.JsonAsync())!.Value.GetProperty("nights").EnumerateArray()
+            .First().GetProperty("id").GetString();
+
+        var body = new
+        {
+            nights = new[] { new { hostedEventNightId = night, hostedEventLayoutUnitId = seat } },
+            partySize = 2,
+            // The organizer has to be able to reach whoever holds (slice 11d).
+            firstName = "Test", lastName = "Guest", phone = "615-555-0100",
+        };
+
+        var held = await guest.PostAsync(
+            $"/api/public/hosted-events/{SeededSeatsEventId}/holds", new() { DataObject = body });
+        Assert.That(held.Status, Is.EqualTo(200), await held.TextAsync());
+
+        var bookingId = (await held.JsonAsync())!.Value.GetProperty("id").GetString()!;
+
+        var confirmed = await admin.PostAsync(
+            $"/api/organizations/{orgId}/events/{SeededSeatsEventId}/bookings/{bookingId}/confirm",
+            new()
+            {
+                DataObject = new
+                {
+                    nights = body.nights,
+                    decisionNote = "See you on the night — doors at seven.",
+                },
+            });
+        Assert.That(confirmed.Ok, Is.True, await confirmed.TextAsync());
+
+        await admin.DisposeAsync();
+        await guest.DisposeAsync();
+
+        return bookingId;
+    }
+
+    private async Task ReleaseAsync(string orgId, string bookingId)
+    {
+        var admin = await SignedInApiAsync(SuperAdminEmail, SuperAdminPassword);
+        await admin.PostAsync(
+            $"/api/organizations/{orgId}/events/{SeededSeatsEventId}/bookings/{bookingId}/cancel",
+            new() { DataObject = new { decisionNote = "Clearing up after the pictures." } });
+        await admin.DisposeAsync();
+    }
+
+    private async Task ReleaseEverythingAsync(
+        Microsoft.Playwright.IAPIRequestContext admin, string orgId)
+    {
+        var board = await admin.GetAsync(
+            $"/api/organizations/{orgId}/events/{SeededSeatsEventId}/bookings");
+        if (!board.Ok) return;
+
+        foreach (var booking in (await board.JsonAsync())!.Value
+                     .GetProperty("bookings").EnumerateArray())
+        {
+            if (booking.GetProperty("status").GetInt32() is not (0 or 1 or 4)) continue;
+
+            var id = booking.GetProperty("id").GetString();
+            await admin.PostAsync(
+                $"/api/organizations/{orgId}/events/{SeededSeatsEventId}/bookings/{id}/cancel",
+                new() { DataObject = new { decisionNote = "Clearing up before the pictures." } });
+        }
+    }
+
+    /// <summary>
+    /// The door on the night, and the people helping run it (item 235 phase 7).
+    /// </summary>
+    /// <remarks>
+    /// The door is photographed at phone width because that is the only width it is ever really
+    /// used at: one thumb, in the dark, with somebody standing in front of it. A confirmed party
+    /// is arranged first so the picture is of a list somebody could work from rather than of an
+    /// empty evening.
+    /// </remarks>
+    [Test]
+    [Description("organization-administration: the staff list, and the door on a phone.")]
+    public async Task Capture_HostedEventDoor()
+    {
+        var orgId = await OrgIdBySlugAsync("paranormal365");
+        var bookingId = await ConfirmAPartyAsync(orgId);
+
+        await LoginAsync(SuperAdminEmail, SuperAdminPassword);
+
+        // Bands first, so the door photographs with a colour beside the name — which is the
+        // picture Ben described, and the one the help page is explaining.
+        var admin = await SignedInApiAsync(SuperAdminEmail, SuperAdminPassword);
+        await admin.PutAsync($"/api/organizations/{orgId}/events/{SeededSeatsEventId}/bands",
+            new()
+            {
+                DataObject = new
+                {
+                    bands = new object[]
+                    {
+                        new { colour = "Purple", meaning = "The whole evening", hex = "#7c3aed", rule = 0 },
+                        new { colour = "Red", meaning = "Day one only", hex = "#dc2626", rule = 1 },
+                        new { colour = "Blue", meaning = "With dinner — given at the desk", hex = "#2563eb", rule = 3 },
+                    },
+                },
+            });
+        await admin.DisposeAsync();
+
+        await GoAsync($"/organizations/{orgId}/events/{SeededSeatsEventId}/bands");
+        await ShootAsync("organization-administration", "event-bands.png",
+            gated: true, proves: "Save the bands");
+
+        await GoAsync($"/organizations/{orgId}/events/{SeededSeatsEventId}/door");
+        await ShootAsync("organization-administration", "event-door-phone.png",
+            gated: true, proves: "expected", width: 375);
+
+        // The list, cropped, at a width where the chip sits beside the name — the picture Ben
+        // described: "color displayed on the qr code reader next to name of guest".
+        await ShootAsync("organization-administration", "event-door-bands.png",
+            gated: true, selector: "#door-expected", proves: "Purple");
+
+        await GoAsync($"/organizations/{orgId}/events/{SeededRoomsEventId}/staff");
+        await ShootAsync("organization-administration", "event-staff.png",
+            gated: true, proves: "Ask somebody to help");
+
+        await ReleaseAsync(orgId, bookingId);
+
+        var tidy = await SignedInApiAsync(SuperAdminEmail, SuperAdminPassword);
+        await tidy.PutAsync($"/api/organizations/{orgId}/events/{SeededSeatsEventId}/bands",
+            new() { DataObject = new { bands = Array.Empty<object>() } });
+        await tidy.DisposeAsync();
+    }
+
+    /// <summary>
+    /// A venue on the site: asking it, its answer, its own page (item 235 phase 9).
+    /// </summary>
+    /// <remarks>
+    /// A group registered for the capture holds a draft weekend at the seeded Thomas House, which the
+    /// host is confirmed as running, and is purged afterwards — so the pictures show the real gate
+    /// against the real seeded venue, and nothing is left behind.
+    /// </remarks>
+    [Test]
+    [Description("organization-administration: asking a venue, the venue's requests, its page.")]
+    public async Task Capture_VenueHosting()
+    {
+        const string guestOrgName = "Nashville Night Society";
+        const string thomasHouse = "40000002-0000-0000-0000-000000000001";
+        var venueOrgId = await OrgIdBySlugAsync("paranormal365");
+
+        var organizer = await SignedInApiAsync(UserEmail, UserPassword);
+        var register = await organizer.PostAsync("/api/security/organizations/register", new()
+        {
+            DataObject = new { name = guestOrgName, urlName = $"nns-{Guid.NewGuid():N}"[..16], kind = 0 },
+        });
+        Assert.That(register.Ok, Is.True, await register.TextAsync());
+        var orgId = (await register.JsonAsync())!.Value.GetProperty("organizationId").GetString()!;
+
+        try
+        {
+            var start = DateTime.UtcNow.Date.AddDays(50);
+            var ev = await organizer.PostAsync($"/api/organizations/{orgId}/events", new()
+            {
+                DataObject = new
+                {
+                    name = "Halloween Lock-In", placeId = thomasHouse,
+                    startsOn = start, endsOn = start.AddDays(1), timeZoneId = "America/Chicago",
+                    contactLine = "Call the society to settle up.", dayPassCapacity = 30,
+                },
+            });
+            Assert.That(ev.Ok, Is.True, await ev.TextAsync());
+            var eventId = (await ev.JsonAsync())!.Value.GetProperty("id").GetString()!;
+
+            await organizer.PostAsync($"/api/organizations/{orgId}/events/{eventId}/venue/ask",
+                new() { DataObject = new { message = "About thirty guests, two nights, a séance in the parlour on the Saturday." } });
+
+            await LoginAsync(SuperAdminEmail, SuperAdminPassword);
+            await GoAsync($"/organizations/{venueOrgId}/venue-requests");
+            await ShootAsync("organization-administration", "venue-requests.png",
+                gated: true, selector: ".venue-request", proves: "a séance in the parlour");
+
+            await Page.Locator(".venue-request", new() { HasTextString = "Halloween Lock-In" })
+                .Locator("button", new() { HasTextString = "Say yes" }).ClickAsync();
+            await Expect(Page.Locator("#venue-note")).ToBeVisibleAsync(new() { Timeout = 15_000 });
+
+            await LoginAsync(UserEmail, UserPassword);
+            await GoAsync($"/organizations/{orgId}/events/{eventId}");
+            await ShootAsync("organization-administration", "event-venue-yes.png",
+                gated: true, selector: "#event-venue", proves: "They said yes to");
+
+            await LoginAsync(SuperAdminEmail, SuperAdminPassword);
+            await GoAsync($"/organizations/{venueOrgId}/venue");
+            await ShootAsync("organization-administration", "venue-profile.png",
+                gated: true, selector: ".venue-profile", proves: "Confirmed as the venue");
+
+            await GoAsync($"/o/paranormal365/venues/{thomasHouse}");
+            await ShootAsync("organization-administration", "venue-page.png",
+                gated: true, selector: "#venue-summary", proves: "The building");
+        }
+        finally
+        {
+            var admin = await SignedInApiAsync(SuperAdminEmail, SuperAdminPassword);
+            await admin.DeleteAsync($"/api/admin/organizations/{orgId}/purge",
+                new() { DataObject = new { confirmName = guestOrgName } });
+            await admin.DisposeAsync();
+            await organizer.DisposeAsync();
+        }
+    }
+
+    /// <summary>A place's contact details, claiming it, and the reviewer's queue (item 235 phase 9).</summary>
+    [Test]
+    [Description("organization-administration: contact details, claiming a venue, reviewing a claim.")]
+    public async Task Capture_VenueClaim()
+    {
+        const string orgName = "Franklin Theatre Company";
+        var organizer = await SignedInApiAsync(UserEmail, UserPassword);
+        var register = await organizer.PostAsync("/api/security/organizations/register", new()
+        {
+            DataObject = new { name = orgName, urlName = $"ftc-{Guid.NewGuid():N}"[..16], kind = 0 },
+        });
+        Assert.That(register.Ok, Is.True, await register.TextAsync());
+        var orgId = (await register.JsonAsync())!.Value.GetProperty("organizationId").GetString()!;
+
+        try
+        {
+            var start = DateTime.UtcNow.Date.AddDays(70);
+            var ev = await organizer.PostAsync($"/api/organizations/{orgId}/events", new()
+            {
+                DataObject = new
+                {
+                    name = "Ghost Light Evening", placeId = Guid.Empty, startsOn = start, endsOn = start,
+                    timeZoneId = "America/Chicago",
+                    newVenue = new
+                    {
+                        name = "The Old Franklin Opera House", streetAddress1 = "419 Main St",
+                        city = "Franklin", state = "TN", zipCode = "37064", country = "US",
+                        latitude = 35.9254m, longitude = -86.8695m,
+                    },
+                },
+            });
+            Assert.That(ev.Ok, Is.True, await ev.TextAsync());
+            var placeId = (await ev.JsonAsync())!.Value.GetProperty("placeId").GetString()!;
+
+            var suffix = Guid.NewGuid().ToString("N")[..6];
+            foreach (var (kind, value, label, isPublic) in new[]
+                     {
+                         (0, $"https://oldfranklinopera-{suffix}.example.com", "Their website", true),
+                         (1, "(615) 555-0170", "Box office", true),
+                         (1, "(615) 555-0188", "Dana, for scheduling rehearsals", false),
+                     })
+            {
+                await organizer.PostAsync($"/api/places/{placeId}/contacts",
+                    new() { DataObject = new { organizationId = orgId, kind, value, label, isPublic } });
+            }
+
+            await LoginAsync(UserEmail, UserPassword);
+            await GoAsync($"/places/{placeId}");
+            await ShootAsync("organization-administration", "place-contacts.png",
+                gated: true, selector: "#place-contacts", proves: "Box office");
+
+            await GoAsync($"/organizations/{orgId}/venue/claim?place={placeId}");
+            await ShootAsync("organization-administration", "venue-claim.png",
+                gated: true, selector: ".container-fluid", proves: "How to prove it");
+
+            await organizer.PostAsync($"/api/organizations/{orgId}/venue-claims", new()
+            {
+                DataObject = new
+                {
+                    placeId, role = 1, placeContactId = (Guid?)null,
+                    evidence = "I'm the general manager. We have leased the building since 2019 and our name is on the city's venue licence.",
+                },
+            });
+
+            await LoginAsync(SuperAdminEmail, SuperAdminPassword);
+            await GoAsync("/admin/venue-claims");
+            await ShootAsync("organization-administration", "venue-claim-review.png",
+                gated: true, selector: ".admin-venue-claim", proves: "venue licence");
+        }
+        finally
+        {
+            var admin = await SignedInApiAsync(SuperAdminEmail, SuperAdminPassword);
+            await admin.DeleteAsync($"/api/admin/organizations/{orgId}/purge",
+                new() { DataObject = new { confirmName = orgName } });
+            await admin.DisposeAsync();
+            await organizer.DisposeAsync();
+        }
+    }
+
+    /// <summary>The programme: the host's editor, and what a guest reads on the event page (item 235 phase 10).</summary>
+    [Test]
+    [Description("organization-administration + going-to-an-event: the programme.")]
+    public async Task Capture_Programme()
+    {
+        var orgId = await OrgIdBySlugAsync("paranormal365");
+
+        await LoginAsync(SuperAdminEmail, SuperAdminPassword);
+        await GoAsync($"/organizations/{orgId}/events/{SeededRoomsEventId}/sessions");
+        await ShootAsync("organization-administration", "event-programme.png",
+            gated: true, selector: "#programme-list", proves: "Operating the Ovilus");
+
+        var api = await SignedInApiAsync(SuperAdminEmail, SuperAdminPassword);
+        var ev = await api.GetAsync($"/api/public/hosted-events/{SeededRoomsEventId}");
+        if (!ev.Ok) Assert.Ignore("The seeded rooms weekend is not published on this database, so there is no public programme to photograph.");
+        var slug = (await ev.JsonAsync())!.Value.GetProperty("urlName").GetString();
+
+        // The guest with a confirmed place, so the picture shows the Sign up buttons a guest sees.
+        var guest = await SignedInApiAsync(ClientEmail, ClientPassword);
+        var me = await guest.GetAsync("/api/me");
+        var guestId = (await me.JsonAsync())!.Value is var body && body.TryGetProperty("userId", out var uid) ? uid.GetString() : body.GetProperty("id").GetString();
+        var mine = await guest.GetAsync($"/api/public/hosted-events/{SeededRoomsEventId}/my-booking");
+        string? madeBookingId = null;
+        var confirmed = mine.Ok && (await mine.TextAsync()).Length > 2 && (await mine.JsonAsync())!.Value.GetProperty("status").GetInt32() == 1;
+        if (!confirmed)
+        {
+            if (mine.Ok && (await mine.TextAsync()).Length > 2)
+                await guest.DeleteAsync($"/api/public/hosted-events/{SeededRoomsEventId}/my-booking");
+            var made = await api.PostAsync($"/api/organizations/{orgId}/events/{SeededRoomsEventId}/bookings/on-behalf",
+                new() { DataObject = new { leadAppUserId = guestId, kind = 1, partySize = 2, confirmImmediately = true } });
+            if (made.Ok) madeBookingId = (await made.JsonAsync())!.Value.GetProperty("id").GetString();
+        }
+
+        try
+        {
+            await LoginAsync(ClientEmail, ClientPassword);
+            await GoAsync($"/o/paranormal365/events/{slug}");
+            await ShootAsync("going-to-an-event", "programme.png",
+                selector: "#hosted-programme", proves: "Sign up");
+            await ShootAsync("going-to-an-event", "programme-phone.png",
+                selector: "#hosted-programme", proves: "Sign up", width: 375);
+        }
+        finally
+        {
+            if (madeBookingId is not null)
+                await api.PostAsync($"/api/organizations/{orgId}/events/{SeededRoomsEventId}/bookings/{madeBookingId}/cancel",
+                    new() { DataObject = new { decisionNote = "Capture finished." } });
+            await guest.DisposeAsync();
+            await api.DisposeAsync();
+        }
+    }
+
+    /// <summary>An event's files, each with who it is for (item 235 phase 11).</summary>
+    [Test]
+    [Description("organization-administration: an event's files.")]
+    public async Task Capture_EventFiles()
+    {
+        var orgId = await OrgIdBySlugAsync("paranormal365");
+        var added = new List<string>();
+
+        await LoginAsync(SuperAdminEmail, SuperAdminPassword);
+        await GoAsync($"/organizations/{orgId}/events/{SeededRoomsEventId}/files");
+        await Expect(Page.Locator("#file-input")).ToBeVisibleAsync(new() { Timeout = 30_000 });
+
+        try
+        {
+            foreach (var (name, folder, audience, about) in new[]
+                     {
+                         ("guest-pack.pdf", "Guest pack", "Confirmed guests", "Parking, the key safe and what to bring"),
+                         ("stewards-briefing.pdf", "Stewards", "The event's people only", "Fire exits and who to call"),
+                         ("poster.pdf", "", "Anybody", ""),
+                     })
+            {
+                await Page.Locator("#file-input").SetInputFilesAsync(new FilePayload
+                {
+                    Name = name, MimeType = "application/pdf", Buffer = "%PDF-1.4\n%capture\n"u8.ToArray(),
+                });
+                await Page.Locator("#file-folder").FillAsync(folder);
+                await Page.Locator("#file-audience").SelectOptionAsync(new SelectOptionValue { Label = audience });
+                await Page.Locator("#file-description").FillAsync(about);
+                await Page.Locator("#file-upload").ClickAsync();
+                await Expect(Page.Locator(".event-file", new() { HasTextString = name })).ToBeVisibleAsync(new() { Timeout = 15_000 });
+                added.Add(name);
+            }
+
+            await ShootAsync("organization-administration", "event-files.png",
+                gated: true, selector: ".container-fluid", proves: "stewards-briefing.pdf");
+        }
+        finally
+        {
+            foreach (var name in added)
+            {
+                var remove = Page.Locator(".event-file", new() { HasTextString = name }).GetByRole(AriaRole.Button, new() { Name = "Remove" });
+                if (await remove.CountAsync() > 0)
+                {
+                    await remove.ClickAsync();
+                    await Expect(Page.Locator(".event-file", new() { HasTextString = name })).ToHaveCountAsync(0, new() { Timeout = 15_000 });
+                }
+            }
+        }
+    }
+
+    /// <summary>The event's room, the add-photos page and the photo wall (item 235 phase 11).</summary>
+    [Test]
+    [Description("organization-administration + going-to-an-event: the room and the photo wall.")]
+    public async Task Capture_EventRoomAndWall()
+    {
+        var orgId = await OrgIdBySlugAsync("paranormal365");
+        var admin = await SignedInApiAsync(SuperAdminEmail, SuperAdminPassword);
+        var guest = await SignedInApiAsync(ClientEmail, ClientPassword);
+
+        var ev = await admin.GetAsync($"/api/public/hosted-events/{SeededRoomsEventId}");
+        if (!ev.Ok) Assert.Ignore("The seeded rooms weekend is not published on this database.");
+        var slug = (await ev.JsonAsync())!.Value.GetProperty("urlName").GetString();
+
+        // The guest with a confirmed place for the capture, taken away again afterwards.
+        string? madeBookingId = null;
+        var mine = await guest.GetAsync($"/api/public/hosted-events/{SeededRoomsEventId}/my-booking");
+        var confirmed = mine.Ok && (await mine.TextAsync()).Length > 2 && (await mine.JsonAsync())!.Value.GetProperty("status").GetInt32() == 1;
+        if (!confirmed)
+        {
+            if (mine.Ok && (await mine.TextAsync()).Length > 2)
+                await guest.DeleteAsync($"/api/public/hosted-events/{SeededRoomsEventId}/my-booking");
+            var me = (await (await guest.GetAsync("/api/me")).JsonAsync())!.Value;
+            var guestId = me.TryGetProperty("userId", out var uid) ? uid.GetString() : me.GetProperty("id").GetString();
+            var made = await admin.PostAsync($"/api/organizations/{orgId}/events/{SeededRoomsEventId}/bookings/on-behalf",
+                new() { DataObject = new { leadAppUserId = guestId, kind = 1, partySize = 2, confirmImmediately = true } });
+            if (made.Ok) madeBookingId = (await made.JsonAsync())!.Value.GetProperty("id").GetString();
+        }
+
+        try
+        {
+            await LoginAsync(ClientEmail, ClientPassword);
+            await GoAsync($"/events/{SeededRoomsEventId}/photos");
+            // One photo, so the room's picture fits the screen and the wall shows it with its caption.
+            await Page.Locator("#add-photos-input").SetInputFilesAsync(
+                Path.Combine(AppContext.BaseDirectory, "Fixtures", "room-photo-1.jpg"));
+            await Page.Locator("#add-photos-caption").FillAsync("The corridor outside the Blue Room, just after midnight");
+            if (await Page.Locator("#add-photos-agree").CountAsync() > 0) await Page.Locator("#add-photos-agree").CheckAsync();
+            await ShootAsync("going-to-an-event", "add-photos-phone.png", selector: ".container", proves: "1 chosen", width: 375);
+            await Page.Locator("#add-photos-send-button").ClickAsync();
+            await Expect(Page.Locator("#add-photos-done")).ToBeVisibleAsync(new() { Timeout = 60_000 });
+
+            await GoAsync($"/o/paranormal365/events/{slug}");
+            await ShootAsync("going-to-an-event", "the-room.png", selector: "#hosted-room", proves: "just after midnight");
+
+            await LoginAsync(SuperAdminEmail, SuperAdminPassword);
+            await GoAsync($"/events/{SeededRoomsEventId}/wall");
+            await Expect(Page.Locator("#photo-wall img")).ToBeVisibleAsync(new() { Timeout = 30_000 });
+            await Page.WaitForTimeoutAsync(1500);
+            await ShootAsync("organization-administration", "event-photo-wall.png", gated: true, selector: "#photo-wall");
+        }
+        finally
+        {
+            var room = await guest.GetAsync($"/api/public/hosted-events/{SeededRoomsEventId}/room");
+            if (room.Ok)
+                foreach (var m in (await room.JsonAsync())!.Value.GetProperty("messages").EnumerateArray())
+                    if (m.GetProperty("isMine").GetBoolean())
+                        await guest.DeleteAsync($"/api/public/hosted-events/{SeededRoomsEventId}/room/messages/{m.GetProperty("id").GetString()}");
+            if (madeBookingId is not null)
+                await admin.PostAsync($"/api/organizations/{orgId}/events/{SeededRoomsEventId}/bookings/{madeBookingId}/cancel",
+                    new() { DataObject = new { decisionNote = "Capture finished." } });
+            await guest.DisposeAsync();
+            await admin.DisposeAsync();
+        }
+    }
+
+    /// <summary>The event's gallery and the dressed public page on a phone (item 235 phase 11).</summary>
+    [Test]
+    [Description("organization-administration + going-to-an-event: the gallery and the event page.")]
+    public async Task Capture_EventGallery()
+    {
+        var orgId = await OrgIdBySlugAsync("paranormal365");
+        const string caption = "The corridor outside the Blue Room";
+
+        var api = await SignedInApiAsync(SuperAdminEmail, SuperAdminPassword);
+        var ev = await api.GetAsync($"/api/public/hosted-events/{SeededRoomsEventId}");
+        if (!ev.Ok) Assert.Ignore("The seeded rooms weekend is not published on this database.");
+        var slug = (await ev.JsonAsync())!.Value.GetProperty("urlName").GetString();
+
+        try
+        {
+            await LoginAsync(SuperAdminEmail, SuperAdminPassword);
+            await GoAsync($"/organizations/{orgId}/events/{SeededRoomsEventId}/gallery");
+            await Page.Locator("#gallery-input").SetInputFilesAsync(Path.Combine(AppContext.BaseDirectory, "Fixtures", "room-photo-1.jpg"));
+            await Page.Locator("#gallery-caption").FillAsync(caption);
+            await Page.Locator("#gallery-add").ClickAsync();
+            await Expect(Page.Locator("#gallery-note")).ToContainTextAsync("Added", new() { Timeout = 30_000 });
+            await ShootAsync("organization-administration", "event-gallery.png", gated: true, selector: "#gallery-list", proves: "Leads the page");
+
+            await LogoutAsync();
+            await GoAsync($"/o/paranormal365/events/{slug}");
+            await Expect(Page.Locator("#hosted-gallery")).ToBeVisibleAsync(new() { Timeout = 30_000 });
+            await ShootAsync("going-to-an-event", "event-page-phone.png", width: 375);
+        }
+        finally
+        {
+            var list = await api.GetAsync($"/api/organizations/{orgId}/events/{SeededRoomsEventId}/gallery");
+            if (list.Ok)
+                foreach (var image in (await list.JsonAsync())!.Value.EnumerateArray())
+                    if (image.TryGetProperty("caption", out var c) && c.GetString() == caption)
+                        await api.DeleteAsync($"/api/organizations/{orgId}/events/{SeededRoomsEventId}/gallery/{image.GetProperty("id").GetString()}");
+            await api.DisposeAsync();
+        }
+    }
+
+    /// <summary>Letters about bookings, on the notifications page (item 235 phase 8).</summary>
+    [Test]
+    [Description("organization-administration: how often a group writes to you about bookings.")]
+    public async Task Capture_BookingLetters()
+    {
+        await LoginAsync(SuperAdminEmail, SuperAdminPassword);
+        await GoAsync("/notifications");
+        await ShootAsync("organization-administration", "event-booking-letters.png",
+            gated: true, selector: "#booking-letters + .card", proves: "A daily letter");
+    }
+
+    /// <summary>Access notes, the numbers at a glance, and writing to the guests (item 235 phase 17a).</summary>
+    [Test]
+    [Description("organization-administration and going-to-an-event: getting in and around, at a glance, writing to guests.")]
+    public async Task Capture_EventGlanceLettersAndAccess()
+    {
+        var orgId = await OrgIdBySlugAsync("paranormal365");
+
+        await LogoutAsync();
+        await GoAsync("/o/paranormal365/events/thomas-house-seance-weekend");
+        await ShootAsync("going-to-an-event", "getting-in-and-around.png",
+            gated: false, selector: "#event-access-notes", proves: "Getting in and getting around",
+            around: new Around(Left: 16, Top: 16, Right: 16, Bottom: 16));
+
+        await LoginAsync(SuperAdminEmail, SuperAdminPassword);
+        await GoAsync($"/organizations/{orgId}/events/{SeededRoomsEventId}");
+        await ShootAsync("organization-administration", "event-at-a-glance.png",
+            gated: true, selector: "#event-glance", proves: "At a glance");
+
+        await GoAsync($"/organizations/{orgId}/events/{SeededRoomsEventId}/bookings");
+        await Expect(Page.Locator("#letter-start")).ToBeVisibleAsync(new() { Timeout = 30_000 });
+        await ClickUntilAsync(Page.Locator("#letter-start"), Page.Locator("#letter-subject"));
+        await Page.Locator("#letter-subject").FillAsync("Doors open at eight on Saturday");
+        await Page.Locator("#letter-body").FillAsync("The séance starts half an hour later than the programme says. Dinner is unchanged.");
+        await ShootAsync("organization-administration", "event-write-to-guests.png",
+            gated: true, selector: "#board-letters", proves: "It goes by email");
+    }
+
+    /// <summary>The events dashboard, every event, removing one, and the organizer's appeal (item 235 phase 17b).</summary>
+    [Test]
+    [Description("site-administration and organization-administration: hosted events oversight.")]
+    public async Task Capture_AdminEventOversight()
+    {
+        var orgId = await OrgIdBySlugAsync("paranormal365");
+        await LoginAsync(SuperAdminEmail, SuperAdminPassword);
+
+        await GoAsync("/admin/dashboard?tab=events");
+        await ShootAsync("site-administration", "events-dashboard.png", gated: true, selector: "#events-dashboard", proves: "Events on the site");
+
+        await GoAsync("/admin/events");
+        await ShootAsync("site-administration", "every-event.png", gated: true, selector: ".admin-events-grid", proves: "No appeals waiting");
+
+        var api = await SignedInApiAsync(SuperAdminEmail, SuperAdminPassword);
+        var eventId = await DraftHostedEventAsync(api, orgId, "Mill Lock-In (help capture)", "40000002-0000-0000-0000-000000000001");
+
+        try
+        {
+            await GoAsync($"/admin/events/{eventId}/remove");
+            await ShootAsync("site-administration", "remove-an-event.png", gated: true, selector: "#remove-event", proves: "What removing it does");
+
+            await api.PostAsync($"/api/admin/hosted-events/{eventId}/remove", new() { DataObject = new { note = "Help capture." } });
+            await GoAsync($"/organizations/{orgId}/events/{eventId}");
+            await ShootAsync("organization-administration", "event-removed.png",
+                gated: true, selector: "#event-removed", proves: "Removed by IsHaunted");
+        }
+        finally
+        {
+            await api.PostAsync($"/api/organizations/{orgId}/events/{eventId}/removal/appeal", new() { DataObject = new { message = "Help capture tidy-up." } });
+            var list = await api.GetAsync("/api/admin/hosted-events");
+            if (list.Ok)
+                foreach (var appeal in (await list.JsonAsync())!.Value.GetProperty("appeals").EnumerateArray())
+                    if (appeal.GetProperty("hostedEventId").GetString() == eventId && appeal.GetProperty("appealState").GetInt32() == 1)
+                        await api.PostAsync($"/api/admin/hosted-events/appeals/{appeal.GetProperty("removalId").GetString()}/decide",
+                            new() { DataObject = new { uphold = true, note = "Help capture tidy-up." } });
+            await api.PostAsync($"/api/organizations/{orgId}/events/{eventId}/archive", new() { DataObject = new { } });
+            await api.DisposeAsync();
+        }
+    }
+
+    /// <summary>The seeded evening's slug, which is the address on the poster.</summary>
+    private async Task<string> SeatsEventSlugAsync(string orgId)
+    {
+        var api = await SignedInApiAsync(SuperAdminEmail, SuperAdminPassword);
+        var ev = await api.GetAsync($"/api/organizations/{orgId}/events/{SeededSeatsEventId}");
+        Assert.That(ev.Ok, Is.True, await ev.TextAsync());
+
+        var slug = (await ev.JsonAsync())!.Value.GetProperty("urlName").GetString();
+        await api.DisposeAsync();
+
+        return slug!;
+    }
+
+    /// <summary>Lets the guest go of anything they are holding, so the house photographs empty.</summary>
+    private async Task LetGoOfEverythingAsync()
+    {
+        var api = await SignedInApiAsync(ClientEmail, ClientPassword);
+
+        var mine = await api.GetAsync("/api/public/hosted-events/mine");
+        if (mine.Ok)
+        {
+            foreach (var booking in (await mine.JsonAsync())!.Value.EnumerateArray())
+            {
+                if (booking.GetProperty("hostedEventId").GetString() is { } id)
+                    await api.DeleteAsync($"/api/public/hosted-events/{id}/my-booking");
+            }
+        }
+
+        await api.DisposeAsync();
+    }
+
+    private async Task<Microsoft.Playwright.IAPIRequestContext> SignedInApiAsync(
+        string email, string password)
+    {
+        var api = await Playwright.APIRequest.NewContextAsync(new() { BaseURL = ApiUrl });
+        var login = await api.PostAsync("/login", new() { DataObject = new { email, password } });
+        Assert.That(login.Ok, Is.True, $"{email} could not sign in: {await login.TextAsync()}");
+
+        var token = (await login.JsonAsync())!.Value.GetProperty("accessToken").GetString();
+
+        return await Playwright.APIRequest.NewContextAsync(new()
+        {
+            BaseURL = ApiUrl,
+            ExtraHTTPHeaders = new Dictionary<string, string> { ["Authorization"] = $"Bearer {token}" },
+        });
+    }
+
+    /// <summary>The seeded Thomas House weekend and the seeded 260-seat evening.</summary>
+    /// <remarks>
+    /// Written out rather than referenced: this project drives the running site over HTTP and has
+    /// no reference to the API's assemblies, the same reason the feature keys below are strings.
+    /// </remarks>
+    private const string SeededRoomsEventId = "40000002-0000-0000-0000-000000000002";
+    private const string SeededSeatsEventId = "40000002-0000-0000-0000-000000000003";
 
     /// <summary>
     /// The feature key, spelled out rather than referenced.

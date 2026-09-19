@@ -41,9 +41,13 @@
             </div>
             @if (_status is not null)
             {
-                <span class="badge @(_status.Enabled ? "bg-success" : "bg-secondary-subtle text-secondary-emphasis")">
-                    @(_status.Enabled ? "On" : "Off")
-                </span>
+                @* Shared with the emails card, the profile hero and the admin grid. Off has a
+                   path — the setup below — so it is drawn; see BenProven for when it would not be. *@
+                <BenProven Chip="true"
+                           Label="Two-factor on"
+                           UnprovedText="Two-factor off"
+                           Proved="@_status.Enabled"
+                           Unproved="Set it up below: scan the code with an authenticator app." />
             }
         </div>
 
@@ -83,17 +87,15 @@
             <div class="row g-3">
                 <div class="col-md-auto text-center">
                     @*
-                        TelerikQRCode renders the otpauth:// URI the app scans. Native rather than a
-                        generated image: no round trip, and the secret never becomes a file on the
-                        server that could be cached or logged.
+                        The otpauth:// URI the app scans, drawn natively rather than fetched as an
+                        image: no round trip, and the secret never becomes a file on the server
+                        that could be cached or logged.
+
+                        BenQrPlate carries the light plate a scanner needs. It used to be a
+                        bg-white div here; item 235 phase 6 gave the guest's pass a QR code too,
+                        and two copies of "which colour a camera needs" is one too many.
                     *@
-                    @* bg-white on purpose, and the only one left in the app: a QR code is read by a camera,
-   not by a person, and scanners need the light modules light in either theme. Listed in
-   FixedLightUtilityGuardTests so the ban below stays a ban. *@
-                    <div class="d-inline-block bg-white p-2 rounded border">
-                        <TelerikQRCode Value="@_setup.AuthenticatorUri" Size="180px"
-                                       ErrorCorrection="@QRCodeErrorCorrectionLevel.M" />
-                    </div>
+                    <BenQrPlate Value="@_setup.AuthenticatorUri" Size="180px" />
                 </div>
                 <div class="col-md">
                     <ol class="small ps-3 mb-3">

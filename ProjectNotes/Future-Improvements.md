@@ -11200,7 +11200,7 @@ the fold hands back a y the mouse cannot reach and the drags land on whatever is
 The test then reports "the map never reloaded" about a map nobody touched. Scroll it into view
 first.
 
-## 224. A date field silently takes an impossible day as its second digit (OPEN)
+## 224. A date field silently takes an impossible day as its second digit (FIXED 2026-09-15 — `fix/date-picker-impossible-day-224`)
 
 Found 2026-09-09 alongside item 221, deferred by Ben the same day. **Not started.**
 
@@ -11232,6 +11232,31 @@ typing behaviour were wrong on the day this was found:
 
 **Related, and already fixed:** item 221, where an *empty* picker rebuilt the whole date on the
 first arrow press. That one was fixed by seeding every date field; this one survives a seeded field.
+
+### Measured 2026-09-15 (branch `fix/date-picker-impossible-day-224`) — every option on the tree above fails
+
+Real keystrokes in Chromium against temporary pickers on `/styleguide`, value seeded 09/15/2026, typing from the month:
+
+| Field | Typed | Shows | Bound value |
+|---|---|---|---|
+| `TelerikDatePicker` (today's call sites) | 0 9 3 1 | 09/01/2026 | 09/01/2026 — silent |
+| `TelerikDatePicker AutoCorrectParts="false"` | 0 9 3 1 | 09/31/2026, red `k-invalid` | 09/15/2026 — Save keeps the old date |
+| …then 3 0 to fix the day | | 09/31/**0030** — focus had moved to the year | 09/15/2026 |
+| `TelerikDateTimePicker` (MM/dd/yyyy hh:mm tt) | 0 9 3 1 | 09/01/2026 | 09/01/2026 — silent |
+| `TelerikTimePicker` (hh:mm tt) | 1 3 | 03:00 PM | 15:00 — silent |
+| native `<input type="date" @bind>` | 0 9 3 1 | 01/01/0001 | 09/03/2026 |
+| **Telerik 15.0.1** (probe build only, reverted) | same | identical to 14.1 | identical |
+
+Telerik's own XML docs say `AutoCorrectParts=true` turns "32" into the month's last day; it actually restarts the
+part with the second digit. Selection set from script (`setSelectionRange`) does not move Telerik's active part —
+only a real click does, which matters for any automated test.
+
+**Done, as (1)** — and wider than this entry knew. `Kit/BenDateField` (`DateEntry` parses; a sentence and the kept value on refusal; TelerikCalendar inline) replaced all 34 Telerik pickers **and** the fourteen `type="date"` and three `type="datetime-local"` boxes added since, which failed too: `@bind` saved 01/01/0001 into a `DateTime`, erased a `DateTime?`, and an impossible `datetime-local` read as "none" posted a scheduled post at once. `BenDateFieldGuardTests` bans all of them; `type="time"` stays (it took 08:30 PM correctly).
+
+**What is left:** (1) a Kit date field Blazor owns — free text parsed by our code with a sentence for an impossible
+date, and a calendar button (TelerikCalendar in a popup) — for date, date-and-time and time, migrating the 34 sites
+with a guard; (2) intercepting Telerik's keystrokes in JS (fragile across Telerik versions; not recommended); (3) a
+support ticket to Telerik with the table above, and wait.
 
 ---
 
@@ -11566,12 +11591,1022 @@ Subscription Tiers, banded by members unticked, 29 / 290). Created on the testin
 
 ---
 
-## 232. The ladder-reshape Playwright fixture cannot open its dialog (OPEN, found 2026-09-10)
+## 232. The Price Bands screen died whenever the ladder had something to say (FIXED 2026-09-11)
 
-`LadderReshapeTests` (category Billing) fails on the testing copy: the **Reshape the ladder**
-button is visible, the click lands, and the dialog never appears — with the flat tour tier present
-or retired, so item 231 is not the cause, and the website logged no error. The opening click was
-changed to a retrying one on 2026-09-10 and that did not help, so this is not the usual Blazor
-attach race. Not chased further that day; the three other billing fixtures pass. Start by opening
-`/admin/subscription-tiers` as SuperAdmin on the testing copy and pressing the button by hand.
+Reported as "the reshape dialog will not open". It was the whole page, and the dialog was simply
+the only part anybody was looking at.
 
+**What it actually was.** `GET api/admin/subscription-tiers/validation` returned `Ok(aString)`.
+MVC serves a string result through its string formatter as `text/plain`, and every client here
+reads an answer as JSON — so `ReadFromJsonAsync` threw on the sentence, inside the page's
+`OnInitializedAsync`, which killed the circuit. The button rendered because it is drawn before the
+load; nothing it was wired to was alive.
+
+**Why nobody caught it.** A healthy ladder answers "nothing to report", and null comes back as an
+empty 204 that `ApiResponseMapper` already handles — a fix made after this same screen died on
+production for the mirror-image reason. So the page worked on a fresh database and died on a real
+one. The fixture failed only on the testing copy, whose "Free" band is priced at nothing.
+
+**The fix.** `TierValidationRecord`, so the answer is JSON. The record also carries `IsBlocking`,
+because the endpoint had been collapsing two different things into one string: the screen greeted
+a free-band advisory with "The price list is unusable" and "checkout is refused", neither true. A
+blocker is red and says that; an advisory is amber and says "Worth knowing".
+
+`GiphyController.SdkKey` had the same shape and nothing consuming it yet, so it was wrapped too.
+`TierValidationShapeTests` pins the shape and scans `Ben.Data.WebApi` for any endpoint answering
+with a bare string.
+
+**Verified** by running `LadderReshapeTests` against the testing copy — failing before, passing
+after — and by opening the repaired screen and reading its banner.
+
+---
+
+## 233. The tour tier: tours are the unit a business pays for (BUILT 2026-09-11, merged to develop and master; two pieces named below are deliberately out)
+
+Ben's brief, 2026-09-10, in his words and in order: photos stay a month unless the tour rep keeps
+them; video and audio a week, five minutes each at 720p or 1080p; Field Kit submissions the same,
+so the end user can save or download them first. "The tour can schedule tours and people can sign
+up for the tour. Money collected is to be arranged by the tour company or person… a template to
+generate for people who sign up and then as a reminder including the .ics file." "They can set the
+time and the number of people accepted." Then the rule that reshaped the item: **"The $29 per month
+is for a single tour no matter how many times scheduled. If they have a tour on one street and need
+another tour for another street, that is a different tour."** Nail it down by the start location
+(required) and, my call, the tour's name, unique within the business. The guest email carries the
+start date and time and "name and photo of person who will be leading the tour - for safety"; the
+photo is optional and per date, since a tour led by two people is not the same picture each time.
+"Tours are public so, they show up on the map and are searchable." Retention restated: "Evidence
+collected - unless marked to save - only lasts a week for everything but photos. Photos stay a
+month." The keep for images is a gallery: "up to 50 1920x1080 72ppi images… tag ones from tours to
+keep as well, but 50 images per tour max." Reviews are optional per tour and on by default. The
+owner is not necessarily a guide and adds guides to a tour; the owner manages tours from the web,
+choosing which when there is more than one.
+
+**Superseded by this item:** item 231's flat price per business. The tier row and its two prices
+stay; what changes is that the price is a *unit* price and the quantity is the business's live
+tours, re-counted at renewal and prorated when one is added mid-period (charged today on the saved
+card; without a card it is counted at the next renewal).
+
+Plan of record: `README-tour-tier-233.md`. Phases: **0** entity, `TourId` on dates,
+`TourCountAtPeriodStart`, `TourBilling` and `BillableUnits` behind checkout, quote, renewal and the
+admin screen; **1** tour API, add-on charge, tour and date guides, the calendar rule (a public date
+of a tour business belongs to a tour), the tours page with a per-tour management page, scheduler and
+billing page, public tour page, org home, `/events`, home-map pins and nearby search, iOS shows the
+tour name and guides; **2** guest mail with attachments, `.ics`, template placeholders, the four send
+sites, editor with preview; **3** retention limits as tier data, expiry stamps, the sweep with
+notices, the 50-image gallery, keep for recordings, download while it lasts, five-minute and 1080p
+rules at the doors; **4** reviews; **5** help, screenshots, both PDFs, deploy notes, production data.
+
+**Closed 2026-09-11.** All six phases shipped, merged to `develop` (888a63bd) and `master`
+(097859a9), suite green at 8,133. **Two pieces are not built and are named rather than implied:**
+the phone shows a tour's NAME on an event and reads every time on the Swift half of the clock rule
+(`EventClock`, 2026-09-11), but nothing renders a date's guides yet and there is no tour browsing of
+its own — item 234 is the larger version of that; and an over-long recording is refused on length
+but never downscaled to 1080p. What the testing wrote to `IsHauntedDb_player`, with a back-out script, is in
+`ProjectNotes/Test-Data-Written-2026-09-11.md`.
+
+**Asked for mid-build and built on the same branch** (2026-09-11): the look pass across the tour,
+event, group, events and group-cases pages; the clock rule (times render in the zone of the place,
+or UTC, never the server's); a tour's social links; a timezone on an event; the case vote widget
+rebuilt as one button with a dropdown, beside share, repost, comments and report; comments on a
+published case; link previews under any message carrying a web address; and the composer's row of
+tools — photo/video, GIF (through our own API, so the Giphy key never reaches a browser), poll,
+emoji, schedule and location. Ben's item 3 from the Twitter screenshot ("that is Grok AI, I don't
+know what AI — if any — I would put there") is deliberately not built. The poll widget is reusable
+by design: a poll belongs to a message, so the same pair of components serves a feed post, a case
+comment and a group's own message.
+
+---
+
+## 234. The tour on the phone: a reserved seat, notifications, and a Haunted Tours tab (BUILT 2026-09-11; the phone half is staged behind App Store 1.0.3)
+
+Recorded while item 233 was being built, in Ben's words, to be picked up after it lands:
+
+> "I would like to be able to let the tours use the website with coordination to the iPhone and
+> iPad app where if the person downloads the app and creates an account free or paid, they can get
+> notified where the tour is, when to get there and other stuff that would be available in the
+> e-mail like a link to add to the calendar and a link to get directions to the start point. They
+> would not be confirmed until the tour guide or manager approves them meaning they have settled
+> how money will be or has been exchanged. Then, the person who is touring can confirm it on the
+> app - if they want. This is just confirmation between the tour company and the person taking the
+> tour the seat or seats have been reserved for the tour. I would also like to add the tours in a
+> Haunted Tours tab in the iPhone and iPad app based on current location or looking up a location
+> on the tab."
+
+Four pieces, each resting on item 233:
+
+1. **A seat is reserved, not merely requested.** A sign-up becomes `Requested → Reserved` only when
+   the guide or manager approves it, because approval is where the business says the money is
+   settled. We never take the money; the state is the two of them agreeing. The guest may then
+   acknowledge on the phone, which is optional and is the third state.
+2. **Seats, plural.** A sign-up carries how many places it holds, and capacity counts places rather
+   than people.
+3. **Notifications on the phone** for a reserved seat: where the tour is, when to be there, add to
+   the calendar, directions to the start point — everything the item 233 email already carries,
+   which is why the email's placeholders and its start address are the source for both.
+4. **A Haunted Tours tab** in the iPhone and iPad app: tours near me, or near a place I look up,
+   from the same public tour endpoints item 233 builds for the website map and search.
+
+**Closed 2026-09-11, in five phases.** Plan of record: `README-tour-on-the-phone-234.md`.
+
+1. **A seat is asked for, and the business decides.** `TourSeatStatus` beside `RsvpStatus` rather
+   than inside it, so every existing count of "accepted" goes on meaning *has a place*. Capacity
+   counts PLACES, and a sign-up may hold several. A request is never refused for fullness — the
+   approval is, in words naming how many places are left — so a full walk is a waiting list rather
+   than a closed door. **This site never takes the money**; approving is the two of them agreeing.
+2. **The business's screen and the guest's three sentences**, on the web: a Sign-ups page per date
+   with a "waiting" count on the tour's Dates list, and *asked for* / *reserved* / *not this time*
+   wherever a guest looks at the night.
+3. **The phone gets an event screen** — it had none, and `AppRoute.eventDetail` fell through to a
+   placeholder — plus reminders the device schedules itself the night before and an hour before.
+   **Local, not push**, by Ben's decision: no Apple key, no device-token table, and they still
+   arrive in a cellar with no signal. Real APNs remains the separate piece, needed only for an
+   approval landing while the app is closed.
+4. **A Haunted Tours tab**, near you or near a place looked up, anonymous throughout. The five-tab
+   ceiling meant Investigations moved under Profile for group members; Field Kit is hidden from
+   exactly one person, somebody whose only connection to the site is having attended a public event.
+5. **Two notification buckets**, one per direction, plus help, screenshots and both PDFs.
+
+**Left for production on Ben's word:** migration `TourSeats` applied with an explicit `--connection`
+naming `IsHauntedDb`. The iOS half is staged and proven only — 1.0.3 (4) is still with Apple — and
+the location permission string, which now mentions finding tours, must ship WITH that release.
+
+Prerequisites already true after 233: tours are public with a start address and coordinates, dates
+carry guides and capacity, and the guest mail knows how to say all of it.
+
+
+---
+
+## 235. Hosted events: the event creator band (IN PROGRESS, branched 2026-09-11)
+
+The third paying customer. Ben, 2026-09-11: *"In the price bands, there are personal, Ghost Tours
+and Event Creators. The one I don't think we have addressed is the Event Creator bands."*
+
+**What an event creator is.** A venue like The Thomas House Hotel, or any group that buys the right
+to hold one: multi-night events, rooms that each sleep so many, day passes sold to people not
+staying, a programme of optional classes with their own capacity, check-in and check-out, checklists,
+menus, files kept with the event, staff with different permissions, a flashy public page, ads, QR
+passes issued when a booking is confirmed, attendees sharing photos with each other on the phone,
+and one group hosting at another's venue by permission.
+
+**And it is not about ghosts.** Ben, the same day: *"The idea is to allow someone to schedule and
+track and organize an event that is not ghost hunting related."* A dinner-theatre run, a retreat and
+a Halloween lock-in are the same record. The copy stays neutral; the paranormal surfaces (evidence
+queue, archive publication) are per-event switches, off by default for an ordinary event.
+
+**Plan of record: `README-hosted-events-235.md`** on branch `feature/hosted-events-235` (from
+`develop` `d9c8a94d`). Thirteen phases, each independently shippable: the event package and its
+billing; bookings with rooms and menus; QR passes; sessions; staff, the door and checklists; files;
+the page, feed and ads; venue profiles and the site's first org-to-org grant; the attendee room; the
+phone's Event section; ticketing (design only); docs. **Event credits ship in this arc**, as phase
+1B directly after the event package — without them nobody outside a business plan could publish
+anything at all.
+
+**The model in one line:** a `HostedEvent` is the product, the way a `Tour` is, and it owns exactly
+one `OrgCalendarEvent` umbrella row — so the shipped phone, the public list, the reminder job, the
+`.ics` and the `/o/{org}/events/{slug}` URL all keep working with no change at all.
+
+**Decisions Ben took 2026-09-11:** the site takes no guest money from guests (the host confirms a
+booking; passes issue on confirmation). **An event is sold as a credit, not metered** — `$99` buys
+one event for anybody, credits expire a year after purchase with a thirty-day warning, and one is
+spent at publish behind a confirmation that says what it costs and that it does not come back.
+Metering an occasional weekend at a tour's monthly rate would have priced a hotel weekend as a walk
+round a block, earned less, and reached none of the groups that run one fundraiser a year. The flat
+business plan stays for people who run events for a living, capped by `ActiveHostedEvents` rather
+than metered; `HauntedProperty` joins the business kinds only so it resolves to that plan.
+Publishing is the single moment that spends a credit or occupies a slot, and an event stops counting
+14 days after its last night.
+
+**Open question in the README:** whether a run of separate dates (the resident play company) lands
+its `DatesAreSeparate` flag in phase 1.
+
+**Phase 0 done 2026-09-11:** every append-only value fixed before anything depends on the numbers —
+`OrganizationPermissionArea.Events`, six `OrganizationSecurityTable` values, four `SubscriptionLimit`
+values, three `TierCapability` values, four `CmsSectionType` values, `OrgMessageChannel.EventRoom`,
+and five new enums. Three guards caught what the appends broke, which is what they are for: the
+permission map, the role editor's rows, and the permissions endpoint's probe list. A new
+`TierLabelCoverageTests` refuses a cap or capability a SuperAdmin would have to set by its enum name.
+
+---
+
+## 236. Room mapping with LiDAR: the phone knows which room it is in (FUTURE — iPhone and iPad, next version; not scoped for build)
+
+Ben, 2026-09-12: *"I would like to use the built in Lidar and front camera to map the rooms or
+locations… This makes the end user be able to actually map where they are when things happen
+without having to tell the field kit what room they are in."* And: *"I don't know if it is even
+doable or not, it just came to me there is the potential it would be another piece to set us
+apart."*
+
+**Verdict first: doable, in layers, and the first layer is genuinely worth building.** The part
+Ben most wants — the phone knowing which room a reading happened in without being told — is a
+solved problem on Apple's side, with a first-party framework that does the scanning, names the
+walls and doors, and merges rooms into a building. The parts that are *not* solved by anyone's
+framework are textured, photo-real walk-through models and merging those across visits into ever
+better ones. Those are real engineering with real compute cost, and this entry says exactly where
+the line is so nobody promises the second thing while building the first.
+
+### What Apple actually provides (checked 2026-09-12 against developer.apple.com)
+
+| Piece | What it is | Since | Matters because |
+|---|---|---|---|
+| **RoomPlan** — `RoomCaptureSession`, `RoomCaptureView`, `CapturedRoom` | Scans a room with LiDAR and returns a **parametric** model: walls, doors, windows, openings, floors, and recognised objects (bed, table, fireplace…) with dimensions and positions | iOS 16 | This is the room. Small (kilobytes), comparable, mergeable, and it is what "which room am I in" is computed against |
+| **`StructureBuilder`** → `CapturedStructure` | Merges several `CapturedRoom` scans "captured in the same physical vicinity" into one building | iOS 17 | Apple has done the within-visit merge for us |
+| `CapturedRoom.export` / `CapturedStructure.export` | USDZ model plus a metadata JSON | iOS 16 / 17 | The viewable file and the durable data, from the same call |
+| **ARKit `ARWorldMap`** | The tracked space's feature points and anchors, archivable, reloadable as `initialWorldMap` to **relocalize** a later session | iOS 12 | How a later visit snaps into the same coordinate frame. Apple's own guidance: it only works in the *same physical environment with similar lighting* |
+| ARKit scene reconstruction — `ARMeshAnchor` | The raw LiDAR mesh, live | iOS 13.4 | Change detection while the phone sits on a stand, and the geometry any texturing would drape over |
+| **Object Capture** — `PhotogrammetrySession` | Photos → textured 3D model | iOS 17 on device | **Objects only.** Apple documents it as "creating 3D objects from photographs", not rooms. It is not the room-texturing tool |
+| `ARGeoAnchor` | Lat/lon anchors matched against Apple's street imagery | iOS 14 | **Not usable indoors.** Coverage is street-level in about fifty US cities and excludes anywhere not drivable. Lat/lon is a *seed* for alignment, never the alignment |
+
+**Two corrections to the request, said plainly:**
+
+1. **It is the rear camera, not the front.** LiDAR and the wide camera are on the back of the
+   phone. The front TrueDepth camera is short-range and faces the person holding it. Mapping,
+   texturing and "did something move" all use the back, which is also what you point at a room
+   when the phone sits on a table.
+2. **LiDAR is a minority.** Every iPhone Pro and Pro Max from the 12 onward has it, and iPad Pro
+   from the 2020 models on. No standard, Plus, Air or mini does. Most members will not have it, so
+   the feature has to degrade: a phone without LiDAR keeps today's "tell me the room" and can still
+   *use* a map somebody else made (relocalization needs a camera, not LiDAR).
+
+### What a "map" is, concretely
+
+One scan produces up to four artefacts, and they are kept apart on purpose because they have
+different sizes, different lifetimes and different audiences:
+
+| Artefact | Size | Kept for | Shared? |
+|---|---|---|---|
+| **Structure JSON** — the parametric `CapturedRoom`/`CapturedStructure`: rooms as polygons, walls, doors, windows, objects, all with dimensions in metres | ~10–200 KB | Forever. This is the record everything else hangs off | Yes, under the visibility rules below |
+| **USDZ model** | 1–10 MB | Viewing (QuickLook on the phone; a 3D viewer on the web) | Yes, same rules |
+| **World map** — the archived `ARWorldMap` | 5–50 MB | Relocalizing on a later visit, so a second night lands in the first night's coordinates | Within the group only; it is a fingerprint of a room's contents |
+| **Keyframe bundle** — timed photos with camera poses, and optionally the raw mesh | 100 MB–GBs | Texturing, and any photo-real model later | Optional, phase 5, and it counts against the account's storage like video does |
+
+The first two are the product. The third makes repeat visits work. The fourth is the "impressive,
+complex 3D models" ambition and is deliberately last.
+
+### End to end: the app side
+
+**Scanning (a new step, not a session).** Mapping is its own activity, done once per place with
+the lights on, before or after an investigation — not something that runs during a session, because
+RoomPlan wants the phone swept slowly around a lit room and an investigation wants it still, in
+the dark, for hours. The screen says so.
+
+1. From a place (or from a session that has a place), **Map this place**. `RoomCaptureView` runs
+   Apple's own scanning UI: the person walks the room, the walls draw themselves.
+2. **Room by room.** Each finished room is a `CapturedRoom`; the person names it, and the name
+   becomes (or is matched to) a `PlaceRoom` — the entity item 197 already made for exactly this.
+3. **Merge.** `StructureBuilder` combines the rooms into one `CapturedStructure` for the building
+   and exports USDZ plus metadata.
+4. **Save the world map** at the end of the scan so the next visit can relocalize.
+5. **Upload** structure JSON + USDZ (small, always); world map (group only); keyframes (only if
+   the person opts in, with the size shown first, under the same allowance rules as video —
+   README-continuous-video-and-auto-clips.md and item 210's trimmer already established that the
+   phone is never limited and the upload is).
+
+**Using the map during a session — the actual feature.**
+
+6. When a session starts at a place that has a map, the app loads the world map and runs an
+   `ARWorldTrackingConfiguration` with `initialWorldMap` while the person walks in. Relocalization
+   takes a few seconds of the camera seeing the room. The screen shows *"Found your place in the
+   map"* or *"Couldn't match the room yet — move slowly, or name the room yourself"*, and the
+   manual room picker never goes away.
+7. Once relocalized, every reading, mark and capture gets a **position in the map frame**
+   (x, y, z in metres) alongside the GPS it already carries. The room is derived by point-in-polygon
+   against the structure's room footprints, and written to the same `room` field the Field Kit
+   fills today. Nothing downstream has to change to benefit.
+8. **Without relocalization** (new place, or it failed): the session records device pose relative
+   to its own start anyway, and if the person maps the place afterwards the rooms are applied
+   **retroactively** from the pose history. The night's readings get their rooms the next morning.
+9. Tracking costs battery and cannot run with the screen off. So the pose log runs at a low rate
+   (a fix a second is plenty; a person does not cross a room in less) and the camera stops the
+   moment the blackout overlay goes up, keeping the last good position. This is the same
+   foreground-only limitation continuous video has and it is stated on screen the same way.
+
+**Change detection — "did something move".** Two different questions, two different answers:
+
+- *During a session, phone on a stand pointed at the room* (Ben's stabilisation advice is
+  exactly right, and it goes in the UI copy): take the first thirty seconds' LiDAR mesh as the
+  baseline; thereafter any region whose depth differs from the baseline by more than a threshold
+  for more than a few seconds is a **`scene_changed` mark** with a bounding box, in the same
+  channel Sentry mode already uses for `scene_motion`. This is tractable and it is the one that
+  produces evidence. Camera-motion (someone picks the phone up) is detected already and suppresses
+  it.
+- *Between visits*: after alignment (below), compare the recognised object lists — RoomPlan
+  returns categories and positions — and report *"the chair by the north wall is 40 cm from where
+  it was in March"*. Reliable for the objects RoomPlan classifies; a general mesh diff is noisier
+  and is a phase-5 refinement, not a promise.
+
+### End to end: the server side
+
+**Entities.**
+
+- `PlaceMapCapture` — one scan: `PlaceId`, `OrganizationId` (who made it), `CapturedByAppUserId`,
+  `DeviceModel`, `CapturedAtUtc`, `StructureUploadFileId`, `ModelUploadFileId` (USDZ),
+  `WorldMapUploadFileId?`, `KeyframeBundleUploadFileId?`, SHA-256 of each, `RoomCount`,
+  `FloorAreaSquareMetres`, `Visibility` (the existing sharing scope), `AlignmentToCanonical`
+  (a 4×4 transform, null until aligned), `QualityScore`.
+- `PlaceMap` — the **canonical** map for a (place, organization) pair, or for the place itself
+  when public: the merged structure JSON, the USDZ, `Version`, and `Provenance` (which captures
+  contributed, weighted how). Rebuilt when a capture is added or accepted.
+- `PlaceRoomGeometry` — a footprint polygon per `PlaceRoom` in the canonical frame, with `Floor`.
+  This is the table that turns a position into a room name, and it is what makes rooms
+  *definitions* rather than labels.
+- `FieldSessionUpload` gains nothing new; readings already carry `position` in the device data
+  document, which gains `map_ref` (below).
+
+**Storage.** Files land through `IFileStorageService` under the organization or user, exactly as
+field sessions do, and `AccountStorageGuard` counts them. Parametric JSON is free in practice;
+world maps and keyframes are not, and the upload screen shows the weight before sending, as it now
+does for video.
+
+**Device data format.** A backwards-compatible v1.1 addition, keeping the spec vendor-neutral so
+any LiDAR scanner could feed it:
+
+- `position.map_ref: { map_id, x, y, z, room_id?, confidence }` on a reading, mark or capture.
+- `maps[]` companion list: `{ id, kind: "roomplan-structure" | "usdz" | "arworldmap", filename,
+  sha256, frame: "map" }`.
+
+### The "mesh side": compare, align, merge, refine
+
+This is the part Ben asked about most and the part with the most honest uncertainty in it.
+
+**Within one visit** — solved: `StructureBuilder`.
+
+**Across visits and devices** — three tiers, tried in order:
+
+1. **Relocalization** (best). If the new scan's device relocalized against the canonical world
+   map, its frame *is* the canonical frame. Zero registration needed.
+2. **Footprint registration** (good, ours to build). Room footprints are 2D polygons with wall
+   lengths and door positions; two scans of the same building match by 2D rigid registration
+   (rotation + translation, ICP on wall segments), **seeded by the compass heading and the GPS
+   fix** so the solver starts near the answer. Indoors GPS is tens of metres out, which is enough
+   to say "same building" and not enough to say anything else — a seed, never a solution. Confidence
+   comes from how much wall length agrees after registration; below a threshold it is refused and
+   the scan is kept as a separate, unmerged capture rather than force-fitted.
+3. **A person** (fallback). Show the two floor plans side by side and let somebody drag one onto
+   the other. Two minutes for a human, and it settles the cases where a building was renovated.
+
+**Merging** the parametric structures is then a vote per wall: walls that appear in several
+aligned captures within tolerance are kept with higher confidence; a wall in one capture only is
+kept but marked; an object present in some captures and not others is a *change*, not an error,
+and shows as such. Over visits the canonical map gets tighter, and each room's polygon settles.
+That is the "refine as time passes" Ben described, and for the parametric layer it is achievable
+with ordinary geometry.
+
+**Textures — "the camera to provide the mesh cover."** RoomPlan does not texture, and Object
+Capture is for objects. The honest options:
+
+- *On the phone*: project keyframe photos onto the `ARMeshAnchor` geometry at capture time. Works,
+  quality varies with lighting, and it is a custom renderer to write and maintain.
+- *On the server*: upload the keyframe bundle and reconstruct there (photogrammetry, or Gaussian
+  splatting for the "walk through" feel). Better results, and it needs a machine with a GPU and a
+  queue — an operational cost the site does not have today.
+- *Neither, for now*: ship the parametric map, the USDZ and the floor plan, and add textures as a
+  later opt-in. **This is the recommendation.** The floor plan with readings drawn on it is what a
+  reviewer uses every night; the photo-real model is what a visitor admires once.
+
+### Who may see what — the four cases, mapped onto rules that already exist
+
+Everything below reuses `PlaceKind`, the sharing scopes from `Places-and-Investigation-Sharing.md`
+(`GroupOnly` / `PlaceInvestigators` / `Public`), `OrganizationKind`, `OrganizationMemberRole`,
+`PlaceRoom` ownership, `Case.IsPrivateEngagement` and the client-consent rule for publishing case
+media. Contributing and seeing are two separate grants.
+
+| Where | Who may add a map or name rooms | Who sees it | Default scope | Notes |
+|---|---|---|---|---|
+| **Private residence** (`PlaceKind.PrivateResidence`, a case) | Members of the investigating group with `Member` or above | That group only | `GroupOnly` | Leaves the group **only** with the client's consent recorded, the same two-key rule as case media. A floor plan of somebody's home is the most sensitive artefact this app will hold: it is redacted with the address under private-engagement rules and it never enters the public archive. |
+| **Public location** (`PlaceKind.PublicLocation`, e.g. the Bell Witch Cave) | Any investigator of the place, and the property's own organization if it has one (`HauntedProperty`) | Everyone, at that address | `Public` | Every contribution merges into the place's canonical map. The property owner's rooms (`PlaceRoom`, already per-organization) are the names shown; visiting groups' names are matched to them. |
+| **Hosted event** (`HostedEvent`, `OrganizationKind.PublicEventProvider`) | The organizer's `Owner`, `Administrator` and `Manager` members | Ticket holders of that event, for the event's dates and afterwards for their own records; the organizer always | Event-scoped (a new scope: `EventAttendees`) | If the venue is a public place the place's public map is visible to all anyway; the *event* map (its room names, its layout for that weekend) is what stays with attendees. `HideExactLocation` on the event hides the map with the address. |
+| **Ghost walk tour** (`OrganizationKind.GhostWalkingTour`) | The tour's `Owner`, `Administrator`, `Manager` | Everyone | `Public` | A tour is outdoors and public by nature; its "rooms" are stops. Maps here are more useful as a route than a structure, and RoomPlan is not the tool for a street — this case mostly *consumes* public place maps rather than producing them. |
+
+A `SuperAdmin` sees everything, as everywhere else. Moderation applies to public maps as it does
+to public media: a scan uploaded to a public place is reviewable before it merges into the
+canonical map.
+
+### The web side
+
+- **Floor plan first.** Render the structure JSON as SVG: rooms, doors, windows, and the session's
+  readings drawn where they happened, with the timeline player's playhead moving a dot across it.
+  Cheap, fast on every device, and the thing that makes the feature legible.
+- **3D second.** USDZ opens natively on iPhone and iPad (QuickLook). On the web a glTF conversion
+  in a three.js viewer; nothing in the Telerik set does 3D, so this is the one place a JavaScript
+  library is the pragmatic answer and it loads only on the page that needs it.
+- **Compare view.** Two captures of the same place side by side, aligned, differences highlighted.
+
+### Playing a session back inside the map (Ben, 2026-09-12, added mid-write)
+
+*"This approach would also be able to provide a 3d review to pull from our own refined version of
+the 3d map to play back during field kit sessions."* Yes, and it falls out of M2 and M3 rather
+than needing its own pipeline, because every reading already has a position in the map frame:
+
+- **On the phone, at review.** The session's USDZ (the canonical, refined one for the place, not
+  the raw scan) opens in a RealityKit view; the timeline's playhead drives a marker through the
+  rooms, marks appear where they happened, the field strength colours a trail behind it, and a
+  capture's thumbnail hangs at the spot it was taken. The same `SessionReplay` that drives the
+  audio and video today drives this — it is another consumer of the playhead, exactly as the
+  video is.
+- **On site, in AR.** Because relocalization puts a live device in the map's frame, the previous
+  visit can be *overlaid on the room itself*: stand in the cellar, hold the phone up, and see
+  where last month's spikes were and where the chair stood. This is the most striking thing the
+  feature can do and it costs nothing beyond M2, since it is the same anchors drawn through the
+  camera instead of over a model.
+- **On the web.** The floor plan player (M1) is the everyday version; the three.js viewer gets
+  the same playhead binding in M3, so a member at a desk can scrub a night through the building.
+- **Pulling from the refined map is the point.** A session is played back in the *current*
+  canonical map, aligned through the capture's `AlignmentToCanonical`, so a session recorded
+  against a rough first scan improves visually as later scans tighten the model, without being
+  re-uploaded.
+
+This adds one deliverable to **M2** (phone playback in the model, and the AR overlay behind a
+feature flag) and one to **M3** (the web 3D playhead).
+
+### Build order
+
+| Phase | Delivers | Verification |
+|---|---|---|
+| **M0 — Feasibility spike (1–2 days, Ben's iPhone Pro)** | Scan two rooms with `RoomCaptureView`, merge with `StructureBuilder`, export, save a world map; come back the next day, in the dark, and see whether relocalization works and how long it takes; measure battery and heat for a 30-minute pose log | Device only. Decides whether M2 is real. |
+| **M1 — Capture, upload, view** | Map this place; `PlaceMapCapture` + `PlaceMap`; floor plan SVG on the place page; visibility per the table | BenKit tests for parsing the structure JSON and polygon math; server tests for the visibility matrix (every row of the table is a test); device for the scan |
+| **M2 — The phone knows the room** | Relocalize at session start; pose log; point-in-polygon room attribution; retroactive attribution when a place is mapped afterwards; manual picker always present; **session playback inside the model, and the on-site AR overlay** | BenKit tests for attribution and the retro pass using recorded pose logs as fixtures; device for relocalization |
+| **M3 — Across visits** | Footprint registration seeded by heading and GPS; canonical merge with per-wall confidence; the side-by-side manual fallback; the object-moved report; **the web 3D viewer with the timeline playhead** | Pure geometry, fully unit-testable with synthetic and recorded structures |
+| **M4 — Something moved, live** | Baseline mesh on a stand; `scene_changed` marks with bounding boxes on the timeline; stabilisation guidance in the UI | Device only |
+| **M5 — Textures (optional)** | Keyframe bundle capture and upload under the allowance rules; server reconstruction on a GPU queue; textured model on the web | Needs infrastructure that does not exist yet; decide after M1–M3 have earned it |
+
+### What has to be true before any of it ships
+
+- **Nothing here can be verified in the simulator.** No LiDAR, no camera, no ARKit tracking. Same
+  warning, in capital letters, as continuous video and for the same reason this branch learned
+  the hard way with Sign in with Apple. M0 is on a real phone or it does not count.
+- **Consent copy before the first scan of a home.** The sentence a member reads before mapping a
+  private residence has to say who will see the floor plan, and the client has to have said yes
+  to the group having it, which is a new line on the case's consent record.
+- **The battery notes need measuring, not estimating.** ARKit tracking plus LiDAR is heavier than
+  video. M0 produces the numbers the UI will show.
+- **iOS 17 is the floor for `StructureBuilder`**; the app's minimum is already iOS 18, so this
+  costs nothing.
+
+### Open questions
+
+1. Is a public place's canonical map contribute-to-see, the same open question the sharing spec
+   already carries for findings? Recommend no for maps — a map is more useful the more people can
+   use it, and the property is public anyway.
+2. When a private residence later becomes a public location (a house that becomes a museum), do
+   old private maps migrate? Recommend no: the consent was for that group, at that time.
+3. How long are world maps kept? They go stale when furniture moves. Recommend replacing on each
+   successful re-scan and expiring after a year unused.
+4. Whether to accept structure JSON from *other* LiDAR apps through the device data format, so a
+   group with a Matterport or Polycam habit can contribute. The format is designed to allow it;
+   the question is whether to promise it.
+
+**What I think** (asked directly): the first three phases are a real differentiator and are
+built from parts Apple maintains. A field session whose readings sit on a floor plan the phone
+drew, with the room named automatically and a second visit lining up with the first, is something
+no competitor in this space has. The photo-real walk-through is the part people will ask for and
+the part to resist promising until the plain version has proved itself on a real night in a real
+cellar.
+
+
+---
+
+## 237. The user manager: saying at a glance who somebody is, and what they do here (SUPERADMIN — open, mostly doable now)
+
+Ben, 2026-09-12, after item 236: *"more doable than what we have listed as 236 — probably."* He is
+right, and most of it is reading data the site already stores rather than collecting anything new.
+Four threads, deliberately separated because they are worth very different amounts and one of them
+is a **live defect** rather than an enhancement.
+
+**Grounding, checked against the tree the day this was written.** `SignInEvent` already records
+`AppUserId`, `Utc`, `Succeeded` and `Method` (`password`, `apple`, `handoff`, …). `UserEmail`
+already has `IsValidated`, `ValidationToken` and `DateValidated`. `/admin/users` is
+`Ben.Web.Website.Library/User/AdminUsers.razor`, a Telerik grid whose Actions column uses
+`<BenIcon Name="eye" />`. `ApexChart.razor` already themes charts to the site. So threads A, B and D
+below are mostly wiring; thread C is the only one that needs anything built from nothing.
+
+---
+
+### A. ✅ FIXED 2026-09-12 (`fix/verify-a-new-email`, merged) — and this entry had it partly wrong
+
+> **The correction, first.** This entry was written claiming the verification flow did not exist.
+> It did. `CreateEmail` already refused public, `UpdateEmail` already refused publishing an
+> unvalidated address, re-typing the address already cleared validation and unpublished it, and the
+> whole chain — `send-validation`, the emailed link, the anonymous `/validate-email/{token}` page,
+> the redeem endpoint, the seven-day expiry, the one-minute cooldown — was built, tested and
+> working. All four columns existed and three of them were being written.
+>
+> **Two things were genuinely broken, and the second is what Ben hit.**
+>
+> 1. **`IsPrimary` was governed by nothing**, on create or update. Primary is the address a person
+>    is presented by, so an unproven one taking it is the same mistake as publishing it, only
+>    quieter — the rule public already had. Said honestly: nothing today routes mail by the primary
+>    `UserEmail` (the site writes to the Identity account address, which has its own confirmation),
+>    so this was a wrong label rather than mail redirected. Fixed at the rule level anyway, because
+>    the day something reads it, it becomes the other kind of defect. Changing the address of a
+>    primary row is now refused outright, since re-typing clears validation and a row that stayed
+>    primary through that lands in exactly the state the rule prevents.
+> 2. **No confirmation was ever sent on add.** The row was created with no token, and the link only
+>    went if somebody found a button most people never press — so the address sat unconfirmed for
+>    ever and could never become primary or public. Adding an address IS the request to confirm it,
+>    so create now issues the link immediately through the same helper the resend button uses.
+>    Behaviour change pinned by its own test: asking again inside the minute is throttled.
+>
+> **On the screen:** Primary is disabled until confirmed, with the note Public already had, defined
+> once because it is one rule; and a first address no longer defaults to primary, because a tick
+> the save would refuse is a tick that lied.
+>
+> 32 controller tests, proved to discriminate. `ProfileEmailConfirmationTests` is written and
+> compiles but is **unrun** — the e2e runner refuses while the dev hosts hold port 5252.
+>
+> **Still open from this thread:** the shared verified-tick component for two-factor, phone and
+> linked providers. Email already had a *Confirmed* badge.
+
+### A (original note, kept for the record): an email set primary and public without ever being verified
+
+Ben: *"I just updated my account in the profile by adding a new e-mail. I set it as primary and
+public. Shouldn't we verify that?"*
+
+**Yes, and the columns to do it already exist and are not being used.** `UserEmail.IsValidated`,
+`ValidationToken` and `DateValidated` are on the table; the add-an-email flow writes none of them.
+So today somebody can put any address on their public profile, and make it primary, with no proof
+they can read it. That is worse than untidy:
+
+- A **public** address nobody proved they own can be used to impersonate somebody, or to put a
+  stranger's real address on a page they never asked to appear on.
+- A **primary** address is where the site writes. An unverified one silently redirects a person's
+  own mail — including anything the account recovery path ever sends there.
+
+This is the same rule the site already keeps everywhere else: *say-so before it is seen*, and the
+provider-verified-address rule in `ExternalSignInService` exists precisely because an unverified
+claim on an address is not proof of holding it.
+
+**What to build.** Adding an address sends a confirmation to it and the row stays `IsValidated =
+false` until the link is followed. Unverified means: **may not be primary, may not be public**, and
+says so on the form rather than accepting and quietly ignoring the ticks. A resend button beside it,
+because a confirmation that never arrives is the commonest failure and the profile already offers
+resend for the account address. Existing rows are grandfathered as-is rather than mass-invalidated —
+telling everybody their address is suddenly unverified would be a support day for a problem nobody
+has yet — but a row that has never been validated cannot become primary or public from now on.
+
+**Then the tick.** A small check beside a verified address with a *Verified email* tooltip, and the
+same treatment wherever a fact about an account is proved rather than asserted: two-factor on,
+Apple or Microsoft linked, phone verified. One shared component, because four screens inventing four
+ticks is how they end up meaning four different things.
+
+### A2. ✅ FIXED 2026-09-12 — the profile did not say it had saved
+
+Ben: *"when I returned to my profile page, it didn't say that it was updated."* Adding an email
+succeeded and the screen said nothing. Whatever the enhancements below come to, **a save that
+reports nothing is the bug**: the person cannot tell the difference between "saved" and "silently
+refused", and this codebase has a standing rule that a refusal the UI discards is worse than no
+rule. Fix with the toast the rest of the site uses, naming what changed.
+
+---
+
+### B. Icons that say what somebody is
+
+Ben wants the user manager to show, at a glance: who is paying, who is verified, who is a personal
+account, who owns a ghost tour, who is an employee of one, and so on — with a popover for anybody
+who is several of those at once.
+
+**One correction, and it is small.** The site's icons are `BenIcon`, a sprite of the **Feather** set
+(575 symbols) that replaced `TelerikSvgIcon`; Bootstrap Icons is not loaded and switching sets
+wholesale would restyle every screen. But Ben's actual vocabulary is nearly all there already:
+
+| Ben asked for | Feather has |
+|---|---|
+| `person-fill-add` | `user-plus` |
+| `person-fill-check` | `user-check` |
+| `person-fill-x` | `user-x` |
+| `person-gear` / `person-fill-gear` | **nothing** — the one real gap |
+
+So: use the Feather names for the three that exist, and for `person-gear` add that one Bootstrap
+Icons symbol into our own sprite. The sprite is ours and a symbol is just a `<symbol>` element; one
+borrowed glyph is far cheaper than a second icon set, and it keeps every screen on one component.
+Replacing the eyeball with a person-and-gear on the Actions column is right — *view* is not what
+that button does, it opens the person's management view.
+
+**The badges themselves.** A column of small, consistent marks, each one a fact and not a guess:
+
+| Mark | Means |
+|---|---|
+| Personal account | Not a member of any organization |
+| Group member / manager / owner | Their highest `OrganizationMemberRole` |
+| Ghost tour owner / employee | The above, where the org is `OrganizationKind.GhostWalkingTour` |
+| Event organizer / employee | The same, for `PublicEventProvider` |
+| Venue | `HauntedProperty` |
+| Verified | Account address confirmed, and (per A) that means proved |
+| Paying | An **Active** subscription right now, on their own account or an org they own |
+| Two-factor | On |
+| Apple / Microsoft | An external login is linked |
+
+**Colour carries one meaning only: green is money in.** Ben's instinct — *"when a person is paying
+money currently, maybe we color the icon green vs base"* — is right, and it works precisely because
+nothing else is coloured. The moment a second thing is green the column stops answering the question
+it exists for. Everything else is the base weight.
+
+**The popover is the deliverable, not the badges.** Most people are one thing; some are five, and a
+row cannot show five without becoming unreadable. So a reusable component in the library — Ben asked
+for it in the library and that is right, because the same "who is this person, everywhere" answer is
+wanted on the org member list, on a case's contacts and on a booking's lead guest. It lists every
+position: the organization, the role, whether they own it, whether they are staff, whether they are
+merely an attendee, and since when. One query behind it, one component in front of it.
+
+**Look.** Ben: *"the site should pop and sizzle."* The floor is the tour page; the badges are small,
+quiet and consistent, and the popover is where the richness goes. A grid row that sizzles is a grid
+row nobody can scan.
+
+---
+
+### C. What we can honestly say about where people spend their time
+
+Ben: *"are we able to determine how long they were on the site and where they spent most of their
+time? If they looked at any ads, groups, events, tours, etc and how many times which ones."*
+
+**Partly, and the honest answer differs sharply by question.**
+
+| Question | Can we answer it today? |
+|---|---|
+| How many times somebody signed in, and when they last did | **Yes, now.** `SignInEvent` has every row already. This is a query, not a feature. |
+| Which method they used — password, Apple, Microsoft | **Yes, now.** `Method` is on the same row. |
+| Which pages they opened, and how often | **Not today.** Nothing records a page view. Adding it is ordinary work: one row per view, or a rolled-up counter per person per surface per day. |
+| How long they were on the site | **Only ever an estimate.** A browser does not tell a server when somebody wanders off; the usual trick is the gap between requests with a session cut-off, and it is wrong for anybody who reads one long page. Report it as "active minutes" with the definition written on the screen, or not at all. |
+| Which ads, groups, events and tours they looked at, and how many times | **Not today, and this is the one with a cost.** It means recording, per person, what they read — which is a different kind of data from anything the site currently keeps about members, let alone about signed-out visitors. |
+
+**The privacy line, and it should be drawn before anything is built.** This site's whole posture is
+that it holds less than it could: pseudonyms on public case pages, two keys before a member's photo
+reaches a client, addresses withheld for private residences. A per-person reading history is the
+first thing that would cut against that, and it would sit in the same database as people's home
+addresses.
+
+The recommendation is therefore: **count, do not follow.** Aggregate counters — how many views this
+tour had, what hour of day sign-ins cluster in, how the sections compare — answer every question Ben
+actually named as a reason (*"it is just to determine where to focus development time"*) and none of
+them need a per-person trail. Where a per-person number is genuinely wanted, keep it to the ones
+already kept for another reason: their own bookings, their own sessions, their own sign-ins.
+
+If a per-person trail is later wanted anyway, it needs: a retention window, a line in `/privacy`, an
+exclusion for signed-out visitors, and it must be in what an account deletion removes.
+
+### D. Charts on the manage-user page
+
+Ben wants cards above or below the grid: when people sign in, where they spend time, how the
+sections compare — group, iPhone, iPad, organization event, ghost tour, ads, maps.
+
+**`ApexChart.razor` already exists and already themes to the site**, including re-reading the
+palette when the theme changes, so a chart is a component call rather than a project. And
+`AdminStatsController` already answers the dashboard's numbers, which is where these belong beside.
+
+Buildable **immediately**, from `SignInEvent` alone:
+
+- Sign-ins by hour of day, averaged — the "when do people actually turn up" chart, which is the one
+  Ben named first and the one that tells a deployment window.
+- Sign-ins by day, with failures alongside successes; a spike in failures is an incident.
+- Method split — password against Apple against Microsoft — which is the number that says whether
+  Sign in with Apple was worth the fortnight it cost.
+- New accounts by week, against sign-ins, which is retention in the only form we can currently prove.
+
+Buildable **after C's counters exist**: section comparison, per-surface time, ad and tour view
+counts. Not before, and the cards should not be drawn with placeholder data in the meantime — a
+chart of nothing looks like a chart of zero.
+
+---
+
+### Suggested order
+
+| Slice | Why it goes here |
+|---|---|
+| **1. Verify a new email; refuse primary and public until it is** | It is the defect, and it is small |
+| **2. The saved-toast on the profile** | Same screen, same afternoon |
+| **3. Verified ticks, one shared component** | Reads what slice 1 now writes |
+| **4. The badge column and the positions popover** | The visible half, and the popover is reusable straight away |
+| **5. Sign-in charts on `/admin/users`** | Pure query over data already held |
+| **6. Aggregate view counters** | Needs the privacy decision first |
+| **7. Per-surface time, if still wanted** | Needs 6, and an honest definition of "time" |
+
+Slices 1 to 5 are all reading or writing things the schema already has. Slice 6 is the first one
+that changes what the site knows about people, and it should be a separate decision with its own
+sentence in `/privacy`.
+
+## 238. Telling the venue somebody is asking: reservation alerts, a digest, and the staff room (item 235 follow-on — open, doable now)
+
+Ben, 2026-09-12, while phase 2.4 was being built:
+
+> Add future enhancement where we can send out notices to event organizers with summaries of who
+> is confirmed, any new reservations to contact with a link for them to log in and get the contact
+> information for the attendee and also ability to add this to the organizer or employee internal
+> messages. This might be triggered by someone signing up to reserve room or seat to give employee
+> notice new people are requesting reservation for "X".
+
+**Why it matters more than it sounds.** Everything item 235 built so far is pull: a request lands
+in a queue and waits for somebody to open the board. The bell rows added in phase 2.3 help a person
+who is already on the site. Nobody is *told*. A venue that checks on Monday has left a guest waiting
+since Friday, and a guest who waits three days books somewhere else — so the one number this
+feature moves is how fast a request is answered.
+
+### A. The alert, when somebody asks
+
+Triggered by a request arriving (the guest's own door, the umbrella RSVP, or a confirmed email
+invitation), to every member of the venue who may decide bookings.
+
+- **Say what is being asked for, not that something happened.** "A party of 4 has asked for the
+  Blue Room, Fri–Sat" is actionable; "you have a new notification" is not.
+- **Never carry the guest's contact details.** The letter links to the booking and the person signs
+  in to see who it is. Ben asked for exactly this — *"a link for them to log in and get the contact
+  information"* — and it is also the only version that survives a forwarded email.
+- **Batch, do not flood.** A weekend that sells out in an hour must not send forty letters. One
+  immediate letter, then a rolling window (fifteen minutes is a sensible first guess) that collapses
+  everything else into one "and 12 more".
+- **Per-person opt-out**, because the busiest venue is the one most likely to want only the digest.
+
+### B. The digest
+
+A scheduled summary per event, not per site: who is confirmed, who is still waiting and for how
+long, what is left in each room or seat, and anything undecided inside the booking deadline.
+
+- **Cadence is the venue's**, and the useful default is daily while an event is inside its booking
+  window and weekly outside it. A digest for an event nobody has asked about should not be sent at
+  all — an empty letter every morning is how people learn to filter you.
+- **The oldest undecided request is the headline.** That is the number a venue can act on, and it
+  is the one the bell already computes.
+- Reuses the existing job scheduling; nothing new is needed to run it.
+
+### C. Into the staff room
+
+Ben's *"ability to add this to the organizer or employee internal messages"*. The site already has
+organization messages, so this is a delivery target rather than a new feature: the same alert
+written into the group's own thread so a venue can discuss it where they discuss everything else,
+and so a member with no email still sees it.
+
+- Worth a **thread per event** rather than one per booking, or a busy weekend buries every other
+  conversation the group is having.
+
+### What has to be decided first
+
+- **Which permission receives them.** Today deciding a booking takes the settings key, which is
+  billing-level; phase 5 introduces the `Events` area and per-event staff, and that is the honest
+  audience for this. Building it before phase 5 means sending a venue's bookings to whoever can see
+  its bank details, which is broader than it should be. **So this follows phase 5, not phase 2.**
+- Whether the digest is per event or per venue when a venue runs several at once.
+- Whether an alert should ever go to a non-member (a hired door manager), which is the same
+  question phase 5 asks about non-member staff.
+
+
+## 239. The mail outbox: every letter recorded, retried, and answerable (PLATFORM — 239a SHIPPED 2026-09-12; 239b open)
+
+Ben, 2026-09-12:
+
+> Should we create an email db table and a task to send them so we can timestamp when they are
+> created and when they are sent or if they have been sent. basically in order to verify all
+> e-mails generated get sent and if it doesn't send on the first try it will try to send it on the
+> next try.
+
+**Yes.** This is the transactional-outbox pattern and the site has already been bitten by not
+having it. `AdminMailDiagnosticsController`'s own doc comment records the incident: *"Ben signed up
+on 2026-08-31, received nothing, and there was no way to find out why: the sender swallowed its own
+failure, and the one log line that recorded it was a Warning, below the database sink's Error
+threshold. So the failure left no trace at all."* The diagnostics screen answers "can this machine
+send **right now**"; nothing answers "did **that** letter go, and if not, why, and will it be tried
+again". Today the answer to the second question is always no — every one of the twenty call sites
+catches, logs at Warning, and moves on.
+
+### Why it is cheap: the seam already exists
+
+`IEmailService` (`Ben.Data.Common/Interfaces/IEmailService.cs`) is one interface with one real
+implementation (`SmtpEmailService`) and one method that matters (`SendAsync(EmailMessage)`; the
+three-argument overload defaults into it). So the outbox is a **decorator**, not a rewrite:
+
+- `OutboxEmailService : IEmailService` — writes a row and returns. Registered as `IEmailService`.
+- `SmtpEmailService` stays, registered as itself, used only by the sender job and by
+  `AdminMailDiagnosticsController` (which must keep sending immediately and surfacing the raw
+  exception — a diagnostic that queues is not a diagnostic).
+- `MailSenderJob : IScheduledJob` beside `EventCreditExpiryJob`, claiming and sending.
+
+All twenty callers — Identity's own password and confirmation mail, the tour mailer, the event
+mailer, the client status mailer, the reminder job, the invite doors — are covered without being
+edited.
+
+### The table
+
+`OutboxEmail`: Id, To, Subject, HtmlBody, ReplyTo, Attachments (JSON of name/type/bytes, or a
+child table), **Kind** (a short string like `event-booking-confirmed` so a screen can group and a
+retention rule can differ), correlation ids (OrganizationId?, AppUserId?, a free `SubjectRef`),
+`CreatedUtc`, `Attempts`, `NextAttemptUtc`, `ClaimedUtc`/`ClaimedBy`, **`AcceptedBySmtpUtc`**,
+`FailedUtc`, `LastError`, `BodyScrubbedUtc`. Indexes: `(NextAttemptUtc) WHERE AcceptedBySmtpUtc IS
+NULL AND FailedUtc IS NULL` for the job's only query, and `(CreatedUtc)` for the screen.
+
+### Five things worth deciding, that the one-line ask does not settle
+
+1. **"Sent" must mean "the SMTP server accepted it", not "it arrived."** Naming the column
+   `AcceptedBySmtpUtc` rather than `SentUtc` is the whole difference between an honest screen and
+   one that claims delivery it cannot know. Real delivery needs bounce webhooks from a provider we
+   do not have; that is a later item, and the column name should not pretend otherwise.
+2. **Transient and permanent failures are not the same.** A 5xx for a mailbox that does not exist
+   must not be retried six times; a socket timeout or a 4xx must. MailKit's `SmtpCommandException`
+   carries the status code. Without this split the queue fills with dead addresses and the screen
+   stops being read. Recommended backoff: 1 min, 5, 15, 60, 6 h, 24 h, then `Failed` — about
+   31 hours of trying — and straight to `Failed` on a permanent reply, with the reply text kept.
+3. **A stored body is personal data, and sometimes a credential.** A hosted-event confirmation
+   carries the pass QR inlined as base64; the token behind it is a working door credential. It is
+   already in `HostedEventPasses`, so the outbox adds no new *kind* of secret, but it does put it
+   in a second table and every backup. Recommended: **scrub the body and attachments after
+   acceptance + 30 days, keeping the metadata row for ever** (`BodyScrubbedUtc`), so "did it go"
+   is answerable a year later and "what did it say" for a month. Same shape as the media retention
+   job. Cap the stored body (say 256 KB) and record truncation rather than refusing the enqueue.
+4. **When mail is not configured, enqueue anyway.** Then the day SMTP is switched on, everything
+   queued goes out. This changes what several screens should say — item 235's invite result field
+   is literally called `Sent` and would become `Queued`, and the copyable-link fallbacks stay but
+   stop being the only record. Better semantics, but it is a wording change across the site.
+5. **A crash between "SMTP accepted" and "row marked" sends twice.** Claim-then-send-then-mark
+   makes that window small and one-sided: at worst a duplicate letter, never a lost one. That is
+   the right way round and should be said out loud in the class comment rather than discovered.
+
+### Two steps, because the second is the expensive half
+
+- **239a — the decorator.** `OutboxEmailService` writes through its own `DbContext`; the job sends.
+  Fixes the actual complaint: nothing is lost to a transient failure, every letter is visible, a
+  SuperAdmin can retry one or see why it died. Twenty call sites unchanged. **This is most of the
+  value for a fraction of the work.**
+- **239b — enqueue inside the caller's transaction.** 239a still has a hairline window: a booking
+  saves, the process dies, the letter was never enqueued. Closing it means the enqueue joins the
+  caller's `SaveChanges`, which means the mailers take the caller's `db` — `EventGuestMailer`
+  already does; several others do not. Worth doing for the letters where silence is expensive
+  (a confirmed booking, a password reset, an invitation), not for all twenty.
+
+### The screen
+
+Extend `AdminMailDiagnosticsController` and its page rather than building a second one: a list of
+recent letters with Kind, To, Created, Attempts, state and the last error; filters for Failed and
+Waiting; **Retry now** on one and on all failed; the existing "can this box send" probe stays at
+the top. This is the screen that would have answered the 2026-08-31 question in five seconds.
+
+### 239a SHIPPED, 2026-09-12
+
+Built as designed, with four things worth recording that the design did not predict.
+
+- **`OutboxEmailService` decorates `IEmailService`; `SmtpEmailService` is registered as itself.**
+  All twenty callers were covered without one being edited, as intended.
+- **The diagnostics controller was taking the interface**, so its test-send would have queued
+  instead of proving anything — the one endpoint whose whole purpose is to fail loudly. It now
+  takes the raw sender, and a source guard,
+  `EveryMailerGoesThroughTheOutboxTests`, names the only three files allowed to.
+- **That guard's first run accused `IdentityEmailSender`**, which mentions the sender in a comment
+  and correctly asks for the interface. Guards that read comments cry wolf, and somebody edits the
+  comment to satisfy them, so it strips comments first.
+- **`OrganizationPurgeCoverageTests` fired**, because the outbox carries an `OrganizationId`. The
+  answer was not to purge: a queued letter is not the group's property, and the most important
+  letter a purge can produce is the one telling somebody the group they belonged to is gone.
+  Deleting the rows would take that letter away at the moment it was most needed. The purge clears
+  the link and keeps the letter.
+- **`TierValidationShapeTests` fired** on the retry endpoints answering with a bare string, which
+  MVC serves as text/plain and every client here reads as JSON. They return a record now.
+- Migration `20260912182335_MailOutbox`, two tables, nothing dropped in `Up`, applied to
+  `IsHauntedDb_player`. 17 tests; the backoff table and the wiring were each proved to
+  discriminate. Suite 8,458 pass.
+
+### Sequencing — DECIDED by Ben, 2026-09-12: *"Yes, do that after merging Phase 1"*
+
+**239a and 239b run immediately after item 235 phase 1 merges, before phase 2 (the layout
+designer).** Not part of item 235, but three of its phases add letters (the decision letters
+exist; hold-lapsed and go/no-go land in phases 4 and 3; the digest in phase 8), and phase 1's
+slice D is editing `EventGuestMailer` right now, so mail cannot be touched until that merges.
+Doing it here means every letter item 235 adds from phase 3 onwards is born inside the outbox
+rather than retrofitted into it. Tests: `OutboxEmailServiceTests` (an unconfigured send still enqueues; a body over
+the cap is truncated and says so), `MailSenderJobTests` (transient retries with backoff, permanent
+fails at once, a claimed row is not claimed twice, running twice sends once),
+`MailRetentionTests` (a scrubbed row keeps its metadata), and a source guard
+`EveryMailerGoesThroughTheOutboxTests` (no class outside `SmtpEmailService`, the sender job and the
+diagnostics controller may take `SmtpEmailService` directly).
+
+
+## 240. Two branches parked with real work on them (HOUSEKEEPING — come back to both)
+
+Found on 2026-09-12 while clearing stale worktrees. Both worktrees are gone; **both branches are
+kept and pushed**, and neither is merged. Written down because a branch nobody has a note about is
+a branch nobody remembers, and one of these was only ever in a working directory.
+
+### A. `feature/equipment-make-category-filter` — Ben: *"save the equipment one and make a note to come back to it later"*
+
+Tip `62ce47e6`, pushed. **275 lines that had never been committed at all** — they were sitting
+uncommitted in a worktree and would have gone with it. Committed as an explicit WIP, and **never
+built or tested in that state**, so the first thing to do on picking it up is build it.
+
+What it does, from the diff:
+
+- **Every make stays listed in the picker, even when it has nothing in the chosen category.**
+  Dropping the empty ones hides exactly the make somebody needs the first time anybody registers,
+  say, a FLIR audio recorder — and typing "FLIR" back in is then refused as a probable duplicate,
+  which is a dead end with no way out of it. Labelling is the honest half: the choice stays, it
+  just stops looking like a promise of models underneath it.
+- Loading states on the make and model selects, so a select is never enabled while empty.
+- The empty case says **which** of the three things it is, because broken, still loading, and
+  genuinely nothing here otherwise render identically — and points at the input below that fixes it.
+- Files: `Equipment/MyEquipmentItemEditor.razor`, `Organization/Equipment/OrgEquipmentEditor.razor`,
+  `Help/Content/your-equipment.md`, and 66 lines of `Ben.Web.Playwright/Tests/EquipmentTests.cs`.
+
+**To finish:** build it, run `EquipmentTests` through `scripts/run-e2e.sh --filter EquipmentTests`,
+check the help wording against the shipped screens, then merge. It is self-contained and touches
+nothing item 235 touches.
+
+### B. `claude/xenodochial-pare-b58e81` — the dead stylesheet
+
+Tip `faf4046a`, one commit ahead of master: *"The stylesheet nothing ever loaded, and the three
+things it was hiding"*. Moves 54 lines out of `Ben.Web.Website/wwwroot/css/app.css` into scoped
+component CSS for `FeedPostCard`, `FeedText` and `MailRow` — rules that were never loaded, and so
+three components were rendering without styling somebody had written for them.
+
+**One thing to fix before merging:** it adds `README-dead-app-css-scoped.md` and
+`README-remaining-work-nine-phases.md` at the repository ROOT, which is no longer where those live
+— all 118 of them moved to `ProjectNotes/FeatureHistory/` on 2026-09-12. `git mv` both as part of
+the merge, or the root fills up again.
+
+
+## 241. The research document, next: a canvas you edit in the browser (PRODUCT — being built as a separate WASM project)
+
+**Ben, 2026-09-15:** research is being built as a new, separate WASM project. When it is finished and tested it is imported
+into `Ben.slnx`; then it is shaped to fit, and the API is shaped to match it. Nothing here is built ahead of that import.
+
+`feature/beta-feedback-1` ships research pages as a Notion-style stack of blocks (text, picture, file, link card, map), with
+private drafts, Publish, and a Files & links rail, built in `Ben.Web.Website.Library/Kit/Blocks`. Ben, 2026-09-14, during
+the UI test pass: that stack is the foundation, not what the research document is meant to be.
+
+### What it is meant to be — Ben: *"Keep it like a combination of Notion, Canva, OneNote and Obsidian's Canvas. This is what the Research tool document is supposed to be."*
+
+- **Notion** — what ships now: blocks you type into, move and turn into other kinds.
+- **Canva** — the page is designed: layout, sizes, colour, pictures placed with care rather than stacked.
+- **OneNote** — put anything anywhere: click an empty spot and start writing there.
+- **Obsidian Canvas** — cards on a board you pan and zoom, joined by arrows and gathered into groups: the owners, the deed,
+  the cemetery and the newspaper story, with lines saying how they connect.
+- The **table block** is still owed (Ben asked to be reminded; memory `project_block_editor_followups`).
+
+### Where it runs — Ben: *"WASM sounds like is where it should be. The end user only needs to get data from the server when needed. It doesn't need anything but when it is saved... that is when the server is really needed. The rest can be stored in local storage until saved."*
+
+Today the editor is Blazor Server: every toolbar press, menu, drag and keystroke-driven change is a round trip over the
+circuit. It measured 3–5 ms on localhost, but on a real connection the lag shows — the test pass found that clicking B and
+typing at once loses the bold (4.5), because the tool waits for the server. So the next editor is **Blazor WebAssembly**
+(the video editor already has a WASM host, `Ben.Wasm.Video`, so C# and Telerik stay):
+
+- **Load once**: the page, its draft and its attachments come from the existing research API.
+- **Edit in the browser**: typing, formatting, moving, arranging cards, drawing arrows — no server involved.
+- **Keep the working copy in browser storage** until it is saved, so a refresh, a closed laptop or a dropped connection
+  loses nothing.
+- **The server when it matters**: save a draft, publish, upload a file, fetch a link's preview. The API's
+  `BaseRevision`/409 already tells a tab that somebody else saved first.
+
+### To settle before building
+
+1. **A local copy older than the server's** — the other tab or person saved since. Show both and let the person choose, or
+   merge block by block?
+2. **Shared computers** — browser storage outlives sign-out. Key it by person, clear it on sign-out, and cap how long an
+   unsaved copy is kept.
+3. **Files cannot wait in browser storage** — pictures and files upload the moment they are added (as now); only the
+   document waits.
+4. **Phones** — a free canvas on a 375px screen: pan/zoom with a finger, or the stack as the phone's view of the same
+   document?
+5. **Storage shape** — card positions, sizes, groups and arrows beside today's block list (`BlockDocument` version 2), with
+   the stack kept as the reading and print view, and old version-1 pages opening unchanged.
+6. **The reader** — does a published canvas read as a canvas (pan/zoom) for members, or flatten to the stack?
+
+---
+
+## 242. EVP analysis that can tell a voice from noise, and says how sure it is (FUTURE — business-critical; parked 2026-09-15 for Claude usage)
+
+Ben, 2026-09-15: a small AI service that processes audio when someone analyses it for EVPs, then (separately, later) one
+for long video feeds. His outline: spectrogram analysis (voices leave formants even when buried), anomaly detection over
+the quiet parts of a room, and an open-source speech model (Whisper) to decide whether a flagged burst is a spoken word.
+Ben: *"I don't want to steal claude, I just want claude to teach my AI to be better."* Parked because the work would
+likely exceed his Claude usage allowance — **"invaluable for my business"**, so it comes back.
+
+### Already built
+- `Ben.Data.WebApi/Services/Audio/EvpDetector.cs` — voice-band energy above an adaptive local noise floor; candidates land
+  Pending for a person to accept or dismiss; manual Scan only. `EvpDetectorTests` is its accuracy gate (synthetic fixture).
+- Spectrograms in the audio player (WaveSurfer workers).
+- Local model hosting: `OnnxNsfwScreener` (ONNX Runtime 1.29, model fetched by script, never committed, degrades loudly).
+
+### The design that came out of the conversation
+1. **A speech detector decides "is it speech", not Whisper** — pretrained Silero VAD (ONNX) on each candidate.
+2. **Whisper only suggests words, and only on the flagged 1–3 s clips** — run locally (whisper.cpp / Whisper.net, MIT) so
+   private-residence audio never leaves the server; show its no-speech probability and word confidence; hide weak ones.
+   **Whisper invents fluent phrases from pure noise** — the single biggest risk to credibility.
+3. **Controls** — the same pipeline over plain room tone and reversed audio; its false-word rate is shown, not hidden.
+4. **Blind review** — the investigator writes what they hear before the suggestion is revealed (priming makes people hear it).
+5. **Cleaned listen** (RNNoise / DeepFilterNet) offered beside the original, labelled processed — denoisers can create
+   speech-like artefacts.
+6. Runs in its own process (≈1 GB model memory stays out of the IIS app pool), started by a person like Scan.
+
+### How "Claude teaches the AI" — honestly
+- Claude cannot hear audio, and its guesses at spectrogram images must never become labels.
+- **Known-truth training material:** real room tone, tape hiss and static from Ben's recorders, with public speech
+  (e.g. LibriSpeech) mixed in at known times and loudness down to barely audible, plus non-speech impostors (knocks, steps,
+  pipes, dogs, handling). Every example carries its true answer.
+- Claude writes the generator, the fine-tuning pipeline for a small pretrained detector (not a CNN from scratch — no dataset
+  of confirmed EVPs can exist), the scoring harness (catch rate, false-speech rate on noise, quietest voice caught), and the
+  server integration.
+- **Investigators keep teaching it:** every Accept/Dismiss is a real-tape label that later re-tunes scoring (as FeedLearning
+  re-fits the feed).
+- Anthropic's terms restrict training models that compete with Claude on its outputs; a narrow audio detector built with
+  code Claude wrote is ordinary software work, but Ben should read the terms himself for a commercial product.
+
+### First step when it resumes (cheap, decides the rest)
+A throwaway console measurement, outside the product: Silero VAD and Whisper tiny/base/small over current detector candidates
+on real recordings, and over plain room tone as a control — how often each "hears words" in the control, and CPU time per
+clip on a Windows-class server. **Needs from Ben:** real recordings, including plain room tone and hiss from his recorders.
+
+### Video (separate item when it comes)
+MCP is a protocol for connecting tools to an assistant, not a model. Long-feed analysis is motion detection / background
+subtraction plus a small vision model; MCP could let an assistant use its results.

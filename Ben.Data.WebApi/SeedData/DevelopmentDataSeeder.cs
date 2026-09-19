@@ -488,6 +488,13 @@ internal static class DevelopmentDataSeeder
             }
         }
 
+        // Outside the block above, which runs only when the case is first made: a database seeded
+        // before boards existed gets its board too.
+        if (tgh is not null
+            && await db.Cases.Where(c => c.OrganizationId == tgh.Id && c.StreetAddress1 == "4512 Belmont Blvd")
+                             .Select(c => (Guid?)c.Id).FirstOrDefaultAsync() is { } belmontId)
+            await SeedResearchBoardAsync(db, belmontId, sarah, now);
+
         // Both organizations are created above if missing, so this is defensive rather than
         // expected — but the compiler is right that FirstOrDefaultAsync can return null, and a seed
         // that throws takes the whole API startup down with it.
@@ -859,8 +866,9 @@ internal static class DevelopmentDataSeeder
             Title = "Bell Witch Cave — Public Night Walk",
             Description = "<p>An open evening at the cave. Bring a torch; we supply the recorders.</p>",
             PlaceId = placeId,
-            StartDateTime = now.AddDays(14).Date.AddHours(20),
-            EndDateTime   = now.AddDays(14).Date.AddHours(23),
+            StartDateTime = TennesseeTimeToUtc(now.AddDays(14).Date.AddHours(20)),
+            EndDateTime   = TennesseeTimeToUtc(now.AddDays(14).Date.AddHours(23)),
+            TimeZoneId    = TennesseeZone,
             IsPublic = true,
             UrlName = $"{now.AddDays(14):yyyy-MM-dd}-bell-witch-cave-public-night-walk",
             AttendeeCapacity = 20,
@@ -883,8 +891,9 @@ internal static class DevelopmentDataSeeder
             // No PlaceId: an event may name an organization address instead, and VisibleEvents
             // allows a null Place. The nearby projection falls back to the address for coordinates.
             OrganizationAddressId = npsAddress?.Id,
-            StartDateTime = now.AddDays(28).Date.AddHours(19),
-            EndDateTime   = now.AddDays(28).Date.AddHours(21),
+            StartDateTime = TennesseeTimeToUtc(now.AddDays(28).Date.AddHours(19)),
+            EndDateTime   = TennesseeTimeToUtc(now.AddDays(28).Date.AddHours(21)),
+            TimeZoneId    = TennesseeZone,
             IsPublic = true,
             UrlName = $"{now.AddDays(28):yyyy-MM-dd}-open-meeting-what-we-found-this-year",
             DateCreated = now, CreatedByAppUserId = emma.Id,
@@ -1113,6 +1122,16 @@ internal static class DevelopmentDataSeeder
         Console.WriteLine($"[DevDataSeeder] Seeded case: {org.Name} #{year}-{number:D3} ({city}, {state})");
     }
 
+    /// <summary>Where the seeded public events happen. Named, so their times read in the place's own clock.</summary>
+    /// <remarks>
+    /// The two public events used to be seeded with no zone, and an event with none reads in UTC: a Tennessee night walk
+    /// at eight showed as "08:00 PM UTC" on What's on (UI test pass, 2026-09-14). The hours are the place's; stored as UTC.
+    /// </remarks>
+    private const string TennesseeZone = "America/Chicago";
+
+    private static DateTime TennesseeTimeToUtc(DateTime placeTime) =>
+        TimeZoneInfo.ConvertTimeToUtc(DateTime.SpecifyKind(placeTime, DateTimeKind.Unspecified), TimeZoneInfo.FindSystemTimeZoneById(TennesseeZone));
+
     /// <summary>
     /// Ensures the owner is the org Owner and optionally adds an Admin and a Member membership.
     /// Safe to call on existing orgs — skips any memberships that already exist.
@@ -1218,5 +1237,135 @@ internal static class DevelopmentDataSeeder
             DateCreated = now, CreatedByAppUserId = creatorId,
         });
         await db.SaveChangesAsync();
+    }
+
+    /// <summary>The research board the seed puts on the Belmont case, published.</summary>
+    private static readonly Guid SeededBoardId = new("12000002-0000-0000-0000-000000000001");
+
+    /// <summary>
+    /// One published research board on the Belmont case: four joined cards and a note.
+    /// </summary>
+    /// <remarks>
+    /// <para>
+    /// Research is boards from 2026-09-16, and a fresh install with none shows an empty Research tab
+    /// — nothing for the help pictures, the product walk or the presentation to show. The block-editor
+    /// research page that used to be seeded here went with the block editor.
+    /// </para>
+    /// <para>
+    /// The cards are joined in a chain on purpose: that is what a side handle makes, and it is the
+    /// order presenting walks them in, so the seed exercises the feature rather than just filling a
+    /// tab. Written as the document JSON the editor itself writes — the seeder cannot reference
+    /// Ben.Canvas.Core (it is a WebAssembly-facing library, and the API does not take it), so the
+    /// shape here is pinned by CanvasSeedDocumentTests, which reads this board back with the real
+    /// reader and fails if the format moves.
+    /// </para>
+    /// </remarks>
+    private static async Task SeedResearchBoardAsync(BenDataContext db, Guid caseId, AppUser author, DateTime now)
+    {
+        if (await db.CanvasDocuments.AnyAsync(b => b.Id == SeededBoardId)) return;
+
+        await WriteResearchBoardAsync(db, caseId, author, now, ResearchBoardJson(caseId, now));
+    }
+
+    /// <summary>
+    /// The seeded board's document, as the canvas editor's own format.
+    /// </summary>
+    /// <remarks>
+    /// Built as objects and serialised, not written out as text: JSON with braces in it inside an
+    /// interpolated raw string is a puzzle, and a seed nobody can read is a seed nobody corrects.
+    /// Separated from the write so <c>SeededBoardTests</c> can read it back with the editor's own
+    /// reader — this project cannot reference Ben.Canvas.Core, so nothing here can check its own work.
+    /// </remarks>
+    internal static string ResearchBoardJson(Guid caseId, DateTime now)
+    {
+        static object Card(string id, double x, string title, string description) => new
+        {
+            id,
+            type = "Card",
+            x,
+            y = 0,
+            width = 280,
+            height = 200,
+            z = (int)(x / 344) + 1,
+            data = new
+            {
+                kind = "card",
+                templateId = "evidence",
+                title,
+                fields = new Dictionary<string, string> { ["description"] = description },
+            },
+        };
+
+        static object Joins(string from, string to) => new
+        {
+            id = Guid.NewGuid(),
+            fromNodeId = from,
+            toNodeId = to,
+            fromSide = "Right",
+            toSide = "Left",
+            arrow = "End",
+        };
+
+        const string a = "20000001-0000-0000-0000-000000000001";
+        const string b = "20000001-0000-0000-0000-000000000002";
+        const string c = "20000001-0000-0000-0000-000000000003";
+        const string d = "20000001-0000-0000-0000-000000000004";
+
+        var document = new
+        {
+            schemaVersion = 1,
+            id = SeededBoardId,
+            title = "Previous owners and where they are buried",
+            createdAtUtc = now.AddDays(-6),
+            savedAtUtc = now.AddDays(-5),
+            caseId,
+            revision = 2,
+            nextZ = 6,
+            nodes = new object[]
+            {
+                Card(a, 0, "Built 1924", "County deed index: four owners since the house was built."),
+                Card(b, 344, "Sold 1951", "Deed book 1162, page 88. The second owners kept it thirty-one years."),
+                Card(c, 688, "Obituary, March 1982", "Names both owners. Burial at Mount Olivet."),
+                Card(d, 1032, "Mount Olivet", "Both graves found, section 14. Photographs on the case files."),
+                new
+                {
+                    id = "20000001-0000-0000-0000-000000000005",
+                    type = "Text",
+                    x = 0d,
+                    y = 300,
+                    width = 620,
+                    height = 120,
+                    z = 5,
+                    data = new { kind = "text", text = "Nothing in the deeds explains the upstairs room. Ask the client who used it." },
+                },
+            },
+            edges = new object[] { Joins(a, b), Joins(b, c), Joins(c, d) },
+            groups = Array.Empty<object>(),
+        };
+
+        return System.Text.Json.JsonSerializer.Serialize(document, new System.Text.Json.JsonSerializerOptions
+        {
+            PropertyNamingPolicy = System.Text.Json.JsonNamingPolicy.CamelCase,
+        });
+    }
+
+    private static async Task WriteResearchBoardAsync(BenDataContext db, Guid caseId, AppUser author, DateTime now, string json)
+    {
+        db.CanvasDocuments.Add(new CanvasDocument
+        {
+            Id = SeededBoardId,
+            CaseId = caseId,
+            Name = "Previous owners and where they are buried",
+            DocumentJson = json,
+            PublishedJson = json,
+            Revision = 2,
+            PublishedRevision = 2,
+            PublishedAtUtc = now.AddDays(-5),
+            PublishedByAppUserId = author.Id,
+            DateCreated = now.AddDays(-6),
+            CreatedByAppUserId = author.Id,
+        });
+        await db.SaveChangesAsync();
+        Console.WriteLine("[DevDataSeeder] Seeded a published research board on the Belmont case.");
     }
 }

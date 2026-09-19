@@ -180,14 +180,21 @@ public sealed class PersonalOrganizationTests
         Assert.False(org.RunsPublicTours);
     }
 
-    // ── the group-shaped machinery is refused, not just hidden ───────────────
+    // ── what a personal organization may do is decided by its plan, not by being personal ──
 
     /// <summary>
-    /// A solo plan covers the person's own investigating and keeps their data private. A case is
-    /// somebody else's haunting taken on as client work, which is a group's business.
+    /// Ben, 2026-09-17: "if paid, they can make their work private. By default we should be able to
+    /// collect information as public for unpaid plan."
     /// </summary>
+    /// <remarks>
+    /// This replaces <c>A_personal_organization_may_not_open_a_case</c>, which asserted the opposite
+    /// on the strength of the 2026-08-31 sentence "a solo plan does not take client work". That gate
+    /// was keyed on <c>IsPersonal</c> — a fact about the record — and so refused the paid solo
+    /// subscriber the solo band is sold to, while letting an unpaid group of one keep everything
+    /// private. Opening a case is now nobody's special case; how public it is, is the plan's answer.
+    /// </remarks>
     [Fact]
-    public async Task A_personal_organization_may_not_open_a_case()
+    public async Task A_personal_organization_opens_cases_like_anybody_else()
     {
         var f = CreateFactory();
         await StartAsync(f, await AddUserAsync(f));
@@ -195,13 +202,75 @@ public sealed class PersonalOrganizationTests
         await using var db = await f.CreateDbContextAsync();
         var org = await db.Organizations.SingleAsync();
 
-        var why = PersonalOrganizations.WhyNotInAPersonalOrganization(
-            org, PersonalOrganizations.PersonalAction.CreateCase);
+        // Nothing about being personal refuses anything any more. The only rule left here is
+        // whether it may appear where groups are presented, which it may not.
+        Assert.True(org.IsPersonal);
+        Assert.False(await db.Organizations.Where(PersonalOrganizations.Discoverable)
+                                          .AnyAsync(o => o.Id == org.Id));
+    }
 
-        Assert.NotNull(why);
-        // Says why rather than only no — "not on your plan" would send somebody to buy something
-        // that would not help them.
-        Assert.Contains("does not take client work", why);
+    /// <summary>
+    /// A person with no group at all can get one in a single call, and what they then record at a
+    /// public place is public — the whole free lane, end to end.
+    /// </summary>
+    /// <remarks>
+    /// The endpoint had existed since the solo tier shipped and had <b>no caller anywhere</b> until
+    /// 2026-09-17: a person with no group could record field sessions from the phone and nothing
+    /// else, because every other feature is org-scoped and they had no org. This asserts the door
+    /// rather than the plumbing behind it — that somebody who belongs to nothing ends up belonging
+    /// to exactly one thing, owning it, and inside the free lane's rule.
+    /// </remarks>
+    [Fact]
+    public async Task Somebody_in_no_group_gets_one_of_their_own_and_it_is_public_by_default()
+    {
+        var f = CreateFactory();
+        var userId = await AddUserAsync(f);
+
+        await using (var before = await f.CreateDbContextAsync())
+        {
+            Assert.Empty(before.OrganizationUserMemberships);
+        }
+
+        var plan = await StartAsync(f, userId);
+
+        await using var db = await f.CreateDbContextAsync();
+
+        var membership = Assert.Single(db.OrganizationUserMemberships);
+        Assert.Equal(plan.OrganizationId, membership.OrganizationId);
+        Assert.Equal(userId, membership.AppUserId);
+        Assert.Equal(OrganizationMemberRole.Owner, membership.Role);
+
+        // And straight into the free lane: nothing was paid, so a landmark's findings are shared.
+        Assert.True(await PaidPlan.PublicByDefaultAsync(db, plan.OrganizationId, default));
+        Assert.NotNull(await PaidPlan.WhyCannotNarrowInvestigationAsync(db, plan.OrganizationId, default));
+    }
+
+    /// <summary>
+    /// A personal organization that pays nothing is public by default; one that pays is not. The
+    /// question is the subscription, and the answer is the same one storage and the archive use.
+    /// </summary>
+    [Fact]
+    public async Task What_a_personal_organization_may_keep_private_is_its_plans_answer()
+    {
+        var f = CreateFactory();
+        var plan = await StartAsync(f, await AddUserAsync(f));
+
+        await using var db = await f.CreateDbContextAsync();
+
+        Assert.True(await PaidPlan.PublicByDefaultAsync(db, plan.OrganizationId, default));
+        Assert.NotNull(await PaidPlan.WhyCannotKeepCasePrivateAsync(db, plan.OrganizationId, default));
+
+        db.OrganizationSubscriptions.Add(new Ben.Data.Source.Entities.OrganizationSubscription
+        {
+            Id = Guid.NewGuid(),
+            OrganizationId = plan.OrganizationId,
+            Status = Ben.Data.Common.Enums.SubscriptionStatus.Active,
+            DateCreated = DateTime.UtcNow,
+        });
+        await db.SaveChangesAsync();
+
+        Assert.False(await PaidPlan.PublicByDefaultAsync(db, plan.OrganizationId, default));
+        Assert.Null(await PaidPlan.WhyCannotKeepCasePrivateAsync(db, plan.OrganizationId, default));
     }
 
     /// <summary>
@@ -221,35 +290,34 @@ public sealed class PersonalOrganizationTests
         Assert.Contains("part of a paid plan", why);
     }
 
+    /// <summary>
+    /// A personal organization's visits at a landmark are public ones — because it pays nothing,
+    /// not because it is personal. An unpaid ordinary group gets exactly the same answer, which is
+    /// the whole point of moving the rule.
+    /// </summary>
     [Fact]
-    public async Task A_personal_organizations_investigations_are_public_ones()
+    public async Task An_unpaid_groups_investigations_are_public_ones_personal_or_not()
     {
         var f = CreateFactory();
-        await StartAsync(f, await AddUserAsync(f));
+        var plan = await StartAsync(f, await AddUserAsync(f));
+
+        var ordinaryId = Guid.NewGuid();
+        await using (var seed = await f.CreateDbContextAsync())
+        {
+            seed.Organizations.Add(new Organization
+            {
+                Id = ordinaryId, Name = "Paranormal365", UrlName = "paranormal365",
+                IsPersonal = false, DateCreated = DateTime.UtcNow,
+            });
+            await seed.SaveChangesAsync();
+        }
 
         await using var db = await f.CreateDbContextAsync();
-        var org = await db.Organizations.SingleAsync();
 
-        Assert.NotNull(PersonalOrganizations.WhyNotInAPersonalOrganization(
-            org, PersonalOrganizations.PersonalAction.CreatePrivateInvestigation));
-    }
-
-    /// <summary>
-    /// None of these rules touch an ordinary group. The flag is the only thing that turns them on,
-    /// and it is false everywhere it was not deliberately set.
-    /// </summary>
-    [Theory]
-    [InlineData(PersonalOrganizations.PersonalAction.CreateCase)]
-    [InlineData(PersonalOrganizations.PersonalAction.CreatePrivateInvestigation)]
-    public void An_ordinary_group_is_refused_none_of_them(PersonalOrganizations.PersonalAction action)
-    {
-        var group = new Organization
+        foreach (var orgId in new[] { plan.OrganizationId, ordinaryId })
         {
-            Id = Guid.NewGuid(), Name = "Paranormal365", UrlName = "paranormal365",
-            IsPersonal = false,
-        };
-
-        Assert.Null(PersonalOrganizations.WhyNotInAPersonalOrganization(group, action));
+            Assert.NotNull(await PaidPlan.WhyCannotNarrowInvestigationAsync(db, orgId, default));
+        }
     }
 
     // ── unlisted: a real group that has chosen not to be found ───────────────

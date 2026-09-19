@@ -47,6 +47,16 @@ public sealed class OrganizationCheckoutController : OrgCmsControllerBase
         _configuration = configuration;
     }
 
+    /// <summary>What a plan checkout says while plans are off sale.</summary>
+    public const string PlansNotOnSale = "Plans aren't on sale at the moment.";
+
+    /// <summary>What a seat checkout says while plans are off sale.</summary>
+    public const string SeatsNotOnSale = "Seats aren't on sale at the moment.";
+
+    /// <summary>The <see cref="Services.SiteSettingKeys.PlanPurchasesEnabled"/> switch; on when unset.</summary>
+    private static Task<bool> PlanPurchasesOpenAsync(BenDataContext db, CancellationToken ct) =>
+        Services.SiteSettingsService.GetBoolAsync(db, Services.SiteSettingKeys.PlanPurchasesEnabled, whenUnset: true, ct);
+
     [HttpPost]
     public async Task<ActionResult<StartCheckoutResponse>> Start(
         Guid organizationId, [FromBody] StartCheckoutRequest request, CancellationToken ct)
@@ -64,17 +74,24 @@ public sealed class OrganizationCheckoutController : OrgCmsControllerBase
             .FirstOrDefaultAsync(o => o.Id == organizationId, ct);
         if (org is null) return NotFound();
 
+        // 2026-09-14: SuperAdmin can take plans off sale. Neutral wording — nothing about why, and nothing that
+        // reads as the group's fault (PaidPlan's rule for refusals a customer sees).
+        if (!await PlanPurchasesOpenAsync(db, ct))
+            return BadRequest(PlansNotOnSale);
+
         // ── price it, exactly as the quote did ───────────────────────────────
         var tiers = await db.SubscriptionTiers.AsNoTracking().Include(t => t.Prices).ToListAsync(ct);
         if (SubscriptionTierResolver.Validate(tiers) is not null)
             return Problem("Pricing is temporarily unavailable.", statusCode: 503);
 
-        var members = await db.OrganizationUserMemberships
-            .CountAsync(m => m.OrganizationId == organizationId && m.IsActive, ct);
-        var tier = SubscriptionTierResolver.Resolve(tiers, members, org.Kind);
-
-        if (SubscriptionPricing.PriceFor(tier, request.Interval) is not { } listPrice)
-            return BadRequest($"\"{tier.Name}\" is not offered at that billing cadence.");
+        // Members for a group, tours for a business (item 233) — counted in the one place the
+        // quote counts them, so what was shown is what is charged.
+        if (await BillableUnits.PriceAsync(db, tiers, organizationId, org.Kind, request.Interval, ct)
+            is not { } priced)
+            return BadRequest("That plan is not offered at that billing cadence.");
+        var tier = priced.Tier;
+        var members = priced.Members;
+        var listPrice = priced.ListPrice;
 
         // ── A group is never free (Ben, 2026-09-05) ──────────────────────────
         // "An individual can be free... a group cannot." A band priced at zero was still sellable
@@ -93,6 +110,29 @@ public sealed class OrganizationCheckoutController : OrgCmsControllerBase
 
         var sub = await db.OrganizationSubscriptions.AsNoTracking()
             .FirstOrDefaultAsync(s => s.OrganizationId == organizationId, ct);
+
+        // ALREADY PAID THROUGH, and not changing cadence (2026-09-17 audit).
+        //
+        // The seat path a couple of hundred lines down has always asked this; the group path
+        // never did. Fulfilment dates a checkout period from NOW — unlike a renewal, a session
+        // carries no period start — and ReplaceSnapshotAsync drops the snapshot of the period
+        // they are standing in. So a group paid through December who pressed "Renew" in September
+        // paid a second full price and got a period running from September: two charges, two
+        // receipts, and three months of already-paid service quietly gone. A double-click or two
+        // open tabs did the same thing.
+        //
+        // Only a SAME-cadence purchase is refused. Changing monthly to yearly is a deliberate
+        // change of plan and still goes through; refusing that would break the button the billing
+        // page offers for it.
+        if (sub is { Status: SubscriptionStatus.Active, CurrentPeriodEnd: { } paidThrough }
+            && paidThrough > DateTime.UtcNow
+            && sub.Interval == request.Interval)
+        {
+            return BadRequest(
+                $"This group is already paid through {paidThrough:MM/dd/yyyy}, so there is nothing "
+                + "to buy yet. It renews on its own; changing to a different billing cadence is "
+                + "the one thing you can do before then.");
+        }
 
         // The coupon is validated NOW so a bad code refuses before anyone reaches a card form —
         // but redeemed only at fulfillment, where the money is recorded, like the manual path.
@@ -126,7 +166,7 @@ public sealed class OrganizationCheckoutController : OrgCmsControllerBase
             organizationId, tier.Id, request.Interval, members,
             payable, taxRate, tax, userId.Value,
             string.IsNullOrWhiteSpace(request.CouponCode) ? null : request.CouponCode.Trim(),
-            listPrice, discount);
+            listPrice, discount, TourCount: tier.IsBandedByMembers ? 0 : priced.Units);
 
         var baseUrl = (_configuration["AppBaseUrl"] ?? "").TrimEnd('/');
         // Back to the billing page either way: the person left it to pay, and landing them on
@@ -153,10 +193,92 @@ public sealed class OrganizationCheckoutController : OrgCmsControllerBase
         var handle = await _stripe.CreateCheckoutSessionAsync(new StripeCheckoutSpec(
             organizationId, org.Name, sub?.ProviderCustomerRef,
             payable, tax,
-            $"IsHaunted \"{tier.Name}\" — {members} members, billed {Cadence(request.Interval)}",
+            $"IsHaunted \"{tier.Name}\" — {BillableUnits.Describe(priced)}, billed {Cadence(request.Interval)}",
             SuccessUrl: $"{billingUrl}?checkout=success",
             CancelUrl:  $"{billingUrl}?checkout=cancelled",
             facts.ToMetadata()), ct);
+
+        return Ok(new StartCheckoutResponse(handle.SessionUrl, PaidWithoutCharge: false));
+    }
+
+    /// <summary>
+    /// Buying event credits — one credit, one event (item 235).
+    /// </summary>
+    /// <remarks>
+    /// <para><b>Not a subscription.</b> A credit is bought once, lasts a year, and is spent when an
+    /// event is published. There is no period to open, nothing to renew, and no tier involved — so
+    /// it takes its own path rather than being bent through the subscription machinery, and the
+    /// fulfilment side does the same.</para>
+    ///
+    /// <para><b>The settings key</b>, because this spends the group's money, and the same
+    /// permission opens the billing page where the receipt lands.</para>
+    ///
+    /// <para><b>No free path.</b> Unlike a subscription there is no coupon and no zero-priced
+    /// case: a credit either costs what it costs or it is not sold, and a zero-priced credit
+    /// would be a paid feature given away by a misconfigured setting.</para>
+    /// </remarks>
+    [HttpPost("event-credits")]
+    public async Task<ActionResult<StartCheckoutResponse>> StartEventCreditCheckout(
+        Guid organizationId, [FromQuery] int quantity, CancellationToken ct)
+    {
+        var userId = GetCurrentUserId();
+        if (userId is null) return Unauthorized();
+
+        if (!await IsCmsAuthorizedAsync(userId.Value, organizationId,
+                OrganizationSecurityTable.OrganizationSettings, OrganizationSecurityAction.Update, ct))
+            return Forbid();
+
+        var count = Math.Clamp(quantity <= 0 ? 1 : quantity, 1, Services.Events.EventCredits.MaximumPerPurchase);
+
+        await using var db = await DbFactory.CreateDbContextAsync(ct);
+        var org = await db.Organizations.AsNoTracking()
+            .FirstOrDefaultAsync(o => o.Id == organizationId, ct);
+        if (org is null) return NotFound();
+
+        var settings = HttpContext.RequestServices.GetRequiredService<Services.SiteSettingsService>();
+        if (!await settings.GetBoolAsync(Services.SiteSettingKeys.EventCreditsEnabled, whenUnset: true, ct))
+            return BadRequest("Event credits aren't on sale at the moment.");
+
+        var unit = await settings.GetDecimalAsync(
+            Services.SiteSettingKeys.EventCreditPriceUsd, Services.Events.EventCredits.DefaultPriceUsd, ct);
+
+        if (unit <= 0m)
+            return Problem("Event credits aren't priced yet.", statusCode: 503);
+
+        var listPrice = unit * count;
+        var (_, taxRate) = await TaxResolver.ForOrganizationAsync(db, organizationId, ct);
+        var tax = TaxResolver.TaxOn(listPrice, taxRate);
+
+        if (!_stripe.IsConfigured)
+            return Problem("Online payment isn't set up yet — contact us and we'll sort your group out directly.",
+                statusCode: 503);
+
+        var baseUrl = (_configuration["AppBaseUrl"] ?? "").TrimEnd('/');
+        var billingUrl = $"{baseUrl}/organizations/{organizationId}/billing";
+
+        var metadata = new Dictionary<string, string>
+        {
+            [StripeFulfillmentService.CheckoutFacts.Keys.Organization] = organizationId.ToString(),
+            [StripeFulfillmentService.CheckoutFacts.Keys.User] = userId.Value.ToString(),
+            [StripeFulfillmentService.CheckoutFacts.Keys.EventCredits] = count.ToString(),
+            [StripeFulfillmentService.CheckoutFacts.Keys.List] =
+                listPrice.ToString(System.Globalization.CultureInfo.InvariantCulture),
+            [StripeFulfillmentService.CheckoutFacts.Keys.TaxRate] =
+                taxRate.ToString(System.Globalization.CultureInfo.InvariantCulture),
+            [StripeFulfillmentService.CheckoutFacts.Keys.TaxAmount] =
+                tax.ToString(System.Globalization.CultureInfo.InvariantCulture),
+        };
+
+        var sub = await db.OrganizationSubscriptions.AsNoTracking()
+            .FirstOrDefaultAsync(x => x.OrganizationId == organizationId, ct);
+
+        var handle = await _stripe.CreateCheckoutSessionAsync(new StripeCheckoutSpec(
+            organizationId, org.Name, sub?.ProviderCustomerRef,
+            listPrice, tax,
+            count == 1 ? "IsHaunted — 1 event credit" : $"IsHaunted — {count} event credits",
+            SuccessUrl: $"{billingUrl}?credits=success",
+            CancelUrl:  $"{billingUrl}?credits=cancelled",
+            metadata), ct);
 
         return Ok(new StartCheckoutResponse(handle.SessionUrl, PaidWithoutCharge: false));
     }
@@ -187,6 +309,10 @@ public sealed class OrganizationCheckoutController : OrgCmsControllerBase
         var seat = await db.MemberSeatSubscriptions.AsNoTracking()
             .FirstOrDefaultAsync(s => s.OrganizationId == organizationId && s.AppUserId == userId, ct);
         if (seat is null) return NotFound("You don't hold a seat in this group.");
+
+        // The same switch as plans: a seat is the per-member half of a plan.
+        if (!await PlanPurchasesOpenAsync(db, ct))
+            return BadRequest(SeatsNotOnSale);
         if (seat.Status == SubscriptionStatus.Active
             && seat.CurrentPeriodEnd is { } end && end > DateTime.UtcNow)
             return BadRequest($"Your seat is already paid through {end:MM/dd/yyyy}.");

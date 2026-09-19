@@ -74,4 +74,49 @@ public sealed class FeatureGatedAttributeTests
         Assert.True(ranWhenOn);
         Assert.True(ranWhenUnset, "a flag nobody has set must read as ON — adding a gate must never silently remove a working feature");
     }
+
+    /// <summary>
+    /// A flag whose declared default is OFF reads off when nobody has written its row.
+    /// </summary>
+    /// <remarks>
+    /// <para>R1 of the canvas plan review, 2026-09-14. The gate used to read every flag with
+    /// <c>whenUnset: true</c>, which was right for the sections that already existed and wrong the
+    /// first time an unbuilt feature was gated: <c>features.canvas-editor</c> has no row on
+    /// production, so the canvas API — including the link-unfurl fetcher — would have answered the
+    /// moment the API deployed, with the admin page showing the switch as Off.</para>
+    ///
+    /// <para>The test above still holds for every flag that defaults on; this one pins the other
+    /// half of <see cref="SiteSettingKeys.DefaultFor"/>.</para>
+    /// </remarks>
+    [Fact]
+    public async Task A_flag_that_defaults_off_is_off_while_nobody_has_set_it()
+    {
+        // Publications, since the canvas flag went on 2026-09-16: boards became the only way research
+        // is written, and a switch whose off position leaves a case with no research is not a choice.
+        var gate = new FeatureGatedAttribute(SiteSettingKeys.FeaturePublications);
+
+        var (unsetResult, ranWhenUnset) = await Support.FeatureGateProbe.RunAsync(
+            gate, await Support.FeatureGateProbe.SettingsAsync());
+        Assert.False(ranWhenUnset,
+            "features.publications has no settings row and defaults off, yet the gated action ran — "
+            + "the gate is reading an unset flag as on");
+        Assert.IsType<NotFoundResult>(unsetResult);
+
+        var (_, ranWhenOn) = await Support.FeatureGateProbe.RunAsync(
+            gate, await Support.FeatureGateProbe.SettingsAsync(SiteSettingKeys.FeaturePublications, "true"));
+        Assert.True(ranWhenOn, "switching the flag on must let the action run");
+    }
+
+    /// <summary>The flags that were gated before any of this defaulted on, and still do.</summary>
+    [Theory]
+    [InlineData(SiteSettingKeys.FeatureCmsPages)]
+    [InlineData(SiteSettingKeys.FeatureEvents)]
+    [InlineData(SiteSettingKeys.FeatureVoting)]
+    [InlineData(SiteSettingKeys.FeatureDiscovery)]
+    public async Task Every_flag_that_was_already_gated_still_reads_on_when_unset(string key)
+    {
+        var (_, ran) = await Support.FeatureGateProbe.RunAsync(
+            new FeatureGatedAttribute(key), await Support.FeatureGateProbe.SettingsAsync());
+        Assert.True(ran, $"{key} was on for every site that never set it; it must stay on");
+    }
 }

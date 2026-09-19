@@ -49,6 +49,16 @@ public sealed class SidecarOptions
 
     /// <summary>How long a finished/failed job's workspace and result stay available before
     /// automatic cleanup, if the browser never calls <c>DELETE /v1/jobs/{id}</c>.</summary>
+    /// <summary>
+    /// How long the sidecar may sit with nothing asked of it before it stops.
+    /// </summary>
+    /// <remarks>
+    /// Zero or less keeps it running for ever, which is what a machine that renders for several
+    /// people at once would want. Fifteen minutes is the desktop default — see IdleShutdownPolicy
+    /// for why it is not shorter, and the LaunchAgent's Sockets key for how it comes back.
+    /// </remarks>
+    public TimeSpan IdleTimeout { get; set; } = Lifetime.IdleShutdownPolicy.DefaultIdleTimeout;
+
     public TimeSpan JobRetention { get; set; } = TimeSpan.FromHours(1);
 
     /// <summary>Wall-clock limit for a single ffmpeg invocation before it's killed.</summary>

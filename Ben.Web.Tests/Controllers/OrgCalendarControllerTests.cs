@@ -70,7 +70,8 @@ public class OrgCalendarControllerTests
         var ctrl = new OrgCalendarEventController(factory, CreateMapper(), new Ben.Service.RepositoryService.Services.OrganizationSecurityService(factory), UnconfiguredEmail(),
             Microsoft.Extensions.Options.Options.Create(new Ben.Data.Common.SiteIdentity { BaseUrl = "https://example.test" }),
             Microsoft.Extensions.Logging.Abstractions.NullLogger<OrgCalendarEventController>.Instance,
-            new Ben.Data.WebApi.Services.CmsMarkupSanitizer());
+            new Ben.Data.WebApi.Services.CmsMarkupSanitizer(),
+            Support.SilentTourMail.Instance);
         ctrl.ControllerContext = new ControllerContext
         {
             HttpContext = new DefaultHttpContext

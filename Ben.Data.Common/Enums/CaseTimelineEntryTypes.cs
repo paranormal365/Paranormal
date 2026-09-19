@@ -16,6 +16,15 @@ namespace Ben.Data.Common.Enums;
 /// </remarks>
 public static class CaseTimelineEntryTypes
 {
+    /// <summary>Every kind a person may choose when adding a timeline entry.</summary>
+    /// <remarks>
+    /// "Research" was taken off this list on 2026-09-14, when research pages carried their own date and
+    /// offering it here made two places to write the same thing. It came back on 2026-09-16: research is
+    /// canvas boards now, and a board is not a dated moment on the timeline — so a note about what the
+    /// deeds said has nowhere else to go, and the timeline is where it belongs.
+    /// </remarks>
+    public static IReadOnlyList<CaseTimelineEntryType> Pickable { get; } = Enum.GetValues<CaseTimelineEntryType>();
+
     /// <summary>The full name, for a picker or a heading.</summary>
     public static string DisplayName(CaseTimelineEntryType type) => type switch
     {
