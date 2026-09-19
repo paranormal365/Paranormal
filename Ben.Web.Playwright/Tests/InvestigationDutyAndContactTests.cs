@@ -82,8 +82,14 @@ public class InvestigationDutyAndContactTests : BenTestBase
     public async Task A_case_shows_its_contact_with_the_manager_fallback_and_a_choice_sticks()
     {
         await LoginAsync(SuperAdminEmail, SuperAdminPassword);
-        Assert.That(await OpenOrgCaseAsync("Paranormal365", "#2026-"), Is.True,
-            "The seeded TGH case should be reachable.");
+        // The SEEDED case by name, not "the first card whose reference starts #2026-". That
+        // lookup takes whichever case happens to sort first, so it broke the moment anything
+        // added a case to this group — a test's own fixture, a later seed, or a person. The
+        // three sibling tests in CaseMessageBoardTests already name Belmont for the same
+        // reason, and it is the case this one needs: the only seeded one with a manager, whose
+        // fallback badge is the whole assertion below.
+        Assert.That(await OpenOrgCaseAsync("Paranormal365", "Belmont"), Is.True,
+            "The seeded Belmont case should be reachable.");
 
         var panel = Main.Locator(".card", new() { HasText = "Points of contact" });
         await Expect(panel).ToBeVisibleAsync(new() { Timeout = 20_000 });

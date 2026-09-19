@@ -79,6 +79,41 @@ public class AudioScrubModeTests : BenTestBase
         return true;
     }
 
+    /// <summary>
+    /// Removes every test-audio file this fixture has ever left behind.
+    /// </summary>
+    /// <remarks>
+    /// <para><b>This fixture used to poison every later run.</b> It uploads a ~7MB MP3 into the
+    /// seeded Belmont case on each run, the e2e database and its uploads directory persist
+    /// between runs, and nothing removed them. After a day of runs that case held 399 files, the
+    /// Files tab rendered a wall of audio players, and the newest one's waveform could not decode
+    /// before the assertions gave up: "Create Region" stayed disabled and both tests in this
+    /// fixture failed. The tests were right that the button was disabled, and wrong about why —
+    /// the page was drowning, not broken (2026-09-19).</para>
+    ///
+    /// <para>So the fixture is its own janitor, the same shape as the one in
+    /// InvestigationDutyAndContactTests: it clears EVERY test-audio card, not just this run's,
+    /// because residue outlives the run that made it.</para>
+    ///
+    /// <para>Swallows its own failures. A cleanup that fails must not turn a passing test red —
+    /// the next run's janitor will find whatever this one left.</para>
+    /// </remarks>
+    private async Task RemoveTestAudioFilesAsync()
+    {
+        try
+        {
+            var cards = Main.Locator(".card", new() { HasText = "test-audio" });
+            for (var i = 0; i < 40 && await cards.CountAsync() > 0; i++)
+            {
+                var delete = cards.First.GetByRole(AriaRole.Button, new() { Name = "Delete file" });
+                if (await delete.CountAsync() == 0) return;   // not permitted here; leave it alone
+                await delete.First.ClickAsync();
+                await Page.WaitForTimeoutAsync(400);
+            }
+        }
+        catch { /* see the remarks: a janitor never fails a test */ }
+    }
+
     /// <summary>Right-clicks the compact preview and opens the full-view modal.</summary>
     private async Task OpenFullViewAsync()
     {
@@ -101,6 +136,12 @@ public class AudioScrubModeTests : BenTestBase
             Assert.Ignore("TGH org not visible; seed data may differ.");
             return;
         }
+        // BEFORE the upload, not after: it leaves the page holding one player instead of every
+        // player this fixture has ever uploaded, which is what the waveform actually has to
+        // decode. Doing it afterwards would also have to dismiss the full-view modal first, and
+        // a cleanup that has to be right is a cleanup that will one day not run.
+        await RemoveTestAudioFilesAsync();
+
         if (!await UploadTestAudioAsync())
         {
             // Not a precondition: uploading the file and getting a player is the behaviour under
@@ -136,6 +177,12 @@ public class AudioScrubModeTests : BenTestBase
             Assert.Ignore("TGH org not visible; seed data may differ.");
             return;
         }
+        // BEFORE the upload, not after: it leaves the page holding one player instead of every
+        // player this fixture has ever uploaded, which is what the waveform actually has to
+        // decode. Doing it afterwards would also have to dismiss the full-view modal first, and
+        // a cleanup that has to be right is a cleanup that will one day not run.
+        await RemoveTestAudioFilesAsync();
+
         if (!await UploadTestAudioAsync())
         {
             // Not a precondition: uploading the file and getting a player is the behaviour under
