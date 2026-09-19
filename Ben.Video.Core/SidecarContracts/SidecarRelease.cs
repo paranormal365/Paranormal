@@ -26,5 +26,5 @@ namespace Ben.Video.Core.SidecarContracts;
 public static class SidecarRelease
 {
     /// <summary>Kept identical to &lt;Version&gt; in Ben.Video.Sidecar.csproj.</summary>
-    public const string Version = "1.1.0";
+    public const string Version = "1.1.1";
 }

@@ -36,4 +36,25 @@ public static class IdleShutdownPolicy
         if (activeJobs > 0) return false;                 // someone is waiting on a render
         return idleFor >= idleTimeout;
     }
+
+    /// <summary>
+    /// The idle timeout to actually arm: the configured one where something will start this process
+    /// again when the editor next looks for it, and none at all anywhere else.
+    /// </summary>
+    /// <remarks>
+    /// <para>Stopping is only safe as the first half of a pair. On macOS launchd holds the socket and
+    /// starts this again on the next connection, so an idle exit costs nothing. <b>Windows has no such
+    /// thing</b>: its installer starts the sidecar once, at login, from a Run key. 1.1.0 armed the
+    /// timeout everywhere, so on Windows the sidecar stopped fifteen quiet minutes after login and
+    /// stayed stopped until the next one. Anybody who did not open the editor straight away lost the
+    /// sidecar for the day, and the editor quietly fell back to doing the work in the browser.</para>
+    ///
+    /// <para>So the question is not "which operating system" but "will anything bring it back".
+    /// Today only a launchd-owned socket answers yes. If Windows ever gains an on-demand start - a
+    /// protocol link the editor opens, say - it passes true here and gets the timeout too.</para>
+    /// </remarks>
+    /// <param name="configured">The timeout from configuration, or the default.</param>
+    /// <param name="restartedOnDemand">Whether something starts this process again when it is wanted.</param>
+    public static TimeSpan EffectiveTimeout(TimeSpan configured, bool restartedOnDemand)
+        => restartedOnDemand ? configured : TimeSpan.Zero;
 }
