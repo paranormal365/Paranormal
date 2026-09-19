@@ -2790,10 +2790,16 @@ public sealed class ClipStore
 
         if (stale.Count == 0) return;
 
-        foreach (var transition in stale)
-            track.Items.Remove(transition);
+        // Through a command, so undo can put back an effect the user chose. It used to remove them
+        // straight off the list — see RemoveTransitionsCommand for what that cost.
+        var removed = stale
+            .Select(t => ((TrackItem)t, track.Items.FindIndex(i => i.Id == t.Id)))
+            .Where(r => r.Item2 >= 0)
+            .ToList();
 
-        RenumberItems(track);
+        var command = new RemoveTransitionsCommand(track, removed);
+        PushCommand(command);
+        command.Execute();
 
         // The overlap only existed because the transition did. Close whatever is left over — by
         // position, not by clip id, because the clip a transition pointed at may well have been

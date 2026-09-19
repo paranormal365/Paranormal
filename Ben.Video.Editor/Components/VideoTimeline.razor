@@ -934,10 +934,19 @@
 
     private async Task OpenClipMenu(MouseEventArgs e, TrackItem item)
     {
+        // Read the playhead BEFORE selecting. Selecting a clip moves the playhead to that clip's
+        // start (VideoEditor.OnTimelineItemSelected, deliberately, since the 2026-09-05 audit) —
+        // so asking afterwards whether the playhead is strictly inside the clip was asking whether
+        // the clip's own start is after itself. It never is: "Split at Playhead" was disabled every
+        // single time it was opened, in the only way the menu can be opened, and splitting was
+        // reachable only by knowing the S shortcut. The playhead a person means is the one they
+        // were looking at when they right-clicked (2026-09-18 audit).
+        var playhead = Playback.State.TimelineTime;
+
         await SelectItem(item);
+
         // Inside this clip's own span on the timeline, not "between zero and its length" —
         // which was only the same question for a clip starting at zero.
-        var playhead  = Playback.State.TimelineTime;
         var canSplit  = item is VideoClip vc2 &&
                         playhead > vc2.TimelinePosition &&
                         playhead < vc2.TimelinePosition + vc2.TrimmedDuration;
@@ -973,8 +982,10 @@
                     {
                         if (item is VideoClip vc3)
                             // Absolute playhead → the clip's own offset; see
-                            // ClipStore.SplitClipAtTimelineTime.
-                            Clips.SplitClipAtTimelineTime(vc3.Id, Playback.State.TimelineTime);
+                            // ClipStore.SplitClipAtTimelineTime. The captured playhead, not the
+                            // live one — by now selecting has moved the live one to this clip's
+                            // start, where the cut would be a no-op.
+                            Clips.SplitClipAtTimelineTime(vc3.Id, playhead);
                         return Task.CompletedTask;
                     }, IsDisabled = locked || !canSplit },
             new() { Text = "Separate Audio", Icon = SvgIcon.VolumeUp,
