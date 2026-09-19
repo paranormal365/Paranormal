@@ -104,6 +104,17 @@ public interface IBenUserClient
     /// <param name="token">Propagates cancellation from the Blazor component.</param>
     Task<LoadResult<AppUserRecord>> GetAllUsersAsync(CancellationToken token = default);
 
+    /// <summary>
+    /// When each account last signed in and how many times, for the users grid. SuperAdmin only.
+    /// </summary>
+    /// <remarks>
+    /// Its own call rather than two more fields on <see cref="AppUserRecord"/>: that record is
+    /// read across the site and by the phone, and carrying these would put a subquery on every
+    /// one of those reads for a question one admin screen asks. Accounts that have never signed
+    /// in are absent rather than returned as zeroes.
+    /// </remarks>
+    Task<LoadResult<Ben.Service.Models.Admin.UserSignInSummary>> GetUserSignInSummaryAsync(CancellationToken token = default);
+
     /// <summary>Returns a minimal Id+DisplayName directory of one organization's active
     /// members — for org-admin surfaces (e.g. CMS permission/member pickers) that only need to
     /// resolve names, not the full <see cref="AppUserRecord"/>. Caller must be an active member

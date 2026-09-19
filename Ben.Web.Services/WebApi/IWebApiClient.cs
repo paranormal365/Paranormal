@@ -177,6 +177,9 @@ public interface IWebApiClient
     // Example typed endpoint usage using service models.
     Task<LoadResult<AppUserRecord>> GetUsersAsync(CancellationToken token = default);
 
+    /// <summary>When each account last signed in, and how many times. SuperAdmin only.</summary>
+    Task<LoadResult<Ben.Service.Models.Admin.UserSignInSummary>> GetUserSignInSummaryAsync(CancellationToken token = default);
+
     Task<LoadResult<OrganizationSummaryResponse>> GetMyOrganizationsAsync(CancellationToken token = default);
     Task<LoadResult<UserSearchResultResponse>> SearchUsersAsync(string? query, int skip = 0, int take = 25, CancellationToken token = default);
     Task<OrganizationSummaryResponse?> RegisterOrganizationAsync(RegisterOrganizationRequest request, CancellationToken token = default);

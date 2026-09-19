@@ -17,15 +17,18 @@ public sealed class EntraClaimsTransformation : IClaimsTransformation
 
     private readonly UserManager<AppUser> _userManager;
     private readonly ExternalSignInService _external;
+    private readonly EntraSignInRecorder _visits;
     private readonly ILogger<EntraClaimsTransformation> _logger;
 
     public EntraClaimsTransformation(
         UserManager<AppUser> userManager,
         ExternalSignInService external,
+        EntraSignInRecorder visits,
         ILogger<EntraClaimsTransformation> logger)
     {
         _userManager = userManager;
         _external    = external;
+        _visits      = visits;
         _logger      = logger;
     }
 
@@ -71,6 +74,13 @@ public sealed class EntraClaimsTransformation : IClaimsTransformation
                 "EntraClaimsTransformation: refused {UserId} — the account may not sign in.", user.Id);
             return principal;
         }
+
+        // COUNTED HERE, and only here. An Entra session never passes RecordingSignInManager —
+        // it is a bearer token validated per request — so this is the one place a Microsoft
+        // arrival can be seen at all, and the only one that has already asked whether the account
+        // may sign in. One row per twelve-hour visit rather than per request; the recorder
+        // answers from memory on almost every call, and never throws (EntraSignInRecorder).
+        await _visits.NoteRequestAsync(user.Id);
 
         var identity = new ClaimsIdentity("EntraEnrichment");
         identity.AddClaim(new Claim(AppUserIdClaimType, user.Id.ToString()));

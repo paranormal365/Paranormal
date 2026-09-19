@@ -170,6 +170,25 @@ record, in tabs: their profile fields, addresses, emails, phones, links, notes, 
 files and site roles. Each tab edits directly, and every change is written to the audit log
 under your name.
 
+### Last sign-in and how many
+
+Two columns on the list answer who is actually using the site. **Last sign-in** is the most
+recent one; **Sign-ins** is how many there have been. Both sort, so a click on either heading
+puts the quietest or the busiest accounts at the top, and an account nobody has ever signed in
+to reads **Never** rather than sitting blank.
+
+Every way in is counted the same: a password, Sign in with Apple, a Microsoft account, and the
+code that hands a session to the standalone editor.
+
+Two things worth knowing before you read too much into a number:
+
+- **Nothing goes back further than 20 August 2026**, when sign-ins began being recorded. An
+  account older than that has a count from that day, not from the day it was made.
+- **A Microsoft account is counted once every twelve hours of use**, not once per sign-in. A
+  Microsoft session is a token that arrives with every page rather than a moment somebody signs
+  in, so there is no exact answer — a working day counts as one, and coming back in the evening
+  counts as another. Microsoft sign-ins were not recorded at all before 19 September 2026.
+
 The **Addresses** tab has two buttons beside each address once it has been placed on the map:
 **Map** shows the address with its region circle, and **Directions** opens the directions
 window.
