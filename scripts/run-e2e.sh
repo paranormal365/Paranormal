@@ -285,22 +285,34 @@ echo ""
 # test run, and without the override `dotnet test` finds zero tests and EXITS 0 — a silent pass
 # that has been reported as a real one before.
 # What this run intends to do, before it starts doing it — so progress can be reported as "N of M"
-# rather than "no failures yet", which reads the same at one minute and at thirty. The build this
-# does is the one the run needs anyway, so --no-build below spends it rather than repeating it.
+# rather than "no failures yet", which reads the same at one minute and at thirty.
 {
   echo "E2E_STARTED=$(date +%s)"
   echo "E2E_DB=$DB_NAME"
   echo "E2E_FILTER=${PASSTHROUGH[*]:-}"
 } > "$LOG_DIR/meta"
 
-echo "   listing what will run…"
-set +e
-dotnet test Ben.Web.Playwright -p:IsTestProject=true -c Release --nologo \
-  --list-tests "${PASSTHROUGH[@]:-}" 2>/dev/null \
-  | sed -n '/The following Tests are available/,$p' | tail -n +2 \
-  | sed 's/^[[:space:]]*//' | grep -v '^$' > "$LOG_DIR/planned.txt"
-set -e
-echo "   $(wc -l < "$LOG_DIR/planned.txt" | tr -d ' ') tests to run"
+# Built once, here, so neither pass below repeats it.
+echo "   building…"
+dotnet build Ben.Web.Playwright -p:IsTestProject=true -c Release --nologo -v q > "$LOG_DIR/build.log" 2>&1
+
+# --list-tests DOES NOT HONOUR --filter: it lists everything the assembly contains. Writing that as
+# "what will run" for a filtered slice made the progress script report 47 of 789 and call the other
+# 742 "not reached" (measured 2026-09-19, the first real use of this). So the planned list is only
+# written for a whole-suite run; with a filter there is no honest M, and e2e-progress.sh already
+# degrades to counts when the file is absent.
+if [[ ${#PASSTHROUGH[@]} -eq 0 ]]; then
+  echo "   listing what will run…"
+  set +e
+  dotnet test Ben.Web.Playwright -p:IsTestProject=true -c Release --nologo --no-build \
+    --list-tests 2>/dev/null \
+    | sed -n '/The following Tests are available/,$p' | tail -n +2 \
+    | sed 's/^[[:space:]]*//' | grep -v '^$' > "$LOG_DIR/planned.txt"
+  set -e
+  echo "   $(wc -l < "$LOG_DIR/planned.txt" | tr -d ' ') tests to run"
+else
+  echo "   filtered run — no planned list (--list-tests ignores --filter)"
+fi
 echo ""
 
 # verbosity=normal so the log carries one line per test as it finishes; the terminal keeps the
@@ -311,15 +323,25 @@ dotnet test Ben.Web.Playwright -p:IsTestProject=true -c Release --nologo --no-bu
   --logger "console;verbosity=normal" \
   -e BEN_BASE_URL="$WEB_URL" -e BEN_E2E_API_LOG="$LOG_DIR/api.log" "${PASSTHROUGH[@]:-}" 2>&1 \
   | tee "$LOG_DIR/e2e.log" \
-  | grep -E --line-buffered '^( *(Failed|Error) |Passed!|Failed!|Test run|A total of)' || true
+  | grep -E --line-buffered '^( *(Failed|Error) |Test Run |Total tests:|A total of)' || true
 STATUS=${PIPESTATUS[0]}
 set -e
 touch "$LOG_DIR/.finished"
 
 echo ""
 echo "── Result ──────────────────────────────────────────────────────────────"
-grep -E "Passed!|Failed!" "$LOG_DIR/e2e.log" | tail -1 || echo "no summary line — did anything run?"
-grep -E "^  Failed " "$LOG_DIR/e2e.log" | sed 's/\[.*//' | head -20 || true
+# At verbosity=normal the summary is a BLOCK ("Test Run Successful." then the totals), not the
+# one-line "Passed! - Failed: 0, ..." that minimal verbosity prints. Grepping for the old line
+# found nothing and reported "did anything run?" on a run of 47 green tests (2026-09-19).
+if grep -qE "^Test Run (Successful|Failed)\." "$LOG_DIR/e2e.log"; then
+  verdict=$(grep -E "^Test Run (Successful|Failed)\." "$LOG_DIR/e2e.log" | tail -1)
+  totals=$(grep -E "^ *(Total tests|Passed|Failed|Skipped): " "$LOG_DIR/e2e.log" \
+           | tail -5 | sed 's/^ *//' | paste -sd" · " -)
+  echo "$verdict  $totals"
+else
+  echo "no summary line — did anything run?"
+fi
+grep -E "^ *Failed " "$LOG_DIR/e2e.log" | sed 's/\[.*//' | head -20 || true
 echo ""
 echo "Logs: $LOG_DIR"
 exit "$STATUS"
