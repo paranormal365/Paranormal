@@ -201,6 +201,16 @@ public class EquipmentTests : BenTestBase
             foreach (var make in await OptionValuesAsync(selects.Nth(1)))
             {
                 await selects.Nth(1).SelectOptionAsync(make);
+
+                // Wait for the model list to BE this make's list before reading it. Choosing a
+                // make is a server round trip, so for a moment the select still holds the
+                // previous make's options — or none at all, on the first make of a category —
+                // and reading it then called Olympus a dead end while the API was serving it a
+                // model. The editor says which make its list belongs to; that is the settled
+                // answer, and it cannot be the stale one.
+                await Expect(editor.Locator("[data-model-list-for]"))
+                    .ToHaveAttributeAsync("data-model-list-for", make, new() { Timeout = 15_000 });
+
                 if ((await OptionValuesAsync(selects.Nth(2))).Length > 0) continue;
 
                 chosenMake = await selects.Nth(1).Locator("option:checked").InnerTextAsync();

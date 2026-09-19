@@ -73,7 +73,12 @@
             }
         </div>
 
-        <div class="mb-3">
+        @* data-model-list-for says which make this list belongs to, or that it is still being
+           fetched. Without it there is no way to tell a model list that is genuinely empty from
+           one that still holds the PREVIOUS make's answer, or none at all because no make had
+           been chosen yet — the three look identical in the DOM, and a test that reads the select
+           the instant a make is picked reads whichever of them happens to be there. *@
+        <div class="mb-3" data-model-list-for="@(_modelsLoading ? "loading" : _brandId?.ToString() ?? "none")">
             <label class="form-label fw-semibold" for="myequipmentitemeditor-model-f471">Model</label>
             <BenSelect Data="@_models" Value="@_modelId" ValueChanged="@((Guid? v) => _modelId = v)" TextField="@nameof(EquipmentModelRecord.Name)" ValueField="@nameof(EquipmentModelRecord.Id)" Enabled="@(_brandId is not null && !_modelsLoading)" DefaultText="@ModelPlaceholder" Width="100%" />
 
