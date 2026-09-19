@@ -242,6 +242,9 @@ builder.Services.AddScoped<Ben.Data.WebApi.Services.EmailLinkAccounts>();
 // same checks, and every defect found on one was then found on the other; a third provider would
 // have inherited none of the fixes. Controllers keep only token validation and HTTP.
 builder.Services.AddScoped<Ben.Data.WebApi.Services.ExternalSignInService>();
+// Singleton: it keeps one memory entry per person for the length of a visit, and a
+// per-request copy would remember nothing and ask the database on every single request.
+builder.Services.AddSingleton<Ben.Data.WebApi.Services.EntraSignInRecorder>();
 // The create-and-confirm path shared by /signup and the signed-out request wizard (site
 // evaluation 2026-09-06, phase 1).
 builder.Services.AddScoped<Ben.Data.WebApi.Services.AccountCreationService>();

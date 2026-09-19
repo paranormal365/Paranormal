@@ -199,9 +199,11 @@ public sealed class AdminStatsController : BenControllerBase
     /// why that is deliberate rather than a slip. Everything it names is an account and a count —
     /// never an address, a case, or anything the account did after arriving.</para>
     ///
-    /// <para><b>Password and Apple only.</b> Entra sessions are bearer tokens validated
-    /// per-request, so no moment in them is "the sign-in"; they are absent from every figure
-    /// below and the response says so rather than letting a reader assume otherwise.</para>
+    /// <para><b>Every method, since 2026-09-19.</b> This used to say "password and Apple only",
+    /// because an Entra session is a bearer token validated per-request and no moment in it is
+    /// "the sign-in". One is chosen now — the first request in a twelve-hour window is a visit
+    /// (<see cref="EntraSignInSessions"/>) — so Microsoft arrivals appear here like any other.
+    /// Only from that date: nothing backfills the months when nothing was written.</para>
     /// </remarks>
     [HttpGet("sign-ins")]
     public async Task<ActionResult<AdminSignInInsights>> GetSignInInsights(
@@ -367,6 +369,8 @@ public sealed class AdminStatsController : BenControllerBase
     {
         RecordingSignInManager.PasswordMethod => "Password",
         RecordingSignInManager.AppleMethod    => "Apple",
+        RecordingSignInManager.EntraMethod    => "Microsoft",
+        RecordingSignInManager.HandoffMethod  => "Editor handoff",
         _                                     => method,
     };
 

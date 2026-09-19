@@ -35,21 +35,21 @@
        never true and sends them looking at the database. *@
     <BenListState TItem="AppUserRecord" Result="@_usersResult" Loading="@_loading" EmptyText="No user accounts yet" OnRetry="@LoadAsync">
     <ChildContent>
-    <TelerikGrid Data="@_filtered"
-                 TItem="AppUserRecord"
+    <TelerikGrid Data="@_rows"
+                 TItem="AdminUserRow"
                  Pageable="true"
                  PageSize="25"
                  Sortable="true"
                  Class="admin-users-grid">
         <GridColumns>
-            <GridColumn Field="@nameof(AppUserRecord.DisplayName)" Title="Display Name" Width="180px" />
+            <GridColumn Field="@nameof(AdminUserRow.DisplayName)" Title="Display Name" Width="180px" />
             @* Real name replaces the email column, at Ben's request. Email is still searchable —
                see ApplySearch — so nothing became unfindable, it just stopped taking a column.
                Accounts created before these fields existed have no name; an em dash says so
                rather than leaving a cell that looks like a rendering fault. *@
-            <GridColumn Field="@nameof(AppUserRecord.FullName)" Title="Name" Width="200px">
+            <GridColumn Field="@nameof(AdminUserRow.FullName)" Title="Name" Width="200px">
                 <Template>
-                    @{ var u = (AppUserRecord)context; }
+                    @{ var u = ((AdminUserRow)context).User; }
                     @if (u.FullName is { } name)
                     {
                         @name
@@ -60,17 +60,17 @@
                     }
                 </Template>
             </GridColumn>
-            <GridColumn Field="@nameof(AppUserRecord.DateCreated)" Title="Created" Width="110px">
+            <GridColumn Field="@nameof(AdminUserRow.DateCreated)" Title="Created" Width="110px">
                 <Template>
-                    @(((AppUserRecord)context).DateCreated.ToViewerLocalTime(UserState).ToDisplayDate())
+                    @(((AdminUserRow)context).DateCreated.ToViewerLocalTime(UserState).ToDisplayDate())
                 </Template>
             </GridColumn>
             @* A tick alone could not tell "has not got round to it" from "was never told how" —
                the two states that matter when somebody says they never received the email. The
                sent time is what separates them. *@
-            <GridColumn Field="@nameof(AppUserRecord.IsEmailConfirmed)" Title="Verified" Width="180px">
+            <GridColumn Field="@nameof(AdminUserRow.IsEmailConfirmed)" Title="Verified" Width="180px">
                 <Template>
-                    @{ var u = (AppUserRecord)context; }
+                    @{ var u = ((AdminUserRow)context).User; }
                     @if (u.IsEmailConfirmed)
                     {
                         @* The same mark the person sees on their own profile, so an administrator
@@ -99,6 +99,41 @@
                     }
                 </Template>
             </GridColumn>
+            @* Who is signing in, and how often (Ben, 2026-09-19). Sortable, because the question
+               is "who" and "how often" — both of which are orderings, not lookups.
+
+               Counting every method the site records: password, Sign in with Apple, the editor
+               handoff, and one row per twelve-hour Microsoft visit. Nothing reaches further back
+               than 2026-08-20, when the sign-in table was made, so an older account's count
+               starts there rather than at the day it was created. *@
+            <GridColumn Field="@nameof(AdminUserRow.LastSignInUtc)" Title="Last sign-in" Width="150px">
+                <Template>
+                    @{ var row = (AdminUserRow)context; }
+                    @if (row.LastSignInUtc is { } seen)
+                    {
+                        <span class="text-nowrap">@seen.ToViewerLocalTime(UserState).ToDisplayDateTime()</span>
+                    }
+                    else
+                    {
+                        @* Said, not left blank. An empty cell reads as a rendering fault, and
+                           "never signed in" is the one fact on this row worth noticing. *@
+                        <span class="text-secondary">Never</span>
+                    }
+                </Template>
+            </GridColumn>
+            <GridColumn Field="@nameof(AdminUserRow.SignInCount)" Title="Sign-ins" Width="100px">
+                <Template>
+                    @{ var row = (AdminUserRow)context; }
+                    @if (row.SignInCount > 0)
+                    {
+                        @row.SignInCount.ToString("N0")
+                    }
+                    else
+                    {
+                        <span class="text-secondary">—</span>
+                    }
+                </Template>
+            </GridColumn>
             @* One actions column, three icon buttons, on one line. View used to be a Telerik
                GridCommandColumn of its own, which read as two separate action columns and left
                a text button beside two icon ones. Impersonate and delete stayed out of the
@@ -111,7 +146,7 @@
                so View is never disabled. *@
             <GridColumn Title="Actions" Width="150px" Sortable="false" Filterable="false" Context="row">
                 <Template>
-                    @{ var person = (AppUserRecord)row; }
+                    @{ var person = ((AdminUserRow)row).User; }
                     <div class="text-nowrap">
                         <BenGridAction Icon="eye" Label="View this user" Tone="GridActionTone.Primary" OnClick="@(() => ViewUser(person))" />
                         @if (person.Id == UserState.UserId)
@@ -168,20 +203,67 @@
         }
     }
 
+    /// <summary>
+    /// One row of the grid: the account, and what the sign-in table knows about it.
+    /// </summary>
+    /// <remarks>
+    /// <para>A row type rather than two more fields on <see cref="AppUserRecord"/>. That record is
+    /// read across the site and by the phone; carrying a last-sign-in and a count on it would put
+    /// a subquery on every one of those reads to answer a question this one screen asks.</para>
+    ///
+    /// <para>The pass-through properties exist so the columns that were here before keep sorting
+    /// on a plain field name. Sorting a Telerik column needs a field on the bound item, and
+    /// <c>Field="User.DisplayName"</c> would have moved every existing column onto a nested path
+    /// to add two new ones.</para>
+    /// </remarks>
+    private sealed record AdminUserRow(AppUserRecord User, DateTime? LastSignInUtc, int SignInCount)
+    {
+        public Guid      Id               => User.Id;
+        public string?   DisplayName      => User.DisplayName;
+        public string?   FullName         => User.FullName;
+        public DateTime  DateCreated      => User.DateCreated;
+        public bool      IsEmailConfirmed => User.IsEmailConfirmed;
+    }
+
+    private IReadOnlyList<AdminUserRow> _rows = [];
+
     private async Task LoadAsync()
     {
         _loading     = true;
         _usersResult = await AdminClient.GetAllUsersAsync();
         _users       = _usersResult.Items;
         _filtered    = _users;
+
+        // A refusal here is NOT a refusal of the page. The grid's job is the accounts; the
+        // sign-in figures are an addition to it, and losing them should cost two columns rather
+        // than the screen — the same rule the dashboard follows for its sign-in panels. Every row
+        // then reads "Never", which is honest about what this page can currently see.
+        var signIns = await AdminClient.GetUserSignInSummaryAsync();
+        _signIns = signIns.Items.ToDictionary(s => s.AppUserId);
+
+        BuildRows();
         _loading     = false;
     }
+
+    private Dictionary<Guid, Ben.Service.Models.Admin.UserSignInSummary> _signIns = [];
+
+    /// <summary>Re-pairs the visible accounts with their sign-in figures.</summary>
+    private void BuildRows()
+        => _rows =
+        [
+            .. _filtered.Select(u => _signIns.TryGetValue(u.Id, out var s)
+                ? new AdminUserRow(u, s.LastUtc, s.Count)
+                // Absent from the summary means no successful sign-in has ever been recorded for
+                // this account — the endpoint returns rows only for accounts that have one.
+                : new AdminUserRow(u, null, 0))
+        ];
 
     private void ApplySearch()
     {
         if (string.IsNullOrWhiteSpace(_search))
         {
             _filtered = _users;
+            BuildRows();
             return;
         }
 
@@ -191,12 +273,15 @@
                      || (u.Email?.ToLowerInvariant().Contains(q) ?? false)
                      || (u.UserName?.ToLowerInvariant().Contains(q) ?? false))
             .ToList();
+
+        BuildRows();
     }
 
     private void ClearSearch()
     {
         _search   = string.Empty;
         _filtered = _users;
+        BuildRows();
     }
 
     private void ViewUser(AppUserRecord user)

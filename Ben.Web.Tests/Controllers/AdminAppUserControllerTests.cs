@@ -81,6 +81,97 @@ public class AdminAppUserControllerTests
         return (ctrl, factory);
     }
 
+    // ── The sign-in columns on /admin/users (Ben, 2026-09-19) ────────────────
+
+    private static SignInEvent Arrival(Guid userId, DateTime utc, string method, bool ok = true)
+        => new() { Id = Guid.NewGuid(), AppUserId = userId, Utc = utc, Succeeded = ok, Method = method };
+
+    /// <summary>
+    /// The whole point of the column: every way in counts, and the last one is the latest.
+    /// </summary>
+    [Fact]
+    public async Task The_summary_counts_every_method_and_reports_the_latest()
+    {
+        var (ctrl, factory) = Build();
+        var user = await SeedUserAsync(factory);
+        var newest = new DateTime(2026, 9, 19, 18, 0, 0, DateTimeKind.Utc);
+
+        await using (var db = await factory.CreateDbContextAsync())
+        {
+            db.SignInEvents.AddRange(
+                Arrival(user.Id, newest.AddDays(-3), Ben.Data.WebApi.Services.RecordingSignInManager.PasswordMethod),
+                Arrival(user.Id, newest.AddDays(-2), Ben.Data.WebApi.Services.RecordingSignInManager.AppleMethod),
+                Arrival(user.Id, newest.AddDays(-1), Ben.Data.WebApi.Services.RecordingSignInManager.HandoffMethod),
+                Arrival(user.Id, newest,             Ben.Data.WebApi.Services.RecordingSignInManager.EntraMethod));
+            await db.SaveChangesAsync();
+        }
+
+        var row = Assert.Single(Ok(await ctrl.GetSignInSummary(default)));
+        Assert.Equal(user.Id, row.AppUserId);
+        Assert.Equal(4, row.Count);
+        Assert.Equal(newest, row.LastUtc);
+    }
+
+    /// <summary>
+    /// A failed attempt is kept in the table, and is not somebody signing in. Counting it would
+    /// make an account under attack look like the site's most active user.
+    /// </summary>
+    [Fact]
+    public async Task A_refused_attempt_is_not_a_sign_in()
+    {
+        var (ctrl, factory) = Build();
+        var user = await SeedUserAsync(factory);
+
+        await using (var db = await factory.CreateDbContextAsync())
+        {
+            db.SignInEvents.AddRange(
+                Arrival(user.Id, DateTime.UtcNow.AddHours(-2), Ben.Data.WebApi.Services.RecordingSignInManager.PasswordMethod),
+                Arrival(user.Id, DateTime.UtcNow.AddHours(-1), Ben.Data.WebApi.Services.RecordingSignInManager.PasswordMethod, ok: false));
+            await db.SaveChangesAsync();
+        }
+
+        Assert.Equal(1, Assert.Single(Ok(await ctrl.GetSignInSummary(default))).Count);
+    }
+
+    /// <summary>
+    /// Accounts with nothing recorded are absent, not returned as zeroes — the screen says
+    /// "Never" for anybody it finds no row for, which is the same fact without the freight.
+    /// </summary>
+    [Fact]
+    public async Task Somebody_who_has_never_signed_in_has_no_row()
+    {
+        var (ctrl, factory) = Build();
+        await SeedUserAsync(factory);
+
+        Assert.Empty(Ok(await ctrl.GetSignInSummary(default)));
+    }
+
+    [Fact]
+    public async Task Each_account_is_counted_on_its_own()
+    {
+        var (ctrl, factory) = Build();
+        var one = await SeedUserAsync(factory, "One", "one@example.com");
+        var two = await SeedUserAsync(factory, "Two", "two@example.com");
+
+        await using (var db = await factory.CreateDbContextAsync())
+        {
+            db.SignInEvents.AddRange(
+                Arrival(one.Id, DateTime.UtcNow.AddHours(-3), Ben.Data.WebApi.Services.RecordingSignInManager.PasswordMethod),
+                Arrival(one.Id, DateTime.UtcNow.AddHours(-2), Ben.Data.WebApi.Services.RecordingSignInManager.PasswordMethod),
+                Arrival(two.Id, DateTime.UtcNow.AddHours(-1), Ben.Data.WebApi.Services.RecordingSignInManager.EntraMethod));
+            await db.SaveChangesAsync();
+        }
+
+        var rows = Ok(await ctrl.GetSignInSummary(default)).ToDictionary(r => r.AppUserId);
+        Assert.Equal(2, rows[one.Id].Count);
+        Assert.Equal(1, rows[two.Id].Count);
+    }
+
+    private static IEnumerable<Ben.Service.Models.Admin.UserSignInSummary> Ok(
+        ActionResult<IEnumerable<Ben.Service.Models.Admin.UserSignInSummary>> result)
+        => Assert.IsAssignableFrom<IEnumerable<Ben.Service.Models.Admin.UserSignInSummary>>(
+            Assert.IsType<OkObjectResult>(result.Result).Value);
+
     private static async Task<AppUser> SeedUserAsync(IDbContextFactory<BenDataContext> factory,
         string displayName = "Test User", string email = "test@example.com")
     {

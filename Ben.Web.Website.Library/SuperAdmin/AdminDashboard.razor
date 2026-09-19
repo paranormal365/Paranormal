@@ -228,15 +228,17 @@
     {
         <h5 class="mt-4 mb-2" id="sign-ins">Sign-ins</h5>
         <p class="text-secondary small">
-            Password and Apple sign-ins over the selected period.
+            Sign-ins over the selected period, by every way in: a password, Apple, Microsoft and
+            the editor handoff.
             @if (!_signIns.CoversAppleSignIns)
             {
                 <span class="text-warning">
                     No Apple sign-in has been recorded yet — figures here may be password-only.
                 </span>
             }
-            Microsoft sign-ins are never counted: they arrive as a token on every request, so
-            there is no single moment to record as the sign-in.
+            A Microsoft session is a token that arrives on every request rather than a moment
+            somebody signs in, so it is counted once per twelve hours of use — and only from
+            19 September 2026, when it began being recorded at all.
         </p>
 
         <div class="row g-3">

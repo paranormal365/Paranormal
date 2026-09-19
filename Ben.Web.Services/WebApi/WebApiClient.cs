@@ -363,6 +363,9 @@ public sealed class WebApiClient : IWebApiClient
     public Task<LoadResult<AppUserRecord>> GetUsersAsync(CancellationToken token = default)
         => GetListAsync<AppUserRecord>("/api/app-users", token);
 
+    public Task<LoadResult<Ben.Service.Models.Admin.UserSignInSummary>> GetUserSignInSummaryAsync(CancellationToken token = default)
+        => GetListAsync<Ben.Service.Models.Admin.UserSignInSummary>("/api/admin/app-users/sign-in-summary", token);
+
     public Task<LoadResult<OrganizationSummaryResponse>> GetMyOrganizationsAsync(CancellationToken token = default)
         => GetListAsync<OrganizationSummaryResponse>("/api/security/organizations/mine", token);
 
