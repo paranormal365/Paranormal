@@ -20,7 +20,15 @@ public class EventAfterTests : BenTestBase
     private string _orgId = string.Empty;
 
     [SetUp]
-    public async Task Find() => _orgId = await OrgIdBySlugAsync("paranormal365");
+    public async Task Find()
+    {
+        _orgId = await OrgIdBySlugAsync("paranormal365");
+
+        // The seed leaves this event in Draft on purpose, and a guest's review page is only
+        // reachable for one that is on the public site. This fixture used to inherit a publish
+        // from whichever earlier run happened to do it (item 243); it does its own now.
+        await PublishSeededEventAsync(_orgId, RoomsEventId);
+    }
 
     [TestCase(1280, 800)]
     [TestCase(375, 812)]

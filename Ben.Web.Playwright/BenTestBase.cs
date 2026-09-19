@@ -174,6 +174,56 @@ public abstract class BenTestBase : PageTest
         return (await made.JsonAsync())!.Value.GetProperty("id").GetString()!;
     }
 
+    /// <summary>
+    /// Publishes a seeded hosted event, and answers with the slug its public page lives at.
+    /// </summary>
+    /// <remarks>
+    /// <para><b>Why a test has to do this at all.</b> HostedEventDemoSeeder creates both of its
+    /// events as <c>Draft</c>, deliberately, and says so: "the point of the seed is a plan to
+    /// arrange, and publishing it would spend one of the group's credits every time a database is
+    /// built." The public endpoints answer only for Published, Live or Ended
+    /// (<c>HostedEventStates.OnThePublicSite</c>), so a fixture that wants the event's PUBLIC page
+    /// has to put it there itself.</para>
+    ///
+    /// <para><b>Four fixtures used to assume somebody else had.</b> They asked the public endpoint
+    /// and asserted it answered, which was true on the shared e2e database only because an earlier
+    /// run had published that event and the row outlived it. On a genuinely fresh database — the
+    /// first one built in eight months — all eight of their tests failed at once (item 243,
+    /// 2026-09-19). The green they had been giving was borrowed from history.</para>
+    ///
+    /// <para><b>Safe to call every time.</b> Publishing an event that is already published costs
+    /// nothing: the controller only asks the entitlement on an event whose FirstPublishedUtc is
+    /// null, and "the second publish of the same event is free, for ever, because the first one
+    /// paid for it". The seeded group's tier is not excluded from HostEvents, so the first publish
+    /// is free too — capabilities are excluded per tier, and nothing excludes that one.</para>
+    ///
+    /// <para>A refusal is reported with the server's own sentence rather than as "not on the public
+    /// site", so the next person reads why instead of guessing.</para>
+    /// </remarks>
+    protected async Task<string> PublishSeededEventAsync(string orgId, string eventId)
+    {
+        await using var api = await Playwright.APIRequest.NewContextAsync(new() { BaseURL = ApiUrl });
+
+        var login = await api.PostAsync("/login", new()
+        {
+            DataObject = new { email = SuperAdminEmail, password = SuperAdminPassword },
+        });
+        Assert.That(login.Ok, Is.True, "the admin seat should be able to sign in to publish a seeded event");
+        var token = (await login.JsonAsync())!.Value.GetProperty("accessToken").GetString();
+        var headers = new Dictionary<string, string> { ["Authorization"] = $"Bearer {token}" };
+
+        var published = await api.PostAsync(
+            $"/api/organizations/{orgId}/events/{eventId}/publish",
+            new() { Headers = headers, DataObject = new { } });
+        Assert.That(published.Ok, Is.True,
+            "the seeded event could not be published: " + await published.TextAsync());
+
+        var ev = await api.GetAsync($"/api/public/hosted-events/{eventId}");
+        Assert.That(ev.Ok, Is.True,
+            "the seeded event was published and still is not on the public site: " + await ev.TextAsync());
+        return (await ev.JsonAsync())!.Value.GetProperty("urlName").GetString()!;
+    }
+
     protected async Task<string> OrgIdBySlugAsync(string slug)
     {
         await _orgIdLock.WaitAsync();
@@ -393,14 +443,33 @@ public abstract class BenTestBase : PageTest
 
         if (!await SetFeedSwitchAsync(token, on: true)) return null;
 
-        // Up to twenty seconds, because the answer has to travel through whatever the hosts cache.
-        using var probe = new HttpClient { BaseAddress = new Uri(ApiUrl), Timeout = TimeSpan.FromSeconds(10) };
-        for (var attempt = 0; attempt < 20; attempt++)
+        // Waited for on the WEBSITE, not the API, and this is the whole point of the wait.
+        //
+        // The API answers /api/feed the moment the setting is written. The website does not: its
+        // FeatureGate reads SiteFeaturesProvider, a singleton that refreshes on a 30-SECOND
+        // snapshot, and nothing primes it when a switch is flipped through the API rather than
+        // through the admin page. So the old probe proved the API agreed and then handed the
+        // browser a page that still said the feed was off — for up to half a minute.
+        //
+        // It never showed while the e2e database carried the switch already on from a previous
+        // run. On a genuinely fresh one, where the feed starts off by default, it failed at once
+        // (item 243, 2026-09-19): the tests timed out looking for a tab whose absence was correct.
+        //
+        // Forty seconds, because it has to outlast a 30-second snapshot that may have refreshed
+        // the instant before the setting was written.
+        using var probe = new HttpClient { BaseAddress = new Uri(BaseUrl), Timeout = TimeSpan.FromSeconds(10) };
+        for (var attempt = 0; attempt < 40; attempt++)
         {
             try
             {
-                using var response = await probe.GetAsync("/api/feed");
-                if (response.IsSuccessStatusCode) return wasOn;
+                using var response = await probe.GetAsync("/feed");
+                if (response.IsSuccessStatusCode)
+                {
+                    // The gate renders "There is nothing at this address" when the flag is off, so
+                    // asking for the tab strip asks the question the tests actually need answered.
+                    var html = await response.Content.ReadAsStringAsync();
+                    if (html.Contains("Latest", StringComparison.Ordinal)) return wasOn;
+                }
             }
             catch (HttpRequestException) { }
             await Task.Delay(1000);
