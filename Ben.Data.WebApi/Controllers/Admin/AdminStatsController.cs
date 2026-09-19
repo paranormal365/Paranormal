@@ -6,6 +6,7 @@ using Ben.Service.Models.Admin;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.EntityFrameworkCore;
+using Microsoft.Extensions.Caching.Memory;
 
 namespace Ben.Data.WebApi.Controllers.Admin;
 
@@ -62,44 +63,124 @@ public sealed class AdminStatsController : BenControllerBase
     /// <summary>How long a new account gets before never having signed in is worth counting.</summary>
     private const int NeverSignedInGraceDays = 7;
 
+    /// <summary>
+    /// How far back "registered and never arrived" looks.
+    /// </summary>
+    /// <remarks>
+    /// <para><b>An upper bound as well as a lower one, and it is the point.</b> This counted every
+    /// account ever created that had never signed in, which is an anti-join across two tables that
+    /// both grow for ever — the most expensive query on the page, and the one that would have gone
+    /// first as the site filled up (Ben, 2026-09-19: "as the number of users grows, the dashboard
+    /// page is going to take longer and longer to load").</para>
+    ///
+    /// <para><b>And it is the better question anyway.</b> This is a funnel signal: somebody signed
+    /// up recently and did not come back, which is a thing to act on this week. An account that
+    /// registered in 2019 and never returned is not news, and counting it made the number drift
+    /// upward for ever regardless of how the funnel was actually doing.</para>
+    /// </remarks>
+    private const int NeverArrivedWindowDays = 90;
+
     /// <summary>A doubling means nothing off a base this small; two failures becoming five is a
     /// Tuesday, not a surge.</summary>
     private const int SurgeFloor = 10;
 
     private readonly IDbContextFactory<BenDataContext> _dbContextFactory;
 
-    public AdminStatsController(IDbContextFactory<BenDataContext> dbContextFactory)
-        => _dbContextFactory = dbContextFactory;
+    private readonly IMemoryCache _cache;
 
+    public AdminStatsController(IDbContextFactory<BenDataContext> dbContextFactory, IMemoryCache cache)
+    {
+        _dbContextFactory = dbContextFactory;
+        _cache = cache;
+    }
+
+    /// <summary>
+    /// How long a dashboard answer is reused before it is worked out again.
+    /// </summary>
+    /// <remarks>
+    /// <para>Five minutes. A dashboard is read to see how the site is doing, not to watch a
+    /// counter tick, and nothing on it is a number somebody acts on within a minute. What this
+    /// buys is that the cost is paid once per five minutes instead of once per page — including
+    /// the several times a SuperAdmin reloads it while looking at something.</para>
+    ///
+    /// <para><b>It does not change the curve</b>, and should not be mistaken for the fix. Every
+    /// unbounded count still gets slower as the site fills up; this only stops the page paying for
+    /// it every time. The page says the figures refresh every few minutes rather than implying
+    /// they are live.</para>
+    /// </remarks>
+    public static readonly TimeSpan Freshness = TimeSpan.FromMinutes(5);
+
+    private const string SummaryKey = "admin-stats:summary";
+
+    /// <summary>The answer this key holds, worked out if it is not held.</summary>
+    /// <remarks>
+    /// A failure is NOT cached: <c>GetOrCreateAsync</c> would happily store a thrown-through null
+    /// and hand it back for five minutes, which turns one bad moment into five bad ones.
+    /// </remarks>
+    private async Task<T> Cached<T>(string key, CancellationToken ct, Func<CancellationToken, Task<T>> work)
+        where T : class
+    {
+        if (_cache.TryGetValue<T>(key, out var held) && held is not null) return held;
+
+        var answer = await work(ct);
+        _cache.Set(key, answer, Freshness);
+        return answer;
+    }
+
+    /// <summary>
+    /// The summary's counts run one after another, on ONE context, and that is measured rather
+    /// than assumed.
+    /// </summary>
+    /// <remarks>
+    /// <para>They were briefly run at once, each on a context of its own — a DbContext will not
+    /// run two queries in parallel, so that is what concurrency here costs. On this data it made
+    /// the endpoint <b>slower</b>: 65ms sequential against 153ms concurrent, cold cache and warm
+    /// process, because creating nine contexts and opening nine connections costs more than nine
+    /// counts that each take a few milliseconds on a connection already open.</para>
+    ///
+    /// <para>It would pay at a size where each count takes long enough to dwarf a connection —
+    /// and at that size the answer is a rollup rather than nine parallel table scans (item 244).
+    /// Left sequential, with the number written down, so nobody re-derives it from first
+    /// principles and re-adds it.</para>
+    /// </remarks>
     /// <summary>The headline counts.</summary>
+    /// <remarks>
+    /// <para><b>Five of these nine grow with the site for ever</b> — the four plain counts and the
+    /// distinct membership one — and Ben said the quiet part out loud on 2026-09-19: "as the
+    /// number of users grows, the dashboard page is going to take longer and longer to load." He
+    /// is right, and running them at once does not change that curve; it divides it by nine. The
+    /// cache keeps it off the page entirely most of the time. The thing that would flatten it is a
+    /// rollup the scheduled jobs maintain, and that is item 244 — deliberately not built before
+    /// the measurement says it is needed.</para>
+    ///
+    /// <para>The "this week" pair only look bounded: until the index added with this change,
+    /// <c>DateCreated</c> had none on either table, so they were full scans wearing a date filter.</para>
+    /// </remarks>
     [HttpGet("summary")]
     public async Task<ActionResult<AdminStatsSummary>> GetSummary(CancellationToken ct)
     {
-        await using var db = await _dbContextFactory.CreateDbContextAsync(ct);
+        return Ok(await Cached(SummaryKey, ct, async token =>
+        {
+            await using var db = await _dbContextFactory.CreateDbContextAsync(token);
+            var weekAgo = DateTime.UtcNow.AddDays(-7);
 
-        var weekAgo = DateTime.UtcNow.AddDays(-7);
-
-        return Ok(new AdminStatsSummary(
-            People: await db.AppUsers.CountAsync(ct),
-            PeopleInAGroup: await db.OrganizationUserMemberships
-                .Where(m => m.IsActive)
-                .Select(m => m.AppUserId)
-                .Distinct()
-                .CountAsync(ct),
-            Groups: await db.Organizations.CountAsync(ct),
-            Cases: await db.Cases.CountAsync(ct),
-            Investigations: await db.Investigations.CountAsync(ct),
-            NewPeopleThisWeek: await db.AppUsers.CountAsync(u => u.DateCreated >= weekAgo, ct),
-            NewCasesThisWeek: await db.Cases.CountAsync(c => c.DateCreated >= weekAgo, ct),
-            SignInsThisWeek: await db.SignInEvents
-                .CountAsync(e => e.Succeeded && e.Utc >= weekAgo, ct),
-            // Distinct accounts, not attempts — someone signing in from three devices is one
-            // active person, and conflating the two makes a quiet week look busy.
-            ActivePeopleThisWeek: await db.SignInEvents
-                .Where(e => e.Succeeded && e.Utc >= weekAgo && e.AppUserId != null)
-                .Select(e => e.AppUserId)
-                .Distinct()
-                .CountAsync(ct)));
+            return new AdminStatsSummary(
+                People: await db.AppUsers.CountAsync(token),
+                PeopleInAGroup: await db.OrganizationUserMemberships
+                    .Where(m => m.IsActive).Select(m => m.AppUserId).Distinct().CountAsync(token),
+                Groups: await db.Organizations.CountAsync(token),
+                Cases: await db.Cases.CountAsync(token),
+                Investigations: await db.Investigations.CountAsync(token),
+                NewPeopleThisWeek: await db.AppUsers.CountAsync(u => u.DateCreated >= weekAgo, token),
+                NewCasesThisWeek: await db.Cases.CountAsync(c => c.DateCreated >= weekAgo, token),
+                SignInsThisWeek: await db.SignInEvents
+                    .CountAsync(e => e.Succeeded && e.Utc >= weekAgo, token),
+                // Distinct accounts, not attempts — someone signing in from three devices is one
+                // active person, and conflating the two makes a quiet week look busy.
+                ActivePeopleThisWeek: await db.SignInEvents
+                    .Where(e => e.Succeeded && e.Utc >= weekAgo && e.AppUserId != null)
+                    .Select(e => e.AppUserId).Distinct().CountAsync(token));
+        }));
     }
 
     /// <summary>The charts, over a window of days.</summary>
@@ -108,9 +189,15 @@ public sealed class AdminStatsController : BenControllerBase
         [FromQuery] int days = 30, CancellationToken ct = default)
     {
         // Clamped rather than trusted: an unbounded window is a table scan someone can ask for
-        // from a query string.
+        // from a query string. It is also what makes the cache key safe — a caller cannot mint
+        // unlimited keys by asking for unlimited windows.
         days = Math.Clamp(days, 7, 365);
 
+        return Ok(await Cached($"admin-stats:charts:{days}", ct, token => ChartsAsync(days, token)));
+    }
+
+    private async Task<AdminStatsCharts> ChartsAsync(int days, CancellationToken ct)
+    {
         await using var db = await _dbContextFactory.CreateDbContextAsync(ct);
 
         var since = DateTime.UtcNow.Date.AddDays(-(days - 1));
@@ -175,7 +262,7 @@ public sealed class AdminStatsController : BenControllerBase
             .Take(TopN)
             .ToList();
 
-        return Ok(new AdminStatsCharts(
+        return new AdminStatsCharts(
             SignInsPerDay: FillDays(signIns.Select(x => (x.Day, x.Count)), since, days),
             RegistrationsPerDay: FillDays(registrations.Select(x => (x.Day, x.Count)), since, days),
             CasesByStatus: casesByStatus
@@ -187,7 +274,7 @@ public sealed class AdminStatsController : BenControllerBase
             TopStatesByUser: await TopStatesAsync(db.UserAddresses.Select(a => a.State), ct),
             TopStatesByCase: await TopStatesAsync(db.Cases.Select(c => c.State), ct),
             TopStatesByInvestigation: await TopStatesAsync(
-                db.Investigations.Where(i => i.Place != null).Select(i => i.Place!.State!), ct)));
+                db.Investigations.Where(i => i.Place != null).Select(i => i.Place!.State!), ct));
     }
 
 
@@ -211,6 +298,11 @@ public sealed class AdminStatsController : BenControllerBase
     {
         days = Math.Clamp(days, 7, 365);
 
+        return Ok(await Cached($"admin-stats:sign-ins:{days}", ct, token => SignInInsightsAsync(days, token)));
+    }
+
+    private async Task<AdminSignInInsights> SignInInsightsAsync(int days, CancellationToken ct)
+    {
         await using var db = await _dbContextFactory.CreateDbContextAsync(ct);
 
         var now   = DateTime.UtcNow;
@@ -343,7 +435,7 @@ public sealed class AdminStatsController : BenControllerBase
         var oddities = await FindOddities(db, since, now, days, failRaw
             .ToDictionary(x => x.AppUserId, x => x.Count), NameOf, ct);
 
-        return Ok(new AdminSignInInsights(
+        return new AdminSignInInsights(
             Recent: recent,
             TopPeople: topPeople,
             TopGroups: groupTotals
@@ -361,7 +453,7 @@ public sealed class AdminStatsController : BenControllerBase
             MostFailures: mostFailures,
             Oddities: oddities,
             CoversAppleSignIns: await db.SignInEvents
-                .AnyAsync(e => e.Method == RecordingSignInManager.AppleMethod, ct)));
+                .AnyAsync(e => e.Method == RecordingSignInManager.AppleMethod, ct));
     }
 
     /// <summary>The method slug in the words an administrator would use.</summary>
@@ -478,17 +570,25 @@ public sealed class AdminStatsController : BenControllerBase
         // ── accounts that registered and never arrived ───────────────────────
         // The funnel's quietest failure: they are not signing in badly, they are not signing in.
         var staleCutoff = now.AddDays(-NeverSignedInGraceDays);
-        var everSignedIn = db.SignInEvents.Where(e => e.Succeeded && e.AppUserId != null)
-            .Select(e => e.AppUserId!.Value);
+        var windowStart = now.AddDays(-NeverArrivedWindowDays);
+
+        // NOT EXISTS against the candidate, not NOT IN against every sign-in there has ever been.
+        // The old shape built the set of everybody who has ever signed in and anti-joined the whole
+        // AppUsers table against it — two growing tables, no upper bound, and 312ms of the page's
+        // 502 on a database with almost nothing in it. Bounded by DateCreated and asked per
+        // candidate, it is an index seek on (AppUserId, Utc) over a window that cannot grow.
         var neverArrived = await db.AppUsers
-            .CountAsync(u => u.DateCreated < staleCutoff && !everSignedIn.Contains(u.Id), ct);
+            .CountAsync(u => u.DateCreated < staleCutoff
+                          && u.DateCreated >= windowStart
+                          && !db.SignInEvents.Any(e => e.AppUserId == u.Id && e.Succeeded), ct);
 
         if (neverArrived > 0)
         {
             oddities.Add(new SignInOddity(
                 "never",
                 $"{neverArrived:N0} account{(neverArrived == 1 ? "" : "s")} have never signed in",
-                $"Registered more than {NeverSignedInGraceDays} days ago and never came back. "
+                $"Registered in the last {NeverArrivedWindowDays} days, more than "
+                    + $"{NeverSignedInGraceDays} of them ago, and never came back. "
                     + "Not a security signal — a funnel one.",
                 null));
         }

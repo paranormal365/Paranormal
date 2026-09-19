@@ -62,9 +62,14 @@
             else
             {
             <h3 class="mb-0">Dashboard<HelpLink Slug="site-administration" Anchor="the-dashboard" /></h3>
+            @* Said, because the figures are held for five minutes and a dashboard that looks
+               live while being minutes old is a dashboard somebody will one day trust too far
+               (2026-09-19). Nothing here is a number acted on inside a minute, which is what
+               makes the cache reasonable — and saying so is what keeps it honest. *@
             <p class="text-secondary small mb-0">
                 How the site is being used. Everything here counts accounts and their activity —
-                visitors who never sign in are not recorded anywhere.
+                visitors who never sign in are not recorded anywhere. The figures are worked out
+                every few minutes rather than on every visit, so they can be a little behind.
             </p>
             }
         </div>

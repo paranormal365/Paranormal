@@ -232,6 +232,14 @@ namespace Ben.Data.Source.Context
             // Keep table name consistent with original schema
             modelBuilder.Entity<AppUser>().ToTable("AppUsers");
 
+            // "New people this week" on the admin dashboard, and the same question anywhere else.
+            // Without this the date filter LOOKS bounded and is a full scan of every account the
+            // site has ever had — one of the queries that made Ben say the dashboard "is going to
+            // take longer and longer to load as the number of users grows" (2026-09-19). The cost
+            // is a little on every account created, which is the right way round: accounts are
+            // made rarely and counted often.
+            modelBuilder.Entity<AppUser>().HasIndex(e => e.DateCreated);
+
             // ── UserAddressType ──────────────────────────────────────────────
             modelBuilder.Entity<UserAddressType>()
                 .HasOne(e => e.CreatedByAppUser).WithMany()
@@ -520,6 +528,9 @@ namespace Ben.Data.Source.Context
                 .HasIndex(e => new { e.OrganizationId, e.UrlName })
                 .IsUnique()
                 .HasFilter("[UrlName] IS NOT NULL");
+
+            // "New cases this week", for the same reason as AppUser.DateCreated above.
+            modelBuilder.Entity<Case>().HasIndex(e => e.DateCreated);
 
             modelBuilder.Entity<Case>().Property(e => e.UrlName).HasMaxLength(120);
             // One slug per organization. Filtered: a private case has none, and a pile of nulls
