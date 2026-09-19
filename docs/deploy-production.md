@@ -64,6 +64,20 @@ Nothing applies migrations at startup, so anything marked `(Pending)` has to be 
 `dotnet ef database update` before deploying. `scripts\create-database.sql` is older than the
 migrations and should not be used for this.
 
+### DashboardDateIndexes — additive, but it writes while it runs
+
+`DashboardDateIndexes` (2026-09-19) adds one index to `AppUsers.DateCreated` and one to
+`Cases.DateCreated`. Nothing is dropped and no data changes, so its `Down` simply removes them and
+the rollback is complete.
+
+The only thing worth knowing is that creating an index on a large table takes a write lock on it
+for the duration. On a database this size it is seconds, but it is not the migration to run while
+somebody is signing up. Apply it with the rest, before the deploy, rather than to a running site
+mid-afternoon.
+
+They exist because the dashboard's "new this week" figures filtered on `DateCreated` with no index
+behind it — a full scan wearing a date filter, on the two tables that grow the most.
+
 ### One migration that destroys rows
 
 `RetireResearchPages` (2026-09-16) **drops `CaseResearchEntries` and `CaseResearchAttachments`**.

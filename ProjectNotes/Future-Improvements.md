@@ -12768,5 +12768,61 @@ Three separate fixtures were poisoning the ground for the ones after them, and t
   occurred" anywhere in the body — so `/changes` failed the crawl for *quoting* it in a changelog
   line. It reads the chrome rather than the content now. Its 404 pattern had also never matched the
   page's actual words.
+## 244. The dashboard's unbounded counts, and the rollup that would flatten them (OPEN — measured 2026-09-19)
 
+Ben, 2026-09-19: *"As the number of users grows, the dashboard page is going to take longer and
+longer to load."* He is right, and the cheap work is done — what is left is the part that changes
+the curve rather than the constant.
+
+### What was done, and what it bought
+
+Measured on the e2e database, cold cache and warm process:
+
+| | before | after |
+|---|---|---|
+| page total, warm cache | 502 ms | ~3 ms |
+| summary, cold | 65 ms | 91 ms |
+| charts, cold | 66 ms | ~65 ms |
+| sign-ins, cold | 312 ms | ~290 ms |
+
+- **Five minutes of cache per endpoint**, keyed by the range. The whole visible win, and it does
+  not touch the curve — it only stops the page paying for it on every load. The page says the
+  figures are worked out every few minutes rather than implying they are live.
+- **The "never arrived" anti-join is bounded at both ends.** It counted every account ever created
+  that had never signed in — two growing tables, no upper bound, and the single most expensive
+  query on the page. It asks about the last 90 days now, which is also the better funnel question.
+- **`DateCreated` is indexed on `AppUsers` and `Cases`.** The two "this week" tiles looked bounded
+  and were full scans wearing a date filter.
+
+### What was tried and REVERTED, with the number
+
+Running the summary's nine counts at once, each on its own `DbContext` — a context will not run
+two queries in parallel, so that is what concurrency costs here. It measured **153 ms against 91 ms
+sequential**. Creating nine contexts and opening nine connections costs more than nine counts that
+each take a few milliseconds on a connection already open.
+
+It would pay at a size where each count dwarfs a connection. At that size the answer is the rollup
+below, not nine parallel table scans. The figure is written into the controller so nobody re-derives
+it from first principles and re-adds it.
+
+### What is still unbounded
+
+Every one of these grows with the site for ever, and no amount of caching changes that:
+
+- `AppUsers`, `Organizations`, `Cases`, `Investigations` — four plain `COUNT(*)`
+- active memberships, `DISTINCT` over every one of them
+- cases grouped by status, and the three `TopStates` aggregates in the charts endpoint
+
+### The rollup, when the measurement says so
+
+`IScheduledJob`, `ScheduledWorkService` and `ScheduledJobLedger` already exist, so a snapshot row
+written every N minutes would make the dashboard O(1) in table size. That is the version of Ben's
+"a view or a sp" instinct that actually helps: a plain view is computed at read time and stays
+O(n); only a stored result is constant. SQL Server's indexed views disqualify most of these
+(no `DISTINCT`, no subqueries, `COUNT_BIG` only).
+
+**Deliberately not built yet.** The trigger is a measurement, not a feeling: when a cold summary on
+production data stops being comfortable, this is the next step. It costs a table, a job, and a
+staleness story the page has to tell — all of which is worth paying for a real problem and not a
+predicted one.
 

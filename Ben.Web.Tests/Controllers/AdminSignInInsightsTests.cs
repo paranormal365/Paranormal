@@ -30,7 +30,18 @@ public sealed class AdminSignInInsightsTests
             new DbContextOptionsBuilder<BenDataContext>()
                 .UseInMemoryDatabase(Guid.NewGuid().ToString()).Options);
 
-    private static AdminStatsController Build(IDbContextFactory<BenDataContext> f) => new(f);
+    /// <summary>
+    /// A controller with a cache of its OWN, per call.
+    /// </summary>
+    /// <remarks>
+    /// A shared one would make these tests lie to each other: the dashboard holds an answer for
+    /// five minutes, so a second test asking the same question would be handed the first test's
+    /// data and pass without touching its own. Every Build gets an empty cache, which is also the
+    /// state the endpoint is actually interesting in.
+    /// </remarks>
+    private static AdminStatsController Build(IDbContextFactory<BenDataContext> f)
+        => new(f, new Microsoft.Extensions.Caching.Memory.MemoryCache(
+                      new Microsoft.Extensions.Caching.Memory.MemoryCacheOptions()));
 
     private static async Task<AdminSignInInsights> InsightsAsync(
         IDbContextFactory<BenDataContext> f, int days = 30)
