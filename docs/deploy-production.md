@@ -187,6 +187,16 @@ what the update notice sends people to.
 
 ### History
 
+**1.1.1** — Windows only, in effect; macOS behaves exactly as 1.1.0 did. 1.1.0 armed its fifteen
+minute idle shutdown on every platform, but only macOS has anything that starts the sidecar again:
+launchd holds the socket and relaunches it on the next connection. The Windows installer starts it
+once, at login, from a Run key. So on Windows the sidecar stopped fifteen quiet minutes after login
+and stayed stopped until the next login, and the editor quietly fell back to doing the work in the
+browser. 1.1.1 arms the timeout only where something will bring the process back
+(`IdleShutdownPolicy.EffectiveTimeout`); on Windows it runs from login again, as 1.0.0 did.
+**Both platforms need the 1.1.1 build before the site advertises it**, or every Mac user is told to
+update and handed 1.1.0 back.
+
 **1.1.0** — the first release worth telling anybody about, and the reason the notice exists at all.
 1.0.0 resolved its content root to `/` under launchd and put a recursive file watch over the entire
 filesystem: a pinned CPU core for as long as it ran, 2.9 GB resident, and `/v1/health` answering in
