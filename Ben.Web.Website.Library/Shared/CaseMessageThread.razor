@@ -130,14 +130,26 @@ else
 
     protected override async Task OnAfterRenderAsync(bool firstRender)
     {
-        if (!_toEndPending || _messages is null) return;
+        // Count > 0, not "not null". An empty thread draws the "No messages yet" branch, which
+        // carries no @ref — so _scrollRef was still default and this handed JS a reference to an
+        // element that had never existed. That throws a JSException, which the catch below did
+        // not cover, which ended the circuit: opening the Messages tab of a case nobody had
+        // written to yet took the whole page down with "An unhandled error has occurred"
+        // (Ben, 2026-09-19).
+        if (!_toEndPending || _messages is not { Count: > 0 }) return;
         _toEndPending = false;
         try
         {
             _module ??= await JS.InvokeAsync<IJSObjectReference>("import", "/_content/Ben.Web.Website.Library/Shared/CaseMessageThread.razor.js");
             await _module.InvokeVoidAsync("toEnd", _scrollRef);
         }
+        // Scrolling a list to its end is a convenience. NOTHING it can do is worth ending the
+        // circuit over, so every interop failure is swallowed here rather than only the
+        // disconnection: a torn-down element, a module that failed to import, a browser that
+        // refused the call. The reader keeps the thread and loses the scroll.
         catch (JSDisconnectedException) { }
+        catch (JSException) { }
+        catch (ObjectDisposedException) { }
     }
 
     public async ValueTask DisposeAsync()
@@ -148,7 +160,11 @@ else
             await _module.InvokeVoidAsync("release", _scrollRef);
             await _module.DisposeAsync();
         }
+        // Same reasoning as above, and disposal has even less business throwing: the page is
+        // already going away.
         catch (JSDisconnectedException) { }
+        catch (JSException) { }
+        catch (ObjectDisposedException) { }
     }
 
     /// <summary>
