@@ -133,7 +133,10 @@ else
 }
 
 @* ── Attach from Library picker ───────────────────────────────────────────── *@
-<BenModal @bind-Visible="@_showLibraryPicker" Title="Attach from Library" Size="sm">
+@* lg, not sm. A media grid in Bootstrap's small dialog had a few hundred pixels to lay out
+   four columns of cards in, which is where the one-letter file names came from (Ben,
+   2026-09-19). *@
+<BenModal @bind-Visible="@_showLibraryPicker" Title="Attach from Library" Size="lg">
     <ChildContent>
         <MediaLibraryGrid PickerMode="true" MultiSelect="true" OnFilesSelected="OnLibraryFilesSelected" />
     </ChildContent>
