@@ -123,6 +123,9 @@ public sealed partial class BenAdminClientAdapter
     public Task<LoadResult<AppUserRecord>> GetAllUsersAsync(CancellationToken token = default)
         => _api.GetUsersAsync(token);
 
+    public Task<LoadResult<Ben.Service.Models.Admin.UserSignInSummary>> GetUserSignInSummaryAsync(CancellationToken token = default)
+        => _api.GetUserSignInSummaryAsync(token);
+
     public async Task<LoadResult<OrgUserDirectoryItem>> GetOrgUserDirectoryAsync(Guid organizationId, CancellationToken token = default)
     {
         // Map, not Ok(Select(…)): reshaping by hand drops SessionExpired and the reason with it.

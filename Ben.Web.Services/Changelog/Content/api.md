@@ -18,6 +18,13 @@ read.
 This stream deliberately does not repeat the website's list. A change people meet as a page
 belongs there; this is for the part underneath.
 
+## 2026-09-19
+
+- Sign-ins through a Microsoft account are recorded, once per twelve hours of use. They
+  never were: a Microsoft session is a token validated on every request rather than a
+  moment somebody signs in, so there was no obvious thing to record.
+- The users list can be asked when each account last signed in and how many times.
+
 ## 2026-09-18
 
 - A board that links to another board is checked when it is published: the service refuses to publish

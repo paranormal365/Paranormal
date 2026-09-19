@@ -36,6 +36,39 @@ public sealed class AdminAppUserController : AdminEntityControllerBase<AppUser, 
         [FromBody] AppUser entity, CancellationToken cancellationToken)
         => throw new NotSupportedException("Use POST /api/admin/app-users with AdminCreateUserRequest.");
 
+    /// <summary>
+    /// When each account last signed in, and how many times.
+    /// </summary>
+    /// <remarks>
+    /// <para><b>One grouped query for the whole page</b>, not a subquery per row. The users grid
+    /// draws every account, and asking the sign-in table once per row would be a query per person
+    /// per page load; <c>SignInEvents</c> is indexed on <c>(AppUserId, Utc)</c>, so grouping by
+    /// the account is the shape it is built for.</para>
+    ///
+    /// <para><b>Accounts that have never signed in are simply absent.</b> Returning a row of
+    /// zeroes for each of them would be a larger answer that says nothing; the screen shows
+    /// "Never" for anybody it finds no row for, which is the same fact without the freight.</para>
+    ///
+    /// <para><b>What the numbers do and do not cover.</b> Successful sign-ins only, of every
+    /// method the site records — password, Apple, the editor handoff, and since 2026-09-19 one row
+    /// per twelve-hour Microsoft visit (<c>EntraSignInSessions</c>). Nothing goes further back
+    /// than 2026-08-20, when the table was created: an account older than that has a count from
+    /// that day, not from the day it was made.</para>
+    /// </remarks>
+    [HttpGet("sign-in-summary")]
+    public async Task<ActionResult<IEnumerable<UserSignInSummary>>> GetSignInSummary(CancellationToken ct)
+    {
+        await using var db = await _dbFactory.CreateDbContextAsync(ct);
+
+        var rows = await db.SignInEvents.AsNoTracking()
+            .Where(e => e.Succeeded && e.AppUserId != null)
+            .GroupBy(e => e.AppUserId!.Value)
+            .Select(g => new UserSignInSummary(g.Key, g.Max(e => e.Utc), g.Count()))
+            .ToListAsync(ct);
+
+        return Ok(rows);
+    }
+
     /// <summary>Returns the full user aggregate including all related records.</summary>
     [HttpGet("{id:guid}/detail")]
     public async Task<ActionResult<AppUserDetailAdminRecord>> GetDetail(Guid id, CancellationToken ct)
