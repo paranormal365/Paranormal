@@ -16,6 +16,28 @@ read. Add today's heading at the top when you ship something people can see.
 The history before 2026-08-22 is summarised rather than listed: the site was not yet open, and a
 day-by-day account of building it would say nothing to anyone using it now.
 
+## 2026-09-19
+
+- Arrows in the video editor draw their whole arrow. The line was missing, so pointing at
+  something in a clip left a small arrowhead floating on its own — and the head is bigger now on a
+  long arrow, instead of staying the same size however far it reaches.
+- The button that adds a transition sits on the join between the two clips it applies to. It used
+  to sit at the far left of the track wherever the join actually was, and with three clips you got
+  three identical buttons in the same spot.
+- All sixteen transition styles can be picked. The list opened downwards off the bottom of the
+  window, so only the first few could be clicked. They read as words now — "Wipe left", "Fade
+  through black" — rather than run together.
+- Split at Playhead works from a clip's right-click menu. It was greyed out every time.
+- Undo puts back a transition that an edit removed. Splitting a clip could delete the effect you
+  had chosen with no way to get it back, and left the two clips overlapping with nothing to show
+  why. Deleting, trimming or nudging a clip now tidies up its transition properly too.
+- Clip names and lengths can be read in the light theme. On the timeline they were dark grey on a
+  dark block.
+- Sounds can be faded in and out from the timeline, not only from the panel on the right.
+- Changing a clip's speed now shows the real length on the timeline. A clip set to double speed
+  kept its full width while the finished video was half as long, and the difference came out as
+  black nobody had been warned about. Speed can also be undone.
+
 ## 2026-09-18
 
 - New board now asks what to start from. Five choices: a blank board, a moodboard of coloured

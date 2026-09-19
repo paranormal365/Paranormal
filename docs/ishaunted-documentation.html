@@ -124,7 +124,7 @@ h1, h2, h3 { break-after: avoid-page; }
     <div class="cover-meta">
       <div>Product Documentation</div>
       <div>18 documents &middot; 6 sections</div>
-      <div>18 September 2026</div>
+      <div>19 September 2026</div>
     </div>
   </div>
   <div class="status">
@@ -3769,7 +3769,10 @@ you are going to share as evidence.</p>
 <ul>
 <li><strong>Apply Trim</strong> sets exactly where the clip starts and ends, when dragging its edge is not precise
   enough.</li>
-<li><strong>Apply Speed</strong> slows a moment down or runs a long stretch faster.</li>
+<li><strong>Apply Speed</strong> slows a moment down or runs a long stretch faster. Speed changes how much of the
+  timeline the clip takes up — at double speed it becomes half as wide — so the timeline shows the
+  length the finished video will actually have. Speeding a clip up leaves a gap after it; close it
+  by dragging the next clip back, or leave it and the export fills it with black.</li>
 <li><strong>Apply Volume</strong> sets the clip's level; audio clips also carry a draggable volume envelope on the
   timeline itself, for fading within a single clip.</li>
 <li><strong>Set In</strong> and <strong>Set Out</strong> trim the clip to where the playhead is, so you can trim to what you
@@ -3812,7 +3815,8 @@ part of the recording that clip actually plays.</p>
 <ul>
 <li><strong>Volume</strong>, and a draggable envelope on the chip itself for fading within a single clip.</li>
 <li><strong>Left</strong> and <strong>Right</strong> separately, for a recording where one channel is hotter than the other.</li>
-<li><strong>Fade in</strong> and <strong>fade out</strong>, limited to half the clip.</li>
+<li><strong>Fade in</strong> and <strong>fade out</strong>, limited to half the clip. Both are also on the clip's own
+  right-click menu on the timeline, which sets a one-second fade without opening the panel.</li>
 <li><strong>Mute this clip</strong>, which silences it without losing the level it is set to.</li>
 </ul>
 <h3>Cleaning up a recording</h3>
@@ -3838,6 +3842,23 @@ the timing moves.</p>
 <p>Right-click a video clip and choose <strong>Separate Audio</strong> to put its sound on its own track, where it
 can be trimmed and moved independently. The new clip carries the trim, the speed and the level the
 picture had, so it starts out lined up exactly as it was.</p>
+<h2>Joining two clips</h2>
+<p>Where one clip meets the next, the cut is instant unless you put a transition on it.</p>
+<ul>
+<li>Hover the join between two clips and a small dashed circle appears on it. Click it and pick a
+  style — <strong>Fade</strong>, <strong>Dissolve</strong>, <strong>Wipe left</strong>, <strong>Circle open</strong>, <strong>Fade through black</strong> and a
+  dozen more.</li>
+<li>You can also drag a style straight from the <strong>Transitions</strong> tab of the Assets panel onto the
+  join.</li>
+<li>A transition takes time from both clips: they play at once for its length, so the finished video
+  is shorter than the two clips added together. The timeline shows this — the second clip moves
+  back to meet the first.</li>
+<li>Drag either end of a transition on the timeline to make it longer or shorter. Right-click it to
+  swap the style or remove it.</li>
+<li>Removing one gives the shared time back to both clips.</li>
+</ul>
+<p>A transition belongs to the two clips it names. Delete, trim or move either one and the join it sat
+on is gone, so the transition goes with it — and <strong>Undo</strong> brings it back along with the edit.</p>
 <h2>Layers above the picture</h2>
 <p>The timeline can hold more than one video track. A clip on a track above the first plays over the
 one beneath it for as long as it runs, and everything on the timeline — the gaps included — keeps

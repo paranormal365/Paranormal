@@ -228,7 +228,10 @@ Select a clip and the panel's **Properties** tab describes it.
 
 - **Apply Trim** sets exactly where the clip starts and ends, when dragging its edge is not precise
   enough.
-- **Apply Speed** slows a moment down or runs a long stretch faster.
+- **Apply Speed** slows a moment down or runs a long stretch faster. Speed changes how much of the
+  timeline the clip takes up — at double speed it becomes half as wide — so the timeline shows the
+  length the finished video will actually have. Speeding a clip up leaves a gap after it; close it
+  by dragging the next clip back, or leave it and the export fills it with black.
 - **Apply Volume** sets the clip's level; audio clips also carry a draggable volume envelope on the
   timeline itself, for fading within a single clip.
 - **Set In** and **Set Out** trim the clip to where the playhead is, so you can trim to what you
@@ -279,7 +282,8 @@ Select a sound and the **Properties** tab offers:
 
 - **Volume**, and a draggable envelope on the chip itself for fading within a single clip.
 - **Left** and **Right** separately, for a recording where one channel is hotter than the other.
-- **Fade in** and **fade out**, limited to half the clip.
+- **Fade in** and **fade out**, limited to half the clip. Both are also on the clip's own
+  right-click menu on the timeline, which sets a one-second fade without opening the panel.
 - **Mute this clip**, which silences it without losing the level it is set to.
 
 ### Cleaning up a recording
@@ -311,6 +315,25 @@ the timing moves.
 Right-click a video clip and choose **Separate Audio** to put its sound on its own track, where it
 can be trimmed and moved independently. The new clip carries the trim, the speed and the level the
 picture had, so it starts out lined up exactly as it was.
+
+## Joining two clips
+
+Where one clip meets the next, the cut is instant unless you put a transition on it.
+
+- Hover the join between two clips and a small dashed circle appears on it. Click it and pick a
+  style — **Fade**, **Dissolve**, **Wipe left**, **Circle open**, **Fade through black** and a
+  dozen more.
+- You can also drag a style straight from the **Transitions** tab of the Assets panel onto the
+  join.
+- A transition takes time from both clips: they play at once for its length, so the finished video
+  is shorter than the two clips added together. The timeline shows this — the second clip moves
+  back to meet the first.
+- Drag either end of a transition on the timeline to make it longer or shorter. Right-click it to
+  swap the style or remove it.
+- Removing one gives the shared time back to both clips.
+
+A transition belongs to the two clips it names. Delete, trim or move either one and the join it sat
+on is gone, so the transition goes with it — and **Undo** brings it back along with the edit.
 
 ## Layers above the picture
 
