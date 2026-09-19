@@ -51,6 +51,30 @@ public sealed class TheContentRootIsNotTheWholeDiskTests
     }
 
     [Fact]
+    public void The_service_is_started_on_demand_and_not_at_login()
+    {
+        // Ben, 2026-09-19: it should run only while the editor is being used. RunAtLoad starts it
+        // at login whether or not anybody opens the editor, and KeepAlive fights the idle exit by
+        // restarting what the process deliberately ended.
+        var install = File.ReadAllText(RepoFile("Ben.Video.Sidecar", "installer", "macos", "install.sh"));
+
+        Assert.Contains("<key>Sockets</key>", install);
+        Assert.DoesNotContain("<key>RunAtLoad</key>", install);
+        Assert.DoesNotContain("<key>KeepAlive</key>", install);
+    }
+
+    [Fact]
+    public void The_port_launchd_binds_is_the_port_the_editor_looks_on()
+    {
+        // launchd binds this one; NativeSidecarService scans upward from the constant. If the two
+        // drift the editor finds nothing and the sidecar is never woken, with no error anywhere.
+        var install = File.ReadAllText(RepoFile("Ben.Video.Sidecar", "installer", "macos", "install.sh"));
+
+        Assert.Contains($"SIDECAR_PORT={Ben.Video.Core.SidecarContracts.SidecarProtocol.DefaultPort}", install);
+        Assert.Contains("<string>$SIDECAR_PORT</string>", install);
+    }
+
+    [Fact]
     public void The_installer_tells_launchd_where_to_start_it()
     {
         var install = File.ReadAllText(RepoFile("Ben.Video.Sidecar", "installer", "macos", "install.sh"));

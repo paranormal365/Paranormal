@@ -5,6 +5,7 @@ using Ben.Video.Editor.Services;
 using Ben.Video.Sidecar;
 using Ben.Video.Sidecar.Api;
 using Ben.Video.Sidecar.Jobs;
+using Ben.Video.Sidecar.Lifetime;
 using Ben.Video.Sidecar.Security;
 using Ben.Video.Sidecar.Storage;
 using Ben.Video.Sidecar.Validation;
@@ -33,6 +34,8 @@ var builder = WebApplication.CreateBuilder(new WebApplicationOptions
 builder.Services.Configure<SidecarOptions>(builder.Configuration.GetSection("Sidecar"));
 builder.Services.AddSingleton<AuthFailureThrottle>();
 builder.Services.AddSingleton<JobRegistry>();
+builder.Services.AddSingleton<IdleWatch>();
+builder.Services.AddHostedService<IdleShutdownService>();
 builder.Services.AddSingleton<SidecarPaths>();
 builder.Services.AddSingleton(sp => new InstallIdentity(sp.GetRequiredService<SidecarPaths>().ConfigDir));
 builder.Services.AddSingleton<SourceCache>();
@@ -85,11 +88,23 @@ builder.Services.AddRateLimiter(options =>
 });
 
 var sidecarOptions = builder.Configuration.GetSection("Sidecar").Get<SidecarOptions>() ?? new SidecarOptions();
-var resolvedPort = ResolveFreePort(sidecarOptions.Port, sidecarOptions.PortScanRange);
+// Installed, launchd owns the listening socket: it binds the port itself, holds it whether or not
+// this process exists, and starts this process on the first connection — which is how a sidecar
+// that is not always running is nevertheless always there when the editor looks (2026-09-19).
+// Everywhere else — dotnet run, the tests, Windows — this finds nothing and the port is bound the
+// way it always was.
+var launchdSocket = LaunchdSockets.TryTakeListener();
+var resolvedPort  = launchdSocket is null
+    ? ResolveFreePort(sidecarOptions.Port, sidecarOptions.PortScanRange)
+    : sidecarOptions.Port;
 
 builder.WebHost.ConfigureKestrel(kestrel =>
 {
-    kestrel.Listen(IPAddress.Loopback, resolvedPort);
+    if (launchdSocket is { } handle)
+        kestrel.ListenHandle(handle);
+    else
+        kestrel.Listen(IPAddress.Loopback, resolvedPort);
+
     kestrel.AddServerHeader = false;
     kestrel.Limits.MaxRequestBodySize = sidecarOptions.DefaultMaxRequestBodyBytes;
 });
@@ -126,6 +141,15 @@ if (args.Contains("--pair"))
 }
 
 PrintStartupBanner(app, tokenStore, resolvedPort);
+
+// Ahead of everything, and deliberately: a request that is rate-limited or rejected for a bad
+// token is still evidence that somebody is using this, and stopping underneath them would be the
+// wrong answer to it.
+app.Use(async (context, next) =>
+{
+    context.RequestServices.GetRequiredService<IdleWatch>().Touch();
+    await next(context);
+});
 
 app.UseRateLimiter();
 app.UseMiddleware<SecurityMiddleware>();
