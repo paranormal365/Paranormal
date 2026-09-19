@@ -20,6 +20,9 @@ belongs there; this is for the part underneath.
 
 ## 2026-09-19
 
+- The dashboard's three calls hold their answers for five minutes, keyed by the range asked
+  for. "Registered and never arrived" looks at the last 90 days instead of every account
+  ever created, and the date each account and case was created is indexed.
 - Sign-ins through a Microsoft account are recorded, once per twelve hours of use. They
   never were: a Microsoft session is a token validated on every request rather than a
   moment somebody signs in, so there was no obvious thing to record.
